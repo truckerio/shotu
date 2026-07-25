@@ -14,10 +14,16 @@ import {
 } from "../../db/repositories/locations.repo.js";
 import { getLocationTemplate, upsertLocationTemplate } from "../../db/repositories/templates.repo.js";
 import { findAuthUserByEmail } from "../../db/repositories/auth-users.repo.js";
-import { listUsersByLocation } from "../../db/repositories/users.repo.js";
+import {
+  deleteManagedUser,
+  getManagedUser,
+  listUsersByLocation,
+  recordAdminUserEvent,
+  setManagedUserActive,
+} from "../../db/repositories/users.repo.js";
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { requireCompanyAccess } from "../../auth/authorize.js";
-import { resourceNotFound } from "../../auth/errors.js";
+import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
 
 function tokenHash(token) {
   return createHash("sha256").update(token).digest("hex");
@@ -50,6 +56,26 @@ async function authorizedLocation(context, locationId) {
   if (!location) throw resourceNotFound("Location");
   requireCompanyAccess(context, location.company_id);
   return location;
+}
+
+function managedCompanyIds(target) {
+  return (target.company_ids || []).map(String);
+}
+
+async function authorizedManagedUser(context, locationId, userId) {
+  const location = await authorizedLocation(context, locationId);
+  const target = await getManagedUser(locationId, userId, authorizedCompanyIds(context));
+  if (!target) throw resourceNotFound("User");
+  for (const companyId of managedCompanyIds(target)) {
+    requireCompanyAccess(context, companyId);
+  }
+  return { location, target };
+}
+
+function requireLogin(target) {
+  if (!target.auth_user_id) {
+    throw invalidRequest("This user does not have a login account.");
+  }
 }
 
 export async function adminLocations(context) {
@@ -88,6 +114,88 @@ export async function adminLocationDetail(context, locationId) {
     getLocationTemplate(locationId),
   ]);
   return { location, users, invitations, template };
+}
+
+export async function changeAdminUserStatus(context, actor, locationId, userId, input, headers) {
+  if (actor.id === userId) {
+    throw invalidRequest("You cannot deactivate or reactivate your own account.");
+  }
+  const { location, target } = await authorizedManagedUser(context, locationId, userId);
+  requireLogin(target);
+
+  if (input.active) {
+    await auth.api.unbanUser({ body: { userId: target.auth_user_id }, headers });
+    try {
+      return await setManagedUserActive({
+        userId,
+        companyId: location.company_id,
+        locationId,
+        active: true,
+        actorId: actor.id,
+      });
+    } catch (error) {
+      await auth.api.banUser({
+        body: { userId: target.auth_user_id, banReason: "Account activation failed." },
+        headers,
+      }).catch(() => {});
+      throw error;
+    }
+  }
+
+  await auth.api.banUser({
+    body: { userId: target.auth_user_id, banReason: "Deactivated by an administrator." },
+    headers,
+  });
+  try {
+    return await setManagedUserActive({
+      userId,
+      companyId: location.company_id,
+      locationId,
+      active: false,
+      actorId: actor.id,
+    });
+  } catch (error) {
+    await auth.api.unbanUser({ body: { userId: target.auth_user_id }, headers }).catch(() => {});
+    throw error;
+  }
+}
+
+export async function resetAdminUserPassword(context, actor, locationId, userId, input, headers) {
+  if (actor.id === userId) {
+    throw invalidRequest("You cannot reset your own password from user management.");
+  }
+  const { target } = await authorizedManagedUser(context, locationId, userId);
+  requireLogin(target);
+  await auth.api.setUserPassword({
+    body: { userId: target.auth_user_id, newPassword: input.password },
+    headers,
+  });
+  await auth.api.revokeUserSessions({
+    body: { userId: target.auth_user_id },
+    headers,
+  });
+  for (const companyId of managedCompanyIds(target)) {
+    await recordAdminUserEvent({
+      companyId,
+      actorId: actor.id,
+      targetUserId: userId,
+      action: "password_reset",
+      details: { sessionsRevoked: true },
+    });
+  }
+  return { reset: true };
+}
+
+export async function removeAdminUser(context, actor, locationId, userId) {
+  if (actor.id === userId) {
+    throw invalidRequest("You cannot delete your own account.");
+  }
+  const { target } = await authorizedManagedUser(context, locationId, userId);
+  return deleteManagedUser({
+    userId,
+    companyIds: managedCompanyIds(target),
+    actorId: actor.id,
+  });
 }
 
 export async function saveAdminTemplate(context, locationId, input, actorId) {

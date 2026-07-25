@@ -15,6 +15,10 @@ export function permissionDenied() {
   return new AuthError(403, "PERMISSION_DENIED", "Permission denied.");
 }
 
+export function invalidRequest(message) {
+  return new AuthError(400, "INVALID_REQUEST", message);
+}
+
 export function resourceNotFound(resource = "Resource") {
   return new AuthError(404, "RESOURCE_NOT_FOUND", `${resource} not found.`);
 }

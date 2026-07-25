@@ -1,3 +1,4 @@
+import { fromNodeHeaders } from "better-auth/node";
 import {
   acceptInvitation,
   addAdminLocation,
@@ -5,9 +6,12 @@ import {
   adminLocations,
   adminOperations,
   adminOperationsSummary,
+  changeAdminUserStatus,
   editAdminLocation,
   invitationDetail,
   inviteLocationUser,
+  removeAdminUser,
+  resetAdminUserPassword,
   saveAdminTemplate,
 } from "../modules/admin/admin.service.js";
 import { parseWorkorderOperationsQuery } from "../modules/workorders/workorder-operations.schemas.js";
@@ -15,6 +19,8 @@ import {
   acceptInvitationSchema,
   createInvitationSchema,
   createLocationSchema,
+  resetManagedUserPasswordSchema,
+  updateManagedUserStatusSchema,
   updateLocationSchema,
   updateLocationTemplateSchema,
 } from "../modules/admin/admin.schemas.js";
@@ -29,6 +35,15 @@ function invitationToken(pathname, suffix = "") {
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = new RegExp(`^/api/invitations/([^/]+)${escaped}$`).exec(pathname);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function managedUserPath(pathname, suffix = "") {
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^/api/admin/locations/([^/]+)/users/([^/]+)${escaped}$`).exec(pathname);
+  return match ? {
+    locationId: decodeURIComponent(match[1]),
+    userId: decodeURIComponent(match[2]),
+  } : null;
 }
 
 export async function handleAdminApi(req, res, url, helpers) {
@@ -95,6 +110,51 @@ export async function handleAdminApi(req, res, url, helpers) {
     const input = createInvitationSchema.parse(await readBody(req));
     const origin = `${url.protocol}//${req.headers.host}`;
     sendJson(res, 201, await inviteLocationUser(location.location, input, actor.id, origin));
+    return true;
+  }
+
+  const userStatus = managedUserPath(url.pathname, "/status");
+  if (req.method === "PATCH" && userStatus) {
+    const input = updateManagedUserStatusSchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      user: await changeAdminUserStatus(
+        requestContext,
+        actor,
+        userStatus.locationId,
+        userStatus.userId,
+        input,
+        fromNodeHeaders(req.headers),
+      ),
+    });
+    return true;
+  }
+
+  const userPassword = managedUserPath(url.pathname, "/password");
+  if (req.method === "POST" && userPassword) {
+    const input = resetManagedUserPasswordSchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      result: await resetAdminUserPassword(
+        requestContext,
+        actor,
+        userPassword.locationId,
+        userPassword.userId,
+        input,
+        fromNodeHeaders(req.headers),
+      ),
+    });
+    return true;
+  }
+
+  const managedUser = managedUserPath(url.pathname);
+  if (req.method === "DELETE" && managedUser) {
+    sendJson(res, 200, {
+      result: await removeAdminUser(
+        requestContext,
+        actor,
+        managedUser.locationId,
+        managedUser.userId,
+      ),
+    });
     return true;
   }
 

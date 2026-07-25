@@ -324,6 +324,16 @@ export async function linkDomainAdmin({ pool, input, authUserId }) {
              updated_at = now()`,
       [appUserId, location.id, company.id],
     );
+    await client.query(
+      `update auth_user
+          set auth_role = 'admin',
+              banned = false,
+              ban_reason = null,
+              ban_expires = null,
+              updated_at = now()
+        where id = $1`,
+      [authUserId],
+    );
 
     await client.query("commit");
     return {

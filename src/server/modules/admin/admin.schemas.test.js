@@ -4,6 +4,8 @@ import {
   acceptInvitationSchema,
   createInvitationSchema,
   createLocationSchema,
+  resetManagedUserPasswordSchema,
+  updateManagedUserStatusSchema,
   updateLocationTemplateSchema,
 } from "./admin.schemas.js";
 
@@ -35,4 +37,14 @@ test("template requires the full location-owned header and footer contract", () 
     authorizationText: "Authorization",
   });
   assert.equal(value.headerTitle, "TEXAS YARD WORKORDER");
+});
+
+test("admin user management validates account status and strong replacement passwords", () => {
+  assert.deepEqual(updateManagedUserStatusSchema.parse({ active: false }), { active: false });
+  assert.equal(
+    resetManagedUserPasswordSchema.parse({ password: "LongPassword1!" }).password,
+    "LongPassword1!",
+  );
+  assert.throws(() => updateManagedUserStatusSchema.parse({ active: "false" }));
+  assert.throws(() => resetManagedUserPasswordSchema.parse({ password: "short" }));
 });

@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Copy01, File02, Mail01, MarkerPin01, Plus, RefreshCw01, Tool02, Users01, XClose } from "@untitledui/icons";
+import {
+  ArrowLeft,
+  Copy01,
+  File02,
+  Key01,
+  Mail01,
+  MarkerPin01,
+  Plus,
+  RefreshCw01,
+  Tool02,
+  Trash01,
+  UserCheck01,
+  UserX01,
+  Users01,
+  XClose,
+} from "@untitledui/icons";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -9,6 +24,7 @@ import "./admin.css";
 
 const blankLocation = { name: "", type: "yard", address: "" };
 const blankInvite = { name: "", email: "", role: "mechanic" };
+const blankPassword = { password: "", confirmation: "" };
 
 function templateForm(template, location) {
   return {
@@ -93,17 +109,39 @@ function OperationsHome({ locations, onOpenWorkorder, onCreateWorkorder }) {
   );
 }
 
-function UsersPanel({ detail, onInvite }) {
+function UsersPanel({ actor, detail, onInvite, onManage }) {
   return (
     <section className="admin-panel">
       <header className="admin-panel-header"><h2>Users</h2><Button variant="primary" icon={Mail01} onClick={onInvite}>Invite user</Button></header>
       <div className="admin-users-table">
-        <div className="admin-users-head"><span>User</span><span>Role</span><span>Status</span></div>
-        {detail.users.length ? detail.users.map((user) => (
-          <div className="admin-user-row" key={user.id}>
-            <span><strong>{user.name}</strong><small>{user.email}</small></span><span className="admin-role">{user.role}</span><span>{user.active && user.membership_active ? "Active" : "Inactive"}</span>
-          </div>
-        )) : <div className="admin-empty">No users assigned.</div>}
+        <div className="admin-users-head"><span>User</span><span>Role</span><span>Status</span><span>Actions</span></div>
+        {detail.users.length ? detail.users.map((user) => {
+          const active = user.active && user.membership_active;
+          const self = user.id === actor.id;
+          return (
+            <div className="admin-user-row" key={user.id}>
+              <span>
+                <strong>{user.name}{self ? " (you)" : ""}</strong>
+                <small>{user.username ? `@${user.username}` : user.email}</small>
+              </span>
+              <span className="admin-role">{user.role}</span>
+              <span><span className={`admin-user-status ${active ? "active" : "inactive"}`}>{active ? "Active" : "Inactive"}</span></span>
+              <span className="admin-user-actions">
+                <button type="button" title={self ? "Use your profile to change your own password" : `Reset password for ${user.name}`} aria-label={`Reset password for ${user.name}`} disabled={self} onClick={() => onManage("password", user)}><Key01 /></button>
+                <button
+                  type="button"
+                  title={self ? "You cannot change your own status" : `${active ? "Deactivate" : "Activate"} ${user.name}`}
+                  aria-label={`${active ? "Deactivate" : "Activate"} ${user.name}`}
+                  disabled={self}
+                  onClick={() => onManage(active ? "deactivate" : "activate", user)}
+                >
+                  {active ? <UserX01 /> : <UserCheck01 />}
+                </button>
+                <button type="button" className="danger" title={self ? "You cannot delete your own account" : `Delete ${user.name}`} aria-label={`Delete ${user.name}`} disabled={self} onClick={() => onManage("delete", user)}><Trash01 /></button>
+              </span>
+            </div>
+          );
+        }) : <div className="admin-empty">No users assigned.</div>}
       </div>
       {detail.invitations.some((invite) => invite.status === "pending") ? (
         <div className="admin-pending"><strong>Pending invitations</strong>{detail.invitations.filter((invite) => invite.status === "pending").map((invite) => <span key={invite.id}>{invite.email} · {invite.role}</span>)}</div>
@@ -129,7 +167,7 @@ function TemplatePanel({ detail, value, onChange, onSave, saving }) {
   );
 }
 
-function LocationDetail({ detail, tab, setTab, template, setTemplate, onBack, onInvite, onSaveTemplate, saving, onOpenWorkorder }) {
+function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onBack, onInvite, onManageUser, onSaveTemplate, saving, onOpenWorkorder }) {
   return (
     <section className="admin-content">
       <div className="admin-detail-title">
@@ -142,7 +180,7 @@ function LocationDetail({ detail, tab, setTab, template, setTemplate, onBack, on
         <button className={tab === "template" ? "active" : ""} type="button" onClick={() => setTab("template")}><File02 /> Template</button>
       </nav>
       {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace locations={[detail.location]} fixedLocationId={detail.location.id} onOpenWorkorder={onOpenWorkorder} /></div> : null}
-      {tab === "users" ? <UsersPanel detail={detail} onInvite={onInvite} /> : null}
+      {tab === "users" ? <UsersPanel actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} /> : null}
       {tab === "template" ? <TemplatePanel detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
     </section>
   );
@@ -162,6 +200,8 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
   const [locationDraft, setLocationDraft] = useState(blankLocation);
   const [inviteDraft, setInviteDraft] = useState(blankInvite);
   const [inviteUrl, setInviteUrl] = useState("");
+  const [userAction, setUserAction] = useState(null);
+  const [passwordDraft, setPasswordDraft] = useState(blankPassword);
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
 
   async function loadLocations() {
@@ -169,14 +209,14 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
     setLocations(result.locations || []);
     setState((current) => ({ ...current, loading: false, error: "" }));
   }
-  async function openLocation(id) {
+  async function openLocation(id, nextTab = "work") {
     setState((current) => ({ ...current, loading: true, error: "" }));
     const result = await api(`/api/admin/locations/${id}`);
     setView("locations");
     setSelectedId(id);
     setDetail(result);
     setTemplate(templateForm(result.template, result.location));
-    setTab("work");
+    setTab(nextTab);
     setState((current) => ({ ...current, loading: false }));
     window.history.replaceState({}, "", `/?adminLocation=${encodeURIComponent(id)}`);
   }
@@ -208,7 +248,7 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
     setState((current) => ({ ...current, busy: true, error: "" }));
     try {
       const result = await api(`/api/admin/locations/${selectedId}/invitations`, { method: "POST", body: JSON.stringify(inviteDraft) });
-      setInviteUrl(result.inviteUrl); setState((current) => ({ ...current, busy: false })); await openLocation(selectedId);
+      setInviteUrl(result.inviteUrl); setState((current) => ({ ...current, busy: false })); await openLocation(selectedId, "users");
     } catch (error) { setState((current) => ({ ...current, busy: false, error: error.message })); }
   }
   async function saveTemplate() {
@@ -216,8 +256,52 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
     try {
       await api(`/api/admin/locations/${selectedId}/template`, { method: "PUT", body: JSON.stringify(template) });
       setState((current) => ({ ...current, busy: false, message: "Template saved." }));
-      await openLocation(selectedId); setTab("template");
+      await openLocation(selectedId, "template");
     } catch (error) { setState((current) => ({ ...current, busy: false, error: error.message })); }
+  }
+
+  function openUserAction(type, user) {
+    setPasswordDraft(blankPassword);
+    setUserAction({ type, user });
+    setState((current) => ({ ...current, error: "", message: "" }));
+  }
+
+  async function submitUserAction(event) {
+    event.preventDefault();
+    if (!userAction) return;
+    if (userAction.type === "password" && passwordDraft.password !== passwordDraft.confirmation) {
+      setState((current) => ({ ...current, error: "Passwords do not match." }));
+      return;
+    }
+    setState((current) => ({ ...current, busy: true, error: "", message: "" }));
+    const base = `/api/admin/locations/${selectedId}/users/${userAction.user.id}`;
+    try {
+      if (userAction.type === "password") {
+        await api(`${base}/password`, {
+          method: "POST",
+          body: JSON.stringify({ password: passwordDraft.password }),
+        });
+      } else if (userAction.type === "delete") {
+        await api(base, { method: "DELETE" });
+      } else {
+        await api(`${base}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ active: userAction.type === "activate" }),
+        });
+      }
+      const message = userAction.type === "password"
+        ? `Password reset for ${userAction.user.name}. Existing sessions were signed out.`
+        : userAction.type === "delete"
+          ? `${userAction.user.name} was deleted.`
+          : `${userAction.user.name} is now ${userAction.type === "activate" ? "active" : "inactive"}.`;
+      setUserAction(null);
+      setPasswordDraft(blankPassword);
+      await openLocation(selectedId, "users");
+      await loadLocations();
+      setState((current) => ({ ...current, busy: false, error: "", message }));
+    } catch (error) {
+      setState((current) => ({ ...current, busy: false, error: error.message }));
+    }
   }
 
   return (
@@ -230,11 +314,40 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
         </nav>
       </WorkspaceHeader>
       {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
+      {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
       {view === "operations" ? <OperationsHome locations={locations} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
-      {view === "locations" && selectedId && detail ? <LocationDetail detail={detail} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setModal("invite"); }} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
+      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setModal("invite"); }} onManageUser={openUserAction} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onRefresh={() => loadLocations().catch((error) => setState((current) => ({ ...current, error: error.message })))} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
       {modal === "location" ? <Modal title="New location" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createLocation}><label><span>Name</span><input required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label><label><span>Address</span><input value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label><Button variant="primary" type="submit" disabled={state.busy}>Create location</Button></form></Modal> : null}
       {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}><label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option></select></label>{inviteUrl ? <div className="admin-invite-result"><span>Invite link</span><code>{inviteUrl}</code><Button icon={Copy01} onClick={() => navigator.clipboard.writeText(inviteUrl)}>Copy link</Button></div> : <Button variant="primary" type="submit" disabled={state.busy}>Create invite</Button>}</form></Modal> : null}
+      {userAction ? (
+        <Modal
+          title={userAction.type === "password" ? "Reset password" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
+          onClose={() => !state.busy && setUserAction(null)}
+        >
+          <form className="admin-modal-form" onSubmit={submitUserAction}>
+            {state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}
+            {userAction.type === "password" ? (
+              <>
+                <p className="admin-modal-copy">Set a new password for <strong>{userAction.user.name}</strong>. Their current sessions will be signed out.</p>
+                <label><span>New password</span><input required autoFocus type="password" minLength="12" maxLength="128" autoComplete="new-password" value={passwordDraft.password} onChange={(event) => setPasswordDraft((current) => ({ ...current, password: event.target.value }))} /></label>
+                <label><span>Confirm password</span><input required type="password" minLength="12" maxLength="128" autoComplete="new-password" value={passwordDraft.confirmation} onChange={(event) => setPasswordDraft((current) => ({ ...current, confirmation: event.target.value }))} /></label>
+                <Button variant="primary" icon={Key01} type="submit" disabled={state.busy}>{state.busy ? "Resetting" : "Reset password"}</Button>
+              </>
+            ) : userAction.type === "delete" ? (
+              <>
+                <p className="admin-modal-copy">Delete <strong>{userAction.user.name}</strong>? Their login will be removed and their historical work records will remain under “Deleted user.” This cannot be undone.</p>
+                <Button variant="danger" icon={Trash01} type="submit" disabled={state.busy}>{state.busy ? "Deleting" : "Delete user"}</Button>
+              </>
+            ) : (
+              <>
+                <p className="admin-modal-copy">{userAction.type === "activate" ? "Restore login and location access" : "Sign out and block access"} for <strong>{userAction.user.name}</strong>?</p>
+                <Button variant={userAction.type === "activate" ? "primary" : "danger"} icon={userAction.type === "activate" ? UserCheck01 : UserX01} type="submit" disabled={state.busy}>{state.busy ? "Saving" : userAction.type === "activate" ? "Activate user" : "Deactivate user"}</Button>
+              </>
+            )}
+          </form>
+        </Modal>
+      ) : null}
     </main>
   );
 }

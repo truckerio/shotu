@@ -27,6 +27,7 @@ export async function getAuthActorByAuthUserId(authUserId) {
         ), '[]'::jsonb) as company_memberships
       from app_users u
       where u.auth_user_id = $1
+        and u.deleted_at is null
       limit 1
     `,
     [authUserId],

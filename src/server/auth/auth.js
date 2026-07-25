@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { username } from "better-auth/plugins";
+import { admin, username } from "better-auth/plugins";
 import { getPool } from "../db/pool.js";
 import { resolveAuthConfig } from "./config.js";
 
@@ -81,16 +81,37 @@ export const auth = betterAuth({
     },
   },
   disabledPaths: ["/sign-up/email", "/is-username-available"],
-  plugins: [username({
-    minUsernameLength: 3,
-    maxUsernameLength: 50,
-    schema: {
-      user: {
-        fields: {
-          username: "username",
-          displayUsername: "display_username",
+  plugins: [
+    username({
+      minUsernameLength: 3,
+      maxUsernameLength: 50,
+      schema: {
+        user: {
+          fields: {
+            username: "username",
+            displayUsername: "display_username",
+          },
         },
       },
-    },
-  })],
+    }),
+    admin({
+      defaultRole: "user",
+      adminRoles: ["admin"],
+      schema: {
+        user: {
+          fields: {
+            role: "auth_role",
+            banned: "banned",
+            banReason: "ban_reason",
+            banExpires: "ban_expires",
+          },
+        },
+        session: {
+          fields: {
+            impersonatedBy: "impersonated_by",
+          },
+        },
+      },
+    }),
+  ],
 });

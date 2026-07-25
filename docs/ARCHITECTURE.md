@@ -26,7 +26,7 @@ frontend/src/
     ui/                 Small UI primitives
     workorders/         Shared detail, chat, queue, timeline, and parts UI
   features/             Role or workflow-owned UI
-    admin/              Locations, templates, and invitations
+    admin/              Operations, locations, users, templates, and invitations
     auth/               Session gate and login
     generator/          Physical workorder generator UI
     mechanic/           Mechanic workspace
@@ -69,6 +69,18 @@ server.js               Composition root plus contained legacy print/share endpo
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### User Lifecycle
+
+Better Auth owns passwords, account bans, and session revocation. `app_users` and its company/location memberships own operational identity and access. Admin user-management routes always authorize the target location and every company membership before changing either layer.
+
+- Password reset uses Better Auth hashing and revokes all existing sessions.
+- Deactivation bans the login and deactivates all operational memberships.
+- Activation restores the selected company/location membership and unbans the login.
+- Deletion removes the login and contact data but keeps a tombstoned `app_users` row so historical workorder, chat, and audit references remain valid.
+- `admin_user_events` records password reset, activation, deactivation, and deletion. An admin cannot deactivate, delete, or reset their own account through location user management.
+
+Direct Better Auth admin transport routes are not public API. The application exposes tenant-checked commands under `/api/admin/locations/:locationId/users/:userId`.
 
 ### Operations Projection
 

@@ -12,6 +12,7 @@ PostgreSQL is the source of truth for users, access scope, locations, templates,
 | `location_workorder_templates` | `repositories/templates.repo.js` |
 | `user_invitations` | `repositories/invitations.repo.js` |
 | `app_users` | `repositories/users.repo.js` |
+| `admin_user_events` | `repositories/users.repo.js` and `modules/admin/` |
 | `auth_user` lookup/linking | `repositories/auth-users.repo.js` |
 | Better Auth sessions, accounts, verification | `auth/` and Better Auth |
 | Company and location memberships | `auth/` request context and authorization |
@@ -36,6 +37,8 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 - Parts, office help, missing information, and overdue are attention reasons. Parts/missing/overdue may be derived from their owning records; persisted attention changes are audited in `workorder_attention_events`.
 - `workorder_read_state` is per user and workorder. It must never be stored as a global boolean on the workorder.
 - `workorder_access_events` is append-only. Explicit detail opens are recorded there; background polling must not create access events.
+- User deletion is a credential deletion plus an `app_users.deleted_at` tombstone. Do not delete operational user rows that may be referenced by historical work.
+- Admin account changes are append-only in `admin_user_events`; password hashes and session invalidation remain Better Auth responsibilities.
 
 ## Migration Runtime
 

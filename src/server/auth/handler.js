@@ -9,7 +9,11 @@ export function isAuthRoute(pathname) {
 
 export async function handleAuthApi(req, res, url) {
   if (!isAuthRoute(url.pathname)) return false;
+  if (url.pathname.startsWith("/api/auth/admin/")) {
+    res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "Not found." }));
+    return true;
+  }
   await authNodeHandler(req, res);
   return true;
 }
-

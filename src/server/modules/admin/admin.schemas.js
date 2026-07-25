@@ -30,3 +30,11 @@ export const acceptInvitationSchema = z.object({
   username: z.string().trim().min(3).max(50).regex(/^[a-zA-Z0-9_.]+$/),
   password: z.string().min(12).max(128),
 });
+
+export const updateManagedUserStatusSchema = z.object({
+  active: z.boolean(),
+});
+
+export const resetManagedUserPasswordSchema = z.object({
+  password: z.string().min(12).max(128),
+});
