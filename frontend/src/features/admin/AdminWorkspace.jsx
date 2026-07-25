@@ -14,6 +14,7 @@ import {
   Users01,
   XClose,
 } from "@untitledui/icons";
+import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -74,12 +75,10 @@ function Modal({ title, children, onClose }) {
 function LocationsHome({ locations, loading, onCreate, onOpen }) {
   return (
     <section className="admin-content">
-      <div className="admin-title-row">
-        <h1>Locations</h1>
-        <div className="admin-actions">
-          <Button variant="primary" icon={Plus} onClick={onCreate}>New location</Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Locations"
+        actions={<Button variant="primary" icon={Plus} onClick={onCreate}>New location</Button>}
+      />
       <div className="admin-location-table">
         <div className="admin-table-head"><span>Location</span><span>Users</span><span>Open work</span><span>Template</span><span></span></div>
         {loading ? <div className="admin-empty">Loading locations</div> : locations.map((location) => (
@@ -99,10 +98,10 @@ function LocationsHome({ locations, loading, onCreate, onOpen }) {
 function OperationsHome({ locations, onOpenWorkorder, onCreateWorkorder }) {
   return (
     <section className="admin-content admin-operations-content">
-      <div className="admin-title-row">
-        <h1>Operations</h1>
-        {onCreateWorkorder ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button> : null}
-      </div>
+      <PageHeader
+        title="Operations"
+        actions={onCreateWorkorder ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button> : null}
+      />
       <OperationsWorkspace locations={locations} onOpenWorkorder={onOpenWorkorder} />
     </section>
   );
@@ -194,10 +193,11 @@ function TemplatePanel({ detail, value, onChange, onSave, saving }) {
 function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onBack, onInvite, onManageUser, onResendInvite, resendingInviteId, onSaveTemplate, saving, onOpenWorkorder }) {
   return (
     <section className="admin-content">
-      <div className="admin-detail-title">
-        <button className="admin-back" type="button" onClick={onBack} aria-label="Back to locations"><ArrowLeft /></button>
-        <div><h1>{detail.location.name}</h1><p>{detail.location.address || detail.location.type}</p></div>
-      </div>
+      <PageHeader
+        title={detail.location.name}
+        subtitle={detail.location.address || detail.location.type}
+        leading={<button className="admin-back" type="button" onClick={onBack} aria-label="Back to locations"><ArrowLeft /></button>}
+      />
       <nav className="admin-tabs" aria-label="Location settings">
         <button className={tab === "work" ? "active" : ""} type="button" onClick={() => setTab("work")}><Tool02 /> Work</button>
         <button className={tab === "users" ? "active" : ""} type="button" onClick={() => setTab("users")}><Users01 /> Users <span>{detail.users.length}</span></button>

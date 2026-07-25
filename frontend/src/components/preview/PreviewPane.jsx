@@ -58,6 +58,7 @@ export function PreviewPane({
       id={id}
       ref={panelRef}
       aria-hidden={!open}
+      inert={!open ? true : undefined}
     >
       <div className="preview-header">
         <div className="preview-title-row">

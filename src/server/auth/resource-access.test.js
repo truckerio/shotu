@@ -6,7 +6,6 @@ const workorder = {
   id: "workorder-1",
   companyId: "default",
   locationId: "location-a",
-  currentMechanicId: "mechanic-1",
   mechanicIds: ["mechanic-1", "mechanic-2"],
   status: "accepted",
 };
@@ -32,7 +31,7 @@ test("mechanic can only read assigned work or an available workorder", async () 
     requireWorkorderAccess(context("mechanic", { actor: { id: "mechanic-3", role: "mechanic" } }), workorder.id, { getWorkorder }),
     (error) => error.statusCode === 404,
   );
-  const available = { ...workorder, currentMechanicId: null, mechanicIds: [], status: "open" };
+  const available = { ...workorder, mechanicIds: [], status: "open" };
   assert.equal((await requireWorkorderAccess(context("mechanic"), available.id, {
     allowAvailable: true,
     getWorkorder: async () => available,

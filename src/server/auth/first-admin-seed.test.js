@@ -156,8 +156,8 @@ test("domain links resolve the company slug and use its UUID", async () => {
       if (sql.includes("from locations") && sql.includes("active = true")) {
         return { rows: [{ id: locationId, name: "Main Location" }] };
       }
-      if (sql.includes("from app_users")) return { rows: [] };
-      if (sql.includes("insert into app_users")) return { rows: [{ id: appUserId }] };
+      if (sql.includes("from user_profiles")) return { rows: [] };
+      if (sql.includes("insert into user_profiles")) return { rows: [{ id: appUserId }] };
       return { rows: [] };
     },
     release() {},
@@ -198,8 +198,8 @@ test("first admin adopts the single migrated default company instead of creating
       if (sql.includes("from locations") && sql.includes("active = true")) {
         return { rows: [{ id: locationId, name: "Chino Yard" }] };
       }
-      if (sql.includes("from app_users")) return { rows: [] };
-      if (sql.includes("insert into app_users")) return { rows: [{ id: appUserId }] };
+      if (sql.includes("from user_profiles")) return { rows: [] };
+      if (sql.includes("insert into user_profiles")) return { rows: [{ id: appUserId }] };
       return { rows: [] };
     },
     release() {},

@@ -41,12 +41,12 @@ function workorderSelect() {
   return `
     select
       wo.id,
-      wo.company_uuid as company_id,
+      wo.company_id,
       wo.serial,
       wo.asset_id,
       wo.location_id,
       wo.created_by_user_id,
-      wo.current_mechanic_id,
+      team.primary_mechanic_id,
       wo.status,
       wo.concern,
       wo.diagnosis,
@@ -61,29 +61,39 @@ function workorderSelect() {
       wo.updated_at,
       ${publicAssetSelect("a")} as asset,
       jsonb_build_object('id', l.id, 'name', l.name, 'type', l.type, 'address', l.address) as location,
-      jsonb_build_object('id', m.id, 'name', m.name, 'email', m.email, 'role', m.role) as mechanic,
+      team.primary_mechanic as mechanic,
       coalesce(team.mechanics, '[]'::jsonb) as mechanics,
       coalesce(team.mechanic_ids, '{}'::uuid[]) as mechanic_ids
     from operational_workorders wo
     left join assets a on a.id = wo.asset_id
     left join locations l on l.id = wo.location_id
-    left join app_users m on m.id = wo.current_mechanic_id
     left join lateral (
       select
         jsonb_agg(
           jsonb_build_object(
             'id', member.id,
-            'name', member.name,
-            'email', member.email,
-            'role', member.role,
+            'name', member.display_name,
+            'email', member.contact_email,
+            'role', 'mechanic',
             'assignmentRole', assignment.assignment_role,
             'assignedAt', assignment.assigned_at
           )
-          order by case assignment.assignment_role when 'primary' then 0 else 1 end, member.name
+          order by case assignment.assignment_role when 'primary' then 0 else 1 end, member.display_name
         ) as mechanics,
-        array_agg(assignment.mechanic_user_id) as mechanic_ids
+        array_agg(assignment.mechanic_user_id) as mechanic_ids,
+        (array_agg(assignment.mechanic_user_id order by assignment.assigned_at)
+          filter (where assignment.assignment_role = 'primary'))[1] as primary_mechanic_id,
+        (array_agg(
+          jsonb_build_object(
+            'id', member.id,
+            'name', member.display_name,
+            'email', member.contact_email,
+            'role', 'mechanic'
+          )
+          order by assignment.assigned_at
+        ) filter (where assignment.assignment_role = 'primary'))[1] as primary_mechanic
       from workorder_mechanic_assignments assignment
-      join app_users member on member.id = assignment.mechanic_user_id
+      join user_profiles member on member.id = assignment.mechanic_user_id
       where assignment.workorder_id = wo.id
         and assignment.active = true
     ) team on true
@@ -104,7 +114,7 @@ export function publicWorkorderRow(row) {
     assetId: row.asset_id,
     locationId: row.location_id,
     createdByUserId: row.created_by_user_id,
-    currentMechanicId: row.current_mechanic_id,
+    currentMechanicId: row.primary_mechanic_id,
     status: row.status,
     concern: row.concern,
     diagnosis: row.diagnosis,
@@ -126,30 +136,16 @@ export function publicWorkorderRow(row) {
 }
 
 async function nextSerial(client, companyId) {
-  const keyResult = await client.query(
-    `
-      select legacy_key
-      from company_legacy_keys
-      where company_id = $1
-      order by is_primary desc, created_at, legacy_key
-      limit 1
-    `,
-    [companyId],
-  );
-  const legacyKey = keyResult.rows[0]?.legacy_key;
-  if (!legacyKey) throw new Error("Company has no serial compatibility key.");
-
   for (let attempt = 0; attempt < 1000; attempt += 1) {
     const counter = await client.query(
       `
-        insert into workorder_serial_counters (company_id, company_uuid)
-        values ($1, $2)
+        insert into workorder_serial_counters (company_id)
+        values ($1)
         on conflict (company_id) do update
-          set company_uuid = excluded.company_uuid,
-              updated_at = now()
+          set updated_at = now()
         returning company_id, prefix, next_number, digits
       `,
-      [legacyKey, companyId]
+      [companyId]
     );
     const row = counter.rows[0];
     const serial = `${row.prefix}${String(row.next_number).padStart(row.digits, "0")}`;
@@ -160,10 +156,10 @@ async function nextSerial(client, companyId) {
             updated_at = now()
         where company_id = $1
       `,
-      [legacyKey]
+      [companyId]
     );
     const existing = await client.query(
-      "select 1 from operational_workorders where company_uuid = $1 and serial = $2 limit 1",
+      "select 1 from operational_workorders where company_id = $1 and serial = $2 limit 1",
       [companyId, serial],
     );
     if (!existing.rows[0]) return serial;
@@ -285,7 +281,7 @@ export async function createOperationalWorkorder(input) {
     const result = await client.query(
       `
         insert into operational_workorders (
-          company_uuid, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
+          company_id, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
         )
         values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
         returning id, status
@@ -390,7 +386,7 @@ export async function listOperationalWorkorders({
               and assignment.active = true
           )
         )
-        and ($4::uuid[] is null or wo.company_uuid = any($4::uuid[]))
+        and ($4::uuid[] is null or wo.company_id = any($4::uuid[]))
         and ($5::uuid[] is null or wo.location_id = any($5::uuid[]))
       order by wo.updated_at desc
       limit $6
@@ -429,10 +425,10 @@ function operationsProjectionSql() {
     with operation_base as (
       select
         wo.id,
-        wo.company_uuid as company_id,
+        wo.company_id,
         wo.serial,
         wo.location_id,
-        wo.current_mechanic_id,
+        team.primary_mechanic_id,
         coalesce(team.mechanic_ids, '{}'::uuid[]) as mechanic_ids,
         wo.status as lifecycle,
         wo.concern,
@@ -469,7 +465,7 @@ function operationsProjectionSql() {
           'licensePlate', coalesce(a.license_plate, nullif(wo.form_data->>'licenseNo', '')),
           'model', coalesce(a.model, nullif(wo.form_data->>'model', ''))
         ) as asset,
-        jsonb_build_object('id', m.id, 'name', m.name, 'email', m.email) as mechanic,
+        team.primary_mechanic as mechanic,
         coalesce(team.mechanics, '[]'::jsonb) as mechanics,
         coalesce(oes.status, 'not_entered') as odoo_status,
         coalesce(oes.odoo_service_order_no, '') as odoo_service_order_no,
@@ -500,21 +496,30 @@ function operationsProjectionSql() {
       from operational_workorders wo
       left join assets a on a.id = wo.asset_id
       left join locations l on l.id = wo.location_id
-      left join app_users m on m.id = wo.current_mechanic_id
       left join lateral (
         select
           array_agg(assignment.mechanic_user_id) as mechanic_ids,
+          (array_agg(assignment.mechanic_user_id order by assignment.assigned_at)
+            filter (where assignment.assignment_role = 'primary'))[1] as primary_mechanic_id,
+          (array_agg(
+            jsonb_build_object(
+              'id', member.id,
+              'name', member.display_name,
+              'email', member.contact_email
+            )
+            order by assignment.assigned_at
+          ) filter (where assignment.assignment_role = 'primary'))[1] as primary_mechanic,
           jsonb_agg(
             jsonb_build_object(
               'id', member.id,
-              'name', member.name,
-              'email', member.email,
+              'name', member.display_name,
+              'email', member.contact_email,
               'assignmentRole', assignment.assignment_role
             )
-            order by case assignment.assignment_role when 'primary' then 0 else 1 end, member.name
+            order by case assignment.assignment_role when 'primary' then 0 else 1 end, member.display_name
           ) as mechanics
         from workorder_mechanic_assignments assignment
-        join app_users member on member.id = assignment.mechanic_user_id
+        join user_profiles member on member.id = assignment.mechanic_user_id
         where assignment.workorder_id = wo.id
           and assignment.active = true
       ) team on true
@@ -599,7 +604,7 @@ function publicOperationRow(row) {
     workPerformed: row.work_performed,
     closedAt: row.closed_at,
     mechanic: emptyObjectToNull(row.mechanic),
-    mechanicId: row.current_mechanic_id,
+    mechanicId: row.primary_mechanic_id,
     mechanics: Array.isArray(row.mechanics) ? row.mechanics : [],
     mechanicIds: Array.isArray(row.mechanic_ids) ? row.mechanic_ids : [],
     lifecycle: row.lifecycle,
@@ -719,9 +724,9 @@ export async function getWorkorderTimeline(workorderId) {
           null::uuid as to_mechanic_id,
           null::text as action,
           se.note,
-          u.name as changed_by_name,
+          u.display_name as changed_by_name,
           se.changed_by_user_id as actor_user_id,
-          u.role as actor_role,
+          (select role from v_user_primary_role where user_id = u.id) as actor_role,
           null::text as from_mechanic_name,
           null::text as to_mechanic_name,
           se.created_at,
@@ -730,7 +735,7 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as old_value,
           null::text as new_value
         from workorder_status_events se
-        left join app_users u on u.id = se.changed_by_user_id
+        left join user_profiles u on u.id = se.changed_by_user_id
         where se.workorder_id = $1
         union all
         select
@@ -742,20 +747,20 @@ export async function getWorkorderTimeline(workorderId) {
           ae.to_mechanic_id,
           ae.action,
           ae.reason as note,
-          u.name as changed_by_name,
+          u.display_name as changed_by_name,
           ae.changed_by_user_id as actor_user_id,
-          u.role as actor_role,
-          fm.name as from_mechanic_name,
-          tm.name as to_mechanic_name,
+          (select role from v_user_primary_role where user_id = u.id) as actor_role,
+          fm.display_name as from_mechanic_name,
+          tm.display_name as to_mechanic_name,
           ae.created_at,
           null::text as field_key,
           null::text as field_label,
           null::text as old_value,
           null::text as new_value
         from workorder_assignment_events ae
-        left join app_users u on u.id = ae.changed_by_user_id
-        left join app_users fm on fm.id = ae.from_mechanic_id
-        left join app_users tm on tm.id = ae.to_mechanic_id
+        left join user_profiles u on u.id = ae.changed_by_user_id
+        left join user_profiles fm on fm.id = ae.from_mechanic_id
+        left join user_profiles tm on tm.id = ae.to_mechanic_id
         where ae.workorder_id = $1
         union all
         select
@@ -767,9 +772,9 @@ export async function getWorkorderTimeline(workorderId) {
           null::uuid as to_mechanic_id,
           fe.field_key as action,
           concat(fe.field_label, ' changed') as note,
-          u.name as changed_by_name,
+          u.display_name as changed_by_name,
           fe.changed_by_user_id as actor_user_id,
-          u.role as actor_role,
+          (select role from v_user_primary_role where user_id = u.id) as actor_role,
           null::text as from_mechanic_name,
           null::text as to_mechanic_name,
           fe.created_at,
@@ -778,7 +783,7 @@ export async function getWorkorderTimeline(workorderId) {
           fe.old_value,
           fe.new_value
         from workorder_field_events fe
-        left join app_users u on u.id = fe.changed_by_user_id
+        left join user_profiles u on u.id = fe.changed_by_user_id
         where fe.workorder_id = $1
         union all
         select
@@ -790,9 +795,9 @@ export async function getWorkorderTimeline(workorderId) {
           null::uuid as to_mechanic_id,
           pe.event_type as action,
           pe.note,
-          u.name as changed_by_name,
+          u.display_name as changed_by_name,
           pe.actor_user_id,
-          u.role as actor_role,
+          (select role from v_user_primary_role where user_id = u.id) as actor_role,
           null::text as from_mechanic_name,
           null::text as to_mechanic_name,
           pe.created_at,
@@ -801,7 +806,7 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as old_value,
           null::text as new_value
         from part_request_events pe
-        left join app_users u on u.id = pe.actor_user_id
+        left join user_profiles u on u.id = pe.actor_user_id
         where pe.workorder_id = $1
         union all
         select
@@ -819,9 +824,9 @@ export async function getWorkorderTimeline(workorderId) {
               else replace(attention.reason, '_', ' ') || ' needs attention.'
             end
           ) as note,
-          u.name as changed_by_name,
+          u.display_name as changed_by_name,
           attention.actor_user_id,
-          u.role as actor_role,
+          (select role from v_user_primary_role where user_id = u.id) as actor_role,
           null::text as from_mechanic_name,
           null::text as to_mechanic_name,
           attention.created_at,
@@ -830,7 +835,7 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as old_value,
           null::text as new_value
         from workorder_attention_events attention
-        left join app_users u on u.id = attention.actor_user_id
+        left join user_profiles u on u.id = attention.actor_user_id
         where attention.workorder_id = $1
         union all
         select
@@ -842,7 +847,7 @@ export async function getWorkorderTimeline(workorderId) {
           null::uuid as to_mechanic_id,
           access.event_type as action,
           'Opened workorder.' as note,
-          u.name as changed_by_name,
+          u.display_name as changed_by_name,
           access.user_id as actor_user_id,
           access.actor_role,
           null::text as from_mechanic_name,
@@ -853,7 +858,7 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as old_value,
           null::text as new_value
         from workorder_access_events access
-        left join app_users u on u.id = access.user_id
+        left join user_profiles u on u.id = access.user_id
         where access.workorder_id = $1
       ) timeline
       order by created_at asc
@@ -869,19 +874,20 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status, current_mechanic_id from operational_workorders where id = $1 for update",
+      "select id, status from operational_workorders where id = $1 for update",
       [workorderId]
     );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
     const assignments = await client.query(
-      `select mechanic_user_id
+      `select mechanic_user_id, assignment_role
        from workorder_mechanic_assignments
        where workorder_id = $1 and active = true
        for update`,
       [workorderId],
     );
     const mechanicIds = assignments.rows.map((row) => row.mechanic_user_id);
+    const previousPrimaryId = assignments.rows.find((row) => row.assignment_role === "primary")?.mechanic_user_id || null;
     if (mechanicIds.length && !mechanicIds.includes(mechanicUserId)) {
       throw new Error("This workorder was already accepted by another mechanic.");
     }
@@ -897,17 +903,16 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
     await client.query(
       `
         update operational_workorders
-        set current_mechanic_id = $2,
-            status = $3,
+        set status = $2,
             accepted_at = coalesce(accepted_at, now()),
             updated_at = now()
         where id = $1
       `,
-      [workorderId, mechanicUserId, nextStatus]
+      [workorderId, nextStatus]
     );
     await addAssignmentEvent(client, {
       workorderId,
-      fromMechanicId: workorder.current_mechanic_id,
+      fromMechanicId: previousPrimaryId,
       toMechanicId: mechanicUserId,
       action: "accepted",
       changedByUserId: mechanicUserId,
@@ -937,7 +942,7 @@ export async function releaseOperationalWorkorder(workorderId, mechanicUserId, r
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status, current_mechanic_id from operational_workorders where id = $1 for update",
+      "select id, status from operational_workorders where id = $1 for update",
       [workorderId]
     );
     const workorder = current.rows[0];
@@ -970,12 +975,11 @@ export async function releaseOperationalWorkorder(workorderId, mechanicUserId, r
     await client.query(
       `
         update operational_workorders
-        set current_mechanic_id = $2,
-            status = $3,
+        set status = $2,
             updated_at = now()
         where id = $1
       `,
-      [workorderId, nextPrimaryId, nextStatus]
+      [workorderId, nextStatus]
     );
     await addAssignmentEvent(client, {
       workorderId,
@@ -1122,7 +1126,7 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status, current_mechanic_id from operational_workorders where id = $1 for update",
+      "select id, status from operational_workorders where id = $1 for update",
       [workorderId]
     );
     const workorder = current.rows[0];
@@ -1224,7 +1228,7 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status, current_mechanic_id from operational_workorders where id = $1 for update",
+      "select id, status from operational_workorders where id = $1 for update",
       [workorderId]
     );
     const workorder = current.rows[0];
@@ -1241,8 +1245,7 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
     const targetIds = [...new Set(mechanicUserIds)];
     const addedIds = targetIds.filter((id) => !currentIds.includes(id));
     const removedIds = currentIds.filter((id) => !targetIds.includes(id));
-    const currentPrimaryId = active.rows.find((row) => row.assignment_role === "primary")?.mechanic_user_id
-      || workorder.current_mechanic_id;
+    const currentPrimaryId = active.rows.find((row) => row.assignment_role === "primary")?.mechanic_user_id || null;
     const nextPrimaryId = targetIds.includes(currentPrimaryId) ? currentPrimaryId : targetIds[0] || null;
 
     if (!addedIds.length && !removedIds.length && currentPrimaryId === nextPrimaryId) {
@@ -1286,13 +1289,12 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
     await client.query(
       `
         update operational_workorders
-        set current_mechanic_id = $2,
-            status = $3,
-            accepted_at = case when $2::uuid is null then accepted_at else coalesce(accepted_at, now()) end,
+        set status = $2,
+            accepted_at = case when $3::uuid is null then accepted_at else coalesce(accepted_at, now()) end,
             updated_at = now()
         where id = $1
       `,
-      [workorderId, nextPrimaryId, nextStatus]
+      [workorderId, nextStatus, nextPrimaryId]
     );
     for (const mechanicUserId of removedIds) {
       await addAssignmentEvent(client, {

@@ -19,11 +19,10 @@ export async function requireWorkorderAccess(context, workorderId, options = {})
   }
 
   if (actor.role === "mechanic") {
-    const assigned = workorder.mechanicIds?.includes(actor.id)
-      || workorder.currentMechanicId === actor.id;
+    const assigned = workorder.mechanicIds?.includes(actor.id);
     const available = options.allowAvailable
       && workorder.status === "open"
-      && !(workorder.mechanicIds?.length || workorder.currentMechanicId);
+      && !workorder.mechanicIds?.length;
     if (!assigned && !available) throw resourceNotFound("Workorder");
   }
 

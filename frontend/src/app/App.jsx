@@ -126,6 +126,11 @@ function AssetLocationCard({
           role="group"
           aria-label="Satellite asset location"
           aria-hidden={!mapVisible}
+          onClick={(event) => {
+            if (mapPinned || event.target.closest?.("a, button")) return;
+            setMapOpen(true);
+            setMapPinned(true);
+          }}
         >
           <div className="asset-map-tiles" aria-hidden="true">
             {satelliteTiles(location, mapsConfig).map((tile) => (
@@ -172,7 +177,7 @@ export function App({ actor }) {
   const [officeCloseOpen, setOfficeCloseOpen] = useState(false);
   const [officeCloseNote, setOfficeCloseNote] = useState("");
   const [officeAssignment, setOfficeAssignment] = useState({ mechanicUserIds: [], reason: "" });
-  const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
+  const [previewPanelOpen, setPreviewPanelOpen] = useState(true);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
@@ -254,7 +259,7 @@ export function App({ actor }) {
   const isMechanicDetail = detailSource === "mechanic" && Boolean(activeWorkorder);
   const isOfficeDetail = detailSource === "office" && Boolean(activeWorkorder);
   const isWorkorderDetail = Boolean(activeWorkorder);
-  const showEmbeddedPreview = !isWorkorderDetail || (previewPanelOpen && !isCompact);
+  const showEmbeddedPreview = previewPanelOpen && (!isWorkorderDetail || !isCompact);
   const conversationMessages = useMemo(() => {
     if (!activeWorkorder) return [];
     const officeNote = activeWorkorder.workorder.officeNotes
@@ -967,7 +972,7 @@ export function App({ actor }) {
 
   function openOfficeGenerator() {
     setActiveWorkorder(null);
-    setPreviewPanelOpen(false);
+    setPreviewPanelOpen(true);
     setDetailSource(null);
     setMode("admin");
     setOpenSection("vehicle");
@@ -1135,20 +1140,16 @@ export function App({ actor }) {
   }
 
   function jumpToPreview() {
-    if (isWorkorderDetail) {
-      if (isCompact) {
-        setFullscreenPageIndex(0);
-        setFullscreenZoom(isPhone ? 0 : 1);
-        setPreviewFullscreen(true);
-      } else {
-        setPreviewPanelOpen((open) => {
-          if (open) setPrintMenuOpen(false);
-          return !open;
-        });
-      }
+    if (isWorkorderDetail && isCompact) {
+      setFullscreenPageIndex(0);
+      setFullscreenZoom(isPhone ? 0 : 1);
+      setPreviewFullscreen(true);
       return;
     }
-    previewGridRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPreviewPanelOpen((open) => {
+      if (open) setPrintMenuOpen(false);
+      return !open;
+    });
   }
 
   function openFullscreenPreview() {

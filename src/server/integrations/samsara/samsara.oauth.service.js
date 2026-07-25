@@ -122,6 +122,8 @@ export async function getSamsaraAccessToken({
     return { token: tokens.access_token, source: saved.token_env_key || "oauth" };
   }
 
-  if (allowApiTokenFallback && env.samsaraApiToken) return { token: env.samsaraApiToken, source: "env" };
+  if (allowApiTokenFallback && companyId === DEFAULT_COMPANY_ID && env.samsaraApiToken) {
+    return { token: env.samsaraApiToken, source: "env" };
+  }
   throw new Error("Connect Samsara with OAuth before syncing vehicles.");
 }

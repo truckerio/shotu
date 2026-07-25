@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd } from "@untitledui/icons";
+import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { api } from "../../lib/api.js";
@@ -110,6 +111,7 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
   return (
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} />
+      <PageHeader title="Workorders" />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
       <section className="mechanic-queue-shell">

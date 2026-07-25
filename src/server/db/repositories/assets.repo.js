@@ -1,18 +1,18 @@
 import { query } from "../pool.js";
-import { DEFAULT_COMPANY_ID } from "../company.js";
+import { requireCompanyId } from "../company.js";
 
-export async function searchVehicles(searchText, limit = 12, companyIds = [DEFAULT_COMPANY_ID]) {
+export async function searchVehicles(searchText, limit = 12, companyIds = []) {
   const q = String(searchText || "").trim();
-  if (q.length < 2) return [];
+  if (q.length < 2 || !companyIds.length) return [];
   const qKey = q.toLowerCase().replace(/[^a-z0-9]/g, "");
   const like = `%${q.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
   const result = await query(
     `
-      select id, company_uuid as company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
+      select id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
              make, model, year, serial, last_odometer_meters, last_odometer_miles,
              last_location, last_seen_at, synced_at
       from assets
-      where company_uuid = any($5::uuid[])
+      where company_id = any($5::uuid[])
         and (
           unit_no ilike $1 escape '\\'
           or name ilike $1 escape '\\'
@@ -39,14 +39,15 @@ export async function searchVehicles(searchText, limit = 12, companyIds = [DEFAU
   return result.rows;
 }
 
-export async function getVehicleById(id, companyIds = [DEFAULT_COMPANY_ID]) {
+export async function getVehicleById(id, companyIds = []) {
+  if (!companyIds.length) return null;
   const result = await query(
     `
-      select id, company_uuid as company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
+      select id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
              make, model, year, serial, last_odometer_meters, last_odometer_miles,
              last_location, last_seen_at, synced_at
       from assets
-      where id = $1 and company_uuid = any($2::uuid[])
+      where id = $1 and company_id = any($2::uuid[])
     `,
     [id, companyIds]
   );
@@ -61,7 +62,7 @@ export async function updateVehicleLocation(id, location, seenAt) {
           last_seen_at = $3,
           updated_at = now()
       where id = $1
-      returning id, company_uuid as company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
+      returning id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
                 make, model, year, serial, last_odometer_meters, last_odometer_miles,
                 last_location, last_seen_at, synced_at
     `,
@@ -70,13 +71,14 @@ export async function updateVehicleLocation(id, location, seenAt) {
   return result.rows[0] || null;
 }
 
-export async function upsertVehicles(vehicles, companyId = DEFAULT_COMPANY_ID) {
+export async function upsertVehicles(vehicles, companyId) {
+  const tenantId = requireCompanyId(companyId);
   let changedCount = 0;
   for (const vehicle of vehicles) {
     const result = await query(
       `
         insert into assets (
-          company_uuid, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
+          company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
           make, model, year, serial, external_ids, raw_provider_data,
           last_odometer_meters, last_odometer_miles, last_location, last_seen_at,
           synced_at, updated_at
@@ -87,7 +89,7 @@ export async function upsertVehicles(vehicles, companyId = DEFAULT_COMPANY_ID) {
           $16, $17, $18::jsonb, $19,
           now(), now()
         )
-        on conflict (company_uuid, provider, provider_vehicle_id)
+        on conflict (company_id, provider, provider_vehicle_id)
         where provider_vehicle_id is not null
         do update set
           name = excluded.name,
@@ -111,7 +113,7 @@ export async function upsertVehicles(vehicles, companyId = DEFAULT_COMPANY_ID) {
         returning id
       `,
       [
-        companyId,
+        tenantId,
         vehicle.provider,
         vehicle.providerVehicleId,
         vehicle.unitType,

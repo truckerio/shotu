@@ -15,22 +15,57 @@ async function checkDatabase() {
       (select count(*)::int from pg_views where schemaname = 'public' and viewname like 'v_%') as support_views,
       (select count(*)::int from companies) as companies,
       (select count(*)::int from locations) as locations,
-      (select count(*)::int from app_users) as users,
+      (select count(*)::int from user_profiles) as users,
       (select count(*)::int from assets) as assets,
       (select count(*)::int from operational_workorders) as workorders,
       (select count(*)::int from v_workorder_operations) as operations_view,
-      (select count(*)::int from operational_workorders where company_uuid is null) as workorders_without_company,
-      (select count(*)::int from assets where company_uuid is null) as assets_without_company,
+      (select count(*)::int from operational_workorders where company_id is null) as workorders_without_company,
+      (select count(*)::int from assets where company_id is null) as assets_without_company,
       (select count(*)::int from operational_workorders where location_id is null) as workorders_without_location,
       (
         select count(*)::int
-        from operational_workorders workorder
-        left join workorder_mechanic_assignments assignment
-          on assignment.workorder_id = workorder.id
-          and assignment.active
-          and assignment.assignment_role = 'primary'
-        where workorder.current_mechanic_id is distinct from assignment.mechanic_user_id
-      ) as primary_assignment_drift
+        from user_profiles profile
+        where profile.active
+          and profile.deleted_at is null
+          and not exists (
+            select 1
+            from user_company_memberships membership
+            where membership.user_id = profile.id and membership.active
+          )
+      ) as active_profiles_without_company,
+      (
+        select count(*)::int
+        from information_schema.columns
+        where table_schema = 'public'
+          and (
+            column_name = 'company_uuid'
+            or (table_name = 'operational_workorders' and column_name = 'current_mechanic_id')
+            or (table_name = 'user_profiles' and column_name in ('role', 'location_id'))
+          )
+      ) as legacy_contract_columns,
+      (
+        select count(*)::int
+        from pg_indexes
+        where schemaname = 'public'
+          and (
+            indexname = 'integration_accounts_provider_key'
+            or indexname = 'assets_provider_uid_idx'
+          )
+      ) as global_tenant_indexes,
+      (
+        select count(*)::int
+        from (
+          select conname as object_name
+          from pg_constraint
+          where connamespace = 'public'::regnamespace
+          union all
+          select indexname
+          from pg_indexes
+          where schemaname = 'public'
+        ) names
+        where object_name like '%company_uuid%'
+           or object_name like '%app_users%'
+      ) as legacy_contract_names
   `);
   const report = {
     nodeVersion: process.version,
@@ -43,7 +78,10 @@ async function checkDatabase() {
   if (report.workorders_without_company) failures.push("workorders are missing company ownership");
   if (report.assets_without_company) failures.push("assets are missing company ownership");
   if (report.workorders_without_location) failures.push("workorders are missing a location");
-  if (report.primary_assignment_drift) failures.push("primary mechanic projection has drifted");
+  if (report.active_profiles_without_company) failures.push("active user profiles are missing company membership");
+  if (report.legacy_contract_columns) failures.push("legacy database contract columns remain");
+  if (report.global_tenant_indexes) failures.push("global integration or asset uniqueness remains");
+  if (report.legacy_contract_names) failures.push("legacy constraint or index names remain");
 
   console.log(JSON.stringify({ healthy: failures.length === 0, ...report, failures }));
   if (failures.length) process.exitCode = 1;

@@ -48,5 +48,5 @@ test("an allocated workorder cannot be moved to another company", async () => {
   const repository = await readFile(repositoryUrl, "utf8");
 
   assert.equal(parsed.companyId, undefined);
-  assert.doesNotMatch(repository, /set company_uuid = coalesce/i);
+  assert.doesNotMatch(repository, /set company_id = coalesce/i);
 });

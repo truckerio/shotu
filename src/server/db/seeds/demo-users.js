@@ -50,7 +50,7 @@ async function ensureLocation(client) {
   const existing = await client.query(
     `select id
       from locations
-      where company_uuid = $1 and lower(name) = lower($2) and active = true
+      where company_id = $1 and lower(name) = lower($2) and active = true
       order by created_at, id
       limit 1`,
     [COMPANY_ID, LOCATION_NAME],
@@ -58,7 +58,7 @@ async function ensureLocation(client) {
   if (existing.rows[0]) return existing.rows[0].id;
 
   const created = await client.query(
-    "insert into locations (company_uuid, name, type) values ($1, $2, 'yard') returning id",
+    "insert into locations (company_id, name, type) values ($1, $2, 'yard') returning id",
     [COMPANY_ID, LOCATION_NAME],
   );
   return created.rows[0].id;
@@ -69,32 +69,30 @@ async function linkOperationalUser(user, authUserId, locationId) {
   try {
     await client.query("begin");
     const result = await client.query(
-      `insert into app_users (name, email, role, location_id, active, auth_user_id)
-       values ($1, $2, $3, $4, true, $5)
-       on conflict (email) do update
-         set name = excluded.name,
-             role = excluded.role,
-             location_id = excluded.location_id,
+      `insert into user_profiles (display_name, contact_email, active, auth_user_id)
+       values ($1, $2, true, $3)
+       on conflict (auth_user_id) do update
+         set display_name = excluded.display_name,
+             contact_email = excluded.contact_email,
              active = true,
              auth_user_id = excluded.auth_user_id,
              updated_at = now()
        returning id`,
-      [user.name, user.email, user.role, locationId, authUserId],
+      [user.name, user.email, authUserId],
     );
     const appUserId = result.rows[0].id;
 
     await client.query(
-      `insert into user_location_memberships (user_id, location_id, company_uuid, active)
+      `insert into user_location_memberships (user_id, location_id, company_id, active)
        values ($1, $2, $3, true)
        on conflict (user_id, location_id) do update set active = true, updated_at = now()`,
       [appUserId, locationId, COMPANY_ID],
     );
     await client.query(
-      `insert into user_company_memberships (user_id, company_uuid, role, active)
+      `insert into user_company_memberships (user_id, company_id, role, active)
        values ($1, $2, $3, true)
        on conflict (user_id, company_id) do update
-         set company_uuid = excluded.company_uuid,
-             role = excluded.role,
+         set role = excluded.role,
              active = true,
              updated_at = now()`,
       [appUserId, COMPANY_ID, user.role],

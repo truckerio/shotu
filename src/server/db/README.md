@@ -11,7 +11,7 @@ PostgreSQL is the source of truth for users, access scope, locations, templates,
 | `locations` | `repositories/locations.repo.js` |
 | `location_workorder_templates` | `repositories/templates.repo.js` |
 | `user_invitations` | `repositories/invitations.repo.js` |
-| `app_users` | `repositories/users.repo.js` |
+| `user_profiles` | `repositories/users.repo.js` |
 | `admin_user_events` | `repositories/users.repo.js` and `modules/admin/` |
 | `auth_user` lookup/linking | `repositories/auth-users.repo.js` |
 | Better Auth sessions, accounts, verification | `auth/` and Better Auth |
@@ -37,7 +37,7 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 - Parts, office help, missing information, and overdue are attention reasons. Parts/missing/overdue may be derived from their owning records; persisted attention changes are audited in `workorder_attention_events`.
 - `workorder_read_state` is per user and workorder. It must never be stored as a global boolean on the workorder.
 - `workorder_access_events` is append-only. Explicit detail opens are recorded there; background polling must not create access events.
-- User deletion is a credential deletion plus an `app_users.deleted_at` tombstone. Do not delete operational user rows that may be referenced by historical work.
+- User deletion is credential deletion plus a `user_profiles.deleted_at` tombstone. Do not delete operational profiles referenced by history.
 - Admin account changes are append-only in `admin_user_events`; password hashes and session invalidation remain Better Auth responsibilities.
 
 ## Migration Runtime
@@ -55,6 +55,6 @@ npm run verify
 ```
 
 `db:check` is read-only. It verifies migration parity, tenant ownership, location
-coverage, operational-view coverage, and primary-mechanic projection drift.
+coverage, profile memberships, final contract columns, operational views, and tenant-safe indexes.
 
 `db:create-admin` is idempotent and uses Better Auth to create the credential. It links the login to the operational admin profile, company membership, and location membership. Do not insert password hashes with SQL.

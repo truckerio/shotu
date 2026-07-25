@@ -1,15 +1,16 @@
 import { query } from "../pool.js";
-import { DEFAULT_COMPANY_ID } from "../company.js";
+import { requireCompanyId } from "../company.js";
 
-export async function getIntegrationStatus(provider, companyId = DEFAULT_COMPANY_ID) {
+export async function getIntegrationStatus(provider, companyId) {
+  const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
-      select id, company_uuid as company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
+      select id, company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
            , access_token, refresh_token, token_type, scope, expires_at, oauth_state, oauth_state_created_at
       from integration_accounts
-      where company_uuid = $1 and provider = $2
+      where company_id = $1 and provider = $2
     `,
-    [companyId, provider]
+    [tenantId, provider]
   );
   return result.rows[0] || null;
 }
@@ -17,7 +18,7 @@ export async function getIntegrationStatus(provider, companyId = DEFAULT_COMPANY
 export async function findIntegrationByOAuthState(provider, state) {
   const result = await query(
     `
-      select id, company_uuid as company_id, provider, status, oauth_state, oauth_state_created_at
+      select id, company_id, provider, status, oauth_state, oauth_state_created_at
       from integration_accounts
       where provider = $1 and oauth_state = $2
       limit 1
@@ -30,45 +31,47 @@ export async function findIntegrationByOAuthState(provider, state) {
 export async function listConnectedIntegrationAccounts(provider) {
   const result = await query(
     `
-      select id, company_uuid as company_id, provider, status, last_full_sync_at
+      select id, company_id, provider, status, last_full_sync_at
       from integration_accounts
       where provider = $1
         and status in ('connected', 'configured')
         and (access_token is not null or refresh_token is not null)
-      order by company_uuid
+      order by company_id
     `,
     [provider],
   );
   return result.rows;
 }
 
-export async function saveOAuthState(provider, state, companyId = DEFAULT_COMPANY_ID) {
+export async function saveOAuthState(provider, state, companyId) {
+  const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
-      insert into integration_accounts (company_uuid, provider, status, oauth_state, oauth_state_created_at, updated_at)
+      insert into integration_accounts (company_id, provider, status, oauth_state, oauth_state_created_at, updated_at)
       values ($1, $2, 'oauth_pending', $3, now(), now())
-      on conflict (company_uuid, provider)
+      on conflict (company_id, provider)
       do update set
         status = 'oauth_pending',
         oauth_state = excluded.oauth_state,
         oauth_state_created_at = excluded.oauth_state_created_at,
         updated_at = now()
-      returning id, company_uuid as company_id, provider, status, oauth_state, oauth_state_created_at
+      returning id, company_id, provider, status, oauth_state, oauth_state_created_at
     `,
-    [companyId, provider, state]
+    [tenantId, provider, state]
   );
   return result.rows[0];
 }
 
-export async function saveOAuthTokens(provider, tokens, companyId = DEFAULT_COMPANY_ID) {
+export async function saveOAuthTokens(provider, tokens, companyId) {
+  const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
       insert into integration_accounts (
-        company_uuid, provider, status, token_env_key, access_token, refresh_token, token_type, scope, expires_at,
+        company_id, provider, status, token_env_key, access_token, refresh_token, token_type, scope, expires_at,
         oauth_state, oauth_state_created_at, updated_at
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, null, null, now())
-      on conflict (company_uuid, provider)
+      on conflict (company_id, provider)
       do update set
         status = excluded.status,
         token_env_key = excluded.token_env_key,
@@ -80,10 +83,10 @@ export async function saveOAuthTokens(provider, tokens, companyId = DEFAULT_COMP
         oauth_state = null,
         oauth_state_created_at = null,
         updated_at = now()
-      returning id, company_uuid as company_id, provider, status, token_env_key, token_type, scope, expires_at, last_full_sync_at, updated_at
+      returning id, company_id, provider, status, token_env_key, token_type, scope, expires_at, last_full_sync_at, updated_at
     `,
     [
-      companyId,
+      tenantId,
       provider,
       tokens.status || "connected",
       tokens.tokenEnvKey || "SAMSARA_OAUTH",
@@ -97,24 +100,25 @@ export async function saveOAuthTokens(provider, tokens, companyId = DEFAULT_COMP
   return result.rows[0];
 }
 
-export async function upsertIntegrationStatus(provider, updates, companyId = DEFAULT_COMPANY_ID) {
+export async function upsertIntegrationStatus(provider, updates, companyId) {
+  const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
       insert into integration_accounts (
-        company_uuid, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
+        company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
       )
       values ($1, $2, $3, $4, $5, $6, now())
-      on conflict (company_uuid, provider)
+      on conflict (company_id, provider)
       do update set
         status = excluded.status,
         token_env_key = excluded.token_env_key,
         last_sync_cursor = excluded.last_sync_cursor,
         last_full_sync_at = excluded.last_full_sync_at,
         updated_at = now()
-      returning id, company_uuid as company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
+      returning id, company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
     `,
     [
-      companyId,
+      tenantId,
       provider,
       updates.status || "connected",
       updates.tokenEnvKey || "SAMSARA_API_TOKEN",
@@ -125,22 +129,23 @@ export async function upsertIntegrationStatus(provider, updates, companyId = DEF
   return result.rows[0];
 }
 
-export async function createSyncRun(provider, syncType, companyId = DEFAULT_COMPANY_ID) {
+export async function createSyncRun(provider, syncType, companyId) {
+  const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
       insert into integration_sync_runs (
-        company_uuid, integration_account_id, provider, sync_type, status
+        company_id, integration_account_id, provider, sync_type, status
       )
       values (
         $1,
-        (select id from integration_accounts where company_uuid = $1 and provider = $2 limit 1),
+        (select id from integration_accounts where company_id = $1 and provider = $2 limit 1),
         $2,
         $3,
         'running'
       )
-      returning id, company_uuid as company_id, integration_account_id, provider, sync_type, status, started_at
+      returning id, company_id, integration_account_id, provider, sync_type, status, started_at
     `,
-    [companyId, provider, syncType]
+    [tenantId, provider, syncType]
   );
   return result.rows[0];
 }

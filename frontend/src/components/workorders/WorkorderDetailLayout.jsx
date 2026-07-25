@@ -89,7 +89,13 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
     return () => window.removeEventListener("resize", fitSavedWidth);
   }, []);
 
-  if (!detail) return <section className="split-layout">{panes}</section>;
+  if (!detail) {
+    return (
+      <section className={`split-layout generator-layout ${previewOpen ? "has-preview" : ""}`}>
+        {panes}
+      </section>
+    );
+  }
 
   const limits = bounds();
   const effectivePercent = previewOpen ? clamp(previewPercent, limits.minimum, limits.maximum) : 0;

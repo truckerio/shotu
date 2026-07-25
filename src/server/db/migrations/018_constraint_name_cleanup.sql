@@ -1,0 +1,27 @@
+-- Names should describe the final contract, not the removed expand-phase column.
+
+alter table assets
+  rename constraint assets_company_uuid_fkey to assets_company_id_fkey;
+alter table integration_accounts
+  rename constraint integration_accounts_company_uuid_fkey to integration_accounts_company_id_fkey;
+alter table integration_sync_runs
+  rename constraint integration_sync_runs_company_uuid_fkey to integration_sync_runs_company_id_fkey;
+alter table inventory_items
+  rename constraint inventory_items_company_uuid_fkey to inventory_items_company_id_fkey;
+alter table locations
+  rename constraint locations_company_uuid_fkey to locations_company_id_fkey;
+alter table operational_workorders
+  rename constraint operational_workorders_company_uuid_fkey to operational_workorders_company_id_fkey;
+alter table parts_catalog
+  rename constraint parts_catalog_company_uuid_fkey to parts_catalog_company_id_fkey;
+alter table user_company_memberships
+  rename constraint user_company_memberships_company_uuid_fkey to user_company_memberships_company_id_fkey;
+alter table user_invitations
+  rename constraint user_invitations_company_uuid_fkey to user_invitations_company_id_fkey;
+alter table user_location_memberships
+  rename constraint user_location_memberships_company_uuid_fkey to user_location_memberships_company_id_fkey;
+alter table workorder_serial_counters
+  rename constraint workorder_serial_counters_company_uuid_fkey to workorder_serial_counters_company_id_fkey;
+
+alter index if exists inventory_items_company_uuid_part_idx
+  rename to inventory_items_company_part_idx;

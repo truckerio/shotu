@@ -4,10 +4,10 @@ import { DEFAULT_COMPANY_ID } from "../company.js";
 export async function listLocations(companyId = DEFAULT_COMPANY_ID) {
   const result = await query(
     `
-      select id, company_uuid as company_id, name, type, address, lat, lng, active, created_at, updated_at
+      select id, company_id, name, type, address, lat, lng, active, created_at, updated_at
       from locations
       where active = true
-        and company_uuid = $1
+        and company_id = $1
       order by name asc
     `,
     [companyId || DEFAULT_COMPANY_ID]
@@ -18,10 +18,10 @@ export async function listLocations(companyId = DEFAULT_COMPANY_ID) {
 export async function defaultLocation(companyId = DEFAULT_COMPANY_ID) {
   const result = await query(
     `
-      select id, company_uuid as company_id, name, type, address, lat, lng, active, created_at, updated_at
+      select id, company_id, name, type, address, lat, lng, active, created_at, updated_at
       from locations
       where active = true
-        and company_uuid = $1
+        and company_id = $1
       order by created_at asc
       limit 1
     `,
@@ -32,10 +32,10 @@ export async function defaultLocation(companyId = DEFAULT_COMPANY_ID) {
 
 export async function getLocationById(locationId, companyIds = null) {
   const result = await query(
-    `select id, company_uuid as company_id, name, type, address, lat, lng, active, created_at, updated_at
+    `select id, company_id, name, type, address, lat, lng, active, created_at, updated_at
        from locations
       where id = $1
-        and ($2::uuid[] is null or company_uuid = any($2::uuid[]))
+        and ($2::uuid[] is null or company_id = any($2::uuid[]))
       limit 1`,
     [locationId, companyIds?.length ? companyIds : null],
   );
@@ -46,7 +46,7 @@ export async function listLocationsWithAdminCounts(companyIds) {
   const result = await query(`
     select
       location.id,
-      location.company_uuid as company_id,
+      location.company_id,
       location.name,
       location.type,
       location.address,
@@ -61,7 +61,7 @@ export async function listLocationsWithAdminCounts(companyIds) {
     left join operational_workorders workorder on workorder.location_id = location.id
     left join user_invitations invitation on invitation.location_id = location.id
     left join location_workorder_templates template on template.location_id = location.id and template.active
-    where location.company_uuid = any($1::uuid[])
+    where location.company_id = any($1::uuid[])
     group by location.id, template.id
     order by location.active desc, location.name
   `, [companyIds]);
@@ -73,9 +73,9 @@ export async function createLocationWithTemplate({ companyId, name, type, addres
   try {
     await client.query("begin");
     const location = await client.query(
-      `insert into locations (company_uuid, name, type, address)
+      `insert into locations (company_id, name, type, address)
        values ($1, $2, $3, nullif($4, ''))
-       returning id, company_uuid as company_id, name, type, address, active, created_at, updated_at`,
+       returning id, company_id, name, type, address, active, created_at, updated_at`,
       [companyId, name, type, address],
     );
     await client.query(
@@ -102,7 +102,7 @@ export async function updateLocation(locationId, input) {
             active = coalesce($5, active),
             updated_at = now()
       where id = $1
-      returning id, company_uuid as company_id, name, type, address, active, created_at, updated_at`,
+      returning id, company_id, name, type, address, active, created_at, updated_at`,
     [locationId, input.name ?? null, input.type ?? null, input.address ?? null, input.active ?? null],
   );
   return result.rows[0] || null;

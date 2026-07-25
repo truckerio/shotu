@@ -38,14 +38,14 @@ export async function listChatMessages(workorderId) {
         cm.message_type,
         cm.body,
         cm.created_at,
-        u.name as sender_name,
+        u.display_name as sender_name,
         attachment.id as attachment_id,
         attachment.original_file_name as attachment_file_name,
         attachment.mime_type as attachment_mime_type,
         attachment.byte_size as attachment_byte_size,
         attachment.created_at as attachment_created_at
       from chat_messages cm
-      left join app_users u on u.id = cm.sender_user_id
+      left join user_profiles u on u.id = cm.sender_user_id
       left join chat_message_attachments attachment on attachment.message_id = cm.id
       where cm.workorder_id = $1
       order by cm.created_at asc
@@ -188,8 +188,15 @@ export async function getMechanicChatContext(workorderId) {
     `
       select
         wo.id,
-        wo.company_uuid as company_id,
-        wo.current_mechanic_id,
+        wo.company_id,
+        (
+          select assignment.mechanic_user_id
+          from workorder_mechanic_assignments assignment
+          where assignment.workorder_id = wo.id
+            and assignment.active
+            and assignment.assignment_role = 'primary'
+          limit 1
+        ) as primary_mechanic_id,
         wo.status,
         wo.form_data,
         a.id as asset_id,

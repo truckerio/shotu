@@ -29,28 +29,39 @@ try {
     [companyKey, `Parts Test ${suffix}`],
   );
   companyId = company.rows[0].id;
-  await query(
-    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
-     values ($1, $2, true)`,
-    [companyKey, companyId],
-  );
   const location = await query(
-    `insert into locations (company_uuid, name, type)
+    `insert into locations (company_id, name, type)
      values ($1, $2, 'yard') returning id`,
     [companyId, `Parts Test Yard ${suffix}`],
   );
   locationId = location.rows[0].id;
 
   const [users, asset] = await Promise.all([
-    query("select id, role from app_users where role in ('mechanic', 'office') and active = true order by role"),
-    query("select id from assets where unit_type = 'Truck' and company_uuid = $1 order by updated_at desc limit 1", [companyId]),
+    query(
+      `select profile.id, role.role
+         from user_profiles profile
+         join v_user_primary_role role on role.user_id = profile.id
+        where role.role in ('mechanic', 'office') and profile.active
+        order by role.role`,
+    ),
+    query("select id from assets where unit_type = 'Truck' and company_id = $1 order by updated_at desc limit 1", [companyId]),
   ]);
   const mechanic = users.rows.find((user) => user.role === "mechanic");
   const office = users.rows.find((user) => user.role === "office");
   assert.ok(mechanic && office, "Test requires active mechanic and office users.");
+  await query(
+    `insert into user_company_memberships (user_id, company_id, role)
+     values ($1, $3, 'mechanic'), ($2, $3, 'office')`,
+    [mechanic.id, office.id, companyId],
+  );
+  await query(
+    `insert into user_location_memberships (user_id, location_id, company_id)
+     values ($1, $3, $4), ($2, $3, $4)`,
+    [mechanic.id, office.id, locationId, companyId],
+  );
 
   await query(
-    `insert into workorder_serial_counters (company_uuid, prefix, next_number, digits)
+    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
      values ($1, $2, 1, 4)`,
     [companyId, `PT-${suffix}-`]
   );
@@ -85,7 +96,7 @@ try {
 
   const inventory = await query(
     `insert into inventory_items (
-       company_uuid, location_id, normalized_part_number, part_number, manufacturer,
+       company_id, location_id, normalized_part_number, part_number, manufacturer,
        description, quantity_on_hand, quantity_reserved, bin_location
      ) values ($1, $2, $3, $4, $5, $6, 10, 0, 'B-12') returning id`,
     [companyId, locationId, normalizePartNumber("LF14000NN"), "LF14000NN", "Fleetguard", "Engine oil filter"]
@@ -173,9 +184,9 @@ try {
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
   if (companyId) {
-    await query("delete from inventory_items where company_uuid = $1", [companyId]);
-    await query("delete from parts_catalog where company_uuid = $1", [companyId]);
-    await query("delete from workorder_serial_counters where company_uuid = $1", [companyId]);
+    await query("delete from inventory_items where company_id = $1", [companyId]);
+    await query("delete from parts_catalog where company_id = $1", [companyId]);
+    await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
   }
   if (locationId) await query("delete from locations where id = $1", [locationId]);
   if (companyId) await query("delete from companies where id = $1", [companyId]);

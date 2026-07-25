@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, CheckCircle, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { Briefcase02, CheckCircle, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
@@ -152,9 +153,11 @@ export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
 
   return (
     <main className="prototype mechanic-home office-home workspace-operations">
-      <WorkspaceHeader actor={actor}>
-        <Button variant="primary" onClick={onCreateWorkorder}>Create workorder</Button>
-      </WorkspaceHeader>
+      <WorkspaceHeader actor={actor} />
+      <PageHeader
+        title="Workorders"
+        actions={<Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
+      />
 
       <section className="office-layout">
         <aside className="office-mechanic-panel" aria-label="Mechanic workload">

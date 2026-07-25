@@ -8,10 +8,7 @@ import { listWorkorderPartRequests } from "../../db/repositories/part-requests.r
 
 function mechanicParticipants(workorder, timeline) {
   const participants = new Map();
-  const currentMechanicIds = new Set([
-    ...(workorder.mechanicIds || []),
-    workorder.currentMechanicId,
-  ].filter(Boolean));
+  const currentMechanicIds = new Set(workorder.mechanicIds || []);
   const include = ({ id, name, createdAt, opened = false, activity = false }) => {
     if (!id || !name) return;
     const current = participants.get(id) || {

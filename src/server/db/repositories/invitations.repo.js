@@ -41,9 +41,9 @@ export async function createUserInvitation(input) {
     );
     const result = await client.query(
       `insert into user_invitations (
-         company_uuid, location_id, email, name, role, token_hash, invited_by_user_id, expires_at
+         company_id, location_id, email, name, role, token_hash, invited_by_user_id, expires_at
        ) values ($1, $2, lower($3), $4, $5, $6, $7, $8)
-       returning id, company_uuid as company_id, location_id, email, name, role, status, expires_at, created_at`,
+       returning id, company_id, location_id, email, name, role, status, expires_at, created_at`,
       [input.companyId, input.locationId, input.email, input.name, input.role, input.tokenHash, input.actorId, input.expiresAt],
     );
     await client.query("commit");
@@ -72,7 +72,7 @@ export async function rotateUserInvitation({
       where id = $1
         and location_id = $2
         and status = 'pending'
-      returning id, company_uuid as company_id, location_id, email, name, role,
+      returning id, company_id, location_id, email, name, role,
                 status, expires_at, accepted_at, created_at`,
     [invitationId, locationId, tokenHash, actorId, expiresAt],
   );
@@ -101,34 +101,32 @@ export async function acceptUserInvitation({ invitationId, authUserId, username 
       throw new Error("Invitation is no longer available.");
     }
     const userResult = await client.query(
-      `insert into app_users (name, email, role, location_id, active, auth_user_id)
-       values ($1, $2, $3, $4, true, $5)
-       on conflict (email) do update
-         set name = excluded.name,
-             role = excluded.role,
-             location_id = excluded.location_id,
+      `insert into user_profiles (display_name, contact_email, active, auth_user_id)
+       values ($1, $2, true, $3)
+       on conflict (auth_user_id) do update
+         set display_name = excluded.display_name,
+             contact_email = excluded.contact_email,
              active = true,
              auth_user_id = excluded.auth_user_id,
              updated_at = now()
        returning id`,
-      [invitation.name, invitation.email, invitation.role, invitation.location_id, authUserId],
+      [invitation.name, invitation.email, authUserId],
     );
     const userId = userResult.rows[0].id;
     await client.query(
-      `insert into user_location_memberships (user_id, location_id, company_uuid, active)
+      `insert into user_location_memberships (user_id, location_id, company_id, active)
        values ($1, $2, $3, true)
        on conflict (user_id, location_id) do update set active = true, updated_at = now()`,
-      [userId, invitation.location_id, invitation.company_uuid],
+      [userId, invitation.location_id, invitation.company_id],
     );
     await client.query(
-      `insert into user_company_memberships (user_id, company_uuid, role, active)
+      `insert into user_company_memberships (user_id, company_id, role, active)
        values ($1, $2, $3, true)
        on conflict (user_id, company_id) do update
-         set company_uuid = excluded.company_uuid,
-             role = excluded.role,
+         set role = excluded.role,
              active = true,
              updated_at = now()`,
-      [userId, invitation.company_uuid, invitation.role],
+      [userId, invitation.company_id, invitation.role],
     );
     await client.query(
       `update user_invitations

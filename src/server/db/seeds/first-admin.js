@@ -173,20 +173,6 @@ async function resolveCompany(client, input) {
         returning id, slug, name`,
       [input.companySlug, input.companyName, existing.rows[0].id],
     );
-    await client.query(
-      `update company_legacy_keys
-          set is_primary = false
-        where company_id = $1 and legacy_key <> $2`,
-      [updated.rows[0].id, input.companySlug],
-    );
-    await client.query(
-      `insert into company_legacy_keys (legacy_key, company_id, is_primary)
-       values ($1, $2, true)
-       on conflict (legacy_key) do update
-         set company_id = excluded.company_id,
-             is_primary = true`,
-      [input.companySlug, updated.rows[0].id],
-    );
     return updated.rows[0];
   }
 
@@ -195,11 +181,6 @@ async function resolveCompany(client, input) {
      values ($1, $2, true)
      returning id, slug, name`,
     [input.companySlug, input.companyName],
-  );
-  await client.query(
-    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
-     values ($1, $2, true)`,
-    [input.companySlug, created.rows[0].id],
   );
   return created.rows[0];
 }
@@ -211,7 +192,7 @@ async function resolveLocation(client, input, companyId) {
     const locations = await client.query(
       `select id, name
          from locations
-        where company_uuid = $1 and active = true
+        where company_id = $1 and active = true
         order by created_at, id
         limit 2`,
       [companyId],
@@ -226,7 +207,7 @@ async function resolveLocation(client, input, companyId) {
   const existing = await client.query(
     `select id, name
        from locations
-      where company_uuid = $1 and lower(btrim(name)) = lower(btrim($2))
+      where company_id = $1 and lower(btrim(name)) = lower(btrim($2))
       order by created_at, id
       limit 2
       for update`,
@@ -247,7 +228,7 @@ async function resolveLocation(client, input, companyId) {
   }
 
   const created = await client.query(
-    `insert into locations (company_uuid, name, type, active)
+    `insert into locations (company_id, name, type, active)
      values ($1, $2, 'yard', true)
      returning id, name`,
     [companyId, locationName],
@@ -265,8 +246,8 @@ export async function linkDomainAdmin({ pool, input, authUserId }) {
 
     const matches = await client.query(
       `select id, auth_user_id
-         from app_users
-        where auth_user_id = $1 or lower(email) = lower($2)
+         from user_profiles
+        where auth_user_id = $1 or lower(contact_email) = lower($2)
         order by created_at, id
         for update`,
       [authUserId, input.email],
@@ -282,44 +263,41 @@ export async function linkDomainAdmin({ pool, input, authUserId }) {
         throw new Error("ADMIN_EMAIL is already linked to a different auth identity.");
       }
       const updated = await client.query(
-        `update app_users
-            set name = $1,
-                email = $2,
-                role = 'admin',
-                location_id = $3,
+        `update user_profiles
+            set display_name = $1,
+                contact_email = $2,
                 active = true,
-                auth_user_id = $4,
+                auth_user_id = $3,
                 updated_at = now()
-          where id = $5
+          where id = $4
           returning id`,
-        [input.name, input.email, location.id, authUserId, existing.id],
+        [input.name, input.email, authUserId, existing.id],
       );
       appUserId = updated.rows[0].id;
     } else {
       const created = await client.query(
-        `insert into app_users (name, email, role, location_id, active, auth_user_id)
-         values ($1, $2, 'admin', $3, true, $4)
+        `insert into user_profiles (display_name, contact_email, active, auth_user_id)
+         values ($1, $2, true, $3)
          returning id`,
-        [input.name, input.email, location.id, authUserId],
+        [input.name, input.email, authUserId],
       );
       appUserId = created.rows[0].id;
     }
 
     await client.query(
-      `insert into user_company_memberships (user_id, company_uuid, role, active)
+      `insert into user_company_memberships (user_id, company_id, role, active)
        values ($1, $2, 'admin', true)
        on conflict (user_id, company_id) do update
-         set company_uuid = excluded.company_uuid,
-             role = 'admin',
+         set role = 'admin',
              active = true,
              updated_at = now()`,
       [appUserId, company.id],
     );
     await client.query(
-      `insert into user_location_memberships (user_id, location_id, company_uuid, active)
+      `insert into user_location_memberships (user_id, location_id, company_id, active)
        values ($1, $2, $3, true)
        on conflict (user_id, location_id) do update
-         set company_uuid = excluded.company_uuid,
+         set company_id = excluded.company_id,
              active = true,
              updated_at = now()`,
       [appUserId, location.id, company.id],
@@ -357,7 +335,7 @@ export async function cleanupNewAuthIdentity({ pool, authUserId }) {
     `delete from auth_user auth
       where auth.id = $1
         and not exists (
-          select 1 from app_users operational where operational.auth_user_id = auth.id
+          select 1 from user_profiles operational where operational.auth_user_id = auth.id
         )
       returning auth.id`,
     [authUserId],

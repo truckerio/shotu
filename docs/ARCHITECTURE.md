@@ -72,12 +72,12 @@ Office and mechanic views read and update the same `operational_workorders` reco
 
 ### User Lifecycle
 
-Better Auth owns passwords, account bans, and session revocation. `app_users` and its company/location memberships own operational identity and access. Admin user-management routes always authorize the target location and every company membership before changing either layer.
+Better Auth owns passwords, account bans, and session revocation. `user_profiles` owns operational contact identity. Company and location memberships own role and access. Admin user-management routes authorize the target location and every company membership before changing either layer.
 
 - Password reset uses Better Auth hashing and revokes all existing sessions.
 - Deactivation bans the login and deactivates all operational memberships.
 - Activation restores the selected company/location membership and unbans the login.
-- Deletion removes the login and contact data but keeps a tombstoned `app_users` row so historical workorder, chat, and audit references remain valid.
+- Deletion removes the login and contact data but keeps a tombstoned `user_profiles` row so historical workorder, chat, and audit references remain valid.
 - `admin_user_events` records password reset, activation, deactivation, and deletion. An admin cannot deactivate, delete, or reset their own account through location user management.
 
 Direct Better Auth admin transport routes are not public API. The application exposes tenant-checked commands under `/api/admin/locations/:locationId/users/:userId`.

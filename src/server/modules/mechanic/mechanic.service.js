@@ -96,10 +96,9 @@ export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
     lastSeenActivityAt: detail.workorder.updatedAt,
   });
   const { workorder } = detail;
-  const isMine = workorder.mechanicIds?.includes(mechanic.id)
-    || workorder.currentMechanicId === mechanic.id;
+  const isMine = workorder.mechanicIds?.includes(mechanic.id);
   const canAccept = workorder.status === WORKORDER_STATUS.OPEN
-    && !(workorder.mechanicIds?.length || workorder.currentMechanicId);
+    && !workorder.mechanicIds?.length;
   const canEdit = isMine && ![WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED].includes(workorder.status);
   return {
     user: mechanic,

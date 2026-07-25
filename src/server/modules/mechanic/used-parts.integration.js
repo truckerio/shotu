@@ -23,25 +23,20 @@ try {
     [companyKey, `Used Parts Test ${suffix}`],
   );
   companyId = company.rows[0].id;
-  await query(
-    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
-     values ($1, $2, true)`,
-    [companyKey, companyId],
-  );
   const location = await query(
-    `insert into locations (company_uuid, name, type)
+    `insert into locations (company_id, name, type)
      values ($1, $2, 'yard') returning id`,
     [companyId, `Used Parts Yard ${suffix}`],
   );
   locationId = location.rows[0].id;
 
   const users = await query(
-    `insert into app_users (name, email, role)
+    `insert into user_profiles (display_name, contact_email)
      values
-       ($1, $2, 'mechanic'),
-       ($3, $4, 'mechanic'),
-       ($5, $6, 'office')
-     returning id, role, email`,
+       ($1, $2),
+       ($3, $4),
+       ($5, $6)
+     returning id, contact_email`,
     [
       "Used Parts Mechanic",
       `used-parts-mechanic-${suffix}@example.test`,
@@ -51,12 +46,22 @@ try {
       `used-parts-office-${suffix}@example.test`,
     ]
   );
-  mechanicId = users.rows.find((user) => user.email.startsWith("used-parts-mechanic"))?.id;
-  otherMechanicId = users.rows.find((user) => user.email.startsWith("other-mechanic"))?.id;
-  officeId = users.rows.find((user) => user.role === "office")?.id;
+  mechanicId = users.rows.find((user) => user.contact_email.startsWith("used-parts-mechanic"))?.id;
+  otherMechanicId = users.rows.find((user) => user.contact_email.startsWith("other-mechanic"))?.id;
+  officeId = users.rows.find((user) => user.contact_email.startsWith("used-parts-office"))?.id;
+  await query(
+    `insert into user_company_memberships (user_id, company_id, role)
+     values ($1, $4, 'mechanic'), ($2, $4, 'mechanic'), ($3, $4, 'office')`,
+    [mechanicId, otherMechanicId, officeId, companyId],
+  );
+  await query(
+    `insert into user_location_memberships (user_id, location_id, company_id)
+     values ($1, $4, $5), ($2, $4, $5), ($3, $4, $5)`,
+    [mechanicId, otherMechanicId, officeId, locationId, companyId],
+  );
 
   await query(
-    `insert into workorder_serial_counters (company_uuid, prefix, next_number, digits)
+    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
      values ($1, $2, 1, 4)`,
     [companyId, `UP-${suffix}-`]
   );
@@ -113,9 +118,9 @@ try {
     saveMechanicUsedParts(workorderId, otherMechanicId, input.parts),
     /Only an assigned mechanic/
   );
-  await query("update app_users set active = false where id = $1", [mechanicId]);
+  await query("update user_profiles set active = false where id = $1", [mechanicId]);
   await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /Mechanic user not found/);
-  await query("update app_users set active = true where id = $1", [mechanicId]);
+  await query("update user_profiles set active = true where id = $1", [mechanicId]);
   await query("update operational_workorders set status = 'closed' where id = $1", [workorderId]);
   await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /completed workorder/);
 
@@ -130,9 +135,9 @@ try {
   }));
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
-  if (companyId) await query("delete from workorder_serial_counters where company_uuid = $1", [companyId]);
+  if (companyId) await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
   const userIds = [mechanicId, otherMechanicId, officeId].filter(Boolean);
-  if (userIds.length) await query("delete from app_users where id = any($1::uuid[])", [userIds]);
+  if (userIds.length) await query("delete from user_profiles where id = any($1::uuid[])", [userIds]);
   if (locationId) await query("delete from locations where id = $1", [locationId]);
   if (companyId) await query("delete from companies where id = $1", [companyId]);
   await closePool();

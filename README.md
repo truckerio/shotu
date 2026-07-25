@@ -64,7 +64,7 @@ The browser never receives the OAuth client secret, access token, refresh token,
 
 ## Authentication
 
-Better Auth owns credentials and database-backed sessions. Operational roles, companies, locations, and workorder access remain in `app_users`, `user_company_memberships`, and `user_location_memberships`.
+Better Auth owns credentials and database-backed sessions. `user_profiles` owns operational contact identity; company and location memberships own role and access.
 
 - Public signup is disabled.
 - Mechanics sign in with a username and password.

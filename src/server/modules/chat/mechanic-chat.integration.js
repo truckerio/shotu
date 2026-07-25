@@ -26,32 +26,43 @@ try {
     [companyKey, `Chat Test ${suffix}`],
   );
   companyId = company.rows[0].id;
-  await query(
-    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
-     values ($1, $2, true)`,
-    [companyKey, companyId],
-  );
   const location = await query(
-    `insert into locations (company_uuid, name, type)
+    `insert into locations (company_id, name, type)
      values ($1, $2, 'yard') returning id`,
     [companyId, `Chat Test Yard ${suffix}`],
   );
   locationId = location.rows[0].id;
 
-  const users = await query("select id, role from app_users where role in ('mechanic', 'office') and active = true order by role");
+  const users = await query(
+    `select profile.id, role.role
+       from user_profiles profile
+       join v_user_primary_role role on role.user_id = profile.id
+      where role.role in ('mechanic', 'office') and profile.active
+      order by role.role`,
+  );
   const mechanic = users.rows.find((user) => user.role === "mechanic");
   const office = users.rows.find((user) => user.role === "office");
   assert.ok(mechanic && office, "Test requires active mechanic and office users.");
+  await query(
+    `insert into user_company_memberships (user_id, company_id, role)
+     values ($1, $3, 'mechanic'), ($2, $3, 'office')`,
+    [mechanic.id, office.id, companyId],
+  );
+  await query(
+    `insert into user_location_memberships (user_id, location_id, company_id)
+     values ($1, $3, $4), ($2, $3, $4)`,
+    [mechanic.id, office.id, locationId, companyId],
+  );
 
   const asset = await query(
-    `insert into assets (company_uuid, provider, unit_type, name, unit_no, vin, make, model, year)
+    `insert into assets (company_id, provider, unit_type, name, unit_no, vin, make, model, year)
      values ($1, 'manual', 'Truck', $2, $2, $3, 'Freightliner', 'Cascadia', 2022)
      returning id`,
     [companyId, `CHAT-${suffix}`, `1FUJGLDR0NL${String(Date.now()).slice(-6)}`.slice(0, 17)]
   );
   assetId = asset.rows[0].id;
   await query(
-    `insert into workorder_serial_counters (company_uuid, prefix, next_number, digits)
+    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
      values ($1, $2, 1, 4)`,
     [companyId, `CHAT-${suffix}-`]
   );
@@ -136,7 +147,7 @@ try {
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
   if (assetId) await query("delete from assets where id = $1", [assetId]);
-  if (companyId) await query("delete from workorder_serial_counters where company_uuid = $1", [companyId]);
+  if (companyId) await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
   if (locationId) await query("delete from locations where id = $1", [locationId]);
   if (companyId) await query("delete from companies where id = $1", [companyId]);
   await rm(mediaDirectory, { recursive: true, force: true });

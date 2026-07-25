@@ -71,8 +71,8 @@ export async function listWorkorderPartRequests(workorderId) {
     `
       select
         pr.*,
-        requester.name as requested_by_name,
-        approver.name as approved_by_name,
+        requester.display_name as requested_by_name,
+        approver.display_name as approved_by_name,
         coalesce((
           select jsonb_agg(to_jsonb(allocation_row) order by allocation_row.created_at)
           from (
@@ -88,15 +88,15 @@ export async function listWorkorderPartRequests(workorderId) {
             select ii.*, l.name as location_name
             from inventory_items ii
             left join locations l on l.id = ii.location_id
-            where ii.company_uuid = wo.company_uuid
+            where ii.company_id = wo.company_id
               and ii.normalized_part_number = pr.normalized_part_number
               and pr.normalized_part_number <> ''
           ) inventory_row
         ), '[]'::jsonb) as inventory
       from workorder_part_requests pr
       join operational_workorders wo on wo.id = pr.workorder_id
-      left join app_users requester on requester.id = pr.requested_by_user_id
-      left join app_users approver on approver.id = pr.approved_by_user_id
+      left join user_profiles requester on requester.id = pr.requested_by_user_id
+      left join user_profiles approver on approver.id = pr.approved_by_user_id
       where pr.workorder_id = $1
       order by pr.created_at asc
     `,
@@ -232,7 +232,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       quantity: input.quantity,
       repairOrder: input.repairOrder || "",
     };
-    const catalogPartId = await upsertCatalogPart(client, workorder.company_uuid, values);
+    const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values);
     const inserted = await client.query(
       `
         insert into workorder_part_requests (
@@ -297,9 +297,9 @@ async function upsertCatalogPart(client, companyId, values) {
   const result = await client.query(
     `
       insert into parts_catalog (
-        company_uuid, normalized_part_number, part_number, manufacturer, description, category, repair_template
+        company_id, normalized_part_number, part_number, manufacturer, description, category, repair_template
       ) values ($1, $2, $3, $4, $5, $6, $7)
-      on conflict (company_uuid, normalized_part_number) do update set
+      on conflict (company_id, normalized_part_number) do update set
         part_number = excluded.part_number,
         manufacturer = excluded.manufacturer,
         description = excluded.description,
@@ -318,11 +318,11 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
   if (allocation.sourceType === "inventory" && !inventoryItemId && normalizedPartNumber) {
     const match = await client.query(
       `select id from inventory_items
-       where company_uuid = $1 and normalized_part_number = $2
+       where company_id = $1 and normalized_part_number = $2
          and ($3::uuid is null or location_id = $3)
        order by case when location_id = $3 then 0 else 1 end, updated_at desc
        limit 1 for update`,
-      [workorder.company_uuid, normalizedPartNumber, allocation.locationId || workorder.location_id]
+      [workorder.company_id, normalizedPartNumber, allocation.locationId || workorder.location_id]
     );
     inventoryItemId = match.rows[0]?.id || null;
   }
@@ -398,7 +398,7 @@ async function restoreWorkorderWhenResolved(client, workorder, actorUserId) {
     [workorder.id]
   );
   const nextStatus = resume.rows[0]?.resume_workorder_status
-    || (workorder.current_mechanic_id ? WORKORDER_STATUS.IN_PROGRESS : WORKORDER_STATUS.OPEN);
+    || (workorder.has_primary_mechanic ? WORKORDER_STATUS.IN_PROGRESS : WORKORDER_STATUS.OPEN);
   await setWorkorderStatus(client, {
     workorderId: workorder.id,
     fromStatus: workorder.status,
@@ -414,7 +414,14 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
   try {
     await client.query("begin");
     const result = await client.query(
-      `select pr.*, wo.company_uuid, wo.location_id, wo.current_mechanic_id, wo.status as workorder_status
+      `select pr.*, wo.company_id, wo.location_id, wo.status as workorder_status,
+              exists (
+                select 1
+                from workorder_mechanic_assignments assignment
+                where assignment.workorder_id = wo.id
+                  and assignment.active
+                  and assignment.assignment_role = 'primary'
+              ) as has_primary_mechanic
        from workorder_part_requests pr
        join operational_workorders wo on wo.id = pr.workorder_id
        where pr.id = $1 and pr.workorder_id = $2
@@ -435,7 +442,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       repairOrder: input.repairOrder || request.repair_order,
     };
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
-      ? await upsertCatalogPart(client, request.company_uuid, values)
+      ? await upsertCatalogPart(client, request.company_id, values)
       : request.catalog_part_id;
     await client.query(
       `
@@ -479,7 +486,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       for (const allocation of allocations) {
         await createAllocation(client, {
           requestId,
-          workorder: { company_uuid: request.company_uuid, location_id: request.location_id },
+          workorder: { company_id: request.company_id, location_id: request.location_id },
           actorUserId,
           allocation,
           normalizedPartNumber: normalizePartNumber(values.partNumber),
@@ -503,7 +510,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
     await restoreWorkorderWhenResolved(client, {
       id: workorderId,
       status: request.workorder_status,
-      current_mechanic_id: request.current_mechanic_id,
+      has_primary_mechanic: request.has_primary_mechanic,
     }, actorUserId);
     await client.query("commit");
     return (await listWorkorderPartRequests(workorderId)).find((part) => part.id === requestId);

@@ -15,7 +15,7 @@ function dependencies(overrides = {}) {
       }),
       persistAttachment: async () => ({ storageKey: "stored.png", fileName: "part.png", mimeType: "image/png", byteSize: 10, sha256: "abc" }),
       removeAttachment: async () => {},
-      getContext: async () => ({ current_mechanic_id: "mechanic-1" }),
+      getContext: async () => ({ mechanic_ids: ["mechanic-1"] }),
       createRequest: async (_workorderId, input) => {
         calls.requests.push(input);
         return { id: "request-1", ...input };
