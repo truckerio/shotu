@@ -105,6 +105,10 @@ Lifecycle and attention are intentionally separate. Lifecycle is one of `open`, 
 
 Do not create a second workorder, user, location, template, or asset table for a new screen. Extend the current owner unless the data has a genuinely different lifecycle.
 
+Blank print batches and operational workorder creation both reserve serials through
+`repositories/serial-counters.repo.js`. Browser input and the local print ledger
+must never allocate or override a business serial.
+
 ## Deployment
 
 Railway builds the Dockerfile, runs `npm run db:migrate` before deployment, and starts `npm start`. PostgreSQL and durable object storage are production dependencies; local print/upload directories are not suitable as distributed storage across replicas.

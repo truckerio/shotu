@@ -1,5 +1,6 @@
 import { getPool, query } from "../pool.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
+import { reserveWorkorderSerials } from "./serial-counters.repo.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
@@ -135,38 +136,6 @@ export function publicWorkorderRow(row) {
   };
 }
 
-async function nextSerial(client, companyId) {
-  for (let attempt = 0; attempt < 1000; attempt += 1) {
-    const counter = await client.query(
-      `
-        insert into workorder_serial_counters (company_id)
-        values ($1)
-        on conflict (company_id) do update
-          set updated_at = now()
-        returning company_id, prefix, next_number, digits
-      `,
-      [companyId]
-    );
-    const row = counter.rows[0];
-    const serial = `${row.prefix}${String(row.next_number).padStart(row.digits, "0")}`;
-    await client.query(
-      `
-        update workorder_serial_counters
-        set next_number = next_number + 1,
-            updated_at = now()
-        where company_id = $1
-      `,
-      [companyId]
-    );
-    const existing = await client.query(
-      "select 1 from operational_workorders where company_id = $1 and serial = $2 limit 1",
-      [companyId, serial],
-    );
-    if (!existing.rows[0]) return serial;
-  }
-  throw new Error("Could not allocate unique workorder serial.");
-}
-
 async function addStatusEvent(client, { workorderId, fromStatus, toStatus, changedByUserId, note = "" }) {
   await client.query(
     `
@@ -277,7 +246,8 @@ export async function createOperationalWorkorder(input) {
   try {
     await client.query("begin");
     const companyId = input.companyId || DEFAULT_COMPANY_ID;
-    const serial = await nextSerial(client, companyId);
+    const reservation = await reserveWorkorderSerials({ companyId, count: 1 }, client);
+    const serial = reservation.serials[0];
     const result = await client.query(
       `
         insert into operational_workorders (

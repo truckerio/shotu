@@ -16,7 +16,8 @@ PostgreSQL is the source of truth for users, access scope, locations, templates,
 | `auth_user` lookup/linking | `repositories/auth-users.repo.js` |
 | Better Auth sessions, accounts, verification | `auth/` and Better Auth |
 | Company and location memberships | `auth/` request context and authorization |
-| Workorders, serial counters, status/assignment/field/access events | `repositories/operational-workorders.repo.js` |
+| Workorders and status/assignment/field/access events | `repositories/operational-workorders.repo.js` |
+| `workorder_serial_counters` | `repositories/serial-counters.repo.js` |
 | Attention state/events, read state, user workorder preferences | `repositories/workorder-attention.repo.js` |
 | Chat messages and attachments | `repositories/chat.repo.js` |
 | Catalog, inventory, requests, allocations, request events | `repositories/part-requests.repo.js` and `modules/parts/` |

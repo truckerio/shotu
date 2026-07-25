@@ -87,7 +87,7 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
           <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex + 1)} disabled={!canGoForward} aria-label="Next page" data-tooltip="Next page"><ChevronRight /></button>
           <button className="icon-tooltip" type="button" onClick={() => onZoomChange(Math.max(0, zoom - 1))} disabled={zoom <= 0} aria-label="Zoom out" data-tooltip="Zoom out"><ZoomOut /></button>
           <button className="icon-tooltip" type="button" onClick={() => onZoomChange(Math.min(2, zoom + 1))} disabled={zoom >= 2} aria-label="Zoom in" data-tooltip="Zoom in"><ZoomIn /></button>
-          <button className="fullscreen-print icon-tooltip" type="button" onClick={onPrint} aria-label={actionLabel} data-tooltip={actionLabel}><Printer /></button>
+          {onPrint ? <button className="fullscreen-print icon-tooltip" type="button" onClick={onPrint} aria-label={actionLabel} data-tooltip={actionLabel}><Printer /></button> : null}
           <button className="icon-tooltip" type="button" onClick={onClose} aria-label="Close fullscreen preview" data-tooltip="Close"><XClose /></button>
         </div>
       </div>

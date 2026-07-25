@@ -112,18 +112,19 @@ The API route remains `/api/vehicles/*` because that is the UI language, but the
 
 ## Flow
 
-1. Enter company name, serial prefix, next serial number, digits, and count.
-2. Click `Find` and choose a system printer, or leave `Save PDF only`.
-3. Click `Generate & Print`.
-4. The preview shows the first and last page when printing multiple copies.
+1. Choose the number of blank workorders.
+2. Choose a system printer, or leave `Save PDF only`.
+3. Run the print command.
+4. PostgreSQL reserves the company serials atomically and the preview advances to the next available number.
 
-The legacy physical batch-print workflow allocates serials before printing and writes them to:
+The local print ledger records transient print-job and download metadata at:
 
 ```text
 data/serial-ledger.json
 ```
 
-Generated PDFs are saved under:
+It is not the serial-number source of truth. Company serial allocation is owned by
+`workorder_serial_counters` in PostgreSQL. Generated PDFs are saved under:
 
 ```text
 printed-workorders/
@@ -145,7 +146,7 @@ share-packages/
 
 ## Duplicate Rule
 
-Serials are unique per company. If a user tries to set a company's next number lower than already issued numbers, the backend ignores the lower number and continues from the real next available serial.
+Serials are unique per company. New blank batches and newly created operational workorders reserve numbers through the same locked PostgreSQL counter. Printing an existing operational workorder reuses its assigned serial and never consumes another number.
 
 If printing fails after serial allocation, those serials stay consumed. That avoids duplicates, which is more important for tracking than filling every number.
 

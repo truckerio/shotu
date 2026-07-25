@@ -72,7 +72,7 @@ export function PreviewPane({
             <strong>{range}</strong>
           </div>
 
-          <div className="preview-print-command">
+          {onPrint ? <div className="preview-print-command">
             <button
               className="preview-tool-button icon-tooltip"
               type="button"
@@ -93,21 +93,9 @@ export function PreviewPane({
                 {batchSettings ? (
                   <div className="print-batch-settings" role="group" aria-label="Batch print settings">
                     <div>
-                      <span>Manual batch</span>
-                      <small>Blank physical workorders</small>
+                      <span>Blank workorders</span>
+                      <small>Serials are reserved automatically</small>
                     </div>
-                    <label>
-                      Prefix
-                      <input value={batchSettings.prefix} onChange={(event) => batchSettings.onChange("prefix", event.target.value)} />
-                    </label>
-                    <label>
-                      Start no.
-                      <input type="number" min="1" value={batchSettings.nextNumber} onChange={(event) => batchSettings.onChange("nextNumber", event.target.value)} />
-                    </label>
-                    <label>
-                      Digits
-                      <input type="number" min="1" max="12" value={batchSettings.digits} onChange={(event) => batchSettings.onChange("digits", event.target.value)} />
-                    </label>
                     <label>
                       Copies
                       <input type="number" min="1" max="250" value={batchSettings.copies} onChange={(event) => batchSettings.onChange("copies", event.target.value)} />
@@ -126,7 +114,7 @@ export function PreviewPane({
                 ))}
               </div>
             ) : null}
-          </div>
+          </div> : null}
 
           <button
             className="preview-tool-button icon-tooltip"

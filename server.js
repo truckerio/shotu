@@ -23,8 +23,15 @@ import {
   handleCurrentUserApi,
   permissionForRequest,
   requirePermission,
+  requireWorkorderAccess,
   resolveRequestContext,
 } from "./src/server/auth/index.js";
+import { getLocationById } from "./src/server/db/repositories/locations.repo.js";
+import {
+  getWorkorderSerialSettings,
+  reserveWorkorderSerials,
+} from "./src/server/db/repositories/serial-counters.repo.js";
+import { invalidRequest, resourceNotFound } from "./src/server/auth/errors.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -217,7 +224,7 @@ function publicWorkorder(workorder) {
 
 function ensureCompany(ledger, input) {
   const name = String(input.companyName || input.name || "Default Company").trim() || "Default Company";
-  const id = sanitizeCompanyId(name);
+  const id = String(input.companyId || sanitizeCompanyId(name));
   const existing = ledger.companies[id];
   if (existing) {
     existing.name = name;
@@ -241,29 +248,22 @@ function ensureCompany(ledger, input) {
   return ledger.companies[id];
 }
 
-function formatSerial(company, number) {
-  return `${company.prefix}${String(number).padStart(company.digits, "0")}`;
-}
-
-async function allocateSerials(input) {
+async function recordSerialAllocation(input, reservation) {
   return withLedgerLock(async () => {
     const ledger = normalizeLedger(await loadLedger());
-    const company = ensureCompany(ledger, input);
-    const count = clampInt(input.count, 1, 1, 250);
-    const issuedSet = new Set(company.issued.map((entry) => entry.serial));
+    const company = ensureCompany(ledger, {
+      ...input,
+      companyId: reservation.companyId,
+      prefix: reservation.prefix,
+      nextNumber: reservation.nextNumber,
+      digits: reservation.digits,
+    });
     const now = new Date().toISOString();
     const jobId = crypto.randomUUID();
-    const serials = [];
-    let current = company.nextNumber;
-
-    while (serials.length < count) {
-      const serial = formatSerial(company, current);
-      if (!issuedSet.has(serial)) {
-        serials.push({ serial, number: current });
-        issuedSet.add(serial);
-      }
-      current += 1;
-    }
+    const serials = reservation.serials.map((serial) => ({
+      serial,
+      number: Number(/\d+$/.exec(serial)?.[0] || 0),
+    }));
 
     for (const entry of serials) {
       company.issued.push({
@@ -287,7 +287,7 @@ async function allocateSerials(input) {
         shareHistory: [],
       };
     }
-    company.nextNumber = current;
+    company.nextNumber = reservation.nextNumber;
 
     const job = {
       id: jobId,
@@ -310,6 +310,19 @@ async function allocateSerials(input) {
 
     return { ledger, company, job, serials: serials.map((entry) => entry.serial) };
   });
+}
+
+async function printCompanyContext(requestContext, locationId = "") {
+  const companyIds = [...(requestContext?.companyIds || [])];
+  if (!companyIds.length) throw invalidRequest("Your account is not assigned to a company.");
+  if (!locationId) return { companyId: companyIds[0], location: null };
+
+  const location = await getLocationById(locationId, companyIds);
+  if (!location) throw resourceNotFound("Location");
+  if (requestContext.actor.role !== "admin" && !requestContext.locationIds?.has(locationId)) {
+    throw resourceNotFound("Location");
+  }
+  return { companyId: location.company_id, location };
 }
 
 async function markJob(jobId, updates) {
@@ -690,6 +703,12 @@ async function handleApi(req, res) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/print-settings") {
+    const selected = await printCompanyContext(requestContext, url.searchParams.get("locationId") || "");
+    sendJson(res, 200, await getWorkorderSerialSettings(selected.companyId));
+    return;
+  }
+
   const pdfMatch = /^\/api\/jobs\/([^/]+)\/pdf$/.exec(url.pathname);
   if (req.method === "GET" && pdfMatch) {
     const ledger = normalizeLedger(await loadLedger());
@@ -736,7 +755,26 @@ async function handleApi(req, res) {
         return;
       }
     }
-    const allocation = await allocateSerials({ ...input, ...form });
+    let selected;
+    let reservation;
+    if (input.workorderId) {
+      const workorder = await requireWorkorderAccess(requestContext, input.workorderId);
+      selected = { companyId: workorder.companyId, location: workorder.location || null };
+      const settings = await getWorkorderSerialSettings(workorder.companyId);
+      reservation = { ...settings, serials: [workorder.serial] };
+    } else {
+      selected = await printCompanyContext(requestContext, input.locationId || "");
+      reservation = await reserveWorkorderSerials({
+        companyId: selected.companyId,
+        count: clampInt(input.count, 1, 1, 250),
+      });
+    }
+    const allocation = await recordSerialAllocation({
+      ...input,
+      ...form,
+      companyId: selected.companyId,
+      companyName: selected.location?.name || form.companyName,
+    }, reservation);
     const pdfPath = await writeWorkorderPdf(form, allocation.company, allocation.job, allocation.serials);
     const printResult = await printPdf(pdfPath, input.printerName || "");
     await markJob(allocation.job.id, {

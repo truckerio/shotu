@@ -245,6 +245,7 @@ export function App({ actor }) {
   const workorderCountLabel = activeWorkorder ? "1 workorder" : `${effectiveCopies} page(s)`;
   const primaryActionLabel = form.printerName ? (activeWorkorder ? "Print filled workorder" : "Print workorders") : "Save PDF";
   const selectedDestinationLabel = form.printerName || "Save PDF only";
+  const canPrint = actor.role === "office" || actor.role === "admin";
   const statusOptions = [
     { value: "open", label: "Open" },
     { value: "accepted", label: "Accepted" },
@@ -316,6 +317,21 @@ export function App({ actor }) {
   useEffect(() => {
     if (actor.role === "office" || actor.role === "admin") refreshPrinters().catch(() => {});
   }, [actor.role]);
+
+  useEffect(() => {
+    if (!canPrint || activeWorkorder) return;
+    const params = form.locationId ? `?locationId=${encodeURIComponent(form.locationId)}` : "";
+    api(`/api/print-settings${params}`)
+      .then((settings) => {
+        setForm((current) => ({
+          ...current,
+          prefix: settings.prefix,
+          nextNumber: settings.nextNumber,
+          digits: settings.digits,
+        }));
+      })
+      .catch(() => {});
+  }, [activeWorkorder, canPrint, form.locationId]);
 
   useEffect(() => {
     if (actor.role !== "office") return;
@@ -684,10 +700,9 @@ export function App({ actor }) {
       const result = await api("/api/print", {
         method: "POST",
         body: JSON.stringify({
+          workorderId: activeWorkorder?.workorder?.id || null,
+          locationId: form.locationId || activeWorkorder?.workorder?.locationId || null,
           companyName: form.companyName,
-          prefix: form.prefix,
-          nextNumber: Number(form.nextNumber),
-          digits: Number(form.digits),
           count: effectiveCopies,
           printerName: destination,
           form: {
@@ -722,7 +737,9 @@ export function App({ actor }) {
       const printedRange = printedSerials.length
         ? (printedSerials.length === 1 ? printedSerials[0] : `${printedSerials[0]} to ${printedSerials.at(-1)}`)
         : range;
-      setForm((current) => ({ ...current, nextNumber: result.nextNumber }));
+      if (!activeWorkorder) {
+        setForm((current) => ({ ...current, nextNumber: result.nextNumber }));
+      }
       setPrintState({
         open: true,
         stage: "done",
@@ -1700,19 +1717,16 @@ export function App({ actor }) {
           range={range}
           printMenuOpen={printMenuOpen}
           onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-          onPrint={() => {
+          onPrint={canPrint ? () => {
             setPrintMenuOpen(false);
             printWorkorders();
-          }}
+          } : undefined}
           primaryActionLabel={primaryActionLabel}
           selectedDestinationLabel={selectedDestinationLabel}
           printerName={form.printerName}
           printers={printers}
           onSelectPrintDestination={selectPrintDestination}
-          batchSettings={mode === "admin" && !activeWorkorder ? {
-            prefix: form.prefix,
-            nextNumber: form.nextNumber,
-            digits: form.digits,
+          batchSettings={canPrint && mode === "admin" && !activeWorkorder ? {
             copies: form.copies,
             onChange: updateField,
           } : null}
@@ -1746,10 +1760,10 @@ export function App({ actor }) {
         onClose={() => setPreviewFullscreen(false)}
         onPageChange={setFullscreenPageIndex}
         onZoomChange={setFullscreenZoom}
-        onPrint={() => {
+        onPrint={canPrint ? () => {
           setPreviewFullscreen(false);
           printWorkorders();
-        }}
+        } : undefined}
       />
       <PrintModal state={printState} range={range} printerName={printState.printerName ?? form.printerName} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
       {mechanicFinish.open ? (
