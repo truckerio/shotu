@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, ClipboardCheck } from "@untitledui/icons";
+import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { api } from "../../lib/api.js";
 import "../auth/auth.css";
 
@@ -8,6 +9,7 @@ export function InviteAcceptPage({ token }) {
   const [state, setState] = useState({ loading: true, busy: false, error: "", complete: false });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     api(`/api/invitations/${encodeURIComponent(token)}`)
@@ -64,7 +66,13 @@ export function InviteAcceptPage({ token }) {
             <label><span>Name</span><input value={invitation?.name || ""} disabled /></label>
             <label><span>Email</span><input value={invitation?.email || ""} disabled /></label>
             <label><span>Username</span><input value={username} onChange={(event) => setUsername(event.target.value)} minLength="3" required autoCapitalize="none" /></label>
-            <label><span>Password</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="12" required autoComplete="new-password" /></label>
+            <div className="password-field-group">
+              <label htmlFor="invite-password"><span>Password</span></label>
+              <div className="password-input-control">
+                <input id="invite-password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength="12" required autoComplete="new-password" />
+                <PasswordVisibilityToggle visible={showPassword} controls="invite-password" onToggle={() => setShowPassword((current) => !current)} />
+              </div>
+            </div>
             {state.error ? <p className="auth-error" role="alert">{state.error}</p> : null}
             <button className="auth-submit" type="submit" disabled={state.busy}>{state.busy ? "Creating account..." : "Create account"}</button>
           </form>

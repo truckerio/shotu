@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { ClipboardCheck, Eye, EyeOff } from "@untitledui/icons";
+import { ClipboardCheck } from "@untitledui/icons";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
+import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { authClient } from "../../lib/auth-client.js";
 import "./auth.css";
 
@@ -59,17 +60,13 @@ export function LoginPage() {
 
           <TextField isRequired name="password" value={password} onChange={setPassword}>
             <Label>Password</Label>
-            <div className="auth-password-field">
-              <Input type={showPassword ? "text" : "password"} autoComplete="current-password" />
-              <Button
-                className="auth-password-toggle"
-                type="button"
-                onPress={() => setShowPassword((current) => !current)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                title={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </Button>
+            <div className="auth-password-field password-input-control">
+              <Input id="login-password" type={showPassword ? "text" : "password"} autoComplete="current-password" />
+              <PasswordVisibilityToggle
+                visible={showPassword}
+                controls="login-password"
+                onToggle={() => setShowPassword((current) => !current)}
+              />
             </div>
             <FieldError />
           </TextField>
@@ -84,4 +81,3 @@ export function LoginPage() {
     </main>
   );
 }
-

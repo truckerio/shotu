@@ -17,6 +17,7 @@ import {
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
+import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
@@ -26,6 +27,7 @@ import "./admin.css";
 const blankLocation = { name: "", type: "yard", address: "" };
 const blankInvite = { name: "", email: "", role: "mechanic" };
 const blankPassword = { password: "", confirmation: "" };
+const hiddenPasswords = { password: false, confirmation: false };
 
 function templateForm(template, location) {
   return {
@@ -230,6 +232,7 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
   const inviteResendInFlight = useRef(false);
   const [userAction, setUserAction] = useState(null);
   const [passwordDraft, setPasswordDraft] = useState(blankPassword);
+  const [visiblePasswords, setVisiblePasswords] = useState(hiddenPasswords);
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
 
   async function loadLocations() {
@@ -340,6 +343,7 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
 
   function openUserAction(type, user) {
     setPasswordDraft(blankPassword);
+    setVisiblePasswords(hiddenPasswords);
     setUserAction({ type, user });
     setState((current) => ({ ...current, error: "", message: "" }));
   }
@@ -422,8 +426,20 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
             {userAction.type === "password" ? (
               <>
                 <p className="admin-modal-copy">Set a new password for <strong>{userAction.user.name}</strong>. Their current sessions will be signed out.</p>
-                <label><span>New password</span><input required autoFocus type="password" minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.password.length > 0 && passwordDraft.password.length < 12} value={passwordDraft.password} onChange={(event) => { setPasswordDraft((current) => ({ ...current, password: event.target.value })); setState((current) => ({ ...current, error: "" })); }} /></label>
-                <label><span>Confirm password</span><input required type="password" minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.confirmation.length > 0 && passwordDraft.password !== passwordDraft.confirmation} value={passwordDraft.confirmation} onChange={(event) => { setPasswordDraft((current) => ({ ...current, confirmation: event.target.value })); setState((current) => ({ ...current, error: "" })); }} /></label>
+                <div className="password-field-group admin-password-field-group">
+                  <label htmlFor="admin-new-password"><span>New password</span></label>
+                  <div className="password-input-control">
+                    <input id="admin-new-password" required autoFocus type={visiblePasswords.password ? "text" : "password"} minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.password.length > 0 && passwordDraft.password.length < 12} value={passwordDraft.password} onChange={(event) => { setPasswordDraft((current) => ({ ...current, password: event.target.value })); setState((current) => ({ ...current, error: "" })); }} />
+                    <PasswordVisibilityToggle visible={visiblePasswords.password} controls="admin-new-password" onToggle={() => setVisiblePasswords((current) => ({ ...current, password: !current.password }))} />
+                  </div>
+                </div>
+                <div className="password-field-group admin-password-field-group">
+                  <label htmlFor="admin-confirm-password"><span>Confirm password</span></label>
+                  <div className="password-input-control">
+                    <input id="admin-confirm-password" required type={visiblePasswords.confirmation ? "text" : "password"} minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.confirmation.length > 0 && passwordDraft.password !== passwordDraft.confirmation} value={passwordDraft.confirmation} onChange={(event) => { setPasswordDraft((current) => ({ ...current, confirmation: event.target.value })); setState((current) => ({ ...current, error: "" })); }} />
+                    <PasswordVisibilityToggle visible={visiblePasswords.confirmation} controls="admin-confirm-password" onToggle={() => setVisiblePasswords((current) => ({ ...current, confirmation: !current.confirmation }))} />
+                  </div>
+                </div>
                 <div className="admin-password-rules" aria-live="polite">
                   <span className={passwordDraft.password.length >= 12 ? "valid" : ""}>At least 12 characters</span>
                   <span className={passwordDraft.confirmation && passwordDraft.password === passwordDraft.confirmation ? "valid" : passwordDraft.confirmation ? "invalid" : ""}>Passwords match</span>
