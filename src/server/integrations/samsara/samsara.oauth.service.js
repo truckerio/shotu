@@ -1,7 +1,13 @@
 import crypto from "node:crypto";
 import { env } from "../../config/env.js";
 import { migrate } from "../../db/migrate.js";
-import { getIntegrationStatus, saveOAuthState, saveOAuthTokens } from "../../db/repositories/integrations.repo.js";
+import {
+  findIntegrationByOAuthState,
+  getIntegrationStatus,
+  saveOAuthState,
+  saveOAuthTokens,
+} from "../../db/repositories/integrations.repo.js";
+import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 
 const PROVIDER = "samsara";
 const TOKEN_REFRESH_SKEW_MS = 90_000;
@@ -53,11 +59,11 @@ function expiresAtFromNow(expiresIn) {
   return new Date(Date.now() + Math.max(1, Number(expiresIn) || 3600) * 1000).toISOString();
 }
 
-export async function samsaraOAuthStartUrl(req) {
+export async function samsaraOAuthStartUrl(req, companyId = DEFAULT_COMPANY_ID) {
   await migrate();
   requireOAuthConfig();
   const state = crypto.randomBytes(24).toString("base64url");
-  await saveOAuthState(PROVIDER, state);
+  await saveOAuthState(PROVIDER, state, companyId);
   const url = new URL(`${oauthBaseUrl()}/oauth2/authorize`);
   url.searchParams.set("client_id", env.samsaraOAuthClientId);
   url.searchParams.set("state", state);
@@ -76,7 +82,7 @@ export async function handleSamsaraOAuthCallback(url) {
   const state = url.searchParams.get("state");
   if (!code || !state) throw new Error("Samsara OAuth callback is missing code or state.");
 
-  const account = await getIntegrationStatus(PROVIDER);
+  const account = await findIntegrationByOAuthState(PROVIDER, state);
   const stateAgeMs = account?.oauth_state_created_at ? Date.now() - new Date(account.oauth_state_created_at).getTime() : Infinity;
   if (!account?.oauth_state || account.oauth_state !== state || stateAgeMs > 10 * 60 * 1000) {
     throw new Error("Samsara OAuth state did not match. Please start login again.");
@@ -90,12 +96,15 @@ export async function handleSamsaraOAuthCallback(url) {
     tokenType: tokens.token_type,
     scope: tokens.scope,
     expiresAt: expiresAtFromNow(tokens.expires_in),
-  });
+  }, account.company_id);
 }
 
-export async function getSamsaraAccessToken({ allowApiTokenFallback = true } = {}) {
+export async function getSamsaraAccessToken({
+  allowApiTokenFallback = true,
+  companyId = DEFAULT_COMPANY_ID,
+} = {}) {
   await migrate();
-  const account = await getIntegrationStatus(PROVIDER);
+  const account = await getIntegrationStatus(PROVIDER, companyId);
   if (account?.access_token && account?.expires_at && new Date(account.expires_at).getTime() - Date.now() > TOKEN_REFRESH_SKEW_MS) {
     return { token: account.access_token, source: "oauth" };
   }
@@ -109,7 +118,7 @@ export async function getSamsaraAccessToken({ allowApiTokenFallback = true } = {
       tokenType: tokens.token_type,
       scope: tokens.scope || account.scope,
       expiresAt: expiresAtFromNow(tokens.expires_in),
-    });
+    }, companyId);
     return { token: tokens.access_token, source: saved.token_env_key || "oauth" };
   }
 

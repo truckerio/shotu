@@ -10,8 +10,9 @@ export async function requireWorkorderAccess(context, workorderId, options = {})
   const workorder = await getWorkorder(workorderId);
   if (!workorder) throw resourceNotFound("Workorder");
 
+  if (!context.companyIds?.has(workorder.companyId)) throw resourceNotFound("Workorder");
+
   if (actor.role !== "admin") {
-    if (!context.companyIds?.has(workorder.companyId)) throw resourceNotFound("Workorder");
     if (context.locationIds?.size && workorder.locationId && !context.locationIds.has(workorder.locationId)) {
       throw resourceNotFound("Workorder");
     }

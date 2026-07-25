@@ -60,24 +60,24 @@ export async function handleAdminApi(req, res, url, helpers) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/admin/locations") {
-    sendJson(res, 200, { locations: await adminLocations() });
+    sendJson(res, 200, { locations: await adminLocations(requestContext) });
     return true;
   }
   if (req.method === "POST" && url.pathname === "/api/admin/locations") {
     const input = createLocationSchema.parse(await readBody(req));
-    sendJson(res, 201, { location: await addAdminLocation(input, actor) });
+    sendJson(res, 201, { location: await addAdminLocation(input, actor, requestContext) });
     return true;
   }
 
   const detailId = locationPath(url.pathname);
   if (req.method === "GET" && detailId) {
-    const detail = await adminLocationDetail(detailId);
-    sendJson(res, detail ? 200 : 404, detail || { error: "Location not found." });
+    const detail = await adminLocationDetail(requestContext, detailId);
+    sendJson(res, 200, detail);
     return true;
   }
   if (req.method === "PATCH" && detailId) {
     const input = updateLocationSchema.parse(await readBody(req));
-    const location = await editAdminLocation(detailId, input);
+    const location = await editAdminLocation(requestContext, detailId, input);
     sendJson(res, location ? 200 : 404, location ? { location } : { error: "Location not found." });
     return true;
   }
@@ -85,17 +85,13 @@ export async function handleAdminApi(req, res, url, helpers) {
   const templateId = locationPath(url.pathname, "/template");
   if (req.method === "PUT" && templateId) {
     const input = updateLocationTemplateSchema.parse(await readBody(req));
-    sendJson(res, 200, { template: await saveAdminTemplate(templateId, input, actor.id) });
+    sendJson(res, 200, { template: await saveAdminTemplate(requestContext, templateId, input, actor.id) });
     return true;
   }
 
   const invitationsId = locationPath(url.pathname, "/invitations");
   if (req.method === "POST" && invitationsId) {
-    const location = await adminLocationDetail(invitationsId);
-    if (!location) {
-      sendJson(res, 404, { error: "Location not found." });
-      return true;
-    }
+    const location = await adminLocationDetail(requestContext, invitationsId);
     const input = createInvitationSchema.parse(await readBody(req));
     const origin = `${url.protocol}//${req.headers.host}`;
     sendJson(res, 201, await inviteLocationUser(location.location, input, actor.id, origin));

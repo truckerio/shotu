@@ -88,7 +88,7 @@ export async function listWorkorderPartRequests(workorderId) {
             select ii.*, l.name as location_name
             from inventory_items ii
             left join locations l on l.id = ii.location_id
-            where ii.company_id = wo.company_id
+            where ii.company_uuid = wo.company_uuid
               and ii.normalized_part_number = pr.normalized_part_number
               and pr.normalized_part_number <> ''
           ) inventory_row
@@ -232,7 +232,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       quantity: input.quantity,
       repairOrder: input.repairOrder || "",
     };
-    const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values);
+    const catalogPartId = await upsertCatalogPart(client, workorder.company_uuid, values);
     const inserted = await client.query(
       `
         insert into workorder_part_requests (
@@ -297,9 +297,9 @@ async function upsertCatalogPart(client, companyId, values) {
   const result = await client.query(
     `
       insert into parts_catalog (
-        company_id, normalized_part_number, part_number, manufacturer, description, category, repair_template
+        company_uuid, normalized_part_number, part_number, manufacturer, description, category, repair_template
       ) values ($1, $2, $3, $4, $5, $6, $7)
-      on conflict (company_id, normalized_part_number) do update set
+      on conflict (company_uuid, normalized_part_number) do update set
         part_number = excluded.part_number,
         manufacturer = excluded.manufacturer,
         description = excluded.description,
@@ -318,11 +318,11 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
   if (allocation.sourceType === "inventory" && !inventoryItemId && normalizedPartNumber) {
     const match = await client.query(
       `select id from inventory_items
-       where company_id = $1 and normalized_part_number = $2
+       where company_uuid = $1 and normalized_part_number = $2
          and ($3::uuid is null or location_id = $3)
        order by case when location_id = $3 then 0 else 1 end, updated_at desc
        limit 1 for update`,
-      [workorder.company_id, normalizedPartNumber, allocation.locationId || workorder.location_id]
+      [workorder.company_uuid, normalizedPartNumber, allocation.locationId || workorder.location_id]
     );
     inventoryItemId = match.rows[0]?.id || null;
   }
@@ -414,7 +414,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
   try {
     await client.query("begin");
     const result = await client.query(
-      `select pr.*, wo.company_id, wo.location_id, wo.current_mechanic_id, wo.status as workorder_status
+      `select pr.*, wo.company_uuid, wo.location_id, wo.current_mechanic_id, wo.status as workorder_status
        from workorder_part_requests pr
        join operational_workorders wo on wo.id = pr.workorder_id
        where pr.id = $1 and pr.workorder_id = $2
@@ -435,7 +435,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       repairOrder: input.repairOrder || request.repair_order,
     };
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
-      ? await upsertCatalogPart(client, request.company_id, values)
+      ? await upsertCatalogPart(client, request.company_uuid, values)
       : request.catalog_part_id;
     await client.query(
       `
@@ -479,7 +479,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       for (const allocation of allocations) {
         await createAllocation(client, {
           requestId,
-          workorder: { company_id: request.company_id, location_id: request.location_id },
+          workorder: { company_uuid: request.company_uuid, location_id: request.location_id },
           actorUserId,
           allocation,
           normalizedPartNumber: normalizePartNumber(values.partNumber),

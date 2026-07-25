@@ -51,6 +51,18 @@ test("company and location membership hide inaccessible workorders", async () =>
   );
 });
 
+test("admin access is still limited to assigned companies", async () => {
+  const getWorkorder = async () => workorder;
+  await assert.rejects(
+    requireWorkorderAccess(context("admin", { companyIds: new Set(["other"]) }), workorder.id, { getWorkorder }),
+    (error) => error.statusCode === 404,
+  );
+  assert.equal(
+    (await requireWorkorderAccess(context("admin"), workorder.id, { getWorkorder })).id,
+    workorder.id,
+  );
+});
+
 test("surveillance only reads completed workflow records", async () => {
   await assert.rejects(
     requireWorkorderAccess(context("surveillance"), workorder.id, { getWorkorder: async () => workorder }),

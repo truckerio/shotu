@@ -29,9 +29,16 @@ test("location authorization allows memberships and admin override", () => {
   assert.equal(requireLocationAccess({ actor: { role: "admin" }, locationIds: new Set() }, "location-b").role, "admin");
 });
 
-test("company authorization requires membership and allows admin override", () => {
+test("company authorization requires membership for every role", () => {
   const office = { actor: { role: "office" }, companyIds: new Set(["default"]) };
   assert.equal(requireCompanyAccess(office, "default").role, "office");
   assert.throws(() => requireCompanyAccess(office, "other"), (error) => error.statusCode === 403);
-  assert.equal(requireCompanyAccess({ actor: { role: "admin" }, companyIds: new Set() }, "other").role, "admin");
+  assert.throws(
+    () => requireCompanyAccess({ actor: { role: "admin" }, companyIds: new Set() }, "other"),
+    (error) => error.statusCode === 403,
+  );
+  assert.equal(
+    requireCompanyAccess({ actor: { role: "admin" }, companyIds: new Set(["other"]) }, "other").role,
+    "admin",
+  );
 });

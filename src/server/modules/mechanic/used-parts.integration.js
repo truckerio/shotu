@@ -9,13 +9,32 @@ import { updateMechanicUsedPartsSchema } from "../workorders/workorder.schemas.j
 import { saveMechanicUsedParts } from "./mechanic.service.js";
 
 const suffix = Date.now().toString(36);
-const companyId = `used-parts-test-${suffix}`;
+const companyKey = `used-parts-test-${suffix}`;
+let companyId;
+let locationId;
 let workorderId;
 let mechanicId;
 let otherMechanicId;
 let officeId;
 
 try {
+  const company = await query(
+    `insert into companies (slug, name) values ($1, $2) returning id`,
+    [companyKey, `Used Parts Test ${suffix}`],
+  );
+  companyId = company.rows[0].id;
+  await query(
+    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
+     values ($1, $2, true)`,
+    [companyKey, companyId],
+  );
+  const location = await query(
+    `insert into locations (company_uuid, name, type)
+     values ($1, $2, 'yard') returning id`,
+    [companyId, `Used Parts Yard ${suffix}`],
+  );
+  locationId = location.rows[0].id;
+
   const users = await query(
     `insert into app_users (name, email, role)
      values
@@ -37,13 +56,14 @@ try {
   officeId = users.rows.find((user) => user.role === "office")?.id;
 
   await query(
-    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
+    `insert into workorder_serial_counters (company_uuid, prefix, next_number, digits)
      values ($1, $2, 1, 4)`,
     [companyId, `UP-${suffix}-`]
   );
   const approvedRequestId = "11111111-1111-4111-8111-111111111111";
   const workorder = await createOperationalWorkorder({
     companyId,
+    locationId,
     createdByUserId: officeId,
     concern: "Used parts autosave integration test",
     formData: {
@@ -110,8 +130,10 @@ try {
   }));
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
-  await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
+  if (companyId) await query("delete from workorder_serial_counters where company_uuid = $1", [companyId]);
   const userIds = [mechanicId, otherMechanicId, officeId].filter(Boolean);
   if (userIds.length) await query("delete from app_users where id = any($1::uuid[])", [userIds]);
+  if (locationId) await query("delete from locations where id = $1", [locationId]);
+  if (companyId) await query("delete from companies where id = $1", [companyId]);
   await closePool();
 }

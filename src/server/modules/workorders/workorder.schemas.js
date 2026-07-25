@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 
 export const userRoleSchema = z.enum(["mechanic", "office", "surveillance", "admin"]);
 
 export const createWorkorderSchema = z.object({
-  companyId: z.string().trim().min(1).default("default"),
+  companyId: z.string().uuid().default(DEFAULT_COMPANY_ID),
   assetId: z.string().uuid().optional().nullable(),
   locationId: z.string().uuid().optional().nullable(),
   concern: z.string().trim().min(1, "Concern is required.").max(2000),
@@ -12,7 +13,6 @@ export const createWorkorderSchema = z.object({
 });
 
 export const updateOfficeWorkorderSchema = z.object({
-  companyId: z.string().trim().min(1).optional(),
   assetId: z.string().uuid().optional().nullable(),
   locationId: z.string().uuid().optional().nullable(),
   concern: z.string().trim().min(1, "Concern is required.").max(2000).optional(),

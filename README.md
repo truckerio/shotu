@@ -21,6 +21,7 @@ See `docs/ARCHITECTURE.md` and `src/server/db/README.md` before adding new table
 ```bash
 npm install
 npm run db:migrate
+npm run db:create-admin
 npm run db:seed-demo-users
 npm run build
 npm start
@@ -71,6 +72,23 @@ Better Auth owns credentials and database-backed sessions. Operational roles, co
 - The server resolves the request actor from the session. Browser payloads must never choose a user or role.
 - Production requires `BETTER_AUTH_SECRET`, an HTTPS `BETTER_AUTH_URL`, and matching `AUTH_TRUSTED_ORIGINS`. Railway deployments use its trusted `x-real-ip` header by default; override `AUTH_IP_ADDRESS_HEADERS` only when the deployment proxy supplies a different trusted client-IP header.
 - Railway runs `npm run db:migrate` as a pre-deploy command before the application starts.
+
+Create the first production administrator with environment variables instead of
+editing auth tables:
+
+```text
+ADMIN_EMAIL=owner@example.com
+ADMIN_USERNAME=owner
+ADMIN_NAME=Operations Owner
+ADMIN_PASSWORD=use-a-strong-unique-password
+COMPANY_NAME=Pro Tec Repair
+COMPANY_SLUG=pro-tec-repair
+LOCATION_NAME=Chino Yard
+```
+
+Run `npm run db:create-admin` once, verify login, and then remove
+`ADMIN_PASSWORD` from the service variables. The command is idempotent and
+delegates password hashing to Better Auth.
 
 After OAuth is connected, Samsara sync runs automatically when the server starts, immediately after login, and then every `SAMSARA_SYNC_INTERVAL_MINUTES`. The UI keeps a manual `Sync now` button only for troubleshooting.
 

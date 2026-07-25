@@ -1,4 +1,5 @@
 import { getPool, query } from "../pool.js";
+import { DEFAULT_COMPANY_ID } from "../company.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
@@ -40,7 +41,7 @@ function workorderSelect() {
   return `
     select
       wo.id,
-      wo.company_id,
+      wo.company_uuid as company_id,
       wo.serial,
       wo.asset_id,
       wo.location_id,
@@ -125,16 +126,30 @@ export function publicWorkorderRow(row) {
 }
 
 async function nextSerial(client, companyId) {
+  const keyResult = await client.query(
+    `
+      select legacy_key
+      from company_legacy_keys
+      where company_id = $1
+      order by is_primary desc, created_at, legacy_key
+      limit 1
+    `,
+    [companyId],
+  );
+  const legacyKey = keyResult.rows[0]?.legacy_key;
+  if (!legacyKey) throw new Error("Company has no serial compatibility key.");
+
   for (let attempt = 0; attempt < 1000; attempt += 1) {
     const counter = await client.query(
       `
-        insert into workorder_serial_counters (company_id)
-        values ($1)
+        insert into workorder_serial_counters (company_id, company_uuid)
+        values ($1, $2)
         on conflict (company_id) do update
-          set updated_at = now()
+          set company_uuid = excluded.company_uuid,
+              updated_at = now()
         returning company_id, prefix, next_number, digits
       `,
-      [companyId]
+      [legacyKey, companyId]
     );
     const row = counter.rows[0];
     const serial = `${row.prefix}${String(row.next_number).padStart(row.digits, "0")}`;
@@ -145,9 +160,12 @@ async function nextSerial(client, companyId) {
             updated_at = now()
         where company_id = $1
       `,
-      [companyId]
+      [legacyKey]
     );
-    const existing = await client.query("select 1 from operational_workorders where serial = $1 limit 1", [serial]);
+    const existing = await client.query(
+      "select 1 from operational_workorders where company_uuid = $1 and serial = $2 limit 1",
+      [companyId, serial],
+    );
     if (!existing.rows[0]) return serial;
   }
   throw new Error("Could not allocate unique workorder serial.");
@@ -176,7 +194,6 @@ async function addAssignmentEvent(client, { workorderId, fromMechanicId, toMecha
 }
 
 const FIELD_EVENT_LABELS = {
-  companyId: "Company",
   assetId: "Asset",
   locationId: "Location",
   concern: "Concern",
@@ -225,7 +242,6 @@ function changedFields(before, input) {
     });
   };
 
-  if (Object.prototype.hasOwnProperty.call(input, "companyId")) compare("companyId", before.company_id, input.companyId);
   if (Object.prototype.hasOwnProperty.call(input, "assetId")) compare("assetId", before.asset_id, input.assetId);
   if (Object.prototype.hasOwnProperty.call(input, "locationId")) compare("locationId", before.location_id, input.locationId);
   if (Object.prototype.hasOwnProperty.call(input, "concern")) compare("concern", before.concern, input.concern);
@@ -264,12 +280,12 @@ export async function createOperationalWorkorder(input) {
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const companyId = input.companyId || "default";
+    const companyId = input.companyId || DEFAULT_COMPANY_ID;
     const serial = await nextSerial(client, companyId);
     const result = await client.query(
       `
         insert into operational_workorders (
-          company_id, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
+          company_uuid, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
         )
         values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
         returning id, status
@@ -313,18 +329,16 @@ export async function updateOperationalWorkorder(workorderId, input) {
     await client.query(
       `
         update operational_workorders
-        set company_id = coalesce($2, company_id),
-            asset_id = case when $3::boolean then $4::uuid else asset_id end,
-            location_id = case when $5::boolean then $6::uuid else location_id end,
-            concern = coalesce($7, concern),
-            office_notes = coalesce($8, office_notes),
-            form_data = coalesce($9::jsonb, form_data),
+        set asset_id = case when $2::boolean then $3::uuid else asset_id end,
+            location_id = case when $4::boolean then $5::uuid else location_id end,
+            concern = coalesce($6, concern),
+            office_notes = coalesce($7, office_notes),
+            form_data = coalesce($8::jsonb, form_data),
             updated_at = now()
         where id = $1
       `,
       [
         workorderId,
-        input.companyId || null,
         Object.prototype.hasOwnProperty.call(input, "assetId"),
         input.assetId || null,
         Object.prototype.hasOwnProperty.call(input, "locationId"),
@@ -376,7 +390,7 @@ export async function listOperationalWorkorders({
               and assignment.active = true
           )
         )
-        and ($4::text[] is null or wo.company_id = any($4::text[]))
+        and ($4::uuid[] is null or wo.company_uuid = any($4::uuid[]))
         and ($5::uuid[] is null or wo.location_id = any($5::uuid[]))
       order by wo.updated_at desc
       limit $6
@@ -415,7 +429,7 @@ function operationsProjectionSql() {
     with operation_base as (
       select
         wo.id,
-        wo.company_id,
+        wo.company_uuid as company_id,
         wo.serial,
         wo.location_id,
         wo.current_mechanic_id,
@@ -548,7 +562,7 @@ function buildOperationsWhere(input, { includeCategory = true } = {}) {
     clauses.push(sql.replace("?", `$${values.length}`));
   };
 
-  if (input.companyIds?.length) add("company_id = any(?::text[])", input.companyIds);
+  if (input.companyIds?.length) add("company_id = any(?::uuid[])", input.companyIds);
   if (input.locationIds?.length) add("location_id = any(?::uuid[])", input.locationIds);
   if (input.lifecycle?.length) add("lifecycle = any(?::text[])", input.lifecycle);
   if (input.attentionReason) add("?::text = any(attention_reasons)", input.attentionReason);

@@ -6,13 +6,14 @@ import { SamsaraClient } from "./samsara.client.js";
 import { mapSamsaraTrailer, mapSamsaraVehicle } from "./samsara.mapper.js";
 import { applyVinDecodes, decodeVinValuesBatch } from "../vin/vpic.client.js";
 import { getSamsaraAccessToken } from "./samsara.oauth.service.js";
+import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 
 const STAT_TYPES = ["obdOdometerMeters", "gpsOdometerMeters", "gps"];
-let activeSyncPromise;
+const activeSyncPromises = new Map();
 
-export async function samsaraStatus() {
+export async function samsaraStatus(companyId = DEFAULT_COMPANY_ID) {
   await migrate();
-  const status = await getIntegrationStatus("samsara");
+  const status = await getIntegrationStatus("samsara", companyId);
   const hasOAuth = Boolean(status?.access_token || status?.refresh_token);
   return {
     configured: Boolean(hasOAuth || env.samsaraApiToken),
@@ -23,22 +24,26 @@ export async function samsaraStatus() {
   };
 }
 
-export async function testSamsaraConnection() {
+export async function testSamsaraConnection(companyId = DEFAULT_COMPANY_ID) {
   await migrate();
-  const auth = await getSamsaraAccessToken();
+  const auth = await getSamsaraAccessToken({ companyId });
   const client = new SamsaraClient({ token: auth.token });
   await client.listVehiclesPage({ limit: 1 });
   return upsertIntegrationStatus("samsara", {
     status: "connected",
     tokenEnvKey: auth.source === "oauth" ? "SAMSARA_OAUTH" : "SAMSARA_API_TOKEN",
-  });
+  }, companyId);
 }
 
-async function runSamsaraSync({ syncType = "manual", allowApiTokenFallback = true } = {}) {
+async function runSamsaraSync({
+  syncType = "manual",
+  allowApiTokenFallback = true,
+  companyId = DEFAULT_COMPANY_ID,
+} = {}) {
   await migrate();
-  const auth = await getSamsaraAccessToken({ allowApiTokenFallback });
+  const auth = await getSamsaraAccessToken({ allowApiTokenFallback, companyId });
   const client = new SamsaraClient({ token: auth.token });
-  const run = await createSyncRun("samsara", syncType);
+  const run = await createSyncRun("samsara", syncType, companyId);
   try {
     const vehicles = [];
     let after = "";
@@ -98,12 +103,12 @@ async function runSamsaraSync({ syncType = "manual", allowApiTokenFallback = tru
     ];
     const decodedByVin = await decodeVinValuesBatch(mappedAssets.map((asset) => asset.vin));
     const mapped = applyVinDecodes(mappedAssets, decodedByVin);
-    const changedCount = await upsertVehicles(mapped);
+    const changedCount = await upsertVehicles(mapped, companyId);
     await upsertIntegrationStatus("samsara", {
       status: "connected",
       tokenEnvKey: auth.source === "oauth" ? "SAMSARA_OAUTH" : "SAMSARA_API_TOKEN",
       lastFullSyncAt: new Date().toISOString(),
-    });
+    }, companyId);
     return finishSyncRun(run.id, {
       status: "completed",
       fetchedCount: mapped.length,
@@ -113,7 +118,7 @@ async function runSamsaraSync({ syncType = "manual", allowApiTokenFallback = tru
     await upsertIntegrationStatus("samsara", {
       status: "error",
       tokenEnvKey: auth.source === "oauth" ? "SAMSARA_OAUTH" : "SAMSARA_API_TOKEN",
-    });
+    }, companyId);
     return finishSyncRun(run.id, {
       status: "failed",
       error: error.message,
@@ -122,9 +127,11 @@ async function runSamsaraSync({ syncType = "manual", allowApiTokenFallback = tru
 }
 
 export async function syncSamsaraVehicles(options = {}) {
-  if (activeSyncPromise) return activeSyncPromise;
-  activeSyncPromise = runSamsaraSync(options).finally(() => {
-    activeSyncPromise = null;
+  const companyId = options.companyId || DEFAULT_COMPANY_ID;
+  if (activeSyncPromises.has(companyId)) return activeSyncPromises.get(companyId);
+  const promise = runSamsaraSync({ ...options, companyId }).finally(() => {
+    activeSyncPromises.delete(companyId);
   });
-  return activeSyncPromise;
+  activeSyncPromises.set(companyId, promise);
+  return promise;
 }

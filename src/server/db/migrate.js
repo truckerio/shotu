@@ -26,16 +26,12 @@ async function orderedMigrations() {
 }
 
 async function runMigrations() {
-  const [schema, migrations] = await Promise.all([
-    readFile(join(__dirname, "schema.sql"), "utf8"),
-    orderedMigrations(),
-  ]);
+  const migrations = await orderedMigrations();
   const client = await getPool().connect();
 
   try {
     await client.query("begin");
     await client.query("select pg_advisory_xact_lock(hashtext('workorder-generator:migrate'))");
-    await client.query(schema);
     await client.query(`
       create table if not exists schema_migrations (
         name text primary key,

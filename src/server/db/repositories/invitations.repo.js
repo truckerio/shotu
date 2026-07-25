@@ -24,9 +24,9 @@ export async function createUserInvitation(input) {
     );
     const result = await client.query(
       `insert into user_invitations (
-         company_id, location_id, email, name, role, token_hash, invited_by_user_id, expires_at
+         company_uuid, location_id, email, name, role, token_hash, invited_by_user_id, expires_at
        ) values ($1, $2, lower($3), $4, $5, $6, $7, $8)
-       returning id, company_id, location_id, email, name, role, status, expires_at, created_at`,
+       returning id, company_uuid as company_id, location_id, email, name, role, status, expires_at, created_at`,
       [input.companyId, input.locationId, input.email, input.name, input.role, input.tokenHash, input.actorId, input.expiresAt],
     );
     await client.query("commit");
@@ -75,16 +75,20 @@ export async function acceptUserInvitation({ invitationId, authUserId, username 
     );
     const userId = userResult.rows[0].id;
     await client.query(
-      `insert into user_location_memberships (user_id, location_id, active)
-       values ($1, $2, true)
+      `insert into user_location_memberships (user_id, location_id, company_uuid, active)
+       values ($1, $2, $3, true)
        on conflict (user_id, location_id) do update set active = true, updated_at = now()`,
-      [userId, invitation.location_id],
+      [userId, invitation.location_id, invitation.company_uuid],
     );
     await client.query(
-      `insert into user_company_memberships (user_id, company_id, role, active)
+      `insert into user_company_memberships (user_id, company_uuid, role, active)
        values ($1, $2, $3, true)
-       on conflict (user_id, company_id) do update set role = excluded.role, active = true, updated_at = now()`,
-      [userId, invitation.company_id, invitation.role],
+       on conflict (user_id, company_id) do update
+         set company_uuid = excluded.company_uuid,
+             role = excluded.role,
+             active = true,
+             updated_at = now()`,
+      [userId, invitation.company_uuid, invitation.role],
     );
     await client.query(
       `update user_invitations

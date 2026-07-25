@@ -14,6 +14,7 @@ import { statusLabel } from "../workorders/workorder.presenter.js";
 import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
+import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 
 async function requireOffice(userId) {
   const user = await getUserById(userId);
@@ -79,7 +80,7 @@ export async function officeDashboard(context) {
 
 export async function createOfficeWorkorder(input) {
   const office = input.createdByUserId ? await requireOffice(input.createdByUserId) : await defaultOfficeUser();
-  const location = input.locationId ? null : await defaultLocation(input.companyId || "default");
+  const location = input.locationId ? null : await defaultLocation(input.companyId || DEFAULT_COMPANY_ID);
   return createOperationalWorkorder({
     ...input,
     createdByUserId: office?.id || input.createdByUserId || null,

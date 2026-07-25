@@ -8,6 +8,7 @@
     "build": "vite build --config frontend/vite.config.js",
     "dev:ui": "vite --config frontend/vite.config.js",
     "db:migrate": "node src/server/db/migrate.js",
+    "db:create-admin": "node --env-file=.env src/server/db/seeds/first-admin.js",
     "db:seed-demo-users": "node --env-file=.env src/server/db/seeds/demo-users.js",
     "test:parts-helper": "node --test src/server/modules/parts-helper/parts-helper.test.js",
     "test:parts-helper:hf": "node src/server/modules/parts-helper/parts-helper.samples.js",

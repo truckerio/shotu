@@ -81,7 +81,7 @@ Office and mechanic views read and update the same `operational_workorders` reco
 
 The projection is paginated and filterable and includes canonical lifecycle, attention reasons, location, asset, mechanic, last activity, age, time in status, and per-user unread state. Admin consumes it through `/api/admin/operations/summary` and `/api/admin/operations/workorders`.
 
-Lifecycle and attention are intentionally separate. Lifecycle is one of `open`, `accepted`, `in_progress`, `mechanic_done`, `closed`, or `odoo_entered`. Parts, office help, missing information, and overdue work are attention reasons; they never create or replace a workorder record.
+Lifecycle and attention are intentionally separate. Lifecycle is one of `open`, `accepted`, `in_progress`, `mechanic_done`, `closed`, `odoo_entered`, or `cancelled`. Parts, office help, missing information, and overdue work are attention reasons; they never create or replace a workorder record.
 
 ## Adding A Feature
 

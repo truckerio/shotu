@@ -25,8 +25,8 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 
 ## Schema Rules
 
-- `schema.sql` is an idempotent structural bootstrap. It must not create demo users, locations, or workorders.
-- New production changes use immutable `NNN_snake_case.sql` files under `migrations/`.
+- `migrations/001_initial_schema.sql` is the immutable baseline for an empty database.
+- Every production change uses a new immutable `NNN_snake_case.sql` file under `migrations/`.
 - Never edit an applied migration. The runner records and validates its SHA-256 checksum.
 - Seed data is explicit under `seeds/`; run `npm run db:seed-demo-users` only in local/demo environments.
 - Every company/location-scoped query receives scope from the authenticated request actor.
@@ -39,12 +39,15 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 
 ## Migration Runtime
 
-`npm run db:migrate` takes a PostgreSQL advisory transaction lock, applies `schema.sql`, verifies applied migration checksums, and applies pending migrations in one transaction. Railway runs it as `preDeployCommand`, so multiple application replicas never race the schema update.
+`npm run db:migrate` takes a PostgreSQL advisory transaction lock, verifies applied migration checksums, and applies pending migrations in one transaction. Railway runs it as `preDeployCommand`, so multiple application replicas never race the schema update.
 
 ## Local Commands
 
 ```bash
 npm run db:migrate
+npm run db:create-admin
 npm run db:seed-demo-users
 npm run verify
 ```
+
+`db:create-admin` is idempotent and uses Better Auth to create the credential. It links the login to the operational admin profile, company membership, and location membership. Do not insert password hashes with SQL.

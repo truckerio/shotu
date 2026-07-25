@@ -16,6 +16,8 @@ import { getLocationTemplate, upsertLocationTemplate } from "../../db/repositori
 import { findAuthUserByEmail } from "../../db/repositories/auth-users.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
+import { requireCompanyAccess } from "../../auth/authorize.js";
+import { resourceNotFound } from "../../auth/errors.js";
 
 function tokenHash(token) {
   return createHash("sha256").update(token).digest("hex");
@@ -37,8 +39,21 @@ function invitationView(invitation) {
   };
 }
 
-export async function adminLocations() {
-  return listLocationsWithAdminCounts();
+function authorizedCompanyIds(context) {
+  const companyIds = [...(context.companyIds || [])];
+  if (!companyIds.length) throw resourceNotFound("Company");
+  return companyIds;
+}
+
+async function authorizedLocation(context, locationId) {
+  const location = await getLocationById(locationId, authorizedCompanyIds(context));
+  if (!location) throw resourceNotFound("Location");
+  requireCompanyAccess(context, location.company_id);
+  return location;
+}
+
+export async function adminLocations(context) {
+  return listLocationsWithAdminCounts(authorizedCompanyIds(context));
 }
 
 export async function adminOperations(context, input) {
@@ -49,17 +64,24 @@ export async function adminOperationsSummary(context, input) {
   return summarizeAuthorizedWorkorders(context, input);
 }
 
-export async function addAdminLocation(input, actor) {
-  return createLocationWithTemplate({ ...input, companyId: actor.companyIds?.[0] || "default", actorId: actor.id });
+export async function addAdminLocation(input, actor, context) {
+  const companyIds = authorizedCompanyIds(context);
+  const companyId = input.companyId || companyIds[0];
+  requireCompanyAccess(context, companyId);
+  return createLocationWithTemplate({
+    ...input,
+    companyId,
+    actorId: actor.id,
+  });
 }
 
-export async function editAdminLocation(locationId, input) {
+export async function editAdminLocation(context, locationId, input) {
+  await authorizedLocation(context, locationId);
   return updateLocation(locationId, input);
 }
 
-export async function adminLocationDetail(locationId) {
-  const location = await getLocationById(locationId);
-  if (!location) return null;
+export async function adminLocationDetail(context, locationId) {
+  const location = await authorizedLocation(context, locationId);
   const [users, invitations, template] = await Promise.all([
     listUsersByLocation(locationId),
     listInvitationsByLocation(locationId),
@@ -68,7 +90,8 @@ export async function adminLocationDetail(locationId) {
   return { location, users, invitations, template };
 }
 
-export async function saveAdminTemplate(locationId, input, actorId) {
+export async function saveAdminTemplate(context, locationId, input, actorId) {
+  await authorizedLocation(context, locationId);
   return upsertLocationTemplate(locationId, input, actorId);
 }
 

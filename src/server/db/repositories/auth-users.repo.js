@@ -19,8 +19,8 @@ export async function getAuthActorByAuthUserId(authUserId) {
         ), array[]::uuid[]) as location_ids,
         coalesce((
           select jsonb_agg(
-            jsonb_build_object('companyId', ucm.company_id, 'role', ucm.role)
-            order by ucm.company_id
+            jsonb_build_object('companyId', ucm.company_uuid, 'role', ucm.role)
+            order by ucm.company_uuid
           )
           from user_company_memberships ucm
           where ucm.user_id = u.id and ucm.active = true

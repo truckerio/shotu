@@ -12,36 +12,53 @@ import { readStoredChatImage } from "./chat-media.service.js";
 
 const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const suffix = Date.now().toString(36);
-const companyId = `chat-test-${suffix}`;
+const companyKey = `chat-test-${suffix}`;
+let companyId;
+let locationId;
 const mediaDirectory = await mkdtemp(join(tmpdir(), "workorder-chat-integration-"));
 process.env.CHAT_MEDIA_DIR = mediaDirectory;
 let workorderId;
 let assetId;
 
 try {
+  const company = await query(
+    `insert into companies (slug, name) values ($1, $2) returning id`,
+    [companyKey, `Chat Test ${suffix}`],
+  );
+  companyId = company.rows[0].id;
+  await query(
+    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
+     values ($1, $2, true)`,
+    [companyKey, companyId],
+  );
+  const location = await query(
+    `insert into locations (company_uuid, name, type)
+     values ($1, $2, 'yard') returning id`,
+    [companyId, `Chat Test Yard ${suffix}`],
+  );
+  locationId = location.rows[0].id;
+
   const users = await query("select id, role from app_users where role in ('mechanic', 'office') and active = true order by role");
   const mechanic = users.rows.find((user) => user.role === "mechanic");
   const office = users.rows.find((user) => user.role === "office");
   assert.ok(mechanic && office, "Test requires active mechanic and office users.");
 
-  const location = await query("select id from locations where active = true order by created_at limit 1");
-  assert.ok(location.rows[0], "Test requires a location.");
   const asset = await query(
-    `insert into assets (provider, unit_type, name, unit_no, vin, make, model, year)
-     values ('manual', 'Truck', $1, $1, $2, 'Freightliner', 'Cascadia', 2022)
+    `insert into assets (company_uuid, provider, unit_type, name, unit_no, vin, make, model, year)
+     values ($1, 'manual', 'Truck', $2, $2, $3, 'Freightliner', 'Cascadia', 2022)
      returning id`,
-    [`CHAT-${suffix}`, `1FUJGLDR0NL${String(Date.now()).slice(-6)}`.slice(0, 17)]
+    [companyId, `CHAT-${suffix}`, `1FUJGLDR0NL${String(Date.now()).slice(-6)}`.slice(0, 17)]
   );
   assetId = asset.rows[0].id;
   await query(
-    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
+    `insert into workorder_serial_counters (company_uuid, prefix, next_number, digits)
      values ($1, $2, 1, 4)`,
     [companyId, `CHAT-${suffix}-`]
   );
   const workorder = await createOperationalWorkorder({
     companyId,
     assetId,
-    locationId: location.rows[0].id,
+    locationId,
     createdByUserId: office.id,
     concern: "Mechanic chat attachment integration test",
     formData: { parts: [] },
@@ -119,7 +136,9 @@ try {
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
   if (assetId) await query("delete from assets where id = $1", [assetId]);
-  await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
+  if (companyId) await query("delete from workorder_serial_counters where company_uuid = $1", [companyId]);
+  if (locationId) await query("delete from locations where id = $1", [locationId]);
+  if (companyId) await query("delete from companies where id = $1", [companyId]);
   await rm(mediaDirectory, { recursive: true, force: true });
   await closePool();
 }

@@ -18,28 +18,46 @@ import {
 import { normalizePartNumber } from "./part.constants.js";
 
 const suffix = Date.now().toString(36);
-const companyId = `parts-test-${suffix}`;
+const companyKey = `parts-test-${suffix}`;
+let companyId;
+let locationId;
 let workorderId;
 
 try {
-  const [users, asset, location] = await Promise.all([
+  const company = await query(
+    `insert into companies (slug, name) values ($1, $2) returning id`,
+    [companyKey, `Parts Test ${suffix}`],
+  );
+  companyId = company.rows[0].id;
+  await query(
+    `insert into company_legacy_keys (legacy_key, company_id, is_primary)
+     values ($1, $2, true)`,
+    [companyKey, companyId],
+  );
+  const location = await query(
+    `insert into locations (company_uuid, name, type)
+     values ($1, $2, 'yard') returning id`,
+    [companyId, `Parts Test Yard ${suffix}`],
+  );
+  locationId = location.rows[0].id;
+
+  const [users, asset] = await Promise.all([
     query("select id, role from app_users where role in ('mechanic', 'office') and active = true order by role"),
-    query("select id from assets where unit_type = 'Truck' order by updated_at desc limit 1"),
-    query("select id from locations where active = true order by created_at limit 1"),
+    query("select id from assets where unit_type = 'Truck' and company_uuid = $1 order by updated_at desc limit 1", [companyId]),
   ]);
   const mechanic = users.rows.find((user) => user.role === "mechanic");
   const office = users.rows.find((user) => user.role === "office");
-  assert.ok(mechanic && office && asset.rows[0] && location.rows[0], "Test requires users, an asset, and a location.");
+  assert.ok(mechanic && office, "Test requires active mechanic and office users.");
 
   await query(
-    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
+    `insert into workorder_serial_counters (company_uuid, prefix, next_number, digits)
      values ($1, $2, 1, 4)`,
     [companyId, `PT-${suffix}-`]
   );
   const workorder = await createOperationalWorkorder({
     companyId,
-    assetId: asset.rows[0].id,
-    locationId: location.rows[0].id,
+    assetId: asset.rows[0]?.id || null,
+    locationId,
     createdByUserId: office.id,
     concern: "Integration test oil service",
     formData: { parts: [] },
@@ -67,10 +85,10 @@ try {
 
   const inventory = await query(
     `insert into inventory_items (
-       company_id, location_id, normalized_part_number, part_number, manufacturer,
+       company_uuid, location_id, normalized_part_number, part_number, manufacturer,
        description, quantity_on_hand, quantity_reserved, bin_location
      ) values ($1, $2, $3, $4, $5, $6, 10, 0, 'B-12') returning id`,
-    [companyId, location.rows[0].id, normalizePartNumber("LF14000NN"), "LF14000NN", "Fleetguard", "Engine oil filter"]
+    [companyId, locationId, normalizePartNumber("LF14000NN"), "LF14000NN", "Fleetguard", "Engine oil filter"]
   );
   const approved = await decidePartRequest(workorderId, request.id, {
     officeUserId: office.id,
@@ -88,7 +106,7 @@ try {
       sourceType: "inventory",
       status: "reserved",
       quantity: 2,
-      locationId: location.rows[0].id,
+      locationId,
       inventoryItemId: inventory.rows[0].id,
       vendor: "",
       sourceReference: "",
@@ -154,8 +172,12 @@ try {
   }));
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
-  await query("delete from inventory_items where company_id = $1", [companyId]);
-  await query("delete from parts_catalog where company_id = $1", [companyId]);
-  await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
+  if (companyId) {
+    await query("delete from inventory_items where company_uuid = $1", [companyId]);
+    await query("delete from parts_catalog where company_uuid = $1", [companyId]);
+    await query("delete from workorder_serial_counters where company_uuid = $1", [companyId]);
+  }
+  if (locationId) await query("delete from locations where id = $1", [locationId]);
+  if (companyId) await query("delete from companies where id = $1", [companyId]);
   await closePool();
 }

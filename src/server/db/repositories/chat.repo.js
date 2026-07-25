@@ -188,7 +188,7 @@ export async function getMechanicChatContext(workorderId) {
     `
       select
         wo.id,
-        wo.company_id,
+        wo.company_uuid as company_id,
         wo.current_mechanic_id,
         wo.status,
         wo.form_data,

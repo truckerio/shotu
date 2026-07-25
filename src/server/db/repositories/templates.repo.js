@@ -53,7 +53,7 @@ export async function getLocationTemplates(locationIds) {
   const result = await query(
     `select
        location.id as location_id,
-       location.company_id,
+       location.company_uuid as company_id,
        location.name as location_name,
        location.type as location_type,
        location.address as location_address,

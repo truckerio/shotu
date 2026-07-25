@@ -3,20 +3,20 @@ import { getVehicleById, searchVehicles, updateVehicleLocation } from "../db/rep
 import { SamsaraClient } from "../integrations/samsara/samsara.client.js";
 import { getSamsaraAccessToken } from "../integrations/samsara/samsara.oauth.service.js";
 
-export async function findVehicles(query, limit) {
+export async function findVehicles(query, limit, companyIds) {
   await migrate();
-  return searchVehicles(query, limit);
+  return searchVehicles(query, limit, companyIds);
 }
 
-export async function refreshVehicleLocation(id) {
+export async function refreshVehicleLocation(id, companyIds) {
   await migrate();
-  const vehicle = await getVehicleById(id);
+  const vehicle = await getVehicleById(id, companyIds);
   if (!vehicle) throw new Error("Vehicle not found.");
   if (vehicle.provider !== "samsara" || !vehicle.provider_vehicle_id) {
     throw new Error("Live location is only available for Samsara assets.");
   }
 
-  const auth = await getSamsaraAccessToken();
+  const auth = await getSamsaraAccessToken({ companyId: vehicle.company_id });
   const client = new SamsaraClient({ token: auth.token });
   const providerId = String(vehicle.provider_vehicle_id);
   const isTrailer = vehicle.unit_type === "Trailer" || providerId.startsWith("trailer:");

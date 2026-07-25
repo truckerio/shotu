@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const createLocationSchema = z.object({
+  companyId: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(120),
   type: z.string().trim().min(2).max(50).default("yard"),
   address: z.string().trim().max(500).default(""),

@@ -20,7 +20,7 @@ export function requireLocationAccess(context, locationId) {
 
 export function requireCompanyAccess(context, companyId) {
   const actor = requireActor(context);
-  if (!companyId || actor.role === "admin") return actor;
+  if (!companyId) return actor;
   if (!context.companyIds?.has(companyId)) throw permissionDenied();
   return actor;
 }

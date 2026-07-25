@@ -729,7 +729,7 @@ export function App({ actor }) {
       const result = await api("/api/office/workorders", {
         method: "POST",
         body: JSON.stringify({
-          companyId: actor.companyMemberships?.[0]?.companyId || "default",
+          companyId: actor.companyMemberships?.[0]?.companyId || actor.companyIds?.[0] || "",
           locationId: form.locationId || actor.locationIds?.[0] || null,
           assetId: selectedVehicle?.id || null,
           concern,

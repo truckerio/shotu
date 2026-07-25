@@ -1,8 +1,9 @@
 import { auth } from "../../auth/auth.js";
+import { DEFAULT_COMPANY_ID } from "../company.js";
 import { closePool, getPool } from "../pool.js";
 
 const DEFAULT_PASSWORD = "WorkorderDemo2026!";
-const COMPANY_ID = "default";
+const COMPANY_ID = DEFAULT_COMPANY_ID;
 const LOCATION_NAME = "Chino Yard";
 
 const demoUsers = [
@@ -48,8 +49,8 @@ async function ensureAuthUser(user, password) {
 async function ensureLocation(client) {
   const existing = await client.query(
     `select id
-       from locations
-      where company_id = $1 and lower(name) = lower($2) and active = true
+      from locations
+      where company_uuid = $1 and lower(name) = lower($2) and active = true
       order by created_at, id
       limit 1`,
     [COMPANY_ID, LOCATION_NAME],
@@ -57,7 +58,7 @@ async function ensureLocation(client) {
   if (existing.rows[0]) return existing.rows[0].id;
 
   const created = await client.query(
-    "insert into locations (company_id, name, type) values ($1, $2, 'yard') returning id",
+    "insert into locations (company_uuid, name, type) values ($1, $2, 'yard') returning id",
     [COMPANY_ID, LOCATION_NAME],
   );
   return created.rows[0].id;
@@ -83,16 +84,19 @@ async function linkOperationalUser(user, authUserId, locationId) {
     const appUserId = result.rows[0].id;
 
     await client.query(
-      `insert into user_location_memberships (user_id, location_id, active)
-       values ($1, $2, true)
+      `insert into user_location_memberships (user_id, location_id, company_uuid, active)
+       values ($1, $2, $3, true)
        on conflict (user_id, location_id) do update set active = true, updated_at = now()`,
-      [appUserId, locationId],
+      [appUserId, locationId, COMPANY_ID],
     );
     await client.query(
-      `insert into user_company_memberships (user_id, company_id, role, active)
+      `insert into user_company_memberships (user_id, company_uuid, role, active)
        values ($1, $2, $3, true)
        on conflict (user_id, company_id) do update
-         set role = excluded.role, active = true, updated_at = now()`,
+         set company_uuid = excluded.company_uuid,
+             role = excluded.role,
+             active = true,
+             updated_at = now()`,
       [appUserId, COMPANY_ID, user.role],
     );
     await client.query("commit");
