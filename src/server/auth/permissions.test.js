@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { requireCompanyAccess, requireLocationAccess, requirePermission } from "./authorize.js";
+import { PERMISSION, permissionsForRole, roleHasPermission } from "./permissions.js";
+
+test("role permission matrix keeps domain capabilities separate", () => {
+  assert.equal(roleHasPermission("mechanic", PERMISSION.WORKORDER_MECHANIC), true);
+  assert.equal(roleHasPermission("mechanic", PERMISSION.AUTHENTICATED), true);
+  assert.equal(roleHasPermission("office", PERMISSION.WORKORDER_CHAT_READ), true);
+  assert.equal(roleHasPermission("surveillance", PERMISSION.WORKORDER_CHAT_READ), false);
+  assert.equal(roleHasPermission("mechanic", PERMISSION.WORKORDER_OFFICE), false);
+  assert.equal(roleHasPermission("office", PERMISSION.PART_PRICE), true);
+  assert.equal(roleHasPermission("surveillance", PERMISSION.WORKORDER_SURVEILLANCE), true);
+  assert.equal(roleHasPermission("admin", PERMISSION.INTEGRATION_ADMIN), true);
+});
+
+test("authorization rejects anonymous and wrong-role contexts", () => {
+  assert.throws(() => requirePermission(null, PERMISSION.WORKORDER_MECHANIC), (error) => error.statusCode === 401);
+  assert.throws(
+    () => requirePermission({ actor: { role: "mechanic" }, permissions: permissionsForRole("mechanic") }, PERMISSION.WORKORDER_OFFICE),
+    (error) => error.statusCode === 403,
+  );
+});
+
+test("location authorization allows memberships and admin override", () => {
+  const mechanic = { actor: { role: "mechanic" }, locationIds: new Set(["location-a"]) };
+  assert.equal(requireLocationAccess(mechanic, "location-a").role, "mechanic");
+  assert.throws(() => requireLocationAccess(mechanic, "location-b"), (error) => error.statusCode === 403);
+  assert.equal(requireLocationAccess({ actor: { role: "admin" }, locationIds: new Set() }, "location-b").role, "admin");
+});
+
+test("company authorization requires membership and allows admin override", () => {
+  const office = { actor: { role: "office" }, companyIds: new Set(["default"]) };
+  assert.equal(requireCompanyAccess(office, "default").role, "office");
+  assert.throws(() => requireCompanyAccess(office, "other"), (error) => error.statusCode === 403);
+  assert.equal(requireCompanyAccess({ actor: { role: "admin" }, companyIds: new Set() }, "other").role, "admin");
+});

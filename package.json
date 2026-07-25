@@ -1,0 +1,43 @@
+{
+  "name": "workorder-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "build": "vite build --config frontend/vite.config.js",
+    "dev:ui": "vite --config frontend/vite.config.js",
+    "db:migrate": "node src/server/db/migrate.js",
+    "db:seed-demo-users": "node --env-file=.env src/server/db/seeds/demo-users.js",
+    "test:parts-helper": "node --test src/server/modules/parts-helper/parts-helper.test.js",
+    "test:parts-helper:hf": "node src/server/modules/parts-helper/parts-helper.samples.js",
+    "test:parts-helper:acceptance": "node --env-file=.env src/server/modules/parts-helper/parts-helper.acceptance.js",
+    "test:parts-workflow": "node --env-file=.env src/server/modules/parts/part-workflow.integration.js",
+    "test:chat": "node --test src/server/modules/chat/*.test.js",
+    "test:used-parts": "node --env-file=.env src/server/modules/mechanic/used-parts.integration.js",
+    "test:mechanic-chat": "node --test src/server/modules/chat/*.test.js",
+    "test:mechanic-chat:integration": "node --env-file=.env src/server/modules/chat/mechanic-chat.integration.js",
+    "test:auth": "node --test src/server/auth/*.test.js",
+    "test:admin": "node --test src/server/modules/admin/*.test.js",
+    "test:unit": "node --test src/server/auth/*.test.js src/server/modules/admin/*.test.js src/server/modules/chat/*.test.js src/server/modules/parts-helper/parts-helper.test.js src/server/modules/workorders/*.test.js",
+    "check:structure": "node scripts/check-structure.js",
+    "check": "node --check server.js && find src/server scripts -name '*.js' -print | xargs -I{} node --check {} && npm run build",
+    "verify": "npm run check:structure && npm run test:unit && npm run check"
+  },
+  "dependencies": {
+    "@untitledui/icons": "^0.0.19",
+    "@vitejs/plugin-react": "^4.3.4",
+    "better-auth": "^1.6.25",
+    "dotenv": "^17.4.2",
+    "pg": "^8.22.0",
+    "react": "^19.0.0",
+    "react-aria-components": "^1.5.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

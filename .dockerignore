@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+frontend/dist
+data
+printed-workorders
+uploaded-workorders
+share-packages
+.tmp
+.ui-check
+*.log

@@ -1,0 +1,125 @@
+.profile-menu-trigger {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #344054;
+  cursor: pointer;
+}
+
+.profile-menu-trigger:hover,
+.profile-menu-trigger[data-pressed] {
+  border-color: #d5d9df;
+  background: #fff;
+}
+
+.profile-menu-initials {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eaf2ff;
+  color: #175cd3;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.profile-menu-identity {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+
+.profile-menu-identity strong,
+.profile-menu-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu-identity strong {
+  max-width: 160px;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.profile-menu-identity small {
+  color: #717680;
+  font-size: var(--text-caption);
+}
+
+.profile-menu-trigger > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.profile-menu-popover {
+  width: 250px;
+  padding: 4px;
+  border: 1px solid #d5d9df;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(16 24 40 / 12%);
+}
+
+.profile-menu-list {
+  outline: none;
+}
+
+.profile-menu-list [role="separator"] {
+  height: 1px;
+  margin: 4px -4px;
+  background: #eaecf0;
+}
+
+.profile-menu-summary,
+.profile-menu-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 5px;
+  outline: none;
+  font-size: var(--text-body);
+}
+
+.profile-menu-summary svg,
+.profile-menu-action svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #667085;
+}
+
+.profile-menu-summary span {
+  display: grid;
+  min-width: 0;
+}
+
+.profile-menu-summary small {
+  overflow: hidden;
+  color: #717680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu-action {
+  cursor: pointer;
+}
+
+.profile-menu-action[data-focused],
+.profile-menu-action[data-hovered] {
+  background: #f2f4f7;
+}
+
+@media (max-width: 600px) {
+  .profile-menu-identity,
+  .profile-menu-trigger > svg {
+    display: none;
+  }
+}

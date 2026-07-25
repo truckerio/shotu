@@ -1,0 +1,20 @@
+.workspace-header {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  min-height: 44px;
+}
+
+.workspace-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 700px) {
+  .workspace-header {
+    min-height: 40px;
+  }
+}

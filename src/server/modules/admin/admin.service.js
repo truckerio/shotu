@@ -1,0 +1,119 @@
+import { createHash, randomBytes } from "node:crypto";
+import { auth } from "../../auth/auth.js";
+import {
+  acceptUserInvitation,
+  createUserInvitation,
+  getInvitationByTokenHash,
+  listInvitationsByLocation,
+} from "../../db/repositories/invitations.repo.js";
+import {
+  createLocationWithTemplate,
+  getLocationById,
+  listLocationsWithAdminCounts,
+  updateLocation,
+} from "../../db/repositories/locations.repo.js";
+import { getLocationTemplate, upsertLocationTemplate } from "../../db/repositories/templates.repo.js";
+import { findAuthUserByEmail } from "../../db/repositories/auth-users.repo.js";
+import { listUsersByLocation } from "../../db/repositories/users.repo.js";
+import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
+
+function tokenHash(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function invitationView(invitation) {
+  if (!invitation) return null;
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    name: invitation.name,
+    role: invitation.role,
+    status: invitation.status,
+    locationId: invitation.location_id,
+    locationName: invitation.location_name,
+    expiresAt: invitation.expires_at,
+    acceptedAt: invitation.accepted_at,
+    createdAt: invitation.created_at,
+  };
+}
+
+export async function adminLocations() {
+  return listLocationsWithAdminCounts();
+}
+
+export async function adminOperations(context, input) {
+  return queryAuthorizedWorkorders(context, input);
+}
+
+export async function adminOperationsSummary(context, input) {
+  return summarizeAuthorizedWorkorders(context, input);
+}
+
+export async function addAdminLocation(input, actor) {
+  return createLocationWithTemplate({ ...input, companyId: actor.companyIds?.[0] || "default", actorId: actor.id });
+}
+
+export async function editAdminLocation(locationId, input) {
+  return updateLocation(locationId, input);
+}
+
+export async function adminLocationDetail(locationId) {
+  const location = await getLocationById(locationId);
+  if (!location) return null;
+  const [users, invitations, template] = await Promise.all([
+    listUsersByLocation(locationId),
+    listInvitationsByLocation(locationId),
+    getLocationTemplate(locationId),
+  ]);
+  return { location, users, invitations, template };
+}
+
+export async function saveAdminTemplate(locationId, input, actorId) {
+  return upsertLocationTemplate(locationId, input, actorId);
+}
+
+export async function inviteLocationUser(location, input, actorId, origin) {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const invitation = await createUserInvitation({
+    ...input,
+    companyId: location.company_id,
+    locationId: location.id,
+    actorId,
+    tokenHash: tokenHash(token),
+    expiresAt,
+  });
+  return {
+    invitation: invitationView(invitation),
+    inviteUrl: `${origin}/?invite=${encodeURIComponent(token)}`,
+  };
+}
+
+export async function invitationDetail(token) {
+  const invitation = await getInvitationByTokenHash(tokenHash(token));
+  if (!invitation || invitation.status !== "pending" || new Date(invitation.expires_at) <= new Date()) return null;
+  return invitationView(invitation);
+}
+
+export async function acceptInvitation(token, input) {
+  const invitation = await getInvitationByTokenHash(tokenHash(token));
+  if (!invitation || invitation.status !== "pending" || new Date(invitation.expires_at) <= new Date()) {
+    throw new Error("Invitation is no longer available.");
+  }
+
+  if (await findAuthUserByEmail(invitation.email)) {
+    throw new Error("An account already exists for this email. Ask an admin to assign its location.");
+  }
+  await auth.api.signUpEmail({
+    body: {
+      name: invitation.name,
+      email: invitation.email,
+      password: input.password,
+      username: input.username,
+      displayUsername: input.username,
+    },
+  });
+  const authUser = await findAuthUserByEmail(invitation.email);
+  if (!authUser?.id) throw new Error("Unable to create login for this invitation.");
+  return acceptUserInvitation({ invitationId: invitation.id, authUserId: authUser.id, username: input.username });
+}

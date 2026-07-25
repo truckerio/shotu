@@ -1,0 +1,75 @@
+.workspace-operations .mechanic-queue-shell,
+.workspace-operations .office-mechanic-panel {
+  background: rgb(255 255 255 / 62%);
+  border-color: #e4e7ec;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.workspace-operations .queue-toolbar {
+  background: rgb(255 255 255 / 54%);
+}
+
+.workspace-operations .mechanic-work-open {
+  min-height: 72px;
+}
+
+.operations-filter-row select {
+  min-width: 150px;
+}
+
+.workspace-connection-state {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 6px;
+  color: #7a2e0e;
+  margin: 0;
+  padding: 9px 12px;
+}
+
+@media (max-width: 1180px) {
+  .workspace-operations .office-mechanic-panel {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px;
+  }
+
+  .workspace-operations .office-panel-head {
+    display: none;
+  }
+
+  .workspace-operations .office-mechanic-panel button {
+    border: 1px solid #e4e7ec;
+    border-radius: 6px;
+    flex: 0 0 auto;
+    min-width: 150px;
+  }
+}
+
+@media (max-width: 700px) {
+  .workspace-operations .mechanic-queue-shell,
+  .workspace-operations .office-mechanic-panel {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+  }
+
+  .operations-filter-row {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 10px 10px;
+  }
+
+  .operations-filter-row .mechanic-search {
+    grid-column: 1 / -1;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .operations-filter-row select {
+    min-width: 0;
+    width: 100%;
+  }
+}

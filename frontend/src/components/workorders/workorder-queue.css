@@ -1,0 +1,159 @@
+.mechanic-list-head.queue-variant-mechanic,
+.mechanic-work-open.queue-variant-mechanic {
+  grid-template-columns: minmax(150px, .8fr) minmax(230px, 1.45fr) minmax(150px, .9fr) 158px 128px 20px;
+}
+
+.mechanic-list-head.queue-variant-office,
+.mechanic-work-open.queue-variant-office {
+  grid-template-columns: minmax(138px, .72fr) minmax(210px, 1.25fr) minmax(110px, .58fr) minmax(110px, .58fr) minmax(150px, .8fr) 72px 126px 20px;
+}
+
+.mechanic-list-head.queue-variant-surveillance,
+.mechanic-work-open.queue-variant-surveillance {
+  grid-template-columns: minmax(150px, .8fr) minmax(130px, .65fr) minmax(130px, .65fr) minmax(185px, 1fr) 126px 20px;
+}
+
+.work-row-unit {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.queue-unread-label {
+  background: #eff8ff;
+  border: 1px solid #b2ddff;
+  border-radius: 999px;
+  color: #175cd3 !important;
+  font-size: var(--text-caption) !important;
+  font-weight: var(--weight-semibold) !important;
+  padding: 1px 6px;
+}
+
+.mechanic-work-row.is-unread {
+  box-shadow: inset 3px 0 #1570ef;
+}
+
+.mechanic-work-row.is-current {
+  background: #f8fbff;
+}
+
+.queue-attention,
+.queue-attention-none {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.queue-attention-none {
+  color: #98a2b3;
+  font-size: var(--text-secondary);
+}
+
+.queue-attention-pill,
+.queue-attention-more {
+  border: 1px solid #d5d7da;
+  border-radius: 999px;
+  color: #414651;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  line-height: 20px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-attention-pill.attention-parts,
+.queue-attention-pill.attention-office_help {
+  background: #fffaeb;
+  border-color: #fedf89;
+  color: #93370d;
+}
+
+.queue-attention-pill.attention-missing_info,
+.queue-attention-pill.attention-overdue {
+  background: #fef3f2;
+  border-color: #fecdca;
+  color: #b42318;
+}
+
+@media (max-width: 1180px) {
+  .mechanic-list-head.queue-variant-mechanic,
+  .mechanic-work-open.queue-variant-mechanic {
+    grid-template-columns: minmax(140px, .8fr) minmax(220px, 1.35fr) minmax(150px, .85fr) 128px 20px;
+  }
+
+  .queue-variant-mechanic .work-row-created {
+    display: none;
+  }
+
+  .mechanic-list-head.queue-variant-office,
+  .mechanic-work-open.queue-variant-office {
+    grid-template-columns: minmax(138px, .72fr) minmax(210px, 1.2fr) minmax(115px, .62fr) minmax(150px, .82fr) 72px 126px 20px;
+  }
+
+  .queue-variant-office > :nth-child(3),
+  .queue-variant-office .work-row-location {
+    display: none;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 900px) {
+  .mechanic-list-head.queue-variant-surveillance,
+  .mechanic-work-open.queue-variant-surveillance {
+    grid-template-columns: minmax(140px, .8fr) minmax(110px, .65fr) minmax(170px, 1fr) 112px 20px;
+  }
+
+  .queue-variant-surveillance > :nth-child(3),
+  .queue-variant-surveillance .work-row-mechanic {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .mechanic-work-open.queue-variant-mechanic,
+  .mechanic-work-open.queue-variant-office,
+  .mechanic-work-open.queue-variant-surveillance {
+    align-items: start;
+    display: grid;
+    gap: 7px 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .queue-variant-mechanic .queue-attention,
+  .queue-variant-office .queue-attention {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .queue-variant-mechanic .work-row-created,
+  .queue-variant-office .work-row-age {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
+
+  .queue-variant-office .work-row-location,
+  .queue-variant-office .work-row-mechanic {
+    display: inline;
+    grid-column: 1 / -1;
+  }
+
+  .queue-variant-office .work-row-location { grid-row: 5; }
+  .queue-variant-office .work-row-mechanic { grid-row: 6; }
+
+  .queue-variant-surveillance .work-row-location,
+  .queue-variant-surveillance .work-row-mechanic,
+  .queue-variant-surveillance .work-row-created {
+    display: block;
+    grid-column: 1 / -1;
+  }
+
+  .queue-variant-surveillance .work-row-location { grid-row: 2; }
+  .queue-variant-surveillance .work-row-mechanic { grid-row: 3; }
+  .queue-variant-surveillance .work-row-created { grid-row: 4; }
+}

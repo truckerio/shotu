@@ -1,0 +1,117 @@
+import assert from "node:assert/strict";
+import { closePool, query } from "../../db/pool.js";
+import {
+  acceptOperationalWorkorder,
+  createOperationalWorkorder,
+  getOperationalWorkorderById,
+} from "../../db/repositories/operational-workorders.repo.js";
+import { updateMechanicUsedPartsSchema } from "../workorders/workorder.schemas.js";
+import { saveMechanicUsedParts } from "./mechanic.service.js";
+
+const suffix = Date.now().toString(36);
+const companyId = `used-parts-test-${suffix}`;
+let workorderId;
+let mechanicId;
+let otherMechanicId;
+let officeId;
+
+try {
+  const users = await query(
+    `insert into app_users (name, email, role)
+     values
+       ($1, $2, 'mechanic'),
+       ($3, $4, 'mechanic'),
+       ($5, $6, 'office')
+     returning id, role, email`,
+    [
+      "Used Parts Mechanic",
+      `used-parts-mechanic-${suffix}@example.test`,
+      "Other Mechanic",
+      `other-mechanic-${suffix}@example.test`,
+      "Used Parts Office",
+      `used-parts-office-${suffix}@example.test`,
+    ]
+  );
+  mechanicId = users.rows.find((user) => user.email.startsWith("used-parts-mechanic"))?.id;
+  otherMechanicId = users.rows.find((user) => user.email.startsWith("other-mechanic"))?.id;
+  officeId = users.rows.find((user) => user.role === "office")?.id;
+
+  await query(
+    `insert into workorder_serial_counters (company_id, prefix, next_number, digits)
+     values ($1, $2, 1, 4)`,
+    [companyId, `UP-${suffix}-`]
+  );
+  const approvedRequestId = "11111111-1111-4111-8111-111111111111";
+  const workorder = await createOperationalWorkorder({
+    companyId,
+    createdByUserId: officeId,
+    concern: "Used parts autosave integration test",
+    formData: {
+      companyName: "Preserve this company",
+      unitNo: "TEST-101",
+      parts: [{ requestId: approvedRequestId, partNo: "APPROVED-1", qty: "1", repairOrder: "Approved request" }],
+    },
+  });
+  workorderId = workorder.id;
+  await acceptOperationalWorkorder(workorderId, mechanicId);
+
+  const input = updateMechanicUsedPartsSchema.parse({
+    mechanicUserId: mechanicId,
+    parts: [
+      { partNo: "  LF14000NN  ", qty: 2, repairOrder: " Replace oil filter. " },
+      { partNo: "", qty: "", repairOrder: "" },
+    ],
+  });
+  assert.equal(input.parts[0].partNo, "LF14000NN");
+  assert.equal(input.parts[0].qty, "2");
+  assert.equal(input.parts[1].qty, "");
+  assert.throws(() => updateMechanicUsedPartsSchema.parse({ mechanicUserId: mechanicId, parts: [{ partNo: "X", qty: 0, repairOrder: "" }] }));
+  assert.throws(() => updateMechanicUsedPartsSchema.parse({ mechanicUserId: mechanicId, parts: Array.from({ length: 19 }, () => ({ partNo: "", qty: "", repairOrder: "" })) }));
+
+  const saved = await saveMechanicUsedParts(workorderId, mechanicId, input.parts);
+  assert.equal(saved.formData.companyName, "Preserve this company");
+  assert.equal(saved.formData.unitNo, "TEST-101");
+  assert.equal(saved.formData.parts.length, 3);
+  assert.equal(saved.formData.parts[0].partNo, "LF14000NN");
+  assert.equal(saved.formData.parts[2].requestId, approvedRequestId);
+
+  const auditAfterChange = await query(
+    `select count(*)::int as count from workorder_field_events
+     where workorder_id = $1 and field_key = 'formData.parts'`,
+    [workorderId]
+  );
+  assert.equal(auditAfterChange.rows[0].count, 1);
+  await saveMechanicUsedParts(workorderId, mechanicId, input.parts);
+  const auditAfterNoop = await query(
+    `select count(*)::int as count from workorder_field_events
+     where workorder_id = $1 and field_key = 'formData.parts'`,
+    [workorderId]
+  );
+  assert.equal(auditAfterNoop.rows[0].count, 1);
+
+  await assert.rejects(
+    saveMechanicUsedParts(workorderId, otherMechanicId, input.parts),
+    /Only an assigned mechanic/
+  );
+  await query("update app_users set active = false where id = $1", [mechanicId]);
+  await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /Mechanic user not found/);
+  await query("update app_users set active = true where id = $1", [mechanicId]);
+  await query("update operational_workorders set status = 'closed' where id = $1", [workorderId]);
+  await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /completed workorder/);
+
+  assert.equal((await getOperationalWorkorderById(workorderId)).formData.companyName, "Preserve this company");
+  console.log(JSON.stringify({
+    passed: true,
+    autosave: true,
+    preservedFormData: true,
+    preservedApprovedRequests: true,
+    authorization: true,
+    audit: true,
+  }));
+} finally {
+  if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
+  await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
+  const userIds = [mechanicId, otherMechanicId, officeId].filter(Boolean);
+  if (userIds.length) await query("delete from app_users where id = any($1::uuid[])", [userIds]);
+  await closePool();
+}
