@@ -45,9 +45,13 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 
 ```bash
 npm run db:migrate
+npm run db:check
 npm run db:create-admin
 npm run db:seed-demo-users
 npm run verify
 ```
+
+`db:check` is read-only. It verifies migration parity, tenant ownership, location
+coverage, operational-view coverage, and primary-mechanic projection drift.
 
 `db:create-admin` is idempotent and uses Better Auth to create the credential. It links the login to the operational admin profile, company membership, and location membership. Do not insert password hashes with SQL.
