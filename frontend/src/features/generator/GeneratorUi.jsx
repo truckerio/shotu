@@ -70,7 +70,18 @@ export function WorkorderPreview({ serial, label, form }) {
   );
 }
 
-export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range, countLabel, actionLabel, destinationLabel, onClose, onPageChange, onZoomChange, onPrint }) {
+export function BrowserPrintDocument({ payload }) {
+  if (!payload?.serials?.length) return null;
+  return (
+    <section className="browser-print-document" aria-hidden="true">
+      {payload.serials.map((serial) => (
+        <div key={serial} dangerouslySetInnerHTML={{ __html: renderWorkorderPageHtml(payload.form, serial) }} />
+      ))}
+    </section>
+  );
+}
+
+export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range, countLabel, actionLabel, onClose, onPageChange, onZoomChange, onPrint }) {
   if (!open) return null;
   const safeIndex = Math.min(Math.max(pageIndex, 0), serials.length - 1);
   const serial = serials[safeIndex] || "";
@@ -92,14 +103,14 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
         </div>
       </div>
       <div className={`fullscreen-stage zoom-${zoom}`}>
-        <div className="fullscreen-page-meta"><span>Page {safeIndex + 1}</span><strong>{serial}</strong><small>{destinationLabel}</small></div>
+        <div className="fullscreen-page-meta"><span>Page {safeIndex + 1}</span><strong>{serial}</strong></div>
         <div className="fullscreen-page-wrap"><div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{ __html: renderWorkorderPageHtml(form, serial) }} /></div></div>
       </div>
     </div>
   );
 }
 
-export function PrintModal({ state, range, printerName, onClose }) {
+export function PrintModal({ state, range, onClose }) {
   if (!state.open) return null;
   const isDone = state.stage === "done";
   const isError = state.stage === "error";
@@ -113,7 +124,7 @@ export function PrintModal({ state, range, printerName, onClose }) {
         <p>{state.message}</p>
         <div className="print-summary">
           <div><span>{displayRange.includes(" to ") ? "Serial range" : "Workorder no."}</span><strong>{displayRange}</strong></div>
-          <div><span>Destination</span><strong>{printerName || "Save PDF only"}</strong></div>
+          <div><span>Pages</span><strong>{state.pageCount || 1}</strong></div>
         </div>
         <div className="progress-track"><div className={`progress-fill ${isDone ? "complete" : isError ? "failed" : ""}`} /></div>
         {isDone && state.downloadUrl ? <a className="button primary download-link" href={state.downloadUrl} target="_blank" rel="noreferrer">Download PDF</a> : null}

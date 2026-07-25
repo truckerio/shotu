@@ -32,10 +32,6 @@ export function PreviewPane({
   onTogglePrintMenu,
   onPrint,
   primaryActionLabel,
-  selectedDestinationLabel,
-  printerName,
-  printers,
-  onSelectPrintDestination,
   batchSettings,
   secondaryContent,
   children,
@@ -88,30 +84,20 @@ export function PreviewPane({
               <div className="print-command-menu" role="menu">
                 <button className="print-command-run" type="button" role="menuitem" onClick={onPrint}>
                   <span>{primaryActionLabel}</span>
-                  <small>{selectedDestinationLabel}</small>
+                  <small>Choose a printer or Save as PDF in your browser</small>
                 </button>
                 {batchSettings ? (
                   <div className="print-batch-settings" role="group" aria-label="Batch print settings">
                     <div>
-                      <span>Blank workorders</span>
-                      <small>Serials are reserved automatically</small>
+                      <span>Batch size</span>
+                      <small>Each workorder gets a unique serial</small>
                     </div>
                     <label>
-                      Copies
+                      Workorders
                       <input type="number" min="1" max="250" value={batchSettings.copies} onChange={(event) => batchSettings.onChange("copies", event.target.value)} />
                     </label>
                   </div>
                 ) : null}
-                <button type="button" role="menuitem" onClick={() => onSelectPrintDestination("")}>
-                  <span>{printerName ? "Switch to PDF" : "Selected"}</span>
-                  <small>Save PDF only</small>
-                </button>
-                {printers.map((printer) => (
-                  <button key={printer.name} type="button" role="menuitem" onClick={() => onSelectPrintDestination(printer.name)}>
-                    <span>{printerName === printer.name ? "Selected" : "Use printer"}</span>
-                    <small>{printer.isDefault ? `${printer.name} (default)` : printer.name}</small>
-                  </button>
-                ))}
               </div>
             ) : null}
           </div> : null}

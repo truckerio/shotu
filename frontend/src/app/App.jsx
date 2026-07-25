@@ -11,7 +11,7 @@ import { WorkorderStatusPill } from "../components/workorders/WorkorderStatusPil
 import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
-import { Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview, satelliteTiles } from "../features/generator/GeneratorUi.jsx";
+import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview, satelliteTiles } from "../features/generator/GeneratorUi.jsx";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
 import { emptyPart, workDateRangeLabel, workorderTemplateStyles } from "../../../shared/workorder-template.js";
@@ -184,9 +184,9 @@ export function App({ actor }) {
   const [isPhone, setIsPhone] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 700px)").matches));
   const [isCompact, setIsCompact] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 1180px)").matches));
   const [openSection, setOpenSection] = useState("vehicle");
-  const [printers, setPrinters] = useState([]);
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [printState, setPrintState] = useState({ open: false, stage: "idle", message: "" });
+  const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
   const [officeCreateState, setOfficeCreateState] = useState({ busy: false, message: "" });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
@@ -210,7 +210,6 @@ export function App({ actor }) {
     nextNumber: 1,
     digits: 6,
     copies: 1,
-    printerName: "",
     workDate: todayIso(),
     workStartDate: todayIso(),
     workEndDate: todayIso(),
@@ -242,9 +241,10 @@ export function App({ actor }) {
     () => Array.from({ length: effectiveCopies }, (_, index) => formatSerial(form.prefix, (Number(form.nextNumber) || 1) + index, form.digits)),
     [form.prefix, form.nextNumber, form.digits, effectiveCopies],
   );
-  const workorderCountLabel = activeWorkorder ? "1 workorder" : `${effectiveCopies} page(s)`;
-  const primaryActionLabel = form.printerName ? (activeWorkorder ? "Print filled workorder" : "Print workorders") : "Save PDF";
-  const selectedDestinationLabel = form.printerName || "Save PDF only";
+  const workorderCountLabel = activeWorkorder ? "1 workorder" : `${effectiveCopies} workorder${effectiveCopies === 1 ? "" : "s"}`;
+  const primaryActionLabel = activeWorkorder
+    ? "Print workorder"
+    : `Print ${effectiveCopies} workorder${effectiveCopies === 1 ? "" : "s"}`;
   const canPrint = actor.role === "office" || actor.role === "admin";
   const statusOptions = [
     { value: "open", label: "Open" },
@@ -306,17 +306,6 @@ export function App({ actor }) {
     () => refreshVehicleLocation(mechanicMapVehicle),
     { enabled: Boolean(mechanicMapVehicle?.id), intervalMs: 60_000 },
   );
-
-  async function refreshPrinters() {
-    const result = await api("/api/printers");
-    setPrinters(result.printers || []);
-    const defaultPrinter = result.printers?.find((printer) => printer.isDefault);
-    if (defaultPrinter) setForm((current) => ({ ...current, printerName: defaultPrinter.name }));
-  }
-
-  useEffect(() => {
-    if (actor.role === "office" || actor.role === "admin") refreshPrinters().catch(() => {});
-  }, [actor.role]);
 
   useEffect(() => {
     if (!canPrint || activeWorkorder) return;
@@ -690,13 +679,45 @@ export function App({ actor }) {
     window.location.href = "/api/integrations/samsara/oauth/start";
   }
 
-  async function printWorkorders(destination = form.printerName) {
-    setPrintState({ open: true, stage: "allocating", message: "Locking serial numbers so duplicates cannot be generated.", printerName: destination });
+  async function openBrowserPrintDialog(payload) {
+    setBrowserPrintPayload(payload);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (document.fonts?.ready) await document.fonts.ready;
+    window.print();
+  }
+
+  async function printWorkorders() {
+    const pageCount = effectiveCopies;
+    setPrintState({ open: true, stage: "allocating", message: "Reserving unique serial numbers.", pageCount });
     try {
-      await new Promise((resolve) => setTimeout(resolve, 450));
-      setPrintState({ open: true, stage: "rendering", message: mode === "mechanic" ? "Rendering one workorder." : "Rendering workorder pages with first-to-last serial range.", printerName: destination });
-      await new Promise((resolve) => setTimeout(resolve, 450));
-      setPrintState({ open: true, stage: "printing", message: destination ? "Sending PDF to selected printer." : "Saving generated PDF.", printerName: destination });
+      setPrintState({ open: true, stage: "rendering", message: pageCount === 1 ? "Preparing one workorder." : `Preparing ${pageCount} unique workorders.`, pageCount });
+      setPrintState({ open: true, stage: "printing", message: "Creating the archived PDF.", pageCount });
+      const printableForm = {
+        companyName: form.companyName,
+        headerTitle: form.headerTitle,
+        brandTop: form.brandTop,
+        brandBottom: form.brandBottom,
+        warrantyText: form.warrantyText,
+        responsibilityText: form.responsibilityText,
+        authorizationText: form.authorizationText,
+        workDate: form.workDate,
+        workStartDate: form.workStartDate,
+        workEndDate: form.workEndDate,
+        unitNo: form.unitNo,
+        unitType: form.unitType,
+        licenseNo: form.licenseNo,
+        mileage: form.mileage,
+        model: form.model,
+        vinNo: form.vinNo,
+        mechanicConcern: form.mechanicConcern,
+        mechanicName: form.mechanicName,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        managerName: form.managerName,
+        customerSignature: form.customerSignature,
+        authorizedBy: form.authorizedBy,
+        parts: form.parts,
+      };
       const result = await api("/api/print", {
         method: "POST",
         body: JSON.stringify({
@@ -704,33 +725,7 @@ export function App({ actor }) {
           locationId: form.locationId || activeWorkorder?.workorder?.locationId || null,
           companyName: form.companyName,
           count: effectiveCopies,
-          printerName: destination,
-          form: {
-            companyName: form.companyName,
-            headerTitle: form.headerTitle,
-            brandTop: form.brandTop,
-            brandBottom: form.brandBottom,
-            warrantyText: form.warrantyText,
-            responsibilityText: form.responsibilityText,
-            authorizationText: form.authorizationText,
-            workDate: form.workDate,
-            workStartDate: form.workStartDate,
-            workEndDate: form.workEndDate,
-            unitNo: form.unitNo,
-            unitType: form.unitType,
-            licenseNo: form.licenseNo,
-            mileage: form.mileage,
-            model: form.model,
-            vinNo: form.vinNo,
-            mechanicConcern: form.mechanicConcern,
-            mechanicName: form.mechanicName,
-            startTime: form.startTime,
-            endTime: form.endTime,
-            managerName: form.managerName,
-            customerSignature: form.customerSignature,
-            authorizedBy: form.authorizedBy,
-            parts: form.parts,
-          },
+          form: printableForm,
         }),
       });
       const printedSerials = Array.isArray(result.serials) ? result.serials : [];
@@ -742,14 +737,23 @@ export function App({ actor }) {
       }
       setPrintState({
         open: true,
-        stage: "done",
-        message: result.printerName ? "Sent to printer. Serial numbers were saved in log." : "PDF is ready to download.",
-        printerName: destination,
+        stage: "printing",
+        message: "Opening your browser print dialog.",
         downloadUrl: result.downloadUrl,
         range: printedRange,
+        pageCount: printedSerials.length || pageCount,
+      });
+      await openBrowserPrintDialog({ form: result.printForm || printableForm, serials: printedSerials });
+      setPrintState({
+        open: true,
+        stage: "done",
+        message: "Print dialog opened. Choose your printer or Save as PDF. The archived PDF is also available below.",
+        downloadUrl: result.downloadUrl,
+        range: printedRange,
+        pageCount: printedSerials.length || pageCount,
       });
     } catch (error) {
-      setPrintState({ open: true, stage: "error", message: error.message, printerName: destination });
+      setPrintState({ open: true, stage: "error", message: error.message, pageCount });
     }
   }
 
@@ -804,11 +808,6 @@ export function App({ actor }) {
     } catch (error) {
       setOfficeCreateState({ busy: false, message: error.message });
     }
-  }
-
-  function selectPrintDestination(destination) {
-    setPrintMenuOpen(false);
-    setForm((current) => ({ ...current, printerName: destination }));
   }
 
   function workorderFormValues(detail, current = form) {
@@ -1215,6 +1214,7 @@ export function App({ actor }) {
   return (
     <main className={`prototype ${isWorkorderDetail ? "workorder-detail-page" : ""} ${isMechanicDetail ? "mechanic-detail-page" : ""}`.trim()}>
       <style>{workorderTemplateStyles}</style>
+      <BrowserPrintDocument payload={browserPrintPayload} />
       <WorkorderDetailLayout detail={isWorkorderDetail} previewOpen={showEmbeddedPreview}>
         <aside className="control-panel" ref={formRef}>
           {activeWorkorder ? (
@@ -1722,10 +1722,6 @@ export function App({ actor }) {
             printWorkorders();
           } : undefined}
           primaryActionLabel={primaryActionLabel}
-          selectedDestinationLabel={selectedDestinationLabel}
-          printerName={form.printerName}
-          printers={printers}
-          onSelectPrintDestination={selectPrintDestination}
           batchSettings={canPrint && mode === "admin" && !activeWorkorder ? {
             copies: form.copies,
             onChange: updateField,
@@ -1756,7 +1752,6 @@ export function App({ actor }) {
         range={range}
         countLabel={workorderCountLabel}
         actionLabel={primaryActionLabel}
-        destinationLabel={selectedDestinationLabel}
         onClose={() => setPreviewFullscreen(false)}
         onPageChange={setFullscreenPageIndex}
         onZoomChange={setFullscreenZoom}
@@ -1765,7 +1760,7 @@ export function App({ actor }) {
           printWorkorders();
         } : undefined}
       />
-      <PrintModal state={printState} range={range} printerName={printState.printerName ?? form.printerName} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
+      <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
       {mechanicFinish.open ? (
         <div
           className="modal-backdrop"

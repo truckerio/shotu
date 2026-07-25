@@ -111,4 +111,4 @@ must never allocate or override a business serial.
 
 ## Deployment
 
-Railway builds the Dockerfile, runs `npm run db:migrate` before deployment, and starts `npm start`. PostgreSQL and durable object storage are production dependencies; local print/upload directories are not suitable as distributed storage across replicas.
+Railway builds the Dockerfile, runs `npm run db:migrate` before deployment, and starts `npm start`. PostgreSQL is the operational source of truth. Generated PDFs, uploads, share packages, and chat media must use `WORKORDER_STORAGE_DIR` on a mounted persistent volume; process-local storage is not durable across deployments. A single attached volume supports the current one-replica deployment. Move files to object storage before horizontally scaling the web service.

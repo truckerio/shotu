@@ -7,7 +7,6 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
-    cups-client \
     fonts-liberation \
   && rm -rf /var/lib/apt/lists/*
 

@@ -18,7 +18,10 @@ const MIME_ALIASES = {
 };
 
 function mediaRoot() {
-  return resolve(process.env.CHAT_MEDIA_DIR || resolve(process.cwd(), "data", "chat-media"));
+  const storageRoot = process.env.WORKORDER_STORAGE_DIR
+    ? resolve(process.env.WORKORDER_STORAGE_DIR)
+    : process.cwd();
+  return resolve(process.env.CHAT_MEDIA_DIR || resolve(storageRoot, "data", "chat-media"));
 }
 
 function normalizeMimeType(value) {

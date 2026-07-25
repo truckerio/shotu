@@ -2252,9 +2252,9 @@ textarea:focus {
   color: #535862;
   font-size: var(--text-secondary);
   font-weight: var(--weight-medium);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .range-card {
@@ -2758,6 +2758,7 @@ textarea:focus {
   container-type: inline-size;
   display: grid;
   gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   max-height: calc(100vh - 48px);
   min-height: calc(100vh - 48px);
@@ -2800,6 +2801,8 @@ textarea:focus {
 
 .preview-pane-content {
   min-height: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .preview-secondary-pane {
@@ -2946,6 +2949,8 @@ textarea:focus {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+  min-width: 0;
+  width: 100%;
 }
 
 .preview-title-row {
@@ -2958,6 +2963,7 @@ textarea:focus {
   align-items: center;
   display: inline-flex;
   gap: 10px;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -2967,7 +2973,7 @@ textarea:focus {
 
 .preview-print-command .print-command-menu {
   left: auto;
-  min-width: 250px;
+  min-width: min(290px, calc(100vw - 24px));
   right: 0;
 }
 
@@ -4141,9 +4147,12 @@ textarea:focus {
   .preview-grid {
     gap: 12px;
     grid-template-columns: 1fr;
+    max-width: 100%;
+    min-width: 0;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     padding: 10px;
+    width: 100%;
   }
 
   .preview-page-card {
@@ -4163,6 +4172,17 @@ textarea:focus {
   .preview-header-actions {
     align-items: stretch;
     justify-content: space-between;
+    position: relative;
+  }
+
+  .preview-header-actions .preview-print-command {
+    position: static;
+  }
+
+  .preview-header-actions .preview-print-command .print-command-menu {
+    left: 0;
+    min-width: 0;
+    right: 0;
   }
 
   .preview-summary {
@@ -4608,5 +4628,22 @@ textarea:focus {
     scroll-behavior: auto !important;
     transition-delay: 0ms !important;
     transition-duration: 1ms !important;
+  }
+}
+.browser-print-document {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .prototype > :not(.browser-print-document):not(style) {
+    display: none !important;
+  }
+
+  .prototype > .browser-print-document {
+    display: block !important;
   }
 }

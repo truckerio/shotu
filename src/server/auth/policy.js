@@ -19,7 +19,7 @@ export function permissionForRequest(method, pathname) {
   if (pathname.startsWith("/api/vehicles/")) return pathname.endsWith("/live-location")
     ? PERMISSION.VEHICLE_LOCATION_REFRESH
     : PERMISSION.VEHICLE_READ;
-  if (["/api/state", "/api/workorders", "/api/print", "/api/print-settings", "/api/upload", "/api/share", "/api/printers"].includes(pathname)) {
+  if (["/api/state", "/api/workorders", "/api/print", "/api/print-settings", "/api/upload", "/api/share"].includes(pathname)) {
     return PERMISSION.PRINT_MANAGE;
   }
   if (pathname.startsWith("/api/jobs/")) return PERMISSION.PRINT_MANAGE;

@@ -35,10 +35,11 @@ import { invalidRequest, resourceNotFound } from "./src/server/auth/errors.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
-const dataDir = join(__dirname, "data");
-const outputDir = join(__dirname, "printed-workorders");
-const uploadDir = join(__dirname, "uploaded-workorders");
-const shareDir = join(__dirname, "share-packages");
+const storageRoot = resolve(process.env.WORKORDER_STORAGE_DIR || __dirname);
+const dataDir = join(storageRoot, "data");
+const outputDir = join(storageRoot, "printed-workorders");
+const uploadDir = join(storageRoot, "uploaded-workorders");
+const shareDir = join(storageRoot, "share-packages");
 const tempDir = join(__dirname, ".tmp");
 const ledgerPath = join(dataDir, "serial-ledger.json");
 const frontendDistDir = join(__dirname, "frontend", "dist");
@@ -210,6 +211,7 @@ function publicWorkorder(workorder) {
     companyId: workorder.companyId,
     companyName: workorder.companyName,
     createdAt: workorder.createdAt,
+    generatedAt: workorder.generatedAt || null,
     printedAt: workorder.printedAt || null,
     uploadedAt: workorder.uploadedAt || null,
     uploadedBy: workorder.uploadedBy || "",
@@ -219,6 +221,31 @@ function publicWorkorder(workorder) {
     lastSharedAt: workorder.lastSharedAt || null,
     lastSharedTo: workorder.lastSharedTo || "",
     shareCount: workorder.shareCount || 0,
+  };
+}
+
+function operationalWorkorderPrintForm(workorder) {
+  const saved = workorder.formData || {};
+  const asset = workorder.asset || {};
+  const mechanicName = workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
+    || workorder.mechanic?.name
+    || saved.mechanicName
+    || "";
+  const model = [asset.year, asset.make, asset.model].filter(Boolean).join(" ");
+
+  return {
+    ...saved,
+    companyName: saved.companyName || workorder.location?.name || "",
+    unitNo: saved.unitNo || asset.unitNo || asset.name || "",
+    unitType: saved.unitType || asset.unitType || "",
+    licenseNo: saved.licenseNo || asset.licensePlate || "",
+    mileage: saved.mileage || (asset.lastOdometerMiles ? String(Math.round(Number(asset.lastOdometerMiles))) : ""),
+    model: saved.model || model,
+    vinNo: saved.vinNo || asset.vin || "",
+    mechanicConcern: saved.mechanicConcern || workorder.concern || "",
+    mechanicName,
+    officeNotes: workorder.officeNotes || saved.officeNotes || "",
+    parts: Array.isArray(saved.parts) ? saved.parts : [],
   };
 }
 
@@ -266,25 +293,29 @@ async function recordSerialAllocation(input, reservation) {
     }));
 
     for (const entry of serials) {
-      company.issued.push({
-        serial: entry.serial,
-        number: entry.number,
-        jobId,
-        printerName: input.printerName || "",
-        createdAt: now,
-      });
+      if (!company.issued.some((issued) => issued.serial === entry.serial)) {
+        company.issued.push({
+          serial: entry.serial,
+          number: entry.number,
+          jobId,
+          createdAt: now,
+        });
+      }
+      const existing = ledger.workorders[entry.serial];
       ledger.workorders[entry.serial] = {
-        id: crypto.randomUUID(),
+        ...(existing || {}),
+        id: existing?.id || crypto.randomUUID(),
         serial: entry.serial,
         number: entry.number,
         companyId: company.id,
         companyName: company.name,
         jobId,
-        printerName: input.printerName || "",
-        createdAt: now,
-        printedAt: null,
-        uploadHistory: [],
-        shareHistory: [],
+        jobIds: [...new Set([...(existing?.jobIds || (existing?.jobId ? [existing.jobId] : [])), jobId])],
+        createdAt: existing?.createdAt || now,
+        generatedAt: existing?.generatedAt || null,
+        printedAt: existing?.printedAt || null,
+        uploadHistory: existing?.uploadHistory || [],
+        shareHistory: existing?.shareHistory || [],
       };
     }
     company.nextNumber = reservation.nextNumber;
@@ -293,8 +324,9 @@ async function recordSerialAllocation(input, reservation) {
       id: jobId,
       companyId: company.id,
       companyName: company.name,
+      locationId: input.locationId || null,
+      workorderId: input.workorderId || null,
       serials: serials.map((entry) => entry.serial),
-      printerName: input.printerName || "",
       createdAt: now,
       status: "allocated",
     };
@@ -325,24 +357,29 @@ async function printCompanyContext(requestContext, locationId = "") {
   return { companyId: location.company_id, location };
 }
 
-async function markJob(jobId, updates) {
+async function markPdfGenerated(jobId, pdfPath) {
   return withLedgerLock(async () => {
     const ledger = normalizeLedger(await loadLedger());
     const job = ledger.jobs.find((item) => item.id === jobId);
-    if (job) Object.assign(job, updates);
-    if (job && updates.status) {
-      const printedAt = new Date().toISOString();
-      for (const serial of job.serials || []) {
-        if (ledger.workorders[serial]) ledger.workorders[serial].printedAt = printedAt;
-      }
-      addActivity(ledger, "print_job_updated", {
-        companyId: job.companyId,
-        companyName: job.companyName,
-        serials: job.serials || [],
-        jobId,
-        status: updates.status,
-      });
+    if (!job) throw new Error("Generated PDF job was not found in the serial ledger.");
+
+    const generatedAt = new Date().toISOString();
+    Object.assign(job, {
+      status: "generated",
+      pdfPath,
+      generatedAt,
+      message: "PDF generated and saved.",
+    });
+    for (const serial of job.serials || []) {
+      if (ledger.workorders[serial]) ledger.workorders[serial].generatedAt = generatedAt;
     }
+    addActivity(ledger, "pdf_generated", {
+      companyId: job.companyId,
+      companyName: job.companyName,
+      serials: job.serials || [],
+      jobId,
+      status: "generated",
+    });
     await saveLedger(ledger);
     return job;
   });
@@ -403,51 +440,6 @@ async function writeWorkorderPdf(form, company, job, serials) {
     await rm(htmlPath, { force: true });
   }
   return filePath;
-}
-
-async function listPrinters() {
-  if (process.platform === "darwin" || process.platform === "linux") {
-    const defaultResult = await run("lpstat", ["-d"]);
-    const result = await run("lpstat", ["-p"]);
-    const defaultPrinter = /system default destination:\s*(.+)/i.exec(defaultResult.stdout)?.[1]?.trim() || "";
-    const printers = result.stdout
-      .split(/\r?\n/)
-      .map((lineText) => /^printer\s+(\S+)/.exec(lineText)?.[1])
-      .filter(Boolean)
-      .map((name) => ({ name, isDefault: name === defaultPrinter }));
-    return { platform: process.platform, defaultPrinter, printers };
-  }
-
-  if (process.platform === "win32") {
-    const script = "Get-Printer | Select-Object Name,Default | ConvertTo-Json -Compress";
-    const result = await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]);
-    if (!result.ok) return { platform: process.platform, defaultPrinter: "", printers: [] };
-    const parsed = JSON.parse(result.stdout || "[]");
-    const list = Array.isArray(parsed) ? parsed : [parsed];
-    const printers = list.filter(Boolean).map((printer) => ({ name: printer.Name, isDefault: Boolean(printer.Default) }));
-    return { platform: process.platform, defaultPrinter: printers.find((printer) => printer.isDefault)?.name || "", printers };
-  }
-
-  return { platform: process.platform, defaultPrinter: "", printers: [] };
-}
-
-async function printPdf(filePath, printerName) {
-  if (!printerName) {
-    return { ok: true, skipped: true, message: "No printer selected; PDF saved only." };
-  }
-
-  if (process.platform === "darwin" || process.platform === "linux") {
-    const result = await run("lp", ["-d", printerName, "-o", "landscape", filePath]);
-    return { ok: result.ok, stdout: result.stdout, stderr: result.stderr };
-  }
-
-  if (process.platform === "win32") {
-    const script = `Start-Process -FilePath ${JSON.stringify(filePath)} -Verb PrintTo -ArgumentList ${JSON.stringify(printerName)}`;
-    const result = await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]);
-    return { ok: result.ok, stdout: result.stdout, stderr: result.stderr };
-  }
-
-  return { ok: false, stderr: `Printing unsupported on ${process.platform}` };
 }
 
 function dateInRange(value, from, to) {
@@ -698,11 +690,6 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/printers") {
-    sendJson(res, 200, await listPrinters());
-    return;
-  }
-
   if (req.method === "GET" && url.pathname === "/api/print-settings") {
     const selected = await printCompanyContext(requestContext, url.searchParams.get("locationId") || "");
     sendJson(res, 200, await getWorkorderSerialSettings(selected.companyId));
@@ -717,6 +704,12 @@ async function handleApi(req, res) {
     if (!job?.pdfPath) {
       sendJson(res, 404, { error: "PDF not found for this print job." });
       return;
+    }
+    if (!requestContext.companyIds?.has(job.companyId)) throw resourceNotFound("Print job");
+    if (job.workorderId) {
+      await requireWorkorderAccess(requestContext, job.workorderId);
+    } else if (job.locationId && requestContext.actor.role !== "admin" && !requestContext.locationIds?.has(job.locationId)) {
+      throw resourceNotFound("Print job");
     }
 
     await sendPdfDownload(res, job.pdfPath, downloadNameForJob(job));
@@ -741,29 +734,18 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/print") {
     const input = await readBody(req);
-    const form = input.form || {};
-    form.companyName = input.companyName || form.companyName || "Default Company";
-    if (input.printerName) {
-      const availablePrinters = await listPrinters();
-      const printerExists = availablePrinters.printers.some((printer) => printer.name === input.printerName);
-      if (!printerExists) {
-        sendJson(res, 400, {
-          ok: false,
-          error: `Printer "${input.printerName}" is not available on this server.`,
-          printers: availablePrinters.printers,
-        });
-        return;
-      }
-    }
+    let form = input.form || {};
     let selected;
     let reservation;
     if (input.workorderId) {
       const workorder = await requireWorkorderAccess(requestContext, input.workorderId);
       selected = { companyId: workorder.companyId, location: workorder.location || null };
+      form = operationalWorkorderPrintForm(workorder);
       const settings = await getWorkorderSerialSettings(workorder.companyId);
       reservation = { ...settings, serials: [workorder.serial] };
     } else {
       selected = await printCompanyContext(requestContext, input.locationId || "");
+      form.companyName = input.companyName || form.companyName || selected.location?.name || "Default Company";
       reservation = await reserveWorkorderSerials({
         companyId: selected.companyId,
         count: clampInt(input.count, 1, 1, 250),
@@ -774,24 +756,20 @@ async function handleApi(req, res) {
       ...form,
       companyId: selected.companyId,
       companyName: selected.location?.name || form.companyName,
+      locationId: selected.location?.id || input.locationId || null,
     }, reservation);
     const pdfPath = await writeWorkorderPdf(form, allocation.company, allocation.job, allocation.serials);
-    const printResult = await printPdf(pdfPath, input.printerName || "");
-    await markJob(allocation.job.id, {
-      status: printResult.ok ? (printResult.skipped ? "saved" : "printed") : "print_failed_serials_consumed",
-      pdfPath,
-      printMessage: printResult.stderr || printResult.stdout || printResult.message || "",
-    });
+    await markPdfGenerated(allocation.job.id, pdfPath);
 
-    sendJson(res, printResult.ok ? 200 : 500, {
-      ok: printResult.ok,
+    sendJson(res, 200, {
+      ok: true,
+      status: "generated",
+      message: "PDF generated and saved. Open it to print with your browser.",
       jobId: allocation.job.id,
       serials: allocation.serials,
       nextNumber: allocation.company.nextNumber,
-      pdfPath,
       downloadUrl: `/api/jobs/${encodeURIComponent(allocation.job.id)}/pdf`,
-      printerName: input.printerName || "",
-      printMessage: printResult.stderr || printResult.stdout || printResult.message || "",
+      printForm: form,
     });
     return;
   }
