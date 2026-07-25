@@ -16,7 +16,12 @@ export function InviteAcceptPage({ token }) {
         setUsername(value.email.split("@")[0].replace(/[^a-zA-Z0-9_.]/g, ""));
         setState((current) => ({ ...current, loading: false }));
       })
-      .catch((error) => setState({ loading: false, busy: false, error: error.message, complete: false }));
+      .catch(() => setState({
+        loading: false,
+        busy: false,
+        error: "This invitation link has expired or was replaced. Ask an admin to resend it.",
+        complete: false,
+      }));
   }, [token]);
 
   async function accept(event) {

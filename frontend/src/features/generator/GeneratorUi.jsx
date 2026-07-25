@@ -1,4 +1,4 @@
-import { CheckCircle, ChevronLeft, ChevronRight, Printer, RefreshCw01, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
+import { CheckCircle, ChevronLeft, ChevronRight, Printer, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { renderWorkorderPageHtml } from "../../../../shared/workorder-template.js";
 
@@ -28,19 +28,25 @@ export function satelliteTiles(location, mapsConfig) {
   );
 }
 
-export function SamsaraActionButton({ connected, syncing, onConnect, onSync }) {
-  const label = connected ? (syncing ? "Syncing" : "Sync") : "Connect";
+export function SamsaraActionButton({ connected, loading, onConnect }) {
+  if (loading || connected) {
+    return (
+      <span className={`samsara-connection-status ${connected ? "is-connected" : ""}`} role="status">
+        {connected ? <CheckCircle /> : null}
+        {connected ? "Samsara connected" : "Checking Samsara"}
+      </span>
+    );
+  }
   return (
     <button
-      className={`samsara-action ${connected ? "is-connected" : "needs-connect"} ${syncing ? "is-syncing" : ""}`}
+      className="samsara-action needs-connect"
       type="button"
-      onClick={connected ? onSync : onConnect}
-      disabled={syncing}
-      aria-label={connected ? "Sync Samsara now" : "Connect Samsara"}
-      title={connected ? "Sync Samsara now" : "Connect Samsara"}
+      onClick={onConnect}
+      aria-label="Connect Samsara"
+      title="Connect Samsara"
     >
-      <span>{label}</span>
-      {connected ? <RefreshCw01 /> : <img src="/samsara-logo.png" alt="" aria-hidden="true" />}
+      <span>Connect</span>
+      <img src="/samsara-logo.png" alt="" aria-hidden="true" />
     </button>
   );
 }

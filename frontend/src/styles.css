@@ -2301,40 +2301,26 @@ textarea:focus {
   transform: scale(1.08);
 }
 
-.samsara-action.is-connected {
-  background: #eff8ff;
-  border-color: #84caff;
-  color: #175cd3;
+.samsara-connection-status {
+  align-items: center;
+  color: #667085;
+  display: inline-flex;
+  font-size: var(--text-secondary);
+  gap: 6px;
 }
 
-.samsara-action.is-connected:hover,
-.samsara-action.is-connected:focus {
-  background: #d1e9ff;
-  border-color: #53b1fd;
-  box-shadow: 0 8px 18px rgb(21 112 239 / 14%);
+.samsara-connection-status.is-connected {
+  color: #067647;
 }
 
-.samsara-action.is-syncing svg {
-  animation: spin 0.8s linear infinite;
-}
-
-.samsara-action.is-syncing {
-  animation: sync-pulse 1.4s ease-in-out infinite;
+.samsara-connection-status svg {
+  height: 16px;
+  width: 16px;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes sync-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgb(21 112 239 / 0%);
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgb(21 112 239 / 12%);
   }
 }
 
@@ -2540,19 +2526,6 @@ textarea:focus {
 .asset-location-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-.location-refresh-button {
-  width: 34px;
-}
-
-.location-refresh-button svg {
-  height: 15px;
-  width: 15px;
-}
-
-.location-refresh-button.is-refreshing svg {
-  animation: spin 0.8s linear infinite;
 }
 
 .asset-location-actions .map-hover-trigger {

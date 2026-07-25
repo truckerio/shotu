@@ -4,6 +4,7 @@ import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatche
 import { Button } from "../../components/ui/Button.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { api } from "../../lib/api.js";
+import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import "../role-workspaces.css";
 
@@ -95,6 +96,9 @@ export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
       setLoading(false);
     });
   }, []);
+  useAutomaticRefresh(
+    () => loadDashboard().catch((err) => setError(err.message)),
+  );
 
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
@@ -149,9 +153,6 @@ export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
   return (
     <main className="prototype mechanic-home office-home workspace-operations">
       <WorkspaceHeader actor={actor}>
-        <button className="icon-button" type="button" onClick={() => loadDashboard().catch((err) => setError(err.message))} aria-label="Refresh office workorders" title="Refresh">
-          <RefreshCw01 />
-        </button>
         <Button variant="primary" onClick={onCreateWorkorder}>Create workorder</Button>
       </WorkspaceHeader>
 

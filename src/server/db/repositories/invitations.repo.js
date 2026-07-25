@@ -12,6 +12,20 @@ export async function listInvitationsByLocation(locationId) {
   return result.rows;
 }
 
+export async function getPendingInvitationByLocationEmail(locationId, email) {
+  const result = await query(
+    `select id, email, name, role, status, expires_at, accepted_at, created_at
+       from user_invitations
+      where location_id = $1
+        and lower(email) = lower($2)
+        and status = 'pending'
+      order by created_at desc
+      limit 1`,
+    [locationId, email],
+  );
+  return result.rows[0] || null;
+}
+
 export async function createUserInvitation(input) {
   const client = await getPool().connect();
   try {
@@ -19,7 +33,10 @@ export async function createUserInvitation(input) {
     await client.query(
       `update user_invitations
           set status = 'revoked', updated_at = now()
-        where location_id = $1 and lower(email) = lower($2) and status = 'pending'`,
+        where location_id = $1
+          and lower(email) = lower($2)
+          and status = 'pending'
+          and expires_at <= now()`,
       [input.locationId, input.email],
     );
     const result = await client.query(
@@ -37,6 +54,29 @@ export async function createUserInvitation(input) {
   } finally {
     client.release();
   }
+}
+
+export async function rotateUserInvitation({
+  invitationId,
+  locationId,
+  actorId,
+  tokenHash,
+  expiresAt,
+}) {
+  const result = await query(
+    `update user_invitations
+        set token_hash = $3,
+            invited_by_user_id = $4,
+            expires_at = $5,
+            updated_at = now()
+      where id = $1
+        and location_id = $2
+        and status = 'pending'
+      returning id, company_uuid as company_id, location_id, email, name, role,
+                status, expires_at, accepted_at, created_at`,
+    [invitationId, locationId, tokenHash, actorId, expiresAt],
+  );
+  return result.rows[0] || null;
 }
 
 export async function getInvitationByTokenHash(tokenHash) {

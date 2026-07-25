@@ -12,6 +12,7 @@ import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
 import { Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview, satelliteTiles } from "../features/generator/GeneratorUi.jsx";
+import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
 import { emptyPart, workDateRangeLabel, workorderTemplateStyles } from "../../../shared/workorder-template.js";
 import "../styles.css";
@@ -34,13 +35,27 @@ function splitSerial(serial = "") {
   return { prefix: match[1], nextNumber: Number(match[2]), digits: match[2].length };
 }
 
+function normalizeVehicleLookupValue(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function vehicleLookupValues(vehicle) {
+  return [vehicle?.unit_no, vehicle?.unitNo, vehicle?.name]
+    .map(normalizeVehicleLookupValue)
+    .filter(Boolean);
+}
+
+function uniqueExactVehicleMatch(vehicles, query) {
+  const normalizedQuery = normalizeVehicleLookupValue(query);
+  if (!normalizedQuery) return null;
+  const matches = vehicles.filter((vehicle) => vehicleLookupValues(vehicle).includes(normalizedQuery));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function AssetLocationCard({
   vehicle,
   location,
   mapsConfig,
-  loading,
-  onRefresh,
-  showRefresh = true,
   showVehicleLabel = true,
 }) {
   const cardRef = useRef(null);
@@ -85,18 +100,6 @@ function AssetLocationCard({
           </span>
         </button>
         <div className="asset-location-actions">
-          {showRefresh ? (
-            <button
-              className={`location-refresh-button icon-tooltip ${loading ? "is-refreshing" : ""}`}
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              aria-label={loading ? "Refreshing live location" : "Refresh live location"}
-              data-tooltip={loading ? "Refreshing location" : "Refresh location"}
-            >
-              <RefreshCw01 />
-            </button>
-          ) : null}
           {location ? (
             <button
               className="map-hover-trigger map-pin-button icon-tooltip"
@@ -181,7 +184,7 @@ export function App({ actor }) {
   const [printState, setPrintState] = useState({ open: false, stage: "idle", message: "" });
   const [officeCreateState, setOfficeCreateState] = useState({ busy: false, message: "" });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
-  const [vehicleLookup, setVehicleLookup] = useState({ loading: false, syncing: false, status: "", results: [] });
+  const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [samsaraIntegration, setSamsaraIntegration] = useState({ loading: true, connected: false, authType: "none" });
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -293,6 +296,10 @@ export function App({ actor }) {
     mechanicLocationRefreshRef.current = refreshKey;
     refreshVehicleLocation(mechanicMapVehicle);
   }, [activeWorkorder?.workorder?.id, isMechanicDetail, mechanicMapVehicle?.id]);
+  useAutomaticRefresh(
+    () => refreshVehicleLocation(mechanicMapVehicle),
+    { enabled: Boolean(mechanicMapVehicle?.id), intervalMs: 60_000 },
+  );
 
   async function refreshPrinters() {
     const result = await api("/api/printers");
@@ -482,17 +489,27 @@ export function App({ actor }) {
       setVehicleLookup((current) => ({ ...current, loading: false, results: [] }));
       return;
     }
+    if (selectedVehicle && vehicleLookupValues(selectedVehicle).includes(normalizeVehicleLookupValue(q))) {
+      setVehicleLookup((current) => ({ ...current, loading: false, results: [] }));
+      return;
+    }
 
-    setVehicleLookup((current) => ({ ...current, loading: true }));
+    setVehicleLookup((current) => ({ ...current, loading: true, results: [] }));
     const timer = setTimeout(() => {
       api(`/api/vehicles/search?q=${encodeURIComponent(q)}&limit=8`)
         .then((result) => {
           if (!cancelled) {
+            const vehicles = result.vehicles || [];
+            const exactMatch = uniqueExactVehicleMatch(vehicles, q);
+            if (exactMatch) {
+              applyVehicle(exactMatch);
+              return;
+            }
             setVehicleLookup((current) => ({
               ...current,
               loading: false,
-              status: result.vehicles?.length ? "Samsara vehicle data found." : "No vehicle match. Manual entry still works.",
-              results: result.vehicles || [],
+              status: vehicles.length ? "Samsara vehicle data found." : "No vehicle match. Manual entry still works.",
+              results: vehicles,
             }));
           }
         })
@@ -505,10 +522,17 @@ export function App({ actor }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [form.unitNo]);
+  }, [form.unitNo, selectedVehicle?.id]);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateUnitNumber(value) {
+    updateField("unitNo", value);
+    if (selectedVehicle && !vehicleLookupValues(selectedVehicle).includes(normalizeVehicleLookupValue(value))) {
+      setSelectedVehicle(null);
+    }
   }
 
   function updateStartDate(value) {
@@ -620,6 +644,7 @@ export function App({ actor }) {
     }));
     setVehicleLookup((current) => ({
       ...current,
+      loading: false,
       status: `${vehicle.unit_no || vehicle.name || "Vehicle"} applied from Samsara.`,
       results: [],
     }));
@@ -637,22 +662,6 @@ export function App({ actor }) {
       setVehicleLookup((current) => ({ ...current, status: error.message }));
     } finally {
       setLocationLoading(false);
-    }
-  }
-
-  async function syncSamsaraVehicles() {
-    setVehicleLookup((current) => ({ ...current, syncing: true, status: "Syncing Samsara vehicles..." }));
-    try {
-      const result = await api("/api/integrations/samsara/sync", { method: "POST" });
-      setVehicleLookup((current) => ({
-        ...current,
-        syncing: false,
-        status: result.status === "completed" ? `Synced ${result.fetched_count} vehicle(s).` : result.error || "Samsara sync failed.",
-      }));
-      refreshSamsaraStatus();
-    } catch (error) {
-      setVehicleLookup((current) => ({ ...current, syncing: false, status: error.message }));
-      refreshSamsaraStatus();
     }
   }
 
@@ -1321,7 +1330,6 @@ export function App({ actor }) {
                   vehicle={mechanicMapVehicle}
                   location={mechanicMapLocation}
                   mapsConfig={mapsConfig}
-                  showRefresh={false}
                   showVehicleLabel={false}
                 />
               </details>
@@ -1491,9 +1499,8 @@ export function App({ actor }) {
                   <div className="vehicle-sync-row">
                     <SamsaraActionButton
                       connected={samsaraIntegration.connected}
-                      syncing={vehicleLookup.syncing || samsaraIntegration.loading}
+                      loading={samsaraIntegration.loading}
                       onConnect={connectSamsara}
-                      onSync={syncSamsaraVehicles}
                     />
                   </div>
                 ) : null}
@@ -1511,13 +1518,22 @@ export function App({ actor }) {
                           ?
                         </button>
                       </span>
-                      <input aria-label="Unit no." value={form.unitNo} onChange={(event) => updateField("unitNo", event.target.value)} autoComplete="off" />
+                      <input
+                        aria-label="Unit no."
+                        aria-autocomplete="list"
+                        aria-controls="vehicle-suggestions"
+                        aria-expanded={vehicleLookup.results.length > 0}
+                        role="combobox"
+                        value={form.unitNo}
+                        onChange={(event) => updateUnitNumber(event.target.value)}
+                        autoComplete="off"
+                      />
                     </label>
                     {vehicleLookup.loading ? <p className="vehicle-inline-status">Searching...</p> : null}
                     {vehicleLookup.results.length ? (
-                      <div className="vehicle-results">
+                      <div className="vehicle-results" id="vehicle-suggestions" role="listbox" aria-label="Vehicle suggestions">
 	                        {vehicleLookup.results.map((vehicle) => (
-	                          <button type="button" key={vehicle.id} onClick={() => applyVehicle(vehicle)}>
+	                          <button type="button" role="option" aria-selected="false" key={vehicle.id} onClick={() => applyVehicle(vehicle)}>
 	                            <strong>{vehicle.unit_no || vehicle.name || vehicle.vin || "Unnamed vehicle"}</strong>
 	                            <span>
 	                              {[vehicle.unit_type, vehicle.owner_name, vehicleModelText(vehicle), vehicle.vin, vehicle.license_plate, vehicleMileage(vehicle) ? `${vehicleMileage(vehicle)} mi` : "", vehicleLocation(vehicle) ? "Map" : ""].filter(Boolean).join(" / ")}
@@ -1569,8 +1585,6 @@ export function App({ actor }) {
                   vehicle={selectedVehicle}
                   location={vehicleLocation(selectedVehicle)}
                   mapsConfig={mapsConfig}
-                  loading={locationLoading}
-                  onRefresh={() => refreshVehicleLocation(selectedVehicle)}
                 />
                 <Field label="Mechanic concern">
                   <input value={form.mechanicConcern} onChange={(event) => updateField("mechanicConcern", event.target.value)} />

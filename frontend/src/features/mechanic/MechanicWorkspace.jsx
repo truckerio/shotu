@@ -3,6 +3,7 @@ import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd } from 
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { api } from "../../lib/api.js";
+import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import "../role-workspaces.css";
 
@@ -38,6 +39,10 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
       setLoading(false);
     });
   }, []);
+  useAutomaticRefresh(
+    () => loadDashboard().catch((err) => setError(err.message)),
+    { enabled: online },
+  );
 
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
@@ -104,11 +109,7 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
 
   return (
     <main className="prototype mechanic-home workspace-operations">
-      <WorkspaceHeader actor={actor}>
-        <button className="icon-button" type="button" onClick={() => loadDashboard().catch((err) => setError(err.message))} aria-label="Refresh workorders" title="Refresh workorders">
-          <RefreshCw01 />
-        </button>
-      </WorkspaceHeader>
+      <WorkspaceHeader actor={actor} />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
       <section className="mechanic-queue-shell">

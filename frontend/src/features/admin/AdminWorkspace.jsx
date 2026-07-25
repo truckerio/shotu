@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Copy01,
@@ -7,7 +7,6 @@ import {
   Mail01,
   MarkerPin01,
   Plus,
-  RefreshCw01,
   Tool02,
   Trash01,
   UserCheck01,
@@ -18,6 +17,7 @@ import {
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
 import { Button } from "../../components/ui/Button.jsx";
+import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import "./admin.css";
@@ -71,19 +71,18 @@ function Modal({ title, children, onClose }) {
   );
 }
 
-function LocationsHome({ locations, loading, onRefresh, onCreate, onOpen }) {
+function LocationsHome({ locations, loading, onCreate, onOpen }) {
   return (
     <section className="admin-content">
       <div className="admin-title-row">
         <h1>Locations</h1>
         <div className="admin-actions">
-          <button className="icon-button" type="button" onClick={onRefresh} title="Refresh" aria-label="Refresh locations"><RefreshCw01 /></button>
           <Button variant="primary" icon={Plus} onClick={onCreate}>New location</Button>
         </div>
       </div>
       <div className="admin-location-table">
         <div className="admin-table-head"><span>Location</span><span>Users</span><span>Open work</span><span>Template</span><span></span></div>
-        {loading ? <div className="admin-empty"><RefreshCw01 className="loading-icon" /> Loading locations</div> : locations.map((location) => (
+        {loading ? <div className="admin-empty">Loading locations</div> : locations.map((location) => (
           <button className="admin-location-row" type="button" key={location.id} onClick={() => onOpen(location.id)}>
             <span className="admin-location-name"><span className="admin-location-icon"><MarkerPin01 /></span><span><strong>{location.name}</strong><small>{location.address || location.type}</small></span></span>
             <span>{location.user_count}</span>
@@ -109,7 +108,13 @@ function OperationsHome({ locations, onOpenWorkorder, onCreateWorkorder }) {
   );
 }
 
-function UsersPanel({ actor, detail, onInvite, onManage }) {
+function formatInviteExpiry(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }) {
+  const pendingInvitations = detail.invitations.filter((invite) => invite.status === "pending");
   return (
     <section className="admin-panel">
       <header className="admin-panel-header"><h2>Users</h2><Button variant="primary" icon={Mail01} onClick={onInvite}>Invite user</Button></header>
@@ -143,8 +148,27 @@ function UsersPanel({ actor, detail, onInvite, onManage }) {
           );
         }) : <div className="admin-empty">No users assigned.</div>}
       </div>
-      {detail.invitations.some((invite) => invite.status === "pending") ? (
-        <div className="admin-pending"><strong>Pending invitations</strong>{detail.invitations.filter((invite) => invite.status === "pending").map((invite) => <span key={invite.id}>{invite.email} · {invite.role}</span>)}</div>
+      {pendingInvitations.length ? (
+        <div className="admin-pending">
+          <strong>Pending invitations</strong>
+          <div className="admin-pending-list">
+            {pendingInvitations.map((invite) => (
+              <div className="admin-pending-row" key={invite.id}>
+                <span>
+                  <strong>{invite.email}</strong>
+                  <small>{invite.role} · {invite.expired ? "Expired" : `Expires ${formatInviteExpiry(invite.expiresAt)}`}</small>
+                </span>
+                <Button
+                  icon={Mail01}
+                  onClick={() => onResend(invite)}
+                  disabled={Boolean(resendingId)}
+                >
+                  {resendingId === invite.id ? "Resending" : "Resend link"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
     </section>
   );
@@ -167,7 +191,7 @@ function TemplatePanel({ detail, value, onChange, onSave, saving }) {
   );
 }
 
-function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onBack, onInvite, onManageUser, onSaveTemplate, saving, onOpenWorkorder }) {
+function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onBack, onInvite, onManageUser, onResendInvite, resendingInviteId, onSaveTemplate, saving, onOpenWorkorder }) {
   return (
     <section className="admin-content">
       <div className="admin-detail-title">
@@ -180,7 +204,7 @@ function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onB
         <button className={tab === "template" ? "active" : ""} type="button" onClick={() => setTab("template")}><File02 /> Template</button>
       </nav>
       {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace locations={[detail.location]} fixedLocationId={detail.location.id} onOpenWorkorder={onOpenWorkorder} /></div> : null}
-      {tab === "users" ? <UsersPanel actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} /> : null}
+      {tab === "users" ? <UsersPanel actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} onResend={onResendInvite} resendingId={resendingInviteId} /> : null}
       {tab === "template" ? <TemplatePanel detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
     </section>
   );
@@ -200,6 +224,10 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
   const [locationDraft, setLocationDraft] = useState(blankLocation);
   const [inviteDraft, setInviteDraft] = useState(blankInvite);
   const [inviteUrl, setInviteUrl] = useState("");
+  const [inviteLinkRecipient, setInviteLinkRecipient] = useState("");
+  const [resendingInviteId, setResendingInviteId] = useState("");
+  const inviteCreateInFlight = useRef(false);
+  const inviteResendInFlight = useRef(false);
   const [userAction, setUserAction] = useState(null);
   const [passwordDraft, setPasswordDraft] = useState(blankPassword);
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
@@ -226,6 +254,9 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
       .then(() => id ? openLocation(id) : null)
       .catch((error) => setState({ loading: false, busy: false, error: error.message, message: "" }));
   }, []);
+  useAutomaticRefresh(
+    () => loadLocations().catch((error) => setState((current) => ({ ...current, error: error.message }))),
+  );
 
   function changeView(nextView) {
     setView(nextView);
@@ -245,11 +276,58 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
   }
   async function createInvite(event) {
     event.preventDefault();
+    if (inviteCreateInFlight.current) return;
+    inviteCreateInFlight.current = true;
     setState((current) => ({ ...current, busy: true, error: "" }));
     try {
-      const result = await api(`/api/admin/locations/${selectedId}/invitations`, { method: "POST", body: JSON.stringify(inviteDraft) });
-      setInviteUrl(result.inviteUrl); setState((current) => ({ ...current, busy: false })); await openLocation(selectedId, "users");
-    } catch (error) { setState((current) => ({ ...current, busy: false, error: error.message })); }
+      const result = await api(`/api/admin/locations/${selectedId}/invitations`, {
+        method: "POST",
+        body: JSON.stringify(inviteDraft),
+        timeoutMs: 15_000,
+      });
+      setInviteUrl(result.inviteUrl);
+      setInviteLinkRecipient(result.invitation.email);
+      setModal("inviteLink");
+      setState((current) => ({ ...current, busy: false, message: "Invitation created." }));
+      await openLocation(selectedId, "users");
+    } catch (error) {
+      setState((current) => ({ ...current, busy: false, error: error.message }));
+    } finally {
+      inviteCreateInFlight.current = false;
+    }
+  }
+  async function resendInvite(invite) {
+    if (inviteResendInFlight.current) return;
+    inviteResendInFlight.current = true;
+    setResendingInviteId(invite.id);
+    setState((current) => ({ ...current, error: "", message: "" }));
+    try {
+      const result = await api(`/api/admin/locations/${selectedId}/invitations/${invite.id}/resend`, {
+        method: "POST",
+        timeoutMs: 15_000,
+      });
+      setInviteUrl(result.inviteUrl);
+      setInviteLinkRecipient(result.invitation.email);
+      setDetail((current) => ({
+        ...current,
+        invitations: current.invitations.map((item) => item.id === result.invitation.id ? result.invitation : item),
+      }));
+      setModal("inviteLink");
+      setState((current) => ({ ...current, message: "A new invitation link was created." }));
+    } catch (error) {
+      setState((current) => ({ ...current, error: error.message }));
+    } finally {
+      setResendingInviteId("");
+      inviteResendInFlight.current = false;
+    }
+  }
+  async function copyInviteLink() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setState((current) => ({ ...current, error: "", message: "Invite link copied." }));
+    } catch {
+      setState((current) => ({ ...current, error: "The link could not be copied. Select and copy it manually." }));
+    }
   }
   async function saveTemplate() {
     setState((current) => ({ ...current, busy: true, error: "", message: "" }));
@@ -269,9 +347,19 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
   async function submitUserAction(event) {
     event.preventDefault();
     if (!userAction) return;
-    if (userAction.type === "password" && passwordDraft.password !== passwordDraft.confirmation) {
-      setState((current) => ({ ...current, error: "Passwords do not match." }));
-      return;
+    if (userAction.type === "password") {
+      if (passwordDraft.password.length < 12) {
+        setState((current) => ({ ...current, error: "Password must be at least 12 characters." }));
+        return;
+      }
+      if (!passwordDraft.confirmation) {
+        setState((current) => ({ ...current, error: "Confirm the new password." }));
+        return;
+      }
+      if (passwordDraft.password !== passwordDraft.confirmation) {
+        setState((current) => ({ ...current, error: "Passwords do not match." }));
+        return;
+      }
     }
     setState((current) => ({ ...current, busy: true, error: "", message: "" }));
     const base = `/api/admin/locations/${selectedId}/users/${userAction.user.id}`;
@@ -280,6 +368,7 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
         await api(`${base}/password`, {
           method: "POST",
           body: JSON.stringify({ password: passwordDraft.password }),
+          timeoutMs: 15_000,
         });
       } else if (userAction.type === "delete") {
         await api(base, { method: "DELETE" });
@@ -296,9 +385,11 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
           : `${userAction.user.name} is now ${userAction.type === "activate" ? "active" : "inactive"}.`;
       setUserAction(null);
       setPasswordDraft(blankPassword);
-      await openLocation(selectedId, "users");
-      await loadLocations();
       setState((current) => ({ ...current, busy: false, error: "", message }));
+      if (userAction.type !== "password") {
+        await openLocation(selectedId, "users");
+        await loadLocations();
+      }
     } catch (error) {
       setState((current) => ({ ...current, busy: false, error: error.message }));
     }
@@ -316,10 +407,11 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
       {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
       {view === "operations" ? <OperationsHome locations={locations} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
-      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setModal("invite"); }} onManageUser={openUserAction} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
-      {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onRefresh={() => loadLocations().catch((error) => setState((current) => ({ ...current, error: error.message })))} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
+      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
+      {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
       {modal === "location" ? <Modal title="New location" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createLocation}><label><span>Name</span><input required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label><label><span>Address</span><input value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label><Button variant="primary" type="submit" disabled={state.busy}>Create location</Button></form></Modal> : null}
-      {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}><label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option></select></label>{inviteUrl ? <div className="admin-invite-result"><span>Invite link</span><code>{inviteUrl}</code><Button icon={Copy01} onClick={() => navigator.clipboard.writeText(inviteUrl)}>Copy link</Button></div> : <Button variant="primary" type="submit" disabled={state.busy}>Create invite</Button>}</form></Modal> : null}
+      {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}>{state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}<label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option></select></label><Button variant="primary" type="submit" disabled={state.busy}>{state.busy ? "Creating" : "Create invite"}</Button></form></Modal> : null}
+      {modal === "inviteLink" ? <Modal title="Invite link" onClose={() => setModal("")}><div className="admin-invite-result"><p>Share this new link with <strong>{inviteLinkRecipient}</strong>. Any previous link for this invitation no longer works.</p><code>{inviteUrl}</code><Button icon={Copy01} onClick={copyInviteLink}>Copy link</Button></div></Modal> : null}
       {userAction ? (
         <Modal
           title={userAction.type === "password" ? "Reset password" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
@@ -330,9 +422,13 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
             {userAction.type === "password" ? (
               <>
                 <p className="admin-modal-copy">Set a new password for <strong>{userAction.user.name}</strong>. Their current sessions will be signed out.</p>
-                <label><span>New password</span><input required autoFocus type="password" minLength="12" maxLength="128" autoComplete="new-password" value={passwordDraft.password} onChange={(event) => setPasswordDraft((current) => ({ ...current, password: event.target.value }))} /></label>
-                <label><span>Confirm password</span><input required type="password" minLength="12" maxLength="128" autoComplete="new-password" value={passwordDraft.confirmation} onChange={(event) => setPasswordDraft((current) => ({ ...current, confirmation: event.target.value }))} /></label>
-                <Button variant="primary" icon={Key01} type="submit" disabled={state.busy}>{state.busy ? "Resetting" : "Reset password"}</Button>
+                <label><span>New password</span><input required autoFocus type="password" minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.password.length > 0 && passwordDraft.password.length < 12} value={passwordDraft.password} onChange={(event) => { setPasswordDraft((current) => ({ ...current, password: event.target.value })); setState((current) => ({ ...current, error: "" })); }} /></label>
+                <label><span>Confirm password</span><input required type="password" minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.confirmation.length > 0 && passwordDraft.password !== passwordDraft.confirmation} value={passwordDraft.confirmation} onChange={(event) => { setPasswordDraft((current) => ({ ...current, confirmation: event.target.value })); setState((current) => ({ ...current, error: "" })); }} /></label>
+                <div className="admin-password-rules" aria-live="polite">
+                  <span className={passwordDraft.password.length >= 12 ? "valid" : ""}>At least 12 characters</span>
+                  <span className={passwordDraft.confirmation && passwordDraft.password === passwordDraft.confirmation ? "valid" : passwordDraft.confirmation ? "invalid" : ""}>Passwords match</span>
+                </div>
+                <Button variant="primary" icon={Key01} type="submit" disabled={state.busy || passwordDraft.password.length < 12 || passwordDraft.password !== passwordDraft.confirmation}>{state.busy ? "Resetting" : "Reset password"}</Button>
               </>
             ) : userAction.type === "delete" ? (
               <>

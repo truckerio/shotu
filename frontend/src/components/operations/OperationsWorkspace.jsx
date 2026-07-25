@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock, Inbox01, RefreshCw01, SearchMd } from "@untitledui/icons";
+import { ChevronLeft, ChevronRight, Clock, Inbox01, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
+import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import {
   ATTENTION_OPTIONS,
@@ -111,10 +112,11 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [summary, setSummary] = useState({ counts: emptyCounts, loading: true, error: "" });
-  const [list, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, error: "" });
+  const [summary, setSummary] = useState({ counts: emptyCounts, loading: true, loaded: false, error: "" });
+  const [list, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, loaded: false, error: "" });
   const preferenceHydrated = useRef(false);
   const queuePreferences = useWorkorderPreferences("admin");
+  useAutomaticRefresh(() => setRefreshKey((current) => current + 1));
 
   useEffect(() => {
     if (fixedLocationId || !queuePreferences.ready || preferenceHydrated.current) return;
@@ -157,11 +159,11 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
     const controller = new AbortController();
     const params = new URLSearchParams();
     if (filters.locationId) params.set("locationId", filters.locationId);
-    setSummary((current) => ({ ...current, loading: true, error: "" }));
+    setSummary((current) => ({ ...current, loading: !current.loaded, error: "" }));
     api(`/api/admin/operations/summary${params.size ? `?${params}` : ""}`, { signal: controller.signal })
-      .then((result) => setSummary({ counts: { ...emptyCounts, ...(result.counts || {}) }, loading: false, error: "" }))
+      .then((result) => setSummary({ counts: { ...emptyCounts, ...(result.counts || {}) }, loading: false, loaded: true, error: "" }))
       .catch((error) => {
-        if (error.name !== "AbortError") setSummary((current) => ({ ...current, loading: false, error: error.message }));
+        if (error.name !== "AbortError") setSummary((current) => ({ ...current, loading: false, loaded: true, error: error.message }));
       });
     return () => controller.abort();
   }, [filters.locationId, refreshKey]);
@@ -169,17 +171,18 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
   useEffect(() => {
     const controller = new AbortController();
     const query = buildOperationsQuery(filters, page);
-    setList((current) => ({ ...current, loading: true, error: "" }));
+    setList((current) => ({ ...current, loading: !current.loaded, error: "" }));
     api(`/api/admin/operations/workorders?${query}`, { signal: controller.signal })
       .then((result) => setList({
         items: result.items || [],
         total: result.total || 0,
         pageCount: Math.max(1, result.pageCount || 1),
         loading: false,
+        loaded: true,
         error: "",
       }))
       .catch((error) => {
-        if (error.name !== "AbortError") setList((current) => ({ ...current, loading: false, error: error.message }));
+        if (error.name !== "AbortError") setList((current) => ({ ...current, loading: false, loaded: true, error: error.message }));
       });
     return () => controller.abort();
   }, [filters, page, refreshKey]);
@@ -252,7 +255,6 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
             {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <button className="operations-refresh" type="button" onClick={refresh} aria-label="Refresh workorders" title="Refresh workorders"><RefreshCw01 /></button>
       </div>
 
       {summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}

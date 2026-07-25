@@ -11,9 +11,11 @@ import {
   invitationDetail,
   inviteLocationUser,
   removeAdminUser,
+  resendLocationInvitation,
   resetAdminUserPassword,
   saveAdminTemplate,
 } from "../modules/admin/admin.service.js";
+import { invitationPublicOrigin } from "../modules/admin/invitation-link.js";
 import { parseWorkorderOperationsQuery } from "../modules/workorders/workorder-operations.schemas.js";
 import {
   acceptInvitationSchema,
@@ -46,13 +48,28 @@ function managedUserPath(pathname, suffix = "") {
   } : null;
 }
 
+function locationInvitationPath(pathname, suffix = "") {
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^/api/admin/locations/([^/]+)/invitations/([^/]+)${escaped}$`).exec(pathname);
+  return match ? {
+    locationId: decodeURIComponent(match[1]),
+    invitationId: decodeURIComponent(match[2]),
+  } : null;
+}
+
 export async function handleAdminApi(req, res, url, helpers) {
   const { sendJson, readBody, requestContext } = helpers;
 
   const publicToken = invitationToken(url.pathname);
   if (req.method === "GET" && publicToken) {
     const invitation = await invitationDetail(publicToken);
-    sendJson(res, invitation ? 200 : 404, invitation ? { invitation } : { error: "Invitation is no longer available." });
+    sendJson(
+      res,
+      invitation ? 200 : 404,
+      invitation
+        ? { invitation }
+        : { error: "This invitation link has expired or was replaced. Ask an admin to resend it." },
+    );
     return true;
   }
   const acceptToken = invitationToken(url.pathname, "/accept");
@@ -108,8 +125,22 @@ export async function handleAdminApi(req, res, url, helpers) {
   if (req.method === "POST" && invitationsId) {
     const location = await adminLocationDetail(requestContext, invitationsId);
     const input = createInvitationSchema.parse(await readBody(req));
-    const origin = `${url.protocol}//${req.headers.host}`;
+    const origin = invitationPublicOrigin(req);
+    res.setHeader("cache-control", "no-store");
     sendJson(res, 201, await inviteLocationUser(location.location, input, actor.id, origin));
+    return true;
+  }
+
+  const resendInvitation = locationInvitationPath(url.pathname, "/resend");
+  if (req.method === "POST" && resendInvitation) {
+    res.setHeader("cache-control", "no-store");
+    sendJson(res, 200, await resendLocationInvitation(
+      requestContext,
+      resendInvitation.locationId,
+      resendInvitation.invitationId,
+      actor.id,
+      invitationPublicOrigin(req),
+    ));
     return true;
   }
 

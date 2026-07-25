@@ -4,7 +4,9 @@ import {
   acceptUserInvitation,
   createUserInvitation,
   getInvitationByTokenHash,
+  getPendingInvitationByLocationEmail,
   listInvitationsByLocation,
+  rotateUserInvitation,
 } from "../../db/repositories/invitations.repo.js";
 import {
   createLocationWithTemplate,
@@ -24,6 +26,7 @@ import {
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { requireCompanyAccess } from "../../auth/authorize.js";
 import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
+import { buildInvitationUrl } from "./invitation-link.js";
 
 function tokenHash(token) {
   return createHash("sha256").update(token).digest("hex");
@@ -42,6 +45,7 @@ function invitationView(invitation) {
     expiresAt: invitation.expires_at,
     acceptedAt: invitation.accepted_at,
     createdAt: invitation.created_at,
+    expired: invitation.status === "pending" && new Date(invitation.expires_at) <= new Date(),
   };
 }
 
@@ -113,7 +117,7 @@ export async function adminLocationDetail(context, locationId) {
     listInvitationsByLocation(locationId),
     getLocationTemplate(locationId),
   ]);
-  return { location, users, invitations, template };
+  return { location, users, invitations: invitations.map(invitationView), template };
 }
 
 export async function changeAdminUserStatus(context, actor, locationId, userId, input, headers) {
@@ -204,19 +208,49 @@ export async function saveAdminTemplate(context, locationId, input, actorId) {
 }
 
 export async function inviteLocationUser(location, input, actorId, origin) {
+  const existing = await getPendingInvitationByLocationEmail(location.id, input.email);
+  if (existing && new Date(existing.expires_at) > new Date()) {
+    throw invalidRequest("A pending invitation already exists for this email. Use Resend link.");
+  }
+
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const invitation = await createUserInvitation({
-    ...input,
-    companyId: location.company_id,
-    locationId: location.id,
-    actorId,
-    tokenHash: tokenHash(token),
-    expiresAt,
-  });
+  let invitation;
+  try {
+    invitation = await createUserInvitation({
+      ...input,
+      companyId: location.company_id,
+      locationId: location.id,
+      actorId,
+      tokenHash: tokenHash(token),
+      expiresAt,
+    });
+  } catch (error) {
+    if (error?.code === "23505") {
+      throw invalidRequest("A pending invitation already exists for this email. Use Resend link.");
+    }
+    throw error;
+  }
   return {
     invitation: invitationView(invitation),
-    inviteUrl: `${origin}/?invite=${encodeURIComponent(token)}`,
+    inviteUrl: buildInvitationUrl(origin, token),
+  };
+}
+
+export async function resendLocationInvitation(context, locationId, invitationId, actorId, origin) {
+  await authorizedLocation(context, locationId);
+  const token = randomBytes(32).toString("base64url");
+  const invitation = await rotateUserInvitation({
+    invitationId,
+    locationId,
+    actorId,
+    tokenHash: tokenHash(token),
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+  if (!invitation) throw resourceNotFound("Pending invitation");
+  return {
+    invitation: invitationView(invitation),
+    inviteUrl: buildInvitationUrl(origin, token),
   };
 }
 
@@ -229,7 +263,7 @@ export async function invitationDetail(token) {
 export async function acceptInvitation(token, input) {
   const invitation = await getInvitationByTokenHash(tokenHash(token));
   if (!invitation || invitation.status !== "pending" || new Date(invitation.expires_at) <= new Date()) {
-    throw new Error("Invitation is no longer available.");
+    throw invalidRequest("This invitation link has expired or was replaced. Ask an admin to resend it.");
   }
 
   if (await findAuthUserByEmail(invitation.email)) {

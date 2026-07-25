@@ -51,7 +51,7 @@
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(190px, 1.5fr) repeat(4, minmax(132px, .8fr)) 38px;
+  grid-template-columns: minmax(190px, 1.5fr) repeat(4, minmax(132px, .8fr));
   padding: 16px 0;
 }
 
@@ -80,7 +80,6 @@
 
 .operations-toolbar input:focus,
 .operations-toolbar select:focus,
-.operations-refresh:focus-visible,
 .operations-tabs button:focus-visible,
 .operations-row:focus-visible,
 .operations-pagination button:focus-visible {
@@ -91,22 +90,6 @@
 .operations-input-with-icon { display: block; position: relative; }
 .operations-input-with-icon svg { color: #667085; height: 17px; left: 10px; pointer-events: none; position: absolute; top: 10px; width: 17px; }
 .operations-input-with-icon input { padding-left: 34px; }
-
-.operations-refresh {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #d0d5dd;
-  border-radius: 6px;
-  color: #344054;
-  cursor: pointer;
-  display: flex;
-  height: 38px;
-  justify-content: center;
-  width: 38px;
-}
-
-.operations-refresh:hover { background: #f9fafb; }
-.operations-refresh svg { height: 17px; width: 17px; }
 
 .operations-inline-error {
   background: #fef3f2;
@@ -222,7 +205,6 @@
 
 @media (max-width: 1050px) {
   .operations-toolbar { grid-template-columns: 1.4fr repeat(2, 1fr); }
-  .operations-refresh { grid-column: 3; justify-self: end; }
 }
 
 @media (max-width: 800px) {
@@ -240,10 +222,9 @@
 
 @media (max-width: 600px) {
   .operations-tabs button { min-height: 42px; padding: 0 10px; }
-  .operations-toolbar { grid-template-columns: 1fr 42px; }
+  .operations-toolbar { grid-template-columns: 1fr; }
   .operations-toolbar label { grid-column: 1 / -1; }
-  .operations-refresh { grid-column: 2; grid-row: 1; justify-self: end; margin-top: 19px; }
-  .operations-search { grid-column: 1 !important; grid-row: 1; }
+  .operations-search { grid-column: 1 !important; }
   .operations-row { grid-template-columns: 1fr; }
   .operations-cell::before { flex-basis: 94px; }
   .operations-identity, .operations-state, .operations-wait, .operations-activity { grid-template-columns: 94px minmax(0, 1fr); }

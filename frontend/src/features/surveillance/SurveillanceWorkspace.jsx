@@ -6,6 +6,7 @@ import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatche
 import { WorkorderTimelinePanel } from "../../components/workorders/WorkorderTimeline.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { api } from "../../lib/api.js";
+import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import "./surveillance.css";
 
@@ -60,6 +61,7 @@ export function SurveillanceWorkspace({ actor }) {
   }
 
   useEffect(() => { loadDashboard(); }, []);
+  useAutomaticRefresh(loadDashboard);
 
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
@@ -206,7 +208,7 @@ export function SurveillanceWorkspace({ actor }) {
 
   return (
     <main className="prototype mechanic-home surveillance-home workspace-operations">
-      <WorkspaceHeader actor={actor}><button className="icon-button" type="button" onClick={loadDashboard} aria-label="Refresh completed workorders" title="Refresh"><RefreshCw01 /></button></WorkspaceHeader>
+      <WorkspaceHeader actor={actor} />
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
           <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
