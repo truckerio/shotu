@@ -59,3 +59,10 @@ test("constraint names use the final company_id vocabulary", async () => {
   assert.match(sql, /rename constraint operational_workorders_company_uuid_fkey to operational_workorders_company_id_fkey/i);
   assert.match(sql, /rename constraint user_location_memberships_company_uuid_fkey to user_location_memberships_company_id_fkey/i);
 });
+
+test("named not-null constraints use the final tenant and profile vocabulary", async () => {
+  const sql = await migration("019_not_null_constraint_name_cleanup.sql");
+  assert.match(sql, /rename constraint assets_company_uuid_not_null to assets_company_id_not_null/i);
+  assert.match(sql, /rename constraint operational_workorders_company_uuid_not_null to operational_workorders_company_id_not_null/i);
+  assert.match(sql, /rename constraint app_users_name_not_null to user_profiles_display_name_not_null/i);
+});

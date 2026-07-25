@@ -1,0 +1,37 @@
+-- PostgreSQL preserves explicit NOT NULL constraint names when their columns
+-- are renamed. Keep the final catalog vocabulary aligned with the runtime
+-- contract so production and fresh databases expose the same schema.
+
+alter table assets
+  rename constraint assets_company_uuid_not_null to assets_company_id_not_null;
+alter table integration_accounts
+  rename constraint integration_accounts_company_uuid_not_null to integration_accounts_company_id_not_null;
+alter table integration_sync_runs
+  rename constraint integration_sync_runs_company_uuid_not_null to integration_sync_runs_company_id_not_null;
+alter table inventory_items
+  rename constraint inventory_items_company_uuid_not_null to inventory_items_company_id_not_null;
+alter table locations
+  rename constraint locations_company_uuid_not_null to locations_company_id_not_null;
+alter table operational_workorders
+  rename constraint operational_workorders_company_uuid_not_null to operational_workorders_company_id_not_null;
+alter table parts_catalog
+  rename constraint parts_catalog_company_uuid_not_null to parts_catalog_company_id_not_null;
+alter table user_company_memberships
+  rename constraint user_company_memberships_company_uuid_not_null to user_company_memberships_company_id_not_null;
+alter table user_invitations
+  rename constraint user_invitations_company_uuid_not_null to user_invitations_company_id_not_null;
+alter table user_location_memberships
+  rename constraint user_location_memberships_company_uuid_not_null to user_location_memberships_company_id_not_null;
+alter table workorder_serial_counters
+  rename constraint workorder_serial_counters_company_uuid_not_null to workorder_serial_counters_company_id_not_null;
+
+alter table user_profiles
+  rename constraint app_users_active_not_null to user_profiles_active_not_null;
+alter table user_profiles
+  rename constraint app_users_created_at_not_null to user_profiles_created_at_not_null;
+alter table user_profiles
+  rename constraint app_users_id_not_null to user_profiles_id_not_null;
+alter table user_profiles
+  rename constraint app_users_name_not_null to user_profiles_display_name_not_null;
+alter table user_profiles
+  rename constraint app_users_updated_at_not_null to user_profiles_updated_at_not_null;
