@@ -718,6 +718,10 @@ export function App({ actor }) {
           },
         }),
       });
+      const printedSerials = Array.isArray(result.serials) ? result.serials : [];
+      const printedRange = printedSerials.length
+        ? (printedSerials.length === 1 ? printedSerials[0] : `${printedSerials[0]} to ${printedSerials.at(-1)}`)
+        : range;
       setForm((current) => ({ ...current, nextNumber: result.nextNumber }));
       setPrintState({
         open: true,
@@ -725,6 +729,7 @@ export function App({ actor }) {
         message: result.printerName ? "Sent to printer. Serial numbers were saved in log." : "PDF is ready to download.",
         printerName: destination,
         downloadUrl: result.downloadUrl,
+        range: printedRange,
       });
     } catch (error) {
       setPrintState({ open: true, stage: "error", message: error.message, printerName: destination });

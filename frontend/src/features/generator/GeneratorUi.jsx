@@ -103,6 +103,7 @@ export function PrintModal({ state, range, printerName, onClose }) {
   if (!state.open) return null;
   const isDone = state.stage === "done";
   const isError = state.stage === "error";
+  const displayRange = state.range || range;
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="print-modal">
@@ -111,7 +112,7 @@ export function PrintModal({ state, range, printerName, onClose }) {
         <h2>{isDone ? "Print job ready" : isError ? "Print failed" : "Preparing print job"}</h2>
         <p>{state.message}</p>
         <div className="print-summary">
-          <div><span>{range.includes(" to ") ? "Serial range" : "Workorder no."}</span><strong>{range}</strong></div>
+          <div><span>{displayRange.includes(" to ") ? "Serial range" : "Workorder no."}</span><strong>{displayRange}</strong></div>
           <div><span>Destination</span><strong>{printerName || "Save PDF only"}</strong></div>
         </div>
         <div className="progress-track"><div className={`progress-fill ${isDone ? "complete" : isError ? "failed" : ""}`} /></div>
