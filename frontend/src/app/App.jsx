@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, File02, FileSearch01, MessageChatCircle, Package, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
+import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
 import { PreviewPane, PreviewToggle } from "../components/preview/PreviewPane.jsx";
 import {
   DraftLeaveDialog,
@@ -8,7 +8,6 @@ import {
   useUnsavedBrowserGuard,
 } from "../components/drafts/index.js";
 import { Button } from "../components/ui/Button.jsx";
-import { WorkspaceHeader } from "../components/layout/WorkspaceHeader.jsx";
 import { ChatComposer } from "../components/workorders/ChatComposer.jsx";
 import { ChatThread } from "../components/workorders/ChatThread.jsx";
 import { PartRequestsPanel } from "../components/workorders/PartRequestsPanel.jsx";
@@ -32,7 +31,6 @@ import { MechanicProgressStatus } from "../features/mechanic/progress/MechanicPr
 import { useMechanicProgress } from "../features/mechanic/progress/useMechanicProgress.js";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
-import { WorkorderDraftsWorkspace } from "../features/workorder-drafts/index.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
 import { CREATE_WORKORDER_FORM_ID, CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
 import { validateCreateWorkorder } from "../features/generator/create-workorder-validation.js";
@@ -149,7 +147,6 @@ export function App({ actor }) {
   const [workspace, setWorkspace] = useState(() => {
     if (typeof window === "undefined") return "mechanic";
     const params = new URLSearchParams(window.location.search);
-    if ((actor.role === "office" || actor.role === "admin") && params.get("view") === "drafts") return "drafts";
     if ((actor.role === "office" || actor.role === "admin") && (params.has("workorder") || params.get("view") === "create")) return "generator";
     if (actor.role === "mechanic" && params.has("workorder")) return "generator";
     if (actor.role === "surveillance") return "surveillance";
@@ -461,12 +458,12 @@ export function App({ actor }) {
   }
 
   useEffect(() => {
-    if (workspace !== "drafts") return;
+    if (!["office", "admin"].includes(workspace)) return;
     loadDraftWorkspace();
   }, [workspace]);
   useAutomaticRefresh(
     () => loadDraftWorkspace(),
-    { enabled: workspace === "drafts" },
+    { enabled: ["office", "admin"].includes(workspace) },
   );
 
   useEffect(() => {
@@ -522,7 +519,7 @@ export function App({ actor }) {
       api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`)
         .then(({ draft }) => {
           if (workorderDraftOwnerId(draft) !== actor.id) {
-            setWorkspace("drafts");
+            setWorkspace(actor.role === "admin" ? "admin" : "office");
             setDraftWorkspaceState((current) => ({
               ...current,
               error: "Take over this team draft before editing it.",
@@ -1208,20 +1205,6 @@ export function App({ actor }) {
     window.history.replaceState({}, "", window.location.pathname);
   }
 
-  function openDraftsWorkspace() {
-    const leavingCreate = workspace === "generator" && !activeWorkorder;
-    if (leavingCreate && (workorderDraftMeaningful || workorderDraft.draft?.id)) {
-      setDraftLeaveOpen(true);
-      return;
-    }
-    setActiveWorkorder(null);
-    setSelectedVehicle(null);
-    setPreviewPanelOpen(false);
-    setDetailSource(null);
-    setWorkspace("drafts");
-    window.history.replaceState({}, "", `${window.location.pathname}?view=drafts`);
-  }
-
   function openOfficeWorkspace() {
     const leavingCreate = workspace === "generator" && !activeWorkorder;
     if (leavingCreate && (workorderDraftMeaningful || workorderDraft.draft?.id)) {
@@ -1592,8 +1575,15 @@ export function App({ actor }) {
       <Suspense fallback={null}>
         <AdminWorkspace
           actor={actor}
+          drafts={draftWorkspaceState.drafts}
+          draftLoading={draftWorkspaceState.loading}
+          draftError={draftWorkspaceState.error}
+          draftBusyId={draftWorkspaceState.busyId}
           onCreateWorkorder={openOfficeGenerator}
-          onOpenDrafts={openDraftsWorkspace}
+          onOpenDraft={openSavedDraft}
+          onDiscardDraft={discardDraftFromWorkspace}
+          onTakeoverDraft={takeOverDraft}
+          onRefreshDrafts={loadDraftWorkspace}
           onOpenWorkorder={openOfficeWorkorder}
         />
       </Suspense>
@@ -1604,35 +1594,17 @@ export function App({ actor }) {
     return (
       <OfficeWorkspace
         actor={actor}
+        drafts={draftWorkspaceState.drafts}
+        draftLoading={draftWorkspaceState.loading}
+        draftError={draftWorkspaceState.error}
+        draftBusyId={draftWorkspaceState.busyId}
         onCreateWorkorder={openOfficeGenerator}
-        onOpenDrafts={openDraftsWorkspace}
+        onOpenDraft={openSavedDraft}
+        onDiscardDraft={discardDraftFromWorkspace}
+        onTakeoverDraft={takeOverDraft}
+        onRefreshDrafts={loadDraftWorkspace}
         onOpenWorkorder={openOfficeWorkorder}
       />
-    );
-  }
-
-  if (workspace === "drafts") {
-    return (
-      <main className="prototype workspace-operations workorder-drafts-page">
-        <WorkspaceHeader actor={actor}>
-          <Button type="button" icon={ArrowLeft} onClick={finishOpenOfficeWorkspace}>
-            Workorders
-          </Button>
-        </WorkspaceHeader>
-        <WorkorderDraftsWorkspace
-          actorId={actor.id}
-          role={actor.role}
-          drafts={draftWorkspaceState.drafts}
-          loading={draftWorkspaceState.loading}
-          error={draftWorkspaceState.error}
-          busyId={draftWorkspaceState.busyId}
-          onNew={openOfficeGenerator}
-          onOpen={openSavedDraft}
-          onDiscard={discardDraftFromWorkspace}
-          onTakeover={takeOverDraft}
-          onRefresh={loadDraftWorkspace}
-        />
-      </main>
     );
   }
 

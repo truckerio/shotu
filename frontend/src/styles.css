@@ -656,10 +656,18 @@ body.is-resizing-workorder {
   grid-template-columns: 280px minmax(0, 1fr);
 }
 
+.office-layout.is-drafts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (min-width: 1800px) {
   .office-layout {
     gap: 18px;
     grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .office-layout.is-drafts {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

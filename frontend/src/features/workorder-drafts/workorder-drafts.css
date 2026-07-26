@@ -1,32 +1,15 @@
-.workorder-drafts-workspace {
+.workorder-drafts-queue {
   color: #182230;
   font-size: 13px;
   min-width: 0;
   width: 100%;
 }
 
-.workorder-drafts-header,
 .workorder-drafts-toolbar,
 .workorder-draft-row,
 .workorder-drafts-table-head {
   min-width: 0;
 }
-
-.workorder-drafts-header {
-  align-items: flex-start;
-  border-bottom: 1px solid #d0d5dd;
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  padding-bottom: 16px;
-}
-
-.workorder-drafts-title-line { align-items: center; display: flex; gap: 9px; }
-.workorder-drafts-title-line svg { color: #175cd3; height: 20px; width: 20px; }
-.workorder-drafts-title-line h1 { font-size: 24px; line-height: 1.2; margin: 0; }
-.workorder-drafts-count { background: #eff8ff; border-radius: 10px; color: #175cd3; font-size: 12px; font-weight: 600; min-width: 22px; padding: 2px 6px; text-align: center; }
-.workorder-drafts-heading p { color: #667085; margin: 5px 0 0; }
-.workorder-drafts-header-actions { align-items: center; display: flex; gap: 8px; }
 
 .workorder-draft-icon-action {
   align-items: center;
@@ -45,7 +28,13 @@
 .workorder-draft-icon-action svg { height: 17px; width: 17px; }
 .workorder-draft-icon-action.is-danger:hover { background: #fef3f2; border-color: #fecdca; color: #b42318; }
 
-.workorder-drafts-toolbar { align-items: center; display: flex; gap: 10px; padding: 16px 0; }
+.workorder-drafts-toolbar {
+  align-items: center;
+  border-bottom: 1px solid #d0d5dd;
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+}
 .workorder-drafts-search { align-items: center; display: flex; flex: 1 1 340px; position: relative; }
 .workorder-drafts-search svg { color: #667085; height: 17px; left: 10px; position: absolute; width: 17px; }
 .workorder-drafts-search input,
@@ -57,7 +46,7 @@
 .workorder-draft-row:focus-visible,
 .workorder-draft-icon-action:focus-visible { outline: 2px solid #84adff; outline-offset: 2px; }
 
-.workorder-drafts-table { border-bottom: 1px solid #d0d5dd; border-top: 1px solid #d0d5dd; min-width: 0; }
+.workorder-drafts-table { border-bottom: 1px solid #d0d5dd; min-width: 0; }
 .workorder-drafts-table-head,
 .workorder-draft-row { display: grid; grid-template-columns: minmax(180px, 1.5fr) minmax(130px, 1fr) minmax(120px, 1fr) minmax(110px, .9fr) minmax(140px, 1fr) minmax(180px, 1.2fr); }
 .workorder-drafts-table-head { background: #f9fafb; color: #667085; font-size: 12px; font-weight: 600; min-height: 40px; }
@@ -116,8 +105,6 @@
 
 
 @media (max-width: 800px) {
-  .workorder-drafts-header { align-items: stretch; flex-direction: column; gap: 12px; }
-  .workorder-drafts-header-actions { justify-content: flex-end; }
   .workorder-drafts-toolbar { align-items: stretch; flex-direction: column; }
   .workorder-drafts-filter { flex-basis: auto; }
   .workorder-drafts-table-head { display: none; }

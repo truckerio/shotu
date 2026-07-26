@@ -7,6 +7,7 @@ import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
 import "../role-workspaces.css";
 
 function uniqueRows(...groups) {
@@ -95,12 +96,21 @@ function mechanicStats(rows, roster = []) {
 
 export function OfficeWorkspace({
   actor,
+  drafts = [],
+  draftLoading = false,
+  draftError = "",
+  draftBusyId = "",
   onCreateWorkorder,
-  onOpenDrafts,
+  onOpenDraft,
+  onDiscardDraft,
+  onTakeoverDraft,
+  onRefreshDrafts,
   onOpenWorkorder,
 }) {
   const [dashboard, setDashboard] = useState(null);
-  const [activeTab, setActiveTab] = useState("needs");
+  const [activeTab, setActiveTab] = useState(() => (
+    new URLSearchParams(window.location.search).get("view") === "drafts" ? "drafts" : "needs"
+  ));
   const [search, setSearch] = useState("");
   const [lifecycleFilter, setLifecycleFilter] = useState("");
   const [mechanicFilter, setMechanicFilter] = useState("");
@@ -108,6 +118,10 @@ export function OfficeWorkspace({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const preferenceHydrated = useRef(false);
+  const legacyDraftRoute = useMemo(
+    () => new URLSearchParams(window.location.search).get("view") === "drafts",
+    [],
+  );
   const queuePreferences = useWorkorderPreferences("office");
 
   async function loadDashboard() {
@@ -130,12 +144,12 @@ export function OfficeWorkspace({
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    if (["needs", "open", "active", "parts", "done", "all", "closed"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
+    if (!legacyDraftRoute && ["needs", "open", "active", "parts", "done", "drafts", "all", "closed"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
     setLifecycleFilter(saved.lifecycleFilter || "");
     setMechanicFilter(saved.mechanicFilter || "");
     setLocationFilter(saved.locationFilter || "");
     preferenceHydrated.current = true;
-  }, [queuePreferences.ready]);
+  }, [legacyDraftRoute, queuePreferences.ready]);
 
   useEffect(() => {
     if (!preferenceHydrated.current) return;
@@ -164,6 +178,7 @@ export function OfficeWorkspace({
     { key: "active", label: "Active", count: dashboard?.counts.active || 0, icon: Clock },
     { key: "parts", label: "Parts", count: dashboard?.counts.parts || 0, icon: Tool02 },
     { key: "done", label: "Ready review", count: dashboard?.counts.done || 0, icon: CheckCircle },
+    { key: "drafts", label: "Drafts", count: drafts.length, icon: File02 },
     { key: "all", label: "All", count: allRows.length, icon: Briefcase02 },
     { key: "closed", label: "Closed", count: dashboard?.counts.closed || 0, icon: FileCheck02 },
   ];
@@ -182,16 +197,11 @@ export function OfficeWorkspace({
       <WorkspaceHeader actor={actor} />
       <PageHeader
         title="Workorders"
-        actions={(
-          <>
-            <Button icon={File02} onClick={onOpenDrafts}>Drafts</Button>
-            <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>
-          </>
-        )}
+        actions={<Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
       />
 
-      <section className="office-layout">
-        <aside className="office-mechanic-panel" aria-label="Mechanic workload">
+      <section className={`office-layout${activeTab === "drafts" ? " is-drafts" : ""}`}>
+        {activeTab !== "drafts" ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
           <div className="office-panel-head"><strong>Mechanics</strong><span>{mechanics.length}</span></div>
           <button className={!mechanicFilter ? "active" : ""} type="button" onClick={() => setMechanicFilter("")}>
             <span>All mechanics</span><strong>{allRows.length}</strong>
@@ -203,12 +213,12 @@ export function OfficeWorkspace({
               <strong>{mechanic.total}</strong>
             </button>
           ))}
-        </aside>
+        </aside> : null}
 
         <section className="mechanic-queue-shell office-table-shell">
           <div className="queue-toolbar office-toolbar">
             <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-            <div className="office-filter-row operations-filter-row">
+            {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row">
               <label className="mechanic-search">
                 <SearchMd />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
@@ -228,20 +238,37 @@ export function OfficeWorkspace({
                 <option value="closed">Closed</option>
                 <option value="odoo_entered">Odoo entered</option>
               </select>
-            </div>
+            </div> : null}
           </div>
 
-          {error ? <p className="ops-error" role="alert">{error}</p> : null}
-          <WorkorderTableHeader variant="office" />
-          <div className="mechanic-work-list" aria-live="polite">
-            {loading ? (
-              <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
-            ) : filteredRows.length ? filteredRows.map((workorder) => (
-              <WorkorderRow key={workorder.id} workorder={workorder} variant="office" onOpen={() => openDetail(workorder.id)} />
-            )) : (
-              <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>
-            )}
-          </div>
+          {activeTab === "drafts" ? (
+            <WorkorderDraftQueue
+              role={actor.role}
+              actorId={actor.id}
+              drafts={drafts}
+              loading={draftLoading}
+              error={draftError}
+              busyId={draftBusyId}
+              onOpen={onOpenDraft}
+              onDiscard={onDiscardDraft}
+              onTakeover={onTakeoverDraft}
+              onRefresh={onRefreshDrafts}
+            />
+          ) : (
+            <>
+              {error ? <p className="ops-error" role="alert">{error}</p> : null}
+              <WorkorderTableHeader variant="office" />
+              <div className="mechanic-work-list" aria-live="polite">
+                {loading ? (
+                  <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
+                ) : filteredRows.length ? filteredRows.map((workorder) => (
+                  <WorkorderRow key={workorder.id} workorder={workorder} variant="office" onOpen={() => openDetail(workorder.id)} />
+                )) : (
+                  <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>
+                )}
+              </div>
+            </>
+          )}
         </section>
       </section>
     </main>

@@ -99,14 +99,14 @@ function LocationsHome({ locations, loading, onCreate, onOpen }) {
   );
 }
 
-function OperationsHome({ locations, onOpenWorkorder, onCreateWorkorder }) {
+function OperationsHome({ actor, locations, draftQueue, onOpenWorkorder, onCreateWorkorder }) {
   return (
     <section className="admin-content admin-operations-content">
       <PageHeader
         title="Operations"
         actions={onCreateWorkorder ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button> : null}
       />
-      <OperationsWorkspace locations={locations} onOpenWorkorder={onOpenWorkorder} />
+      <OperationsWorkspace actor={actor} locations={locations} {...draftQueue} onOpenWorkorder={onOpenWorkorder} />
     </section>
   );
 }
@@ -194,7 +194,7 @@ function TemplatePanel({ detail, value, onChange, onSave, saving }) {
   );
 }
 
-function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onBack, onInvite, onManageUser, onResendInvite, resendingInviteId, onSaveTemplate, saving, onOpenWorkorder }) {
+function LocationDetail({ actor, detail, draftQueue, tab, setTab, template, setTemplate, onBack, onInvite, onManageUser, onResendInvite, resendingInviteId, onSaveTemplate, saving, onOpenWorkorder }) {
   return (
     <section className="admin-content">
       <PageHeader
@@ -207,7 +207,7 @@ function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onB
         <button className={tab === "users" ? "active" : ""} type="button" onClick={() => setTab("users")}><Users01 /> Users <span>{detail.users.length}</span></button>
         <button className={tab === "template" ? "active" : ""} type="button" onClick={() => setTab("template")}><File02 /> Template</button>
       </nav>
-      {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace locations={[detail.location]} fixedLocationId={detail.location.id} onOpenWorkorder={onOpenWorkorder} /></div> : null}
+      {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace actor={actor} locations={[detail.location]} fixedLocationId={detail.location.id} {...draftQueue} onOpenWorkorder={onOpenWorkorder} /></div> : null}
       {tab === "users" ? <UsersPanel actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} onResend={onResendInvite} resendingId={resendingInviteId} /> : null}
       {tab === "template" ? <TemplatePanel detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
     </section>
@@ -216,9 +216,16 @@ function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onB
 
 export function AdminWorkspace({
   actor,
+  drafts = [],
+  draftLoading = false,
+  draftError = "",
+  draftBusyId = "",
   onOpenWorkorder,
   onCreateWorkorder,
-  onOpenDrafts,
+  onOpenDraft,
+  onDiscardDraft,
+  onTakeoverDraft,
+  onRefreshDrafts,
 }) {
   const [locations, setLocations] = useState([]);
   const [view, setView] = useState(() => {
@@ -244,6 +251,16 @@ export function AdminWorkspace({
   const [passwordDraft, setPasswordDraft] = useState(blankPassword);
   const [visiblePasswords, setVisiblePasswords] = useState(hiddenPasswords);
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
+  const draftQueue = {
+    drafts,
+    draftLoading,
+    draftError,
+    draftBusyId,
+    onOpenDraft,
+    onDiscardDraft,
+    onTakeoverDraft,
+    onRefreshDrafts,
+  };
 
   async function loadLocations() {
     const result = await api("/api/admin/locations");
@@ -418,16 +435,15 @@ export function AdminWorkspace({
       <WorkspaceHeader actor={actor} className="admin-workspace-header">
         <nav className="admin-primary-nav" aria-label="Admin workspace">
           <button className={view === "operations" ? "active" : ""} type="button" onClick={() => changeView("operations")}><Tool02 />Operations</button>
-          <button type="button" onClick={onOpenDrafts}><File02 />Drafts</button>
           <button className={view === "locations" ? "active" : ""} type="button" onClick={() => changeView("locations")}><MarkerPin01 />Locations</button>
           <button className={view === "settings" ? "active" : ""} type="button" onClick={() => changeView("settings")}><Settings01 />Settings</button>
         </nav>
       </WorkspaceHeader>
       {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
-      {view === "operations" ? <OperationsHome locations={locations} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
+      {view === "operations" ? <OperationsHome actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
       {view === "settings" ? <IntegrationsSettings /> : null}
-      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
+      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} draftQueue={draftQueue} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
       {modal === "location" ? <Modal title="New location" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createLocation}><label><span>Name</span><input required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label><label><span>Address</span><input value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label><Button variant="primary" type="submit" disabled={state.busy}>Create location</Button></form></Modal> : null}
       {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}>{state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}<label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option></select></label><Button variant="primary" type="submit" disabled={state.busy}>{state.busy ? "Creating" : "Create invite"}</Button></form></Modal> : null}

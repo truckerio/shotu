@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Clock, Inbox01, SearchMd } from "@untitledui
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { WorkorderDraftQueue } from "../../features/workorder-drafts/index.js";
 import {
   ATTENTION_OPTIONS,
   LIFECYCLE_OPTIONS,
@@ -21,6 +22,7 @@ const emptyCounts = {
   active: 0,
   parts: 0,
   readyReview: 0,
+  drafts: 0,
   odooBacklog: 0,
   all: 0,
 };
@@ -114,9 +116,22 @@ function LoadingRows() {
   );
 }
 
-export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOpenWorkorder }) {
+export function OperationsWorkspace({
+  actor,
+  locations = [],
+  fixedLocationId = "",
+  drafts = [],
+  draftLoading = false,
+  draftError = "",
+  draftBusyId = "",
+  onOpenDraft,
+  onDiscardDraft,
+  onTakeoverDraft,
+  onRefreshDrafts,
+  onOpenWorkorder,
+}) {
   const [filters, setFilters] = useState({
-    category: "needs_attention",
+    category: new URLSearchParams(window.location.search).get("view") === "drafts" ? "drafts" : "needs_attention",
     locationId: fixedLocationId,
     lifecycle: "",
     attentionReason: "",
@@ -129,6 +144,10 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
   const [summary, setSummary] = useState({ counts: emptyCounts, loading: true, loaded: false, error: "" });
   const [list, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, loaded: false, error: "" });
   const preferenceHydrated = useRef(false);
+  const legacyDraftRoute = useMemo(
+    () => new URLSearchParams(window.location.search).get("view") === "drafts",
+    [],
+  );
   const queuePreferences = useWorkorderPreferences("admin");
   useAutomaticRefresh(() => setRefreshKey((current) => current + 1));
 
@@ -137,14 +156,16 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
     const saved = queuePreferences.filters;
     setFilters((current) => ({
       ...current,
-      category: OPERATION_CATEGORIES.some((item) => item.id === saved.category) ? saved.category : current.category,
+      category: !legacyDraftRoute && OPERATION_CATEGORIES.some((item) => item.id === saved.category)
+        ? saved.category
+        : current.category,
       locationId: saved.locationId || "",
       lifecycle: saved.lifecycle || "",
       attentionReason: saved.attentionReason || "",
       sort: SORT_OPTIONS.some(([value]) => value === saved.sort) ? saved.sort : current.sort,
     }));
     preferenceHydrated.current = true;
-  }, [fixedLocationId, queuePreferences.ready]);
+  }, [fixedLocationId, legacyDraftRoute, queuePreferences.ready]);
 
   useEffect(() => {
     if (fixedLocationId || !preferenceHydrated.current) return;
@@ -184,6 +205,17 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
 
   useEffect(() => {
     const controller = new AbortController();
+    if (filters.category === "drafts") {
+      setList({
+        items: [],
+        total: drafts.filter((draft) => !fixedLocationId || draft.locationId === fixedLocationId).length,
+        pageCount: 1,
+        loading: false,
+        loaded: true,
+        error: "",
+      });
+      return () => controller.abort();
+    }
     const query = buildOperationsQuery(filters, page);
     setList((current) => ({ ...current, loading: !current.loaded, error: "" }));
     api(`/api/admin/operations/workorders?${query}`, { signal: controller.signal })
@@ -199,11 +231,19 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
         if (error.name !== "AbortError") setList((current) => ({ ...current, loading: false, loaded: true, error: error.message }));
       });
     return () => controller.abort();
-  }, [filters, page, refreshKey]);
+  }, [drafts, filters, fixedLocationId, page, refreshKey]);
 
   const activeCategory = useMemo(
     () => OPERATION_CATEGORIES.find((category) => category.id === filters.category) || OPERATION_CATEGORIES[0],
     [filters.category],
+  );
+  const visibleDraftCount = useMemo(
+    () => drafts.filter((draft) => !fixedLocationId || draft.locationId === fixedLocationId).length,
+    [drafts, fixedLocationId],
+  );
+  const categoryCounts = useMemo(
+    () => ({ ...summary.counts, drafts: visibleDraftCount }),
+    [summary.counts, visibleDraftCount],
   );
 
   function updateFilter(key, value) {
@@ -229,15 +269,15 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
               onClick={() => updateFilter("category", category.id)}
             >
               <span>{category.label}</span>
-              <strong aria-label={`${summary.counts[category.countKey]} workorders`}>
-                {summary.loading ? "-" : summary.counts[category.countKey]}
+              <strong aria-label={`${categoryCounts[category.countKey]} ${category.id === "drafts" ? "drafts" : "workorders"}`}>
+                {category.id !== "drafts" && summary.loading ? "-" : categoryCounts[category.countKey]}
               </strong>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="operations-toolbar">
+      {filters.category !== "drafts" ? <div className="operations-toolbar">
         <label className="operations-search">
           <span className="operations-field-label">Search workorders</span>
           <span className="operations-input-with-icon"><SearchMd /><input type="search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Unit, serial, concern" /></span>
@@ -269,15 +309,29 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
             {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-      </div>
+      </div> : null}
 
-      {summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
+      {filters.category !== "drafts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
       <div className="operations-list-header">
-        <span><strong>{activeCategory.label}</strong>{!list.loading ? ` · ${list.total}` : ""}</span>
-        {filters.locationId && !fixedLocationId ? <span>{locations.find((location) => location.id === filters.locationId)?.name}</span> : null}
+        <span><strong>{activeCategory.label}</strong>{filters.category === "drafts" || !list.loading ? ` · ${filters.category === "drafts" ? visibleDraftCount : list.total}` : ""}</span>
+        {filters.category !== "drafts" && filters.locationId && !fixedLocationId ? <span>{locations.find((location) => location.id === filters.locationId)?.name}</span> : null}
       </div>
 
-      <div className="operations-table" role="table" aria-label={`${activeCategory.label} workorders`} aria-busy={list.loading}>
+      {filters.category === "drafts" ? (
+        <WorkorderDraftQueue
+          role={actor?.role}
+          actorId={actor?.id}
+          drafts={drafts}
+          loading={draftLoading}
+          error={draftError}
+          busyId={draftBusyId}
+          fixedLocationId={fixedLocationId}
+          onOpen={onOpenDraft}
+          onDiscard={onDiscardDraft}
+          onTakeover={onTakeoverDraft}
+          onRefresh={onRefreshDrafts}
+        />
+      ) : <div className="operations-table" role="table" aria-label={`${activeCategory.label} workorders`} aria-busy={list.loading}>
         <div className="operations-table-head" role="row">
           <span role="columnheader">Location</span>
           <span role="columnheader">Unit / workorder</span>
@@ -303,9 +357,9 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
           </div>
         ) : null}
         {!list.loading && !list.error ? list.items.map((item) => <OperationRow key={item.id} item={item} onOpenWorkorder={onOpenWorkorder} />) : null}
-      </div>
+      </div>}
 
-      {list.pageCount > 1 ? (
+      {filters.category !== "drafts" && list.pageCount > 1 ? (
         <nav className="operations-pagination" aria-label="Workorder pages">
           <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}><ChevronLeft />Previous</button>
           <span>Page {page} of {list.pageCount}</span>
