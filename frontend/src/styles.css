@@ -95,13 +95,21 @@ small {
 }
 
 .split-layout.generator-layout {
-  grid-template-columns: minmax(390px, 0.34fr) minmax(0, 1fr);
+  --preview-pane-width: 0%;
+  --detail-resizer-width: 0px;
+  grid-template-columns: minmax(390px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
   overflow: hidden;
-  transition: grid-template-columns var(--motion-surface) var(--motion-ease-standard);
+  transition:
+    --preview-pane-width var(--motion-surface) var(--motion-ease-standard),
+    --detail-resizer-width var(--motion-control) var(--motion-ease-standard);
 }
 
-.split-layout.generator-layout:not(.has-preview) {
-  grid-template-columns: minmax(390px, 1fr) minmax(0, 0fr);
+.generator-layout .control-panel {
+  grid-column: 1;
+}
+
+.generator-layout .preview-panel {
+  grid-column: 3;
 }
 
 .generator-layout .preview-panel {
@@ -125,6 +133,10 @@ small {
 .generator-layout.has-preview .preview-panel {
   transition-delay: 0s;
   visibility: visible;
+}
+
+.generator-layout.is-resizing {
+  transition: none;
 }
 
 .split-layout.workorder-detail-layout {
@@ -3879,6 +3891,11 @@ textarea:focus {
   .split-layout.generator-layout.has-preview,
   .split-layout.generator-layout:not(.has-preview) {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generator-layout .control-panel,
+  .generator-layout .preview-panel {
+    grid-column: 1;
   }
 
   .generator-layout .preview-panel {

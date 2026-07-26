@@ -12,6 +12,7 @@ import {
   UnitSummary,
 } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
+import { AssetLocationCard } from "../../components/workorders/AssetLocationCard.jsx";
 
 export function CreateWorkorderForm({
   assignment,
@@ -19,6 +20,7 @@ export function CreateWorkorderForm({
   errors,
   form,
   locations,
+  mapsConfig,
   message,
   onAddPart,
   onAssignmentChange,
@@ -120,20 +122,27 @@ export function CreateWorkorderForm({
         </div>
 
         {selectedVehicle ? (
-          <UnitSummary
-            unit={{
-              unitNo: form.unitNo,
-              unitType: form.unitType,
-              year: selectedVehicle.year,
-              make: selectedVehicle.make,
-              model: selectedVehicle.model || form.model,
-              vin: form.vinNo,
-              license: form.licenseNo,
-              mileage: form.mileage ? `${form.mileage} mi` : "",
-            }}
-            onEdit={() => setUnitDetailsOpen((open) => !open)}
-            editLabel={unitDetailsOpen ? "Hide unit details" : "Edit unit details"}
-          />
+          <>
+            <UnitSummary
+              unit={{
+                unitNo: form.unitNo,
+                unitType: form.unitType,
+                year: selectedVehicle.year,
+                make: selectedVehicle.make,
+                model: selectedVehicle.model || form.model,
+                vin: form.vinNo,
+                license: form.licenseNo,
+                mileage: form.mileage ? `${form.mileage} mi` : "",
+              }}
+              onEdit={() => setUnitDetailsOpen((open) => !open)}
+              editLabel={unitDetailsOpen ? "Hide unit details" : "Edit unit details"}
+            />
+            <AssetLocationCard
+              vehicle={selectedVehicle}
+              mapsConfig={mapsConfig}
+              showVehicleLabel={false}
+            />
+          </>
         ) : null}
 
         <OptionalSection

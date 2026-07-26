@@ -74,6 +74,35 @@ export async function listUsersByLocation(locationId) {
   return result.rows;
 }
 
+export async function listMechanicsByLocations(locationIds) {
+  if (!locationIds?.length) return [];
+  const result = await query(
+    `select app_user.id,
+            app_user.display_name as name,
+            array_agg(distinct membership.location_id order by membership.location_id) as location_ids
+       from user_location_memberships membership
+       join user_company_memberships company_membership
+         on company_membership.user_id = membership.user_id
+        and company_membership.company_id = membership.company_id
+        and company_membership.active
+        and company_membership.role = 'mechanic'
+       join user_profiles app_user
+         on app_user.id = membership.user_id
+        and app_user.active
+        and app_user.deleted_at is null
+      where membership.location_id = any($1::uuid[])
+        and membership.active
+      group by app_user.id, app_user.display_name
+      order by app_user.display_name`,
+    [locationIds],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    locationIds: row.location_ids,
+  }));
+}
+
 export async function getManagedUser(locationId, userId, companyIds) {
   const result = await query(
     `select app_user.id,

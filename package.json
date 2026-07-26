@@ -24,7 +24,7 @@
     "test:mechanic-chat:integration": "node --env-file=.env src/server/modules/chat/mechanic-chat.integration.js",
     "test:auth": "node --test src/server/auth/*.test.js",
     "test:admin": "node --test src/server/modules/admin/*.test.js",
-    "test:unit": "node --test src/server/auth/*.test.js src/server/modules/admin/*.test.js src/server/modules/chat/*.test.js src/server/modules/parts-helper/parts-helper.test.js src/server/modules/surveillance/*.test.js src/server/modules/workorders/*.test.js src/server/print/*.test.js",
+    "test:unit": "node --test src/server/auth/*.test.js src/server/modules/admin/*.test.js src/server/modules/chat/*.test.js src/server/modules/office/*.test.js src/server/modules/parts-helper/parts-helper.test.js src/server/modules/surveillance/*.test.js src/server/modules/workorders/*.test.js src/server/print/*.test.js",
     "check:structure": "node scripts/check-structure.js",
     "check": "node --check server.js && find src/server scripts -name '*.js' -print | xargs -I{} node --check {} && npm run build",
     "verify": "npm run check:structure && npm run test:unit && npm run check"

@@ -9,7 +9,12 @@ import {
   setOperationalWorkorderMechanics,
   updateOperationalWorkorder,
 } from "../../db/repositories/operational-workorders.repo.js";
-import { getUserById, listUsersByLocation, listUsersByRole } from "../../db/repositories/users.repo.js";
+import {
+  getUserById,
+  listMechanicsByLocations,
+  listUsersByLocation,
+  listUsersByRole,
+} from "../../db/repositories/users.repo.js";
 import { statusLabel } from "../workorders/workorder.presenter.js";
 import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
@@ -54,13 +59,16 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
   };
 }
 
-export async function officeDashboard(context) {
-  const [open, active, parts, done, closed] = await Promise.all([
-    queryAuthorizedWorkorders(context, { category: "unassigned", pageSize: 100 }),
-    queryAuthorizedWorkorders(context, { category: "active", pageSize: 100 }),
-    queryAuthorizedWorkorders(context, { category: "parts", pageSize: 100 }),
-    queryAuthorizedWorkorders(context, { category: "ready_review", pageSize: 100 }),
-    queryAuthorizedWorkorders(context, { category: "all", lifecycle: ["closed", "odoo_entered"], pageSize: 100 }),
+export async function officeDashboard(context, dependencies = {}) {
+  const queryWorkorders = dependencies.queryWorkorders || queryAuthorizedWorkorders;
+  const listMechanics = dependencies.listMechanics || listMechanicsByLocations;
+  const [open, active, parts, done, closed, mechanics] = await Promise.all([
+    queryWorkorders(context, { category: "unassigned", pageSize: 100 }),
+    queryWorkorders(context, { category: "active", pageSize: 100 }),
+    queryWorkorders(context, { category: "parts", pageSize: 100 }),
+    queryWorkorders(context, { category: "ready_review", pageSize: 100 }),
+    queryWorkorders(context, { category: "all", lifecycle: ["closed", "odoo_entered"], pageSize: 100 }),
+    listMechanics([...(context.locationIds || [])]),
   ]);
   return {
     counts: {
@@ -70,6 +78,7 @@ export async function officeDashboard(context) {
       done: done.total,
       closed: closed.total,
     },
+    mechanics,
     open: open.items.map((item) => dashboardOperation(item)),
     active: active.items.map((item) => dashboardOperation(item, item.attentionReasons.includes("office_help") ? "waiting_office" : item.lifecycle)),
     parts: parts.items.map((item) => dashboardOperation(item, "parts_requested")),

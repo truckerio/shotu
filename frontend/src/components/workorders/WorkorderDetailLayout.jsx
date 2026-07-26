@@ -1,15 +1,23 @@
 import { Children, useEffect, useRef, useState } from "react";
 
-const DEFAULT_PREVIEW_PERCENT = 40;
-const MIN_CONTROL_WIDTH = 440;
-const MIN_PREVIEW_WIDTH = 680;
+const DETAIL_LAYOUT = Object.freeze({
+  defaultPreviewPercent: 40,
+  minControlWidth: 440,
+  minPreviewWidth: 680,
+  storageKey: "workorder.detailPreviewPercent.v2",
+});
+const CREATE_LAYOUT = Object.freeze({
+  defaultPreviewPercent: 62,
+  minControlWidth: 390,
+  minPreviewWidth: 560,
+  storageKey: "workorder.createPreviewPercent.v1",
+});
 const RESIZER_WIDTH = 8;
-const STORAGE_KEY = "workorder.detailPreviewPercent.v2";
 
-function initialPreviewPercent() {
-  if (typeof window === "undefined") return DEFAULT_PREVIEW_PERCENT;
-  const saved = Number(window.localStorage.getItem(STORAGE_KEY));
-  return Number.isFinite(saved) && saved > 0 ? saved : DEFAULT_PREVIEW_PERCENT;
+function initialPreviewPercent(layout) {
+  if (typeof window === "undefined") return layout.defaultPreviewPercent;
+  const saved = Number(window.localStorage.getItem(layout.storageKey));
+  return Number.isFinite(saved) && saved > 0 ? saved : layout.defaultPreviewPercent;
 }
 
 function clamp(value, minimum, maximum) {
@@ -18,17 +26,18 @@ function clamp(value, minimum, maximum) {
 
 export function WorkorderDetailLayout({ detail, previewOpen, children }) {
   const shellRef = useRef(null);
-  const [previewPercent, setPreviewPercent] = useState(initialPreviewPercent);
+  const layout = detail ? DETAIL_LAYOUT : CREATE_LAYOUT;
+  const [previewPercent, setPreviewPercent] = useState(() => initialPreviewPercent(layout));
   const [resizing, setResizing] = useState(false);
   const panes = Children.toArray(children);
 
   function bounds() {
     const width = shellRef.current?.getBoundingClientRect().width || 0;
-    if (!width) return { minimum: DEFAULT_PREVIEW_PERCENT, maximum: 58 };
+    if (!width) return { minimum: layout.defaultPreviewPercent, maximum: layout.defaultPreviewPercent };
 
-    const minimum = (MIN_PREVIEW_WIDTH / width) * 100;
-    const maximum = ((width - MIN_CONTROL_WIDTH - RESIZER_WIDTH) / width) * 100;
-    if (minimum > maximum) return { minimum: DEFAULT_PREVIEW_PERCENT, maximum: DEFAULT_PREVIEW_PERCENT };
+    const minimum = (layout.minPreviewWidth / width) * 100;
+    const maximum = ((width - layout.minControlWidth - RESIZER_WIDTH) / width) * 100;
+    if (minimum > maximum) return { minimum: layout.defaultPreviewPercent, maximum: layout.defaultPreviewPercent };
     return { minimum, maximum };
   }
 
@@ -52,7 +61,7 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
     event.preventDefault();
     const limits = bounds();
     if (event.key === "Home") {
-      setPreviewPercent(clamp(DEFAULT_PREVIEW_PERCENT, limits.minimum, limits.maximum));
+      setPreviewPercent(clamp(layout.defaultPreviewPercent, limits.minimum, limits.maximum));
       return;
     }
     const change = event.key === "ArrowLeft" ? 3 : -3;
@@ -76,8 +85,12 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
   }, [resizing]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, String(previewPercent));
-  }, [previewPercent]);
+    if (typeof window !== "undefined") window.localStorage.setItem(layout.storageKey, String(previewPercent));
+  }, [layout.storageKey, previewPercent]);
+
+  useEffect(() => {
+    setPreviewPercent(initialPreviewPercent(layout));
+  }, [layout.storageKey]);
 
   useEffect(() => {
     const fitSavedWidth = () => {
@@ -89,20 +102,14 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
     return () => window.removeEventListener("resize", fitSavedWidth);
   }, []);
 
-  if (!detail) {
-    return (
-      <section className={`split-layout generator-layout ${previewOpen ? "has-preview" : ""}`}>
-        {panes}
-      </section>
-    );
-  }
-
   const limits = bounds();
   const effectivePercent = previewOpen ? clamp(previewPercent, limits.minimum, limits.maximum) : 0;
+  const layoutClass = detail ? "workorder-detail-layout" : "generator-layout";
+  const separatorLabel = detail ? "Resize workorder and preview panels" : "Resize form and preview panels";
   return (
     <section
       ref={shellRef}
-      className={`split-layout workorder-detail-layout ${previewOpen ? "has-preview" : ""} ${resizing ? "is-resizing" : ""}`}
+      className={`split-layout ${layoutClass} ${previewOpen ? "has-preview" : ""} ${resizing ? "is-resizing" : ""}`}
       style={{
         "--preview-pane-width": `${effectivePercent}%`,
         "--detail-resizer-width": previewOpen ? `${RESIZER_WIDTH}px` : "0px",
@@ -113,7 +120,7 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
         <div
           className="detail-pane-resizer"
           role="separator"
-          aria-label="Resize workorder and preview panels"
+          aria-label={separatorLabel}
           aria-orientation="vertical"
           aria-valuemin={Math.round(limits.minimum)}
           aria-valuemax={Math.round(limits.maximum)}
@@ -124,7 +131,7 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
           onKeyDown={resizeWithKeyboard}
           onDoubleClick={() => {
             const currentBounds = bounds();
-            setPreviewPercent(clamp(DEFAULT_PREVIEW_PERCENT, currentBounds.minimum, currentBounds.maximum));
+            setPreviewPercent(clamp(layout.defaultPreviewPercent, currentBounds.minimum, currentBounds.maximum));
           }}
         >
           <span />

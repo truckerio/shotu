@@ -1,6 +1,6 @@
 .admin-shell { min-height: 100vh; overflow-x: hidden; background: #f7f8fa; color: #182230; }
-.admin-workspace-header { margin: 0 auto; max-width: 1320px; padding: 20px 28px 0; }
-.admin-content { margin: 0 auto; max-width: 1320px; padding: 32px 28px 60px; }
+.admin-workspace-header { margin: 0 auto; max-width: 1760px; padding: 20px 28px 0; }
+.admin-content { margin: 0 auto; max-width: 1760px; padding: 32px 28px 60px; }
 .admin-primary-nav { align-items: center; display: flex; gap: 4px; }
 .admin-primary-nav button { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #475467; cursor: pointer; display: inline-flex; font: inherit; font-size: var(--text-body); font-weight: var(--weight-semibold); gap: 7px; min-height: 38px; padding: 0 11px; }
 .admin-primary-nav button:hover { background: #fff; border-color: #e4e7ec; color: #182230; }
@@ -69,8 +69,8 @@
 .admin-template-preview > div { box-shadow: 0 8px 28px rgb(16 24 40 / 12%); height: calc(8.5in * .62); transform-origin: top center; width: calc(11in * .62); }
 .admin-template-preview .workorder-page { transform: scale(.62); transform-origin: top left; margin-bottom: calc(-8.5in * .38); }
 .admin-empty { align-items: center; color: #667085; display: flex; gap: 8px; justify-content: center; min-height: 120px; }
-.admin-error { background: #fef3f2; border: 1px solid #fecdca; color: #b42318; margin: 12px auto 0; max-width: 1264px; padding: 10px 14px; }
-.admin-success { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; margin: 12px auto 0; max-width: 1264px; padding: 10px 14px; }
+.admin-error { background: #fef3f2; border: 1px solid #fecdca; color: #b42318; margin: 12px auto 0; max-width: 1704px; padding: 10px 14px; }
+.admin-success { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; margin: 12px auto 0; max-width: 1704px; padding: 10px 14px; }
 .admin-modal-backdrop { align-items: center; background: rgb(16 24 40 / 45%); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 100; }
 .admin-modal { background: #fff; border-radius: 8px; box-shadow: 0 24px 48px rgb(16 24 40 / 25%); max-width: 460px; padding: 22px; width: 100%; }
 .admin-modal > header { align-items: center; display: flex; justify-content: space-between; }

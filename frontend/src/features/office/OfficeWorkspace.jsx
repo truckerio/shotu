@@ -57,16 +57,37 @@ function urgency(row) {
   return 5;
 }
 
-function mechanicStats(rows) {
+function mechanicStats(rows, roster = []) {
   const stats = new Map();
+  for (const mechanic of roster) {
+    stats.set(mechanic.id || mechanic.name, {
+      id: mechanic.id,
+      name: mechanic.name,
+      total: 0,
+      active: 0,
+      attention: 0,
+      done: 0,
+    });
+  }
   for (const row of rows) {
-    for (const name of rowMechanicNames(row)) {
-      const current = stats.get(name) || { name, total: 0, active: 0, attention: 0, done: 0 };
+    const assigned = row.mechanics?.length
+      ? row.mechanics
+      : row.mechanicName ? [{ id: row.mechanicId, name: row.mechanicName }] : [];
+    for (const mechanic of assigned) {
+      const key = mechanic.id || mechanic.name;
+      const current = stats.get(key) || {
+        id: mechanic.id,
+        name: mechanic.name,
+        total: 0,
+        active: 0,
+        attention: 0,
+        done: 0,
+      };
       current.total += 1;
       if (["accepted", "in_progress"].includes(lifecycle(row))) current.active += 1;
       if (attentionReasons(row).length) current.attention += 1;
       if (["mechanic_done", "closed", "odoo_entered"].includes(lifecycle(row))) current.done += 1;
-      stats.set(name, current);
+      stats.set(key, current);
     }
   }
   return [...stats.values()].sort((a, b) => b.attention - a.attention || b.active - a.active || a.name.localeCompare(b.name));
@@ -130,7 +151,7 @@ export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
 
   const allRows = useMemo(() => buildOfficeRows(dashboard), [dashboard]);
   const needsRows = useMemo(() => allRows.filter(needsOfficeAction), [allRows]);
-  const mechanics = useMemo(() => mechanicStats(allRows), [allRows]);
+  const mechanics = useMemo(() => mechanicStats(allRows, dashboard?.mechanics), [allRows, dashboard?.mechanics]);
   const locations = useMemo(() => [...new Set(allRows.map((row) => row.locationName).filter(Boolean))].sort(), [allRows]);
   const tabs = [
     { key: "needs", label: "Needs action", count: needsRows.length, icon: Tool02 },
@@ -166,7 +187,7 @@ export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
             <span>All mechanics</span><strong>{allRows.length}</strong>
           </button>
           {mechanics.map((mechanic) => (
-            <button className={mechanicFilter === mechanic.name ? "active" : ""} key={mechanic.name} type="button" onClick={() => setMechanicFilter(mechanic.name)}>
+            <button className={mechanicFilter === mechanic.name ? "active" : ""} key={mechanic.id || mechanic.name} type="button" onClick={() => setMechanicFilter(mechanic.name)}>
               <span>{mechanic.name}</span>
               <small>{mechanic.active} active · {mechanic.attention} need attention</small>
               <strong>{mechanic.total}</strong>

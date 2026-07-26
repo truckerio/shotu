@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, Pin01, RefreshCw01, Save01, XClose } from "@untitledui/icons";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, RefreshCw01, Save01, XClose } from "@untitledui/icons";
 import { PreviewPane, PreviewToggle } from "../components/preview/PreviewPane.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { ChatComposer } from "../components/workorders/ChatComposer.jsx";
 import { ChatThread } from "../components/workorders/ChatThread.jsx";
 import { PartRequestsPanel } from "../components/workorders/PartRequestsPanel.jsx";
+import { AssetLocationCard, getVehicleLocation } from "../components/workorders/AssetLocationCard.jsx";
 import { WorkorderDetailLayout } from "../components/workorders/WorkorderDetailLayout.jsx";
 import {
   ProgressiveWorkorderSection,
@@ -22,7 +23,7 @@ import {
 import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
-import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview, satelliteTiles } from "../features/generator/GeneratorUi.jsx";
+import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
 import { CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
@@ -74,108 +75,6 @@ function defaultDetailSection(role, status, compact = false) {
 function defaultSupportingView(role, status) {
   if (role === "mechanic" || ["waiting_office", "parts_requested"].includes(status)) return "chat";
   return "preview";
-}
-
-function AssetLocationCard({
-  vehicle,
-  location,
-  mapsConfig,
-  showVehicleLabel = true,
-}) {
-  const cardRef = useRef(null);
-  const mapPanelId = useId();
-  const [mapOpen, setMapOpen] = useState(false);
-  const [mapPinned, setMapPinned] = useState(false);
-  const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || "Vehicle";
-  const mapVisible = Boolean(location) && (mapOpen || mapPinned);
-
-  useEffect(() => {
-    if (!mapOpen || mapPinned) return undefined;
-
-    const closeMapOutside = (event) => {
-      if (!cardRef.current?.contains(event.target)) setMapOpen(false);
-    };
-
-    document.addEventListener("pointerdown", closeMapOutside);
-    return () => document.removeEventListener("pointerdown", closeMapOutside);
-  }, [mapOpen, mapPinned]);
-
-  if (!vehicle?.id) return null;
-
-  return (
-    <div
-      ref={cardRef}
-      className={`asset-location-card ${mapVisible ? "is-map-visible" : ""} ${mapPinned ? "is-map-pinned" : ""}`}
-    >
-      <div className="asset-location-header">
-        <button
-          className="asset-location-copy asset-location-toggle"
-          type="button"
-          aria-controls={location ? mapPanelId : undefined}
-          aria-expanded={mapVisible}
-          disabled={!location}
-          onClick={() => {
-            if (!mapPinned) setMapOpen((open) => !open);
-          }}
-        >
-          {showVehicleLabel ? <strong>{unitLabel}</strong> : null}
-          <span className="asset-location-address">
-            {location ? (location.address || `${location.latitude}, ${location.longitude}`) : "Location not available yet"}
-          </span>
-        </button>
-        <div className="asset-location-actions">
-          {location ? (
-            <button
-              className="map-hover-trigger map-pin-button icon-tooltip"
-              type="button"
-              aria-label={mapPinned ? "Unpin satellite map" : "Pin satellite map open"}
-              aria-controls={mapPanelId}
-              aria-expanded={mapVisible}
-              aria-pressed={mapPinned}
-              data-tooltip={mapPinned ? "Unpin map" : "Pin map open"}
-              onClick={() => {
-                setMapOpen(true);
-                setMapPinned((pinned) => !pinned);
-              }}
-            >
-              <Pin01 />
-            </button>
-          ) : null}
-        </div>
-      </div>
-      {location ? (
-        <div
-          className="asset-map-hover"
-          id={mapPanelId}
-          role="group"
-          aria-label="Satellite asset location"
-          aria-hidden={!mapVisible}
-          onClick={(event) => {
-            if (mapPinned || event.target.closest?.("a, button")) return;
-            setMapOpen(true);
-            setMapPinned(true);
-          }}
-        >
-          <div className="asset-map-tiles" aria-hidden="true">
-            {satelliteTiles(location, mapsConfig).map((tile) => (
-              <img key={tile.key} src={tile.src} alt="" loading="lazy" />
-            ))}
-            <span className="asset-map-pin" />
-          </div>
-          <div className="asset-map-meta">
-            <span>{location.time ? new Date(location.time).toLocaleString() : "Live GPS"}</span>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open map
-            </a>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export function App({ actor }) {
@@ -313,7 +212,7 @@ export function App({ actor }) {
     mechanicAsset.model,
   ].filter(Boolean).join(" ") || form.model || "Not listed";
   const mechanicMapVehicle = selectedVehicle || mechanicAsset;
-  const mechanicMapLocation = vehicleLocation(mechanicMapVehicle);
+  const mechanicMapLocation = getVehicleLocation(mechanicMapVehicle);
   const assignedMechanicIds = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.id)
     || (activeWorkorder?.workorder?.mechanic?.id ? [activeWorkorder.workorder.mechanic.id] : []);
   const detailMechanicNames = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
@@ -708,20 +607,6 @@ export function App({ actor }) {
         return true;
       })
       .join(" ");
-  }
-
-  function vehicleLocation(vehicle) {
-    const gps = vehicle?.lastLocation || vehicle?.last_location || null;
-    const latitude = Number(gps?.latitude);
-    const longitude = Number(gps?.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return {
-      latitude,
-      longitude,
-      address: gps?.reverseGeo?.formattedLocation || gps?.address?.name || "",
-      time: gps?.time || vehicle?.lastSeenAt || vehicle?.last_seen_at || "",
-      speed: gps?.speedMilesPerHour,
-    };
   }
 
   function applyVehicle(vehicle) {
@@ -1560,6 +1445,7 @@ export function App({ actor }) {
               onSubmit={createOfficeWorkorder}
               onUnitChange={updateUnitNumber}
               onVehicleSelect={applyVehicle}
+              mapsConfig={mapsConfig}
               selectedVehicle={selectedVehicle}
               vehicleLookup={vehicleLookup}
             />
@@ -1731,7 +1617,7 @@ export function App({ actor }) {
 	                          <button type="button" role="option" aria-selected="false" key={vehicle.id} onClick={() => applyVehicle(vehicle)}>
 	                            <strong>{vehicle.unit_no || vehicle.name || vehicle.vin || "Unnamed vehicle"}</strong>
 	                            <span>
-	                              {[vehicle.unit_type, vehicle.owner_name, vehicleModelText(vehicle), vehicle.vin, vehicle.license_plate, vehicleMileage(vehicle) ? `${vehicleMileage(vehicle)} mi` : "", vehicleLocation(vehicle) ? "Map" : ""].filter(Boolean).join(" / ")}
+	                              {[vehicle.unit_type, vehicle.owner_name, vehicleModelText(vehicle), vehicle.vin, vehicle.license_plate, vehicleMileage(vehicle) ? `${vehicleMileage(vehicle)} mi` : "", getVehicleLocation(vehicle) ? "Map" : ""].filter(Boolean).join(" / ")}
 	                            </span>
 	                          </button>
 	                        ))}
@@ -1778,7 +1664,7 @@ export function App({ actor }) {
                 </div>
                 <AssetLocationCard
                   vehicle={selectedVehicle}
-                  location={vehicleLocation(selectedVehicle)}
+                  location={getVehicleLocation(selectedVehicle)}
                   mapsConfig={mapsConfig}
                 />
                 <Field label="Mechanic concern">
