@@ -3310,11 +3310,21 @@ textarea:focus {
   position: relative;
 }
 
+.workorder-preview-shell > div {
+  height: 8.5in;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: scale(calc(100cqw / 1056px));
+  transform-origin: top left;
+  width: 11in;
+}
+
 .workorder-preview-shell .workorder-page {
-  height: 100%;
+  height: 8.5in;
   min-height: 0;
   page-break-after: auto;
-  width: 100%;
+  width: 11in;
 }
 
 .preview-page {
@@ -4675,7 +4685,38 @@ textarea:focus {
 
 @media (min-width: 1800px) {
   .create-workorder-form {
-    max-width: 880px;
+    align-items: start;
+    column-gap: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    max-width: 1320px;
+  }
+
+  .create-workorder-form > .operational-form-error-summary,
+  .create-workorder-form > .operational-action-footer {
+    grid-column: 1 / -1;
+  }
+
+  .create-workorder-form > .operational-form-error-summary {
+    margin-bottom: 8px;
+  }
+
+  .create-workorder-form > .operational-form-card {
+    margin-top: 0;
+  }
+
+  .create-workorder-form > .create-workorder-card,
+  .create-workorder-form > .create-assignment-card {
+    grid-column: 1;
+  }
+
+  .create-workorder-form > .create-unit-card {
+    grid-column: 2;
+    grid-row: span 2;
+  }
+
+  .create-workorder-form > .operational-action-footer {
+    margin-top: 8px;
   }
 }
 

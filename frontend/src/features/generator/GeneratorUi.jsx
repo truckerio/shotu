@@ -1,6 +1,11 @@
 import { CheckCircle, ChevronLeft, ChevronRight, Printer, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
-import { renderWorkorderPageHtml } from "../../../../shared/workorder-template.js";
+import {
+  paginateWorkorderParts,
+  renderWorkorderBatchPagesHtml,
+  renderWorkorderPageHtml,
+  WORKORDER_PART_ROWS_PER_PAGE,
+} from "../../../../shared/workorder-template.js";
 
 function longitudeToTile(longitude, zoom) {
   return Math.floor(((Number(longitude) + 180) / 360) * 2 ** zoom);
@@ -61,11 +66,20 @@ export function Field({ label, hint, children }) {
   );
 }
 
-export function WorkorderPreview({ serial, label, form }) {
+export function WorkorderPreview({ serial, label, form, pageIndex = 0 }) {
+  const pages = paginateWorkorderParts(form);
+  const safePageIndex = Math.min(Math.max(pageIndex, 0), pages.length - 1);
   return (
     <div className="preview-page-card">
       <div className="preview-page-meta"><span>{label}</span><strong>{serial}</strong></div>
-      <div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{ __html: renderWorkorderPageHtml(form, serial) }} /></div>
+      <div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{
+        __html: renderWorkorderPageHtml(form, serial, {
+          rows: pages[safePageIndex],
+          pageIndex: safePageIndex,
+          pageCount: pages.length,
+          rowOffset: safePageIndex * WORKORDER_PART_ROWS_PER_PAGE,
+        }),
+      }} /></div>
     </div>
   );
 }
@@ -73,20 +87,31 @@ export function WorkorderPreview({ serial, label, form }) {
 export function BrowserPrintDocument({ payload }) {
   if (!payload?.serials?.length) return null;
   return (
-    <section className="browser-print-document" aria-hidden="true">
-      {payload.serials.map((serial) => (
-        <div key={serial} dangerouslySetInnerHTML={{ __html: renderWorkorderPageHtml(payload.form, serial) }} />
-      ))}
-    </section>
+    <section
+      className="browser-print-document"
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: renderWorkorderBatchPagesHtml(payload.form, payload.serials) }}
+    />
   );
 }
 
 export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range, countLabel, actionLabel, onClose, onPageChange, onZoomChange, onPrint }) {
   if (!open) return null;
-  const safeIndex = Math.min(Math.max(pageIndex, 0), serials.length - 1);
-  const serial = serials[safeIndex] || "";
+  const physicalPages = serials.flatMap((serial) => {
+    const pages = paginateWorkorderParts(form);
+    return pages.map((rows, physicalPageIndex) => ({
+      serial,
+      rows,
+      pageIndex: physicalPageIndex,
+      pageCount: pages.length,
+      rowOffset: physicalPageIndex * WORKORDER_PART_ROWS_PER_PAGE,
+    }));
+  });
+  const safeIndex = Math.min(Math.max(pageIndex, 0), physicalPages.length - 1);
+  const physicalPage = physicalPages[safeIndex];
+  const serial = physicalPage?.serial || "";
   const canGoBack = safeIndex > 0;
-  const canGoForward = safeIndex < serials.length - 1;
+  const canGoForward = safeIndex < physicalPages.length - 1;
 
   return (
     <div className="preview-fullscreen" role="dialog" aria-modal="true" aria-label="Fullscreen workorder preview">
@@ -94,7 +119,7 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
         <div className="fullscreen-title"><strong>Preview</strong><span>{countLabel} / {range}</span></div>
         <div className="fullscreen-toolbox" aria-label="Preview tools">
           <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex - 1)} disabled={!canGoBack} aria-label="Previous page" data-tooltip="Previous page"><ChevronLeft /></button>
-          <span className="fullscreen-page-count">{safeIndex + 1} / {serials.length}</span>
+          <span className="fullscreen-page-count">{safeIndex + 1} / {physicalPages.length}</span>
           <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex + 1)} disabled={!canGoForward} aria-label="Next page" data-tooltip="Next page"><ChevronRight /></button>
           <button className="icon-tooltip" type="button" onClick={() => onZoomChange(Math.max(0, zoom - 1))} disabled={zoom <= 0} aria-label="Zoom out" data-tooltip="Zoom out"><ZoomOut /></button>
           <button className="icon-tooltip" type="button" onClick={() => onZoomChange(Math.min(2, zoom + 1))} disabled={zoom >= 2} aria-label="Zoom in" data-tooltip="Zoom in"><ZoomIn /></button>
@@ -104,7 +129,9 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
       </div>
       <div className={`fullscreen-stage zoom-${zoom}`}>
         <div className="fullscreen-page-meta"><span>Page {safeIndex + 1}</span><strong>{serial}</strong></div>
-        <div className="fullscreen-page-wrap"><div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{ __html: renderWorkorderPageHtml(form, serial) }} /></div></div>
+        <div className="fullscreen-page-wrap"><div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{
+          __html: renderWorkorderPageHtml(form, serial, physicalPage),
+        }} /></div></div>
       </div>
     </div>
   );

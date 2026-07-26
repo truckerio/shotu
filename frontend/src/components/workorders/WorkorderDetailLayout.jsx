@@ -7,10 +7,10 @@ const DETAIL_LAYOUT = Object.freeze({
   storageKey: "workorder.detailPreviewPercent.v2",
 });
 const CREATE_LAYOUT = Object.freeze({
-  defaultPreviewPercent: 62,
-  minControlWidth: 390,
+  defaultPreviewPercent: 40,
+  minControlWidth: 620,
   minPreviewWidth: 560,
-  storageKey: "workorder.createPreviewPercent.v1",
+  storageKey: "workorder.createPreviewPercent.v2",
 });
 const RESIZER_WIDTH = 8;
 

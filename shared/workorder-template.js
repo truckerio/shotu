@@ -46,12 +46,26 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function partRows(form) {
+export const WORKORDER_PART_ROWS_PER_PAGE = 6;
+
+function inputPartRows(form) {
   const inputParts = Array.isArray(form.parts) ? form.parts : [];
-  const rows = inputParts.length ? inputParts : [emptyPart(), emptyPart(), emptyPart()];
-  const visibleRows = rows.slice(0, 18);
-  while (visibleRows.length < 3) visibleRows.push(emptyPart());
-  return visibleRows;
+  return inputParts.length ? inputParts : [emptyPart(), emptyPart(), emptyPart()];
+}
+
+export function paginateWorkorderParts(form) {
+  const rows = inputPartRows(form);
+  const pages = [];
+  for (let index = 0; index < rows.length; index += WORKORDER_PART_ROWS_PER_PAGE) {
+    const pageRows = rows.slice(index, index + WORKORDER_PART_ROWS_PER_PAGE);
+    while (pageRows.length < WORKORDER_PART_ROWS_PER_PAGE) pageRows.push(emptyPart());
+    pages.push(pageRows);
+  }
+  return pages;
+}
+
+export function workorderPhysicalPageCount(form) {
+  return paginateWorkorderParts(form).length;
 }
 
 function unitDisplay(form) {
@@ -93,28 +107,46 @@ export const workorderTemplateStyles = `
   display: grid;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Arial, sans-serif;
   grid-template-rows:
-    clamp(16px, 3%, 18px)
-    clamp(96px, 16%, 125px)
-    clamp(18px, 3%, 22px)
-    minmax(0, 1fr)
-    clamp(78px, 17%, 96px)
-    clamp(42px, 10%, 56px);
+    3%
+    22%
+    5%
+    34%
+    16%
+    20%;
   height: 8.5in;
   overflow: hidden;
   page-break-after: always;
   width: 11in;
 }
 
-.workorder-page:last-child {
+.workorder-page.is-document-final-page {
   page-break-after: auto;
 }
 
 .wo-title {
+  align-items: center;
   border-bottom: 1px solid #111;
-  font-size: 12px;
+  display: flex;
+  font-size: 13px;
   font-weight: 800;
-  line-height: 18px;
+  justify-content: center;
+  line-height: 1.2;
+  overflow: hidden;
+  padding: 0 92px;
+  position: relative;
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wo-page-marker {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .wo-top {
@@ -136,16 +168,17 @@ export const workorderTemplateStyles = `
 }
 
 .wo-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .wo-value {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .wo-brand {
@@ -156,14 +189,12 @@ export const workorderTemplateStyles = `
 }
 
 .wo-brand strong {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.2;
   max-width: 100%;
-  overflow: hidden;
   text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .wo-details {
@@ -173,14 +204,14 @@ export const workorderTemplateStyles = `
 }
 
 .wo-detail {
-  align-items: end;
+  align-items: center;
   border-bottom: 1px solid #111;
   border-right: 1px solid #111;
   display: grid;
-  gap: 4px;
-  grid-template-columns: auto 1fr;
-  min-height: 12px;
-  padding: 2px 6px;
+  gap: 6px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  min-height: 0;
+  padding: 3px 8px;
 }
 
 .wo-detail:nth-child(even),
@@ -193,7 +224,7 @@ export const workorderTemplateStyles = `
 }
 
 .wo-detail .wo-value {
-  min-height: 10px;
+  min-height: 14px;
 }
 
 .wo-mechanic {
@@ -207,8 +238,8 @@ export const workorderTemplateStyles = `
   border-right: 1px solid #111;
   display: grid;
   gap: 5px;
-  grid-template-columns: auto 1fr;
-  padding: 2px 6px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  padding: 3px 8px;
 }
 
 .wo-mechanic > div:last-child {
@@ -216,18 +247,18 @@ export const workorderTemplateStyles = `
 }
 
 .wo-mechanic .wo-value {
-  min-height: 10px;
+  min-height: 14px;
 }
 
 .wo-parts {
   display: grid;
-  grid-template-rows: minmax(14px, 8%) repeat(var(--wo-part-rows), minmax(0, 1fr));
+  grid-template-rows: 30px repeat(var(--wo-part-rows), minmax(0, 1fr));
   min-height: 0;
 }
 
 .wo-part-row {
   display: grid;
-  grid-template-columns: 64px 25% 82px 1fr;
+  grid-template-columns: 54px 25% 68px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -236,11 +267,12 @@ export const workorderTemplateStyles = `
   border-bottom: 1px solid #111;
   border-right: 1px solid #111;
   display: flex;
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.2;
   overflow: hidden;
-  padding: 2px 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  padding: 4px 8px;
+  white-space: normal;
 }
 
 .wo-part-row > div:first-child,
@@ -263,9 +295,10 @@ export const workorderTemplateStyles = `
 
 .wo-footer > div {
   border-right: 1px solid #111;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
-  padding: 6px 8px;
+  line-height: 1.2;
+  padding: 6px 10px;
 }
 
 .wo-footer > div:last-child {
@@ -274,12 +307,13 @@ export const workorderTemplateStyles = `
 
 .wo-footer-line {
   display: grid;
-  gap: 5px;
-  grid-template-columns: auto 1fr;
+  align-content: start;
+  gap: 7px;
+  grid-template-columns: max-content minmax(0, 1fr);
 }
 
 .wo-footer-line .wo-value {
-  min-height: 10px;
+  min-height: 14px;
 }
 
 .wo-totals {
@@ -289,7 +323,10 @@ export const workorderTemplateStyles = `
 
 .wo-totals span {
   border-bottom: 1px solid #111;
-  padding: 4px 8px;
+  align-items: center;
+  display: flex;
+  min-height: 0;
+  padding: 3px 10px;
 }
 
 .wo-totals span:last-child {
@@ -299,24 +336,24 @@ export const workorderTemplateStyles = `
 .wo-disclaimer {
   border-top: 1px solid #111;
   display: grid;
-  gap: 4px;
-  padding: 4px 12px;
+  align-content: center;
+  gap: 7px;
+  padding: 8px 18px;
   text-align: center;
 }
 
 .wo-disclaimer strong {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .wo-disclaimer span {
   display: block;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 600;
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 @media print {
@@ -337,12 +374,21 @@ export const workorderTemplateStyles = `
 }
 `;
 
-export function renderWorkorderPageHtml(form, serial) {
-  const rows = partRows(form);
+export function renderWorkorderPageHtml(form, serial, {
+  rows = paginateWorkorderParts(form)[0],
+  pageIndex = 0,
+  pageCount = 1,
+  rowOffset = 0,
+  isDocumentFinalPage = false,
+} = {}) {
   const customerCompanyName = resolveCustomerCompanyName(form, form?.assetOwnerName);
+  const pageMarker = pageCount > 1 ? `Page ${pageIndex + 1} of ${pageCount}` : "";
   return `
-    <article class="workorder-page">
-      <header class="wo-title">${escapeHtml(form.headerTitle || "CHINO YARD WORKORDER")}</header>
+    <article class="workorder-page${isDocumentFinalPage ? " is-document-final-page" : ""}" data-workorder-serial="${escapeHtml(serial)}" data-page-number="${pageIndex + 1}">
+      <header class="wo-title">
+        ${escapeHtml(form.headerTitle || "CHINO YARD WORKORDER")}
+        ${pageMarker ? `<span class="wo-page-marker">${escapeHtml(pageMarker)}</span>` : ""}
+      </header>
       <section class="wo-top">
         <div class="wo-concern">
           <span class="wo-label">Mechanic Concern:</span>
@@ -379,7 +425,7 @@ export function renderWorkorderPageHtml(form, serial) {
           .map(
             (row, index) => `
               <div class="wo-part-row">
-                <div>${index + 1}</div>
+                <div>${rowOffset + index + 1}</div>
                 <div>${escapeHtml(row.partNo)}</div>
                 <div>${escapeHtml(row.qty)}</div>
                 <div>${escapeHtml(row.repairOrder)}</div>
@@ -408,6 +454,40 @@ export function renderWorkorderPageHtml(form, serial) {
   `;
 }
 
+export function renderWorkorderPagesHtml(form, serial) {
+  const pages = paginateWorkorderParts(form);
+  return pages
+    .map((rows, pageIndex) => renderWorkorderPageHtml(form, serial, {
+      rows,
+      pageIndex,
+      pageCount: pages.length,
+      rowOffset: pageIndex * WORKORDER_PART_ROWS_PER_PAGE,
+    }))
+    .join("");
+}
+
+export function renderWorkorderBatchPagesHtml(form, serials) {
+  const pageGroups = serials.map((serial) => ({
+    serial,
+    pages: paginateWorkorderParts(form),
+  }));
+  const totalPages = pageGroups.reduce((total, group) => total + group.pages.length, 0);
+  let renderedPages = 0;
+
+  return pageGroups
+    .flatMap(({ serial, pages }) => pages.map((rows, pageIndex) => {
+      renderedPages += 1;
+      return renderWorkorderPageHtml(form, serial, {
+        rows,
+        pageIndex,
+        pageCount: pages.length,
+        rowOffset: pageIndex * WORKORDER_PART_ROWS_PER_PAGE,
+        isDocumentFinalPage: renderedPages === totalPages,
+      });
+    }))
+    .join("");
+}
+
 export function renderWorkorderDocument(form, serials) {
   return `<!doctype html>
 <html>
@@ -417,7 +497,7 @@ export function renderWorkorderDocument(form, serials) {
     <style>${workorderTemplateStyles}</style>
   </head>
   <body class="workorder-print-root">
-    ${serials.map((serial) => renderWorkorderPageHtml(form, serial)).join("")}
+    ${renderWorkorderBatchPagesHtml(form, serials)}
   </body>
 </html>`;
 }

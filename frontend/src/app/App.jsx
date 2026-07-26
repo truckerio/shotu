@@ -27,7 +27,7 @@ import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActi
 import { CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
-import { emptyPart, workDateRangeLabel, workorderTemplateStyles } from "../../../shared/workorder-template.js";
+import { emptyPart, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../shared/workorder-template.js";
 import "../styles.css";
 
 const AdminWorkspace = lazy(() => import("../features/admin/AdminWorkspace.jsx").then((module) => ({ default: module.AdminWorkspace })));
@@ -170,6 +170,7 @@ export function App({ actor }) {
     [form.prefix, form.nextNumber, form.digits, effectiveCopies],
   );
   const workorderCountLabel = activeWorkorder ? "1 workorder" : `${effectiveCopies} workorder${effectiveCopies === 1 ? "" : "s"}`;
+  const lastPhysicalPageIndex = workorderPhysicalPageCount(form) - 1;
   const primaryActionLabel = activeWorkorder
     ? "Print workorder"
     : `Print ${effectiveCopies} workorder${effectiveCopies === 1 ? "" : "s"}`;
@@ -656,10 +657,11 @@ export function App({ actor }) {
   }
 
   async function printWorkorders() {
-    const pageCount = effectiveCopies;
+    const workorderCount = effectiveCopies;
+    const pageCount = workorderCount * workorderPhysicalPageCount(form);
     setPrintState({ open: true, stage: "allocating", message: "Reserving unique serial numbers.", pageCount });
     try {
-      setPrintState({ open: true, stage: "rendering", message: pageCount === 1 ? "Preparing one workorder." : `Preparing ${pageCount} unique workorders.`, pageCount });
+      setPrintState({ open: true, stage: "rendering", message: workorderCount === 1 ? "Preparing one workorder." : `Preparing ${workorderCount} unique workorders.`, pageCount });
       setPrintState({ open: true, stage: "printing", message: "Creating the archived PDF.", pageCount });
       const printableForm = {
         companyName: form.customerCompanyName,
@@ -711,7 +713,7 @@ export function App({ actor }) {
         message: "Opening your browser print dialog.",
         downloadUrl: result.downloadUrl,
         range: printedRange,
-        pageCount: printedSerials.length || pageCount,
+        pageCount: (printedSerials.length || effectiveCopies) * workorderPhysicalPageCount(result.printForm || printableForm),
       });
       await openBrowserPrintDialog({ form: result.printForm || printableForm, serials: printedSerials });
       setPrintState({
@@ -720,7 +722,7 @@ export function App({ actor }) {
         message: "Print dialog opened. Choose your printer or Save as PDF. The archived PDF is also available below.",
         downloadUrl: result.downloadUrl,
         range: printedRange,
-        pageCount: printedSerials.length || pageCount,
+        pageCount: (printedSerials.length || effectiveCopies) * workorderPhysicalPageCount(result.printForm || printableForm),
       });
     } catch (error) {
       setPrintState({ open: true, stage: "error", message: error.message, pageCount });
@@ -1823,7 +1825,9 @@ export function App({ actor }) {
         >
           <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} ${activeWorkorder ? "mechanic-preview-grid" : ""}`}>
             <WorkorderPreview label="First page" serial={firstSerial} form={form} />
-            {effectiveCopies > 1 ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} /> : null}
+            {effectiveCopies > 1 || lastPhysicalPageIndex > 0
+              ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+              : null}
           </div>
         </PreviewPane>
       </WorkorderDetailLayout>

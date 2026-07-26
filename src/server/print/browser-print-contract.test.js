@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { renderWorkorderDocument } from "../../../shared/workorder-template.js";
+import {
+  renderWorkorderDocument,
+  renderWorkorderPagesHtml,
+  workorderPhysicalPageCount,
+  workorderTemplateStyles,
+} from "../../../shared/workorder-template.js";
 
 const serverSource = await readFile(new URL("../../../server.js", import.meta.url), "utf8");
 
@@ -44,10 +49,57 @@ test("shared print renderer emits one physical page for every reserved serial", 
     parts: [],
   }, serials);
 
-  assert.equal((html.match(/class="workorder-page"/g) || []).length, 10);
+  assert.equal((html.match(/class="workorder-page/g) || []).length, 10);
   for (const serial of serials) assert.match(html, new RegExp(`Invoice No:</span><strong class="wo-value">${serial}`));
   assert.match(html, /page-break-after:\s*always/);
-  assert.match(html, /\.workorder-page:last-child\s*\{\s*page-break-after:\s*auto/);
+  assert.match(html, /\.workorder-page\.is-document-final-page\s*\{\s*page-break-after:\s*auto/);
+  assert.equal((html.match(/is-document-final-page/g) || []).length, 2);
+});
+
+test("shared template keeps operational text readable without ellipsis clipping", () => {
+  assert.match(workorderTemplateStyles, /\.wo-label\s*\{[^}]*font-size:\s*12px/s);
+  assert.match(workorderTemplateStyles, /\.wo-value\s*\{[^}]*font-size:\s*12px/s);
+  assert.match(workorderTemplateStyles, /\.wo-part-row > div\s*\{[^}]*font-size:\s*12px/s);
+  assert.match(workorderTemplateStyles, /\.wo-footer > div\s*\{[^}]*font-size:\s*12px/s);
+  assert.match(workorderTemplateStyles, /\.wo-disclaimer span\s*\{[^}]*font-size:\s*10px/s);
+  assert.doesNotMatch(workorderTemplateStyles, /\.wo-value\s*\{[^}]*text-overflow:\s*ellipsis/s);
+  assert.doesNotMatch(workorderTemplateStyles, /\.wo-value\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.doesNotMatch(workorderTemplateStyles, /\.wo-disclaimer span\s*\{[^}]*text-overflow:\s*ellipsis/s);
+});
+
+test("parts overflow creates numbered continuation pages without shrinking the workorder", () => {
+  const parts = Array.from({ length: 14 }, (_, index) => ({
+    partNo: `PART-${index + 1}`,
+    qty: "1",
+    repairOrder: `Replaced part ${index + 1} and verified operation.`,
+  }));
+  const form = { parts, customerCompanyName: "Long Haul" };
+  const html = renderWorkorderPagesHtml(form, "WO-000101");
+
+  assert.equal(workorderPhysicalPageCount(form), 3);
+  assert.equal((html.match(/class="workorder-page/g) || []).length, 3);
+  assert.match(html, /Page 1 of 3/);
+  assert.match(html, /Page 3 of 3/);
+  assert.match(html, /data-page-number="3"/);
+  assert.match(html, />PART-14</);
+  assert.match(html, /<div>14<\/div>/);
+  assert.equal((html.match(/Invoice No:<\/span><strong class="wo-value">WO-000101/g) || []).length, 3);
+});
+
+test("ten serial batch keeps ten workorders while counting continuation pages independently", () => {
+  const serials = Array.from({ length: 10 }, (_, index) => `WO-${String(index + 1).padStart(6, "0")}`);
+  const form = {
+    parts: Array.from({ length: 7 }, (_, index) => ({
+      partNo: `P-${index + 1}`,
+      qty: "1",
+      repairOrder: `Repair ${index + 1}`,
+    })),
+  };
+  const html = renderWorkorderDocument(form, serials);
+
+  assert.equal(workorderPhysicalPageCount(form), 2);
+  assert.equal((html.match(/class="workorder-page/g) || []).length, 20);
+  assert.equal(new Set([...html.matchAll(/data-workorder-serial="([^"]+)"/g)].map((match) => match[1])).size, 10);
 });
 
 test("frontend browser print contract does not depend on enumerating printers", async () => {

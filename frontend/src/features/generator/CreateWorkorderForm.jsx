@@ -43,7 +43,11 @@ export function CreateWorkorderForm({
     <OperationalForm className="create-workorder-form" busy={busy} onSubmit={onSubmit} noValidate>
       <FormErrorSummary errors={errors} focusOnMount title="Check the workorder details" />
 
-      <FormCard title="Workorder" description="Repair location, schedule, and requested work.">
+      <FormCard
+        className="create-workorder-card"
+        title="Workorder"
+        description="Repair location, schedule, and requested work."
+      >
         <FormSection title="Work context">
           {locationOptions.length ? (
             <FormField id="workorder-location" label="Location" error={errors?.locationId} required>
@@ -87,7 +91,11 @@ export function CreateWorkorderForm({
         </FormSection>
       </FormCard>
 
-      <FormCard title="Unit & customer" description="Select the equipment and confirm who owns or operates it.">
+      <FormCard
+        className="create-unit-card"
+        title="Unit & customer"
+        description="Select the equipment and confirm who owns or operates it."
+      >
         <FormSection title="Unit" description="Search by unit number, VIN, truck name, or license plate.">
         <div className="operational-unit-lookup">
           <FormField id="workorder-unit" label="Unit" error={errors?.unitNo} required>
@@ -186,7 +194,11 @@ export function CreateWorkorderForm({
         </FormSection>
       </FormCard>
 
-      <FormCard title="Assignment" description="Choose the mechanic team and record any parts already known.">
+      <FormCard
+        className="create-assignment-card"
+        title="Assignment"
+        description="Choose the mechanic team and record any parts already known."
+      >
         <FormSection title="Mechanics" description="Leave the team empty to make this work available for mechanics to accept.">
           <MechanicMultiSelect
             mechanics={mechanics}
