@@ -12,6 +12,26 @@ function filledParts(parts) {
     }));
 }
 
+export function shouldPromptForWorkorderDraft({
+  activeWorkorder,
+  draftPromptDismissed = false,
+  resumedDraftId = "",
+  role,
+  routeLoading = false,
+  search = "",
+  workspace,
+}) {
+  const params = new URLSearchParams(search);
+  return workspace === "generator"
+    && params.get("view") === "create"
+    && !params.has("workorder")
+    && !activeWorkorder
+    && !routeLoading
+    && ["office", "admin"].includes(role)
+    && !draftPromptDismissed
+    && !resumedDraftId;
+}
+
 export function buildWorkorderDraftPayload({
   actor,
   form,

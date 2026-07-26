@@ -38,6 +38,7 @@ import {
   formValuesFromWorkorderDraft,
   isMeaningfulWorkorderDraft,
   selectedVehicleFromWorkorderDraft,
+  shouldPromptForWorkorderDraft,
 } from "../features/generator/workorder-draft.js";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
@@ -206,6 +207,15 @@ export function App({ actor }) {
     authorizedBy: "",
     parts: [emptyPart(), emptyPart(), emptyPart()],
   });
+  const canPromptForWorkorderDraft = shouldPromptForWorkorderDraft({
+    activeWorkorder,
+    draftPromptDismissed,
+    resumedDraftId: resumedDraft?.id,
+    role: actor.role,
+    routeLoading,
+    search: typeof window === "undefined" ? "" : window.location.search,
+    workspace,
+  });
 
   const workorderDraftPayload = useMemo(() => buildWorkorderDraftPayload({
     actor,
@@ -366,13 +376,10 @@ export function App({ actor }) {
   }, [actor.role]);
 
   useEffect(() => {
-    if (
-      workspace !== "generator"
-      || activeWorkorder
-      || !["office", "admin"].includes(actor.role)
-      || draftPromptDismissed
-      || resumedDraft?.id
-    ) return;
+    if (!canPromptForWorkorderDraft) {
+      setDraftResumeOpen(false);
+      return;
+    }
 
     let cancelled = false;
     api("/api/workorder-drafts?type=workorder")
@@ -388,7 +395,7 @@ export function App({ actor }) {
     return () => {
       cancelled = true;
     };
-  }, [activeWorkorder, actor.role, draftPromptDismissed, resumedDraft?.id, workspace]);
+  }, [canPromptForWorkorderDraft]);
 
   useEffect(() => {
     if (activeWorkorder || !["office", "admin"].includes(actor.role) || !form.locationId) {
@@ -2002,7 +2009,7 @@ export function App({ actor }) {
       />
       <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
       <DraftResumeDialog
-        open={draftResumeOpen}
+        open={draftResumeOpen && canPromptForWorkorderDraft}
         busy={draftResumeBusy}
         draftLabel={
           availableDrafts[0]?.payload?.formData?.unitNo

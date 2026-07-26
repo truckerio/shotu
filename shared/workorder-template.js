@@ -97,7 +97,7 @@ export const workorderTemplateStyles = `
 .workorder-print-root {
   background: #fff;
   color: #111;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
 .workorder-page {
@@ -105,7 +105,7 @@ export const workorderTemplateStyles = `
   background: #fff;
   color: #111;
   display: grid;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   grid-template-rows:
     3%
     22%
