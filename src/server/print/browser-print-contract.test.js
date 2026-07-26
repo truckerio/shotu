@@ -34,6 +34,15 @@ test("print downloads and operational reprints are resource scoped", () => {
   assert.match(serverSource, /form = operationalWorkorderPrintForm\(workorder\)/);
 });
 
+test("print requires a persisted workorder and never allocates a draft serial", () => {
+  assert.match(serverSource, /if \(!input\.workorderId\) throw invalidRequest\("Create the workorder before printing\."\)/);
+  assert.match(serverSource, /serials:\s*\[workorder\.serial\]/);
+  assert.doesNotMatch(
+    serverSource,
+    /url\.pathname === "\/api\/print"[\s\S]*?reserveWorkorderSerials\([\s\S]*?\n\s*}\n\s*const allocation/,
+  );
+});
+
 test("reprinting a serial preserves its existing ledger history", () => {
   assert.match(serverSource, /uploadHistory:\s*existing\?\.uploadHistory \|\| \[\]/);
   assert.match(serverSource, /shareHistory:\s*existing\?\.shareHistory \|\| \[\]/);

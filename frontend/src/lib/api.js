@@ -12,7 +12,12 @@ export async function api(path, options = {}) {
       signal: fetchOptions.signal || controller?.signal,
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || body.printMessage || "Request failed");
+    if (!response.ok) {
+      const error = new Error(body.error || body.printMessage || "Request failed");
+      error.status = response.status;
+      error.details = body;
+      throw error;
+    }
     return body;
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("The request took too long. Try again.");

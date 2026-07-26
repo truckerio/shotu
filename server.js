@@ -15,6 +15,7 @@ import { handleOfficeApi } from "./src/server/routes/office.routes.js";
 import { handlePartsHelperApi } from "./src/server/routes/parts-helper.routes.js";
 import { handleSurveillanceApi } from "./src/server/routes/surveillance.routes.js";
 import { handleVehiclesApi } from "./src/server/routes/vehicles.routes.js";
+import { handleWorkorderDraftsApi } from "./src/server/routes/workorder-drafts.routes.js";
 import { handleWorkorderPreferencesApi } from "./src/server/routes/workorder-preferences.routes.js";
 import { startSamsaraAutoSync } from "./src/server/integrations/samsara/samsara.auto-sync.js";
 import {
@@ -29,7 +30,6 @@ import {
 import { getLocationById } from "./src/server/db/repositories/locations.repo.js";
 import {
   getWorkorderSerialSettings,
-  reserveWorkorderSerials,
 } from "./src/server/db/repositories/serial-counters.repo.js";
 import { invalidRequest, resourceNotFound } from "./src/server/auth/errors.js";
 
@@ -670,6 +670,7 @@ async function handleApi(req, res) {
   if (await handleOfficeApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
   if (await handlePartsHelperApi(req, res, url, helpers)) return;
+  if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;
   if (await handleWorkorderPreferencesApi(req, res, url, helpers)) return;
 
   if (req.method === "GET" && url.pathname === "/api/state") {
@@ -734,23 +735,12 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/print") {
     const input = await readBody(req);
-    let form = input.form || {};
-    let selected;
-    let reservation;
-    if (input.workorderId) {
-      const workorder = await requireWorkorderAccess(requestContext, input.workorderId);
-      selected = { companyId: workorder.companyId, location: workorder.location || null };
-      form = operationalWorkorderPrintForm(workorder);
-      const settings = await getWorkorderSerialSettings(workorder.companyId);
-      reservation = { ...settings, serials: [workorder.serial] };
-    } else {
-      selected = await printCompanyContext(requestContext, input.locationId || "");
-      form.companyName = input.companyName || form.companyName || selected.location?.name || "Default Company";
-      reservation = await reserveWorkorderSerials({
-        companyId: selected.companyId,
-        count: clampInt(input.count, 1, 1, 250),
-      });
-    }
+    if (!input.workorderId) throw invalidRequest("Create the workorder before printing.");
+    const workorder = await requireWorkorderAccess(requestContext, input.workorderId);
+    const selected = { companyId: workorder.companyId, location: workorder.location || null };
+    const form = operationalWorkorderPrintForm(workorder);
+    const settings = await getWorkorderSerialSettings(workorder.companyId);
+    const reservation = { ...settings, serials: [workorder.serial] };
     const allocation = await recordSerialAllocation({
       ...input,
       ...form,

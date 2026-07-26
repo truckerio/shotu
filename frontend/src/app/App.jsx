@@ -1,6 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, RefreshCw01, Save01, XClose } from "@untitledui/icons";
+import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
 import { PreviewPane, PreviewToggle } from "../components/preview/PreviewPane.jsx";
+import {
+  DraftLeaveDialog,
+  DraftResumeDialog,
+  DraftSaveStatus,
+  useDraftForm,
+  useUnsavedBrowserGuard,
+} from "../components/drafts/index.js";
 import { Button } from "../components/ui/Button.jsx";
 import { ChatComposer } from "../components/workorders/ChatComposer.jsx";
 import { ChatThread } from "../components/workorders/ChatThread.jsx";
@@ -24,7 +31,13 @@ import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
-import { CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
+import { CREATE_WORKORDER_FORM_ID, CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
+import {
+  buildWorkorderDraftPayload,
+  formValuesFromWorkorderDraft,
+  isMeaningfulWorkorderDraft,
+  selectedVehicleFromWorkorderDraft,
+} from "../features/generator/workorder-draft.js";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
 import { emptyPart, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../shared/workorder-template.js";
@@ -37,10 +50,6 @@ const todayIso = () => {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 };
-
-function formatSerial(prefix, number, digits) {
-  return `${prefix || ""}${String(Number(number) || 1).padStart(Number(digits) || 1, "0")}`;
-}
 
 function splitSerial(serial = "") {
   const match = /^(.*?)(\d+)$/.exec(serial.trim());
@@ -75,6 +84,34 @@ function defaultDetailSection(role, status, compact = false) {
 function defaultSupportingView(role, status) {
   if (role === "mechanic" || ["waiting_office", "parts_requested"].includes(status)) return "chat";
   return "preview";
+}
+
+async function createWorkorderDraft(payload) {
+  const result = await api("/api/workorder-drafts", {
+    method: "POST",
+    body: JSON.stringify({
+      type: "workorder",
+      locationId: payload.locationId || null,
+      payload,
+    }),
+  });
+  return result.draft;
+}
+
+async function updateWorkorderDraft(draftId, { version, payload }) {
+  const result = await api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      version,
+      locationId: payload.locationId || null,
+      payload,
+    }),
+  });
+  return result.draft;
+}
+
+async function discardWorkorderDraft(draftId) {
+  return api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" });
 }
 
 export function App({ actor }) {
@@ -113,6 +150,17 @@ export function App({ actor }) {
   const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
   const [officeCreateState, setOfficeCreateState] = useState({ busy: false, message: "" });
   const [officeCreateErrors, setOfficeCreateErrors] = useState({});
+  const [resumedDraft, setResumedDraft] = useState(null);
+  const [availableDrafts, setAvailableDrafts] = useState([]);
+  const [draftResumeOpen, setDraftResumeOpen] = useState(false);
+  const [draftResumeBusy, setDraftResumeBusy] = useState(false);
+  const [draftLeaveOpen, setDraftLeaveOpen] = useState(false);
+  const [draftLeaveBusy, setDraftLeaveBusy] = useState(false);
+  const [draftPromptDismissed, setDraftPromptDismissed] = useState(false);
+  const createInitialDatesRef = useRef({
+    workStartDate: todayIso(),
+    workEndDate: todayIso(),
+  });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [samsaraIntegration, setSamsaraIntegration] = useState({ loading: true, connected: false, authType: "none" });
@@ -158,22 +206,43 @@ export function App({ actor }) {
     parts: [emptyPart(), emptyPart(), emptyPart()],
   });
 
-  const effectiveCopies = activeWorkorder ? 1 : Math.max(1, Number(form.copies) || 1);
-  const firstSerial = useMemo(() => formatSerial(form.prefix, form.nextNumber, form.digits), [form.prefix, form.nextNumber, form.digits]);
-  const lastSerial = useMemo(() => {
-    const last = (Number(form.nextNumber) || 1) + effectiveCopies - 1;
-    return formatSerial(form.prefix, last, form.digits);
-  }, [form.prefix, form.nextNumber, form.digits, effectiveCopies]);
-  const range = firstSerial === lastSerial ? firstSerial : `${firstSerial} to ${lastSerial}`;
-  const previewSerials = useMemo(
-    () => Array.from({ length: effectiveCopies }, (_, index) => formatSerial(form.prefix, (Number(form.nextNumber) || 1) + index, form.digits)),
-    [form.prefix, form.nextNumber, form.digits, effectiveCopies],
+  const workorderDraftPayload = useMemo(() => buildWorkorderDraftPayload({
+    actor,
+    form,
+    mechanicUserIds: createAssignment.mechanicUserIds,
+    selectedVehicle,
+  }), [actor, createAssignment.mechanicUserIds, form, selectedVehicle]);
+  const workorderDraftMeaningful = (
+    workspace === "generator"
+    && !activeWorkorder
+    && ["office", "admin"].includes(actor.role)
+    && isMeaningfulWorkorderDraft(workorderDraftPayload, createInitialDatesRef.current)
   );
-  const workorderCountLabel = activeWorkorder ? "1 workorder" : `${effectiveCopies} workorder${effectiveCopies === 1 ? "" : "s"}`;
+  const workorderDraft = useDraftForm({
+    value: workorderDraftPayload,
+    meaningful: workorderDraftMeaningful,
+    draft: resumedDraft,
+    createDraft: createWorkorderDraft,
+    updateDraft: updateWorkorderDraft,
+    discardDraft: discardWorkorderDraft,
+  });
+  useUnsavedBrowserGuard({
+    enabled: workspace === "generator" && !activeWorkorder,
+    hasUnsyncedChanges: workorderDraft.hasUnsyncedChanges,
+    flush: workorderDraft.flush,
+    onFlushError: (error) => {
+      setOfficeCreateState({ busy: false, message: error.message });
+    },
+  });
+
+  const effectiveCopies = 1;
+  const firstSerial = activeWorkorder?.workorder?.serial || "DRAFT";
+  const lastSerial = firstSerial;
+  const range = firstSerial;
+  const previewSerials = useMemo(() => [firstSerial], [firstSerial]);
+  const workorderCountLabel = activeWorkorder ? "1 workorder" : "Draft workorder";
   const lastPhysicalPageIndex = workorderPhysicalPageCount(form) - 1;
-  const primaryActionLabel = activeWorkorder
-    ? "Print workorder"
-    : `Print ${effectiveCopies} workorder${effectiveCopies === 1 ? "" : "s"}`;
+  const primaryActionLabel = "Print workorder";
   const canPrint = actor.role === "office" || actor.role === "admin";
   const statusOptions = [
     { value: "open", label: "Open" },
@@ -274,21 +343,6 @@ export function App({ actor }) {
   );
 
   useEffect(() => {
-    if (!canPrint || activeWorkorder) return;
-    const params = form.locationId ? `?locationId=${encodeURIComponent(form.locationId)}` : "";
-    api(`/api/print-settings${params}`)
-      .then((settings) => {
-        setForm((current) => ({
-          ...current,
-          prefix: settings.prefix,
-          nextNumber: settings.nextNumber,
-          digits: settings.digits,
-        }));
-      })
-      .catch(() => {});
-  }, [activeWorkorder, canPrint, form.locationId]);
-
-  useEffect(() => {
     if (!["office", "admin"].includes(actor.role)) return;
     api("/api/office/template")
       .then(({ location, template, locations }) => {
@@ -309,6 +363,31 @@ export function App({ actor }) {
       })
       .catch(() => {});
   }, [actor.role]);
+
+  useEffect(() => {
+    if (
+      workspace !== "generator"
+      || activeWorkorder
+      || !["office", "admin"].includes(actor.role)
+      || draftPromptDismissed
+      || resumedDraft?.id
+    ) return;
+
+    let cancelled = false;
+    api("/api/workorder-drafts?type=workorder")
+      .then(({ drafts }) => {
+        if (cancelled) return;
+        const activeDrafts = Array.isArray(drafts) ? drafts : [];
+        setAvailableDrafts(activeDrafts);
+        setDraftResumeOpen(activeDrafts.length > 0);
+      })
+      .catch((error) => {
+        if (!cancelled) setOfficeCreateState({ busy: false, message: error.message });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkorder, actor.role, draftPromptDismissed, resumedDraft?.id, workspace]);
 
   useEffect(() => {
     if (activeWorkorder || !["office", "admin"].includes(actor.role) || !form.locationId) {
@@ -657,9 +736,16 @@ export function App({ actor }) {
   }
 
   async function printWorkorders() {
+    if (!activeWorkorder?.workorder?.id) {
+      setOfficeCreateState({
+        busy: false,
+        message: "Create the workorder before printing. Drafts do not receive serial numbers.",
+      });
+      return;
+    }
     const workorderCount = effectiveCopies;
     const pageCount = workorderCount * workorderPhysicalPageCount(form);
-    setPrintState({ open: true, stage: "allocating", message: "Reserving unique serial numbers.", pageCount });
+    setPrintState({ open: true, stage: "allocating", message: "Preparing the saved workorder for printing.", pageCount });
     try {
       setPrintState({ open: true, stage: "rendering", message: workorderCount === 1 ? "Preparing one workorder." : `Preparing ${workorderCount} unique workorders.`, pageCount });
       setPrintState({ open: true, stage: "printing", message: "Creating the archived PDF.", pageCount });
@@ -704,9 +790,6 @@ export function App({ actor }) {
       const printedRange = printedSerials.length
         ? (printedSerials.length === 1 ? printedSerials[0] : `${printedSerials[0]} to ${printedSerials.at(-1)}`)
         : range;
-      if (!activeWorkorder) {
-        setForm((current) => ({ ...current, nextNumber: result.nextNumber }));
-      }
       setPrintState({
         open: true,
         stage: "printing",
@@ -746,52 +829,28 @@ export function App({ actor }) {
     setOfficeCreateErrors({});
     setOfficeCreateState({ busy: true, message: "Creating workorder..." });
     try {
-      const result = await api("/api/office/workorders", {
+      const savedDraft = await workorderDraft.flush();
+      if (!savedDraft?.id || !savedDraft?.version) {
+        throw new Error("The draft could not be saved. Try again before creating the workorder.");
+      }
+      const result = await api(`/api/workorder-drafts/${encodeURIComponent(savedDraft.id)}/submit`, {
         method: "POST",
         body: JSON.stringify({
-          companyId: actor.companyMemberships?.[0]?.companyId || actor.companyIds?.[0] || "",
-          locationId: form.locationId || actor.locationIds?.[0] || null,
-          assetId: selectedVehicle?.id || null,
-          concern,
-          officeNotes: "",
-          mechanicUserIds: createAssignment.mechanicUserIds,
-          formData: {
-            companyName: form.customerCompanyName,
-            customerCompanyName: form.customerCompanyName,
-            headerTitle: form.headerTitle,
-            brandTop: form.brandTop,
-            brandBottom: form.brandBottom,
-            warrantyText: form.warrantyText,
-            responsibilityText: form.responsibilityText,
-            authorizationText: form.authorizationText,
-            workDate: form.workDate,
-            workStartDate: form.workStartDate,
-            workEndDate: form.workEndDate,
-            unitNo: form.unitNo,
-            unitType: form.unitType,
-            licenseNo: form.licenseNo,
-            mileage: form.mileage,
-            model: form.model,
-            vinNo: form.vinNo,
-            mechanicConcern: form.mechanicConcern,
-            mechanicName: form.mechanicName,
-            startTime: form.startTime,
-            endTime: form.endTime,
-            managerName: form.managerName,
-            customerSignature: form.customerSignature,
-            authorizedBy: form.authorizedBy,
-            parts: form.parts,
-          },
+          version: savedDraft.version,
         }),
       });
+      workorderDraft.reset(null);
+      setResumedDraft(null);
+      setAvailableDrafts([]);
+      setDraftPromptDismissed(true);
       setOfficeCreateState({
         busy: false,
         message: createAssignment.mechanicUserIds.length
           ? `${result.workorder.serial} created and assigned.`
           : `${result.workorder.serial} added to the available queue.`,
       });
-      setWorkspace(actor.role === "admin" ? "admin" : "office");
-      window.history.replaceState({}, "", window.location.pathname);
+      const opened = await openOfficeWorkorder(result.workorder.id);
+      if (!opened) finishOpenOfficeWorkspace();
     } catch (error) {
       setOfficeCreateState({ busy: false, message: error.message });
     }
@@ -875,8 +934,10 @@ export function App({ actor }) {
       setWorkspace("generator");
       setOfficeDetailState({ busy: false, message: "" });
       window.history.replaceState({}, "", `${window.location.pathname}?workorder=${encodeURIComponent(workorder.id)}`);
+      return true;
     } catch (error) {
       setOfficeDetailState({ busy: false, message: error.message });
+      return false;
     }
   }
 
@@ -987,6 +1048,17 @@ export function App({ actor }) {
   }
 
   function openOfficeGenerator() {
+    const createDate = todayIso();
+    createInitialDatesRef.current = {
+      workStartDate: createDate,
+      workEndDate: createDate,
+    };
+    workorderDraft.reset(null);
+    setResumedDraft(null);
+    setAvailableDrafts([]);
+    setDraftPromptDismissed(false);
+    setDraftResumeOpen(false);
+    setDraftLeaveOpen(false);
     setActiveWorkorder(null);
     setSelectedVehicle(null);
     setVehicleLookup({ loading: false, status: "", results: [] });
@@ -1009,9 +1081,9 @@ export function App({ actor }) {
       officeNotes: "",
       customerSignature: "",
       authorizedBy: "",
-      workDate: todayIso(),
-      workStartDate: todayIso(),
-      workEndDate: todayIso(),
+      workDate: createDate,
+      workStartDate: createDate,
+      workEndDate: createDate,
       parts: [emptyPart(), emptyPart(), emptyPart()],
     }));
     setPreviewPanelOpen(true);
@@ -1024,12 +1096,97 @@ export function App({ actor }) {
     window.history.replaceState({}, "", `${window.location.pathname}?view=create`);
   }
 
-  function openOfficeWorkspace() {
+  function finishOpenOfficeWorkspace() {
+    setDraftLeaveOpen(false);
+    setDraftResumeOpen(false);
+    setDraftLeaveBusy(false);
+    setDraftResumeBusy(false);
     setActiveWorkorder(null);
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace(actor.role === "admin" ? "admin" : "office");
     window.history.replaceState({}, "", window.location.pathname);
+  }
+
+  function openOfficeWorkspace() {
+    const leavingCreate = workspace === "generator" && !activeWorkorder;
+    if (leavingCreate && (workorderDraftMeaningful || workorderDraft.draft?.id)) {
+      setDraftLeaveOpen(true);
+      return;
+    }
+    finishOpenOfficeWorkspace();
+  }
+
+  function closeDraftResumeDialog() {
+    setDraftResumeOpen(false);
+    setDraftPromptDismissed(true);
+  }
+
+  function resumeLatestDraft() {
+    const draft = availableDrafts[0];
+    if (!draft) {
+      closeDraftResumeDialog();
+      return;
+    }
+    setForm((current) => formValuesFromWorkorderDraft(draft.payload, current));
+    setCreateAssignment((current) => ({
+      ...current,
+      mechanicUserIds: draft.payload?.mechanicUserIds || [],
+    }));
+    setSelectedVehicle(selectedVehicleFromWorkorderDraft(draft.payload));
+    setResumedDraft(draft);
+    workorderDraft.reset(draft);
+    setDraftResumeOpen(false);
+    setDraftPromptDismissed(true);
+    setOfficeCreateState({ busy: false, message: "Draft restored." });
+  }
+
+  async function discardLatestDraft() {
+    const draft = availableDrafts[0];
+    if (!draft) {
+      closeDraftResumeDialog();
+      return;
+    }
+    setDraftResumeBusy(true);
+    try {
+      await discardWorkorderDraft(draft.id);
+      const remaining = availableDrafts.slice(1);
+      setAvailableDrafts(remaining);
+      setDraftResumeOpen(remaining.length > 0);
+      setDraftPromptDismissed(remaining.length === 0);
+      setOfficeCreateState({ busy: false, message: "Draft discarded." });
+    } catch (error) {
+      setOfficeCreateState({ busy: false, message: error.message });
+    } finally {
+      setDraftResumeBusy(false);
+    }
+  }
+
+  async function saveDraftAndLeave() {
+    setDraftLeaveBusy(true);
+    try {
+      await workorderDraft.flush();
+      workorderDraft.reset(null);
+      setResumedDraft(null);
+      finishOpenOfficeWorkspace();
+    } catch (error) {
+      setOfficeCreateState({ busy: false, message: error.message });
+    } finally {
+      setDraftLeaveBusy(false);
+    }
+  }
+
+  async function discardDraftAndLeave() {
+    setDraftLeaveBusy(true);
+    try {
+      await workorderDraft.discard();
+      setResumedDraft(null);
+      finishOpenOfficeWorkspace();
+    } catch (error) {
+      setOfficeCreateState({ busy: false, message: error.message });
+    } finally {
+      setDraftLeaveBusy(false);
+    }
   }
 
   function returnToRoleWorkspace() {
@@ -1363,9 +1520,23 @@ export function App({ actor }) {
               </button>
               <div>
                 <strong>Create workorder</strong>
-                <span>Office queue</span>
+                <DraftSaveStatus
+                  status={workorderDraft.status}
+                  error={workorderDraft.error}
+                  labels={{ dirty: "Draft changed" }}
+                  className="office-create-draft-status"
+                />
               </div>
               <div className="detail-context-actions">
+                <button
+                  className="detail-create-button"
+                  type="submit"
+                  form={CREATE_WORKORDER_FORM_ID}
+                  disabled={officeCreateState.busy}
+                >
+                  <Plus />
+                  <span>{officeCreateState.busy ? "Creating..." : "Create"}</span>
+                </button>
                 <PreviewToggle open={showEmbeddedPreview || previewFullscreen} onToggle={jumpToPreview} controls="workorder-preview-panel" />
               </div>
             </div>
@@ -1805,15 +1976,11 @@ export function App({ actor }) {
           range={range}
           printMenuOpen={printMenuOpen}
           onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-          onPrint={canPrint ? () => {
+          onPrint={canPrint && activeWorkorder ? () => {
             setPrintMenuOpen(false);
             printWorkorders();
           } : undefined}
           primaryActionLabel={primaryActionLabel}
-          batchSettings={canPrint && mode === "admin" && !activeWorkorder ? {
-            copies: form.copies,
-            onChange: updateField,
-          } : null}
           onFullscreen={openFullscreenPreview}
           onOpenPreview={isWorkorderDetail ? openFullscreenPreview : undefined}
           supportingContent={!isCompact && activeWorkorder ? workorderChatContent : undefined}
@@ -1844,12 +2011,38 @@ export function App({ actor }) {
         onClose={() => setPreviewFullscreen(false)}
         onPageChange={setFullscreenPageIndex}
         onZoomChange={setFullscreenZoom}
-        onPrint={canPrint ? () => {
+        onPrint={canPrint && activeWorkorder ? () => {
           setPreviewFullscreen(false);
           printWorkorders();
         } : undefined}
       />
       <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
+      <DraftResumeDialog
+        open={draftResumeOpen}
+        busy={draftResumeBusy}
+        draftLabel={
+          availableDrafts[0]?.payload?.formData?.unitNo
+          || availableDrafts[0]?.payload?.concern
+          || "Untitled workorder"
+        }
+        updatedAt={
+          availableDrafts[0]?.updatedAt
+            ? new Date(availableDrafts[0].updatedAt).toLocaleString()
+            : ""
+        }
+        onResume={resumeLatestDraft}
+        onDiscard={discardLatestDraft}
+        onClose={closeDraftResumeDialog}
+      />
+      <DraftLeaveDialog
+        open={draftLeaveOpen}
+        busy={draftLeaveBusy}
+        status={workorderDraft.status}
+        error={workorderDraft.error}
+        onStay={() => setDraftLeaveOpen(false)}
+        onDiscard={discardDraftAndLeave}
+        onSaveAndLeave={saveDraftAndLeave}
+      />
       {mechanicFinish.open ? (
         <div
           className="modal-backdrop"

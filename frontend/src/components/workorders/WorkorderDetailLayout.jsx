@@ -1,4 +1,5 @@
 import { Children, useEffect, useRef, useState } from "react";
+import "./workorder-detail-layout.css";
 
 const DETAIL_LAYOUT = Object.freeze({
   defaultPreviewPercent: 40,
@@ -7,17 +8,41 @@ const DETAIL_LAYOUT = Object.freeze({
   storageKey: "workorder.detailPreviewPercent.v2",
 });
 const CREATE_LAYOUT = Object.freeze({
-  defaultPreviewPercent: 40,
+  defaultPreviewPercent: 50,
   minControlWidth: 620,
   minPreviewWidth: 560,
-  storageKey: "workorder.createPreviewPercent.v2",
+  responsiveToLandscape: true,
+  storageKey: "workorder.createPreviewPercent.v3",
 });
 const RESIZER_WIDTH = 8;
+const WORKORDER_ASPECT_RATIO = 11 / 8.5;
+
+function defaultPreviewPercent(layout, width = 0) {
+  if (!layout.responsiveToLandscape || typeof window === "undefined" || !width) {
+    return layout.defaultPreviewPercent;
+  }
+  const paperFitWidth = Math.max(
+    layout.minPreviewWidth,
+    (window.innerHeight - 180) * WORKORDER_ASPECT_RATIO + 28,
+  );
+  const preferredWidth = Math.min(width * 0.5, paperFitWidth);
+  const minimum = (layout.minPreviewWidth / width) * 100;
+  const maximum = ((width - layout.minControlWidth - RESIZER_WIDTH) / width) * 100;
+  if (minimum > maximum) return layout.defaultPreviewPercent;
+  return clamp((preferredWidth / width) * 100, minimum, maximum);
+}
+
+function savedPreviewPercent(layout) {
+  if (typeof window === "undefined") return null;
+  const saved = Number(window.localStorage.getItem(layout.storageKey));
+  return Number.isFinite(saved) && saved > 0 ? saved : null;
+}
 
 function initialPreviewPercent(layout) {
-  if (typeof window === "undefined") return layout.defaultPreviewPercent;
-  const saved = Number(window.localStorage.getItem(layout.storageKey));
-  return Number.isFinite(saved) && saved > 0 ? saved : layout.defaultPreviewPercent;
+  const saved = savedPreviewPercent(layout);
+  if (saved) return saved;
+  const width = typeof window === "undefined" ? 0 : window.innerWidth - 48;
+  return defaultPreviewPercent(layout, width);
 }
 
 function clamp(value, minimum, maximum) {
@@ -29,15 +54,28 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
   const layout = detail ? DETAIL_LAYOUT : CREATE_LAYOUT;
   const [previewPercent, setPreviewPercent] = useState(() => initialPreviewPercent(layout));
   const [resizing, setResizing] = useState(false);
+  const userSizedRef = useRef(Boolean(savedPreviewPercent(layout)));
   const panes = Children.toArray(children);
+
+  function setUserPreviewPercent(nextValue) {
+    userSizedRef.current = true;
+    setPreviewPercent((current) => {
+      const next = typeof nextValue === "function" ? nextValue(current) : nextValue;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(layout.storageKey, String(next));
+      }
+      return next;
+    });
+  }
 
   function bounds() {
     const width = shellRef.current?.getBoundingClientRect().width || 0;
-    if (!width) return { minimum: layout.defaultPreviewPercent, maximum: layout.defaultPreviewPercent };
+    const fallback = defaultPreviewPercent(layout, width);
+    if (!width) return { minimum: fallback, maximum: fallback };
 
     const minimum = (layout.minPreviewWidth / width) * 100;
     const maximum = ((width - layout.minControlWidth - RESIZER_WIDTH) / width) * 100;
-    if (minimum > maximum) return { minimum: layout.defaultPreviewPercent, maximum: layout.defaultPreviewPercent };
+    if (minimum > maximum) return { minimum: fallback, maximum: fallback };
     return { minimum, maximum };
   }
 
@@ -46,7 +84,7 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
     if (!rect) return;
     const limits = bounds();
     const next = ((rect.right - clientX) / rect.width) * 100;
-    setPreviewPercent(clamp(next, limits.minimum, limits.maximum));
+    setUserPreviewPercent(clamp(next, limits.minimum, limits.maximum));
   }
 
   function startResize(event) {
@@ -61,11 +99,14 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
     event.preventDefault();
     const limits = bounds();
     if (event.key === "Home") {
-      setPreviewPercent(clamp(layout.defaultPreviewPercent, limits.minimum, limits.maximum));
+      userSizedRef.current = false;
+      window.localStorage.removeItem(layout.storageKey);
+      const width = shellRef.current?.getBoundingClientRect().width || 0;
+      setPreviewPercent(clamp(defaultPreviewPercent(layout, width), limits.minimum, limits.maximum));
       return;
     }
     const change = event.key === "ArrowLeft" ? 3 : -3;
-    setPreviewPercent((current) => clamp(current + change, limits.minimum, limits.maximum));
+    setUserPreviewPercent((current) => clamp(current + change, limits.minimum, limits.maximum));
   }
 
   useEffect(() => {
@@ -85,22 +126,29 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
   }, [resizing]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem(layout.storageKey, String(previewPercent));
-  }, [layout.storageKey, previewPercent]);
-
-  useEffect(() => {
-    setPreviewPercent(initialPreviewPercent(layout));
+    const saved = savedPreviewPercent(layout);
+    userSizedRef.current = Boolean(saved);
+    setPreviewPercent(saved || initialPreviewPercent(layout));
   }, [layout.storageKey]);
 
   useEffect(() => {
     const fitSavedWidth = () => {
       const limits = bounds();
-      setPreviewPercent((current) => clamp(current, limits.minimum, limits.maximum));
+      const width = shellRef.current?.getBoundingClientRect().width || 0;
+      setPreviewPercent((current) => {
+        const next = userSizedRef.current
+          ? clamp(current, limits.minimum, limits.maximum)
+          : clamp(defaultPreviewPercent(layout, width), limits.minimum, limits.maximum);
+        if (userSizedRef.current && typeof window !== "undefined") {
+          window.localStorage.setItem(layout.storageKey, String(next));
+        }
+        return next;
+      });
     };
     fitSavedWidth();
     window.addEventListener("resize", fitSavedWidth);
     return () => window.removeEventListener("resize", fitSavedWidth);
-  }, []);
+  }, [layout]);
 
   const limits = bounds();
   const effectivePercent = previewOpen ? clamp(previewPercent, limits.minimum, limits.maximum) : 0;
@@ -131,7 +179,14 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
           onKeyDown={resizeWithKeyboard}
           onDoubleClick={() => {
             const currentBounds = bounds();
-            setPreviewPercent(clamp(layout.defaultPreviewPercent, currentBounds.minimum, currentBounds.maximum));
+            const width = shellRef.current?.getBoundingClientRect().width || 0;
+            userSizedRef.current = false;
+            window.localStorage.removeItem(layout.storageKey);
+            setPreviewPercent(clamp(
+              defaultPreviewPercent(layout, width),
+              currentBounds.minimum,
+              currentBounds.maximum,
+            ));
           }}
         >
           <span />

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  ActionFooter,
   CustomerCompanyField,
   FormCard,
   FormErrorSummary,
@@ -13,6 +12,8 @@ import {
 } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { AssetLocationCard } from "../../components/workorders/AssetLocationCard.jsx";
+
+export const CREATE_WORKORDER_FORM_ID = "create-workorder-form";
 
 export function CreateWorkorderForm({
   assignment,
@@ -40,8 +41,15 @@ export function CreateWorkorderForm({
   const mechanics = assignment?.mechanics || [];
 
   return (
-    <OperationalForm className="create-workorder-form" busy={busy} onSubmit={onSubmit} noValidate>
+    <OperationalForm
+      id={CREATE_WORKORDER_FORM_ID}
+      className="create-workorder-form"
+      busy={busy}
+      onSubmit={onSubmit}
+      noValidate
+    >
       <FormErrorSummary errors={errors} focusOnMount title="Check the workorder details" />
+      {message ? <p className="create-workorder-form-message" role="status">{message}</p> : null}
 
       <FormCard
         className="create-workorder-card"
@@ -252,11 +260,6 @@ export function CreateWorkorderForm({
         </OptionalSection>
       </FormCard>
 
-      <ActionFooter message={message} stickyOnMobile>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? "Creating..." : "Create workorder"}
-        </Button>
-      </ActionFooter>
     </OperationalForm>
   );
 }

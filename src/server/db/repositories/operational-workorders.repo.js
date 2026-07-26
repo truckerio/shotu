@@ -314,78 +314,83 @@ async function addFieldEvents(client, { workorderId, changes, changedByUserId })
   }
 }
 
+export async function createOperationalWorkorderInTransaction(input, client) {
+  const companyId = input.companyId || DEFAULT_COMPANY_ID;
+  const mechanicUserIds = [...new Set(input.mechanicUserIds || [])];
+  await validateInitialMechanics(client, {
+    mechanicUserIds,
+    companyId,
+    locationId: input.locationId || null,
+  });
+  const assetOwnerResult = input.assetId
+    ? await client.query(
+      "select owner_name from assets where id = $1 and company_id = $2",
+      [input.assetId, companyId],
+    )
+    : { rows: [] };
+  const formData = normalizeWorkorderFormData(input.formData, {
+    assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
+  });
+  const reservation = await reserveWorkorderSerials({ companyId, count: 1 }, client);
+  const serial = reservation.serials[0];
+  const result = await client.query(
+    `
+      insert into operational_workorders (
+        company_id, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      returning id, status
+    `,
+    [
+      companyId,
+      serial,
+      input.assetId || null,
+      input.locationId || null,
+      input.createdByUserId || null,
+      input.concern,
+      input.officeNotes || "",
+      JSON.stringify(formData),
+    ]
+  );
+  await addStatusEvent(client, {
+    workorderId: result.rows[0].id,
+    toStatus: result.rows[0].status,
+    changedByUserId: input.createdByUserId,
+    note: "Workorder created.",
+  });
+  if (mechanicUserIds.length) {
+    await addInitialMechanicAssignments(client, {
+      workorderId: result.rows[0].id,
+      mechanicUserIds,
+      assignedByUserId: input.createdByUserId,
+    });
+    await client.query(
+      `update operational_workorders
+          set status = $2, accepted_at = now(), updated_at = now()
+        where id = $1`,
+      [result.rows[0].id, WORKORDER_STATUS.ACCEPTED],
+    );
+    await addStatusEvent(client, {
+      workorderId: result.rows[0].id,
+      fromStatus: result.rows[0].status,
+      toStatus: WORKORDER_STATUS.ACCEPTED,
+      changedByUserId: input.createdByUserId,
+      note: INITIAL_ASSIGNMENT_REASON,
+    });
+  }
+  return { id: result.rows[0].id, serial };
+}
+
 export async function createOperationalWorkorder(input) {
   const pool = getPool();
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const companyId = input.companyId || DEFAULT_COMPANY_ID;
-    const mechanicUserIds = [...new Set(input.mechanicUserIds || [])];
-    await validateInitialMechanics(client, {
-      mechanicUserIds,
-      companyId,
-      locationId: input.locationId || null,
-    });
-    const assetOwnerResult = input.assetId
-      ? await client.query(
-        "select owner_name from assets where id = $1 and company_id = $2",
-        [input.assetId, companyId],
-      )
-      : { rows: [] };
-    const formData = normalizeWorkorderFormData(input.formData, {
-      assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
-    });
-    const reservation = await reserveWorkorderSerials({ companyId, count: 1 }, client);
-    const serial = reservation.serials[0];
-    const result = await client.query(
-      `
-        insert into operational_workorders (
-          company_id, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-        returning id, status
-      `,
-      [
-        companyId,
-        serial,
-        input.assetId || null,
-        input.locationId || null,
-        input.createdByUserId || null,
-        input.concern,
-        input.officeNotes || "",
-        JSON.stringify(formData),
-      ]
-    );
-    await addStatusEvent(client, {
-      workorderId: result.rows[0].id,
-      toStatus: result.rows[0].status,
-      changedByUserId: input.createdByUserId,
-      note: "Workorder created.",
-    });
-    if (mechanicUserIds.length) {
-      await addInitialMechanicAssignments(client, {
-        workorderId: result.rows[0].id,
-        mechanicUserIds,
-        assignedByUserId: input.createdByUserId,
-      });
-      await client.query(
-        `update operational_workorders
-            set status = $2, accepted_at = now(), updated_at = now()
-          where id = $1`,
-        [result.rows[0].id, WORKORDER_STATUS.ACCEPTED],
-      );
-      await addStatusEvent(client, {
-        workorderId: result.rows[0].id,
-        fromStatus: result.rows[0].status,
-        toStatus: WORKORDER_STATUS.ACCEPTED,
-        changedByUserId: input.createdByUserId,
-        note: INITIAL_ASSIGNMENT_REASON,
-      });
-    }
+    const created = await createOperationalWorkorderInTransaction(input, client);
     await client.query("commit");
-    return getOperationalWorkorderById(result.rows[0].id);
+    return getOperationalWorkorderById(created.id);
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => {});
     throw error;
   } finally {
     client.release();

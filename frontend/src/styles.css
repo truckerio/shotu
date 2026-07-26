@@ -1112,6 +1112,10 @@ body.is-resizing-workorder {
   font-weight: var(--weight-medium);
 }
 
+.office-create-nav .draft-save-status {
+  margin-top: 0;
+}
+
 .mechanic-action-message {
   color: #344054;
   font-size: var(--text-secondary);
@@ -4686,14 +4690,14 @@ textarea:focus {
 @media (min-width: 1800px) {
   .create-workorder-form {
     align-items: start;
-    column-gap: 16px;
     display: grid;
+    gap: 16px;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     max-width: 1320px;
   }
 
   .create-workorder-form > .operational-form-error-summary,
-  .create-workorder-form > .operational-action-footer {
+  .create-workorder-form > .create-workorder-form-message {
     grid-column: 1 / -1;
   }
 
@@ -4715,9 +4719,11 @@ textarea:focus {
     grid-row: span 2;
   }
 
-  .create-workorder-form > .operational-action-footer {
-    margin-top: 8px;
-  }
+}
+
+.create-workorder-form-message {
+  color: #475467;
+  margin: 0;
 }
 
 .workorder-detail-page .accordion-stack {
