@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { Camera01, Send01, XClose } from "@untitledui/icons";
+import { ArrowUp, Plus, XClose } from "@untitledui/icons";
 
 const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -162,13 +162,19 @@ export function ChatComposer({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy}
+          aria-label={readingImage ? "Loading photo" : cameraLabel}
+          title={readingImage ? "Loading photo" : cameraLabel}
         >
-          <Camera01 aria-hidden="true" />
-          <span>{readingImage ? "Loading photo" : cameraLabel}</span>
+          <Plus aria-hidden="true" />
         </button>
-        <button className="chat-send-button" type="submit" disabled={!canSend}>
-          <Send01 aria-hidden="true" />
-          <span>{sending ? "Sending" : sendLabel}</span>
+        <button
+          className="chat-send-button"
+          type="submit"
+          disabled={!canSend}
+          aria-label={sending ? "Sending message" : sendLabel}
+          title={sending ? "Sending message" : sendLabel}
+        >
+          <ArrowUp aria-hidden="true" />
         </button>
       </div>
     </form>

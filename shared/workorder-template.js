@@ -1,5 +1,42 @@
 export const emptyPart = () => ({ partNo: "", qty: "", repairOrder: "" });
 
+function trimmedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Resolve the customer/unit-owner snapshot without consulting tenant or location data.
+ *
+ * `customerCompanyName` is the canonical workorder snapshot. An explicitly present
+ * canonical key, including an empty string, is authoritative so legacy adapters
+ * cannot replace it with a repair location. `companyName` remains a read-only
+ * compatibility source for workorders created before the canonical key existed.
+ */
+export function resolveCustomerCompanyName(formData = {}, assetOwnerName = "") {
+  const source = formData && typeof formData === "object" ? formData : {};
+  if (Object.prototype.hasOwnProperty.call(source, "customerCompanyName")) {
+    return trimmedText(source.customerCompanyName);
+  }
+  return trimmedText(source.companyName) || trimmedText(assetOwnerName);
+}
+
+/**
+ * Return printable workorder form data with an explicit customer snapshot.
+ *
+ * Asset owner is master data and is used only to initialize/read a missing snapshot.
+ * Once present, the workorder snapshot wins so later asset-owner changes do not
+ * rewrite historical workorders.
+ */
+export function normalizeWorkorderFormData(formData = {}, { assetOwnerName = "" } = {}) {
+  const source = formData && typeof formData === "object" && !Array.isArray(formData)
+    ? formData
+    : {};
+  return {
+    ...source,
+    customerCompanyName: resolveCustomerCompanyName(source, assetOwnerName),
+  };
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -302,6 +339,7 @@ export const workorderTemplateStyles = `
 
 export function renderWorkorderPageHtml(form, serial) {
   const rows = partRows(form);
+  const customerCompanyName = resolveCustomerCompanyName(form, form?.assetOwnerName);
   return `
     <article class="workorder-page">
       <header class="wo-title">${escapeHtml(form.headerTitle || "CHINO YARD WORKORDER")}</header>
@@ -322,7 +360,7 @@ export function renderWorkorderPageHtml(form, serial) {
           <div class="wo-detail"><span class="wo-label">Invoice No:</span><strong class="wo-value">${escapeHtml(serial)}</strong></div>
           <div class="wo-detail"><span class="wo-label">Model:</span><strong class="wo-value">${escapeHtml(form.model)}</strong></div>
           <div class="wo-detail wo-detail-wide"><span class="wo-label">Vin No:</span><strong class="wo-value">${escapeHtml(form.vinNo)}</strong></div>
-          <div class="wo-detail wo-detail-wide"><span class="wo-label">Company Name:</span><strong class="wo-value">${escapeHtml(form.companyName)}</strong></div>
+          <div class="wo-detail wo-detail-wide"><span class="wo-label">Customer Company:</span><strong class="wo-value">${escapeHtml(customerCompanyName)}</strong></div>
         </div>
       </section>
       <section class="wo-mechanic">

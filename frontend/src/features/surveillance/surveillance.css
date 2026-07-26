@@ -80,7 +80,10 @@
 
 .surveillance-odoo-panel { border-left: 1px solid #e4e7ec; padding-left: 24px; }
 .surveillance-odoo-panel form { display: grid; gap: 16px; position: sticky; top: 24px; }
-.surveillance-odoo-panel h2 { margin: 0; font-size: var(--text-heading); font-weight: var(--weight-semibold); }
+.surveillance-odoo-panel h2,
+.surveillance-progress-state h2 { margin: 0; font-size: var(--text-heading); font-weight: var(--weight-semibold); }
+.surveillance-progress-state { display: grid; gap: 8px; position: sticky; top: 24px; }
+.surveillance-progress-state p { color: #475467; font-size: var(--text-body); line-height: var(--leading-body); margin: 0; }
 .surveillance-odoo-panel label { display: grid; gap: 6px; }
 .surveillance-odoo-panel input,
 .surveillance-odoo-panel textarea {

@@ -6,12 +6,24 @@ import { ChatComposer } from "../components/workorders/ChatComposer.jsx";
 import { ChatThread } from "../components/workorders/ChatThread.jsx";
 import { PartRequestsPanel } from "../components/workorders/PartRequestsPanel.jsx";
 import { WorkorderDetailLayout } from "../components/workorders/WorkorderDetailLayout.jsx";
+import {
+  ProgressiveWorkorderSection,
+  WorkorderObjectSummary,
+  WorkorderSectionNav,
+} from "../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderTimelinePanel } from "../components/workorders/WorkorderTimeline.jsx";
 import { WorkorderStatusPill } from "../components/workorders/WorkorderStatusPill.jsx";
+import {
+  CustomerCompanyField,
+  FormField as OperationalFormField,
+  FormSection,
+  MechanicMultiSelect,
+} from "../components/forms/index.js";
 import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview, satelliteTiles } from "../features/generator/GeneratorUi.jsx";
+import { CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
 import { emptyPart, workDateRangeLabel, workorderTemplateStyles } from "../../../shared/workorder-template.js";
@@ -50,6 +62,18 @@ function uniqueExactVehicleMatch(vehicles, query) {
   if (!normalizedQuery) return null;
   const matches = vehicles.filter((vehicle) => vehicleLookupValues(vehicle).includes(normalizedQuery));
   return matches.length === 1 ? matches[0] : null;
+}
+
+function defaultDetailSection(role, status, compact = false) {
+  if (compact && ["waiting_office", "parts_requested"].includes(status)) return "chat";
+  if (role === "mechanic") return "work";
+  if (status === "open") return "team";
+  return "work";
+}
+
+function defaultSupportingView(role, status) {
+  if (role === "mechanic" || ["waiting_office", "parts_requested"].includes(status)) return "chat";
+  return "preview";
 }
 
 function AssetLocationCard({
@@ -173,21 +197,23 @@ export function App({ actor }) {
   const [activeWorkorder, setActiveWorkorder] = useState(null);
   const [mechanicAction, setMechanicAction] = useState({ busy: "", message: "" });
   const [mechanicFinish, setMechanicFinish] = useState({ open: false, name: "", message: "" });
-  const [mechanicTruckDetailsOpen, setMechanicTruckDetailsOpen] = useState(false);
   const [officeCloseOpen, setOfficeCloseOpen] = useState(false);
   const [officeCloseNote, setOfficeCloseNote] = useState("");
   const [officeAssignment, setOfficeAssignment] = useState({ mechanicUserIds: [], reason: "" });
+  const [createAssignment, setCreateAssignment] = useState({ mechanicUserIds: [], mechanics: [], loading: false });
   const [previewPanelOpen, setPreviewPanelOpen] = useState(true);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [isPhone, setIsPhone] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 700px)").matches));
   const [isCompact, setIsCompact] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 1180px)").matches));
-  const [openSection, setOpenSection] = useState("vehicle");
+  const [detailSection, setDetailSection] = useState("work");
+  const [supportingView, setSupportingView] = useState("preview");
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [printState, setPrintState] = useState({ open: false, stage: "idle", message: "" });
   const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
   const [officeCreateState, setOfficeCreateState] = useState({ busy: false, message: "" });
+  const [officeCreateErrors, setOfficeCreateErrors] = useState({});
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [samsaraIntegration, setSamsaraIntegration] = useState({ loading: true, connected: false, authType: "none" });
@@ -198,7 +224,8 @@ export function App({ actor }) {
   const [detailStatus, setDetailStatus] = useState("open");
   const [detailSource, setDetailSource] = useState(null);
   const [form, setForm] = useState({
-    companyName: "Chino Yard",
+    companyName: "",
+    customerCompanyName: "",
     locationId: actor.locationIds?.[0] || "",
     headerTitle: "CHINO YARD WORKORDER",
     brandTop: "PRO TEC",
@@ -220,6 +247,8 @@ export function App({ actor }) {
     model: "",
     vinNo: "",
     mechanicConcern: "",
+    diagnosis: "",
+    workPerformed: "",
     mechanicName: "",
     startTime: "",
     endTime: "",
@@ -287,6 +316,43 @@ export function App({ actor }) {
   const mechanicMapLocation = vehicleLocation(mechanicMapVehicle);
   const assignedMechanicIds = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.id)
     || (activeWorkorder?.workorder?.mechanic?.id ? [activeWorkorder.workorder.mechanic.id] : []);
+  const detailMechanicNames = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
+    || activeWorkorder?.workorder?.mechanic?.name
+    || form.mechanicName;
+  const detailLocationName = activeWorkorder?.workorder?.location?.name
+    || officeLocations.find((entry) => entry.location.id === form.locationId)?.location?.name
+    || "";
+  const pendingPartCount = (activeWorkorder?.partRequests || []).filter((request) => !["approved", "rejected", "cancelled"].includes(request.status)).length;
+  const detailSections = useMemo(() => {
+    if (!activeWorkorder) return [];
+    const common = [{ id: "work", label: isMechanicDetail ? "Work" : "Review" }];
+    if (isCompact) {
+      common.push({
+        id: "chat",
+        label: "Chat",
+        count: conversationMessages.length || undefined,
+        attention: ["waiting_office", "parts_requested"].includes(detailStatus),
+      });
+    }
+    common.push(
+      { id: "parts", label: "Parts", count: pendingPartCount || filledPartCount || undefined, attention: pendingPartCount > 0 },
+      { id: "unit", label: form.unitType || "Unit" },
+    );
+    if (isOfficeDetail) common.push({ id: "team", label: "Team", count: assignedMechanicIds.length || undefined, attention: !assignedMechanicIds.length });
+    common.push({ id: "activity", label: "Activity", count: activeWorkorder.timeline?.length || undefined });
+    return common;
+  }, [
+    activeWorkorder,
+    assignedMechanicIds.length,
+    conversationMessages.length,
+    detailStatus,
+    filledPartCount,
+    form.unitType,
+    isCompact,
+    isMechanicDetail,
+    isOfficeDetail,
+    pendingPartCount,
+  ]);
   const officeAssignmentChanged = [...officeAssignment.mechanicUserIds].sort().join(",")
     !== [...assignedMechanicIds].sort().join(",");
   const expectedMechanicName = activeWorkorder?.user?.name || actor.name || "";
@@ -323,7 +389,7 @@ export function App({ actor }) {
   }, [activeWorkorder, canPrint, form.locationId]);
 
   useEffect(() => {
-    if (actor.role !== "office") return;
+    if (!["office", "admin"].includes(actor.role)) return;
     api("/api/office/template")
       .then(({ location, template, locations }) => {
         setOfficeLocations(locations || []);
@@ -331,7 +397,6 @@ export function App({ actor }) {
         setForm((current) => ({
           ...current,
           locationId: location.id,
-          companyName: location.name,
           ...(template ? {
             headerTitle: template.header_title,
             brandTop: template.brand_top,
@@ -345,13 +410,33 @@ export function App({ actor }) {
       .catch(() => {});
   }, [actor.role]);
 
+  useEffect(() => {
+    if (activeWorkorder || !["office", "admin"].includes(actor.role) || !form.locationId) {
+      setCreateAssignment((current) => ({ ...current, mechanics: [], loading: false }));
+      return;
+    }
+    let cancelled = false;
+    setCreateAssignment((current) => ({ ...current, mechanicUserIds: [], loading: true }));
+    api(`/api/office/locations/${encodeURIComponent(form.locationId)}/mechanics`)
+      .then(({ mechanics }) => {
+        if (!cancelled) {
+          setCreateAssignment({ mechanicUserIds: [], mechanics: mechanics || [], loading: false });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCreateAssignment({ mechanicUserIds: [], mechanics: [], loading: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkorder, actor.role, form.locationId]);
+
   function selectOfficeLocation(locationId) {
     const selected = officeLocations.find((entry) => entry.location.id === locationId);
     if (!selected) return;
     setForm((current) => ({
       ...current,
       locationId: selected.location.id,
-      companyName: selected.location.name,
       ...(selected.template ? {
         headerTitle: selected.template.header_title,
         brandTop: selected.template.brand_top,
@@ -406,7 +491,8 @@ export function App({ actor }) {
         setDetailSource("office");
         setMode("admin");
         setDetailStatus(detail.workorder.status);
-        setOpenSection("chat");
+        setDetailSection(defaultDetailSection(actor.role, detail.workorder.status, isCompact));
+        setSupportingView(defaultSupportingView(actor.role, detail.workorder.status));
         setForm((current) => workorderFormValues(detail, current));
       })
       : actor.role === "mechanic"
@@ -438,6 +524,12 @@ export function App({ actor }) {
   }, []);
 
   useEffect(() => {
+    if (!activeWorkorder || isCompact || detailSection !== "chat") return;
+    setSupportingView("chat");
+    setDetailSection(defaultDetailSection(actor.role, detailStatus, false));
+  }, [activeWorkorder, actor.role, detailSection, detailStatus, isCompact]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const samsara = params.get("samsara");
     if (!samsara) return;
@@ -450,14 +542,6 @@ export function App({ actor }) {
     }
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
-
-  useEffect(() => {
-    setOpenSection((current) => {
-      if (mode === "mechanic" && (current === "print" || current === "header" || current === "disclaimer" || !current)) return "vehicle";
-      if (mode === "admin" && (current === "print" || !current)) return "vehicle";
-      return current;
-    });
-  }, [mode]);
 
   useEffect(() => {
     setFullscreenPageIndex((current) => Math.min(current, Math.max(0, effectiveCopies - 1)));
@@ -644,7 +728,7 @@ export function App({ actor }) {
     const modelText = vehicleModelText(vehicle);
     setForm((current) => ({
       ...current,
-      companyName: vehicle.owner_name || current.companyName,
+      customerCompanyName: vehicle.owner_name || current.customerCompanyName,
       unitNo: vehicle.unit_no || vehicle.name || current.unitNo,
       unitType: vehicle.unit_type || current.unitType,
       licenseNo: vehicle.license_plate || current.licenseNo,
@@ -693,7 +777,8 @@ export function App({ actor }) {
       setPrintState({ open: true, stage: "rendering", message: pageCount === 1 ? "Preparing one workorder." : `Preparing ${pageCount} unique workorders.`, pageCount });
       setPrintState({ open: true, stage: "printing", message: "Creating the archived PDF.", pageCount });
       const printableForm = {
-        companyName: form.companyName,
+        companyName: form.customerCompanyName,
+        customerCompanyName: form.customerCompanyName,
         headerTitle: form.headerTitle,
         brandTop: form.brandTop,
         brandBottom: form.brandBottom,
@@ -723,7 +808,7 @@ export function App({ actor }) {
         body: JSON.stringify({
           workorderId: activeWorkorder?.workorder?.id || null,
           locationId: form.locationId || activeWorkorder?.workorder?.locationId || null,
-          companyName: form.companyName,
+          companyName: form.customerCompanyName,
           count: effectiveCopies,
           form: printableForm,
         }),
@@ -757,13 +842,21 @@ export function App({ actor }) {
     }
   }
 
-  async function createOfficeWorkorder() {
+  async function createOfficeWorkorder(event) {
+    event?.preventDefault?.();
     const concern = form.mechanicConcern.trim();
-    if (!concern) {
-      setOfficeCreateState({ busy: false, message: "Mechanic concern is required before sending work to the queue." });
-      setOpenSection("vehicle");
+    const errors = {
+      ...(!form.locationId ? { locationId: "Select the repair location." } : {}),
+      ...(!form.unitNo.trim() ? { unitNo: "Enter or select the unit." } : {}),
+      ...(!form.customerCompanyName.trim() ? { customerCompanyName: "Enter the company that owns or operates this unit." } : {}),
+      ...(!concern ? { mechanicConcern: "Describe what needs to be inspected or repaired." } : {}),
+    };
+    if (Object.keys(errors).length) {
+      setOfficeCreateErrors(errors);
+      setOfficeCreateState({ busy: false, message: "Fix the highlighted fields before creating the workorder." });
       return;
     }
+    setOfficeCreateErrors({});
     setOfficeCreateState({ busy: true, message: "Creating workorder..." });
     try {
       const result = await api("/api/office/workorders", {
@@ -774,8 +867,10 @@ export function App({ actor }) {
           assetId: selectedVehicle?.id || null,
           concern,
           officeNotes: "",
+          mechanicUserIds: createAssignment.mechanicUserIds,
           formData: {
-            companyName: form.companyName,
+            companyName: form.customerCompanyName,
+            customerCompanyName: form.customerCompanyName,
             headerTitle: form.headerTitle,
             brandTop: form.brandTop,
             brandBottom: form.brandBottom,
@@ -802,8 +897,13 @@ export function App({ actor }) {
           },
         }),
       });
-      setOfficeCreateState({ busy: false, message: `${result.workorder.serial} sent to mechanic available queue.` });
-      setWorkspace("office");
+      setOfficeCreateState({
+        busy: false,
+        message: createAssignment.mechanicUserIds.length
+          ? `${result.workorder.serial} created and assigned.`
+          : `${result.workorder.serial} added to the available queue.`,
+      });
+      setWorkspace(actor.role === "admin" ? "admin" : "office");
       window.history.replaceState({}, "", window.location.pathname);
     } catch (error) {
       setOfficeCreateState({ busy: false, message: error.message });
@@ -828,7 +928,9 @@ export function App({ actor }) {
       ...savedForm,
       ...serial,
       copies: 1,
-      companyName: savedForm.companyName || workorder.location?.name || current.companyName,
+      locationId: workorder.locationId || workorder.location?.id || current.locationId,
+      companyName: savedForm.customerCompanyName || savedForm.companyName || asset.ownerName || asset.owner_name || "",
+      customerCompanyName: savedForm.customerCompanyName || savedForm.companyName || asset.ownerName || asset.owner_name || "",
       unitNo: savedForm.unitNo || asset.unitNo || asset.name || "",
       unitType: savedForm.unitType || asset.unitType || "",
       licenseNo: savedForm.licenseNo || asset.licensePlate || "",
@@ -836,6 +938,8 @@ export function App({ actor }) {
       model: savedForm.model || model,
       vinNo: savedForm.vinNo || asset.vin || "",
       mechanicConcern: savedForm.mechanicConcern || workorder.concern || "",
+      diagnosis: workorder.diagnosis || savedForm.diagnosis || "",
+      workPerformed: workorder.workPerformed || savedForm.workPerformed || "",
       mechanicName: assignedMechanicName || savedForm.mechanicName,
       officeNotes: workorder.officeNotes || savedForm.officeNotes || "",
       parts: savedParts,
@@ -845,7 +949,6 @@ export function App({ actor }) {
   function openOperationalWorkorder(detail) {
     const workorder = detail.workorder;
     mechanicLocationRefreshRef.current = "";
-    setMechanicTruckDetailsOpen(false);
     setActiveWorkorder(detail);
     setPreviewPanelOpen(true);
     setDetailSource("mechanic");
@@ -853,7 +956,8 @@ export function App({ actor }) {
     setDetailStatus(workorder.status);
     setSelectedVehicle(workorder.asset || null);
     setMechanicAction({ busy: "", message: "" });
-    setOpenSection("chat");
+    setDetailSection(defaultDetailSection("mechanic", workorder.status, isCompact));
+    setSupportingView(defaultSupportingView("mechanic", workorder.status));
     setForm((current) => workorderFormValues(detail, current));
     setWorkspace("generator");
     window.history.replaceState({}, "", `${window.location.pathname}?workorder=${encodeURIComponent(workorder.id)}`);
@@ -878,7 +982,8 @@ export function App({ actor }) {
       setDetailSource("office");
       setMode("admin");
       setDetailStatus(workorder.status);
-      setOpenSection("chat");
+      setDetailSection(defaultDetailSection(actor.role, workorder.status, isCompact));
+      setSupportingView(defaultSupportingView(actor.role, workorder.status));
       setForm((current) => workorderFormValues(detail, current));
       setWorkspace("generator");
       setOfficeDetailState({ busy: false, message: "" });
@@ -894,7 +999,8 @@ export function App({ actor }) {
     try {
       const formData = {
         ...(activeWorkorder.workorder.formData || {}),
-        companyName: form.companyName,
+        companyName: form.customerCompanyName,
+        customerCompanyName: form.customerCompanyName,
         headerTitle: form.headerTitle,
         brandTop: form.brandTop,
         brandBottom: form.brandBottom,
@@ -922,6 +1028,8 @@ export function App({ actor }) {
       const result = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`, {
         method: "PATCH",
         body: JSON.stringify({
+          assetId: selectedVehicle?.id || activeWorkorder.workorder.asset?.id || null,
+          locationId: form.locationId || activeWorkorder.workorder.locationId || null,
           concern: form.mechanicConcern,
           officeNotes: form.officeNotes || "",
           formData,
@@ -952,7 +1060,7 @@ export function App({ actor }) {
       setForm((current) => workorderFormValues(detail, current));
       setOfficeCloseOpen(false);
       setOfficeCloseNote("");
-      setOfficeDetailState({ busy: false, message: "Workorder closed." });
+      setOfficeDetailState({ busy: false, message: "Workorder approved and sent to surveillance." });
     } catch (error) {
       setOfficeDetailState({ busy: false, message: error.message });
     }
@@ -993,10 +1101,38 @@ export function App({ actor }) {
 
   function openOfficeGenerator() {
     setActiveWorkorder(null);
+    setSelectedVehicle(null);
+    setVehicleLookup({ loading: false, status: "", results: [] });
+    setForm((current) => ({
+      ...current,
+      customerCompanyName: "",
+      unitNo: "",
+      unitType: "",
+      licenseNo: "",
+      mileage: "",
+      model: "",
+      vinNo: "",
+      mechanicConcern: "",
+      diagnosis: "",
+      workPerformed: "",
+      mechanicName: "",
+      startTime: "",
+      endTime: "",
+      managerName: "",
+      officeNotes: "",
+      customerSignature: "",
+      authorizedBy: "",
+      workDate: todayIso(),
+      workStartDate: todayIso(),
+      workEndDate: todayIso(),
+      parts: [emptyPart(), emptyPart(), emptyPart()],
+    }));
     setPreviewPanelOpen(true);
     setDetailSource(null);
     setMode("admin");
-    setOpenSection("vehicle");
+    setOfficeCreateErrors({});
+    setOfficeCreateState({ busy: false, message: "" });
+    setCreateAssignment((current) => ({ ...current, mechanicUserIds: [] }));
     setWorkspace("generator");
     window.history.replaceState({}, "", `${window.location.pathname}?view=create`);
   }
@@ -1113,19 +1249,29 @@ export function App({ actor }) {
     };
   }, [activeWorkorder?.workorder?.id, mode]);
 
+  async function saveMechanicWorkNotes() {
+    if (!activeWorkorder?.workorder?.id || !isMechanicDetail) return;
+    await runMechanicAction(
+      "notes",
+      (detail) => api(`/api/mechanic/workorders/${detail.workorder.id}/notes`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          diagnosis: form.diagnosis,
+          workPerformed: form.workPerformed,
+        }),
+      }),
+      "Work details saved.",
+    );
+  }
+
   function markMechanicWorkDone(confirmationName) {
-    const repairOrders = form.parts
-      .map((part) => String(part.repairOrder || "").trim())
-      .filter(Boolean)
-      .filter((value, index, values) => values.indexOf(value) === index)
-      .join("\n");
     return runMechanicAction(
       "done",
       (detail) => api(`/api/mechanic/workorders/${detail.workorder.id}/mark-done`, {
         method: "POST",
         body: JSON.stringify({
-          diagnosis: form.mechanicConcern,
-          workPerformed: repairOrders,
+          diagnosis: form.diagnosis,
+          workPerformed: form.workPerformed,
           confirmationName,
         }),
       }),
@@ -1135,6 +1281,13 @@ export function App({ actor }) {
 
   async function submitMechanicFinish(event) {
     event.preventDefault();
+    if (!form.workPerformed.trim()) {
+      setMechanicFinish((current) => ({
+        ...current,
+        message: "Add the work performed before finishing this workorder.",
+      }));
+      return;
+    }
     if (!mechanicFinishNameMatches) {
       setMechanicFinish((current) => ({
         ...current,
@@ -1146,12 +1299,13 @@ export function App({ actor }) {
     if (finished) setMechanicFinish({ open: false, name: "", message: "" });
   }
 
-  function toggleSection(section) {
-    setOpenSection((current) => (current === section ? "" : section));
-  }
-
   function openMechanicSection(section) {
-    setOpenSection(section);
+    if (section === "chat" && !isCompact) {
+      setSupportingView("chat");
+      setPreviewPanelOpen(true);
+      return;
+    }
+    setDetailSection(section);
     window.requestAnimationFrame(() => {
       document.getElementById(`mechanic-${section}-section`)?.scrollIntoView({
         behavior: "smooth",
@@ -1167,10 +1321,33 @@ export function App({ actor }) {
       setPreviewFullscreen(true);
       return;
     }
+    if (supportingView !== "preview" || !previewPanelOpen) {
+      setSupportingView("preview");
+      setPreviewPanelOpen(true);
+      return;
+    }
     setPreviewPanelOpen((open) => {
       if (open) setPrintMenuOpen(false);
       return !open;
     });
+  }
+
+  function toggleWorkorderTools() {
+    if (isCompact) {
+      jumpToPreview();
+      return;
+    }
+    setPreviewPanelOpen((open) => !open);
+    setPrintMenuOpen(false);
+  }
+
+  function selectDetailSection(section) {
+    if (section === "chat" && !isCompact) {
+      setSupportingView("chat");
+      setPreviewPanelOpen(true);
+      return;
+    }
+    setDetailSection(section);
   }
 
   function openFullscreenPreview() {
@@ -1179,6 +1356,23 @@ export function App({ actor }) {
     setFullscreenZoom(isPhone ? 0 : 1);
     setPreviewFullscreen(true);
   }
+
+  const workorderChatContent = activeWorkorder ? (
+    <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className="chat-content">
+      <ChatThread messages={conversationMessages} currentRole={isOfficeDetail ? "office" : "mechanic"} currentUserId={actor.id} />
+      <ChatComposer
+        onSend={sendWorkorderChat}
+        disabled={isMechanicDetail && !activeWorkorder.allowedActions.sendMessage}
+        sending={mechanicAction.busy === "chat"}
+        placeholder={isOfficeDetail ? "Message mechanic..." : "Type a message to office..."}
+        textareaLabel={isOfficeDetail ? "Message mechanic" : "Message office"}
+        cameraLabel={isOfficeDetail ? "Take or add photo" : "Take photo"}
+        sendLabel="Send"
+        compact={isMechanicDetail}
+      />
+      {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
+    </div>
+  ) : null;
 
   if (routeLoading) {
     return (
@@ -1254,21 +1448,30 @@ export function App({ actor }) {
                       setOfficeCloseOpen(true);
                     }}
                     disabled={officeDetailState.busy}
-                    aria-label="Close workorder"
-                    title="Close workorder"
+                    aria-label="Approve workorder"
+                    title="Approve workorder"
                   >
                     <CheckCircle />
-                    <span>Close</span>
+                    <span>Approve</span>
                   </button>
                 ) : null}
-                {!isMechanicDetail ? (
-                  <PreviewToggle open={showEmbeddedPreview || previewFullscreen} onToggle={jumpToPreview} controls="workorder-preview-panel" />
-                ) : null}
+                <PreviewToggle
+                  open={showEmbeddedPreview || previewFullscreen}
+                  onToggle={toggleWorkorderTools}
+                  controls="workorder-preview-panel"
+                  openLabel="Open workorder tools"
+                  closeLabel="Close workorder tools"
+                />
               </div>
             </div>
           ) : (
             <div className="detail-context-bar office-create-nav">
-              <button type="button" onClick={openOfficeWorkspace} aria-label="Back to Office" title="Back to Office">
+              <button
+                type="button"
+                onClick={openOfficeWorkspace}
+                aria-label={actor.role === "admin" ? "Back to Operations" : "Back to Office"}
+                title={actor.role === "admin" ? "Back to Operations" : "Back to Office"}
+              >
                 <ArrowLeft />
               </button>
               <div>
@@ -1276,16 +1479,6 @@ export function App({ actor }) {
                 <span>Office queue</span>
               </div>
               <div className="detail-context-actions">
-                <button
-                  className="detail-create-button"
-                  type="button"
-                  onClick={createOfficeWorkorder}
-                  disabled={officeCreateState.busy}
-                  aria-label={officeCreateState.busy ? "Creating workorder" : "Create workorder"}
-                  title={officeCreateState.busy ? "Creating workorder" : "Create workorder"}
-                >
-                  <span>{officeCreateState.busy ? "Creating" : "Create"}</span>
-                </button>
                 <PreviewToggle open={showEmbeddedPreview || previewFullscreen} onToggle={jumpToPreview} controls="workorder-preview-panel" />
               </div>
             </div>
@@ -1300,135 +1493,129 @@ export function App({ actor }) {
             </div>
           ) : null}
 
-          {mode === "admin" && !activeWorkorder && officeCreateState.message ? (
-            <p className="office-create-message" role="status">{officeCreateState.message}</p>
-          ) : null}
-
-          {mode === "mechanic" && !activeWorkorder ? (
-            <div className="detail-status-card">
-              <div>
-                <span>Status</span>
-                <strong>{currentStatusLabel}</strong>
-              </div>
-              <div>
-                <span>Workorder</span>
-                <strong>{firstSerial}</strong>
-              </div>
-            </div>
-          ) : null}
-
-          {isMechanicDetail ? (
-            <section className="mechanic-job-overview" aria-labelledby="mechanic-job-title">
-              <div className="mechanic-job-heading">
-                <span>Work to do</span>
-                <h1 id="mechanic-job-title">{form.mechanicConcern || "No repair concern listed"}</h1>
-              </div>
-              <div className="mechanic-job-facts">
-                <div>
-                  <span>{mechanicUnitType}</span>
-                  <strong>{form.unitNo || mechanicAsset.unitNo || mechanicAsset.name || "Not listed"}</strong>
-                </div>
-                <div>
-                  <span>{mechanicUnitType} details</span>
-                  <strong>{mechanicVehicleLabel}</strong>
-                </div>
-                <div>
-                  <span>Mileage</span>
-                  <strong>{form.mileage ? `${form.mileage} mi` : "Not listed"}</strong>
-                </div>
-              </div>
-              <details
-                className="mechanic-truck-details"
-                open={mechanicTruckDetailsOpen}
-                onToggle={(event) => setMechanicTruckDetailsOpen(event.currentTarget.open)}
+          {activeWorkorder ? (
+            <>
+              <WorkorderObjectSummary
+                concern={form.mechanicConcern}
+                customer={form.customerCompanyName}
+                dates={workDateRangeLabel(form)}
+                location={detailLocationName}
+                mechanics={detailMechanicNames}
+                unit={form.unitNo || mechanicAsset.unitNo || mechanicAsset.name}
+                unitType={form.unitType || mechanicAsset.unitType || "Unit"}
+                actions={isMechanicDetail ? (
+                  <>
+                    <button type="button" onClick={jumpToPreview} aria-controls="workorder-preview-panel">
+                      <FileSearch01 />
+                      <span>Preview</span>
+                    </button>
+                    <button type="button" onClick={() => openMechanicSection("chat")}>
+                      <MessageChatCircle />
+                      <span>Message office</span>
+                    </button>
+                    <button type="button" onClick={() => openMechanicSection("parts")}>
+                      <Package />
+                      <span>Parts</span>
+                    </button>
+                    <button
+                      className="finish-work-button"
+                      type="button"
+                      onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
+                      disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
+                    >
+                      <CheckCircle />
+                      <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
+                    </button>
+                  </>
+                ) : null}
               >
-                <summary>More {mechanicUnitType.toLowerCase()} details</summary>
-                <dl>
-                  <div><dt>VIN</dt><dd>{form.vinNo || "Not listed"}</dd></div>
-                  <div><dt>License</dt><dd>{form.licenseNo || "Not listed"}</dd></div>
-                  <div><dt>Work dates</dt><dd>{workDateRangeLabel(form) || "Not listed"}</dd></div>
-                  <div><dt>Workorder</dt><dd>{activeWorkorder.workorder.serial}</dd></div>
-                </dl>
-                <AssetLocationCard
-                  vehicle={mechanicMapVehicle}
-                  location={mechanicMapLocation}
-                  mapsConfig={mapsConfig}
-                  showVehicleLabel={false}
-                />
-              </details>
-              <div className="mechanic-job-actions" aria-label="Workorder actions">
-                <button
-                  type="button"
-                  onClick={jumpToPreview}
-                  aria-controls="workorder-preview-panel"
-                  aria-expanded={showEmbeddedPreview || previewFullscreen}
-                >
-                  <FileSearch01 />
-                  <span>{showEmbeddedPreview || previewFullscreen ? "Hide workorder" : "View workorder"}</span>
-                </button>
-                <button type="button" onClick={() => openMechanicSection("chat")}>
-                  <MessageChatCircle />
-                  <span>Message office</span>
-                </button>
-                <button type="button" onClick={() => openMechanicSection("parts")}>
-                  <Package />
-                  <span>Parts used</span>
-                </button>
-                <button
-                  className="finish-work-button"
-                  type="button"
-                  onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                  disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
-                >
-                  <CheckCircle />
-                  <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
-                </button>
-              </div>
-              {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
-            </section>
+                {isMechanicDetail ? (
+                  <div className="workorder-object-inline-detail">
+                    <span>{mechanicUnitType} details</span>
+                    <strong>{mechanicVehicleLabel}</strong>
+                    <span>Mileage</span>
+                    <strong>{form.mileage ? `${form.mileage} mi` : "Not listed"}</strong>
+                  </div>
+                ) : null}
+                {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
+              </WorkorderObjectSummary>
+              <WorkorderSectionNav sections={detailSections} activeSection={detailSection} onSelect={selectDetailSection} />
+            </>
           ) : null}
 
-          <div className="accordion-stack">
-            {activeWorkorder ? (
-              <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className={`editor-section chat-section ${isMechanicDetail ? "mechanic-primary-section" : ""} ${openSection === "chat" ? "is-open" : ""}`}>
-                <button className="editor-summary" type="button" aria-expanded={openSection === "chat"} onClick={() => toggleSection("chat")}>
-                  <span>{isOfficeDetail ? "Chat with mechanic" : "Messages with office"}</span>
-                  <small>{conversationMessages.length} {conversationMessages.length === 1 ? "message" : "messages"}</small>
-                </button>
-                <div className="section-content chat-content">
-                  <ChatThread messages={conversationMessages} currentRole={isOfficeDetail ? "office" : "mechanic"} currentUserId={actor.id} />
-                  {isWorkorderDetail ? (
-                    <ChatComposer
-                      onSend={sendWorkorderChat}
-                      disabled={isMechanicDetail && !activeWorkorder.allowedActions.sendMessage}
-                      sending={mechanicAction.busy === "chat"}
-                      placeholder={isOfficeDetail ? "Message mechanic..." : "Type a message to office..."}
-                      textareaLabel={isOfficeDetail ? "Message mechanic" : "Message office"}
-                      cameraLabel={isOfficeDetail ? "Take or add photo" : "Take photo"}
-                      sendLabel="Send"
-                      compact={isMechanicDetail}
-                    />
-                  ) : null}
-                  {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
-                </div>
-              </div>
+          {!activeWorkorder ? (
+            <CreateWorkorderForm
+              assignment={createAssignment}
+              busy={officeCreateState.busy}
+              errors={officeCreateErrors}
+              form={form}
+              locations={officeLocations}
+              message={officeCreateState.message}
+              onAddPart={addPartRow}
+              onAssignmentChange={(mechanicUserIds) => setCreateAssignment((current) => ({ ...current, mechanicUserIds }))}
+              onFieldChange={updateField}
+              onLocationChange={selectOfficeLocation}
+              onPartChange={updatePart}
+              onRemovePart={removePartRow}
+              onSubmit={createOfficeWorkorder}
+              onUnitChange={updateUnitNumber}
+              onVehicleSelect={applyVehicle}
+              selectedVehicle={selectedVehicle}
+              vehicleLookup={vehicleLookup}
+            />
+          ) : (
+          <div className="accordion-stack workorder-progressive-stack">
+            {activeWorkorder && isCompact ? (
+              <ProgressiveWorkorderSection
+                id="chat"
+                title={isOfficeDetail ? "Chat with mechanic" : "Messages with office"}
+                summary={`${conversationMessages.length} ${conversationMessages.length === 1 ? "message" : "messages"}`}
+                activeSection={detailSection}
+                onSelect={setDetailSection}
+                attention={["waiting_office", "parts_requested"].includes(detailStatus)}
+                className="chat-section"
+              >
+                {workorderChatContent}
+              </ProgressiveWorkorderSection>
             ) : null}
 
-            {activeWorkorder && !isMechanicDetail && !showEmbeddedPreview ? (
-              <WorkorderTimelinePanel
-                timeline={activeWorkorder.timeline || []}
-                participants={activeWorkorder.participants || []}
-                className="is-control-timeline"
-              />
+            {isMechanicDetail ? (
+              <ProgressiveWorkorderSection
+                id="work"
+                title="Work performed"
+                summary={form.workPerformed ? "Repair details added" : "Diagnosis and repair details"}
+                activeSection={detailSection}
+                onSelect={setDetailSection}
+                className="mechanic-work-section"
+              >
+                <div className="operational-form detail-workflow-fields">
+                  <OperationalFormField id="mechanic-diagnosis" label="Diagnosis" hint="What did you inspect or find?">
+                    <textarea rows="3" value={form.diagnosis} onChange={(event) => updateField("diagnosis", event.target.value)} />
+                  </OperationalFormField>
+                  <OperationalFormField id="mechanic-work-performed" label="Repair completed" hint="Write what was repaired, replaced, adjusted, or checked.">
+                    <textarea rows="4" value={form.workPerformed} onChange={(event) => updateField("workPerformed", event.target.value)} />
+                  </OperationalFormField>
+                  <Button type="button" variant="secondary" onClick={saveMechanicWorkNotes} disabled={Boolean(mechanicAction.busy)}>
+                    {mechanicAction.busy === "notes" ? "Saving..." : "Save work details"}
+                  </Button>
+                </div>
+              </ProgressiveWorkorderSection>
             ) : null}
 
             {isOfficeDetail ? (
-              <div className={`editor-section ${openSection === "office" ? "is-open" : ""}`}>
-                <button className="editor-summary" type="button" aria-expanded={openSection === "office"} onClick={() => toggleSection("office")}>
-                  <span>Office</span>
-                  <small>{officeDetailState.message || "Notes / save"}</small>
-                </button>
-                <div className="section-content">
+              <ProgressiveWorkorderSection
+                id="work"
+                title={detailStatus === "mechanic_done" ? "Review completed work" : "Work review"}
+                summary={officeDetailState.message || (form.workPerformed ? "Mechanic details available" : "Office notes and repair progress")}
+                activeSection={detailSection}
+                onSelect={setDetailSection}
+                attention={detailStatus === "mechanic_done"}
+              >
+                <div className="workorder-review-content">
+                  <div className="workorder-review-copy">
+                    <div><span>Diagnosis</span><p>{form.diagnosis || "No diagnosis recorded yet."}</p></div>
+                    <div><span>Work performed</span><p>{form.workPerformed || "No completed work recorded yet."}</p></div>
+                  </div>
                   <Field label="Office notes">
                     <textarea value={form.officeNotes} onChange={(event) => updateField("officeNotes", event.target.value)} rows="3" />
                   </Field>
@@ -1437,15 +1624,18 @@ export function App({ actor }) {
                   </Button>
                   {officeDetailState.message ? <p className="mechanic-action-message" role="status">{officeDetailState.message}</p> : null}
                 </div>
-              </div>
+              </ProgressiveWorkorderSection>
             ) : null}
 
-            <div id={isMechanicDetail ? "mechanic-parts-section" : undefined} className={`editor-section ${isMechanicDetail ? "mechanic-primary-section" : ""} ${openSection === "parts" ? "is-open" : ""}`}>
-              <button className="editor-summary" type="button" aria-expanded={openSection === "parts"} onClick={() => toggleSection("parts")}>
-                <span>{isMechanicDetail ? "Parts used" : "Parts"}</span>
-                <small>{isMechanicDetail ? `${filledPartCount} added` : `${form.parts.length} row(s)`}</small>
-              </button>
-              <div className="section-content">
+            <ProgressiveWorkorderSection
+              id="parts"
+              title={isMechanicDetail ? "Parts used" : "Parts"}
+              summary={pendingPartCount ? `${pendingPartCount} awaiting action` : `${filledPartCount} recorded`}
+              activeSection={detailSection}
+              onSelect={setDetailSection}
+              attention={pendingPartCount > 0}
+            >
+              <div id={isMechanicDetail ? "mechanic-parts-section" : undefined}>
                 {activeWorkorder ? (
                   <PartRequestsPanel
                     role={isOfficeDetail ? "office" : "mechanic"}
@@ -1481,37 +1671,19 @@ export function App({ actor }) {
                   </>
                 )}
               </div>
-            </div>
+            </ProgressiveWorkorderSection>
 
-            {actor.role === "admin" && !activeWorkorder ? (
-              <div className={`editor-section ${openSection === "header" ? "is-open" : ""}`}>
-              <button className="editor-summary" type="button" aria-expanded={openSection === "header"} onClick={() => toggleSection("header")}>
-                <span>Header</span>
-                <small>{form.companyName}</small>
-              </button>
-              <div className="section-content">
-                <Field label="Header title">
-                  <input value={form.headerTitle} onChange={(event) => updateField("headerTitle", event.target.value)} />
-                </Field>
-                <div className="two-col">
-                  <Field label="Brand top">
-                    <input value={form.brandTop} onChange={(event) => updateField("brandTop", event.target.value)} />
-                  </Field>
-                  <Field label="Brand bottom">
-                    <input value={form.brandBottom} onChange={(event) => updateField("brandBottom", event.target.value)} />
-                  </Field>
-                </div>
-              </div>
-              </div>
-            ) : null}
-
-            <div className={`editor-section ${isMechanicDetail ? "mechanic-secondary-admin-section" : ""} ${openSection === "vehicle" ? "is-open" : ""}`}>
-              <button className="editor-summary" type="button" aria-expanded={openSection === "vehicle"} onClick={() => toggleSection("vehicle")}>
-                <span>{form.unitType || "Vehicle"}</span>
-                <small>{form.unitNo || workDateRangeLabel(form)}</small>
-              </button>
-              <div className="section-content">
-                {actor.role === "office" && officeLocations.length ? (
+            {isOfficeDetail ? (
+            <>
+            <ProgressiveWorkorderSection
+              id="unit"
+              title={`${form.unitType || "Unit"} details`}
+              summary={[form.unitNo, form.customerCompanyName].filter(Boolean).join(" · ") || "Unit and customer information"}
+              activeSection={detailSection}
+              onSelect={setDetailSection}
+            >
+              <div className="workorder-unit-content">
+                {officeLocations.length ? (
                   <Field label="Location">
                     <select value={form.locationId} onChange={(event) => selectOfficeLocation(event.target.value)}>
                       {officeLocations.map((entry) => <option key={entry.location.id} value={entry.location.id}>{entry.location.name}</option>)}
@@ -1597,8 +1769,8 @@ export function App({ actor }) {
 	                  </Field>
                 </div>
                 <div className="two-col">
-                  <Field label="Company name">
-                    <input value={form.companyName} onChange={(event) => updateField("companyName", event.target.value)} />
+                  <Field label="Customer company">
+                    <input value={form.customerCompanyName} onChange={(event) => updateField("customerCompanyName", event.target.value)} />
                   </Field>
                   <Field label="VIN no.">
                     <input value={form.vinNo} onChange={(event) => updateField("vinNo", event.target.value)} />
@@ -1613,14 +1785,17 @@ export function App({ actor }) {
                   <input value={form.mechanicConcern} onChange={(event) => updateField("mechanicConcern", event.target.value)} />
                 </Field>
               </div>
-            </div>
+            </ProgressiveWorkorderSection>
 
-            <div className={`editor-section ${isMechanicDetail ? "mechanic-secondary-admin-section" : ""} ${openSection === "mechanic" ? "is-open" : ""}`}>
-              <button className="editor-summary" type="button" aria-expanded={openSection === "mechanic"} onClick={() => toggleSection("mechanic")}>
-                <span>{isOfficeDetail ? "Mechanics" : "Mechanic"}</span>
-                <small>{form.mechanicName || "Name / time"}</small>
-              </button>
-              <div className="section-content">
+            <ProgressiveWorkorderSection
+              id="team"
+              title="Mechanics"
+              summary={detailMechanicNames || "Unassigned"}
+              activeSection={detailSection}
+              onSelect={setDetailSection}
+              attention={!assignedMechanicIds.length}
+            >
+              <div className="workorder-team-content">
                 {isOfficeDetail && !["closed", "odoo_entered"].includes(detailStatus) ? (
                   <div className="office-assignment-control">
                     <fieldset className="office-mechanic-team">
@@ -1683,28 +1858,53 @@ export function App({ actor }) {
                   </Field>
                 </div>
               </div>
-            </div>
+            </ProgressiveWorkorderSection>
+            </>
+            ) : (
+              <ProgressiveWorkorderSection
+                id="unit"
+                title={`${mechanicUnitType} details`}
+                summary={[form.unitNo, form.model].filter(Boolean).join(" · ") || "Unit information"}
+                activeSection={detailSection}
+                onSelect={setDetailSection}
+              >
+                <dl className="workorder-readonly-details">
+                  <div><dt>Unit</dt><dd>{form.unitNo || "Not listed"}</dd></div>
+                  <div><dt>Model</dt><dd>{mechanicVehicleLabel}</dd></div>
+                  <div><dt>Mileage</dt><dd>{form.mileage ? `${form.mileage} mi` : "Not listed"}</dd></div>
+                  <div><dt>VIN</dt><dd>{form.vinNo || "Not listed"}</dd></div>
+                  <div><dt>License</dt><dd>{form.licenseNo || "Not listed"}</dd></div>
+                  <div><dt>Customer</dt><dd>{form.customerCompanyName || "Not listed"}</dd></div>
+                  <div><dt>Work dates</dt><dd>{workDateRangeLabel(form) || "Not listed"}</dd></div>
+                  <div><dt>Workorder</dt><dd>{activeWorkorder.workorder.serial}</dd></div>
+                </dl>
+                <AssetLocationCard
+                  vehicle={mechanicMapVehicle}
+                  location={mechanicMapLocation}
+                  mapsConfig={mapsConfig}
+                  showVehicleLabel={false}
+                />
+              </ProgressiveWorkorderSection>
+            )}
 
-            {actor.role === "admin" && !activeWorkorder ? (
-              <div className={`editor-section ${openSection === "disclaimer" ? "is-open" : ""}`}>
-              <button className="editor-summary" type="button" aria-expanded={openSection === "disclaimer"} onClick={() => toggleSection("disclaimer")}>
-                <span>Disclaimer</span>
-                <small>Footer text</small>
-              </button>
-              <div className="section-content">
-                <Field label="Warranty disclaimer">
-                  <input value={form.warrantyText} onChange={(event) => updateField("warrantyText", event.target.value)} />
-                </Field>
-                <Field label="Responsibility disclaimer">
-                  <textarea value={form.responsibilityText} onChange={(event) => updateField("responsibilityText", event.target.value)} rows="2" />
-                </Field>
-                <Field label="Authorization terms">
-                  <textarea value={form.authorizationText} onChange={(event) => updateField("authorizationText", event.target.value)} rows="3" />
-                </Field>
-              </div>
-              </div>
+            {activeWorkorder ? (
+              <ProgressiveWorkorderSection
+                id="activity"
+                title="Activity"
+                summary={`${activeWorkorder.timeline?.length || 0} events`}
+                activeSection={detailSection}
+                onSelect={setDetailSection}
+                className="is-detail-end-timeline"
+              >
+                <WorkorderTimelinePanel
+                  timeline={activeWorkorder.timeline || []}
+                  participants={activeWorkorder.participants || []}
+                  className="is-control-timeline"
+                />
+              </ProgressiveWorkorderSection>
             ) : null}
           </div>
+          )}
         </aside>
 
         <PreviewPane
@@ -1726,15 +1926,14 @@ export function App({ actor }) {
             copies: form.copies,
             onChange: updateField,
           } : null}
-          secondaryContent={activeWorkorder && showEmbeddedPreview && !isMechanicDetail ? (
-            <WorkorderTimelinePanel
-              timeline={activeWorkorder.timeline || []}
-              participants={activeWorkorder.participants || []}
-              className="is-preview-timeline"
-            />
-          ) : null}
           onFullscreen={openFullscreenPreview}
           onOpenPreview={isWorkorderDetail ? openFullscreenPreview : undefined}
+          supportingContent={!isCompact && activeWorkorder ? workorderChatContent : undefined}
+          supportingLabel={isOfficeDetail ? "Chat with mechanic" : "Chat with office"}
+          supportingCount={conversationMessages.length || undefined}
+          supportingAttention={["waiting_office", "parts_requested"].includes(detailStatus)}
+          activeView={supportingView}
+          onViewChange={setSupportingView}
         >
           <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} ${activeWorkorder ? "mechanic-preview-grid" : ""}`}>
             <WorkorderPreview label="First page" serial={firstSerial} form={form} />
@@ -1812,16 +2011,17 @@ export function App({ actor }) {
       ) : null}
       {officeCloseOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOfficeCloseOpen(false)}>
-          <form className="office-close-modal" role="dialog" aria-modal="true" aria-label="Close workorder" onSubmit={closeOfficeWorkorder}>
+          <form className="office-close-modal" role="dialog" aria-modal="true" aria-label="Approve workorder" onSubmit={closeOfficeWorkorder}>
             <button className="close-button" type="button" onClick={() => setOfficeCloseOpen(false)} aria-label="Close review"><XClose /></button>
-            <h2>Close workorder?</h2>
-            <Field label="Office note (optional)">
-              <textarea rows="3" value={officeCloseNote} onChange={(event) => setOfficeCloseNote(event.target.value)} placeholder="Add a final note" />
+            <h2>Approve workorder?</h2>
+            <p className="office-close-modal-copy">This sends the completed workorder to the surveillance team's Odoo queue.</p>
+            <Field label="Approval note (optional)">
+              <textarea rows="3" value={officeCloseNote} onChange={(event) => setOfficeCloseNote(event.target.value)} placeholder="Add an approval note" />
             </Field>
             {officeDetailState.message ? <p className="mechanic-completion-message" role="status">{officeDetailState.message}</p> : null}
             <div className="mechanic-completion-actions">
               <Button variant="secondary" type="button" onClick={() => setOfficeCloseOpen(false)}>Cancel</Button>
-              <Button variant="primary" type="submit" disabled={officeDetailState.busy}>{officeDetailState.busy ? "Closing..." : "Close workorder"}</Button>
+              <Button variant="primary" type="submit" disabled={officeDetailState.busy}>{officeDetailState.busy ? "Approving..." : "Approve workorder"}</Button>
             </div>
           </form>
         </div>

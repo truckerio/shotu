@@ -45,7 +45,7 @@ test("mechanic query carries own-or-available isolation", async () => {
   assert.equal(received.actorUserId, mechanicId);
 });
 
-test("surveillance query is marked completed-only", async () => {
+test("surveillance query receives its role visibility boundary", async () => {
   let received;
   await queryAuthorizedWorkorders(context("surveillance", { locations: [locationA] }), { category: "all" }, {
     queryWorkorders: async (input) => { received = input; return { items: [] }; },

@@ -4,6 +4,7 @@ import {
   closeOfficeWorkorder,
   createOfficeWorkorder,
   officeDashboard,
+  officeLocationMechanics,
   officeWorkorderDetail,
   reviewOfficePartRequest,
   reassignOfficeWorkorder,
@@ -50,6 +51,11 @@ function officePartsPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function locationMechanicsPath(pathname) {
+  const match = /^\/api\/office\/locations\/([^/]+)\/mechanics$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export async function handleOfficeApi(req, res, url, helpers) {
   const { sendJson, readBody, requestContext } = helpers;
   const officeUserId = requestContext.actor.id;
@@ -84,6 +90,15 @@ export async function handleOfficeApi(req, res, url, helpers) {
 
   if (req.method === "GET" && url.pathname === "/api/office/dashboard") {
     sendJson(res, 200, await officeDashboard(requestContext));
+    return true;
+  }
+
+  const mechanicsLocationId = locationMechanicsPath(url.pathname);
+  if (req.method === "GET" && mechanicsLocationId) {
+    requireLocationAccess(requestContext, mechanicsLocationId);
+    sendJson(res, 200, {
+      mechanics: await officeLocationMechanics(mechanicsLocationId, officeUserId),
+    });
     return true;
   }
 

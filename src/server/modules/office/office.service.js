@@ -103,6 +103,14 @@ export async function officeWorkorderDetail(workorderId, officeUserId) {
   return { ...detail, user, assignableMechanics };
 }
 
+export async function officeLocationMechanics(locationId, officeUserId) {
+  await requireOffice(officeUserId);
+  const mechanics = await listUsersByLocation(locationId);
+  return mechanics
+    .filter((candidate) => candidate.role === "mechanic" && candidate.active && candidate.membership_active)
+    .map((candidate) => ({ id: candidate.id, name: candidate.name }));
+}
+
 export async function reviewOfficePartRequest(workorderId, requestId, input) {
   const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");

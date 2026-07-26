@@ -2,6 +2,7 @@ import { getPool, query } from "../pool.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { reserveWorkorderSerials } from "./serial-counters.repo.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
+import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
   return `
@@ -32,6 +33,7 @@ function publicAssetSelect(alias = "a", workorderAlias = "wo") {
         nullif(${alias}.raw_provider_data->>'esn', '')
       ),
       'lastOdometerMiles', ${alias}.last_odometer_miles,
+      'ownerName', ${alias}.owner_name,
       'lastLocation', ${alias}.last_location,
       'lastSeenAt', ${alias}.last_seen_at
     )
@@ -108,6 +110,7 @@ function emptyObjectToNull(value) {
 
 export function publicWorkorderRow(row) {
   if (!row) return null;
+  const asset = emptyObjectToNull(row.asset);
   return {
     id: row.id,
     companyId: row.company_id,
@@ -121,14 +124,16 @@ export function publicWorkorderRow(row) {
     diagnosis: row.diagnosis,
     workPerformed: row.work_performed,
     officeNotes: row.office_notes,
-    formData: row.form_data || {},
+    formData: normalizeWorkorderFormData(row.form_data, {
+      assetOwnerName: asset?.ownerName,
+    }),
     acceptedAt: row.accepted_at,
     startedAt: row.started_at,
     mechanicDoneAt: row.mechanic_done_at,
     closedAt: row.closed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    asset: emptyObjectToNull(row.asset),
+    asset,
     location: emptyObjectToNull(row.location),
     mechanic: emptyObjectToNull(row.mechanic),
     mechanics: Array.isArray(row.mechanics) ? row.mechanics : [],
@@ -158,6 +163,70 @@ async function addAssignmentEvent(client, { workorderId, fromMechanicId, toMecha
   );
 }
 
+const INITIAL_ASSIGNMENT_REASON = "Assigned when workorder was created.";
+
+async function validateInitialMechanics(client, {
+  mechanicUserIds,
+  companyId,
+  locationId,
+}) {
+  if (!mechanicUserIds.length) return;
+  if (mechanicUserIds.length > 10) throw new Error("A workorder can have up to 10 mechanics.");
+  if (!locationId) throw new Error("Select a location before assigning mechanics.");
+
+  const assignable = await client.query(
+    `select membership.user_id
+       from user_location_memberships membership
+       join user_company_memberships company_membership
+         on company_membership.user_id = membership.user_id
+        and company_membership.company_id = membership.company_id
+        and company_membership.role = 'mechanic'
+        and company_membership.active = true
+       join user_profiles profile
+         on profile.id = membership.user_id
+        and profile.active = true
+        and profile.deleted_at is null
+      where membership.location_id = $1
+        and membership.company_id = $2
+        and membership.active = true
+        and membership.user_id = any($3::uuid[])`,
+    [locationId, companyId, mechanicUserIds],
+  );
+  const assignableIds = new Set(assignable.rows.map((row) => row.user_id));
+  if (mechanicUserIds.some((id) => !assignableIds.has(id))) {
+    throw new Error("Every selected mechanic must be active at this workorder location.");
+  }
+}
+
+async function addInitialMechanicAssignments(client, {
+  workorderId,
+  mechanicUserIds,
+  assignedByUserId,
+}) {
+  for (const [index, mechanicUserId] of mechanicUserIds.entries()) {
+    await client.query(
+      `insert into workorder_mechanic_assignments (
+         workorder_id, mechanic_user_id, assignment_role, assigned_by_user_id, reason
+       ) values ($1, $2, $3, $4, $5)`,
+      [
+        workorderId,
+        mechanicUserId,
+        index === 0 ? "primary" : "support",
+        assignedByUserId || null,
+        INITIAL_ASSIGNMENT_REASON,
+      ],
+    );
+    await addAssignmentEvent(client, {
+      workorderId,
+      fromMechanicId: null,
+      toMechanicId: mechanicUserId,
+      action: "reassigned",
+      reason: INITIAL_ASSIGNMENT_REASON,
+      changedByUserId: assignedByUserId,
+    });
+  }
+}
+
 const FIELD_EVENT_LABELS = {
   assetId: "Asset",
   locationId: "Location",
@@ -165,7 +234,8 @@ const FIELD_EVENT_LABELS = {
   diagnosis: "Diagnosis",
   workPerformed: "Work performed",
   officeNotes: "Office notes",
-  "formData.companyName": "Company",
+  "formData.customerCompanyName": "Customer company",
+  "formData.companyName": "Customer company (legacy)",
   "formData.unitNo": "Unit no.",
   "formData.unitType": "Unit type",
   "formData.licenseNo": "License",
@@ -219,6 +289,10 @@ function changedFields(before, input) {
     const newForm = input.formData || {};
     for (const key of Object.keys(FIELD_EVENT_LABELS).filter((entry) => entry.startsWith("formData."))) {
       const formKey = key.slice("formData.".length);
+      if (
+        formKey === "companyName"
+        && Object.prototype.hasOwnProperty.call(newForm, "customerCompanyName")
+      ) continue;
       compare(key, oldForm[formKey], newForm[formKey]);
     }
   }
@@ -246,6 +320,21 @@ export async function createOperationalWorkorder(input) {
   try {
     await client.query("begin");
     const companyId = input.companyId || DEFAULT_COMPANY_ID;
+    const mechanicUserIds = [...new Set(input.mechanicUserIds || [])];
+    await validateInitialMechanics(client, {
+      mechanicUserIds,
+      companyId,
+      locationId: input.locationId || null,
+    });
+    const assetOwnerResult = input.assetId
+      ? await client.query(
+        "select owner_name from assets where id = $1 and company_id = $2",
+        [input.assetId, companyId],
+      )
+      : { rows: [] };
+    const formData = normalizeWorkorderFormData(input.formData, {
+      assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
+    });
     const reservation = await reserveWorkorderSerials({ companyId, count: 1 }, client);
     const serial = reservation.serials[0];
     const result = await client.query(
@@ -264,7 +353,7 @@ export async function createOperationalWorkorder(input) {
         input.createdByUserId || null,
         input.concern,
         input.officeNotes || "",
-        JSON.stringify(input.formData || {}),
+        JSON.stringify(formData),
       ]
     );
     await addStatusEvent(client, {
@@ -273,6 +362,26 @@ export async function createOperationalWorkorder(input) {
       changedByUserId: input.createdByUserId,
       note: "Workorder created.",
     });
+    if (mechanicUserIds.length) {
+      await addInitialMechanicAssignments(client, {
+        workorderId: result.rows[0].id,
+        mechanicUserIds,
+        assignedByUserId: input.createdByUserId,
+      });
+      await client.query(
+        `update operational_workorders
+            set status = $2, accepted_at = now(), updated_at = now()
+          where id = $1`,
+        [result.rows[0].id, WORKORDER_STATUS.ACCEPTED],
+      );
+      await addStatusEvent(client, {
+        workorderId: result.rows[0].id,
+        fromStatus: result.rows[0].status,
+        toStatus: WORKORDER_STATUS.ACCEPTED,
+        changedByUserId: input.createdByUserId,
+        note: INITIAL_ASSIGNMENT_REASON,
+      });
+    }
     await client.query("commit");
     return getOperationalWorkorderById(result.rows[0].id);
   } catch (error) {
@@ -291,7 +400,24 @@ export async function updateOperationalWorkorder(workorderId, input) {
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     if (!before) throw new Error("Workorder not found.");
-    const changes = changedFields(before, input);
+    const nextAssetId = Object.prototype.hasOwnProperty.call(input, "assetId")
+      ? input.assetId
+      : before.asset_id;
+    const assetOwnerResult = nextAssetId
+      ? await client.query(
+        "select owner_name from assets where id = $1 and company_id = $2",
+        [nextAssetId, before.company_id],
+      )
+      : { rows: [] };
+    const normalizedInput = input.formData === undefined
+      ? input
+      : {
+        ...input,
+        formData: normalizeWorkorderFormData(input.formData, {
+          assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
+        }),
+      };
+    const changes = changedFields(before, normalizedInput);
     await client.query(
       `
         update operational_workorders
@@ -311,7 +437,7 @@ export async function updateOperationalWorkorder(workorderId, input) {
         input.locationId || null,
         input.concern ?? null,
         input.officeNotes ?? null,
-        input.formData === undefined ? null : JSON.stringify(input.formData || {}),
+        normalizedInput.formData === undefined ? null : JSON.stringify(normalizedInput.formData),
       ]
     );
     await addFieldEvents(client, { workorderId, changes, changedByUserId: input.changedByUserId });
@@ -556,7 +682,7 @@ function buildOperationsWhere(input, { includeCategory = true } = {}) {
   if (input.visibility === "mechanic") {
     add("(?::uuid = any(mechanic_ids) or (lifecycle = 'open' and cardinality(mechanic_ids) = 0))", input.actorUserId);
   } else if (input.visibility === "surveillance") {
-    clauses.push("lifecycle in ('closed', 'odoo_entered')");
+    clauses.push("lifecycle in ('accepted', 'in_progress', 'mechanic_done', 'closed', 'odoo_entered')");
   }
   if (includeCategory) clauses.push(OPERATIONS_CATEGORY[input.category] || OPERATIONS_CATEGORY.all);
   return { sql: clauses.join("\n and "), values };
@@ -1155,7 +1281,7 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
     if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
-      throw new Error("Only workorders ready for office review can be closed.");
+      throw new Error("Only workorders ready for office review can be approved.");
     }
     await client.query(
       `
@@ -1180,7 +1306,7 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
       fromStatus: workorder.status,
       toStatus: WORKORDER_STATUS.CLOSED,
       changedByUserId: officeUserId,
-      note: note || "Office closed workorder.",
+      note: note || "Office approved workorder.",
     });
     await client.query("commit");
     return getOperationalWorkorderById(workorderId);

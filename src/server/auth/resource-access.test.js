@@ -62,11 +62,16 @@ test("admin access is still limited to assigned companies", async () => {
   );
 });
 
-test("surveillance only reads completed workflow records", async () => {
-  await assert.rejects(
-    requireWorkorderAccess(context("surveillance"), workorder.id, { getWorkorder: async () => workorder }),
-    (error) => error.statusCode === 404,
+test("surveillance reads active and completed workflow records but not unassigned work", async () => {
+  assert.equal(
+    (await requireWorkorderAccess(context("surveillance"), workorder.id, { getWorkorder: async () => workorder })).status,
+    "accepted",
   );
   const closed = { ...workorder, status: "closed" };
   assert.equal((await requireWorkorderAccess(context("surveillance"), closed.id, { getWorkorder: async () => closed })).status, "closed");
+  const open = { ...workorder, status: "open" };
+  await assert.rejects(
+    requireWorkorderAccess(context("surveillance"), open.id, { getWorkorder: async () => open }),
+    (error) => error.statusCode === 404,
+  );
 });

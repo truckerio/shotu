@@ -1,3 +1,5 @@
+import { resolveCustomerCompanyName } from "../../../../shared/workorder-template.js";
+
 export function statusLabel(status) {
   const labels = {
     open: "Open",
@@ -29,6 +31,10 @@ export function dashboardCard(workorder, lastMessage = null) {
     status: workorder.status,
     statusLabel: statusLabel(workorder.status),
     locationName: workorder.location?.name || "",
+    customerCompanyName: resolveCustomerCompanyName(
+      workorder.formData,
+      workorder.asset?.ownerName,
+    ),
     mechanicName: workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
       || workorder.mechanic?.name
       || "",

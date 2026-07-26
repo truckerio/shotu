@@ -1,7 +1,22 @@
 import { z } from "zod";
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
+import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 
 export const userRoleSchema = z.enum(["mechanic", "office", "surveillance", "admin"]);
+
+const customerCompanyNameSchema = z.string().trim().max(300, "Customer company must be 300 characters or less.");
+
+/**
+ * Typed boundary for printable form snapshots.
+ *
+ * The remaining legacy/template keys stay open during the compatibility window,
+ * while customerCompanyName has one explicit meaning: the customer or unit owner
+ * captured for this workorder. It is never the tenant or repair location.
+ */
+export const workorderFormDataSchema = z.object({
+  customerCompanyName: customerCompanyNameSchema.optional(),
+  companyName: customerCompanyNameSchema.optional(),
+}).catchall(z.unknown()).transform((formData) => normalizeWorkorderFormData(formData));
 
 export const createWorkorderSchema = z.object({
   companyId: z.string().uuid().default(DEFAULT_COMPANY_ID),
@@ -9,7 +24,10 @@ export const createWorkorderSchema = z.object({
   locationId: z.string().uuid().optional().nullable(),
   concern: z.string().trim().min(1, "Concern is required.").max(2000),
   officeNotes: z.string().trim().max(4000).default(""),
-  formData: z.record(z.string(), z.unknown()).default({}),
+  mechanicUserIds: z.array(z.string().uuid()).max(10, "A workorder can have up to 10 mechanics.")
+    .transform((ids) => [...new Set(ids)])
+    .default([]),
+  formData: workorderFormDataSchema.default({}),
 });
 
 export const updateOfficeWorkorderSchema = z.object({
@@ -17,7 +35,7 @@ export const updateOfficeWorkorderSchema = z.object({
   locationId: z.string().uuid().optional().nullable(),
   concern: z.string().trim().min(1, "Concern is required.").max(2000).optional(),
   officeNotes: z.string().trim().max(4000).optional(),
-  formData: z.record(z.string(), z.unknown()).optional(),
+  formData: workorderFormDataSchema.optional(),
 });
 
 export const acceptWorkorderSchema = z.object({});

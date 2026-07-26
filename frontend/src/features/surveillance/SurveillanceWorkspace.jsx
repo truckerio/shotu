@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle, ClipboardCheck, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { ArrowLeft, ArrowRight, CheckCircle, ClipboardCheck, Clock, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
@@ -32,9 +32,16 @@ function missingFields(workorder) {
   ].filter(Boolean);
 }
 
+function progressTimestamp(workorder) {
+  if (workorder.status === "accepted") return { label: "Accepted", value: workorder.acceptedAt };
+  if (workorder.status === "in_progress") return { label: "Started", value: workorder.startedAt || workorder.acceptedAt };
+  if (workorder.status === "mechanic_done") return { label: "Finished", value: workorder.mechanicDoneAt };
+  return { label: "Approved", value: workorder.closedAt };
+}
+
 export function SurveillanceWorkspace({ actor }) {
   const [dashboard, setDashboard] = useState(null);
-  const [activeTab, setActiveTab] = useState("pendingOdoo");
+  const [activeTab, setActiveTab] = useState("active");
   const [search, setSearch] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -67,7 +74,7 @@ export function SurveillanceWorkspace({ actor }) {
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    if (["pendingOdoo", "missingInfo", "entered"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
+    if (["active", "awaitingOffice", "pendingOdoo", "missingInfo", "entered"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
     setLocationFilter(saved.locationFilter || "");
     setDateFilter(saved.dateFilter || "");
     preferenceHydrated.current = true;
@@ -82,11 +89,19 @@ export function SurveillanceWorkspace({ actor }) {
   }, [activeTab, locationFilter, dateFilter]);
 
   const tabs = [
+    { key: "active", label: "Active", count: dashboard?.counts.active || 0, icon: Clock },
+    { key: "awaitingOffice", label: "Awaiting office", count: dashboard?.counts.awaitingOffice || 0, icon: CheckCircle },
     { key: "pendingOdoo", label: "Needs Odoo", count: dashboard?.counts.pendingOdoo || 0, icon: ClipboardCheck },
     { key: "missingInfo", label: "Missing info", count: dashboard?.counts.missingInfo || 0, icon: Tool02 },
     { key: "entered", label: "Entered", count: dashboard?.counts.entered || 0, icon: CheckCircle },
   ];
-  const allRows = useMemo(() => [...(dashboard?.pendingOdoo || []), ...(dashboard?.missingInfo || []), ...(dashboard?.entered || [])], [dashboard]);
+  const allRows = useMemo(() => [
+    ...(dashboard?.active || []),
+    ...(dashboard?.awaitingOffice || []),
+    ...(dashboard?.pendingOdoo || []),
+    ...(dashboard?.missingInfo || []),
+    ...(dashboard?.entered || []),
+  ], [dashboard]);
   const locations = useMemo(() => [...new Set(allRows.map((row) => row.locationName).filter(Boolean))].sort(), [allRows]);
   const rows = useMemo(() => (dashboard?.[activeTab] || [])
     .filter((workorder) => workorderMatchesSearch(workorder, search))
@@ -157,11 +172,13 @@ export function SurveillanceWorkspace({ actor }) {
     const usedParts = (formData.parts || []).filter((part) => part.partNo || part.description || part.repairOrder);
     const missing = missingFields(workorder);
     const currentIndex = rows.findIndex((row) => row.id === workorder.id);
+    const canProcessOdoo = ["closed", "odoo_entered"].includes(workorder.status);
+    const progress = progressTimestamp(workorder);
     return (
       <main className="prototype surveillance-detail">
         <header className="surveillance-detail-header">
           <ProfileMenu actor={actor} />
-          <button className="icon-button" type="button" onClick={() => setDetail(null)} aria-label="Back to completed workorders" title="Back"><ArrowLeft /></button>
+          <button className="icon-button" type="button" onClick={() => setDetail(null)} aria-label="Back to workorders" title="Back"><ArrowLeft /></button>
           <div className="surveillance-detail-title"><strong>{workorder.serial}</strong><span>{valueOrDash(workorder.asset?.unitNo || workorder.asset?.name)}</span></div>
           <WorkorderStatusPill status={workorder.status} />
           <nav className="surveillance-batch-nav" aria-label="Batch navigation">
@@ -173,12 +190,13 @@ export function SurveillanceWorkspace({ actor }) {
 
         {error ? <p className="ops-error" role="alert">{error}</p> : null}
         <div className="surveillance-detail-layout">
-          <section className="surveillance-record" aria-label="Completed workorder">
+          <section className="surveillance-record" aria-label={canProcessOdoo ? "Approved workorder" : "Workorder progress"}>
             <div className="surveillance-record-grid">
               <div><span>{unitType}</span><strong>{valueOrDash(workorder.asset?.unitNo || workorder.asset?.name)}</strong></div>
               <div><span>Mechanics</span><strong>{valueOrDash(mechanicNames)}</strong></div>
               <div><span>Location</span><strong>{valueOrDash(workorder.location?.name)}</strong></div>
-              <div><span>Closed</span><strong>{valueOrDash(workorder.closedAt ? new Date(workorder.closedAt).toLocaleString() : "")}</strong></div>
+              <div><span>Customer company</span><strong>{valueOrDash(workorder.customerCompanyName || formData.customerCompanyName || formData.companyName)}</strong></div>
+              <div><span>{progress.label}</span><strong>{valueOrDash(progress.value ? new Date(progress.value).toLocaleString() : "")}</strong></div>
             </div>
             <div className="surveillance-copy-block"><span>Concern</span><p>{valueOrDash(workorder.concern)}</p></div>
             <div className="surveillance-copy-block"><span>Diagnosis</span><p>{valueOrDash(workorder.diagnosis)}</p></div>
@@ -192,14 +210,23 @@ export function SurveillanceWorkspace({ actor }) {
           </section>
 
           <aside className="surveillance-odoo-panel">
-            <form onSubmit={markEntered}>
-              <h2>Odoo service order</h2>
-              {missing.length ? <div className="surveillance-missing"><strong>Missing</strong><span>{missing.join(", ")}</span></div> : <p className="surveillance-complete">Workorder information complete</p>}
-              <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
-              <label><span>Note</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" /></label>
-              <button type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</button>
-              <button className="surveillance-missing-button" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</button>
-            </form>
+            {canProcessOdoo ? (
+              <form onSubmit={markEntered}>
+                <h2>Odoo service order</h2>
+                {missing.length ? <div className="surveillance-missing"><strong>Missing</strong><span>{missing.join(", ")}</span></div> : <p className="surveillance-complete">Workorder information complete</p>}
+                <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
+                <label><span>Note</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" /></label>
+                <button type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</button>
+                <button className="surveillance-missing-button" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</button>
+              </form>
+            ) : (
+              <div className="surveillance-progress-state">
+                <h2>{workorder.status === "mechanic_done" ? "Awaiting office approval" : "Work in progress"}</h2>
+                <p>{workorder.status === "mechanic_done"
+                  ? "The mechanic finished this workorder. It moves to Needs Odoo when office approves it."
+                  : "This workorder is active. Odoo entry becomes available after the mechanic finishes and office approves it."}</p>
+              </div>
+            )}
           </aside>
         </div>
         <WorkorderTimelinePanel timeline={detail.timeline || []} participants={detail.participants || []} />
@@ -210,14 +237,14 @@ export function SurveillanceWorkspace({ actor }) {
   return (
     <main className="prototype mechanic-home surveillance-home workspace-operations">
       <WorkspaceHeader actor={actor} />
-      <PageHeader title="Completed workorders" />
+      <PageHeader title="Workorders" />
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
           <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
           <div className="surveillance-filter-row">
-            <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search completed workorders" /></label>
+            <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}
-            <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} aria-label="Completed date filter" />
+            <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} aria-label="Activity date filter" />
           </div>
         </div>
         {error ? <p className="ops-error" role="alert">{error}</p> : null}

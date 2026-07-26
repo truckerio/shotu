@@ -93,7 +93,7 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   if (variant === "surveillance") {
     return (
       <div className="mechanic-list-head queue-variant-surveillance" aria-hidden="true">
-        <span>Unit / Workorder</span><span>Location</span><span>Mechanics</span><span>Completed</span><span>Odoo</span><span></span>
+        <span>Unit / Workorder</span><span>Location</span><span>Mechanics</span><span>Last activity</span><span>Status</span><span></span>
       </div>
     );
   }
@@ -121,8 +121,11 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
   const waiting = durationLabel(workorder.timeInStatusSeconds) || ageLabel(lastActivity);
   const statusLabel = LIFECYCLE_LABELS[lifecycle] || workorder.statusLabel || lifecycle;
   const isSurveillance = variant === "surveillance";
-  const rowStatus = isSurveillance ? (workorder.odooStatus === "entered" ? "odoo_entered" : workorder.odooStatus === "missing_info" ? "waiting_office" : "closed") : lifecycle;
-  const rowStatusLabel = isSurveillance ? odooLabel(workorder.odooStatus) : statusLabel;
+  const hasOdooStage = ["closed", "odoo_entered"].includes(lifecycle);
+  const rowStatus = isSurveillance && hasOdooStage
+    ? (workorder.odooStatus === "entered" ? "odoo_entered" : workorder.odooStatus === "missing_info" ? "waiting_office" : "closed")
+    : lifecycle;
+  const rowStatusLabel = isSurveillance && hasOdooStage ? odooLabel(workorder.odooStatus) : statusLabel;
 
   return (
     <article className={`mechanic-work-row queue-row-${variant} ${workorder.unread ? "is-unread" : ""} ${featured ? "is-current" : ""}`}>
@@ -135,7 +138,7 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
           <>
             <span className="work-row-location">{location}</span>
             <span className="work-row-mechanic">{mechanic}</span>
-            <span className="work-row-created">{formatCreatedAt(workorder.closedAt || lastActivity)}</span>
+            <span className="work-row-created">{formatCreatedAt(lastActivity)}</span>
           </>
         ) : (
           <>

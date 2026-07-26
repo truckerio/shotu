@@ -2,7 +2,7 @@ import { getOperationalWorkorderById } from "../db/repositories/operational-work
 import { requireActor } from "./authorize.js";
 import { resourceNotFound } from "./errors.js";
 
-const CLOSED_STATUSES = new Set(["closed", "odoo_entered"]);
+const SURVEILLANCE_VISIBLE_STATUSES = new Set(["accepted", "in_progress", "mechanic_done", "closed", "odoo_entered"]);
 
 export async function requireWorkorderAccess(context, workorderId, options = {}) {
   const actor = requireActor(context);
@@ -26,7 +26,7 @@ export async function requireWorkorderAccess(context, workorderId, options = {})
     if (!assigned && !available) throw resourceNotFound("Workorder");
   }
 
-  if (actor.role === "surveillance" && !CLOSED_STATUSES.has(workorder.status)) {
+  if (actor.role === "surveillance" && !SURVEILLANCE_VISIBLE_STATUSES.has(workorder.status)) {
     throw resourceNotFound("Workorder");
   }
 

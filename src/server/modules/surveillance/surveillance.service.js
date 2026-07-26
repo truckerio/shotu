@@ -17,9 +17,36 @@ export async function defaultSurveillanceUser() {
   return users[0] || null;
 }
 
+export function categorizeSurveillanceRows(rows) {
+  const active = rows.filter((row) => ["accepted", "in_progress"].includes(row.lifecycle));
+  const awaitingOffice = rows.filter((row) => row.lifecycle === "mechanic_done");
+  const approved = rows.filter((row) => ["closed", "odoo_entered"].includes(row.lifecycle));
+
+  return {
+    active,
+    awaitingOffice,
+    pendingOdoo: approved.filter((row) => row.odooStatus === "not_entered"),
+    missingInfo: approved.filter((row) => row.odooStatus === "missing_info"),
+    entered: approved.filter((row) => row.odooStatus === "entered"),
+  };
+}
+
+export function isOdooEligibleStatus(status) {
+  return ["closed", "odoo_entered"].includes(status);
+}
+
+async function requireOdooEligibleWorkorder(workorderId) {
+  const workorder = await getOperationalWorkorderById(workorderId);
+  if (!workorder) throw new Error("Workorder not found.");
+  if (!isOdooEligibleStatus(workorder.status)) {
+    throw new Error("Office approval is required before Odoo processing.");
+  }
+  return workorder;
+}
+
 export async function surveillanceDashboard(context) {
   const result = await queryAuthorizedWorkorders(context, {
-    lifecycle: ["closed", "odoo_entered"],
+    lifecycle: ["accepted", "in_progress", "mechanic_done", "closed", "odoo_entered"],
     pageSize: 200,
     sortBy: "lastActivityAt",
     sortDirection: "desc",
@@ -52,15 +79,17 @@ export async function surveillanceDashboard(context) {
     odooStatus: item.odooStatus,
     odooServiceOrderNo: item.odooServiceOrderNo,
   }));
+  const queues = categorizeSurveillanceRows(rows);
+
   return {
     counts: {
-      pendingOdoo: rows.filter((row) => row.odooStatus === "not_entered").length,
-      entered: rows.filter((row) => row.odooStatus === "entered").length,
-      missingInfo: rows.filter((row) => row.odooStatus === "missing_info").length,
+      active: queues.active.length,
+      awaitingOffice: queues.awaitingOffice.length,
+      pendingOdoo: queues.pendingOdoo.length,
+      missingInfo: queues.missingInfo.length,
+      entered: queues.entered.length,
     },
-    pendingOdoo: rows.filter((row) => row.odooStatus === "not_entered"),
-    entered: rows.filter((row) => row.odooStatus === "entered"),
-    missingInfo: rows.filter((row) => row.odooStatus === "missing_info"),
+    ...queues,
   };
 }
 
@@ -78,6 +107,7 @@ export async function surveillanceWorkorderDetail(workorderId, userId) {
 
 export async function markOdooEntered(workorderId, input) {
   await requireSurveillance(input.userId);
+  await requireOdooEligibleWorkorder(workorderId);
   const result = await query(
     `
       insert into odoo_entry_status (
@@ -102,6 +132,7 @@ export async function markOdooEntered(workorderId, input) {
 
 export async function markOdooMissingInfo(workorderId, input) {
   await requireSurveillance(input.userId);
+  await requireOdooEligibleWorkorder(workorderId);
   const result = await query(
     `insert into odoo_entry_status (workorder_id, status, note, updated_at)
      values ($1, 'missing_info', $2, now())
