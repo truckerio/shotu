@@ -1,4 +1,4 @@
-import { query } from "../pool.js";
+import { getPool, query } from "../pool.js";
 import { requireCompanyId } from "../company.js";
 
 export async function getIntegrationStatus(provider, companyId) {
@@ -41,6 +41,112 @@ export async function listConnectedIntegrationAccounts(provider) {
     [provider],
   );
   return result.rows;
+}
+
+export async function getLatestIntegrationSyncRun(provider, companyId) {
+  const tenantId = requireCompanyId(companyId);
+  const result = await query(
+    `
+      select
+        id,
+        company_id,
+        integration_account_id,
+        provider,
+        sync_type,
+        status,
+        started_at,
+        finished_at,
+        fetched_count,
+        changed_count,
+        (error is not null) as has_error
+      from integration_sync_runs
+      where company_id = $1 and provider = $2
+      order by started_at desc, id desc
+      limit 1
+    `,
+    [tenantId, provider],
+  );
+  return result.rows[0] || null;
+}
+
+export async function disconnectIntegration(provider, companyId) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const accountResult = await client.query(
+      `
+        insert into integration_accounts (
+          company_id,
+          provider,
+          status,
+          token_env_key,
+          access_token,
+          refresh_token,
+          token_type,
+          scope,
+          expires_at,
+          oauth_state,
+          oauth_state_created_at,
+          updated_at
+        )
+        values ($1, $2, 'disconnected', '', null, null, null, null, null, null, null, now())
+        on conflict (company_id, provider)
+        do update set
+          status = 'disconnected',
+          token_env_key = '',
+          access_token = null,
+          refresh_token = null,
+          token_type = null,
+          scope = null,
+          expires_at = null,
+          oauth_state = null,
+          oauth_state_created_at = null,
+          last_sync_cursor = null,
+          updated_at = now()
+        returning id, company_id, provider, status, last_full_sync_at, updated_at
+      `,
+      [tenantId, provider],
+    );
+    const account = accountResult.rows[0];
+    const runResult = await client.query(
+      `
+        insert into integration_sync_runs (
+          company_id,
+          integration_account_id,
+          provider,
+          sync_type,
+          status,
+          started_at,
+          finished_at,
+          fetched_count,
+          changed_count,
+          error
+        )
+        values ($1, $2, $3, 'disconnect', 'completed', now(), now(), 0, 0, null)
+        returning
+          id,
+          company_id,
+          integration_account_id,
+          provider,
+          sync_type,
+          status,
+          started_at,
+          finished_at,
+          fetched_count,
+          changed_count,
+          false as has_error
+      `,
+      [tenantId, account.id, provider],
+    );
+    await client.query("commit");
+    return { account, run: runResult.rows[0] };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function saveOAuthState(provider, state, companyId) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CustomerCompanyField,
   FormCard,
@@ -39,6 +39,11 @@ export function CreateWorkorderForm({
   const [partsOpen, setPartsOpen] = useState(false);
   const locationOptions = locations || [];
   const mechanics = assignment?.mechanics || [];
+  const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
+
+  useEffect(() => {
+    setUnitDetailsOpen(false);
+  }, [selectedVehicleId]);
 
   return (
     <OperationalForm
@@ -51,6 +56,8 @@ export function CreateWorkorderForm({
       <FormErrorSummary errors={errors} focusOnMount title="Check the workorder details" />
       {message ? <p className="create-workorder-form-message" role="status">{message}</p> : null}
 
+      <div className="create-workorder-columns">
+        <div className="create-workorder-column create-workorder-primary-column">
       <FormCard
         className="create-workorder-card"
         title="Workorder"
@@ -96,109 +103,6 @@ export function CreateWorkorderForm({
               onChange={(event) => onFieldChange("mechanicConcern", event.target.value)}
             />
           </FormField>
-        </FormSection>
-      </FormCard>
-
-      <FormCard
-        className="create-unit-card"
-        title="Unit & customer"
-        description="Select the equipment and confirm who owns or operates it."
-      >
-        <FormSection title="Unit" description="Search by unit number, VIN, truck name, or license plate.">
-        <div className="operational-unit-lookup">
-          <FormField id="workorder-unit" label="Unit" error={errors?.unitNo} required>
-            <input
-              role="combobox"
-              aria-autocomplete="list"
-              aria-controls="create-vehicle-suggestions"
-              aria-expanded={Boolean(vehicleLookup.results?.length)}
-              autoComplete="off"
-              value={form.unitNo}
-              onChange={(event) => onUnitChange(event.target.value)}
-              placeholder="Unit, VIN, or license"
-            />
-          </FormField>
-          {vehicleLookup.loading ? <p className="operational-inline-status">Searching units...</p> : null}
-          {vehicleLookup.results?.length ? (
-            <div className="operational-unit-results" id="create-vehicle-suggestions" role="listbox" aria-label="Unit suggestions">
-              {vehicleLookup.results.map((vehicle) => (
-                <button key={vehicle.id} type="button" role="option" aria-selected="false" onClick={() => onVehicleSelect(vehicle)}>
-                  <strong>{vehicle.unit_no || vehicle.name || vehicle.vin || "Unnamed unit"}</strong>
-                  <span>{[
-                    vehicle.unit_type,
-                    vehicle.owner_name,
-                    [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" "),
-                    vehicle.vin,
-                    vehicle.license_plate,
-                  ].filter(Boolean).join(" / ")}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        {selectedVehicle ? (
-          <>
-            <UnitSummary
-              unit={{
-                unitNo: form.unitNo,
-                unitType: form.unitType,
-                year: selectedVehicle.year,
-                make: selectedVehicle.make,
-                model: selectedVehicle.model || form.model,
-                vin: form.vinNo,
-                license: form.licenseNo,
-                mileage: form.mileage ? `${form.mileage} mi` : "",
-              }}
-              onEdit={() => setUnitDetailsOpen((open) => !open)}
-              editLabel={unitDetailsOpen ? "Hide unit details" : "Edit unit details"}
-            />
-            <AssetLocationCard
-              vehicle={selectedVehicle}
-              mapsConfig={mapsConfig}
-              showVehicleLabel={false}
-            />
-          </>
-        ) : null}
-
-        <OptionalSection
-          title="Unit details"
-          description="Add or correct details when the imported record is incomplete."
-          open={unitDetailsOpen || !selectedVehicle}
-          onToggle={setUnitDetailsOpen}
-        >
-          <div className="operational-form-grid two">
-            <FormField id="workorder-unit-type" label="Unit type">
-              <select value={form.unitType} onChange={(event) => onFieldChange("unitType", event.target.value)}>
-                <option value="">Select type</option>
-                <option value="Truck">Truck</option>
-                <option value="Trailer">Trailer</option>
-                <option value="Other">Other</option>
-              </select>
-            </FormField>
-            <FormField id="workorder-license" label="License">
-              <input value={form.licenseNo} onChange={(event) => onFieldChange("licenseNo", event.target.value)} />
-            </FormField>
-            <FormField id="workorder-mileage" label="Mileage">
-              <input inputMode="numeric" value={form.mileage} onChange={(event) => onFieldChange("mileage", event.target.value)} />
-            </FormField>
-            <FormField id="workorder-model" label="Model">
-              <input value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} />
-            </FormField>
-          </div>
-          <FormField id="workorder-vin" label="VIN">
-            <input value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} />
-          </FormField>
-        </OptionalSection>
-        </FormSection>
-
-        <FormSection title="Customer">
-          <CustomerCompanyField
-            value={form.customerCompanyName}
-            onChange={(value) => onFieldChange("customerCompanyName", value)}
-            error={errors?.customerCompanyName}
-            required
-          />
         </FormSection>
       </FormCard>
 
@@ -259,7 +163,114 @@ export function CreateWorkorderForm({
           <Button type="button" variant="secondary" onClick={onAddPart}>Add part</Button>
         </OptionalSection>
       </FormCard>
+        </div>
 
+        <div className="create-workorder-column create-workorder-unit-column">
+      <FormCard
+        className="create-unit-card"
+        title="Unit & customer"
+        description="Select the equipment and confirm who owns or operates it."
+      >
+        <FormSection title="Unit" description="Search by unit number, VIN, truck name, or license plate.">
+        <div className="operational-unit-lookup">
+          <FormField id="workorder-unit" label="Unit" error={errors?.unitNo} required>
+            <input
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls="create-vehicle-suggestions"
+              aria-expanded={Boolean(vehicleLookup.results?.length)}
+              autoComplete="off"
+              value={form.unitNo}
+              onChange={(event) => onUnitChange(event.target.value)}
+              placeholder="Unit, VIN, or license"
+            />
+          </FormField>
+          {vehicleLookup.loading ? <p className="operational-inline-status">Searching units...</p> : null}
+          {vehicleLookup.results?.length ? (
+            <div className="operational-unit-results" id="create-vehicle-suggestions" role="listbox" aria-label="Unit suggestions">
+              {vehicleLookup.results.map((vehicle) => (
+                <button key={vehicle.id} type="button" role="option" aria-selected="false" onClick={() => onVehicleSelect(vehicle)}>
+                  <strong>{vehicle.unit_no || vehicle.name || vehicle.vin || "Unnamed unit"}</strong>
+                  <span>{[
+                    vehicle.unit_type,
+                    vehicle.owner_name,
+                    [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" "),
+                    vehicle.vin,
+                    vehicle.license_plate,
+                  ].filter(Boolean).join(" / ")}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {selectedVehicle ? (
+          <>
+            <UnitSummary
+              editing={unitDetailsOpen}
+              unit={{
+                unitNo: form.unitNo,
+                unitType: form.unitType,
+                vehicle: form.model,
+                vin: form.vinNo,
+                license: form.licenseNo,
+                mileage: form.mileage,
+              }}
+              onEdit={() => setUnitDetailsOpen((open) => !open)}
+              onFieldChange={onFieldChange}
+              editLabel={unitDetailsOpen ? "Done editing" : "Edit unit details"}
+            />
+            <AssetLocationCard
+              vehicle={selectedVehicle}
+              mapsConfig={mapsConfig}
+              showVehicleLabel={false}
+            />
+          </>
+        ) : null}
+
+        {!selectedVehicle ? (
+          <OptionalSection
+            title="Unit details"
+            description="Add details when the unit is not available from Samsara."
+            open
+          >
+            <div className="operational-form-grid two">
+              <FormField id="workorder-unit-type" label="Unit type">
+                <select value={form.unitType} onChange={(event) => onFieldChange("unitType", event.target.value)}>
+                  <option value="">Select type</option>
+                  <option value="Truck">Truck</option>
+                  <option value="Trailer">Trailer</option>
+                  <option value="Other">Other</option>
+                </select>
+              </FormField>
+              <FormField id="workorder-license" label="License">
+                <input value={form.licenseNo} onChange={(event) => onFieldChange("licenseNo", event.target.value)} />
+              </FormField>
+              <FormField id="workorder-mileage" label="Mileage">
+                <input inputMode="numeric" value={form.mileage} onChange={(event) => onFieldChange("mileage", event.target.value)} />
+              </FormField>
+              <FormField id="workorder-model" label="Model">
+                <input value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} />
+              </FormField>
+            </div>
+            <FormField id="workorder-vin" label="VIN">
+              <input value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} />
+            </FormField>
+          </OptionalSection>
+        ) : null}
+        </FormSection>
+
+        <FormSection title="Customer">
+          <CustomerCompanyField
+            value={form.customerCompanyName}
+            onChange={(value) => onFieldChange("customerCompanyName", value)}
+            error={errors?.customerCompanyName}
+            required
+          />
+        </FormSection>
+      </FormCard>
+        </div>
+      </div>
     </OperationalForm>
   );
 }

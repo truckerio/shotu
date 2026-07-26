@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Pin01 } from "@untitledui/icons";
 import { satelliteTiles } from "../../features/generator/GeneratorUi.jsx";
 
+const MAP_HOVER_DELAY_MS = 1500;
+
 export function getVehicleLocation(vehicle) {
   const gps = vehicle?.lastLocation || vehicle?.last_location || null;
   const latitude = Number(gps?.latitude);
@@ -23,11 +25,34 @@ export function AssetLocationCard({
   showVehicleLabel = true,
 }) {
   const cardRef = useRef(null);
+  const hoverTimerRef = useRef(null);
   const mapPanelId = useId();
   const [mapOpen, setMapOpen] = useState(false);
   const [mapPinned, setMapPinned] = useState(false);
   const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || "Vehicle";
   const mapVisible = Boolean(location) && (mapOpen || mapPinned);
+
+  function clearHoverTimer() {
+    if (!hoverTimerRef.current) return;
+    window.clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+  }
+
+  function startHoverTimer(event) {
+    if (event.pointerType !== "mouse" || !location || mapVisible) return;
+    clearHoverTimer();
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      setMapOpen(true);
+    }, MAP_HOVER_DELAY_MS);
+  }
+
+  function leaveCard() {
+    clearHoverTimer();
+    if (!mapPinned) setMapOpen(false);
+  }
+
+  useEffect(() => () => clearHoverTimer(), []);
 
   useEffect(() => {
     if (!mapOpen || mapPinned) return undefined;
@@ -46,6 +71,8 @@ export function AssetLocationCard({
     <div
       ref={cardRef}
       className={`asset-location-card ${mapVisible ? "is-map-visible" : ""} ${mapPinned ? "is-map-pinned" : ""}`}
+      onPointerEnter={startHoverTimer}
+      onPointerLeave={leaveCard}
     >
       <div className="asset-location-header">
         <button
@@ -55,6 +82,7 @@ export function AssetLocationCard({
           aria-expanded={mapVisible}
           disabled={!location}
           onClick={() => {
+            clearHoverTimer();
             if (!mapPinned) setMapOpen((open) => !open);
           }}
         >
@@ -74,6 +102,7 @@ export function AssetLocationCard({
               aria-pressed={mapPinned}
               data-tooltip={mapPinned ? "Unpin map" : "Pin map open"}
               onClick={() => {
+                clearHoverTimer();
                 setMapOpen(true);
                 setMapPinned((pinned) => !pinned);
               }}

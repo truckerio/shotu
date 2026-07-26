@@ -1,4 +1,9 @@
-import { samsaraStatus, syncSamsaraVehicles, testSamsaraConnection } from "../integrations/samsara/samsara.sync.service.js";
+import {
+  disconnectSamsara,
+  samsaraStatus,
+  syncSamsaraVehicles,
+  testSamsaraConnection,
+} from "../integrations/samsara/samsara.sync.service.js";
 import { handleSamsaraOAuthCallback, samsaraOAuthStartUrl } from "../integrations/samsara/samsara.oauth.service.js";
 import { runAutomaticSamsaraSync } from "../integrations/samsara/samsara.auto-sync.js";
 import { requireCompanyAccess } from "../auth/authorize.js";
@@ -52,6 +57,12 @@ export async function handleIntegrationsApi(req, res, url, helpers) {
   if (req.method === "POST" && url.pathname === "/api/integrations/samsara/sync") {
     const companyId = selectedCompanyId(url, requestContext);
     sendJson(res, 200, await syncSamsaraVehicles({ companyId }));
+    return true;
+  }
+
+  if (req.method === "DELETE" && url.pathname === "/api/integrations/samsara") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await disconnectSamsara(companyId));
     return true;
   }
 

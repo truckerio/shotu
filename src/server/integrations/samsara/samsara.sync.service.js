@@ -1,6 +1,13 @@
 import { migrate } from "../../db/migrate.js";
 import { upsertVehicles } from "../../db/repositories/assets.repo.js";
-import { createSyncRun, finishSyncRun, getIntegrationStatus, upsertIntegrationStatus } from "../../db/repositories/integrations.repo.js";
+import {
+  createSyncRun,
+  disconnectIntegration,
+  finishSyncRun,
+  getIntegrationStatus,
+  getLatestIntegrationSyncRun,
+  upsertIntegrationStatus,
+} from "../../db/repositories/integrations.repo.js";
 import { env } from "../../config/env.js";
 import { SamsaraClient } from "./samsara.client.js";
 import { mapSamsaraTrailer, mapSamsaraVehicle } from "./samsara.mapper.js";
@@ -11,17 +18,59 @@ import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 const STAT_TYPES = ["obdOdometerMeters", "gpsOdometerMeters", "gps"];
 const activeSyncPromises = new Map();
 
+function publicLatestSync(run) {
+  if (!run) return null;
+  return {
+    id: run.id,
+    type: run.sync_type,
+    status: run.status,
+    startedAt: run.started_at,
+    finishedAt: run.finished_at,
+    fetchedCount: Number(run.fetched_count) || 0,
+    changedCount: Number(run.changed_count) || 0,
+    hasError: Boolean(run.has_error),
+  };
+}
+
+export function publicSamsaraStatus({
+  account,
+  latestSync,
+  hasApiToken = false,
+}) {
+  const hasOAuth = Boolean(account?.access_token || account?.refresh_token);
+  const oauthPending = account?.status === "oauth_pending";
+  let status = "missing_token";
+  if (hasOAuth) status = account?.status || "connected";
+  else if (hasApiToken) status = account?.status === "error" ? "error" : "configured";
+  else if (oauthPending || account?.status === "disconnected") status = account.status;
+
+  return {
+    configured: Boolean(hasOAuth || hasApiToken),
+    provider: "samsara",
+    authType: hasOAuth || oauthPending ? "oauth" : hasApiToken ? "api_token" : "none",
+    status,
+    lastFullSyncAt: account?.last_full_sync_at || null,
+    latestSync: publicLatestSync(latestSync),
+  };
+}
+
 export async function samsaraStatus(companyId = DEFAULT_COMPANY_ID) {
   await migrate();
-  const status = await getIntegrationStatus("samsara", companyId);
-  const hasOAuth = Boolean(status?.access_token || status?.refresh_token);
-  return {
-    configured: Boolean(hasOAuth || env.samsaraApiToken),
-    provider: "samsara",
-    authType: hasOAuth ? "oauth" : env.samsaraApiToken ? "api_token" : "none",
-    status: hasOAuth || env.samsaraApiToken ? status?.status || "configured" : "missing_token",
-    lastFullSyncAt: status?.last_full_sync_at || null,
-  };
+  const [account, latestSync] = await Promise.all([
+    getIntegrationStatus("samsara", companyId),
+    getLatestIntegrationSyncRun("samsara", companyId),
+  ]);
+  return publicSamsaraStatus({
+    account,
+    latestSync,
+    hasApiToken: companyId === DEFAULT_COMPANY_ID && Boolean(env.samsaraApiToken),
+  });
+}
+
+export async function disconnectSamsara(companyId = DEFAULT_COMPANY_ID) {
+  await migrate();
+  await disconnectIntegration("samsara", companyId);
+  return samsaraStatus(companyId);
 }
 
 export async function testSamsaraConnection(companyId = DEFAULT_COMPANY_ID) {

@@ -30,7 +30,7 @@ import {
 import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
-import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, SamsaraActionButton, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
+import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
 import { CREATE_WORKORDER_FORM_ID, CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
 import {
   buildWorkorderDraftPayload,
@@ -163,7 +163,6 @@ export function App({ actor }) {
   });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
-  const [samsaraIntegration, setSamsaraIntegration] = useState({ loading: true, connected: false, authType: "none" });
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [officeLocations, setOfficeLocations] = useState([]);
@@ -433,24 +432,6 @@ export function App({ actor }) {
       .catch(() => setMapsConfig({}));
   }, []);
 
-  async function refreshSamsaraStatus() {
-    try {
-      const result = await api("/api/integrations/samsara/status");
-      setSamsaraIntegration({
-        loading: false,
-        connected: result.authType === "oauth" && result.status === "connected",
-        authType: result.authType || "none",
-      });
-    } catch {
-      setSamsaraIntegration({ loading: false, connected: false, authType: "none" });
-    }
-  }
-
-  useEffect(() => {
-    if (actor.role === "admin") refreshSamsaraStatus();
-    else setSamsaraIntegration({ loading: false, connected: false, authType: "none" });
-  }, [actor.role]);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const workorderId = params.get("workorder");
@@ -507,20 +488,6 @@ export function App({ actor }) {
     setSupportingView("chat");
     setDetailSection(defaultDetailSection(actor.role, detailStatus, false));
   }, [activeWorkorder, actor.role, detailSection, detailStatus, isCompact]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const samsara = params.get("samsara");
-    if (!samsara) return;
-    setVehicleLookup((current) => ({
-      ...current,
-      status: samsara === "connected" ? "Samsara connected. Vehicle list will sync automatically." : params.get("message") || "Samsara login failed.",
-    }));
-    if (samsara === "connected") {
-      setSamsaraIntegration((current) => ({ ...current, connected: true, authType: "oauth", loading: false }));
-    }
-    window.history.replaceState({}, "", window.location.pathname);
-  }, []);
 
   useEffect(() => {
     setFullscreenPageIndex((current) => Math.min(current, Math.max(0, effectiveCopies - 1)));
@@ -713,10 +680,11 @@ export function App({ actor }) {
 
   async function refreshVehicleLocation(vehicle = selectedVehicle) {
     if (!vehicle?.id || locationLoading) return;
+    const requestedVehicleId = vehicle.id;
     setLocationLoading(true);
     try {
       const result = await api(`/api/vehicles/${encodeURIComponent(vehicle.id)}/live-location`, { method: "POST" });
-      setSelectedVehicle(result.vehicle);
+      setSelectedVehicle((current) => current?.id === requestedVehicleId ? result.vehicle : current);
     } catch (error) {
       setVehicleLookup((current) => ({ ...current, status: error.message }));
     } finally {
@@ -724,8 +692,18 @@ export function App({ actor }) {
     }
   }
 
-  function connectSamsara() {
-    window.location.href = "/api/integrations/samsara/oauth/start";
+  async function restoreDraftVehicle(payload) {
+    const snapshot = selectedVehicleFromWorkorderDraft(payload);
+    setSelectedVehicle(snapshot);
+    if (!snapshot?.id) return;
+
+    try {
+      const result = await api(`/api/vehicles/${encodeURIComponent(snapshot.id)}`);
+      setSelectedVehicle((current) => current?.id === snapshot.id ? result.vehicle : current);
+      refreshVehicleLocation(result.vehicle);
+    } catch (error) {
+      setVehicleLookup((current) => ({ ...current, status: error.message }));
+    }
   }
 
   async function openBrowserPrintDialog(payload) {
@@ -1133,7 +1111,7 @@ export function App({ actor }) {
       ...current,
       mechanicUserIds: draft.payload?.mechanicUserIds || [],
     }));
-    setSelectedVehicle(selectedVehicleFromWorkorderDraft(draft.payload));
+    restoreDraftVehicle(draft.payload);
     setResumedDraft(draft);
     workorderDraft.reset(draft);
     setDraftResumeOpen(false);
@@ -1748,15 +1726,6 @@ export function App({ actor }) {
                       {officeLocations.map((entry) => <option key={entry.location.id} value={entry.location.id}>{entry.location.name}</option>)}
                     </select>
                   </Field>
-                ) : null}
-                {actor.role === "admin" ? (
-                  <div className="vehicle-sync-row">
-                    <SamsaraActionButton
-                      connected={samsaraIntegration.connected}
-                      loading={samsaraIntegration.loading}
-                      onConnect={connectSamsara}
-                    />
-                  </div>
                 ) : null}
                 <div className="two-col">
                   <div className="unit-field-wrap">

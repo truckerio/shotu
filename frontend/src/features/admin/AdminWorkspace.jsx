@@ -7,6 +7,7 @@ import {
   Mail01,
   MarkerPin01,
   Plus,
+  Settings01,
   Tool02,
   Trash01,
   UserCheck01,
@@ -22,6 +23,7 @@ import { Button } from "../../components/ui/Button.jsx";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import { IntegrationsSettings } from "./integrations/IntegrationsSettings.jsx";
 import "./admin.css";
 
 const blankLocation = { name: "", type: "yard", address: "" };
@@ -216,7 +218,10 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
   const [locations, setLocations] = useState([]);
   const [view, setView] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("adminLocation") || params.get("adminView") === "locations" ? "locations" : "operations";
+    if (params.has("samsara")) return "settings";
+    if (params.get("adminLocation") || params.get("adminView") === "locations") return "locations";
+    if (params.get("adminView") === "settings") return "settings";
+    return "operations";
   });
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -266,7 +271,10 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
     setSelectedId(null);
     setDetail(null);
     setTab("work");
-    window.history.replaceState({}, "", `/?adminView=${nextView}`);
+    const query = nextView === "settings"
+      ? "?adminView=settings&settingsTab=integrations"
+      : `?adminView=${nextView}`;
+    window.history.replaceState({}, "", `/${query}`);
   }
 
   async function createLocation(event) {
@@ -406,11 +414,13 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
         <nav className="admin-primary-nav" aria-label="Admin workspace">
           <button className={view === "operations" ? "active" : ""} type="button" onClick={() => changeView("operations")}><Tool02 />Operations</button>
           <button className={view === "locations" ? "active" : ""} type="button" onClick={() => changeView("locations")}><MarkerPin01 />Locations</button>
+          <button className={view === "settings" ? "active" : ""} type="button" onClick={() => changeView("settings")}><Settings01 />Settings</button>
         </nav>
       </WorkspaceHeader>
       {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
       {view === "operations" ? <OperationsHome locations={locations} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
+      {view === "settings" ? <IntegrationsSettings /> : null}
       {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
       {modal === "location" ? <Modal title="New location" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createLocation}><label><span>Name</span><input required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label><label><span>Address</span><input value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label><Button variant="primary" type="submit" disabled={state.busy}>Create location</Button></form></Modal> : null}

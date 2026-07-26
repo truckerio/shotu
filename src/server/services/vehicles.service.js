@@ -8,6 +8,11 @@ export async function findVehicles(query, limit, companyIds) {
   return searchVehicles(query, limit, companyIds);
 }
 
+export async function findVehicleById(id, companyIds) {
+  await migrate();
+  return getVehicleById(id, companyIds);
+}
+
 export async function refreshVehicleLocation(id, companyIds) {
   await migrate();
   const vehicle = await getVehicleById(id, companyIds);

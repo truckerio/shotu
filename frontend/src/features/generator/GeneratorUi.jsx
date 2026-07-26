@@ -33,29 +33,6 @@ export function satelliteTiles(location, mapsConfig) {
   );
 }
 
-export function SamsaraActionButton({ connected, loading, onConnect }) {
-  if (loading || connected) {
-    return (
-      <span className={`samsara-connection-status ${connected ? "is-connected" : ""}`} role="status">
-        {connected ? <CheckCircle /> : null}
-        {connected ? "Samsara connected" : "Checking Samsara"}
-      </span>
-    );
-  }
-  return (
-    <button
-      className="samsara-action needs-connect"
-      type="button"
-      onClick={onConnect}
-      aria-label="Connect Samsara"
-      title="Connect Samsara"
-    >
-      <span>Connect</span>
-      <img src="/samsara-logo.png" alt="" aria-hidden="true" />
-    </button>
-  );
-}
-
 export function Field({ label, hint, children }) {
   return (
     <label className="field">

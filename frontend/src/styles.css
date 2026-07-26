@@ -2320,87 +2320,6 @@ textarea:focus {
   font-size: var(--text-secondary);
 }
 
-.vehicle-sync-row {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.samsara-action {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #d5d7da;
-  border-radius: 8px;
-  color: #414651;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  gap: 8px;
-  justify-content: center;
-  min-height: 38px;
-  padding: 7px 12px;
-  position: relative;
-  transition:
-    background var(--motion-control) var(--motion-ease-standard),
-    border-color var(--motion-control) var(--motion-ease-standard),
-    box-shadow var(--motion-control) var(--motion-ease-standard),
-    color var(--motion-control) var(--motion-ease-standard),
-    transform var(--motion-control) var(--motion-ease-standard);
-  white-space: nowrap;
-}
-
-.samsara-action:hover,
-.samsara-action:focus {
-  background: #f9fafb;
-  border-color: #a4a7ae;
-  transform: translateY(-1px);
-  outline: none;
-}
-
-.samsara-action:focus {
-  box-shadow: 0 0 0 3px #d1e9ff;
-}
-
-.samsara-action:disabled {
-  cursor: wait;
-  opacity: 0.75;
-}
-
-.samsara-action svg {
-  height: 16px;
-  width: 16px;
-}
-
-.samsara-action img {
-  border-radius: 4px;
-  height: 18px;
-  object-fit: contain;
-  transition: transform var(--motion-control) var(--motion-ease-standard);
-  width: 18px;
-}
-
-.samsara-action.needs-connect:hover img,
-.samsara-action.needs-connect:focus img {
-  transform: scale(1.08);
-}
-
-.samsara-connection-status {
-  align-items: center;
-  color: #667085;
-  display: inline-flex;
-  font-size: var(--text-secondary);
-  gap: 6px;
-}
-
-.samsara-connection-status.is-connected {
-  color: #067647;
-}
-
-.samsara-connection-status svg {
-  height: 16px;
-  width: 16px;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -2691,26 +2610,6 @@ textarea:focus {
   transform: translateY(0);
   transition-delay: 0s;
   visibility: visible;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .asset-location-card:hover .asset-location-header {
-    border-color: #b2ccff;
-    border-radius: 8px 8px 0 0;
-  }
-
-  .asset-location-card:hover .asset-map-hover {
-    border-color: #b2ccff;
-    border-width: 1px;
-    margin-top: -1px;
-    max-height: 360px;
-    opacity: 1;
-    padding: 7px;
-    pointer-events: auto;
-    transform: translateY(0);
-    transition-delay: 0s;
-    visibility: visible;
-  }
 }
 
 .asset-map-tiles {
@@ -4682,43 +4581,61 @@ textarea:focus {
 
 /* Shared operational form composition */
 .create-workorder-form {
+  display: grid;
+  gap: 16px;
   margin: 0 auto;
   max-width: 720px;
   padding: 20px 24px 28px;
 }
 
+.create-workorder-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-workorder-column {
+  display: contents;
+}
+
+.create-workorder-columns > .create-workorder-column > .operational-form-card {
+  margin-top: 0;
+}
+
+.create-workorder-card {
+  order: 1;
+}
+
+.create-unit-card {
+  order: 2;
+}
+
+.create-assignment-card {
+  order: 3;
+}
+
 @media (min-width: 1800px) {
   .create-workorder-form {
+    max-width: 1320px;
+  }
+
+  .create-workorder-columns {
     align-items: start;
     display: grid;
     gap: 16px;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    max-width: 1320px;
   }
 
-  .create-workorder-form > .operational-form-error-summary,
-  .create-workorder-form > .create-workorder-form-message {
-    grid-column: 1 / -1;
+  .create-workorder-column {
+    align-content: start;
+    display: grid;
+    gap: 16px;
+    min-width: 0;
   }
 
-  .create-workorder-form > .operational-form-error-summary {
-    margin-bottom: 8px;
+  .create-workorder-columns .operational-form-card {
+    order: initial;
   }
-
-  .create-workorder-form > .operational-form-card {
-    margin-top: 0;
-  }
-
-  .create-workorder-form > .create-workorder-card,
-  .create-workorder-form > .create-assignment-card {
-    grid-column: 1;
-  }
-
-  .create-workorder-form > .create-unit-card {
-    grid-column: 2;
-    grid-row: span 2;
-  }
-
 }
 
 .create-workorder-form-message {
@@ -5332,7 +5249,12 @@ textarea:focus {
 
 @media (max-width: 700px) {
   .create-workorder-form {
+    gap: 12px;
     padding: 12px 4px 96px;
+  }
+
+  .create-workorder-columns {
+    gap: 12px;
   }
 
   .workorder-detail-page .editor-summary,

@@ -438,6 +438,18 @@
   overflow-wrap: anywhere;
 }
 
+.operational-unit-summary.is-editing dl {
+  align-items: end;
+}
+
+.operational-unit-summary.is-editing dd {
+  font-weight: 400;
+}
+
+.operational-unit-summary.is-editing :where(input, select) {
+  min-height: 40px;
+}
+
 .operational-mechanic-select {
   border: 0;
   margin: 0;

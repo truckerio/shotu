@@ -9,23 +9,34 @@ function displayValue(value) {
 
 export function UnitSummary({
   className = "",
+  editing = false,
   unit = {},
   onEdit,
+  onFieldChange,
   editLabel = "Edit unit details",
 }) {
   const title = unit.unitNo || unit.name || unit.vin || "Selected unit";
   const type = unit.unitType || unit.type || "Unit";
-  const vehicle = [unit.year, unit.make, unit.model].filter(Boolean).join(" ");
+  const vehicle = unit.vehicle || [unit.year, unit.make, unit.model].filter(Boolean).join(" ");
   const details = [
-    ["Type", type],
-    ["Vehicle", vehicle],
-    ["VIN", unit.vin],
-    ["License", unit.license || unit.licensePlate],
-    ["Mileage", unit.mileage],
-  ].filter(([, value]) => value !== null && value !== undefined && value !== "");
+    { label: "Type", value: type, field: "unitType", control: "select" },
+    { label: "Vehicle", value: vehicle, field: "model" },
+    { label: "VIN", value: unit.vin, field: "vinNo" },
+    { label: "License", value: unit.license || unit.licensePlate, field: "licenseNo" },
+    {
+      label: "Mileage",
+      value: unit.mileage,
+      displayValue: unit.mileage ? `${unit.mileage} mi` : "",
+      field: "mileage",
+      inputMode: "numeric",
+    },
+  ].filter(({ value }) => editing || (value !== null && value !== undefined && value !== ""));
 
   return (
-    <section className={joinClassNames("operational-unit-summary", className)} aria-label={`${title} summary`}>
+    <section
+      className={joinClassNames("operational-unit-summary", editing && "is-editing", className)}
+      aria-label={`${title} summary`}
+    >
       <div className="operational-unit-summary-header">
         <div>
           <span>{type}</span>
@@ -35,10 +46,32 @@ export function UnitSummary({
       </div>
       {details.length ? (
         <dl>
-          {details.map(([label, value]) => (
+          {details.map(({ control, displayValue: formattedValue, field, inputMode, label, value }) => (
             <div key={label}>
-              <dt>{label}</dt>
-              <dd>{displayValue(value)}</dd>
+              <dt><label htmlFor={`selected-unit-${field}`}>{label}</label></dt>
+              <dd>
+                {editing && onFieldChange ? (
+                  control === "select" ? (
+                    <select
+                      id={`selected-unit-${field}`}
+                      value={value === "Unit" ? "" : value}
+                      onChange={(event) => onFieldChange(field, event.target.value)}
+                    >
+                      <option value="">Select type</option>
+                      <option value="Truck">Truck</option>
+                      <option value="Trailer">Trailer</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  ) : (
+                    <input
+                      id={`selected-unit-${field}`}
+                      inputMode={inputMode}
+                      value={value || ""}
+                      onChange={(event) => onFieldChange(field, event.target.value)}
+                    />
+                  )
+                ) : displayValue(formattedValue || value)}
+              </dd>
             </div>
           ))}
         </dl>
