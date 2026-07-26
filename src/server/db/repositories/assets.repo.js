@@ -54,19 +54,21 @@ export async function getVehicleById(id, companyIds = []) {
   return result.rows[0] || null;
 }
 
-export async function updateVehicleLocation(id, location, seenAt) {
+export async function updateVehicleLocation(id, companyId, location, seenAt) {
+  const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
       update assets
-      set last_location = $2::jsonb,
-          last_seen_at = $3,
+      set last_location = $3::jsonb,
+          last_seen_at = $4,
           updated_at = now()
       where id = $1
+        and company_id = $2
       returning id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
                 make, model, year, serial, last_odometer_meters, last_odometer_miles,
                 last_location, last_seen_at, synced_at
     `,
-    [id, JSON.stringify(location || {}), seenAt || null]
+    [id, tenantId, JSON.stringify(location || {}), seenAt || null]
   );
   return result.rows[0] || null;
 }

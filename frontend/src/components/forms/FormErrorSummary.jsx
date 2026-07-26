@@ -4,15 +4,28 @@ import "./operational-form.css";
 
 export function FormErrorSummary({
   errors,
+  focusFirstField = false,
+  focusKey = 0,
   focusOnMount = false,
   title = "There is a problem",
 }) {
   const items = normalizeFormErrors(errors);
   const summaryRef = useRef(null);
+  const errorSignature = items.map((item) => `${item.key}:${item.id}:${item.message}`).join("|");
 
   useEffect(() => {
-    if (focusOnMount && items.length) summaryRef.current?.focus();
-  }, [focusOnMount, items.length]);
+    if (!focusOnMount || !items.length) return;
+
+    const firstField = focusFirstField && items[0].id
+      ? document.getElementById(items[0].id)
+      : null;
+    if (firstField) {
+      firstField.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstField.focus({ preventScroll: true });
+      return;
+    }
+    summaryRef.current?.focus();
+  }, [errorSignature, focusFirstField, focusKey, focusOnMount]);
 
   if (!items.length) return null;
 

@@ -13,6 +13,15 @@ export async function findVehicleById(id, companyIds) {
   return getVehicleById(id, companyIds);
 }
 
+export function hasValidGpsCoordinates(gps) {
+  const hasCoordinate = (value) =>
+    value !== null
+    && value !== undefined
+    && value !== ""
+    && Number.isFinite(Number(value));
+  return hasCoordinate(gps?.latitude) && hasCoordinate(gps?.longitude);
+}
+
 export async function refreshVehicleLocation(id, companyIds) {
   await migrate();
   const vehicle = await getVehicleById(id, companyIds);
@@ -30,8 +39,15 @@ export async function refreshVehicleLocation(id, companyIds) {
     ? await client.listTrailerStats({ trailerIds: [samsaraId], types: ["gps"] })
     : await client.listVehicleStats({ vehicleIds: [samsaraId], types: ["gps"] });
   const gps = body.data?.[0]?.gps;
-  if (!gps?.latitude || !gps?.longitude) {
+  if (!hasValidGpsCoordinates(gps)) {
     throw new Error("Samsara did not return a GPS location for this asset.");
   }
-  return updateVehicleLocation(vehicle.id, gps, gps.time || vehicle.last_seen_at);
+  const updatedVehicle = await updateVehicleLocation(
+    vehicle.id,
+    vehicle.company_id,
+    gps,
+    gps.time || vehicle.last_seen_at
+  );
+  if (!updatedVehicle) throw new Error("Vehicle not found.");
+  return updatedVehicle;
 }

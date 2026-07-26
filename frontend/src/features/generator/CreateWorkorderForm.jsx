@@ -12,6 +12,7 @@ import {
 } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { AssetLocationCard } from "../../components/workorders/AssetLocationCard.jsx";
+import { createWorkorderSummaryErrors } from "./create-workorder-validation.js";
 
 export const CREATE_WORKORDER_FORM_ID = "create-workorder-form";
 
@@ -19,6 +20,7 @@ export function CreateWorkorderForm({
   assignment,
   busy,
   errors,
+  errorFocusKey,
   form,
   locations,
   mapsConfig,
@@ -40,6 +42,7 @@ export function CreateWorkorderForm({
   const locationOptions = locations || [];
   const mechanics = assignment?.mechanics || [];
   const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
+  const summaryErrors = createWorkorderSummaryErrors(errors);
 
   useEffect(() => {
     setUnitDetailsOpen(false);
@@ -53,7 +56,13 @@ export function CreateWorkorderForm({
       onSubmit={onSubmit}
       noValidate
     >
-      <FormErrorSummary errors={errors} focusOnMount title="Check the workorder details" />
+      <FormErrorSummary
+        errors={summaryErrors}
+        focusFirstField
+        focusKey={errorFocusKey}
+        focusOnMount
+        title="Check the workorder details"
+      />
       {message ? <p className="create-workorder-form-message" role="status">{message}</p> : null}
 
       <div className="create-workorder-columns">

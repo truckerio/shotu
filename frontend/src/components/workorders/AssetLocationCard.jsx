@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Pin01 } from "@untitledui/icons";
-import { satelliteTiles } from "../../features/generator/GeneratorUi.jsx";
-
-const MAP_HOVER_DELAY_MS = 1500;
+import { buildHereLocationUrl, buildSatelliteTileLayer } from "../../lib/maps/satellite-tiles.js";
+import { MAP_CLOSE_DELAY_MS, MAP_OPEN_DELAY_MS } from "../../lib/ui-timings.js";
 
 export function getVehicleLocation(vehicle) {
   const gps = vehicle?.lastLocation || vehicle?.last_location || null;
@@ -25,40 +24,59 @@ export function AssetLocationCard({
   showVehicleLabel = true,
 }) {
   const cardRef = useRef(null);
-  const hoverTimerRef = useRef(null);
+  const openTimerRef = useRef(null);
+  const closeTimerRef = useRef(null);
   const mapPanelId = useId();
   const [mapOpen, setMapOpen] = useState(false);
   const [mapPinned, setMapPinned] = useState(false);
   const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || "Vehicle";
   const mapVisible = Boolean(location) && (mapOpen || mapPinned);
+  const tileLayer = mapVisible ? buildSatelliteTileLayer(location, mapsConfig) : null;
 
-  function clearHoverTimer() {
-    if (!hoverTimerRef.current) return;
-    window.clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = null;
+  function clearOpenTimer() {
+    if (!openTimerRef.current) return;
+    window.clearTimeout(openTimerRef.current);
+    openTimerRef.current = null;
   }
 
-  function startHoverTimer(event) {
+  function clearCloseTimer() {
+    if (!closeTimerRef.current) return;
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  }
+
+  function enterCard(event) {
+    clearCloseTimer();
     if (event.pointerType !== "mouse" || !location || mapVisible) return;
-    clearHoverTimer();
-    hoverTimerRef.current = window.setTimeout(() => {
-      hoverTimerRef.current = null;
+    clearOpenTimer();
+    openTimerRef.current = window.setTimeout(() => {
+      openTimerRef.current = null;
       setMapOpen(true);
-    }, MAP_HOVER_DELAY_MS);
+    }, MAP_OPEN_DELAY_MS);
   }
 
   function leaveCard() {
-    clearHoverTimer();
-    if (!mapPinned) setMapOpen(false);
+    clearOpenTimer();
+    if (mapPinned) return;
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setMapOpen(false);
+    }, MAP_CLOSE_DELAY_MS);
   }
 
-  useEffect(() => () => clearHoverTimer(), []);
+  useEffect(() => () => {
+    clearOpenTimer();
+    clearCloseTimer();
+  }, []);
 
   useEffect(() => {
     if (!mapOpen || mapPinned) return undefined;
 
     const closeMapOutside = (event) => {
-      if (!cardRef.current?.contains(event.target)) setMapOpen(false);
+      if (cardRef.current?.contains(event.target)) return;
+      clearCloseTimer();
+      setMapOpen(false);
     };
 
     document.addEventListener("pointerdown", closeMapOutside);
@@ -71,7 +89,7 @@ export function AssetLocationCard({
     <div
       ref={cardRef}
       className={`asset-location-card ${mapVisible ? "is-map-visible" : ""} ${mapPinned ? "is-map-pinned" : ""}`}
-      onPointerEnter={startHoverTimer}
+      onPointerEnter={enterCard}
       onPointerLeave={leaveCard}
     >
       <div className="asset-location-header">
@@ -82,7 +100,8 @@ export function AssetLocationCard({
           aria-expanded={mapVisible}
           disabled={!location}
           onClick={() => {
-            clearHoverTimer();
+            clearOpenTimer();
+            clearCloseTimer();
             if (!mapPinned) setMapOpen((open) => !open);
           }}
         >
@@ -102,7 +121,8 @@ export function AssetLocationCard({
               aria-pressed={mapPinned}
               data-tooltip={mapPinned ? "Unpin map" : "Pin map open"}
               onClick={() => {
-                clearHoverTimer();
+                clearOpenTimer();
+                clearCloseTimer();
                 setMapOpen(true);
                 setMapPinned((pinned) => !pinned);
               }}
@@ -121,26 +141,46 @@ export function AssetLocationCard({
           aria-hidden={!mapVisible}
           onClick={(event) => {
             if (mapPinned || event.target.closest?.("a, button")) return;
+            clearCloseTimer();
             setMapOpen(true);
             setMapPinned(true);
           }}
         >
-          <div className="asset-map-tiles" aria-hidden="true">
-            {satelliteTiles(location, mapsConfig).map((tile) => (
-              <img key={tile.key} src={tile.src} alt="" loading="lazy" />
-            ))}
-            <span className="asset-map-pin" />
-          </div>
-          <div className="asset-map-meta">
-            <span>{location.time ? new Date(location.time).toLocaleString() : "Live GPS"}</span>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open map
-            </a>
-          </div>
+          {mapVisible && tileLayer ? (
+            <>
+              <div className="asset-map-tiles" aria-hidden="true">
+                <div className="asset-map-tile-layer" style={tileLayer.layerStyle}>
+                  {tileLayer.tiles.map((tile) => (
+                    <img
+                      key={tile.key}
+                      src={tile.src}
+                      alt=""
+                      loading="lazy"
+                      onError={(event) => {
+                        if (!tile.fallbackSrc || event.currentTarget.dataset.fallbackApplied) return;
+                        event.currentTarget.dataset.fallbackApplied = "true";
+                        event.currentTarget.src = tile.fallbackSrc;
+                      }}
+                    />
+                  ))}
+                </div>
+                <span className="asset-map-pin" />
+              </div>
+              <div className="asset-map-meta">
+                <div className="asset-map-meta-copy">
+                  <span>{location.time ? new Date(location.time).toLocaleString() : "Live GPS"}</span>
+                  <small>{tileLayer.attribution}</small>
+                </div>
+                <a
+                  href={buildHereLocationUrl(location)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in HERE
+                </a>
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

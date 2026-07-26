@@ -32,6 +32,7 @@ import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
 import { CREATE_WORKORDER_FORM_ID, CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
+import { validateCreateWorkorder } from "../features/generator/create-workorder-validation.js";
 import {
   buildWorkorderDraftPayload,
   formValuesFromWorkorderDraft,
@@ -150,6 +151,7 @@ export function App({ actor }) {
   const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
   const [officeCreateState, setOfficeCreateState] = useState({ busy: false, message: "" });
   const [officeCreateErrors, setOfficeCreateErrors] = useState({});
+  const [officeCreateAttempt, setOfficeCreateAttempt] = useState(0);
   const [resumedDraft, setResumedDraft] = useState(null);
   const [availableDrafts, setAvailableDrafts] = useState([]);
   const [draftResumeOpen, setDraftResumeOpen] = useState(false);
@@ -338,7 +340,7 @@ export function App({ actor }) {
   }, [activeWorkorder?.workorder?.id, isMechanicDetail, mechanicMapVehicle?.id]);
   useAutomaticRefresh(
     () => refreshVehicleLocation(mechanicMapVehicle),
-    { enabled: Boolean(mechanicMapVehicle?.id), intervalMs: 60_000 },
+    { enabled: workspace === "generator" && Boolean(mechanicMapVehicle?.id), intervalMs: 60_000 },
   );
 
   useEffect(() => {
@@ -412,6 +414,7 @@ export function App({ actor }) {
   function selectOfficeLocation(locationId) {
     const selected = officeLocations.find((entry) => entry.location.id === locationId);
     if (!selected) return;
+    clearOfficeCreateErrors("locationId");
     setForm((current) => ({
       ...current,
       locationId: selected.location.id,
@@ -442,6 +445,7 @@ export function App({ actor }) {
         body: JSON.stringify({}),
       }).then(() => api(`/api/office/workorders/${encodeURIComponent(workorderId)}`)).then((detail) => {
         setActiveWorkorder(detail);
+        setSelectedVehicle(detail.workorder.asset || null);
         setOfficeAssignment({
           mechanicUserIds: detail.workorder.mechanics?.map((mechanic) => mechanic.id)
             || (detail.workorder.mechanic?.id ? [detail.workorder.mechanic.id] : []),
@@ -565,7 +569,17 @@ export function App({ actor }) {
   }, [form.unitNo, selectedVehicle?.id]);
 
   function updateField(field, value) {
+    clearOfficeCreateErrors(field);
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function clearOfficeCreateErrors(...fields) {
+    setOfficeCreateErrors((current) => {
+      if (!fields.some((field) => current[field])) return current;
+      const next = { ...current };
+      fields.forEach((field) => delete next[field]);
+      return next;
+    });
   }
 
   function updateUnitNumber(value) {
@@ -658,6 +672,7 @@ export function App({ actor }) {
 
   function applyVehicle(vehicle) {
     const modelText = vehicleModelText(vehicle);
+    clearOfficeCreateErrors("unitNo", ...(vehicle.owner_name ? ["customerCompanyName"] : []));
     setForm((current) => ({
       ...current,
       customerCompanyName: vehicle.owner_name || current.customerCompanyName,
@@ -792,19 +807,15 @@ export function App({ actor }) {
 
   async function createOfficeWorkorder(event) {
     event?.preventDefault?.();
-    const concern = form.mechanicConcern.trim();
-    const errors = {
-      ...(!form.locationId ? { locationId: "Select the repair location." } : {}),
-      ...(!form.unitNo.trim() ? { unitNo: "Enter or select the unit." } : {}),
-      ...(!form.customerCompanyName.trim() ? { customerCompanyName: "Enter the company that owns or operates this unit." } : {}),
-      ...(!concern ? { mechanicConcern: "Describe what needs to be inspected or repaired." } : {}),
-    };
+    const errors = validateCreateWorkorder(form);
     if (Object.keys(errors).length) {
       setOfficeCreateErrors(errors);
+      setOfficeCreateAttempt((attempt) => attempt + 1);
       setOfficeCreateState({ busy: false, message: "Fix the highlighted fields before creating the workorder." });
       return;
     }
     setOfficeCreateErrors({});
+    setOfficeCreateAttempt(0);
     setOfficeCreateState({ busy: true, message: "Creating workorder..." });
     try {
       const savedDraft = await workorderDraft.flush();
@@ -897,6 +908,7 @@ export function App({ actor }) {
       const detail = await api(`/api/office/workorders/${encodeURIComponent(workorderId)}`);
       const workorder = detail.workorder;
       setActiveWorkorder(detail);
+      setSelectedVehicle(workorder.asset || null);
       setOfficeAssignment({
         mechanicUserIds: workorder.mechanics?.map((mechanic) => mechanic.id)
           || (workorder.mechanic?.id ? [workorder.mechanic.id] : []),
@@ -1080,6 +1092,7 @@ export function App({ actor }) {
     setDraftLeaveBusy(false);
     setDraftResumeBusy(false);
     setActiveWorkorder(null);
+    setSelectedVehicle(null);
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace(actor.role === "admin" ? "admin" : "office");
@@ -1177,6 +1190,7 @@ export function App({ actor }) {
 
   function returnToMyWork() {
     setActiveWorkorder(null);
+    setSelectedVehicle(null);
     setMechanicFinish({ open: false, name: "", message: "" });
     setPreviewPanelOpen(false);
     setDetailSource(null);
@@ -1584,6 +1598,7 @@ export function App({ actor }) {
               assignment={createAssignment}
               busy={officeCreateState.busy}
               errors={officeCreateErrors}
+              errorFocusKey={officeCreateAttempt}
               form={form}
               locations={officeLocations}
               message={officeCreateState.message}

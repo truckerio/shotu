@@ -7,32 +7,6 @@ import {
   WORKORDER_PART_ROWS_PER_PAGE,
 } from "../../../../shared/workorder-template.js";
 
-function longitudeToTile(longitude, zoom) {
-  return Math.floor(((Number(longitude) + 180) / 360) * 2 ** zoom);
-}
-
-function latitudeToTile(latitude, zoom) {
-  const radians = (Number(latitude) * Math.PI) / 180;
-  return Math.floor(((1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2) * 2 ** zoom);
-}
-
-export function satelliteTiles(location, mapsConfig) {
-  const zoom = 17;
-  const centerX = longitudeToTile(location?.longitude, zoom);
-  const centerY = latitudeToTile(location?.latitude, zoom);
-  const hereKey = mapsConfig?.useHereSatelliteTiles ? mapsConfig?.hereBrowserApiKey : "";
-  return [-1, 0, 1].flatMap((rowOffset) =>
-    [-1, 0, 1].map((colOffset) => {
-      const x = centerX + colOffset;
-      const y = centerY + rowOffset;
-      const src = hereKey
-        ? `https://maps.hereapi.com/v3/base/mc/${zoom}/${x}/${y}/jpeg?style=satellite.day&size=256&apiKey=${encodeURIComponent(hereKey)}`
-        : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
-      return { key: `${x}-${y}`, src };
-    }),
-  );
-}
-
 export function Field({ label, hint, children }) {
   return (
     <label className="field">
