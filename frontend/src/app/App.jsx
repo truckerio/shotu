@@ -745,37 +745,44 @@ export function App({ actor }) {
     }
     const workorderCount = effectiveCopies;
     const pageCount = workorderCount * workorderPhysicalPageCount(form);
-    setPrintState({ open: true, stage: "allocating", message: "Preparing the saved workorder for printing.", pageCount });
+    const printableForm = {
+      companyName: form.customerCompanyName,
+      customerCompanyName: form.customerCompanyName,
+      headerTitle: form.headerTitle,
+      brandTop: form.brandTop,
+      brandBottom: form.brandBottom,
+      warrantyText: form.warrantyText,
+      responsibilityText: form.responsibilityText,
+      authorizationText: form.authorizationText,
+      workDate: form.workDate,
+      workStartDate: form.workStartDate,
+      workEndDate: form.workEndDate,
+      unitNo: form.unitNo,
+      unitType: form.unitType,
+      licenseNo: form.licenseNo,
+      mileage: form.mileage,
+      model: form.model,
+      vinNo: form.vinNo,
+      mechanicConcern: form.mechanicConcern,
+      mechanicName: form.mechanicName,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      managerName: form.managerName,
+      customerSignature: form.customerSignature,
+      authorizedBy: form.authorizedBy,
+      parts: form.parts,
+    };
+
     try {
-      setPrintState({ open: true, stage: "rendering", message: workorderCount === 1 ? "Preparing one workorder." : `Preparing ${workorderCount} unique workorders.`, pageCount });
-      setPrintState({ open: true, stage: "printing", message: "Creating the archived PDF.", pageCount });
-      const printableForm = {
-        companyName: form.customerCompanyName,
-        customerCompanyName: form.customerCompanyName,
-        headerTitle: form.headerTitle,
-        brandTop: form.brandTop,
-        brandBottom: form.brandBottom,
-        warrantyText: form.warrantyText,
-        responsibilityText: form.responsibilityText,
-        authorizationText: form.authorizationText,
-        workDate: form.workDate,
-        workStartDate: form.workStartDate,
-        workEndDate: form.workEndDate,
-        unitNo: form.unitNo,
-        unitType: form.unitType,
-        licenseNo: form.licenseNo,
-        mileage: form.mileage,
-        model: form.model,
-        vinNo: form.vinNo,
-        mechanicConcern: form.mechanicConcern,
-        mechanicName: form.mechanicName,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        managerName: form.managerName,
-        customerSignature: form.customerSignature,
-        authorizedBy: form.authorizedBy,
-        parts: form.parts,
-      };
+      setPrintMenuOpen(false);
+      await openBrowserPrintDialog({ form: printableForm, serials: previewSerials });
+      setPrintState({
+        open: true,
+        stage: "archiving",
+        message: "Saving an archived PDF copy.",
+        range,
+        pageCount,
+      });
       const result = await api("/api/print", {
         method: "POST",
         body: JSON.stringify({
@@ -798,11 +805,10 @@ export function App({ actor }) {
         range: printedRange,
         pageCount: (printedSerials.length || effectiveCopies) * workorderPhysicalPageCount(result.printForm || printableForm),
       });
-      await openBrowserPrintDialog({ form: result.printForm || printableForm, serials: printedSerials });
       setPrintState({
         open: true,
         stage: "done",
-        message: "Print dialog opened. Choose your printer or Save as PDF. The archived PDF is also available below.",
+        message: "Print dialog closed. The archived PDF is ready below.",
         downloadUrl: result.downloadUrl,
         range: printedRange,
         pageCount: (printedSerials.length || effectiveCopies) * workorderPhysicalPageCount(result.printForm || printableForm),

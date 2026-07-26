@@ -117,6 +117,10 @@ test("frontend browser print contract does not depend on enumerating printers", 
 
   assert.match(appSource, /window\.print\(\)/);
   assert.match(appSource, /BrowserPrintDocument/);
+  assert.ok(
+    appSource.indexOf("await openBrowserPrintDialog") < appSource.indexOf('await api("/api/print"'),
+    "the browser print dialog must open before the slower archived PDF request",
+  );
   assert.doesNotMatch(appSource, /\/api\/printers|printerName|refreshPrinters/);
   assert.doesNotMatch(previewSource, /Use printer|Save PDF only|onSelectPrintDestination/);
   assert.match(previewSource, /Each workorder gets a unique serial/);

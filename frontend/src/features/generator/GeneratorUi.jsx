@@ -98,7 +98,7 @@ export function PrintModal({ state, range, onClose }) {
       <div className="print-modal">
         <button className="close-button" type="button" onClick={onClose} aria-label="Close print status"><XClose /></button>
         <div className={`modal-icon ${isDone ? "done" : isError ? "error" : ""}`}>{isDone ? <CheckCircle /> : <Printer />}</div>
-        <h2>{isDone ? "Print job ready" : isError ? "Print failed" : "Preparing print job"}</h2>
+        <h2>{isDone ? "Print job ready" : isError ? "Print failed" : "Archiving print job"}</h2>
         <p>{state.message}</p>
         <div className="print-summary">
           <div><span>{displayRange.includes(" to ") ? "Serial range" : "Workorder no."}</span><strong>{displayRange}</strong></div>
