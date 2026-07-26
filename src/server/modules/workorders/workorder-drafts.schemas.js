@@ -34,6 +34,10 @@ export const submitWorkorderDraftSchema = z.object({
   version: z.number().int().positive().optional(),
 }).strict();
 
+export const takeoverWorkorderDraftSchema = z.object({
+  version: z.number().int().positive(),
+}).strict();
+
 export const workorderDraftIdSchema = z.string().uuid("Draft not found.");
 
 function parse(schema, value) {
@@ -58,6 +62,10 @@ export function parseUpdateWorkorderDraft(input) {
 
 export function parseSubmitWorkorderDraft(input) {
   return parse(submitWorkorderDraftSchema, input);
+}
+
+export function parseTakeoverWorkorderDraft(input) {
+  return parse(takeoverWorkorderDraftSchema, input);
 }
 
 export function parseWorkorderDraftId(value) {

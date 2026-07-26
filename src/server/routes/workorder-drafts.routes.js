@@ -1,6 +1,7 @@
 import {
   parseCreateWorkorderDraft,
   parseSubmitWorkorderDraft,
+  parseTakeoverWorkorderDraft,
   parseUpdateWorkorderDraft,
   parseWorkorderDraftId,
   parseWorkorderDraftListQuery,
@@ -11,6 +12,7 @@ import {
   getUserWorkorderDraft,
   listUserWorkorderDrafts,
   submitUserWorkorderDraft,
+  takeoverUserWorkorderDraft,
   updateUserWorkorderDraft,
 } from "../modules/workorders/workorder-drafts.service.js";
 
@@ -43,6 +45,15 @@ export async function handleWorkorderDraftsApi(req, res, url, helpers) {
     const input = parseSubmitWorkorderDraft(await readBody(req));
     const result = await submitUserWorkorderDraft(requestContext, submitId, input);
     sendJson(res, 200, { draft: result.draft, workorder: result.workorder });
+    return true;
+  }
+
+  const takeoverId = draftPath(url.pathname, "/takeover");
+  if (req.method === "POST" && takeoverId) {
+    const input = parseTakeoverWorkorderDraft(await readBody(req));
+    sendJson(res, 200, {
+      draft: await takeoverUserWorkorderDraft(requestContext, takeoverId, input),
+    });
     return true;
   }
 

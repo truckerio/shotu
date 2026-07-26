@@ -17,6 +17,8 @@ PostgreSQL is the source of truth for users, access scope, locations, templates,
 | Better Auth sessions, accounts, verification | `auth/` and Better Auth |
 | Company and location memberships | `auth/` request context and authorization |
 | Workorders and status/assignment/field/access events | `repositories/operational-workorders.repo.js` |
+| Mechanic diagnosis/work-performed optimistic writes | `repositories/workorder-progress.repo.js` |
+| `workorder_drafts`, `workorder_draft_events` | `repositories/workorder-drafts.repo.js` |
 | `workorder_serial_counters` | `repositories/serial-counters.repo.js` |
 | Attention state/events, read state, user workorder preferences | `repositories/workorder-attention.repo.js` |
 | Chat messages and attachments | `repositories/chat.repo.js` |
@@ -34,12 +36,18 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 - Every company/location-scoped query receives scope from the authenticated request actor.
 - Provider payloads may remain in `raw_provider_data`, while searchable/form-ready values use typed columns.
 - Generated PDFs are output artifacts, not source-of-truth workorder records.
-- `operational_workorders.status` is canonical lifecycle only: `open`, `accepted`, `in_progress`, `mechanic_done`, `closed`, or `odoo_entered`.
+- `operational_workorders.status` is canonical lifecycle only: `open`, `accepted`, `in_progress`, `mechanic_done`, `closed`, `odoo_entered`, or `cancelled`.
 - Parts, office help, missing information, and overdue are attention reasons. Parts/missing/overdue may be derived from their owning records; persisted attention changes are audited in `workorder_attention_events`.
 - `workorder_read_state` is per user and workorder. It must never be stored as a global boolean on the workorder.
 - `workorder_access_events` is append-only. Explicit detail opens are recorded there; background polling must not create access events.
 - User deletion is credential deletion plus a `user_profiles.deleted_at` tombstone. Do not delete operational profiles referenced by history.
 - Admin account changes are append-only in `admin_user_events`; password hashes and session invalidation remain Better Auth responsibilities.
+- Workorder drafts never reserve serials. `owner_user_id` is the only current
+  editor; admin takeover is explicit and every draft mutation is append-only in
+  `workorder_draft_events`.
+- Mechanic progress uses `operational_workorders.progress_version` for
+  optimistic concurrency. Pending changed-field names support grouped activity
+  events without logging every keystroke.
 
 ## Migration Runtime
 

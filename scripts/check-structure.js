@@ -36,6 +36,9 @@ for (const file of routeFiles) {
   if (/from\s+["'][^"']*db\/pool\.js["']/.test(source)) {
     fail(file, "routes must not access the database pool directly");
   }
+  if (file.endsWith("mechanic.routes.js") && source.includes('"/notes"')) {
+    fail(file, "mechanic progress must use the optimistic /progress contract");
+  }
 }
 
 const migrationFiles = (await filesUnder(join(root, "src", "server", "db", "migrations")))

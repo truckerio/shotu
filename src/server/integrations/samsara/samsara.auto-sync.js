@@ -6,6 +6,8 @@ import { syncSamsaraVehicles } from "./samsara.sync.service.js";
 const MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 let schedulerStarted = false;
+let startupTimer = null;
+let intervalTimer = null;
 
 async function connectedCompanies() {
   await migrate();
@@ -37,12 +39,22 @@ export function startSamsaraAutoSync() {
 
   const intervalMs = Math.max(MIN_INTERVAL_MS, (Number(env.samsaraSyncIntervalMinutes) || 30) * 60 * 1000);
   if (env.samsaraSyncOnStartup) {
-    setTimeout(() => {
+    startupTimer = setTimeout(() => {
       runAutomaticSamsaraSync("startup").catch(() => {});
     }, 5000);
+    startupTimer.unref?.();
   }
 
-  setInterval(() => {
+  intervalTimer = setInterval(() => {
     runAutomaticSamsaraSync("scheduled").catch(() => {});
   }, intervalMs);
+  intervalTimer.unref?.();
+}
+
+export function stopSamsaraAutoSync() {
+  if (startupTimer) clearTimeout(startupTimer);
+  if (intervalTimer) clearInterval(intervalTimer);
+  startupTimer = null;
+  intervalTimer = null;
+  schedulerStarted = false;
 }

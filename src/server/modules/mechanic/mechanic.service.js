@@ -2,7 +2,6 @@ import {
   acceptOperationalWorkorder,
   markOperationalWorkorderDone,
   releaseOperationalWorkorder,
-  updateMechanicNotes,
   updateMechanicUsedParts,
 } from "../../db/repositories/operational-workorders.repo.js";
 import { createPartRequest, updatePartUsage } from "../../db/repositories/part-requests.repo.js";
@@ -15,6 +14,11 @@ import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { processMechanicChatMessage } from "../chat/mechanic-chat.service.js";
 import { markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
+import {
+  WorkorderProgressConflictError,
+  saveMechanicWorkorderProgress as persistMechanicWorkorderProgress,
+} from "../../db/repositories/workorder-progress.repo.js";
+import { AuthError, resourceNotFound } from "../../auth/errors.js";
 
 async function requireMechanic(userId) {
   const user = await getUserById(userId);
@@ -134,9 +138,25 @@ export async function releaseMechanicWorkorder(workorderId, mechanicUserId, reas
   return releaseOperationalWorkorder(workorderId, mechanicUserId, reason);
 }
 
-export async function saveMechanicNotes(workorderId, mechanicUserId, input) {
+export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId, input) {
   await requireMechanic(mechanicUserId);
-  return updateMechanicNotes(workorderId, mechanicUserId, input);
+  try {
+    const progress = await persistMechanicWorkorderProgress({
+      workorderId,
+      mechanicUserId,
+      ...input,
+    });
+    if (!progress) throw resourceNotFound("Workorder");
+    return progress;
+  } catch (error) {
+    if (error instanceof WorkorderProgressConflictError) {
+      throw new AuthError(error.statusCode, error.code, error.message);
+    }
+    if (error.statusCode === 409 && error.code === "WORKORDER_PROGRESS_LOCKED") {
+      throw new AuthError(error.statusCode, error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts) {

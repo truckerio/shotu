@@ -3,16 +3,20 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   WorkorderDraftConflictError,
+  WorkorderDraftLimitError,
+  publicWorkorderDraftRow,
   submitWorkorderDraftInTransaction,
 } from "../../db/repositories/workorder-drafts.repo.js";
 import {
   createWorkorderDraftSchema,
   submitWorkorderDraftSchema,
+  takeoverWorkorderDraftSchema,
   updateWorkorderDraftSchema,
 } from "./workorder-drafts.schemas.js";
 import {
   createUserWorkorderDraft,
   submitUserWorkorderDraft,
+  takeoverUserWorkorderDraft,
   updateUserWorkorderDraft,
 } from "./workorder-drafts.service.js";
 
@@ -58,6 +62,8 @@ test("draft schemas allow incomplete autosave snapshots but require optimistic v
   }).payload.formData, { unitNo: "G2001" });
   assert.equal(updateWorkorderDraftSchema.parse({ version: 3, payload: { concern: "" } }).version, 3);
   assert.deepEqual(submitWorkorderDraftSchema.parse({}), {});
+  assert.equal(takeoverWorkorderDraftSchema.parse({ version: 3 }).version, 3);
+  assert.throws(() => takeoverWorkorderDraftSchema.parse({}));
   assert.throws(() => updateWorkorderDraftSchema.parse({ version: 0, payload: {} }));
   assert.throws(() => createWorkorderDraftSchema.parse({ type: "inventory", locationId, payload: {} }));
 });
@@ -134,6 +140,88 @@ test("draft updates cannot move between companies and map version conflicts to H
   );
 });
 
+test("draft metadata is ready for a shared queue without exposing raw ownership fields", () => {
+  const row = publicWorkorderDraftRow({
+    id: draftId,
+    company_id: companyId,
+    location_id: locationId,
+    created_by_user_id: actorId,
+    owner_user_id: actorId,
+    last_edited_by_user_id: actorId,
+    creator_name: "Office One",
+    owner_name: "Office One",
+    last_editor_name: "Office One",
+    location_name: "Chino Yard",
+    type: "workorder",
+    status: "active",
+    version: 4,
+    payload: {
+      formData: { unitNo: "G2001", customerCompanyName: "Long Haul" },
+      concern: "Inspect brakes.",
+    },
+    created_at: "2026-07-25T11:00:00.000Z",
+    updated_at: "2026-07-25T12:00:00.000Z",
+    submitted_workorder_id: null,
+  });
+  assert.deepEqual(row.location, { id: locationId, name: "Chino Yard" });
+  assert.equal(row.unit, "G2001");
+  assert.equal(row.concern, "Inspect brakes.");
+  assert.deepEqual(row.missingFields, []);
+  assert.equal(row.creator.name, "Office One");
+  assert.equal(row.owner.name, "Office One");
+  assert.equal(row.lastEditedBy.name, "Office One");
+});
+
+test("office lists assigned-location drafts while admin receives all authorized-company drafts", async () => {
+  const calls = [];
+  const listDrafts = async (input) => {
+    calls.push(input);
+    return [];
+  };
+  await import("./workorder-drafts.service.js").then(({ listUserWorkorderDrafts }) =>
+    listUserWorkorderDrafts(context("office"), { type: "workorder" }, { listDrafts }));
+  await import("./workorder-drafts.service.js").then(({ listUserWorkorderDrafts }) =>
+    listUserWorkorderDrafts(context("admin"), { type: "workorder" }, { listDrafts }));
+  assert.deepEqual(calls.map(({ role, locationIds }) => ({ role, locationIds })), [
+    { role: "office", locationIds: [locationId] },
+    { role: "admin", locationIds: [locationId] },
+  ]);
+});
+
+test("takeover is atomic at the service boundary and mechanics remain forbidden", async () => {
+  const nextOwnerId = "77777777-7777-4777-8777-777777777777";
+  let received;
+  const draft = await takeoverUserWorkorderDraft({
+    actor: { id: nextOwnerId, role: "admin" },
+    companyIds: new Set([companyId]),
+    locationIds: new Set([locationId]),
+  }, draftId, { version: 4 }, {
+    takeover: async (input) => {
+      received = input;
+      return { id: draftId, version: 5, ownerId: nextOwnerId };
+    },
+  });
+  assert.equal(draft.ownerId, nextOwnerId);
+  assert.equal(received.version, 4);
+  await assert.rejects(
+    takeoverUserWorkorderDraft(context("office"), draftId, { version: 4 }, { takeover: async () => ({}) }),
+    (error) => error.statusCode === 403 && error.code === "PERMISSION_DENIED",
+  );
+  await assert.rejects(
+    takeoverUserWorkorderDraft(context("mechanic"), draftId, { version: 4 }, { takeover: async () => ({}) }),
+    (error) => error.statusCode === 403 && error.code === "PERMISSION_DENIED",
+  );
+});
+
+test("active draft limit is returned as an actionable conflict", async () => {
+  await assert.rejects(
+    createUserWorkorderDraft(context(), { type: "workorder", payload: {} }, {
+      createDraft: async () => { throw new WorkorderDraftLimitError(); },
+    }),
+    (error) => error.statusCode === 409 && error.code === "DRAFT_LIMIT_REACHED",
+  );
+});
+
 test("submission locks the draft before creating and marks it submitted in the same transaction", async () => {
   const events = [];
   const client = {
@@ -152,6 +240,9 @@ test("submission locks the draft before creating and marks it submitted in the s
             submitted_workorder_id: workorderId,
           })],
         };
+      }
+      if (/insert into workorder_draft_events/i.test(sql)) {
+        return { rows: [] };
       }
       throw new Error(`Unexpected SQL: ${sql}`);
     },
@@ -246,4 +337,12 @@ test("migration stores no serial and enforces tenant-safe submission references"
   assert.match(migration, /foreign key \(company_id, location_id\)/);
   assert.match(migration, /foreign key \(company_id, submitted_workorder_id\)/);
   assert.match(migration, /status = 'submitted' and submitted_workorder_id is not null/);
+  const collaboration = await readFile(
+    new URL("../../db/migrations/021_workorder_draft_collaboration.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(collaboration, /owner_user_id/);
+  assert.match(collaboration, /last_edited_by_user_id/);
+  assert.match(collaboration, /create table if not exists workorder_draft_events/);
+  assert.match(collaboration, /taken_over/);
 });

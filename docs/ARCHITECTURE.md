@@ -29,9 +29,10 @@ frontend/src/
     admin/              Operations, locations, users, templates, and invitations
     auth/               Session gate and login
     generator/          Physical workorder generator UI
-    mechanic/           Mechanic workspace
+    mechanic/           Mechanic workspace and active-work progress autosave
     office/             Office workspace
     surveillance/       Closed-workorder/Odoo workflow
+    workorder-drafts/   Office/admin unfinished-creation queue
   lib/                  Browser API and date utilities
 
 shared/
@@ -66,6 +67,7 @@ server.js               Composition root plus contained legacy print/share endpo
 | `/api/vehicles/*` | `routes/vehicles.routes.js` and `services/vehicles.service.js` |
 | `/api/integrations/samsara/*` | `routes/integrations.routes.js` and `integrations/samsara/` |
 | `/api/parts-helper/*` | `routes/parts-helper.routes.js` and `modules/parts-helper/` |
+| `/api/workorder-drafts/*` | `routes/workorder-drafts.routes.js`, `modules/workorders/workorder-drafts.service.js`, and `repositories/workorder-drafts.repo.js` |
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
@@ -94,6 +96,32 @@ Direct Better Auth admin transport routes are not public API. The application ex
 The projection is paginated and filterable and includes canonical lifecycle, attention reasons, location, asset, mechanic, last activity, age, time in status, and per-user unread state. Admin consumes it through `/api/admin/operations/summary` and `/api/admin/operations/workorders`.
 
 Lifecycle and attention are intentionally separate. Lifecycle is one of `open`, `accepted`, `in_progress`, `mechanic_done`, `closed`, `odoo_entered`, or `cancelled`. Parts, office help, missing information, and overdue work are attention reasons; they never create or replace a workorder record.
+
+### Drafts And Mechanic Progress
+
+Creation drafts and mechanic progress have different lifecycles and must not be
+combined:
+
+- A `workorder_drafts` row is an unfinished office/admin creation. It has no
+  serial and is not visible in mechanic queues. Office sees drafts in assigned
+  locations; admin sees authorized-company drafts and must explicitly take
+  ownership before editing another user's draft.
+- Submitting a draft creates exactly one `operational_workorders` row and
+  reserves its serial inside the submit transaction. Repeating the submit is
+  idempotent.
+- Mechanic diagnosis and work performed are fields on the real assigned
+  workorder. `repositories/workorder-progress.repo.js` updates them with an
+  optimistic `progress_version`; it never creates a draft workorder.
+- Browser autosave may write frequently, but the operator timeline receives one
+  grouped `work_details_updated` event per editing burst. Access/open events
+  remain append-only audit records and are not shown as operator activity.
+
+The frontend reflects the same ownership:
+
+- `features/workorder-drafts/` owns the office/admin drafts queue.
+- `components/drafts/useDraftForm.js` owns create-form persistence.
+- `features/mechanic/progress/` owns assigned-work autosave and local recovery.
+- `App.jsx` composes these features and owns URL transitions only.
 
 ## Adding A Feature
 

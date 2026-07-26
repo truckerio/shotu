@@ -13,6 +13,7 @@ export function permissionForRequest(method, pathname) {
   if (pathname.startsWith("/api/mechanic/chat-media/") && method === "GET") return PERMISSION.WORKORDER_CHAT_READ;
   if (pathname.startsWith("/api/mechanic/")) return PERMISSION.WORKORDER_MECHANIC;
   if (pathname.startsWith("/api/office/")) return PERMISSION.WORKORDER_OFFICE;
+  if (pathname.startsWith("/api/workorder-drafts")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/surveillance/")) return PERMISSION.WORKORDER_SURVEILLANCE;
   if (pathname === "/api/parts-helper/live-prices") return PERMISSION.PART_PRICE;
   if (pathname.startsWith("/api/parts-helper/")) return PERMISSION.PART_IDENTIFY;

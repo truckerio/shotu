@@ -1,14 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
+import { ArrowLeft, CheckCircle, File02, FileSearch01, MessageChatCircle, Package, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
 import { PreviewPane, PreviewToggle } from "../components/preview/PreviewPane.jsx";
 import {
   DraftLeaveDialog,
-  DraftResumeDialog,
   DraftSaveStatus,
   useDraftForm,
   useUnsavedBrowserGuard,
 } from "../components/drafts/index.js";
 import { Button } from "../components/ui/Button.jsx";
+import { WorkspaceHeader } from "../components/layout/WorkspaceHeader.jsx";
 import { ChatComposer } from "../components/workorders/ChatComposer.jsx";
 import { ChatThread } from "../components/workorders/ChatThread.jsx";
 import { PartRequestsPanel } from "../components/workorders/PartRequestsPanel.jsx";
@@ -28,8 +28,11 @@ import {
   MechanicMultiSelect,
 } from "../components/forms/index.js";
 import { MechanicWorkspace } from "../features/mechanic/MechanicWorkspace.jsx";
+import { MechanicProgressStatus } from "../features/mechanic/progress/MechanicProgressStatus.jsx";
+import { useMechanicProgress } from "../features/mechanic/progress/useMechanicProgress.js";
 import { OfficeWorkspace } from "../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../features/surveillance/SurveillanceWorkspace.jsx";
+import { WorkorderDraftsWorkspace } from "../features/workorder-drafts/index.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../features/generator/GeneratorUi.jsx";
 import { CREATE_WORKORDER_FORM_ID, CreateWorkorderForm } from "../features/generator/CreateWorkorderForm.jsx";
 import { validateCreateWorkorder } from "../features/generator/create-workorder-validation.js";
@@ -38,7 +41,6 @@ import {
   formValuesFromWorkorderDraft,
   isMeaningfulWorkorderDraft,
   selectedVehicleFromWorkorderDraft,
-  shouldPromptForWorkorderDraft,
 } from "../features/generator/workorder-draft.js";
 import { useAutomaticRefresh } from "../hooks/useAutomaticRefresh.js";
 import { api } from "../lib/api.js";
@@ -116,14 +118,38 @@ async function discardWorkorderDraft(draftId) {
   return api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" });
 }
 
+function workorderDraftOwnerId(draft) {
+  return draft?.owner?.id || draft?.ownerId || draft?.createdBy?.id || draft?.creator?.id || "";
+}
+
+async function updateMechanicProgress({
+  workorderId,
+  diagnosis,
+  workPerformed,
+  expectedVersion,
+  recordActivity,
+}) {
+  return api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}/progress`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      diagnosis,
+      workPerformed,
+      expectedVersion,
+      recordActivity,
+    }),
+  });
+}
+
 export function App({ actor }) {
   const formRef = useRef(null);
   const previewRef = useRef(null);
   const previewGridRef = useRef(null);
   const mechanicLocationRefreshRef = useRef("");
+  const mechanicProgressBackupRestoredRef = useRef("");
   const [workspace, setWorkspace] = useState(() => {
     if (typeof window === "undefined") return "mechanic";
     const params = new URLSearchParams(window.location.search);
+    if ((actor.role === "office" || actor.role === "admin") && params.get("view") === "drafts") return "drafts";
     if ((actor.role === "office" || actor.role === "admin") && (params.has("workorder") || params.get("view") === "create")) return "generator";
     if (actor.role === "mechanic" && params.has("workorder")) return "generator";
     if (actor.role === "surveillance") return "surveillance";
@@ -131,7 +157,11 @@ export function App({ actor }) {
     return actor.role === "mechanic" ? "mechanic" : "office";
   });
   const [mode, setMode] = useState(() => (actor.role === "mechanic" ? "mechanic" : "admin"));
-  const [routeLoading, setRouteLoading] = useState(() => (typeof window === "undefined" ? false : new URLSearchParams(window.location.search).has("workorder")));
+  const [routeLoading, setRouteLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.has("workorder") || params.has("draft");
+  });
   const [activeWorkorder, setActiveWorkorder] = useState(null);
   const [mechanicAction, setMechanicAction] = useState({ busy: "", message: "" });
   const [mechanicFinish, setMechanicFinish] = useState({ open: false, name: "", message: "" });
@@ -154,12 +184,14 @@ export function App({ actor }) {
   const [officeCreateErrors, setOfficeCreateErrors] = useState({});
   const [officeCreateAttempt, setOfficeCreateAttempt] = useState(0);
   const [resumedDraft, setResumedDraft] = useState(null);
-  const [availableDrafts, setAvailableDrafts] = useState([]);
-  const [draftResumeOpen, setDraftResumeOpen] = useState(false);
-  const [draftResumeBusy, setDraftResumeBusy] = useState(false);
+  const [draftWorkspaceState, setDraftWorkspaceState] = useState({
+    drafts: [],
+    loading: false,
+    error: "",
+    busyId: "",
+  });
   const [draftLeaveOpen, setDraftLeaveOpen] = useState(false);
   const [draftLeaveBusy, setDraftLeaveBusy] = useState(false);
-  const [draftPromptDismissed, setDraftPromptDismissed] = useState(false);
   const createInitialDatesRef = useRef({
     workStartDate: todayIso(),
     workEndDate: todayIso(),
@@ -207,16 +239,6 @@ export function App({ actor }) {
     authorizedBy: "",
     parts: [emptyPart(), emptyPart(), emptyPart()],
   });
-  const canPromptForWorkorderDraft = shouldPromptForWorkorderDraft({
-    activeWorkorder,
-    draftPromptDismissed,
-    resumedDraftId: resumedDraft?.id,
-    role: actor.role,
-    routeLoading,
-    search: typeof window === "undefined" ? "" : window.location.search,
-    workspace,
-  });
-
   const workorderDraftPayload = useMemo(() => buildWorkorderDraftPayload({
     actor,
     form,
@@ -294,6 +316,44 @@ export function App({ actor }) {
   ].filter(Boolean).join(" ") || form.model || "Not listed";
   const mechanicMapVehicle = selectedVehicle || mechanicAsset;
   const mechanicMapLocation = getVehicleLocation(mechanicMapVehicle);
+  const mechanicProgress = useMechanicProgress({
+    workorderId: isMechanicDetail ? activeWorkorder?.workorder?.id : null,
+    value: {
+      diagnosis: form.diagnosis,
+      workPerformed: form.workPerformed,
+    },
+    initialVersion: activeWorkorder?.workorder?.progressVersion || 1,
+    saveProgress: updateMechanicProgress,
+  });
+  useEffect(() => {
+    const workorderId = activeWorkorder?.workorder?.id;
+    const backup = mechanicProgress.backup;
+    if (
+      !isMechanicDetail
+      || !activeWorkorder?.allowedActions?.saveNotes
+      || !workorderId
+      || !backup
+      || mechanicProgressBackupRestoredRef.current === workorderId
+    ) return;
+    mechanicProgressBackupRestoredRef.current = workorderId;
+    if (backup.diagnosis === form.diagnosis && backup.workPerformed === form.workPerformed) return;
+    setForm((current) => ({
+      ...current,
+      diagnosis: backup.diagnosis,
+      workPerformed: backup.workPerformed,
+    }));
+    setMechanicAction({
+      busy: "",
+      message: "Recovered unsaved work details from this device. They will sync automatically.",
+    });
+  }, [
+    activeWorkorder?.allowedActions?.saveNotes,
+    activeWorkorder?.workorder?.id,
+    form.diagnosis,
+    form.workPerformed,
+    isMechanicDetail,
+    mechanicProgress.backup,
+  ]);
   const assignedMechanicIds = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.id)
     || (activeWorkorder?.workorder?.mechanic?.id ? [activeWorkorder.workorder.mechanic.id] : []);
   const detailMechanicNames = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
@@ -303,6 +363,10 @@ export function App({ actor }) {
     || officeLocations.find((entry) => entry.location.id === form.locationId)?.location?.name
     || "";
   const pendingPartCount = (activeWorkorder?.partRequests || []).filter((request) => !["approved", "rejected", "cancelled"].includes(request.status)).length;
+  const visibleTimeline = useMemo(
+    () => (activeWorkorder?.timeline || []).filter((event) => event.type !== "access"),
+    [activeWorkorder?.timeline],
+  );
   const detailSections = useMemo(() => {
     if (!activeWorkorder) return [];
     const common = [{ id: "work", label: isMechanicDetail ? "Work" : "Review" }];
@@ -319,7 +383,7 @@ export function App({ actor }) {
       { id: "unit", label: form.unitType || "Unit" },
     );
     if (isOfficeDetail) common.push({ id: "team", label: "Team", count: assignedMechanicIds.length || undefined, attention: !assignedMechanicIds.length });
-    common.push({ id: "activity", label: "Activity", count: activeWorkorder.timeline?.length || undefined });
+    common.push({ id: "activity", label: "Activity", count: visibleTimeline.length || undefined });
     return common;
   }, [
     activeWorkorder,
@@ -332,6 +396,7 @@ export function App({ actor }) {
     isMechanicDetail,
     isOfficeDetail,
     pendingPartCount,
+    visibleTimeline.length,
   ]);
   const officeAssignmentChanged = [...officeAssignment.mechanicUserIds].sort().join(",")
     !== [...assignedMechanicIds].sort().join(",");
@@ -375,27 +440,34 @@ export function App({ actor }) {
       .catch(() => {});
   }, [actor.role]);
 
-  useEffect(() => {
-    if (!canPromptForWorkorderDraft) {
-      setDraftResumeOpen(false);
-      return;
+  async function loadDraftWorkspace() {
+    if (!["office", "admin"].includes(actor.role)) return;
+    setDraftWorkspaceState((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const result = await api("/api/workorder-drafts?type=workorder");
+      setDraftWorkspaceState((current) => ({
+        ...current,
+        drafts: Array.isArray(result.drafts) ? result.drafts : [],
+        loading: false,
+        error: "",
+      }));
+    } catch (error) {
+      setDraftWorkspaceState((current) => ({
+        ...current,
+        loading: false,
+        error: error.message,
+      }));
     }
+  }
 
-    let cancelled = false;
-    api("/api/workorder-drafts?type=workorder")
-      .then(({ drafts }) => {
-        if (cancelled) return;
-        const activeDrafts = Array.isArray(drafts) ? drafts : [];
-        setAvailableDrafts(activeDrafts);
-        setDraftResumeOpen(activeDrafts.length > 0);
-      })
-      .catch((error) => {
-        if (!cancelled) setOfficeCreateState({ busy: false, message: error.message });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canPromptForWorkorderDraft]);
+  useEffect(() => {
+    if (workspace !== "drafts") return;
+    loadDraftWorkspace();
+  }, [workspace]);
+  useAutomaticRefresh(
+    () => loadDraftWorkspace(),
+    { enabled: workspace === "drafts" },
+  );
 
   useEffect(() => {
     if (activeWorkorder || !["office", "admin"].includes(actor.role) || !form.locationId) {
@@ -445,6 +517,25 @@ export function App({ actor }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const workorderId = params.get("workorder");
+    const draftId = params.get("draft");
+    if (draftId && ["office", "admin"].includes(actor.role)) {
+      api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`)
+        .then(({ draft }) => {
+          if (workorderDraftOwnerId(draft) !== actor.id) {
+            setWorkspace("drafts");
+            setDraftWorkspaceState((current) => ({
+              ...current,
+              error: "Take over this team draft before editing it.",
+            }));
+            window.history.replaceState({}, "", `${window.location.pathname}?view=drafts`);
+            return;
+          }
+          restoreWorkorderDraft(draft);
+        })
+        .catch(() => finishOpenOfficeWorkspace())
+        .finally(() => setRouteLoading(false));
+      return;
+    }
     if (!workorderId) return;
     const loadDetail = actor.role === "office" || actor.role === "admin"
       ? api(`/api/office/workorders/${encodeURIComponent(workorderId)}/opened`, {
@@ -478,6 +569,18 @@ export function App({ actor }) {
     // The route is only hydrated on the initial page load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actor.role]);
+
+  useEffect(() => {
+    const draftId = workorderDraft.draft?.id;
+    if (workspace !== "generator" || activeWorkorder || !draftId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("draft") === draftId) return;
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}?view=create&draft=${encodeURIComponent(draftId)}`,
+    );
+  }, [activeWorkorder, workorderDraft.draft?.id, workspace]);
 
   useEffect(() => {
     const phoneQuery = window.matchMedia("(max-width: 700px)");
@@ -843,8 +946,6 @@ export function App({ actor }) {
       });
       workorderDraft.reset(null);
       setResumedDraft(null);
-      setAvailableDrafts([]);
-      setDraftPromptDismissed(true);
       setOfficeCreateState({
         busy: false,
         message: createAssignment.mechanicUserIds.length
@@ -1058,9 +1159,6 @@ export function App({ actor }) {
     };
     workorderDraft.reset(null);
     setResumedDraft(null);
-    setAvailableDrafts([]);
-    setDraftPromptDismissed(false);
-    setDraftResumeOpen(false);
     setDraftLeaveOpen(false);
     setActiveWorkorder(null);
     setSelectedVehicle(null);
@@ -1101,15 +1199,27 @@ export function App({ actor }) {
 
   function finishOpenOfficeWorkspace() {
     setDraftLeaveOpen(false);
-    setDraftResumeOpen(false);
     setDraftLeaveBusy(false);
-    setDraftResumeBusy(false);
     setActiveWorkorder(null);
     setSelectedVehicle(null);
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace(actor.role === "admin" ? "admin" : "office");
     window.history.replaceState({}, "", window.location.pathname);
+  }
+
+  function openDraftsWorkspace() {
+    const leavingCreate = workspace === "generator" && !activeWorkorder;
+    if (leavingCreate && (workorderDraftMeaningful || workorderDraft.draft?.id)) {
+      setDraftLeaveOpen(true);
+      return;
+    }
+    setActiveWorkorder(null);
+    setSelectedVehicle(null);
+    setPreviewPanelOpen(false);
+    setDetailSource(null);
+    setWorkspace("drafts");
+    window.history.replaceState({}, "", `${window.location.pathname}?view=drafts`);
   }
 
   function openOfficeWorkspace() {
@@ -1121,17 +1231,7 @@ export function App({ actor }) {
     finishOpenOfficeWorkspace();
   }
 
-  function closeDraftResumeDialog() {
-    setDraftResumeOpen(false);
-    setDraftPromptDismissed(true);
-  }
-
-  function resumeLatestDraft() {
-    const draft = availableDrafts[0];
-    if (!draft) {
-      closeDraftResumeDialog();
-      return;
-    }
+  function restoreWorkorderDraft(draft) {
     setForm((current) => formValuesFromWorkorderDraft(draft.payload, current));
     setCreateAssignment((current) => ({
       ...current,
@@ -1140,29 +1240,56 @@ export function App({ actor }) {
     restoreDraftVehicle(draft.payload);
     setResumedDraft(draft);
     workorderDraft.reset(draft);
-    setDraftResumeOpen(false);
-    setDraftPromptDismissed(true);
+    setActiveWorkorder(null);
+    setPreviewPanelOpen(true);
+    setDetailSource(null);
+    setMode("admin");
+    setWorkspace("generator");
     setOfficeCreateState({ busy: false, message: "Draft restored." });
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}?view=create&draft=${encodeURIComponent(draft.id)}`,
+    );
   }
 
-  async function discardLatestDraft() {
-    const draft = availableDrafts[0];
-    if (!draft) {
-      closeDraftResumeDialog();
-      return;
+  async function openSavedDraft(draft) {
+    setDraftWorkspaceState((current) => ({ ...current, busyId: draft.id, error: "" }));
+    try {
+      const result = await api(`/api/workorder-drafts/${encodeURIComponent(draft.id)}`);
+      restoreWorkorderDraft(result.draft);
+    } catch (error) {
+      setDraftWorkspaceState((current) => ({ ...current, error: error.message }));
+    } finally {
+      setDraftWorkspaceState((current) => ({ ...current, busyId: "" }));
     }
-    setDraftResumeBusy(true);
+  }
+
+  async function takeOverDraft(draft) {
+    setDraftWorkspaceState((current) => ({ ...current, busyId: draft.id, error: "" }));
+    try {
+      const result = await api(`/api/workorder-drafts/${encodeURIComponent(draft.id)}/takeover`, {
+        method: "POST",
+        body: JSON.stringify({ version: draft.version }),
+      });
+      restoreWorkorderDraft(result.draft);
+    } catch (error) {
+      setDraftWorkspaceState((current) => ({ ...current, error: error.message }));
+    } finally {
+      setDraftWorkspaceState((current) => ({ ...current, busyId: "" }));
+    }
+  }
+
+  async function discardDraftFromWorkspace(draft) {
+    setDraftWorkspaceState((current) => ({ ...current, busyId: draft.id, error: "" }));
     try {
       await discardWorkorderDraft(draft.id);
-      const remaining = availableDrafts.slice(1);
-      setAvailableDrafts(remaining);
-      setDraftResumeOpen(remaining.length > 0);
-      setDraftPromptDismissed(remaining.length === 0);
-      setOfficeCreateState({ busy: false, message: "Draft discarded." });
+      await loadDraftWorkspace();
     } catch (error) {
-      setOfficeCreateState({ busy: false, message: error.message });
+      setDraftWorkspaceState((current) => ({ ...current, error: error.message }));
+      throw error;
     } finally {
-      setDraftResumeBusy(false);
+      setDraftWorkspaceState((current) => ({ ...current, busyId: "" }));
     }
   }
 
@@ -1201,7 +1328,19 @@ export function App({ actor }) {
     returnToMyWork();
   }
 
-  function returnToMyWork() {
+  async function returnToMyWork() {
+    if (isMechanicDetail && mechanicProgress.hasUnsyncedChanges) {
+      setMechanicAction({ busy: "progress", message: "Saving progress before leaving..." });
+      try {
+        await mechanicProgress.flush({ recordActivity: true });
+      } catch (error) {
+        setMechanicAction({
+          busy: "",
+          message: `${error.message} Your recovery copy is still on this device. Retry before leaving.`,
+        });
+        return false;
+      }
+    }
     setActiveWorkorder(null);
     setSelectedVehicle(null);
     setMechanicFinish({ open: false, name: "", message: "" });
@@ -1209,6 +1348,7 @@ export function App({ actor }) {
     setDetailSource(null);
     setWorkspace("mechanic");
     window.history.replaceState({}, "", window.location.pathname);
+    return true;
   }
 
   async function runMechanicAction(name, request, successMessage, nextStatus) {
@@ -1286,7 +1426,9 @@ export function App({ actor }) {
         if (cancelled) return;
         setActiveWorkorder(detail);
         setDetailStatus(detail.workorder.status);
-        setForm((current) => workorderFormValues(detail, current));
+        if (!mechanicProgress.hasUnsyncedChanges && mechanicProgress.status !== "saving") {
+          setForm((current) => workorderFormValues(detail, current));
+        }
       } catch {
         // Keep the current detail visible; dashboard refresh handles missing workorders.
       }
@@ -1296,24 +1438,31 @@ export function App({ actor }) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeWorkorder?.workorder?.id, mode]);
+  }, [
+    activeWorkorder?.workorder?.id,
+    mechanicProgress.hasUnsyncedChanges,
+    mechanicProgress.status,
+    mode,
+  ]);
 
   async function saveMechanicWorkNotes() {
     if (!activeWorkorder?.workorder?.id || !isMechanicDetail) return;
-    await runMechanicAction(
-      "notes",
-      (detail) => api(`/api/mechanic/workorders/${detail.workorder.id}/notes`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          diagnosis: form.diagnosis,
-          workPerformed: form.workPerformed,
-        }),
-      }),
-      "Work details saved.",
-    );
+    setMechanicAction({ busy: "notes", message: "" });
+    try {
+      await mechanicProgress.flush({ recordActivity: true });
+      setMechanicAction({ busy: "", message: "Work details saved." });
+    } catch (error) {
+      setMechanicAction({ busy: "", message: error.message });
+    }
   }
 
-  function markMechanicWorkDone(confirmationName) {
+  async function markMechanicWorkDone(confirmationName) {
+    try {
+      await mechanicProgress.flush({ recordActivity: true });
+    } catch (error) {
+      setMechanicAction({ busy: "", message: error.message });
+      return false;
+    }
     return runMechanicAction(
       "done",
       (detail) => api(`/api/mechanic/workorders/${detail.workorder.id}/mark-done`, {
@@ -1441,13 +1590,50 @@ export function App({ actor }) {
   if (workspace === "admin") {
     return (
       <Suspense fallback={null}>
-        <AdminWorkspace actor={actor} onCreateWorkorder={openOfficeGenerator} onOpenWorkorder={openOfficeWorkorder} />
+        <AdminWorkspace
+          actor={actor}
+          onCreateWorkorder={openOfficeGenerator}
+          onOpenDrafts={openDraftsWorkspace}
+          onOpenWorkorder={openOfficeWorkorder}
+        />
       </Suspense>
     );
   }
 
   if (workspace === "office") {
-    return <OfficeWorkspace actor={actor} onCreateWorkorder={openOfficeGenerator} onOpenWorkorder={openOfficeWorkorder} />;
+    return (
+      <OfficeWorkspace
+        actor={actor}
+        onCreateWorkorder={openOfficeGenerator}
+        onOpenDrafts={openDraftsWorkspace}
+        onOpenWorkorder={openOfficeWorkorder}
+      />
+    );
+  }
+
+  if (workspace === "drafts") {
+    return (
+      <main className="prototype workspace-operations workorder-drafts-page">
+        <WorkspaceHeader actor={actor}>
+          <Button type="button" icon={ArrowLeft} onClick={finishOpenOfficeWorkspace}>
+            Workorders
+          </Button>
+        </WorkspaceHeader>
+        <WorkorderDraftsWorkspace
+          actorId={actor.id}
+          role={actor.role}
+          drafts={draftWorkspaceState.drafts}
+          loading={draftWorkspaceState.loading}
+          error={draftWorkspaceState.error}
+          busyId={draftWorkspaceState.busyId}
+          onNew={openOfficeGenerator}
+          onOpen={openSavedDraft}
+          onDiscard={discardDraftFromWorkspace}
+          onTakeover={takeOverDraft}
+          onRefresh={loadDraftWorkspace}
+        />
+      </main>
+    );
   }
 
   if (workspace === "surveillance") {
@@ -1660,8 +1846,9 @@ export function App({ actor }) {
                   <OperationalFormField id="mechanic-work-performed" label="Repair completed" hint="Write what was repaired, replaced, adjusted, or checked.">
                     <textarea rows="4" value={form.workPerformed} onChange={(event) => updateField("workPerformed", event.target.value)} />
                   </OperationalFormField>
+                  <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} />
                   <Button type="button" variant="secondary" onClick={saveMechanicWorkNotes} disabled={Boolean(mechanicAction.busy)}>
-                    {mechanicAction.busy === "notes" ? "Saving..." : "Save work details"}
+                    {mechanicAction.busy === "notes" ? "Saving..." : "Save progress"}
                   </Button>
                 </div>
               </ProgressiveWorkorderSection>
@@ -1947,13 +2134,13 @@ export function App({ actor }) {
               <ProgressiveWorkorderSection
                 id="activity"
                 title="Activity"
-                summary={`${activeWorkorder.timeline?.length || 0} events`}
+                summary={`${visibleTimeline.length} events`}
                 activeSection={detailSection}
                 onSelect={setDetailSection}
                 className="is-detail-end-timeline"
               >
                 <WorkorderTimelinePanel
-                  timeline={activeWorkorder.timeline || []}
+                  timeline={visibleTimeline}
                   participants={activeWorkorder.participants || []}
                   className="is-control-timeline"
                 />
@@ -2014,23 +2201,6 @@ export function App({ actor }) {
         } : undefined}
       />
       <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
-      <DraftResumeDialog
-        open={draftResumeOpen && canPromptForWorkorderDraft}
-        busy={draftResumeBusy}
-        draftLabel={
-          availableDrafts[0]?.payload?.formData?.unitNo
-          || availableDrafts[0]?.payload?.concern
-          || "Untitled workorder"
-        }
-        updatedAt={
-          availableDrafts[0]?.updatedAt
-            ? new Date(availableDrafts[0].updatedAt).toLocaleString()
-            : ""
-        }
-        onResume={resumeLatestDraft}
-        onDiscard={discardLatestDraft}
-        onClose={closeDraftResumeDialog}
-      />
       <DraftLeaveDialog
         open={draftLeaveOpen}
         busy={draftLeaveBusy}

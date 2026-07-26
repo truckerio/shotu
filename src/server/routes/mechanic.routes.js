@@ -5,7 +5,7 @@ import {
   mechanicWorkorderDetail,
   releaseMechanicWorkorder,
   requestMechanicPart,
-  saveMechanicNotes,
+  saveMechanicWorkorderProgress,
   saveMechanicUsedParts,
   sendMechanicMessage,
   updateMechanicPartUsage,
@@ -16,9 +16,9 @@ import {
   markDoneSchema,
   releaseWorkorderSchema,
   sendMessageSchema,
-  updateMechanicNotesSchema,
   updateMechanicUsedPartsSchema,
 } from "../modules/workorders/workorder.schemas.js";
+import { mechanicProgressSchema } from "../modules/mechanic/mechanic-progress.schemas.js";
 import { getChatAttachmentById } from "../db/repositories/chat.repo.js";
 import { readStoredChatImage } from "../modules/chat/chat-media.service.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
@@ -124,11 +124,21 @@ export async function handleMechanicApi(req, res, url, helpers) {
     return true;
   }
 
-  const notesId = workorderIdFrom(url.pathname, "/notes");
-  if (req.method === "PATCH" && notesId) {
-    await requireWorkorderAccess(requestContext, notesId);
-    const input = updateMechanicNotesSchema.parse(await readBody(req));
-    sendJson(res, 200, { workorder: await saveMechanicNotes(notesId, mechanicUserId, input) });
+  const progressId = workorderIdFrom(url.pathname, "/progress");
+  if (req.method === "PATCH" && progressId) {
+    await requireWorkorderAccess(requestContext, progressId);
+    const parsed = mechanicProgressSchema.safeParse(await readBody(req));
+    if (!parsed.success) {
+      sendJson(res, 400, { error: "Invalid mechanic progress.", issues: parsed.error.issues });
+      return true;
+    }
+    const input = parsed.data;
+    const progress = await saveMechanicWorkorderProgress(progressId, mechanicUserId, input);
+    sendJson(res, 200, {
+      progress,
+      version: progress.version,
+      savedAt: progress.savedAt,
+    });
     return true;
   }
 

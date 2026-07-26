@@ -44,6 +44,30 @@ export async function getLocationById(locationId, companyIds = null) {
 
 export async function listLocationsWithAdminCounts(companyIds) {
   const result = await query(`
+    with user_counts as (
+      select location_id, count(*)::integer as user_count
+      from user_location_memberships
+      where active
+      group by location_id
+    ),
+    workorder_counts as (
+      select location_id, count(*)::integer as open_workorder_count
+      from operational_workorders
+      where status not in ('closed', 'odoo_entered', 'cancelled')
+      group by location_id
+    ),
+    invitation_counts as (
+      select location_id, count(*)::integer as pending_invite_count
+      from user_invitations
+      where status = 'pending'
+        and expires_at > now()
+      group by location_id
+    ),
+    template_locations as (
+      select distinct location_id
+      from location_workorder_templates
+      where active
+    )
     select
       location.id,
       location.company_id,
@@ -52,17 +76,16 @@ export async function listLocationsWithAdminCounts(companyIds) {
       location.address,
       location.active,
       location.created_at,
-      count(distinct membership.user_id) filter (where membership.active) :: integer as user_count,
-      count(distinct workorder.id) filter (where workorder.status not in ('closed', 'odoo_entered', 'cancelled')) :: integer as open_workorder_count,
-      count(distinct invitation.id) filter (where invitation.status = 'pending' and invitation.expires_at > now()) :: integer as pending_invite_count,
-      (template.id is not null) as has_template
+      coalesce(user_counts.user_count, 0) as user_count,
+      coalesce(workorder_counts.open_workorder_count, 0) as open_workorder_count,
+      coalesce(invitation_counts.pending_invite_count, 0) as pending_invite_count,
+      (template_locations.location_id is not null) as has_template
     from locations location
-    left join user_location_memberships membership on membership.location_id = location.id
-    left join operational_workorders workorder on workorder.location_id = location.id
-    left join user_invitations invitation on invitation.location_id = location.id
-    left join location_workorder_templates template on template.location_id = location.id and template.active
+    left join user_counts on user_counts.location_id = location.id
+    left join workorder_counts on workorder_counts.location_id = location.id
+    left join invitation_counts on invitation_counts.location_id = location.id
+    left join template_locations on template_locations.location_id = location.id
     where location.company_id = any($1::uuid[])
-    group by location.id, template.id
     order by location.active desc, location.name
   `, [companyIds]);
   return result.rows;

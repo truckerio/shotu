@@ -1,36 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shouldPromptForWorkorderDraft } from "./workorder-draft.js";
+import {
+  buildWorkorderDraftPayload,
+  formValuesFromWorkorderDraft,
+  isMeaningfulWorkorderDraft,
+} from "./workorder-draft.js";
 
-const createScreen = {
-  activeWorkorder: null,
-  role: "office",
-  routeLoading: false,
-  search: "?view=create",
-  workspace: "generator",
-};
-
-test("draft prompt is limited to the explicit create-workorder route", () => {
-  assert.equal(shouldPromptForWorkorderDraft(createScreen), true);
-  assert.equal(shouldPromptForWorkorderDraft({ ...createScreen, search: "?workorder=wo-1" }), false);
-  assert.equal(shouldPromptForWorkorderDraft({ ...createScreen, search: "" }), false);
-  assert.equal(shouldPromptForWorkorderDraft({ ...createScreen, workspace: "office" }), false);
+test("workorder creation draft preserves required form and assignment data", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      customerCompanyName: "Long Haul",
+      mechanicConcern: "Oil leak",
+      unitNo: "G2021",
+      parts: [],
+    },
+    mechanicUserIds: ["mechanic-1", "mechanic-1"],
+    selectedVehicle: { id: "asset-1" },
+  });
+  assert.equal(payload.assetId, "asset-1");
+  assert.equal(payload.concern, "Oil leak");
+  assert.deepEqual(payload.mechanicUserIds, ["mechanic-1"]);
+  assert.equal(payload.formData.customerCompanyName, "Long Haul");
+  assert.equal(isMeaningfulWorkorderDraft(payload), true);
 });
 
-test("draft prompt stays closed while a saved workorder is loading or open", () => {
-  assert.equal(shouldPromptForWorkorderDraft({
-    ...createScreen,
-    routeLoading: true,
-    search: "?workorder=wo-1",
-  }), false);
-  assert.equal(shouldPromptForWorkorderDraft({
-    ...createScreen,
-    activeWorkorder: { id: "wo-1" },
-  }), false);
-});
-
-test("draft prompt respects role, dismissal, and resumed-draft state", () => {
-  assert.equal(shouldPromptForWorkorderDraft({ ...createScreen, role: "mechanic" }), false);
-  assert.equal(shouldPromptForWorkorderDraft({ ...createScreen, draftPromptDismissed: true }), false);
-  assert.equal(shouldPromptForWorkorderDraft({ ...createScreen, resumedDraftId: "draft-1" }), false);
+test("draft values restore into the controlled create form", () => {
+  const restored = formValuesFromWorkorderDraft({
+    locationId: "location-2",
+    concern: "Brake inspection",
+    formData: { unitNo: "T110", customerCompanyName: "Customer" },
+  }, { locationId: "location-1", unitNo: "", parts: [] });
+  assert.equal(restored.locationId, "location-2");
+  assert.equal(restored.unitNo, "T110");
+  assert.equal(restored.mechanicConcern, "Brake inspection");
 });

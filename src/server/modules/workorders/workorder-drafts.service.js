@@ -2,12 +2,15 @@ import { AuthError, invalidRequest, permissionDenied, resourceNotFound } from ".
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import {
   WorkorderDraftConflictError,
+  WorkorderDraftLimitError,
+  WorkorderDraftPermissionError,
   createWorkorderDraft,
   discardWorkorderDraft,
   getWorkorderDraftById,
   getWorkorderDraftOwnership,
   listActiveWorkorderDrafts,
   submitWorkorderDraft,
+  takeoverWorkorderDraft,
   updateWorkorderDraft,
 } from "../../db/repositories/workorder-drafts.repo.js";
 import { createWorkorderSchema } from "./workorder.schemas.js";
@@ -33,7 +36,9 @@ async function accessibleLocation(context, locationId, dependencies = {}) {
 }
 
 function mapDraftError(error) {
-  if (!(error instanceof WorkorderDraftConflictError)) throw error;
+  if (!(error instanceof WorkorderDraftConflictError)
+    && !(error instanceof WorkorderDraftLimitError)
+    && !(error instanceof WorkorderDraftPermissionError)) throw error;
   throw new AuthError(error.statusCode, error.code, error.message);
 }
 
@@ -62,7 +67,13 @@ function finalCreateInput(draft) {
 export async function listUserWorkorderDrafts(context, { type = "workorder" }, dependencies = {}) {
   const { actor, companyIds } = draftScope(context);
   const listDrafts = dependencies.listDrafts || listActiveWorkorderDrafts;
-  return listDrafts({ companyIds, userId: actor.id, type });
+  return listDrafts({
+    companyIds,
+    locationIds: [...(context.locationIds || [])],
+    userId: actor.id,
+    role: actor.role,
+    type,
+  });
 }
 
 export async function createUserWorkorderDraft(context, input, dependencies = {}) {
@@ -74,19 +85,29 @@ export async function createUserWorkorderDraft(context, input, dependencies = {}
     throw invalidRequest("Select a location before starting a draft for one of multiple companies.");
   }
   const createDraft = dependencies.createDraft || createWorkorderDraft;
-  return createDraft({
-    companyId: location?.company_id || companyIds[0],
-    locationId: location?.id || null,
-    userId: actor.id,
-    type: input.type,
-    payload: input.payload,
-  });
+  try {
+    return await createDraft({
+      companyId: location?.company_id || companyIds[0],
+      locationId: location?.id || null,
+      userId: actor.id,
+      type: input.type,
+      payload: input.payload,
+    });
+  } catch (error) {
+    mapDraftError(error);
+  }
 }
 
 export async function getUserWorkorderDraft(context, id, dependencies = {}) {
   const { actor, companyIds } = draftScope(context);
   const getDraft = dependencies.getDraft || getWorkorderDraftById;
-  const draft = await getDraft({ id, companyIds, userId: actor.id });
+  const draft = await getDraft({
+    id,
+    companyIds,
+    locationIds: [...(context.locationIds || [])],
+    userId: actor.id,
+    role: actor.role,
+  });
   if (!draft) throw resourceNotFound("Draft");
   return draft;
 }
@@ -94,7 +115,13 @@ export async function getUserWorkorderDraft(context, id, dependencies = {}) {
 export async function updateUserWorkorderDraft(context, id, input, dependencies = {}) {
   const { actor, companyIds } = draftScope(context);
   const getOwnership = dependencies.getOwnership || getWorkorderDraftOwnership;
-  const ownership = await getOwnership({ id, companyIds, userId: actor.id });
+  const ownership = await getOwnership({
+    id,
+    companyIds,
+    locationIds: [...(context.locationIds || [])],
+    userId: actor.id,
+    role: actor.role,
+  });
   if (!ownership) throw resourceNotFound("Draft");
 
   if (input.locationId) {
@@ -109,6 +136,8 @@ export async function updateUserWorkorderDraft(context, id, input, dependencies 
     const draft = await updateDraft({
       id,
       companyIds,
+      locationIds: [...(context.locationIds || [])],
+      role: actor.role,
       userId: actor.id,
       ...input,
     });
@@ -123,7 +152,13 @@ export async function discardUserWorkorderDraft(context, id, dependencies = {}) 
   const { actor, companyIds } = draftScope(context);
   const discardDraft = dependencies.discardDraft || discardWorkorderDraft;
   try {
-    const discarded = await discardDraft({ id, companyIds, userId: actor.id });
+    const discarded = await discardDraft({
+      id,
+      companyIds,
+      locationIds: [...(context.locationIds || [])],
+      userId: actor.id,
+      role: actor.role,
+    });
     if (!discarded) throw resourceNotFound("Draft");
     return true;
   } catch (error) {
@@ -138,6 +173,8 @@ export async function submitUserWorkorderDraft(context, id, input, dependencies 
     const result = await submitDraft({
       id,
       companyIds,
+      locationIds: [...(context.locationIds || [])],
+      role: actor.role,
       userId: actor.id,
       version: input.version,
       prepareCreateInput: async (draft) => {
@@ -148,6 +185,26 @@ export async function submitUserWorkorderDraft(context, id, input, dependencies 
     });
     if (!result) throw resourceNotFound("Draft");
     return result;
+  } catch (error) {
+    mapDraftError(error);
+  }
+}
+
+export async function takeoverUserWorkorderDraft(context, id, input, dependencies = {}) {
+  const { actor, companyIds } = draftScope(context);
+  if (actor.role !== "admin") throw permissionDenied();
+  const takeover = dependencies.takeover || takeoverWorkorderDraft;
+  try {
+    const draft = await takeover({
+      id,
+      companyIds,
+      locationIds: [...(context.locationIds || [])],
+      userId: actor.id,
+      role: actor.role,
+      version: input.version,
+    });
+    if (!draft) throw resourceNotFound("Draft");
+    return draft;
   } catch (error) {
     mapDraftError(error);
   }

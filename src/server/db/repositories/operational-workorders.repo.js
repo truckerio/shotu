@@ -54,6 +54,7 @@ function workorderSelect() {
       wo.concern,
       wo.diagnosis,
       wo.work_performed,
+      wo.progress_version,
       wo.office_notes,
       wo.form_data,
       wo.accepted_at,
@@ -123,6 +124,7 @@ export function publicWorkorderRow(row) {
     concern: row.concern,
     diagnosis: row.diagnosis,
     workPerformed: row.work_performed,
+    progressVersion: row.progress_version || 1,
     officeNotes: row.office_notes,
     formData: normalizeWorkorderFormData(row.form_data, {
       assetOwnerName: asset?.ownerName,
@@ -1109,56 +1111,6 @@ export async function releaseOperationalWorkorder(workorderId, mechanicUserId, r
   }
 }
 
-export async function updateMechanicNotes(workorderId, mechanicUserId, input) {
-  const pool = getPool();
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
-    const beforeResult = await client.query(
-      `select wo.*
-       from operational_workorders wo
-       where wo.id = $1
-         and exists (
-           select 1 from workorder_mechanic_assignments assignment
-           where assignment.workorder_id = wo.id
-             and assignment.mechanic_user_id = $2
-             and assignment.active = true
-         )
-       for update of wo`,
-      [workorderId, mechanicUserId]
-    );
-    const before = beforeResult.rows[0];
-    if (!before) throw new Error("Workorder not found for this mechanic.");
-    const nextInput = { diagnosis: input.diagnosis || "", workPerformed: input.workPerformed || "" };
-    await client.query(
-      `
-        update operational_workorders
-        set diagnosis = $3,
-            work_performed = $4,
-            status = case when status = 'accepted' then 'in_progress' else status end,
-            started_at = coalesce(started_at, now()),
-            updated_at = now()
-        where id = $1
-          and exists (
-            select 1 from workorder_mechanic_assignments assignment
-            where assignment.workorder_id = operational_workorders.id
-              and assignment.mechanic_user_id = $2
-              and assignment.active = true
-          )
-      `,
-      [workorderId, mechanicUserId, nextInput.diagnosis, nextInput.workPerformed]
-    );
-    await addFieldEvents(client, { workorderId, changes: changedFields(before, nextInput), changedByUserId: mechanicUserId });
-    await client.query("commit");
-    return getOperationalWorkorderById(workorderId);
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 export async function updateMechanicUsedParts(workorderId, mechanicUserId, parts) {
   const pool = getPool();
   const client = await pool.connect();
@@ -1241,11 +1193,16 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     const nextInput = { diagnosis: input.diagnosis || "", workPerformed: input.workPerformed || "" };
+    // Mark-done is an explicit terminal mutation, so it intentionally bypasses
+    // expectedVersion while advancing the progress token atomically.
     await client.query(
       `
         update operational_workorders
         set diagnosis = $3,
             work_performed = $4,
+            progress_version = progress_version + 1,
+            progress_activity_version = progress_version + 1,
+            progress_pending_fields = '[]'::jsonb,
             status = $5,
             mechanic_done_at = now(),
             updated_at = now()

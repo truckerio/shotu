@@ -214,7 +214,12 @@ function LocationDetail({ actor, detail, tab, setTab, template, setTemplate, onB
   );
 }
 
-export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
+export function AdminWorkspace({
+  actor,
+  onOpenWorkorder,
+  onCreateWorkorder,
+  onOpenDrafts,
+}) {
   const [locations, setLocations] = useState([]);
   const [view, setView] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -413,6 +418,7 @@ export function AdminWorkspace({ actor, onOpenWorkorder, onCreateWorkorder }) {
       <WorkspaceHeader actor={actor} className="admin-workspace-header">
         <nav className="admin-primary-nav" aria-label="Admin workspace">
           <button className={view === "operations" ? "active" : ""} type="button" onClick={() => changeView("operations")}><Tool02 />Operations</button>
+          <button type="button" onClick={onOpenDrafts}><File02 />Drafts</button>
           <button className={view === "locations" ? "active" : ""} type="button" onClick={() => changeView("locations")}><MarkerPin01 />Locations</button>
           <button className={view === "settings" ? "active" : ""} type="button" onClick={() => changeView("settings")}><Settings01 />Settings</button>
         </nav>

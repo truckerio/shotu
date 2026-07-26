@@ -7,7 +7,10 @@ function timelineTitle(event) {
     const subject = event.field_key === "missing_info" ? "Information request" : String(event.field_key || "Attention").replaceAll("_", " ");
     return event.action === "resolved" ? `${subject} resolved` : subject;
   }
-  if (event.type === "field") return `${event.field_label || event.action || "Field"} changed`;
+  if (event.type === "field") {
+    if (event.field_key === "work_details_updated") return "Work details updated";
+    return `${event.field_label || event.action || "Field"} changed`;
+  }
   if (event.type === "assignment") {
     if (event.action === "reassigned") return event.from_mechanic_id ? "Mechanic reassigned" : "Mechanic assigned";
     if (event.action === "unassigned") return "Returned to available queue";
@@ -24,6 +27,18 @@ function timelineBody(event) {
     return event.note ? `${assignment} ${event.note}` : assignment;
   }
   if (event.type === "field") {
+    if (event.field_key === "work_details_updated") {
+      try {
+        const details = JSON.parse(event.new_value || "{}");
+        const fields = Array.isArray(details.fieldsChanged) ? details.fieldsChanged : [];
+        if (fields.length === 2) return "Diagnosis and repair details saved.";
+        if (fields.includes("diagnosis")) return "Diagnosis saved.";
+        if (fields.includes("workPerformed")) return "Repair details saved.";
+      } catch {
+        // Fall through to the stable grouped-event label.
+      }
+      return "Mechanic progress saved.";
+    }
     if (String(event.field_label || "").toLowerCase() === "used parts") {
       try {
         const parts = JSON.parse(event.new_value || "[]")
@@ -42,11 +57,12 @@ function timelineBody(event) {
 }
 
 export function WorkorderTimeline({ timeline }) {
-  if (!timeline?.length) return <p className="chat-empty">No timeline yet.</p>;
+  const meaningfulTimeline = (timeline || []).filter((event) => event.type !== "access");
+  if (!meaningfulTimeline.length) return <p className="chat-empty">No activity yet.</p>;
 
   return (
     <div className="office-timeline">
-      {timeline.map((event) => (
+      {meaningfulTimeline.map((event) => (
         <div key={`${event.type}-${event.id}`}>
           <strong>{timelineTitle(event)}</strong>
           <span>{timelineBody(event)}</span>
@@ -60,7 +76,8 @@ export function WorkorderTimeline({ timeline }) {
 }
 
 export function WorkorderTimelinePanel({ timeline, participants = [], className = "" }) {
-  const count = timeline?.length || 0;
+  const meaningfulTimeline = (timeline || []).filter((event) => event.type !== "access");
+  const count = meaningfulTimeline.length;
 
   return (
     <section className={`workorder-timeline-panel ${className}`.trim()} aria-label="Workorder timeline">
@@ -78,7 +95,7 @@ export function WorkorderTimelinePanel({ timeline, participants = [], className 
           </span>
         </div>
       ) : null}
-      <WorkorderTimeline timeline={timeline} />
+      <WorkorderTimeline timeline={meaningfulTimeline} />
     </section>
   );
 }

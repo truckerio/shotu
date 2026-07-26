@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, CheckCircle, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -93,7 +93,12 @@ function mechanicStats(rows, roster = []) {
   return [...stats.values()].sort((a, b) => b.attention - a.attention || b.active - a.active || a.name.localeCompare(b.name));
 }
 
-export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
+export function OfficeWorkspace({
+  actor,
+  onCreateWorkorder,
+  onOpenDrafts,
+  onOpenWorkorder,
+}) {
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("needs");
   const [search, setSearch] = useState("");
@@ -177,7 +182,12 @@ export function OfficeWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
       <WorkspaceHeader actor={actor} />
       <PageHeader
         title="Workorders"
-        actions={<Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
+        actions={(
+          <>
+            <Button icon={File02} onClick={onOpenDrafts}>Drafts</Button>
+            <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>
+          </>
+        )}
       />
 
       <section className="office-layout">

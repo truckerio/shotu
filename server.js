@@ -17,7 +17,13 @@ import { handleSurveillanceApi } from "./src/server/routes/surveillance.routes.j
 import { handleVehiclesApi } from "./src/server/routes/vehicles.routes.js";
 import { handleWorkorderDraftsApi } from "./src/server/routes/workorder-drafts.routes.js";
 import { handleWorkorderPreferencesApi } from "./src/server/routes/workorder-preferences.routes.js";
-import { startSamsaraAutoSync } from "./src/server/integrations/samsara/samsara.auto-sync.js";
+import { handleHealthRoute } from "./src/server/routes/health.routes.js";
+import {
+  startSamsaraAutoSync,
+  stopSamsaraAutoSync,
+} from "./src/server/integrations/samsara/samsara.auto-sync.js";
+import { closePool } from "./src/server/db/pool.js";
+import { installGracefulShutdown, observeRequest } from "./src/server/operations/runtime.js";
 import {
   AuthError,
   handleAuthApi,
@@ -32,6 +38,14 @@ import {
   getWorkorderSerialSettings,
 } from "./src/server/db/repositories/serial-counters.repo.js";
 import { invalidRequest, resourceNotFound } from "./src/server/auth/errors.js";
+import {
+  SecurityHttpError,
+  applyRateLimitHeaders,
+  applySecurityHeaders,
+  assertSameOriginMutation,
+  createSensitiveRouteRateLimiter,
+  readJsonBody,
+} from "./src/server/security/index.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -53,6 +67,17 @@ const staticTypes = {
 };
 
 let ledgerQueue = Promise.resolve();
+const sensitiveRouteRateLimiter = createSensitiveRouteRateLimiter();
+const trustedOrigins = String(process.env.AUTH_TRUSTED_ORIGINS || "")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+const trustedIpHeaders = process.env.NODE_ENV === "production"
+  ? String(process.env.AUTH_IP_ADDRESS_HEADERS || "x-real-ip")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  : [];
 
 function sendJson(res, status, body) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -89,22 +114,15 @@ function downloadNameForJob(job) {
   return basename(job?.pdfPath || "workorder.pdf");
 }
 
+function requestBodyLimit(req) {
+  const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
+  if (pathname === "/api/upload") return 75_000_000;
+  if (pathname.endsWith("/messages")) return 12_000_000;
+  return 1_000_000;
+}
+
 function readBody(req) {
-  return new Promise((resolveBody, rejectBody) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 75_000_000) req.destroy();
-    });
-    req.on("end", () => {
-      try {
-        resolveBody(body ? JSON.parse(body) : {});
-      } catch (error) {
-        rejectBody(error);
-      }
-    });
-    req.on("error", rejectBody);
-  });
+  return readJsonBody(req, { maxBytes: requestBodyLimit(req) });
 }
 
 function run(command, args, options = {}) {
@@ -649,9 +667,17 @@ async function serveStatic(req, res) {
 
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  const rateLimit = sensitiveRouteRateLimiter.check(req, url, { trustedIpHeaders });
+  applyRateLimitHeaders(res, rateLimit.result);
 
   if (await handleAuthApi(req, res, url)) return;
   if (await handleCurrentUserApi(req, res, url, { sendJson, resolveRequestContext })) return;
+
+  assertSameOriginMutation(req, {
+    allowedOrigins: trustedOrigins,
+    allowMissingOrigin: process.env.NODE_ENV !== "production",
+    publicOrigin: process.env.BETTER_AUTH_URL,
+  });
 
   const requiredPermission = permissionForRequest(req.method, url.pathname);
   let requestContext = null;
@@ -778,8 +804,14 @@ async function handleApi(req, res) {
 }
 
 const server = createServer(async (req, res) => {
+  applySecurityHeaders(res);
+  observeRequest(req, res);
   try {
-    if (req.url.startsWith("/api/")) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (await handleHealthRoute(req, res, url, { sendJson })) {
+      return;
+    }
+    if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res);
     } else {
       await serveStatic(req, res);
@@ -789,11 +821,33 @@ const server = createServer(async (req, res) => {
       sendJson(res, error.statusCode, { error: error.message, code: error.code });
       return;
     }
-    sendJson(res, 500, { error: error.message });
+    if (error instanceof SecurityHttpError) {
+      if (error.result) applyRateLimitHeaders(res, error.result);
+      sendJson(res, error.statusCode, { error: error.message, code: error.code });
+      return;
+    }
+    console.error(JSON.stringify({
+      type: "request_error",
+      requestId: req.requestId,
+      method: req.method,
+      path: new URL(req.url, `http://${req.headers.host}`).pathname,
+      errorName: error.name || "Error",
+      errorCode: error.code || null,
+      message: error.message,
+    }));
+    const message = process.env.NODE_ENV === "production"
+      ? "The request could not be completed."
+      : error.message;
+    sendJson(res, 500, { error: message, code: "internal_error" });
   }
 });
 
-server.listen(port, () => {
+server.listen(port, process.env.HOST || "0.0.0.0", () => {
   console.log(`Workorder generator running at http://localhost:${port}`);
   startSamsaraAutoSync();
+});
+
+installGracefulShutdown(server, {
+  closeDatabase: closePool,
+  stopBackgroundJobs: stopSamsaraAutoSync,
 });

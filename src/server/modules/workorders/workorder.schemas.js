@@ -44,11 +44,6 @@ export const releaseWorkorderSchema = z.object({
   reason: z.string().trim().min(2, "Release reason is required.").max(500),
 });
 
-export const updateMechanicNotesSchema = z.object({
-  diagnosis: z.string().trim().max(5000).default(""),
-  workPerformed: z.string().trim().max(5000).default(""),
-});
-
 const usedPartQuantitySchema = z.union([
   z.literal(""),
   z.number().int().positive().max(9999),
