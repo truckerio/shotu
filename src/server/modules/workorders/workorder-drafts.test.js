@@ -328,6 +328,35 @@ test("final validation ignores browser tenant fields and happens before workorde
   assert.equal(createCalls, 0);
 });
 
+test("draft submission accepts the canonical database company UUID", async () => {
+  let preparedInput;
+  const canonicalCompanyId = "00000000-0000-0000-0000-000000000001";
+
+  await submitUserWorkorderDraft({
+    ...context(),
+    companyIds: new Set([canonicalCompanyId]),
+  }, draftId, { version: 2 }, {
+    getLocation: async () => ({ id: locationId, company_id: canonicalCompanyId }),
+    submitDraft: async (input) => {
+      preparedInput = await input.prepareCreateInput({
+        id: draftId,
+        companyId: canonicalCompanyId,
+        createdByUserId: actorId,
+        locationId,
+        payload: {
+          concern: "Inspect coolant leak.",
+          mechanicUserIds: [],
+          formData: {},
+        },
+      });
+      return { draft: { id: draftId }, workorder: { id: workorderId } };
+    },
+  });
+
+  assert.equal(preparedInput.companyId, canonicalCompanyId);
+  assert.equal(preparedInput.locationId, locationId);
+});
+
 test("migration stores no serial and enforces tenant-safe submission references", async () => {
   const migration = await readFile(
     new URL("../../db/migrations/020_workorder_drafts.sql", import.meta.url),

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 import { assignMechanicsSchema, createWorkorderSchema } from "./workorder.schemas.js";
 
 const mechanic1 = "11111111-1111-4111-8111-111111111111";
@@ -37,6 +38,16 @@ test("workorder creation accepts a deduped initial mechanic team", () => {
   });
 
   assert.deepEqual(parsed.mechanicUserIds, [mechanic1, mechanic2]);
+});
+
+test("workorder creation accepts the canonical database company UUID", () => {
+  const parsed = createWorkorderSchema.parse({
+    companyId: DEFAULT_COMPANY_ID,
+    locationId: "44444444-4444-4444-8444-444444444444",
+    concern: "Inspect coolant leak.",
+  });
+
+  assert.equal(parsed.companyId, DEFAULT_COMPANY_ID);
 });
 
 test("workorder creation limits the initial team to 10 mechanics", () => {

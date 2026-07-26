@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_COMPANY_ID } from "../../db/company.js";
+import { DATABASE_UUID_PATTERN, DEFAULT_COMPANY_ID } from "../../db/company.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 
 export const userRoleSchema = z.enum(["mechanic", "office", "surveillance", "admin"]);
@@ -19,9 +19,11 @@ export const workorderFormDataSchema = z.object({
 }).catchall(z.unknown()).transform((formData) => normalizeWorkorderFormData(formData));
 
 export const createWorkorderSchema = z.object({
-  companyId: z.string().uuid().default(DEFAULT_COMPANY_ID),
-  assetId: z.string().uuid().optional().nullable(),
-  locationId: z.string().uuid().optional().nullable(),
+  companyId: z.string()
+    .regex(DATABASE_UUID_PATTERN, "Select a valid company.")
+    .default(DEFAULT_COMPANY_ID),
+  assetId: z.string().uuid("Select a valid unit.").optional().nullable(),
+  locationId: z.string().uuid("Select a valid location.").optional().nullable(),
   concern: z.string().trim().min(1, "Concern is required.").max(2000),
   officeNotes: z.string().trim().max(4000).default(""),
   mechanicUserIds: z.array(z.string().uuid()).max(10, "A workorder can have up to 10 mechanics.")

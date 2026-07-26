@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Pin01 } from "@untitledui/icons";
 import { buildHereLocationUrl, buildSatelliteTileLayer } from "../../lib/maps/satellite-tiles.js";
-import { MAP_CLOSE_DELAY_MS, MAP_OPEN_DELAY_MS } from "../../lib/ui-timings.js";
+import { createMapVisibilityController } from "../../lib/maps/map-visibility-controller.js";
+import { MAP_SURFACE_TRANSITION_MS } from "../../lib/ui-timings.js";
+import "./asset-location-card.css";
 
 export function getVehicleLocation(vehicle) {
   const gps = vehicle?.lastLocation || vehicle?.last_location || null;
@@ -24,64 +26,57 @@ export function AssetLocationCard({
   showVehicleLabel = true,
 }) {
   const cardRef = useRef(null);
-  const openTimerRef = useRef(null);
-  const closeTimerRef = useRef(null);
+  const mapControllerRef = useRef(null);
   const mapPanelId = useId();
   const [mapOpen, setMapOpen] = useState(false);
   const [mapPinned, setMapPinned] = useState(false);
+  const [mapContentMounted, setMapContentMounted] = useState(false);
+  if (!mapControllerRef.current) {
+    mapControllerRef.current = createMapVisibilityController({
+      onMount: () => setMapContentMounted(true),
+      onExpand: () => setMapOpen(true),
+      onCollapse: () => setMapOpen(false),
+      onUnmount: () => setMapContentMounted(false),
+    });
+  }
   const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || "Vehicle";
   const mapVisible = Boolean(location) && (mapOpen || mapPinned);
-  const tileLayer = mapVisible ? buildSatelliteTileLayer(location, mapsConfig) : null;
-
-  function clearOpenTimer() {
-    if (!openTimerRef.current) return;
-    window.clearTimeout(openTimerRef.current);
-    openTimerRef.current = null;
-  }
-
-  function clearCloseTimer() {
-    if (!closeTimerRef.current) return;
-    window.clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = null;
-  }
+  const tileLayer = mapContentMounted && location
+    ? buildSatelliteTileLayer(location, mapsConfig)
+    : null;
 
   function enterCard(event) {
-    clearCloseTimer();
-    if (event.pointerType !== "mouse" || !location || mapVisible) return;
-    clearOpenTimer();
-    openTimerRef.current = window.setTimeout(() => {
-      openTimerRef.current = null;
-      setMapOpen(true);
-    }, MAP_OPEN_DELAY_MS);
+    if (event.pointerType !== "mouse" || !location || mapPinned) return;
+    mapControllerRef.current.cancelClose();
+    if (!mapOpen) {
+      mapControllerRef.current.open({ immediate: mapContentMounted });
+    }
   }
 
   function leaveCard() {
-    clearOpenTimer();
     if (mapPinned) return;
-    clearCloseTimer();
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      setMapOpen(false);
-    }, MAP_CLOSE_DELAY_MS);
+    mapControllerRef.current.close();
   }
 
-  useEffect(() => () => {
-    clearOpenTimer();
-    clearCloseTimer();
-  }, []);
+  useEffect(() => () => mapControllerRef.current?.dispose(), []);
 
   useEffect(() => {
     if (!mapOpen || mapPinned) return undefined;
 
     const closeMapOutside = (event) => {
       if (cardRef.current?.contains(event.target)) return;
-      clearCloseTimer();
-      setMapOpen(false);
+      mapControllerRef.current.close({ immediate: true });
     };
 
     document.addEventListener("pointerdown", closeMapOutside);
     return () => document.removeEventListener("pointerdown", closeMapOutside);
   }, [mapOpen, mapPinned]);
+
+  useEffect(() => {
+    if (location) return;
+    setMapPinned(false);
+    mapControllerRef.current.reset();
+  }, [location]);
 
   if (!vehicle?.id) return null;
 
@@ -89,6 +84,7 @@ export function AssetLocationCard({
     <div
       ref={cardRef}
       className={`asset-location-card ${mapVisible ? "is-map-visible" : ""} ${mapPinned ? "is-map-pinned" : ""}`}
+      style={{ "--map-surface-transition": `${MAP_SURFACE_TRANSITION_MS}ms` }}
       onPointerEnter={enterCard}
       onPointerLeave={leaveCard}
     >
@@ -100,9 +96,9 @@ export function AssetLocationCard({
           aria-expanded={mapVisible}
           disabled={!location}
           onClick={() => {
-            clearOpenTimer();
-            clearCloseTimer();
-            if (!mapPinned) setMapOpen((open) => !open);
+            if (mapPinned) return;
+            if (mapOpen) mapControllerRef.current.close({ immediate: true });
+            else mapControllerRef.current.open({ immediate: true });
           }}
         >
           {showVehicleLabel ? <strong>{unitLabel}</strong> : null}
@@ -121,9 +117,7 @@ export function AssetLocationCard({
               aria-pressed={mapPinned}
               data-tooltip={mapPinned ? "Unpin map" : "Pin map open"}
               onClick={() => {
-                clearOpenTimer();
-                clearCloseTimer();
-                setMapOpen(true);
+                mapControllerRef.current.open({ immediate: true });
                 setMapPinned((pinned) => !pinned);
               }}
             >
@@ -141,12 +135,11 @@ export function AssetLocationCard({
           aria-hidden={!mapVisible}
           onClick={(event) => {
             if (mapPinned || event.target.closest?.("a, button")) return;
-            clearCloseTimer();
-            setMapOpen(true);
+            mapControllerRef.current.open({ immediate: true });
             setMapPinned(true);
           }}
         >
-          {mapVisible && tileLayer ? (
+          {mapContentMounted && tileLayer ? (
             <>
               <div className="asset-map-tiles" aria-hidden="true">
                 <div className="asset-map-tile-layer" style={tileLayer.layerStyle}>

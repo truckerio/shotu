@@ -1,0 +1,27 @@
+.asset-location-card .asset-location-header {
+  transition:
+    border-color var(--map-surface-transition) var(--motion-ease-standard),
+    border-radius var(--map-surface-transition) var(--motion-ease-standard);
+}
+
+.asset-location-card .asset-map-hover {
+  transition:
+    border-color var(--map-surface-transition) var(--motion-ease-standard),
+    margin-top var(--map-surface-transition) var(--motion-ease-standard),
+    max-height var(--map-surface-transition) var(--motion-ease-standard),
+    opacity var(--map-surface-transition) var(--motion-ease-standard),
+    padding var(--map-surface-transition) var(--motion-ease-standard),
+    transform var(--map-surface-transition) var(--motion-ease-standard),
+    visibility 0s var(--map-surface-transition);
+}
+
+.asset-location-card.is-map-visible .asset-map-hover {
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-location-card .asset-location-header,
+  .asset-location-card .asset-map-hover {
+    transition-duration: 1ms;
+  }
+}
