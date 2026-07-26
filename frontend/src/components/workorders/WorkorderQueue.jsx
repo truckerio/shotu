@@ -93,7 +93,7 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   if (variant === "surveillance") {
     return (
       <div className="mechanic-list-head queue-variant-surveillance" aria-hidden="true">
-        <span>Unit / Workorder</span><span>Location</span><span>Mechanics</span><span>Last activity</span><span>Status</span><span></span>
+        <span>Unit / Workorder</span><span className="queue-wide-only">Problem</span><span>Location</span><span>Mechanics</span><span className="queue-wide-only">Waiting</span><span>Last activity</span><span>Status</span><span></span>
       </div>
     );
   }
@@ -106,7 +106,7 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   }
   return (
     <div className="mechanic-list-head queue-variant-mechanic" aria-hidden="true">
-      <span>Unit / Workorder</span><span>Problem</span><span>Attention</span><span>Created</span><span>Status</span><span></span>
+      <span>Unit / Workorder</span><span>Problem</span><span className="queue-wide-only">Location</span><span className="queue-wide-only">Team</span><span>Attention</span><span>Created</span><span>Status</span><span></span>
     </div>
   );
 }
@@ -116,7 +116,10 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
   const attention = normalizedAttention(workorder);
   const unit = workorder.assetUnitNo || workorder.assetLabel || workorder.asset?.unitNo || workorder.asset?.name || "No unit selected";
   const location = workorder.locationName || workorder.location?.name || "Location not set";
-  const mechanic = workorder.mechanicName || workorder.mechanic?.name || "Unassigned";
+  const mechanic = workorder.mechanics?.map((member) => member.name).filter(Boolean).join(", ")
+    || workorder.mechanicName
+    || workorder.mechanic?.name
+    || "Unassigned";
   const lastActivity = workorder.lastActivityAt || workorder.updatedAt || workorder.createdAt;
   const waiting = durationLabel(workorder.timeInStatusSeconds) || ageLabel(lastActivity);
   const statusLabel = LIFECYCLE_LABELS[lifecycle] || workorder.statusLabel || lifecycle;
@@ -136,13 +139,17 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
         </span>
         {isSurveillance ? (
           <>
+            <span className="work-row-concern queue-wide-only">{workorder.concern || "Problem not recorded"}</span>
             <span className="work-row-location">{location}</span>
             <span className="work-row-mechanic">{mechanic}</span>
+            <span className="work-row-age queue-wide-only">{waiting || "Now"}</span>
             <span className="work-row-created">{formatCreatedAt(lastActivity)}</span>
           </>
         ) : (
           <>
             <span className="work-row-concern">{workorder.concern || "Problem not recorded"}</span>
+            {variant === "mechanic" ? <span className="work-row-location queue-wide-only">{location}</span> : null}
+            {variant === "mechanic" ? <span className="work-row-mechanic queue-wide-only">{mechanic}</span> : null}
             {variant === "office" ? <span className="work-row-location">{location}</span> : null}
             {variant === "office" ? <span className="work-row-mechanic">{mechanic}</span> : null}
             <WorkorderAttention reasons={attention} />

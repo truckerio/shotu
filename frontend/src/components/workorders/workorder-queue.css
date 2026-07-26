@@ -13,6 +13,58 @@
   grid-template-columns: minmax(150px, .8fr) minmax(130px, .65fr) minmax(130px, .65fr) minmax(185px, 1fr) 126px 20px;
 }
 
+.queue-wide-only {
+  display: none;
+}
+
+@media (min-width: 1600px) {
+  .queue-variant-mechanic > .queue-wide-only,
+  .queue-variant-surveillance > .queue-wide-only {
+    display: block;
+  }
+
+  .mechanic-list-head.queue-variant-mechanic,
+  .mechanic-work-open.queue-variant-mechanic {
+    grid-template-columns:
+      minmax(170px, 0.85fr)
+      minmax(300px, 1.7fr)
+      minmax(160px, 0.8fr)
+      minmax(170px, 0.85fr)
+      minmax(150px, 0.8fr)
+      158px
+      128px
+      20px;
+  }
+
+  .mechanic-list-head.queue-variant-surveillance,
+  .mechanic-work-open.queue-variant-surveillance {
+    grid-template-columns:
+      minmax(170px, 0.85fr)
+      minmax(280px, 1.55fr)
+      minmax(150px, 0.75fr)
+      minmax(170px, 0.85fr)
+      100px
+      minmax(170px, 0.95fr)
+      126px
+      20px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .mechanic-list-head.queue-variant-office,
+  .mechanic-work-open.queue-variant-office {
+    grid-template-columns:
+      minmax(180px, 0.9fr)
+      minmax(320px, 1.8fr)
+      minmax(150px, 0.8fr)
+      minmax(170px, 0.85fr)
+      180px
+      90px
+      140px
+      20px;
+  }
+}
+
 .work-row-unit {
   align-items: center;
   display: flex;

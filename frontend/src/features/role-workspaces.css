@@ -1,5 +1,5 @@
 .workspace-operations.mechanic-home {
-  padding-inline: max(24px, calc((100vw - 1760px) / 2));
+  padding-inline: max(24px, calc((100vw - var(--workspace-max-width)) / 2));
 }
 
 .workspace-operations .mechanic-queue-shell,

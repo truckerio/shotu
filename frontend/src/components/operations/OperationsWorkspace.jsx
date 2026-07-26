@@ -29,11 +29,18 @@ function OperationRow({ item, onOpenWorkorder }) {
   const attentionReasons = Array.isArray(item.attentionReasons) ? item.attentionReasons : [];
   const overdue = attentionReasons.includes("overdue");
   const activity = formatActivity(item.lastActivityAt || item.createdAt);
+  const created = formatActivity(item.createdAt);
   const unit = item.asset?.unitNo || item.asset?.name || "No unit";
   const location = item.location?.name || "No location";
   const mechanic = item.mechanics?.map((member) => member.name).filter(Boolean).join(", ")
     || item.mechanic?.name
     || "Unassigned";
+  const odooStatus = item.odooStatus || "not_entered";
+  const odooStatusLabel = {
+    entered: "Entered",
+    missing_info: "Missing info",
+    not_entered: "Not entered",
+  }[odooStatus] || odooStatus.replaceAll("_", " ");
   const interactive = typeof onOpenWorkorder === "function";
 
   function open() {
@@ -83,6 +90,13 @@ function OperationRow({ item, onOpenWorkorder }) {
       <div className="operations-cell operations-wait" role="cell" data-label="Time waiting">
         <strong>{formatDuration(item.timeInStatusSeconds)}</strong>
         <span>in status</span>
+      </div>
+      <div className="operations-cell operations-created" role="cell" data-label="Created / age" title={created.absolute}>
+        <strong>{created.relative}</strong>
+        <span>{created.absolute}</span>
+      </div>
+      <div className="operations-cell operations-odoo" role="cell" data-label="Odoo">
+        <span className={`operations-odoo-state odoo-${odooStatus}`}>{odooStatusLabel}</span>
       </div>
       <div className="operations-cell operations-activity" role="cell" data-label="Last activity" title={activity.absolute}>
         <strong>{activity.relative}</strong>
@@ -271,6 +285,8 @@ export function OperationsWorkspace({ locations = [], fixedLocationId = "", onOp
           <span role="columnheader">Mechanics</span>
           <span role="columnheader">Lifecycle / attention</span>
           <span role="columnheader">Time waiting</span>
+          <span className="operations-created" role="columnheader">Created / age</span>
+          <span className="operations-odoo" role="columnheader">Odoo</span>
           <span role="columnheader">Last activity</span>
         </div>
         {list.loading ? <LoadingRows /> : null}

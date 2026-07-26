@@ -1,6 +1,7 @@
 :root {
   color: #181d27;
   background: #eef2f6;
+  --workspace-max-width: 2400px;
   --motion-fast: 180ms;
   --motion-control: 200ms;
   --motion-surface: 320ms;
@@ -376,7 +377,7 @@ body.is-resizing-workorder {
 .mechanic-home {
   align-content: start;
   gap: 18px;
-  padding: 28px max(24px, calc((100vw - 1440px) / 2));
+  padding: 28px max(24px, calc((100vw - var(--workspace-max-width)) / 2));
 }
 
 .icon-button {
@@ -653,6 +654,13 @@ body.is-resizing-workorder {
   display: grid;
   gap: 14px;
   grid-template-columns: 280px minmax(0, 1fr);
+}
+
+@media (min-width: 1800px) {
+  .office-layout {
+    gap: 18px;
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
 }
 
 .office-mechanic-panel {
@@ -4663,6 +4671,12 @@ textarea:focus {
   margin: 0 auto;
   max-width: 720px;
   padding: 20px 24px 28px;
+}
+
+@media (min-width: 1800px) {
+  .create-workorder-form {
+    max-width: 880px;
+  }
 }
 
 .workorder-detail-page .accordion-stack {
