@@ -5071,6 +5071,48 @@ textarea:focus {
   padding: 2px 16px 22px;
 }
 
+.workorder-section-panel {
+  animation: workorder-section-enter 140ms var(--motion-ease-enter);
+  background: #fff;
+  min-width: 0;
+}
+
+.workorder-section-panel.has-attention {
+  box-shadow: inset 3px 0 #f79009;
+}
+
+.workorder-section-panel-heading {
+  align-items: flex-start;
+  border-bottom: 1px solid #e4e7ec;
+  display: flex;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+}
+
+.workorder-section-panel-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.workorder-section-panel-heading h2 {
+  color: #181d27;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.workorder-section-panel-heading p {
+  font-size: var(--detail-meta-size);
+}
+
+.workorder-section-panel-content {
+  min-width: 0;
+  padding: 20px;
+}
+
+.mechanic-compact-primary-action {
+  display: none;
+}
+
 .workorder-detail-page .workorder-progressive-stack > .chat-section {
   border: 1px solid #d0d5dd;
   border-radius: 8px;
@@ -5294,6 +5336,79 @@ textarea:focus {
   }
 }
 
+@media (min-width: 1024px) and (max-width: 1180px) and (orientation: landscape) {
+  .mechanic-detail-page .split-layout.workorder-detail-layout,
+  .mechanic-detail-page .split-layout.workorder-detail-layout.has-preview {
+    grid-template-columns: minmax(440px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
+    justify-content: stretch;
+  }
+
+  .mechanic-detail-page .workorder-detail-layout .control-panel,
+  .mechanic-detail-page .workorder-detail-layout.has-preview .control-panel {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .mechanic-detail-page .workorder-detail-layout .preview-panel,
+  .mechanic-detail-page .workorder-detail-layout.has-preview .preview-panel {
+    display: grid;
+  }
+
+  .mechanic-detail-page .detail-pane-resizer {
+    display: grid;
+  }
+}
+
+@media (max-width: 1023px), (max-width: 1180px) and (orientation: portrait) {
+  .mechanic-detail-page .workorder-section-nav {
+    background: rgb(255 255 255 / 96%);
+    padding: 0 10px;
+    position: sticky;
+    top: 62px;
+    z-index: 11;
+  }
+
+  .mechanic-detail-page .workorder-progressive-stack {
+    padding-bottom: 112px;
+  }
+
+  .mechanic-compact-primary-action {
+    background: rgb(255 255 255 / 96%);
+    border-top: 1px solid #d5d7da;
+    bottom: 0;
+    display: block;
+    left: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    position: fixed;
+    right: 0;
+    z-index: 30;
+  }
+
+  .mechanic-compact-primary-action .finish-work-button {
+    align-items: center;
+    background: #067647;
+    border: 1px solid #067647;
+    border-radius: 7px;
+    color: #fff;
+    display: flex;
+    font-size: var(--detail-body-size);
+    font-weight: var(--weight-semibold);
+    gap: 7px;
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .mechanic-compact-primary-action .finish-work-button svg {
+    height: 17px;
+    width: 17px;
+  }
+
+  .mechanic-compact-primary-action .finish-work-button:disabled {
+    opacity: 0.5;
+  }
+}
+
 @media (max-width: 700px) {
   .create-workorder-form {
     gap: 12px;
@@ -5357,22 +5472,16 @@ textarea:focus {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .workorder-object-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workorder-object-actions .finish-work-button {
-    grid-column: 1 / -1;
-    margin-left: 0;
-  }
-
   .workorder-section-nav {
-    display: none;
+    background: rgb(255 255 255 / 96%);
+    padding: 0 6px;
+    position: sticky;
+    top: 62px;
+    z-index: 11;
   }
 
   .workorder-detail-page .workorder-progressive-stack {
-    padding: 10px 12px 96px;
+    padding: 10px 12px 112px;
   }
 
   .workorder-progressive-trigger {
@@ -5386,6 +5495,14 @@ textarea:focus {
   .workorder-progressive-content {
     padding-left: 10px;
     padding-right: 10px;
+  }
+
+  .workorder-section-panel-heading {
+    padding: 16px 12px 12px;
+  }
+
+  .workorder-section-panel-content {
+    padding: 16px 12px;
   }
 
   .workorder-detail-page .workorder-progressive-stack > .chat-section {

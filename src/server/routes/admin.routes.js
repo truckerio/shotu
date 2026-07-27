@@ -3,6 +3,7 @@ import {
   acceptInvitation,
   addAdminLocation,
   adminLocationDetail,
+  adminLocationWorkorderPolicy,
   adminLocations,
   adminOperations,
   adminOperationsSummary,
@@ -14,6 +15,7 @@ import {
   resendLocationInvitation,
   resetAdminUserPassword,
   saveAdminTemplate,
+  saveAdminLocationWorkorderPolicy,
 } from "../modules/admin/admin.service.js";
 import { invitationPublicOrigin } from "../modules/admin/invitation-link.js";
 import { parseWorkorderOperationsQuery } from "../modules/workorders/workorder-operations.schemas.js";
@@ -25,6 +27,7 @@ import {
   updateManagedUserStatusSchema,
   updateLocationSchema,
   updateLocationTemplateSchema,
+  updateLocationWorkorderPolicySchema,
 } from "../modules/admin/admin.schemas.js";
 
 function locationPath(pathname, suffix = "") {
@@ -118,6 +121,26 @@ export async function handleAdminApi(req, res, url, helpers) {
   if (req.method === "PUT" && templateId) {
     const input = updateLocationTemplateSchema.parse(await readBody(req));
     sendJson(res, 200, { template: await saveAdminTemplate(requestContext, templateId, input, actor.id) });
+    return true;
+  }
+
+  const policyId = locationPath(url.pathname, "/workorder-policy");
+  if (req.method === "GET" && policyId) {
+    sendJson(res, 200, {
+      policy: await adminLocationWorkorderPolicy(requestContext, policyId),
+    });
+    return true;
+  }
+  if (req.method === "PATCH" && policyId) {
+    const input = updateLocationWorkorderPolicySchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      policy: await saveAdminLocationWorkorderPolicy(
+        requestContext,
+        policyId,
+        input,
+        actor.id,
+      ),
+    });
     return true;
   }
 

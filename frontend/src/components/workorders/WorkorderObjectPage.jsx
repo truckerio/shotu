@@ -81,9 +81,32 @@ export function ProgressiveWorkorderSection({
   attention = false,
   children,
   className = "",
+  displayMode = "accordion",
 }) {
   const panelId = useId();
   const open = activeSection === id;
+
+  if (displayMode === "panel") {
+    if (!open) return null;
+    return (
+      <section
+        className={`workorder-section-panel ${attention ? "has-attention" : ""} ${className}`.trim()}
+        id={panelId}
+        role="tabpanel"
+        aria-label={title}
+      >
+        <div className="workorder-section-panel-heading">
+          <div>
+            <h2>{title}</h2>
+            {summary ? <p>{summary}</p> : null}
+          </div>
+        </div>
+        <div className="workorder-section-panel-content">
+          {children}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className={`workorder-progressive-section ${open ? "is-open" : ""} ${attention ? "has-attention" : ""} ${className}`.trim()}>

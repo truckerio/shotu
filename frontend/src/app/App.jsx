@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, FileSearch01, MessageChatCircle, Package, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
+import { ArrowLeft, CheckCircle, Plus, RefreshCw01, Save01, XClose } from "@untitledui/icons";
 import { PreviewPane, PreviewToggle } from "../components/preview/PreviewPane.jsx";
 import {
   DraftLeaveDialog,
@@ -171,7 +171,11 @@ export function App({ actor }) {
   const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [isPhone, setIsPhone] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 700px)").matches));
-  const [isCompact, setIsCompact] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 1180px)").matches));
+  const [isCompact, setIsCompact] = useState(() => (
+    typeof window === "undefined"
+      ? false
+      : window.matchMedia("(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)").matches
+  ));
   const [detailSection, setDetailSection] = useState("work");
   const [supportingView, setSupportingView] = useState("preview");
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
@@ -581,7 +585,7 @@ export function App({ actor }) {
 
   useEffect(() => {
     const phoneQuery = window.matchMedia("(max-width: 700px)");
-    const compactQuery = window.matchMedia("(max-width: 1180px)");
+    const compactQuery = window.matchMedia("(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)");
     const syncPhone = () => setIsPhone(phoneQuery.matches);
     const syncCompact = () => setIsCompact(compactQuery.matches);
     syncPhone();
@@ -994,6 +998,11 @@ export function App({ actor }) {
 
   function openOperationalWorkorder(detail) {
     const workorder = detail.workorder;
+    const requestedSection = new URLSearchParams(window.location.search).get("section");
+    const compactSections = ["work", "chat", "parts", "unit", "activity"];
+    const nextSection = compactSections.includes(requestedSection)
+      ? requestedSection
+      : defaultDetailSection("mechanic", workorder.status, isCompact);
     mechanicLocationRefreshRef.current = "";
     setActiveWorkorder(detail);
     setPreviewPanelOpen(true);
@@ -1002,11 +1011,12 @@ export function App({ actor }) {
     setDetailStatus(workorder.status);
     setSelectedVehicle(workorder.asset || null);
     setMechanicAction({ busy: "", message: "" });
-    setDetailSection(defaultDetailSection("mechanic", workorder.status, isCompact));
-    setSupportingView(defaultSupportingView("mechanic", workorder.status));
+    setDetailSection(nextSection === "chat" && !isCompact ? "work" : nextSection);
+    setSupportingView(nextSection === "chat" ? "chat" : defaultSupportingView("mechanic", workorder.status));
     setForm((current) => workorderFormValues(detail, current));
     setWorkspace("generator");
-    window.history.replaceState({}, "", `${window.location.pathname}?workorder=${encodeURIComponent(workorder.id)}`);
+    const sectionQuery = nextSection === "work" ? "" : `&section=${encodeURIComponent(nextSection)}`;
+    window.history.replaceState({}, "", `${window.location.pathname}?workorder=${encodeURIComponent(workorder.id)}${sectionQuery}`);
   }
 
   async function openOfficeWorkorder(workorderId) {
@@ -1480,21 +1490,6 @@ export function App({ actor }) {
     if (finished) setMechanicFinish({ open: false, name: "", message: "" });
   }
 
-  function openMechanicSection(section) {
-    if (section === "chat" && !isCompact) {
-      setSupportingView("chat");
-      setPreviewPanelOpen(true);
-      return;
-    }
-    setDetailSection(section);
-    window.requestAnimationFrame(() => {
-      document.getElementById(`mechanic-${section}-section`)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }
-
   function jumpToPreview() {
     if (isWorkorderDetail && isCompact) {
       setFullscreenPageIndex(0);
@@ -1526,9 +1521,24 @@ export function App({ actor }) {
     if (section === "chat" && !isCompact) {
       setSupportingView("chat");
       setPreviewPanelOpen(true);
+      if (activeWorkorder?.workorder?.id) {
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}?workorder=${encodeURIComponent(activeWorkorder.workorder.id)}&section=chat`,
+        );
+      }
       return;
     }
     setDetailSection(section);
+    if (isMechanicDetail && activeWorkorder?.workorder?.id) {
+      const sectionQuery = section === "work" ? "" : `&section=${encodeURIComponent(section)}`;
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}?workorder=${encodeURIComponent(activeWorkorder.workorder.id)}${sectionQuery}`,
+      );
+    }
   }
 
   function openFullscreenPreview() {
@@ -1724,30 +1734,16 @@ export function App({ actor }) {
                 mechanics={detailMechanicNames}
                 unit={form.unitNo || mechanicAsset.unitNo || mechanicAsset.name}
                 unitType={form.unitType || mechanicAsset.unitType || "Unit"}
-                actions={isMechanicDetail ? (
-                  <>
-                    <button type="button" onClick={jumpToPreview} aria-controls="workorder-preview-panel">
-                      <FileSearch01 />
-                      <span>Preview</span>
-                    </button>
-                    <button type="button" onClick={() => openMechanicSection("chat")}>
-                      <MessageChatCircle />
-                      <span>Message office</span>
-                    </button>
-                    <button type="button" onClick={() => openMechanicSection("parts")}>
-                      <Package />
-                      <span>Parts</span>
-                    </button>
-                    <button
-                      className="finish-work-button"
-                      type="button"
-                      onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                      disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
-                    >
-                      <CheckCircle />
-                      <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
-                    </button>
-                  </>
+                actions={isMechanicDetail && !isCompact ? (
+                  <button
+                    className="finish-work-button"
+                    type="button"
+                    onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
+                    disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
+                  >
+                    <CheckCircle />
+                    <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
+                  </button>
                 ) : null}
               >
                 {isMechanicDetail ? (
@@ -1761,6 +1757,19 @@ export function App({ actor }) {
                 {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
               </WorkorderObjectSummary>
               <WorkorderSectionNav sections={detailSections} activeSection={detailSection} onSelect={selectDetailSection} />
+              {isMechanicDetail && isCompact ? (
+                <div className="mechanic-compact-primary-action">
+                  <button
+                    className="finish-work-button"
+                    type="button"
+                    onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
+                    disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
+                  >
+                    <CheckCircle />
+                    <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
+                  </button>
+                </div>
+              ) : null}
             </>
           ) : null}
 
@@ -1797,6 +1806,7 @@ export function App({ actor }) {
                 onSelect={setDetailSection}
                 attention={["waiting_office", "parts_requested"].includes(detailStatus)}
                 className="chat-section"
+                displayMode={isMechanicDetail ? "panel" : "accordion"}
               >
                 {workorderChatContent}
               </ProgressiveWorkorderSection>
@@ -1810,6 +1820,7 @@ export function App({ actor }) {
                 activeSection={detailSection}
                 onSelect={setDetailSection}
                 className="mechanic-work-section"
+                displayMode="panel"
               >
                 <div className="operational-form detail-workflow-fields">
                   <OperationalFormField id="mechanic-diagnosis" label="Diagnosis" hint="What did you inspect or find?">
@@ -1858,6 +1869,7 @@ export function App({ actor }) {
               activeSection={detailSection}
               onSelect={setDetailSection}
               attention={pendingPartCount > 0}
+              displayMode={isMechanicDetail ? "panel" : "accordion"}
             >
               <div id={isMechanicDetail ? "mechanic-parts-section" : undefined}>
                 {activeWorkorder ? (
@@ -2082,6 +2094,7 @@ export function App({ actor }) {
                 summary={[form.unitNo, form.model].filter(Boolean).join(" · ") || "Unit information"}
                 activeSection={detailSection}
                 onSelect={setDetailSection}
+                displayMode="panel"
               >
                 <dl className="workorder-readonly-details">
                   <div><dt>Unit</dt><dd>{form.unitNo || "Not listed"}</dd></div>
@@ -2110,6 +2123,7 @@ export function App({ actor }) {
                 activeSection={detailSection}
                 onSelect={setDetailSection}
                 className="is-detail-end-timeline"
+                displayMode={isMechanicDetail ? "panel" : "accordion"}
               >
                 <WorkorderTimelinePanel
                   timeline={visibleTimeline}

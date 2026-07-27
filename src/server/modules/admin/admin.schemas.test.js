@@ -7,6 +7,7 @@ import {
   resetManagedUserPasswordSchema,
   updateManagedUserStatusSchema,
   updateLocationTemplateSchema,
+  updateLocationWorkorderPolicySchema,
 } from "./admin.schemas.js";
 
 test("location input keeps the admin model compact", () => {
@@ -47,4 +48,13 @@ test("admin user management validates account status and strong replacement pass
   );
   assert.throws(() => updateManagedUserStatusSchema.parse({ active: "false" }));
   assert.throws(() => resetManagedUserPasswordSchema.parse({ password: "short" }));
+});
+
+test("location workorder policy accepts only an explicit mechanic parts decision", () => {
+  assert.deepEqual(
+    updateLocationWorkorderPolicySchema.parse({ mechanicCanRecordParts: true }),
+    { mechanicCanRecordParts: true },
+  );
+  assert.throws(() => updateLocationWorkorderPolicySchema.parse({}));
+  assert.throws(() => updateLocationWorkorderPolicySchema.parse({ mechanicCanRecordParts: "true" }));
 });

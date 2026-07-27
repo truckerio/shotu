@@ -464,7 +464,7 @@ export function PartRequestsPanel({ role, detail, parts, onPartsChange, onSavePa
         parts={parts}
         onChange={onPartsChange}
         onSave={onSaveParts}
-        disabled={role === "mechanic" && !detail.allowedActions?.saveNotes}
+        disabled={role === "mechanic" && !detail.allowedActions?.recordUsedParts}
         minimumRows={role === "mechanic" ? 1 : 3}
         suggestionsEnabled={role !== "mechanic"}
       />

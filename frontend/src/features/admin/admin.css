@@ -34,6 +34,11 @@
 .admin-location-work { margin-top: 4px; min-width: 0; }
 .admin-panel { padding: 22px; }
 .admin-panel h2, .admin-template-form h2 { font-size: var(--text-heading); font-weight: var(--weight-semibold); margin: 0 0 4px; }
+.admin-rules-panel { margin-top: 24px; }
+.admin-rule-row { align-items: center; border-top: 1px solid #eaecf0; cursor: pointer; display: flex; gap: 20px; justify-content: space-between; margin-top: 20px; min-height: 76px; padding-top: 18px; }
+.admin-rule-row > span { display: grid; gap: 4px; }
+.admin-rule-row small { color: #667085; font-size: var(--text-secondary); line-height: 1.45; }
+.admin-rule-row input { accent-color: #1570ef; height: 20px; margin: 0; width: 20px; }
 .admin-users-table { border: 1px solid #eaecf0; border-radius: 6px; margin-top: 20px; overflow: hidden; }
 .admin-users-head, .admin-user-row { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(220px, 1fr) 130px 100px 132px; min-height: 56px; padding: 0 16px; }
 .admin-users-head { background: #f9fafb; color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); min-height: 40px; }

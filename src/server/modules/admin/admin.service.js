@@ -15,6 +15,10 @@ import {
   updateLocation,
 } from "../../db/repositories/locations.repo.js";
 import { getLocationTemplate, upsertLocationTemplate } from "../../db/repositories/templates.repo.js";
+import {
+  getLocationWorkorderPolicy,
+  saveLocationWorkorderPolicy,
+} from "../../db/repositories/workorder-policies.repo.js";
 import { findAuthUserByEmail } from "../../db/repositories/auth-users.repo.js";
 import {
   deleteManagedUser,
@@ -112,12 +116,13 @@ export async function editAdminLocation(context, locationId, input) {
 
 export async function adminLocationDetail(context, locationId) {
   const location = await authorizedLocation(context, locationId);
-  const [users, invitations, template] = await Promise.all([
+  const [users, invitations, template, policy] = await Promise.all([
     listUsersByLocation(locationId),
     listInvitationsByLocation(locationId),
     getLocationTemplate(locationId),
+    getLocationWorkorderPolicy(locationId, authorizedCompanyIds(context)),
   ]);
-  return { location, users, invitations: invitations.map(invitationView), template };
+  return { location, users, invitations: invitations.map(invitationView), template, policy };
 }
 
 export async function changeAdminUserStatus(context, actor, locationId, userId, input, headers) {
@@ -205,6 +210,21 @@ export async function removeAdminUser(context, actor, locationId, userId) {
 export async function saveAdminTemplate(context, locationId, input, actorId) {
   await authorizedLocation(context, locationId);
   return upsertLocationTemplate(locationId, input, actorId);
+}
+
+export async function adminLocationWorkorderPolicy(context, locationId) {
+  await authorizedLocation(context, locationId);
+  return getLocationWorkorderPolicy(locationId, authorizedCompanyIds(context));
+}
+
+export async function saveAdminLocationWorkorderPolicy(context, locationId, input, actorId) {
+  const location = await authorizedLocation(context, locationId);
+  return saveLocationWorkorderPolicy({
+    locationId,
+    companyId: location.company_id,
+    mechanicCanRecordParts: input.mechanicCanRecordParts,
+    actorId,
+  });
 }
 
 export async function inviteLocationUser(location, input, actorId, origin) {

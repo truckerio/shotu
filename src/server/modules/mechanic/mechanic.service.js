@@ -7,6 +7,10 @@ import {
 import { createPartRequest, updatePartUsage } from "../../db/repositories/part-requests.repo.js";
 import { getUserById, listUsersByRole } from "../../db/repositories/users.repo.js";
 import {
+  getLocationWorkorderPolicy,
+  getWorkorderMechanicPartsPolicy,
+} from "../../db/repositories/workorder-policies.repo.js";
+import {
   WORKORDER_STATUS,
 } from "../workorders/workorder.constants.js";
 import { statusLabel } from "../workorders/workorder.presenter.js";
@@ -90,6 +94,26 @@ export async function mechanicDashboard(mechanicUserId, context) {
   };
 }
 
+export function mechanicAllowedActions(workorder, mechanicId, policy = {}) {
+  const isMine = workorder.mechanicIds?.includes(mechanicId);
+  const canAccept = workorder.status === WORKORDER_STATUS.OPEN
+    && !workorder.mechanicIds?.length;
+  const canEdit = isMine && ![
+    WORKORDER_STATUS.MECHANIC_DONE,
+    WORKORDER_STATUS.CLOSED,
+    WORKORDER_STATUS.ODOO_ENTERED,
+  ].includes(workorder.status);
+  return {
+    accept: canAccept,
+    saveNotes: canEdit,
+    sendMessage: isMine,
+    recordUsedParts: canEdit && policy.mechanicCanRecordParts === true,
+    release: canEdit,
+    markDone: canEdit,
+    requestParts: canEdit,
+  };
+}
+
 export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
   const mechanic = mechanicUserId ? await requireMechanic(mechanicUserId) : await defaultMechanicUser();
   if (!mechanic) throw new Error("No mechanic user exists.");
@@ -100,21 +124,13 @@ export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
     lastSeenActivityAt: detail.workorder.updatedAt,
   });
   const { workorder } = detail;
-  const isMine = workorder.mechanicIds?.includes(mechanic.id);
-  const canAccept = workorder.status === WORKORDER_STATUS.OPEN
-    && !workorder.mechanicIds?.length;
-  const canEdit = isMine && ![WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED].includes(workorder.status);
+  const policy = workorder.locationId
+    ? await getLocationWorkorderPolicy(workorder.locationId, [workorder.companyId])
+    : null;
   return {
     user: mechanic,
     ...detail,
-    allowedActions: {
-      accept: canAccept,
-      saveNotes: canEdit,
-      sendMessage: isMine && ![WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED].includes(workorder.status),
-      release: canEdit,
-      markDone: canEdit,
-      requestParts: canEdit,
-    },
+    allowedActions: mechanicAllowedActions(workorder, mechanic.id, policy),
   };
 }
 
@@ -161,6 +177,14 @@ export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId,
 
 export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts) {
   await requireMechanic(mechanicUserId);
+  const policy = await getWorkorderMechanicPartsPolicy(workorderId);
+  if (!policy?.mechanicCanRecordParts) {
+    throw new AuthError(
+      403,
+      "MECHANIC_PARTS_ENTRY_DISABLED",
+      "Mechanics cannot record used parts at this location. Send a part request to the office instead.",
+    );
+  }
   return updateMechanicUsedParts(workorderId, mechanicUserId, parts);
 }
 

@@ -20,6 +20,10 @@ export const updateLocationTemplateSchema = z.object({
   authorizationText: z.string().trim().max(4000),
 });
 
+export const updateLocationWorkorderPolicySchema = z.object({
+  mechanicCanRecordParts: z.boolean(),
+});
+
 export const createInvitationSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(320),
