@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { partsHelperEnabled } from "./parts-helper.config.js";
 import { findLivePartPrices, identifyPart, resolveOfficePartRequest } from "./parts-helper.service.js";
 import { requireSupportedTruck, supportedTruckFamily, UnsupportedTruckError } from "./supported-trucks.js";
 import { identifyPartWithOpenAI, PartsHelperProviderError } from "./providers/openai.provider.js";
+
+test("parts helper flag accepts normalized deployment values", () => {
+  assert.equal(partsHelperEnabled("true"), true);
+  assert.equal(partsHelperEnabled(" TRUE "), true);
+  assert.equal(partsHelperEnabled(true), true);
+  assert.equal(partsHelperEnabled("false"), false);
+  assert.equal(partsHelperEnabled(undefined), false);
+});
 
 test("supported truck scope stays narrow", () => {
   assert.equal(supportedTruckFamily({ make: "Volvo", model: "VNL" }), "volvo");
