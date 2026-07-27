@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
@@ -16,7 +17,7 @@ function workRank(workorder) {
   return 3;
 }
 
-export function MechanicWorkspace({ actor, onOpenWorkorder }) {
+export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("myWork");
   const [search, setSearch] = useState("");
@@ -112,7 +113,10 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
   return (
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} />
-      <PageHeader title="Workorders" />
+      <PageHeader
+        title="Workorders"
+        actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
+      />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
       <section className="mechanic-queue-shell">
