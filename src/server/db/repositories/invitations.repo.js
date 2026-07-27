@@ -100,34 +100,58 @@ export async function acceptUserInvitation({ invitationId, authUserId, username 
     if (!invitation || invitation.status !== "pending" || new Date(invitation.expires_at) <= new Date()) {
       throw new Error("Invitation is no longer available.");
     }
-    const userResult = await client.query(
-      `insert into user_profiles (display_name, contact_email, active, auth_user_id)
-       values ($1, $2, true, $3)
-       on conflict (auth_user_id) do update
-         set display_name = excluded.display_name,
-             contact_email = excluded.contact_email,
-             active = true,
-             auth_user_id = excluded.auth_user_id,
-             updated_at = now()
-       returning id`,
+    let userResult = await client.query(
+      `update user_profiles
+          set display_name = $1,
+              contact_email = $2,
+              active = true,
+              updated_at = now()
+        where auth_user_id = $3
+          and deleted_at is null
+        returning id`,
       [invitation.name, invitation.email, authUserId],
     );
+    if (!userResult.rowCount) {
+      userResult = await client.query(
+        `insert into user_profiles (display_name, contact_email, active, auth_user_id)
+         values ($1, $2, true, $3)
+         returning id`,
+        [invitation.name, invitation.email, authUserId],
+      );
+    }
     const userId = userResult.rows[0].id;
-    await client.query(
-      `insert into user_location_memberships (user_id, location_id, company_id, active)
-       values ($1, $2, $3, true)
-       on conflict (user_id, location_id) do update set active = true, updated_at = now()`,
-      [userId, invitation.location_id, invitation.company_id],
-    );
-    await client.query(
-      `insert into user_company_memberships (user_id, company_id, role, active)
-       values ($1, $2, $3, true)
-       on conflict (user_id, company_id) do update
-         set role = excluded.role,
-             active = true,
-             updated_at = now()`,
+    const companyMembership = await client.query(
+      `update user_company_memberships
+          set role = $3,
+              active = true,
+              updated_at = now()
+        where user_id = $1
+          and company_id = $2`,
       [userId, invitation.company_id, invitation.role],
     );
+    if (!companyMembership.rowCount) {
+      await client.query(
+        `insert into user_company_memberships (user_id, company_id, role, active)
+         values ($1, $2, $3, true)`,
+        [userId, invitation.company_id, invitation.role],
+      );
+    }
+    const locationMembership = await client.query(
+      `update user_location_memberships
+          set company_id = $3,
+              active = true,
+              updated_at = now()
+        where user_id = $1
+          and location_id = $2`,
+      [userId, invitation.location_id, invitation.company_id],
+    );
+    if (!locationMembership.rowCount) {
+      await client.query(
+        `insert into user_location_memberships (user_id, location_id, company_id, active)
+         values ($1, $2, $3, true)`,
+        [userId, invitation.location_id, invitation.company_id],
+      );
+    }
     await client.query(
       `update user_invitations
           set status = 'accepted', accepted_at = now(), updated_at = now()

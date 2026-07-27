@@ -57,6 +57,6 @@ export async function getAuthActorByAuthUserId(authUserId) {
 }
 
 export async function findAuthUserByEmail(email) {
-  const result = await query("select id from auth_user where lower(email) = lower($1) limit 1", [email]);
+  const result = await query("select id, username from auth_user where lower(email) = lower($1) limit 1", [email]);
   return result.rows[0] || null;
 }

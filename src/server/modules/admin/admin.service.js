@@ -19,7 +19,7 @@ import {
   getLocationWorkorderPolicy,
   saveLocationWorkorderPolicy,
 } from "../../db/repositories/workorder-policies.repo.js";
-import { findAuthUserByEmail } from "../../db/repositories/auth-users.repo.js";
+import { findAuthUserByEmail, getAuthActorByAuthUserId } from "../../db/repositories/auth-users.repo.js";
 import {
   deleteManagedUser,
   getManagedUser,
@@ -286,17 +286,22 @@ export async function acceptInvitation(token, input) {
     throw invalidRequest("This invitation link has expired or was replaced. Ask an admin to resend it.");
   }
 
-  if (await findAuthUserByEmail(invitation.email)) {
-    throw new Error("An account already exists for this email. Ask an admin to assign its location.");
+  let authUser = await findAuthUserByEmail(invitation.email);
+  if (authUser?.id) {
+    const linkedActor = await getAuthActorByAuthUserId(authUser.id);
+    if (linkedActor) {
+      throw new Error("An account already exists for this email. Ask an admin to assign its location.");
+    }
+  } else {
+    try {
+      await createInvitationAuthUser({ invitation, input });
+    } catch (error) {
+      throw invalidRequest(error?.message || "Unable to create login for this invitation.");
+    }
+    authUser = await findAuthUserByEmail(invitation.email);
   }
-  try {
-    await createInvitationAuthUser({ invitation, input });
-  } catch (error) {
-    throw invalidRequest(error?.message || "Unable to create login for this invitation.");
-  }
-  const authUser = await findAuthUserByEmail(invitation.email);
   if (!authUser?.id) throw new Error("Unable to create login for this invitation.");
-  return acceptUserInvitation({ invitationId: invitation.id, authUserId: authUser.id, username: input.username });
+  return acceptUserInvitation({ invitationId: invitation.id, authUserId: authUser.id, username: authUser.username || input.username });
 }
 
 export async function createInvitationAuthUser({ invitation, input, authApi = auth.api }) {
