@@ -7,6 +7,7 @@ import {
   createSensitiveRouteRateLimiter,
   requestRateLimitIdentity,
   sensitiveRateLimitPolicy,
+  SENSITIVE_RATE_LIMIT_POLICIES,
 } from "./rate-limit.js";
 
 test("fixed-window limiter is deterministic, isolated by key, and resets", () => {
@@ -54,6 +55,11 @@ test("sensitive route classification limits mutations and expensive OAuth start"
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/integrations/samsara/sync"), "integration");
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/integrations/samsara/oauth/start"), "integration");
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/integrations/samsara/status"), null);
+});
+
+test("auth limiter gives users a short typo-friendly retry window", () => {
+  assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.auth.limit, 20);
+  assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.auth.windowMs, 60_000);
 });
 
 test("sensitive guard uses independent policies and throws a stable 429 error", () => {

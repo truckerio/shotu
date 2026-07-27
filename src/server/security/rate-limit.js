@@ -1,7 +1,7 @@
 import { RateLimitExceededError } from "./errors.js";
 
 export const SENSITIVE_RATE_LIMIT_POLICIES = Object.freeze({
-  auth: Object.freeze({ limit: 10, windowMs: 10 * 60_000 }),
+  auth: Object.freeze({ limit: 20, windowMs: 60_000 }),
   admin: Object.freeze({ limit: 60, windowMs: 60_000 }),
   integration: Object.freeze({ limit: 10, windowMs: 60_000 }),
 });
