@@ -27,6 +27,19 @@ function localDate(value) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
+function matchesDateFilter(value, startDate, endDate) {
+  if (!startDate && !endDate) return true;
+  const date = localDate(value);
+  if (!date) return false;
+  if (startDate && endDate) {
+    const rangeStart = startDate <= endDate ? startDate : endDate;
+    const rangeEnd = startDate <= endDate ? endDate : startDate;
+    return date >= rangeStart && date <= rangeEnd;
+  }
+  if (startDate) return date === startDate;
+  return date <= endDate;
+}
+
 function missingFields(workorder) {
   return [
     !workorder.concern ? "Concern" : "",
@@ -49,7 +62,8 @@ export function SurveillanceWorkspace({ actor }) {
   const [activeTab, setActiveTab] = useState("active");
   const [search, setSearch] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateStartFilter, setDateStartFilter] = useState("");
+  const [dateEndFilter, setDateEndFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
@@ -87,17 +101,24 @@ export function SurveillanceWorkspace({ actor }) {
     const saved = queuePreferences.filters;
     if (["active", "awaitingOffice", "pendingOdoo", "missingInfo", "entered"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
     setLocationFilter(saved.locationFilter || "");
-    setDateFilter(saved.dateFilter || "");
+    setDateStartFilter(saved.dateStartFilter || saved.dateFilter || "");
+    setDateEndFilter(saved.dateEndFilter || "");
     preferenceHydrated.current = true;
   }, [queuePreferences.ready]);
 
   useEffect(() => {
     if (!preferenceHydrated.current) return;
     queuePreferences.save(
-      { activeTab, locationFilter, dateFilter },
+      {
+        activeTab,
+        locationFilter,
+        dateFilter: dateStartFilter,
+        dateStartFilter,
+        dateEndFilter,
+      },
       { defaultView: activeTab },
     );
-  }, [activeTab, locationFilter, dateFilter]);
+  }, [activeTab, locationFilter, dateStartFilter, dateEndFilter]);
 
   const tabs = [
     { key: "active", label: "Active", count: dashboard?.counts.active || 0, icon: Clock },
@@ -118,7 +139,7 @@ export function SurveillanceWorkspace({ actor }) {
   const rows = useMemo(() => (dashboard?.[activeTab] || [])
     .filter((workorder) => workorderMatchesSearch(workorder, search))
     .filter((workorder) => !effectiveLocationFilter || workorder.locationName === effectiveLocationFilter)
-    .filter((workorder) => !dateFilter || localDate(workorder.closedAt || workorder.updatedAt) === dateFilter), [dashboard, activeTab, search, effectiveLocationFilter, dateFilter]);
+    .filter((workorder) => matchesDateFilter(workorder.closedAt || workorder.updatedAt, dateStartFilter, dateEndFilter)), [dashboard, activeTab, search, effectiveLocationFilter, dateStartFilter, dateEndFilter]);
 
   async function openWorkorder(id) {
     setError("");
@@ -423,7 +444,14 @@ export function SurveillanceWorkspace({ actor }) {
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}
-            <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} aria-label="Activity date filter" />
+            <label className="surveillance-date-filter">
+              <span>From</span>
+              <input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" />
+            </label>
+            <label className="surveillance-date-filter">
+              <span>To</span>
+              <input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" />
+            </label>
           </div>
         </div>
         {error ? <p className="ops-error" role="alert">{error}</p> : null}
