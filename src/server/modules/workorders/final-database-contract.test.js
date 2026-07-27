@@ -66,3 +66,10 @@ test("named not-null constraints use the final tenant and profile vocabulary", a
   assert.match(sql, /rename constraint operational_workorders_company_uuid_not_null to operational_workorders_company_id_not_null/i);
   assert.match(sql, /rename constraint app_users_name_not_null to user_profiles_display_name_not_null/i);
 });
+
+test("operational profile auth identity remains unique after rename", async () => {
+  const sql = await migration("025_user_profile_auth_identity_unique.sql");
+  assert.match(sql, /create unique index if not exists user_profiles_auth_user_id_uidx/i);
+  assert.match(sql, /on user_profiles\(auth_user_id\)/i);
+  assert.match(sql, /where auth_user_id is not null/i);
+});
