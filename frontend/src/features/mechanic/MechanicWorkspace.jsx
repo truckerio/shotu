@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd } from "@untitledui/icons";
+import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
@@ -16,7 +17,7 @@ function workRank(workorder) {
   return 3;
 }
 
-export function MechanicWorkspace({ actor, onOpenWorkorder }) {
+export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("myWork");
   const [search, setSearch] = useState("");
@@ -48,7 +49,7 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const savedTab = queuePreferences.filters.activeTab;
-    if (["myWork", "openWork", "waiting", "done"].includes(savedTab)) setActiveTab(savedTab);
+    if (["activeWork", "myWork", "openWork", "waiting", "done"].includes(savedTab)) setActiveTab(savedTab);
     preferenceHydrated.current = true;
   }, [queuePreferences.ready]);
 
@@ -99,6 +100,7 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
   }
 
   const tabs = [
+    { key: "activeWork", label: "Active", count: dashboard?.counts.active || 0, icon: Users01 },
     { key: "myWork", label: "My jobs", count: dashboard?.counts.mine || 0, icon: Briefcase02 },
     { key: "openWork", label: "New jobs", count: dashboard?.counts.open || 0, icon: Inbox01 },
     { key: "waiting", label: "Waiting", count: dashboard?.counts.waiting || 0, icon: Clock },
@@ -111,7 +113,10 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
   return (
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} />
-      <PageHeader title="Workorders" />
+      <PageHeader
+        title="Workorders"
+        actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
+      />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
       <section className="mechanic-queue-shell">
@@ -133,8 +138,10 @@ export function MechanicWorkspace({ actor, onOpenWorkorder }) {
               key={workorder.id}
               workorder={workorder}
               featured={activeTab === "myWork" && index === 0}
-              available={activeTab === "openWork"}
+              available={activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
               busy={acceptingId === workorder.id}
+              acceptLabel={activeTab === "activeWork" ? "Join work" : "Accept work"}
+              busyLabel={activeTab === "activeWork" ? "Joining..." : "Accepting..."}
               onOpen={() => openWorkorder(workorder.id)}
               onAccept={() => acceptFromCard(workorder.id)}
             />

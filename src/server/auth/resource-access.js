@@ -23,7 +23,9 @@ export async function requireWorkorderAccess(context, workorderId, options = {})
     const available = options.allowAvailable
       && workorder.status === "open"
       && !workorder.mechanicIds?.length;
-    if (!assigned && !available) throw resourceNotFound("Workorder");
+    const activeAtLocation = options.allowActiveAtLocation
+      && ["accepted", "in_progress"].includes(workorder.status);
+    if (!assigned && !available && !activeAtLocation) throw resourceNotFound("Workorder");
   }
 
   if (actor.role === "surveillance" && !SURVEILLANCE_VISIBLE_STATUSES.has(workorder.status)) {

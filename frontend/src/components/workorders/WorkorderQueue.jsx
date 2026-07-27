@@ -111,7 +111,7 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   );
 }
 
-export function WorkorderRow({ workorder, available = false, busy = false, featured = false, office = false, variant = office ? "office" : "mechanic", onOpen, onAccept }) {
+export function WorkorderRow({ workorder, available = false, busy = false, featured = false, office = false, variant = office ? "office" : "mechanic", acceptLabel = "Accept work", busyLabel = "Accepting...", onOpen, onAccept }) {
   const lifecycle = normalizedLifecycle(workorder);
   const attention = normalizedAttention(workorder);
   const unit = workorder.assetUnitNo || workorder.assetLabel || workorder.asset?.unitNo || workorder.asset?.name || "No unit selected";
@@ -161,7 +161,7 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
       </button>
       {available ? (
         <button className="accept-work-button" type="button" onClick={onAccept} disabled={busy}>
-          {busy ? "Accepting..." : "Accept work"}
+          {busy ? busyLabel : acceptLabel}
         </button>
       ) : null}
     </article>

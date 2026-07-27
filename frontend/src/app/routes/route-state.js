@@ -29,7 +29,7 @@ export function draftsSearch() {
 export function readInitialWorkspace(actor) {
   const params = currentRouteParams();
   if ((actor.role === "office" || actor.role === "admin") && (params.has("workorder") || params.get("view") === "create")) return "generator";
-  if (actor.role === "mechanic" && params.has("workorder")) return "generator";
+  if (actor.role === "mechanic" && (params.has("workorder") || params.get("view") === "create")) return "generator";
   if (actor.role === "surveillance") return "surveillance";
   if (actor.role === "admin") return "admin";
   return actor.role === "mechanic" ? "mechanic" : "office";

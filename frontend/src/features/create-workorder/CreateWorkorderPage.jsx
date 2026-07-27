@@ -60,6 +60,9 @@ export function CreateWorkorderPage({
   updateUnitNumber,
   applyVehicle,
 }) {
+  const isMechanicCreate = actor.role === "mechanic";
+  const backLabel = actor.role === "admin" ? "Back to Operations" : isMechanicCreate ? "Back to My Work" : "Back to Office";
+
   return (
     <main className="prototype">
       <style>{workorderTemplateStyles}</style>
@@ -70,19 +73,21 @@ export function CreateWorkorderPage({
             <button
               type="button"
               onClick={openOfficeWorkspace}
-              aria-label={actor.role === "admin" ? "Back to Operations" : "Back to Office"}
-              title={actor.role === "admin" ? "Back to Operations" : "Back to Office"}
+              aria-label={backLabel}
+              title={backLabel}
             >
               <ArrowLeft />
             </button>
             <div>
               <strong>Create workorder</strong>
-              <DraftSaveStatus
-                status={workorderDraft.status}
-                error={workorderDraft.error}
-                labels={{ dirty: "Draft changed" }}
-                className="office-create-draft-status"
-              />
+              {!isMechanicCreate ? (
+                <DraftSaveStatus
+                  status={workorderDraft.status}
+                  error={workorderDraft.error}
+                  labels={{ dirty: "Draft changed" }}
+                  className="office-create-draft-status"
+                />
+              ) : null}
             </div>
             <div className="detail-context-actions">
               <button
@@ -122,6 +127,7 @@ export function CreateWorkorderPage({
             onSubmit={createOfficeWorkorder}
             onUnitChange={updateUnitNumber}
             onVehicleSelect={applyVehicle}
+            canAssign={!isMechanicCreate}
             mapsConfig={mapsConfig}
             selectedVehicle={selectedVehicle}
             vehicleLookup={vehicleLookup}
@@ -163,15 +169,17 @@ export function CreateWorkorderPage({
         onZoomChange={setFullscreenZoom}
       />
       <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
-      <DraftLeaveDialog
-        open={draftLeaveOpen}
-        busy={draftLeaveBusy}
-        status={workorderDraft.status}
-        error={workorderDraft.error}
-        onStay={() => setDraftLeaveOpen(false)}
-        onDiscard={discardDraftAndLeave}
-        onSaveAndLeave={saveDraftAndLeave}
-      />
+      {!isMechanicCreate ? (
+        <DraftLeaveDialog
+          open={draftLeaveOpen}
+          busy={draftLeaveBusy}
+          status={workorderDraft.status}
+          error={workorderDraft.error}
+          onStay={() => setDraftLeaveOpen(false)}
+          onDiscard={discardDraftAndLeave}
+          onSaveAndLeave={saveDraftAndLeave}
+        />
+      ) : null}
     </main>
   );
 }

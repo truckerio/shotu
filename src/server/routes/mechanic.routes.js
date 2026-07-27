@@ -1,5 +1,6 @@
 import {
   acceptMechanicWorkorder,
+  createMechanicWorkorder,
   markMechanicDone,
   mechanicDashboard,
   mechanicWorkorderDetail,
@@ -13,6 +14,7 @@ import {
 import { createPartRequestSchema, updatePartUsageSchema } from "../modules/parts/part.schemas.js";
 import {
   acceptWorkorderSchema,
+  createWorkorderSchema,
   markDoneSchema,
   releaseWorkorderSchema,
   sendMessageSchema,
@@ -20,7 +22,9 @@ import {
 } from "../modules/workorders/workorder.schemas.js";
 import { mechanicProgressSchema } from "../modules/mechanic/mechanic-progress.schemas.js";
 import { getChatAttachmentById } from "../db/repositories/chat.repo.js";
+import { getLocationTemplates } from "../db/repositories/templates.repo.js";
 import { readStoredChatImage } from "../modules/chat/chat-media.service.js";
+import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
 
@@ -78,16 +82,52 @@ export async function handleMechanicApi(req, res, url, helpers) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/mechanic/template") {
+    const rows = await getLocationTemplates(requestContext.actor.locationIds || []);
+    const locations = rows.map((row) => ({
+      location: {
+        id: row.location_id,
+        company_id: row.company_id,
+        name: row.location_name,
+        type: row.location_type,
+        address: row.location_address,
+      },
+      template: row.id ? {
+        id: row.id,
+        location_id: row.location_id,
+        header_title: row.header_title,
+        brand_top: row.brand_top,
+        brand_bottom: row.brand_bottom,
+        warranty_text: row.warranty_text,
+        responsibility_text: row.responsibility_text,
+        authorization_text: row.authorization_text,
+        active: row.active,
+        version: row.version,
+        updated_at: row.updated_at,
+      } : null,
+    }));
+    sendJson(res, 200, { locations, ...(locations[0] || { location: null, template: null }) });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/mechanic/workorders") {
+    const input = createWorkorderSchema.parse(await readBody(req));
+    requireCompanyAccess(requestContext, input.companyId);
+    requireLocationAccess(requestContext, input.locationId);
+    sendJson(res, 200, { workorder: await createMechanicWorkorder({ ...input, createdByUserId: mechanicUserId }) });
+    return true;
+  }
+
   const detailId = workorderIdFrom(url.pathname);
   if (req.method === "GET" && detailId) {
-    await requireWorkorderAccess(requestContext, detailId, { allowAvailable: true });
+    await requireWorkorderAccess(requestContext, detailId, { allowAvailable: true, allowActiveAtLocation: true });
     sendJson(res, 200, await mechanicWorkorderDetail(detailId, mechanicUserId));
     return true;
   }
 
   const openedId = workorderIdFrom(url.pathname, "/opened");
   if (req.method === "POST" && openedId) {
-    await requireWorkorderAccess(requestContext, openedId, { allowAvailable: true });
+    await requireWorkorderAccess(requestContext, openedId, { allowAvailable: true, allowActiveAtLocation: true });
     await recordWorkorderOpen(openedId, requestContext.actor);
     sendJson(res, 200, { recorded: true });
     return true;
@@ -110,7 +150,7 @@ export async function handleMechanicApi(req, res, url, helpers) {
 
   const acceptId = workorderIdFrom(url.pathname, "/accept");
   if (req.method === "POST" && acceptId) {
-    await requireWorkorderAccess(requestContext, acceptId, { allowAvailable: true });
+    await requireWorkorderAccess(requestContext, acceptId, { allowAvailable: true, allowActiveAtLocation: true });
     const input = acceptWorkorderSchema.parse(await readBody(req));
     sendJson(res, 200, { workorder: await acceptMechanicWorkorder(acceptId, mechanicUserId) });
     return true;

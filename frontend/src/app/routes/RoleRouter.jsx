@@ -361,8 +361,9 @@ export function RoleRouter({ actor }) {
   );
 
   useEffect(() => {
-    if (!["office", "admin"].includes(actor.role)) return;
-    api("/api/office/template")
+    if (!["office", "admin", "mechanic"].includes(actor.role)) return;
+    const rolePath = actor.role === "mechanic" ? "mechanic" : "office";
+    api(`/api/${rolePath}/template`)
       .then(({ location, template, locations }) => {
         setOfficeLocations(locations || []);
         if (!location) return;
@@ -872,6 +873,19 @@ export function RoleRouter({ actor }) {
     setOfficeCreateAttempt(0);
     setOfficeCreateState({ busy: true, message: "Creating workorder..." });
     try {
+      if (actor.role === "mechanic") {
+        const result = await api("/api/mechanic/workorders", {
+          method: "POST",
+          body: JSON.stringify({
+            ...workorderDraftPayload,
+            mechanicUserIds: [],
+          }),
+        });
+        setOfficeCreateState({ busy: false, message: `${result.workorder.serial} created and assigned to you.` });
+        const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(result.workorder.id)}`);
+        openOperationalWorkorder(detail);
+        return;
+      }
       const savedDraft = await workorderDraft.flush();
       if (!savedDraft?.id || !savedDraft?.version) {
         throw new Error("The draft could not be saved. Try again before creating the workorder.");
@@ -1132,7 +1146,7 @@ export function RoleRouter({ actor }) {
     }));
     setPreviewPanelOpen(true);
     setDetailSource(null);
-    setMode("admin");
+    setMode(actor.role === "mechanic" ? "mechanic" : "admin");
     setOfficeCreateErrors({});
     setOfficeCreateState({ busy: false, message: "" });
     setCreateAssignment((current) => ({ ...current, mechanicUserIds: [] }));
@@ -1147,7 +1161,7 @@ export function RoleRouter({ actor }) {
     setSelectedVehicle(null);
     setPreviewPanelOpen(false);
     setDetailSource(null);
-    setWorkspace(actor.role === "admin" ? "admin" : "office");
+    setWorkspace(actor.role === "admin" ? "admin" : actor.role === "mechanic" ? "mechanic" : "office");
     replaceRouteSearch("");
   }
 
@@ -1250,7 +1264,8 @@ export function RoleRouter({ actor }) {
       openOfficeWorkspace();
       return;
     }
-    returnToMyWork();
+    if (activeWorkorder) returnToMyWork();
+    else finishOpenOfficeWorkspace();
   }
 
   async function returnToMyWork() {
@@ -1483,7 +1498,7 @@ export function RoleRouter({ actor }) {
   }
 
   if (workspace === "mechanic") {
-    return <MechanicWorkspace actor={actor} onOpenWorkorder={openOperationalWorkorder} />;
+    return <MechanicWorkspace actor={actor} onCreateWorkorder={openOfficeGenerator} onOpenWorkorder={openOperationalWorkorder} />;
   }
 
   if (workspace === "admin") {

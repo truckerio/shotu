@@ -687,7 +687,11 @@ function buildOperationsWhere(input, { includeCategory = true } = {}) {
     )`, input.search);
   }
   if (input.visibility === "mechanic") {
-    add("(?::uuid = any(mechanic_ids) or (lifecycle = 'open' and cardinality(mechanic_ids) = 0))", input.actorUserId);
+    if (input.mechanicPool) {
+      clauses.push("lifecycle in ('accepted', 'in_progress')");
+    } else {
+      add("(?::uuid = any(mechanic_ids) or (lifecycle = 'open' and cardinality(mechanic_ids) = 0))", input.actorUserId);
+    }
   } else if (input.visibility === "surveillance") {
     clauses.push("lifecycle in ('accepted', 'in_progress', 'mechanic_done', 'closed', 'odoo_entered')");
   }
@@ -991,15 +995,14 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
     );
     const mechanicIds = assignments.rows.map((row) => row.mechanic_user_id);
     const previousPrimaryId = assignments.rows.find((row) => row.assignment_role === "primary")?.mechanic_user_id || null;
-    if (mechanicIds.length && !mechanicIds.includes(mechanicUserId)) {
-      throw new Error("This workorder was already accepted by another mechanic.");
-    }
     if (!mechanicIds.includes(mechanicUserId)) {
+      const assignmentRole = mechanicIds.length ? "support" : "primary";
+      const assignmentReason = mechanicIds.length ? "Mechanic joined active work" : "Mechanic accepted work";
       await client.query(
         `insert into workorder_mechanic_assignments (
            workorder_id, mechanic_user_id, assignment_role, assigned_by_user_id, reason
-         ) values ($1, $2, 'primary', $2, 'Mechanic accepted work')`,
-        [workorderId, mechanicUserId],
+         ) values ($1, $2, $3, $2, $4)`,
+        [workorderId, mechanicUserId, assignmentRole, assignmentReason],
       );
     }
     const nextStatus = workorder.status === WORKORDER_STATUS.OPEN ? WORKORDER_STATUS.ACCEPTED : workorder.status;
@@ -1018,6 +1021,7 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
       fromMechanicId: previousPrimaryId,
       toMechanicId: mechanicUserId,
       action: "accepted",
+      reason: mechanicIds.length ? "Joined active work." : "",
       changedByUserId: mechanicUserId,
     });
     if (workorder.status !== nextStatus) {

@@ -1,5 +1,6 @@
 import {
   acceptOperationalWorkorder,
+  createOperationalWorkorder,
   markOperationalWorkorderDone,
   releaseOperationalWorkorder,
   updateMechanicUsedParts,
@@ -53,6 +54,7 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
       || item.mechanic?.name
       || "",
     mechanics: item.mechanics || [],
+    mechanicIds: item.mechanicIds || [],
     lastActivityAt: item.lastActivityAt,
     ageSeconds: item.ageSeconds,
     timeInStatusSeconds: item.timeInStatusSeconds,
@@ -68,11 +70,12 @@ export async function mechanicDashboard(mechanicUserId, context) {
 
   const [openWork, myWork, partsWaiting, officeWaiting, done] = await Promise.all([
     queryAuthorizedWorkorders(context, { category: "unassigned", pageSize: 50 }),
-    queryAuthorizedWorkorders(context, { category: "active", pageSize: 50 }),
+    queryAuthorizedWorkorders(context, { category: "active", mechanicPool: true, pageSize: 100 }),
     queryAuthorizedWorkorders(context, { attentionReason: "parts", pageSize: 50 }),
     queryAuthorizedWorkorders(context, { attentionReason: "office_help", pageSize: 50 }),
     queryAuthorizedWorkorders(context, { lifecycle: ["mechanic_done", "closed", "odoo_entered"], pageSize: 50 }),
   ]);
+  const assignedActiveItems = myWork.items.filter((item) => item.mechanicIds?.includes(mechanic.id));
   const waitingById = new Map([
     ...officeWaiting.items.map((item) => [item.id, dashboardOperation(item, "waiting_office")]),
     ...partsWaiting.items.map((item) => [item.id, dashboardOperation(item, "parts_requested")]),
@@ -83,12 +86,14 @@ export async function mechanicDashboard(mechanicUserId, context) {
     user: mechanic,
     counts: {
       open: openWork.total,
-      mine: myWork.total,
+      active: myWork.total,
+      mine: assignedActiveItems.length,
       waiting: waiting.length,
       done: done.total,
     },
     openWork: openWork.items.map((item) => dashboardOperation(item)),
-    myWork: myWork.items.map((item) => dashboardOperation(item)),
+    activeWork: myWork.items.map((item) => dashboardOperation(item)),
+    myWork: assignedActiveItems.map((item) => dashboardOperation(item)),
     waiting,
     done: done.items.map((item) => dashboardOperation(item)),
   };
@@ -147,6 +152,15 @@ export async function updateMechanicPartUsage(workorderId, requestId, input) {
 export async function acceptMechanicWorkorder(workorderId, mechanicUserId) {
   await requireMechanic(mechanicUserId);
   return acceptOperationalWorkorder(workorderId, mechanicUserId);
+}
+
+export async function createMechanicWorkorder(input) {
+  const mechanic = await requireMechanic(input.createdByUserId);
+  return createOperationalWorkorder({
+    ...input,
+    createdByUserId: mechanic.id,
+    mechanicUserIds: [mechanic.id],
+  });
 }
 
 export async function releaseMechanicWorkorder(workorderId, mechanicUserId, reason) {

@@ -19,6 +19,7 @@ export const CREATE_WORKORDER_FORM_ID = "create-workorder-form";
 export function CreateWorkorderForm({
   assignment,
   busy,
+  canAssign = true,
   errors,
   errorFocusKey,
   form,
@@ -115,63 +116,65 @@ export function CreateWorkorderForm({
         </FormSection>
       </FormCard>
 
-      <FormCard
-        className="create-assignment-card"
-        title="Assignment"
-        description="Choose the mechanic team and record any parts already known."
-      >
-        <FormSection title="Mechanics" description="Leave the team empty to make this work available for mechanics to accept.">
-          <MechanicMultiSelect
-            mechanics={mechanics}
-            selectedIds={assignment?.mechanicUserIds || []}
-            onChange={onAssignmentChange}
-            disabled={assignment?.loading}
-            emptyMessage={assignment?.loading ? "Loading mechanics..." : "No active mechanics at this location."}
-            description=""
-          />
-          {!assignment?.mechanicUserIds?.length ? (
-            <p className="operational-availability-note">This workorder will appear in the available queue.</p>
-          ) : null}
-        </FormSection>
-
-        <OptionalSection
-          title="Known parts"
-          description="Optional. Mechanics can confirm the parts actually used later."
-          open={partsOpen}
-          onToggle={setPartsOpen}
+      {canAssign ? (
+        <FormCard
+          className="create-assignment-card"
+          title="Assignment"
+          description="Choose the mechanic team and record any parts already known."
         >
-          <div className="operational-parts-editor">
-            {form.parts.map((part, index) => (
-              <div className="operational-part-row" key={index}>
-                <strong>{index + 1}</strong>
-                <input
-                  value={part.partNo}
-                  onChange={(event) => onPartChange(index, "partNo", event.target.value)}
-                  aria-label={`Part number ${index + 1}`}
-                  placeholder="Part number"
-                />
-                <input
-                  value={part.qty}
-                  onChange={(event) => onPartChange(index, "qty", event.target.value)}
-                  aria-label={`Quantity ${index + 1}`}
-                  placeholder="Qty"
-                  inputMode="numeric"
-                />
-                <input
-                  value={part.repairOrder}
-                  onChange={(event) => onPartChange(index, "repairOrder", event.target.value)}
-                  aria-label={`Repair order ${index + 1}`}
-                  placeholder="Repair order"
-                />
-                <button type="button" onClick={() => onRemovePart(index)} disabled={form.parts.length <= 1}>
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-          <Button type="button" variant="secondary" onClick={onAddPart}>Add part</Button>
-        </OptionalSection>
-      </FormCard>
+          <FormSection title="Mechanics" description="Leave the team empty to make this work available for mechanics to accept.">
+            <MechanicMultiSelect
+              mechanics={mechanics}
+              selectedIds={assignment?.mechanicUserIds || []}
+              onChange={onAssignmentChange}
+              disabled={assignment?.loading}
+              emptyMessage={assignment?.loading ? "Loading mechanics..." : "No active mechanics at this location."}
+              description=""
+            />
+            {!assignment?.mechanicUserIds?.length ? (
+              <p className="operational-availability-note">This workorder will appear in the available queue.</p>
+            ) : null}
+          </FormSection>
+
+          <OptionalSection
+            title="Known parts"
+            description="Optional. Mechanics can confirm the parts actually used later."
+            open={partsOpen}
+            onToggle={setPartsOpen}
+          >
+            <div className="operational-parts-editor">
+              {form.parts.map((part, index) => (
+                <div className="operational-part-row" key={index}>
+                  <strong>{index + 1}</strong>
+                  <input
+                    value={part.partNo}
+                    onChange={(event) => onPartChange(index, "partNo", event.target.value)}
+                    aria-label={`Part number ${index + 1}`}
+                    placeholder="Part number"
+                  />
+                  <input
+                    value={part.qty}
+                    onChange={(event) => onPartChange(index, "qty", event.target.value)}
+                    aria-label={`Quantity ${index + 1}`}
+                    placeholder="Qty"
+                    inputMode="numeric"
+                  />
+                  <input
+                    value={part.repairOrder}
+                    onChange={(event) => onPartChange(index, "repairOrder", event.target.value)}
+                    aria-label={`Repair order ${index + 1}`}
+                    placeholder="Repair order"
+                  />
+                  <button type="button" onClick={() => onRemovePart(index)} disabled={form.parts.length <= 1}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Button type="button" variant="secondary" onClick={onAddPart}>Add part</Button>
+          </OptionalSection>
+        </FormCard>
+      ) : null}
         </div>
 
         <div className="create-workorder-column create-workorder-unit-column">
