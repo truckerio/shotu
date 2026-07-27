@@ -1,13 +1,6 @@
-export function partsHelperEnabled(value) {
-  return String(value ?? "").trim().toLowerCase() === "true";
-}
-
 // Keep these values live so runtime-injected deployment variables are not
 // frozen while the module graph is being initialized.
 export const partsHelperConfig = {
-  get enabled() {
-    return partsHelperEnabled(process.env.PARTS_HELPER_ENABLED);
-  },
   get openAiApiKey() {
     return process.env.OPENAI_API_KEY || "";
   },

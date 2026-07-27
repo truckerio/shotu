@@ -1,6 +1,6 @@
-# Experimental Parts Helper
+# Parts Helper
 
-Isolated prototype. No database writes. No mechanic UI dependency.
+Server-owned part identification and live pricing support.
 
 Supported vehicles:
 
@@ -23,7 +23,7 @@ Real-fleet acceptance testing:
 - It exercises identification, editable repair-order generation, fitment gating, and transient live pricing across 15 component scenarios.
 - The runner masks VINs in terminal output and does not persist price comparisons or modify fleet/workorder data.
 
-Routes are disabled unless `PARTS_HELPER_ENABLED=true`:
+Authenticated routes:
 
 - `GET /api/parts-helper/status`
 - `POST /api/parts-helper/identify`

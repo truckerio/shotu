@@ -18,16 +18,11 @@ export async function handlePartsHelperApi(req, res, url, helpers) {
   if (req.method === "GET" && url.pathname === "/api/parts-helper/status") {
     sendJson(res, 200, {
       experimental: true,
-      enabled: partsHelperConfig.enabled,
+      enabled: true,
       openAiConfigured: Boolean(partsHelperConfig.openAiApiKey),
       huggingFaceDataset: partsHelperConfig.huggingFaceDataset,
       supportedTrucks: supportedTruckLabels,
     });
-    return true;
-  }
-
-  if (!partsHelperConfig.enabled) {
-    sendJson(res, 503, { error: "Experimental parts helper is disabled. Set PARTS_HELPER_ENABLED=true to test it." });
     return true;
   }
 
