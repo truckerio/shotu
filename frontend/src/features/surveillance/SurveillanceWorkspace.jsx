@@ -4,6 +4,7 @@ import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
+import { Button } from "../../components/ui/Button.jsx";
 import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
 import { ProgressiveWorkorderSection, WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
@@ -40,6 +41,39 @@ function matchesDateFilter(value, startDate, endDate) {
   return date <= endDate;
 }
 
+function dateInputValue(date) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function datePresetRange(preset) {
+  const today = new Date();
+  if (preset === "today") {
+    const value = dateInputValue(today);
+    return { start: value, end: value };
+  }
+  if (preset === "week") {
+    const start = new Date(today);
+    const day = start.getDay();
+    start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+    return { start: dateInputValue(start), end: dateInputValue(today) };
+  }
+  return null;
+}
+
+function activeDatePreset(startDate, endDate) {
+  if (!startDate && !endDate) return "all";
+  const today = datePresetRange("today");
+  if (startDate === today.start && endDate === today.end) return "today";
+  const week = datePresetRange("week");
+  if (startDate === week.start && endDate === week.end) return "week";
+  return "custom";
+}
+
+function isCompactViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
+}
+
 function missingFields(workorder) {
   return [
     !workorder.concern ? "Concern" : "",
@@ -64,6 +98,7 @@ export function SurveillanceWorkspace({ actor }) {
   const [locationFilter, setLocationFilter] = useState("");
   const [dateStartFilter, setDateStartFilter] = useState("");
   const [dateEndFilter, setDateEndFilter] = useState("");
+  const [customDateOpen, setCustomDateOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
@@ -77,6 +112,7 @@ export function SurveillanceWorkspace({ actor }) {
   const [saving, setSaving] = useState(false);
   const previewRef = useRef(null);
   const preferenceHydrated = useRef(false);
+  const compactQueueDefaultApplied = useRef(false);
   const queuePreferences = useWorkorderPreferences("surveillance");
 
   async function loadDashboard() {
@@ -120,12 +156,27 @@ export function SurveillanceWorkspace({ actor }) {
     );
   }, [activeTab, locationFilter, dateStartFilter, dateEndFilter]);
 
+  useEffect(() => {
+    if (!dashboard || !queuePreferences.ready || compactQueueDefaultApplied.current) return;
+    compactQueueDefaultApplied.current = true;
+    if (isCompactViewport() && activeTab === "active" && (dashboard.counts.pendingOdoo || 0) > 0) {
+      setActiveTab("pendingOdoo");
+    }
+  }, [dashboard, queuePreferences.ready]);
+
   const tabs = [
     { key: "active", label: "Active", count: dashboard?.counts.active || 0, icon: Clock },
     { key: "awaitingOffice", label: "Awaiting office", count: dashboard?.counts.awaitingOffice || 0, icon: CheckCircle },
     { key: "pendingOdoo", label: "Needs Odoo", count: dashboard?.counts.pendingOdoo || 0, icon: ClipboardCheck },
     { key: "missingInfo", label: "Missing info", count: dashboard?.counts.missingInfo || 0, icon: Tool02 },
     { key: "entered", label: "Entered", count: dashboard?.counts.entered || 0, icon: CheckCircle },
+  ];
+  const compactTabs = [
+    tabs[2],
+    tabs[3],
+    { ...tabs[1], label: "Completed" },
+    tabs[4],
+    tabs[0],
   ];
   const allRows = useMemo(() => [
     ...(dashboard?.active || []),
@@ -204,6 +255,14 @@ export function SurveillanceWorkspace({ actor }) {
       method: "POST",
       body: JSON.stringify({ note: odooNote.trim() }),
     }));
+  }
+
+  function applyDatePreset(preset) {
+    const range = datePresetRange(preset);
+    if (!range) return;
+    setCustomDateOpen(false);
+    setDateStartFilter(range.start);
+    setDateEndFilter(range.end);
   }
 
   if (detail) {
@@ -332,8 +391,8 @@ export function SurveillanceWorkspace({ actor }) {
                     <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
                     <label><span>Note</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" /></label>
                     <div className="surveillance-odoo-actions">
-                      <button className="surveillance-primary-action" type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</button>
-                      <button className="surveillance-secondary-action" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</button>
+                      <Button variant="primary" type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</Button>
+                      <Button variant="secondary" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</Button>
                     </div>
                   </form>
                 ) : (
@@ -440,18 +499,44 @@ export function SurveillanceWorkspace({ actor }) {
       <PageHeader title="Workorders" />
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
-          <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+          <div className="surveillance-desktop-queues">
+            <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+          </div>
+          <div className="surveillance-compact-queues">
+            <WorkorderQueueTabs tabs={compactTabs} activeTab={activeTab} onChange={setActiveTab} />
+          </div>
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}
-            <label className="surveillance-date-filter">
+            <label className="surveillance-date-filter surveillance-desktop-date">
               <span>From</span>
               <input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" />
             </label>
-            <label className="surveillance-date-filter">
+            <label className="surveillance-date-filter surveillance-desktop-date">
               <span>To</span>
               <input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" />
             </label>
+            <div className="surveillance-compact-date-controls">
+              <div className="surveillance-date-presets" aria-label="Activity date range">
+                <button className={activeDatePreset(dateStartFilter, dateEndFilter) === "today" ? "active" : ""} type="button" onClick={() => applyDatePreset("today")}>Today</button>
+                <button className={activeDatePreset(dateStartFilter, dateEndFilter) === "week" ? "active" : ""} type="button" onClick={() => applyDatePreset("week")}>This week</button>
+                <button className={activeDatePreset(dateStartFilter, dateEndFilter) === "custom" || customDateOpen ? "active" : ""} type="button" onClick={() => {
+                  setCustomDateOpen(true);
+                  if (!dateStartFilter && !dateEndFilter) {
+                    const today = dateInputValue(new Date());
+                    setDateStartFilter(today);
+                    setDateEndFilter(today);
+                  }
+                }}>Custom</button>
+              </div>
+              {customDateOpen || activeDatePreset(dateStartFilter, dateEndFilter) === "custom" ? (
+                <div className="surveillance-custom-date-range">
+                  <label><span>From</span><input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Custom activity date start" /></label>
+                  <label><span>To</span><input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Custom activity date end" /></label>
+                  {(dateStartFilter || dateEndFilter) ? <button type="button" onClick={() => { setDateStartFilter(""); setDateEndFilter(""); setCustomDateOpen(false); }}>Clear</button> : <span className="surveillance-any-date">All dates</span>}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         {error ? <p className="ops-error" role="alert">{error}</p> : null}

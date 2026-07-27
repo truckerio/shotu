@@ -119,7 +119,7 @@ export function RoleRouter({ actor }) {
   const [isCompact, setIsCompact] = useState(() => (
     typeof window === "undefined"
       ? false
-      : window.matchMedia("(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)").matches
+      : window.matchMedia("(max-width: 1180px)").matches
   ));
   const [detailSection, setDetailSection] = useState("work");
   const [supportingView, setSupportingView] = useState("preview");
@@ -523,7 +523,7 @@ export function RoleRouter({ actor }) {
 
   useEffect(() => {
     const phoneQuery = window.matchMedia("(max-width: 700px)");
-    const compactQuery = window.matchMedia("(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)");
+    const compactQuery = window.matchMedia("(max-width: 1180px)");
     const syncPhone = () => setIsPhone(phoneQuery.matches);
     const syncCompact = () => setIsCompact(compactQuery.matches);
     syncPhone();

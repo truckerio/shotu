@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
-import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
@@ -17,7 +16,7 @@ function workRank(workorder) {
   return 3;
 }
 
-export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
+export function MechanicWorkspace({ actor, onOpenWorkorder }) {
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("myWork");
   const [search, setSearch] = useState("");
@@ -100,11 +99,11 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
   }
 
   const tabs = [
-    { key: "activeWork", label: "Active", count: dashboard?.counts.active || 0, icon: Users01 },
     { key: "myWork", label: "My jobs", count: dashboard?.counts.mine || 0, icon: Briefcase02 },
     { key: "openWork", label: "New jobs", count: dashboard?.counts.open || 0, icon: Inbox01 },
     { key: "waiting", label: "Waiting", count: dashboard?.counts.waiting || 0, icon: Clock },
     { key: "done", label: "Finished", count: dashboard?.counts.done || 0, icon: FileCheck02 },
+    { key: "activeWork", label: "All active", count: dashboard?.counts.active || 0, icon: Users01 },
   ];
   const rows = useMemo(() => (dashboard?.[activeTab] || [])
     .filter((workorder) => workorderMatchesSearch(workorder, search))
@@ -113,10 +112,7 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
   return (
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} />
-      <PageHeader
-        title="Workorders"
-        actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
-      />
+      <PageHeader title="Workorders" />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
       <section className="mechanic-queue-shell">

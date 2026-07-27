@@ -122,6 +122,7 @@
 
 @media (max-width: 800px) {
   .workorder-drafts-toolbar { align-items: stretch; flex-direction: column; }
+  .workorder-drafts-search { flex-basis: auto; }
   .workorder-drafts-filter { flex-basis: auto; }
   .workorder-drafts-table-head { display: none; }
   .workorder-draft-row { display: grid; gap: 0; grid-template-columns: 1fr 1fr; padding: 10px 0; }

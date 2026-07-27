@@ -181,15 +181,6 @@ export function WorkorderDetailPage({
             </div>
           </div>
 
-          {!isMechanicDetail ? (
-            <div className="mobile-jumpbar" aria-label="Phone shortcuts">
-              <button type="button" onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-                Form
-              </button>
-              <PreviewToggle open={showEmbeddedPreview || previewFullscreen} onToggle={jumpToPreview} controls="workorder-preview-panel" className="mobile-preview-pane-toggle" />
-            </div>
-          ) : null}
-
           <WorkorderObjectSummary
             concern={form.mechanicConcern}
             customer={form.customerCompanyName}
@@ -221,7 +212,7 @@ export function WorkorderDetailPage({
             {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
           </WorkorderObjectSummary>
           <WorkorderSectionNav sections={detailSections} activeSection={detailSection} onSelect={selectDetailSection} />
-          {isMechanicDetail && isCompact ? (
+          {isMechanicDetail && isCompact && detailSection === "work" ? (
             <div className="mechanic-compact-primary-action">
               <button
                 className="finish-work-button"

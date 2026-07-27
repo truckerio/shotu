@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Copy01,
+  DotsVertical,
   File02,
   Key01,
   Mail01,
@@ -15,6 +16,13 @@ import {
   Users01,
   XClose,
 } from "@untitledui/icons";
+import {
+  Button as AriaButton,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+} from "react-aria-components";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
@@ -88,10 +96,10 @@ function LocationsHome({ locations, loading, onCreate, onOpen }) {
         {loading ? <div className="admin-empty">Loading locations</div> : locations.map((location) => (
           <button className="admin-location-row" type="button" key={location.id} onClick={() => onOpen(location.id)}>
             <span className="admin-location-name"><span className="admin-location-icon"><MarkerPin01 /></span><span><strong>{location.name}</strong><small>{location.address || location.type}</small></span></span>
-            <span>{location.user_count}</span>
-            <span>{location.open_workorder_count}</span>
-            <span className={location.has_template ? "admin-ready" : "admin-muted"}>{location.has_template ? "Ready" : "Missing"}</span>
-            <span>›</span>
+            <span className="admin-location-stat"><small>Users</small><strong>{location.user_count}</strong></span>
+            <span className="admin-location-stat"><small>Open work</small><strong>{location.open_workorder_count}</strong></span>
+            <span className={`admin-location-stat ${location.has_template ? "admin-ready" : "admin-muted"}`}><small>Template</small><strong>{location.has_template ? "Ready" : "Missing"}</strong></span>
+            <span className="admin-location-arrow" aria-hidden="true">›</span>
           </button>
         ))}
       </div>
@@ -116,6 +124,50 @@ function formatInviteExpiry(value) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
+function UserActionsMenu({ active, onManage, self, user }) {
+  return (
+    <MenuTrigger>
+      <AriaButton
+        className="admin-user-menu-trigger"
+        aria-label={`Actions for ${user.name}`}
+      >
+        <DotsVertical />
+      </AriaButton>
+      <Popover className="admin-user-menu-popover" placement="bottom end">
+        <Menu className="admin-user-menu" aria-label={`Actions for ${user.name}`}>
+          <MenuItem
+            className="admin-user-menu-item"
+            isDisabled={self}
+            onAction={() => onManage("password", user)}
+            textValue="Reset password"
+          >
+            <Key01 />
+            <span>Reset password</span>
+          </MenuItem>
+          <MenuItem
+            className="admin-user-menu-item"
+            isDisabled={self}
+            onAction={() => onManage(active ? "deactivate" : "activate", user)}
+            textValue={active ? "Deactivate user" : "Activate user"}
+          >
+            {active ? <UserX01 /> : <UserCheck01 />}
+            <span>{active ? "Deactivate user" : "Activate user"}</span>
+          </MenuItem>
+          <MenuItem
+            className="admin-user-menu-item danger"
+            isDisabled={self}
+            onAction={() => onManage("delete", user)}
+            textValue="Delete user"
+          >
+            <Trash01 />
+            <span>Delete user</span>
+          </MenuItem>
+        </Menu>
+      </Popover>
+    </MenuTrigger>
+  );
+}
+
 function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }) {
   const pendingInvitations = detail.invitations.filter((invite) => invite.status === "pending");
   return (
@@ -134,7 +186,7 @@ function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }
               </span>
               <span className="admin-role">{user.role}</span>
               <span><span className={`admin-user-status ${active ? "active" : "inactive"}`}>{active ? "Active" : "Inactive"}</span></span>
-              <span className="admin-user-actions">
+              <span className="admin-user-actions admin-user-actions-desktop">
                 <button type="button" title={self ? "Use your profile to change your own password" : `Reset password for ${user.name}`} aria-label={`Reset password for ${user.name}`} disabled={self} onClick={() => onManage("password", user)}><Key01 /></button>
                 <button
                   type="button"
@@ -146,6 +198,9 @@ function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }
                   {active ? <UserX01 /> : <UserCheck01 />}
                 </button>
                 <button type="button" className="danger" title={self ? "You cannot delete your own account" : `Delete ${user.name}`} aria-label={`Delete ${user.name}`} disabled={self} onClick={() => onManage("delete", user)}><Trash01 /></button>
+              </span>
+              <span className="admin-user-actions-mobile">
+                <UserActionsMenu active={active} onManage={onManage} self={self} user={user} />
               </span>
             </div>
           );
@@ -544,6 +599,11 @@ export function AdminWorkspace({
           </form>
         </Modal>
       ) : null}
+      <nav className="admin-mobile-nav" aria-label="Admin workspace">
+        <button className={view === "operations" ? "active" : ""} type="button" onClick={() => changeView("operations")}><Tool02 /><span>Operations</span></button>
+        <button className={view === "locations" ? "active" : ""} type="button" onClick={() => changeView("locations")}><MarkerPin01 /><span>Locations</span></button>
+        <button className={view === "settings" ? "active" : ""} type="button" onClick={() => changeView("settings")}><Settings01 /><span>Settings</span></button>
+      </nav>
     </main>
   );
 }

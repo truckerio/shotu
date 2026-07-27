@@ -1,0 +1,154 @@
+.workorder-section-nav-mobile {
+  display: none;
+}
+
+.workorder-section-more-popover {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(16 24 40 / 18%);
+  min-width: 190px;
+  padding: 6px;
+  z-index: 80;
+}
+
+.workorder-section-more-menu {
+  display: grid;
+  gap: 2px;
+  outline: 0;
+}
+
+.workorder-section-more-menu [role="menuitem"] {
+  align-items: center;
+  border-radius: 6px;
+  color: #344054;
+  cursor: pointer;
+  display: grid;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  gap: 9px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  min-height: 44px;
+  outline: 0;
+  padding: 8px 10px;
+}
+
+.workorder-section-more-menu [role="menuitem"][data-focused] {
+  background: #f5f8ff;
+  color: #175cd3;
+}
+
+.workorder-section-more-menu .is-selected {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.workorder-section-more-menu .has-attention:not(.is-selected) {
+  color: #b54708;
+}
+
+.workorder-section-more-menu svg {
+  height: 18px;
+  width: 18px;
+}
+
+.workorder-section-more-menu small {
+  align-items: center;
+  background: #f2f4f7;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  height: 20px;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 6px;
+}
+
+@media (max-width: 640px) {
+  .workorder-section-nav-desktop {
+    display: none;
+  }
+
+  .workorder-section-nav-mobile {
+    background: rgb(255 255 255 / 98%);
+    border-top: 1px solid #d5d7da;
+    bottom: 0;
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    left: 0;
+    padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
+    position: fixed;
+    right: 0;
+    z-index: 40;
+  }
+
+  .workorder-section-nav-mobile > button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    color: #667085;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    font-weight: var(--weight-semibold);
+    gap: 2px;
+    justify-content: center;
+    min-height: 48px;
+    min-width: 0;
+    padding: 4px 2px;
+    position: relative;
+  }
+
+  .workorder-section-nav-mobile > button svg {
+    height: 19px;
+    width: 19px;
+  }
+
+  .workorder-section-nav-mobile > button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workorder-section-nav-mobile > button small {
+    align-items: center;
+    background: #f2f4f7;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 9px;
+    height: 17px;
+    justify-content: center;
+    min-width: 17px;
+    padding: 0 4px;
+    position: absolute;
+    right: max(5px, calc(50% - 21px));
+    top: 2px;
+  }
+
+  .workorder-section-nav-mobile > button.is-active {
+    background: #eff8ff;
+    color: #175cd3;
+  }
+
+  .workorder-section-nav-mobile > button.has-attention:not(.is-active) {
+    color: #b54708;
+  }
+
+  .workorder-detail-page .control-panel {
+    padding-bottom: calc(66px + env(safe-area-inset-bottom));
+  }
+
+  .workorder-detail-page .workorder-progressive-stack {
+    padding-bottom: 16px;
+  }
+
+  .mechanic-detail-page .mechanic-compact-primary-action {
+    bottom: calc(59px + env(safe-area-inset-bottom));
+    padding-bottom: 8px;
+    z-index: 39;
+  }
+}

@@ -140,28 +140,8 @@
   gap: 10px;
 }
 
-.surveillance-odoo-actions button {
-  min-height: 40px;
-  border: 1px solid #d0d5dd;
-  border-radius: 6px;
-  background: #fff;
-  color: #344054;
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  padding: 0 14px;
-}
-
-.surveillance-odoo-actions .surveillance-primary-action {
-  background: #1570ef;
-  border-color: #1570ef;
-  color: #fff;
-}
-
-.surveillance-odoo-actions button:disabled {
-  cursor: not-allowed;
-  opacity: .55;
+.surveillance-odoo-actions .button {
+  min-height: 44px;
 }
 
 .surveillance-missing, .surveillance-complete { border-radius: 6px; display: grid; font-size: var(--text-secondary); gap: 3px; margin: 0; padding: 10px 12px; }
@@ -189,7 +169,10 @@
   overflow-wrap: anywhere;
 }
 
-.surveillance-toolbar { display: grid; }
+.queue-toolbar.surveillance-toolbar { display: grid; }
+.surveillance-compact-queues,
+.surveillance-compact-date-controls { display: none; }
+.surveillance-desktop-queues { min-width: 0; }
 .surveillance-filter-row { align-items: center; display: flex; gap: 8px; padding: 0 14px 12px; }
 .surveillance-filter-row .mechanic-search { flex: 1; margin: 0; }
 .surveillance-filter-row select, .surveillance-filter-row input[type="date"] { background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; min-height: 38px; padding: 0 10px; }
@@ -205,14 +188,123 @@
   font-weight: var(--weight-semibold);
 }
 
+@media (min-width: 641px) and (max-width: 1007px) {
+  .surveillance-home {
+    overflow-x: clip;
+  }
+
+  .surveillance-home .mechanic-queue-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-inline: 10px;
+    scrollbar-width: thin;
+  }
+
+  .surveillance-filter-row {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) minmax(150px, auto) auto auto;
+    padding-inline: 12px;
+  }
+
+  .surveillance-filter-row .mechanic-search {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .surveillance-filter-row select,
+  .surveillance-filter-row input[type="date"] {
+    min-height: 44px;
+    min-width: 0;
+  }
+
+  .surveillance-home .mechanic-list-head.queue-variant-surveillance,
+  .surveillance-home .mechanic-work-open.queue-variant-surveillance {
+    grid-template-columns: minmax(132px, .8fr) minmax(120px, .7fr) minmax(150px, 1fr) 116px 24px;
+  }
+
+  .surveillance-home .queue-variant-surveillance > :nth-child(4),
+  .surveillance-home .queue-variant-surveillance .work-row-mechanic {
+    display: none;
+  }
+
+  .surveillance-home .mechanic-list-head.queue-variant-surveillance > :nth-child(3),
+  .surveillance-home .mechanic-work-open.queue-variant-surveillance .work-row-location {
+    display: block;
+  }
+
+  .surveillance-home .mechanic-work-open {
+    min-height: 76px;
+    padding-block: 12px;
+  }
+
+  .surveillance-home .work-row-chevron {
+    height: 20px;
+    width: 20px;
+  }
+}
+
 @media (max-width: 900px) {
   .surveillance-readonly-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .surveillance-inline-detail { grid-template-columns: auto minmax(0, 1fr); }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 640px) {
+  .surveillance-home {
+    overflow-x: clip;
+  }
+
   .surveillance-home .profile-menu-trigger {
     padding-left: 0;
+  }
+
+  .surveillance-home .page-header {
+    padding-inline: 4px;
+  }
+
+  .surveillance-queue-shell {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .surveillance-toolbar {
+    gap: 10px;
+  }
+
+  .surveillance-desktop-queues,
+  .surveillance-desktop-date {
+    display: none;
+  }
+
+  .surveillance-compact-queues,
+  .surveillance-compact-date-controls {
+    display: block;
+    min-width: 0;
+  }
+
+  .surveillance-compact-queues {
+    border-bottom: 1px solid #e4e7ec;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .surveillance-compact-queues::-webkit-scrollbar {
+    display: none;
+  }
+
+  .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: max-content;
+    padding: 0 4px;
+  }
+
+  .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs button {
+    justify-content: center;
+    min-height: 48px;
+    padding-inline: 10px;
   }
 
   .surveillance-detail-page { padding: 0 0 28px; }
@@ -224,10 +316,146 @@
     display: none;
   }
   .surveillance-batch-nav span { min-width: 42px; }
-  .surveillance-filter-row { align-items: stretch; display: grid; grid-template-columns: 1fr 1fr; padding: 0 10px 10px; }
-  .surveillance-filter-row .mechanic-search { grid-column: 1 / -1; min-width: 0; }
-  .surveillance-filter-row select, .surveillance-filter-row input[type="date"] { min-width: 0; width: 100%; }
+  .surveillance-filter-row {
+    align-items: stretch;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 1fr;
+    padding: 0 2px 10px;
+  }
+  .surveillance-filter-row .mechanic-search {
+    grid-column: 1 / -1;
+    margin: 0;
+    max-width: none;
+    min-width: 0;
+    width: auto;
+  }
+  .surveillance-filter-row select,
+  .surveillance-filter-row input[type="date"] {
+    min-height: 44px;
+    min-width: 0;
+    width: 100%;
+  }
   .surveillance-date-filter { min-width: 0; }
+
+  .surveillance-date-presets {
+    background: #f2f4f7;
+    border-radius: 8px;
+    display: grid;
+    gap: 3px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 3px;
+  }
+
+  .surveillance-date-presets button {
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    color: #535862;
+    font: inherit;
+    font-size: var(--text-secondary);
+    font-weight: var(--weight-semibold);
+    min-height: 44px;
+    padding: 0 8px;
+  }
+
+  .surveillance-date-presets button.active {
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(10 13 18 / 10%);
+    color: #175cd3;
+  }
+
+  .surveillance-custom-date-range {
+    align-items: end;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding-top: 10px;
+  }
+
+  .surveillance-custom-date-range label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .surveillance-custom-date-range label span,
+  .surveillance-any-date {
+    color: #667085;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+  }
+
+  .surveillance-custom-date-range button {
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    color: #344054;
+    font: inherit;
+    font-size: var(--text-secondary);
+    font-weight: var(--weight-semibold);
+    grid-column: 1 / -1;
+    min-height: 44px;
+  }
+
+  .surveillance-home .mechanic-work-list {
+    gap: 10px;
+  }
+
+  .surveillance-home .mechanic-work-row {
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgb(10 13 18 / 4%);
+  }
+
+  .surveillance-home .mechanic-work-open.queue-variant-surveillance {
+    gap: 8px 12px;
+    min-height: 144px;
+    padding: 14px;
+  }
+
+  .surveillance-home .queue-variant-surveillance .work-row-location,
+  .surveillance-home .queue-variant-surveillance .work-row-mechanic,
+  .surveillance-home .queue-variant-surveillance .work-row-created {
+    color: #667085;
+    font-size: var(--text-secondary);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .surveillance-home .queue-variant-surveillance .work-row-location::before {
+    content: "Location: ";
+    font-weight: var(--weight-semibold);
+  }
+
+  .surveillance-home .queue-variant-surveillance .work-row-mechanic::before {
+    content: "Mechanic: ";
+    font-weight: var(--weight-semibold);
+  }
+
+  .surveillance-home .queue-variant-surveillance .work-row-created::before {
+    content: "Updated: ";
+    font-weight: var(--weight-semibold);
+  }
+
+  .surveillance-home .queue-variant-surveillance .ops-status {
+    align-self: start;
+    justify-self: end;
+    max-width: 132px;
+  }
+
+  .surveillance-home .queue-variant-surveillance .work-row-chevron {
+    align-self: center;
+    height: 22px;
+    width: 22px;
+  }
+
   .surveillance-readonly-grid { grid-template-columns: 1fr; }
   .surveillance-odoo-actions { display: grid; }
+
+  .surveillance-odoo-actions .button {
+    min-height: 44px;
+    width: 100%;
+  }
 }

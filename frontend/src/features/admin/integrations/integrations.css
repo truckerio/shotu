@@ -304,7 +304,14 @@
   margin-top: 22px;
 }
 
-@media (max-width: 620px) {
+@media (min-width: 641px) and (max-width: 1007px) {
+  .integration-card { max-width: none; }
+}
+
+@media (max-width: 640px) {
+  .admin-settings-tabs { margin-top: 18px; }
+  .admin-settings-tabs button { min-height: 44px; }
+  .integration-page-heading { margin-top: 22px; }
   .integration-card {
     padding: 16px;
   }
@@ -343,6 +350,25 @@
 
   .integration-card-actions .button {
     justify-content: center;
+    min-height: 44px;
+  }
+
+  .integration-confirm-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .integration-confirm {
+    border-radius: 10px 10px 0 0;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .integration-confirm > header button {
+    align-items: center;
+    display: inline-flex;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
   }
 
   .integration-confirm footer {

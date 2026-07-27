@@ -185,6 +185,57 @@
 }
 
 @media (max-width: 700px) {
+  .mechanic-queue-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 5px 8px 7px;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .mechanic-queue-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mechanic-queue-tabs button {
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 10px;
+    scroll-snap-align: start;
+  }
+
+  .mechanic-queue-tabs button svg {
+    display: none;
+  }
+
+  .mechanic-list-head {
+    display: none;
+  }
+
+  .mechanic-work-row {
+    background: #fff;
+    display: grid;
+    overflow: hidden;
+  }
+
+  .mechanic-work-open {
+    min-width: 0;
+    padding: 14px 12px 10px;
+  }
+
+  .mechanic-work-open .ops-status {
+    max-width: min(45vw, 150px);
+  }
+
+  .mechanic-work-open .ops-status span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .mechanic-work-open.queue-variant-mechanic .work-row-location,
   .mechanic-work-open.queue-variant-mechanic .work-row-mechanic {
     display: none;
@@ -235,4 +286,47 @@
   .queue-variant-surveillance .work-row-location { grid-row: 2; }
   .queue-variant-surveillance .work-row-mechanic { grid-row: 3; }
   .queue-variant-surveillance .work-row-created { grid-row: 4; }
+
+  .work-row-chevron {
+    display: none;
+  }
+
+  .accept-work-button {
+    justify-self: stretch;
+    margin: 0 12px 12px;
+    min-height: 44px;
+    width: auto;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1050px) {
+  .mechanic-queue-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .mechanic-queue-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mechanic-queue-tabs button {
+    scroll-snap-align: start;
+  }
+
+  .mechanic-list-head.queue-variant-mechanic,
+  .mechanic-work-open.queue-variant-mechanic {
+    grid-template-columns: minmax(130px, .8fr) minmax(180px, 1.3fr) minmax(120px, .75fr) minmax(112px, auto) 18px;
+  }
+
+  .mechanic-list-head.queue-variant-office,
+  .mechanic-work-open.queue-variant-office {
+    grid-template-columns: minmax(130px, .75fr) minmax(190px, 1.3fr) minmax(125px, .72fr) minmax(135px, .8fr) minmax(112px, auto) 18px;
+  }
+
+  .queue-variant-office .work-row-age,
+  .queue-variant-office > :nth-child(6) {
+    display: none;
+  }
 }

@@ -1,6 +1,6 @@
-export function Button({ children, variant = "secondary", icon: Icon, ...props }) {
+export function Button({ children, variant = "secondary", icon: Icon, className = "", ...props }) {
   return (
-    <button className={`button ${variant}`} {...props}>
+    <button className={`button ${variant} ${className}`.trim()} {...props}>
       {Icon ? <Icon /> : null}
       <span>{children}</span>
     </button>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, FilterLines, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -8,6 +8,7 @@ import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
+import { MobileFilterSheet } from "../../components/responsive/MobileFilterSheet.jsx";
 import "../role-workspaces.css";
 
 function uniqueRows(...groups) {
@@ -117,6 +118,7 @@ export function OfficeWorkspace({
   const [locationFilter, setLocationFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const preferenceHydrated = useRef(false);
   const legacyDraftRoute = useMemo(
     () => new URLSearchParams(window.location.search).get("view") === "drafts",
@@ -223,13 +225,21 @@ export function OfficeWorkspace({
                 <SearchMd />
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
               </label>
+              <Button
+                className="office-mobile-filter-button"
+                type="button"
+                icon={FilterLines}
+                onClick={() => setMobileFiltersOpen(true)}
+              >
+                Filters
+              </Button>
               {locations.length > 1 ? (
-                <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
+                <select className="office-inline-filter" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
                   <option value="">All locations</option>
                   {locations.map((location) => <option key={location} value={location}>{location}</option>)}
                 </select>
               ) : null}
-              <select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)} aria-label="Lifecycle filter">
+              <select className="office-inline-filter" value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)} aria-label="Lifecycle filter">
                 <option value="">All stages</option>
                 <option value="open">Unassigned</option>
                 <option value="accepted">Accepted</option>
@@ -271,6 +281,41 @@ export function OfficeWorkspace({
           )}
         </section>
       </section>
+      <MobileFilterSheet
+        open={mobileFiltersOpen}
+        onOpenChange={setMobileFiltersOpen}
+        title="Filter workorders"
+        footer={<Button type="button" variant="primary" onClick={() => setMobileFiltersOpen(false)}>Show results</Button>}
+      >
+        <label>
+          <span>Mechanic</span>
+          <select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}>
+            <option value="">All mechanics</option>
+            {mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}
+          </select>
+        </label>
+        {locations.length > 1 ? (
+          <label>
+            <span>Location</span>
+            <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+              <option value="">All locations</option>
+              {locations.map((location) => <option key={location} value={location}>{location}</option>)}
+            </select>
+          </label>
+        ) : null}
+        <label>
+          <span>Stage</span>
+          <select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}>
+            <option value="">All stages</option>
+            <option value="open">Unassigned</option>
+            <option value="accepted">Accepted</option>
+            <option value="in_progress">In progress</option>
+            <option value="mechanic_done">Ready for review</option>
+            <option value="closed">Closed</option>
+            <option value="odoo_entered">Odoo entered</option>
+          </select>
+        </label>
+      </MobileFilterSheet>
     </main>
   );
 }

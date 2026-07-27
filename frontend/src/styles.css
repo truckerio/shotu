@@ -4006,14 +4006,15 @@ textarea:focus {
   }
 
   .mechanic-queue-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     padding: 5px 8px 8px;
   }
 
   .mechanic-queue-tabs button {
-    justify-content: flex-start;
+    flex: 0 0 auto;
+    justify-content: center;
     min-height: 46px;
     padding: 0 8px;
   }
@@ -5409,29 +5410,6 @@ textarea:focus {
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1180px) and (orientation: landscape) {
-  .mechanic-detail-page .split-layout.workorder-detail-layout,
-  .mechanic-detail-page .split-layout.workorder-detail-layout.has-preview {
-    grid-template-columns: minmax(440px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
-    justify-content: stretch;
-  }
-
-  .mechanic-detail-page .workorder-detail-layout .control-panel,
-  .mechanic-detail-page .workorder-detail-layout.has-preview .control-panel {
-    grid-template-columns: minmax(0, 1fr);
-    overflow-y: auto;
-  }
-
-  .mechanic-detail-page .workorder-detail-layout .preview-panel,
-  .mechanic-detail-page .workorder-detail-layout.has-preview .preview-panel {
-    display: grid;
-  }
-
-  .mechanic-detail-page .detail-pane-resizer {
-    display: grid;
-  }
-}
-
 @media (max-width: 1023px), (max-width: 1180px) and (orientation: portrait) {
   .mechanic-detail-page .workorder-section-nav {
     background: rgb(255 255 255 / 96%);
@@ -5479,6 +5457,12 @@ textarea:focus {
 
   .mechanic-compact-primary-action .finish-work-button:disabled {
     opacity: 0.5;
+  }
+}
+
+@media (max-width: 640px) {
+  .workorder-section-nav.workorder-section-nav-desktop {
+    display: none;
   }
 }
 
