@@ -1,5 +1,11 @@
 import { getPool, query } from "../pool.js";
 import { PART_APPROVAL_STATUS, normalizePartNumber } from "../../modules/parts/part.constants.js";
+import {
+  formatAllocationFeedback,
+  formatPartDecisionFeedback,
+  formatUsageFeedback,
+  partRequestLabel,
+} from "../../modules/parts/part-feedback.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 
 const TERMINAL_WORKORDER_STATUSES = [WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED, WORKORDER_STATUS.CANCELLED];
@@ -232,7 +238,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       quantity: input.quantity,
       repairOrder: input.repairOrder || "",
     };
-    const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values);
+    const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values, input.query);
     const inserted = await client.query(
       `
         insert into workorder_part_requests (
@@ -291,24 +297,49 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
   }
 }
 
-async function upsertCatalogPart(client, companyId, values) {
+function learnedAliases(values, rawQuery) {
+  const candidate = String(rawQuery || "").trim();
+  if (!candidate) return [];
+  const canonical = [values.partNumber, values.description]
+    .map((value) => String(value || "").trim().toLowerCase());
+  return canonical.includes(candidate.toLowerCase()) ? [] : [candidate];
+}
+
+async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
   const normalized = normalizePartNumber(values.partNumber);
   if (!normalized) return null;
+  const aliases = learnedAliases(values, rawQuery);
   const result = await client.query(
     `
       insert into parts_catalog (
-        company_id, normalized_part_number, part_number, manufacturer, description, category, repair_template
-      ) values ($1, $2, $3, $4, $5, $6, $7)
+        company_id, normalized_part_number, part_number, manufacturer, description, category, repair_template, aliases
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
       on conflict (company_id, normalized_part_number) do update set
         part_number = excluded.part_number,
         manufacturer = excluded.manufacturer,
         description = excluded.description,
         category = excluded.category,
         repair_template = excluded.repair_template,
+        aliases = (
+          select coalesce(jsonb_agg(alias order by alias), '[]'::jsonb)
+          from (
+            select distinct alias
+            from jsonb_array_elements_text(parts_catalog.aliases || excluded.aliases) alias
+          ) learned
+        ),
         updated_at = now()
       returning id
     `,
-    [companyId, normalized, values.partNumber, values.manufacturer, values.description, values.category, values.repairOrder]
+    [
+      companyId,
+      normalized,
+      values.partNumber,
+      values.manufacturer,
+      values.description,
+      values.category,
+      values.repairOrder,
+      JSON.stringify(aliases),
+    ]
   );
   return result.rows[0].id;
 }
@@ -442,7 +473,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       repairOrder: input.repairOrder || request.repair_order,
     };
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
-      ? await upsertCatalogPart(client, request.company_id, values)
+      ? await upsertCatalogPart(client, request.company_id, values, request.raw_query)
       : request.catalog_part_id;
     await client.query(
       `
@@ -504,9 +535,13 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       note: input.reason || `Part request ${eventType}: ${label}.`,
       metadata: { allocations: input.allocations.length, fitmentStatus: input.fitmentStatus },
     });
-    await addSystemMessage(client, workorderId, input.reason
-      ? `Part request ${eventType}: ${label}. ${input.reason}`
-      : `Part request ${eventType}: ${label}.`);
+    await addSystemMessage(client, workorderId, formatPartDecisionFeedback({
+      decision: input.decision,
+      quantity: values.quantity,
+      label,
+      reason: input.reason,
+      allocations: input.allocations,
+    }));
     await restoreWorkorderWhenResolved(client, {
       id: workorderId,
       status: request.workorder_status,
@@ -528,7 +563,7 @@ export async function updatePartAllocation(workorderId, requestId, allocationId,
   try {
     await client.query("begin");
     const result = await client.query(
-      `select pa.*, pr.workorder_id
+      `select pa.*, pr.workorder_id, pr.part_number, pr.description, pr.raw_query, pr.quantity as request_quantity
        from part_allocations pa
        join workorder_part_requests pr on pr.id = pa.part_request_id
        where pa.id = $1 and pa.part_request_id = $2 and pr.workorder_id = $3
@@ -565,6 +600,13 @@ export async function updatePartAllocation(workorderId, requestId, allocationId,
       note: input.note || `${allocation.source_type} allocation changed from ${allocation.status} to ${input.status}.`,
       metadata: { allocationId, from: allocation.status, to: input.status },
     });
+    await addSystemMessage(client, workorderId, formatAllocationFeedback({
+      quantity: allocation.quantity,
+      label: partRequestLabel(allocation),
+      sourceType: allocation.source_type,
+      status: input.status,
+      note: input.note,
+    }));
     await client.query("commit");
     return (await listWorkorderPartRequests(workorderId)).find((part) => part.id === requestId);
   } catch (error) {
@@ -607,6 +649,12 @@ export async function updatePartUsage(workorderId, requestId, input) {
       note: input.note || `Part usage changed from ${request.usage_status} to ${input.usageStatus}.`,
       metadata: { from: request.usage_status, to: input.usageStatus },
     });
+    await addSystemMessage(client, workorderId, formatUsageFeedback({
+      quantity: request.quantity,
+      label: partRequestLabel(request),
+      usageStatus: input.usageStatus,
+      note: input.note,
+    }));
     await client.query("commit");
     return (await listWorkorderPartRequests(workorderId)).find((part) => part.id === requestId);
   } catch (error) {

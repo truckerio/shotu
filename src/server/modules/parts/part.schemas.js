@@ -46,7 +46,15 @@ export const decidePartRequestSchema = z.object({
 }).superRefine((value, context) => {
   if (value.decision === "approved") {
     const allocated = value.allocations.reduce((sum, allocation) => sum + allocation.quantity, 0);
-    if (allocated > value.quantity) context.addIssue({ code: "custom", path: ["allocations"], message: "Allocated quantity cannot exceed approved quantity." });
+    if (!value.partNumber && !value.description) {
+      context.addIssue({ code: "custom", path: ["partNumber"], message: "Add a part number or description before approval." });
+    }
+    if (value.fitmentStatus === "conflict") {
+      context.addIssue({ code: "custom", path: ["fitmentStatus"], message: "A part with conflicting fitment cannot be approved." });
+    }
+    if (allocated !== value.quantity) {
+      context.addIssue({ code: "custom", path: ["allocations"], message: "Supply quantities must equal the approved quantity." });
+    }
   }
   if (value.decision !== "approved" && !value.reason) {
     context.addIssue({ code: "custom", path: ["reason"], message: "A reason is required." });

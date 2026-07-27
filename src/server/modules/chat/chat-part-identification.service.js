@@ -2,6 +2,7 @@ import { partsHelperConfig } from "../parts-helper/parts-helper.config.js";
 import { findHuggingFaceTruckContext } from "../parts-helper/providers/huggingface.provider.js";
 import { identifyOfficePartRequestWithOpenAI } from "../parts-helper/providers/openai.provider.js";
 import { requireSupportedTruck } from "../parts-helper/supported-trucks.js";
+import { findCompanyCatalogPart } from "../../db/repositories/parts-catalog.repo.js";
 
 function inferredMake(make, model) {
   if (make) return make;
@@ -54,7 +55,74 @@ export function mechanicChatVehicleContext(row) {
   };
 }
 
-export async function identifyMechanicChatPart({ message, imageDataUrl, workorderContext }, dependencies = {}) {
+function catalogIdentification(part) {
+  return {
+    status: "matched",
+    normalizedPartNumber: part.partNumber,
+    manufacturer: part.manufacturer,
+    description: part.description,
+    category: part.category,
+    suggestedQuantity: 1,
+    repairOrder: part.repairOrder,
+    fitmentStatus: "unknown",
+    confidence: 100,
+    evidenceSummary: "Matched company-approved parts data.",
+    cautions: ["Office must still verify fitment for the selected unit."],
+    alternatives: [],
+  };
+}
+
+function typedPartIdentification(partNumber, description) {
+  return {
+    status: "ambiguous",
+    normalizedPartNumber: partNumber,
+    manufacturer: "",
+    description: description || "",
+    category: "",
+    suggestedQuantity: 1,
+    repairOrder: "",
+    fitmentStatus: "unknown",
+    confidence: 0,
+    evidenceSummary: "Part number supplied by mechanic; no company-approved match exists yet.",
+    cautions: ["Office verification is required before approval or ordering."],
+    alternatives: [],
+  };
+}
+
+export async function identifyMechanicChatPart({
+  message,
+  imageDataUrl,
+  partNumber = "",
+  partDescription = "",
+  workorderContext,
+}, dependencies = {}) {
+  const findCatalogPart = dependencies.findCatalogPart || findCompanyCatalogPart;
+  const catalogPart = await findCatalogPart(
+    workorderContext?.company_id,
+    partNumber || partDescription || message,
+  );
+  if (catalogPart) {
+    return {
+      part: catalogIdentification(catalogPart),
+      sources: [],
+      consultedSourceCount: 0,
+      resolutionSource: "company_catalog",
+      vehicle: mechanicChatVehicleContext(workorderContext),
+    };
+  }
+
+  // A mechanic's exact input is the durable truth. Save unknown numbers for
+  // office review immediately instead of delaying chat or letting AI replace it.
+  if (partNumber) {
+    return {
+      part: typedPartIdentification(partNumber, partDescription),
+      sources: [],
+      consultedSourceCount: 0,
+      resolutionSource: "mechanic_input",
+      vehicle: mechanicChatVehicleContext(workorderContext),
+    };
+  }
+
   const config = dependencies.config || partsHelperConfig;
   if (!config.openAiApiKey) {
     const error = new Error("Parts helper is not configured.");
@@ -67,16 +135,22 @@ export async function identifyMechanicChatPart({ message, imageDataUrl, workorde
   const findTruckContext = dependencies.findTruckContext || findHuggingFaceTruckContext;
   const identifyWithOpenAI = dependencies.identifyWithOpenAI || identifyOfficePartRequestWithOpenAI;
   const truckContext = await findTruckContext(vehicle, dependencies.huggingFaceOptions);
+  const openAiOptions = {
+    ...dependencies.openAiOptions,
+    // Chat must remain responsive even when photo recognition is unavailable.
+    timeoutMs: dependencies.openAiOptions?.timeoutMs || 8_000,
+  };
   const identification = await identifyWithOpenAI({
     message: message || "",
     imageUrl: imageDataUrl || undefined,
     vehicle,
-  }, truckContext, dependencies.openAiOptions);
+  }, truckContext, openAiOptions);
 
   return {
     part: identification.result,
     sources: identification.sources || [],
     consultedSourceCount: identification.consultedSourceCount ?? identification.sources?.length ?? 0,
+    resolutionSource: "ai_suggestion",
     vehicle,
   };
 }

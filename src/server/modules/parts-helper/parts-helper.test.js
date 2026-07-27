@@ -45,6 +45,66 @@ test("identification combines truck context and sourced OpenAI result", async ()
   assert.equal(result.part.fitmentStatus, "possible");
 });
 
+test("identification uses company catalog without calling AI", async () => {
+  let aiCalled = false;
+  const result = await identifyPart({
+    query: "LF9009",
+    vehicle: { make: "Freightliner", model: "Cascadia" },
+  }, {
+    companyId: "company-1",
+    findCatalogPart: async () => ({
+      partNumber: "LF9009",
+      manufacturer: "Fleetguard",
+      description: "Engine oil filter",
+      category: "lube_filter",
+      repairOrder: "Replace engine oil filter.",
+    }),
+    identifyWithOpenAI: async () => {
+      aiCalled = true;
+      throw new Error("AI must not run");
+    },
+  });
+
+  assert.equal(result.resolutionSource, "company_catalog");
+  assert.equal(result.experimental, false);
+  assert.equal(result.part.description, "Engine oil filter");
+  assert.equal(aiCalled, false);
+});
+
+test("AI cannot silently replace an exact part number", async () => {
+  const result = await identifyPart({
+    query: "ZX-9911",
+    vehicle: { make: "Freightliner", model: "Cascadia" },
+  }, {
+    companyId: "company-1",
+    findCatalogPart: async () => null,
+    findTruckContext: async () => ({ family: "cascadia" }),
+    identifyWithOpenAI: async () => ({
+      result: {
+        status: "matched",
+        normalizedPartNumber: "ZX-9917",
+        manufacturer: "Example",
+        description: "Candidate",
+        category: "unknown",
+        suggestedQuantity: 1,
+        repairOrder: "",
+        fitmentStatus: "possible",
+        confidence: 90,
+        evidenceSummary: "Search candidate.",
+        cautions: [],
+        alternatives: [],
+      },
+      sources: [],
+      consultedSourceCount: 1,
+    }),
+  });
+
+  assert.equal(result.part.normalizedPartNumber, "ZX-9911");
+  assert.equal(result.part.status, "ambiguous");
+  assert.equal(result.part.fitmentStatus, "unknown");
+  assert.ok(result.part.confidence <= 40);
+});
+
 test("live pricing keeps source-backed listings and separates conditions", async () => {
   const result = await findLivePartPrices({
     partNumber: "LF9009",

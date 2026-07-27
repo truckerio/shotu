@@ -9,9 +9,15 @@ import { classifyMechanicPartIntent } from "./chat-part-intent.js";
 import { identifyMechanicChatPart } from "./chat-part-identification.service.js";
 import { persistChatImageAttachment, removeStoredChatImage } from "./chat-media.service.js";
 
-function summarizedIdentification(part) {
+function summarizedIdentification(part, resolutionSource) {
   if (!part) return "";
   const identity = [part.normalizedPartNumber, part.description].filter(Boolean).join(" - ");
+  if (resolutionSource === "company_catalog") {
+    return `Matched company part: ${identity}. Office must verify fitment before approval.`;
+  }
+  if (resolutionSource === "mechanic_input") {
+    return `Part request saved exactly as entered: ${identity || "part number"}. No company-approved match exists yet; office verification is required.`;
+  }
   if (part.status === "matched") {
     return `Part identified for office review: ${identity || "part candidate"}.${part.repairOrder ? ` Suggested work: ${part.repairOrder}` : ""} Office must verify fitment before approval.`;
   }
@@ -65,6 +71,8 @@ export async function processMechanicChatMessage(workorderId, input, dependencie
       identification = await identifyPart({
         message: input.body,
         imageDataUrl: input.attachment?.dataUrl,
+        partNumber: classification.partNumber,
+        partDescription: classification.partDescription,
         workorderContext,
       });
     } catch (error) {
@@ -109,6 +117,7 @@ export async function processMechanicChatMessage(workorderId, input, dependencie
       identification: identifiedPart ? {
         status: identifiedPart.status,
         confidence: identifiedPart.confidence,
+        resolutionSource: identification.resolutionSource,
         evidenceSummary: identifiedPart.evidenceSummary,
         cautions: identifiedPart.cautions,
         sources: identification.sources,
@@ -128,7 +137,7 @@ export async function processMechanicChatMessage(workorderId, input, dependencie
   await addSystemMessage({
     workorderId,
     body: identifiedPart
-      ? summarizedIdentification(identifiedPart)
+      ? summarizedIdentification(identifiedPart, identification.resolutionSource)
       : "Part request saved for office review. Add the exact part number or a clear label photo when available.",
     dedupeKey: `part-identification:${partRequest.id}`,
   });

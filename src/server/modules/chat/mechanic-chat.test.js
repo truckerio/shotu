@@ -83,3 +83,32 @@ test("identification populates part and editable repair-order suggestion", async
   assert.equal(result.partRequest.sourceChatMessageId, "message-1");
   assert.equal(result.intelligence.pricingSearched, false);
 });
+
+test("mechanic classification details are passed to deterministic identification", async () => {
+  let identificationInput = null;
+  const deps = dependencies({
+    identifyPart: async (input) => {
+      identificationInput = input;
+      return {
+        resolutionSource: "mechanic_input",
+        part: {
+          status: "ambiguous",
+          normalizedPartNumber: "ZX-9911",
+          description: "ZX-9911",
+          suggestedQuantity: 1,
+          fitmentStatus: "unknown",
+        },
+        sources: [],
+      };
+    },
+  });
+  await processMechanicChatMessage("wo-1", {
+    senderUserId: "mechanic-1",
+    messageType: "normal",
+    body: "Need ZX-9911",
+  }, deps.value);
+
+  assert.equal(identificationInput.partNumber, "ZX-9911");
+  assert.equal(identificationInput.partDescription, "ZX-9911");
+  assert.equal(deps.calls.requests[0].rawContext.identification.resolutionSource, "mechanic_input");
+});

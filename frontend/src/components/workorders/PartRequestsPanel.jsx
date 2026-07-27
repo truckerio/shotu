@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CheckCircle, Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { Button } from "../ui/Button.jsx";
@@ -207,13 +207,39 @@ function OfficeRequestCard({ request, detail, onChanged }) {
   } : { sourceType: "unknown", status: "proposed", quantity: request.quantity, vendor: "" }]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("error");
   const [pricing, setPricing] = useState(null);
+  const responseRef = useRef(null);
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
   async function decide(decision) {
+    if (decision !== "approved" && !form.reason.trim()) {
+      setMessageTone("error");
+      setMessage(decision === "needs_info"
+        ? "Write the question the mechanic needs to answer."
+        : "Explain why the request is being declined.");
+      responseRef.current?.focus();
+      return;
+    }
+    if (decision === "approved" && !form.partNumber.trim() && !form.description.trim()) {
+      setMessageTone("error");
+      setMessage("Add a part number or description before approval.");
+      return;
+    }
+    if (decision === "approved" && form.fitmentStatus === "conflict") {
+      setMessageTone("error");
+      setMessage("This part has conflicting fitment. Resolve the fitment before approval.");
+      return;
+    }
+    const allocatedQuantity = allocations.reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0);
+    if (decision === "approved" && allocatedQuantity !== Number(form.quantity)) {
+      setMessageTone("error");
+      setMessage(`Supply quantities must total ${form.quantity}.`);
+      return;
+    }
     setBusy(decision);
     setMessage("");
     try {
@@ -226,8 +252,50 @@ function OfficeRequestCard({ request, detail, onChanged }) {
         }),
       });
       await onChanged();
+      setMessageTone("success");
+      setMessage(decision === "approved"
+        ? "Approved. The mechanic was notified in chat."
+        : decision === "needs_info"
+          ? "Question sent to the mechanic."
+          : "Request declined. The mechanic was notified.");
     } catch (error) {
+      setMessageTone("error");
       setMessage(error.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function findSuggestion() {
+    setBusy("identify");
+    setMessage("");
+    try {
+      const result = await api("/api/parts-helper/identify", {
+        method: "POST",
+        body: JSON.stringify({
+          query: form.partNumber || request.rawQuery,
+          vehicle: vehicleInput(detail),
+          location: purchasingLocation(detail),
+        }),
+      });
+      setForm((current) => ({
+        ...current,
+        partNumber: result.part.normalizedPartNumber || current.partNumber,
+        manufacturer: result.part.manufacturer || current.manufacturer,
+        description: result.part.description || current.description,
+        category: result.part.category || current.category,
+        quantity: result.part.suggestedQuantity || current.quantity,
+        repairOrder: result.part.repairOrder || current.repairOrder,
+        fitmentStatus: result.part.fitmentStatus || "unknown",
+        fitmentNotes: result.part.evidenceSummary || current.fitmentNotes,
+      }));
+      setMessageTone("success");
+      setMessage(result.resolutionSource === "company_catalog"
+        ? "Matched company-approved part data."
+        : "AI suggestion loaded for review. Nothing has been approved yet.");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(`${error.message} Review and enter the part manually.`);
     } finally {
       setBusy("");
     }
@@ -242,7 +310,10 @@ function OfficeRequestCard({ request, detail, onChanged }) {
         body: JSON.stringify({ status }),
       });
       await onChanged();
+      setMessageTone("success");
+      setMessage(`Supply updated to ${ALLOCATION_STATUS_LABELS[status]}. The mechanic was notified.`);
     } catch (error) {
+      setMessageTone("error");
       setMessage(error.message);
     } finally {
       setBusy("");
@@ -266,6 +337,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
       });
       setPricing(result);
     } catch (error) {
+      setMessageTone("error");
       setMessage(error.message);
     } finally {
       setBusy("");
@@ -278,6 +350,19 @@ function OfficeRequestCard({ request, detail, onChanged }) {
       <RequestSummary request={request} />
       {pending ? (
         <>
+          <div className="part-review-heading">
+            <div>
+              <strong>Review request</strong>
+              <span>Verify the part, decide how it will be supplied, and send one clear response.</span>
+            </div>
+            <div className="part-review-heading-actions">
+              {request.requestedByName ? <span>Requested by {request.requestedByName}</span> : null}
+              <button type="button" onClick={findSuggestion} disabled={Boolean(busy)}>
+                <SearchMd />
+                {busy === "identify" ? "Finding" : "Find suggestion"}
+              </button>
+            </div>
+          </div>
           <div className="part-office-fields">
             <label>Part number<input value={form.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
             <label>Quantity<input type="number" min="1" max="999" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value) || 1)} /></label>
@@ -291,18 +376,42 @@ function OfficeRequestCard({ request, detail, onChanged }) {
                 <option value="conflict">Conflict</option>
               </select>
             </label>
-            <label>Reason / question<input value={form.reason} onChange={(event) => update("reason", event.target.value)} placeholder="Required for reject or question" /></label>
+            <label>Fitment note<input value={form.fitmentNotes} onChange={(event) => update("fitmentNotes", event.target.value)} placeholder="How fitment was checked" /></label>
           </div>
-          <div className="inventory-summary">
-            {request.inventory.length ? request.inventory.map((item) => (
-              <span key={item.id}><strong>{item.quantityAvailable}</strong> available · {item.locationName || "Inventory"}{item.binLocation ? ` · ${item.binLocation}` : ""}</span>
-            )) : <span>Inventory is not tracked for this part yet.</span>}
+          <div className="part-review-section">
+            <div className="part-review-section-heading">
+              <strong>Supply</strong>
+              <span>Approved quantity: {form.quantity}</span>
+            </div>
+            <div className="inventory-summary">
+              {request.inventory.length ? request.inventory.map((item) => (
+                <span key={item.id}><strong>{item.quantityAvailable}</strong> available · {item.locationName || "Inventory"}{item.binLocation ? ` · ${item.binLocation}` : ""}</span>
+              )) : <span>Inventory is not tracked for this part yet.</span>}
+            </div>
+            <AllocationEditor allocations={allocations} setAllocations={setAllocations} quantity={form.quantity} inventory={request.inventory} />
           </div>
-          <AllocationEditor allocations={allocations} setAllocations={setAllocations} quantity={form.quantity} inventory={request.inventory} />
-          <div className="part-decision-actions">
-            <Button variant="primary" onClick={() => decide("approved")} disabled={Boolean(busy)}>{busy === "approved" ? "Approving" : "Approve"}</Button>
-            <button type="button" onClick={() => decide("needs_info")} disabled={Boolean(busy)}>Ask mechanic</button>
-            <button type="button" onClick={() => decide("rejected")} disabled={Boolean(busy)}>Reject</button>
+          <div className="part-response-composer">
+            <label htmlFor={`part-response-${request.id}`}>Message to mechanic</label>
+            <textarea
+              id={`part-response-${request.id}`}
+              ref={responseRef}
+              value={form.reason}
+              onChange={(event) => update("reason", event.target.value)}
+              placeholder="Optional for approval. Required when asking a question or declining."
+              rows="3"
+            />
+            <span>This response will also appear in the workorder chat and activity history.</span>
+            <div className="part-decision-actions">
+              <Button variant="primary" icon={CheckCircle} onClick={() => decide("approved")} disabled={Boolean(busy)}>
+                {busy === "approved" ? "Approving" : "Approve request"}
+              </Button>
+              <button type="button" onClick={() => decide("needs_info")} disabled={Boolean(busy)}>
+                {busy === "needs_info" ? "Sending question" : "Ask mechanic"}
+              </button>
+              <button className="part-decline-button" type="button" onClick={() => decide("rejected")} disabled={Boolean(busy)}>
+                {busy === "rejected" ? "Declining" : "Decline"}
+              </button>
+            </div>
           </div>
         </>
       ) : (
@@ -337,7 +446,14 @@ function OfficeRequestCard({ request, detail, onChanged }) {
           ) : null}
         </>
       )}
-      {message ? <p className="part-request-error">{message}</p> : null}
+      {message ? (
+        <p
+          className={messageTone === "success" ? "part-request-message part-request-success" : "part-request-error"}
+          role={messageTone === "success" ? "status" : "alert"}
+        >
+          {message}
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -372,7 +488,11 @@ function OfficePartComposer({ detail, onChanged }) {
         fitmentStatus: result.part.fitmentStatus,
         fitmentNotes: result.part.evidenceSummary,
       }));
-      setMessage("Candidate filled. Office remains responsible for fitment.");
+      setMessage(result.resolutionSource === "company_catalog"
+        ? "Company-approved part filled. Verify fitment for this unit."
+        : result.part.status === "ambiguous"
+          ? "Exact input preserved. Review the AI suggestion before approval."
+          : "AI suggestion filled. Office remains responsible for fitment.");
     } catch (error) {
       setMessage(`${error.message} Manual entry remains available.`);
       if (!draft.partNumber) update("partNumber", draft.query);

@@ -2,6 +2,8 @@ import { identifyPartInputSchema, livePriceInputSchema, officePartRequestInputSc
 import { requireSupportedTruck } from "./supported-trucks.js";
 import { findHuggingFaceTruckContext } from "./providers/huggingface.provider.js";
 import { findLivePricesWithOpenAI, identifyOfficePartRequestWithOpenAI, identifyPartWithOpenAI } from "./providers/openai.provider.js";
+import { findCompanyCatalogPart } from "../../db/repositories/parts-catalog.repo.js";
+import { normalizePartNumber } from "../parts/part.constants.js";
 
 const normalizedUrl = (value) => {
   try {
@@ -50,18 +52,67 @@ export function summarizeListings(listings, valueField = "totalPrice") {
 
 export async function identifyPart(input, dependencies = {}) {
   const parsed = identifyPartInputSchema.parse(input);
+  const findCatalogPart = dependencies.findCatalogPart || findCompanyCatalogPart;
+  const catalogPart = await findCatalogPart(dependencies.companyId, parsed.query);
+  if (catalogPart) {
+    return {
+      experimental: false,
+      family: null,
+      searchedAt: new Date().toISOString(),
+      vehicleContext: null,
+      resolutionSource: "company_catalog",
+      part: {
+        status: "matched",
+        normalizedPartNumber: catalogPart.partNumber,
+        manufacturer: catalogPart.manufacturer,
+        description: catalogPart.description,
+        category: catalogPart.category,
+        suggestedQuantity: 1,
+        repairOrder: catalogPart.repairOrder,
+        fitmentStatus: "unknown",
+        confidence: 100,
+        evidenceSummary: "Matched company-approved parts data.",
+        cautions: ["Verify fitment for the selected unit before approval."],
+        alternatives: [],
+      },
+      sources: [],
+      consultedSourceCount: 0,
+    };
+  }
   const family = requireSupportedTruck(parsed.vehicle);
   const hfLookup = dependencies.findTruckContext || findHuggingFaceTruckContext;
   const openAiLookup = dependencies.identifyWithOpenAI || identifyPartWithOpenAI;
   const truckContext = await hfLookup(parsed.vehicle, dependencies.huggingFaceOptions);
   const identification = await openAiLookup(parsed, truckContext, dependencies.openAiOptions);
+  const explicitNumber = /^[A-Za-z0-9][A-Za-z0-9-]{3,29}$/.test(parsed.query)
+    && /[A-Za-z]/.test(parsed.query)
+    && /\d/.test(parsed.query)
+    ? parsed.query
+    : "";
+  const aiPart = identification.result;
+  const part = explicitNumber
+    && normalizePartNumber(aiPart.normalizedPartNumber) !== normalizePartNumber(explicitNumber)
+    ? {
+      ...aiPart,
+      status: "ambiguous",
+      normalizedPartNumber: explicitNumber,
+      fitmentStatus: "unknown",
+      confidence: Math.min(aiPart.confidence, 40),
+      evidenceSummary: "Preserved the exact part number entered by the user; AI returned a different candidate.",
+      cautions: [
+        ...aiPart.cautions,
+        `AI suggested ${aiPart.normalizedPartNumber || "a different part"}; office verification is required.`,
+      ],
+    }
+    : aiPart;
 
   return {
     experimental: true,
     family,
     searchedAt: new Date().toISOString(),
     vehicleContext: truckContext,
-    part: identification.result,
+    resolutionSource: "ai_suggestion",
+    part,
     sources: identification.sources,
     consultedSourceCount: identification.consultedSourceCount ?? identification.sources.length,
   };

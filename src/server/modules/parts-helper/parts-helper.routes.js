@@ -28,7 +28,8 @@ export async function handlePartsHelperApi(req, res, url, helpers) {
 
   try {
     if (req.method === "POST" && url.pathname === "/api/parts-helper/identify") {
-      sendJson(res, 200, await identifyPart(await readBody(req)));
+      const companyId = [...(helpers.requestContext?.companyIds || [])][0] || null;
+      sendJson(res, 200, await identifyPart(await readBody(req), { companyId }));
       return true;
     }
     if (req.method === "POST" && url.pathname === "/api/parts-helper/live-prices") {

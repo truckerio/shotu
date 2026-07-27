@@ -78,7 +78,7 @@ try {
 
   const request = await createPartRequest(workorderId, {
     mechanicUserId: mechanic.id,
-    query: "LF14000NN",
+    query: "Need LF14000NN oil filters",
     partNumber: "LF14000NN",
     manufacturer: "Fleetguard",
     description: "Engine oil filter",
@@ -128,6 +128,12 @@ try {
   assert.equal(approved.approvalStatus, "approved");
   assert.equal(approved.allocations[0].status, "reserved");
   assert.equal(approved.inventory[0].quantityAvailable, 8);
+  const learnedCatalogPart = await query(
+    `select aliases from parts_catalog
+     where company_id = $1 and normalized_part_number = $2`,
+    [companyId, normalizePartNumber("LF14000NN")],
+  );
+  assert.deepEqual(learnedCatalogPart.rows[0].aliases, ["Need LF14000NN oil filters"]);
 
   const afterApproval = await getOperationalWorkorderById(workorderId);
   assert.equal(afterApproval.status, "accepted");
@@ -136,11 +142,22 @@ try {
   assert.equal(afterApproval.formData.parts.length, 1);
   assert.equal(afterApproval.formData.parts[0].requestId, request.id);
   assert.equal(afterApproval.formData.parts[0].partNo, "LF14000NN");
+  const approvalMessage = await query(
+    "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
+    [workorderId]
+  );
+  assert.match(approvalMessage.rows[0].body, /Office approved 2 x LF14000NN/);
+  assert.match(approvalMessage.rows[0].body, /inventory \(Reserved\)/);
 
   await updatePartAllocation(workorderId, request.id, approved.allocations[0].id, { status: "issued", note: "Issued to mechanic." }, office.id);
   const issuedInventory = await query("select quantity_on_hand, quantity_reserved from inventory_items where id = $1", [inventory.rows[0].id]);
   assert.equal(issuedInventory.rows[0].quantity_on_hand, 8);
   assert.equal(issuedInventory.rows[0].quantity_reserved, 0);
+  const issuedMessage = await query(
+    "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
+    [workorderId]
+  );
+  assert.match(issuedMessage.rows[0].body, /is now Issued/);
 
   const installed = await updatePartUsage(workorderId, request.id, {
     mechanicUserId: mechanic.id,
@@ -148,6 +165,11 @@ try {
     note: "Installed and leak checked.",
   });
   assert.equal(installed.usageStatus, "installed");
+  const installedMessage = await query(
+    "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
+    [workorderId]
+  );
+  assert.match(installedMessage.rows[0].body, /Mechanic marked 2 x LF14000NN as Installed/);
   const officeAdded = await createApprovedOfficePart(workorderId, {
     officeUserId: office.id,
     query: "Customer supplied air filter",

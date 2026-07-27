@@ -120,6 +120,9 @@ function webSearchTool(location) {
 async function createResponse({ input, schema, schemaName, location, options }) {
   const config = options.config || partsHelperConfig;
   const fetchFn = options.fetchFn || fetch;
+  const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+    ? options.timeoutMs
+    : 60_000;
   if (!config.openAiApiKey) throw new PartsHelperProviderError("OPENAI_API_KEY is required for live parts-helper requests.", 503);
 
   const response = await fetchFn(`${config.openAiBaseUrl}/responses`, {
@@ -141,7 +144,7 @@ async function createResponse({ input, schema, schemaName, location, options }) 
       },
       input,
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   const body = await response.json().catch(() => ({}));

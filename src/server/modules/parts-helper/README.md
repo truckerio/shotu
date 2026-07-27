@@ -10,11 +10,14 @@ Supported vehicles:
 
 Flow:
 
-1. Validate supported truck family.
-2. Enrich vehicle and engine context from `partsnow/us-heavy-duty-trucks` through Hugging Face Dataset Viewer API.
-3. Use OpenAI Responses API with required live `web_search` and strict structured output.
-4. Return sourced part identity, fitment status, and editable repair instruction.
-5. For pricing, run a fresh search every request and compare only source-backed listings. Nothing is stored as current market price.
+1. Search company-approved `parts_catalog` data by normalized part number, exact description, or approved alias.
+2. Return company data immediately when a strong match exists.
+3. Preserve an unknown part number exactly as the mechanic entered it and send it to office review without blocking chat.
+4. For deliberate office lookup only, validate the truck family, enrich vehicle context, and use OpenAI web search as a suggestion.
+5. Never allow AI to silently replace an exact part number entered by a user.
+6. For pricing, run a fresh search every request and compare only source-backed listings. Nothing is stored as current market price.
+
+An office-approved part is written back to the company catalog with the original request phrase as an alias. Future requests therefore resolve from company memory instead of AI.
 
 Real-fleet acceptance testing:
 
