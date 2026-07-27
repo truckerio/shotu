@@ -289,16 +289,27 @@ export async function acceptInvitation(token, input) {
   if (await findAuthUserByEmail(invitation.email)) {
     throw new Error("An account already exists for this email. Ask an admin to assign its location.");
   }
-  await auth.api.signUpEmail({
+  try {
+    await createInvitationAuthUser({ invitation, input });
+  } catch (error) {
+    throw invalidRequest(error?.message || "Unable to create login for this invitation.");
+  }
+  const authUser = await findAuthUserByEmail(invitation.email);
+  if (!authUser?.id) throw new Error("Unable to create login for this invitation.");
+  return acceptUserInvitation({ invitationId: invitation.id, authUserId: authUser.id, username: input.username });
+}
+
+export async function createInvitationAuthUser({ invitation, input, authApi = auth.api }) {
+  await authApi.createUser({
     body: {
       name: invitation.name,
       email: invitation.email,
       password: input.password,
-      username: input.username,
-      displayUsername: input.username,
+      role: "user",
+      data: {
+        username: input.username,
+        displayUsername: input.username,
+      },
     },
   });
-  const authUser = await findAuthUserByEmail(invitation.email);
-  if (!authUser?.id) throw new Error("Unable to create login for this invitation.");
-  return acceptUserInvitation({ invitationId: invitation.id, authUserId: authUser.id, username: input.username });
 }
