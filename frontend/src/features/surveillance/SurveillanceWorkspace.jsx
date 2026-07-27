@@ -3,12 +3,17 @@ import { ArrowLeft, ArrowRight, CheckCircle, ClipboardCheck, Clock, RefreshCw01,
 import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
+import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
+import { ProgressiveWorkorderSection, WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkorderTimelinePanel } from "../../components/workorders/WorkorderTimeline.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
+import { PreviewFullscreen, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { normalizeWorkorderFormData, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import "./surveillance.css";
 
 function valueOrDash(value) {
@@ -48,9 +53,15 @@ export function SurveillanceWorkspace({ actor }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
+  const [detailSection, setDetailSection] = useState("work");
+  const [previewOpen, setPreviewOpen] = useState(() => (typeof window === "undefined" ? true : window.innerWidth > 760));
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
+  const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [odooServiceOrderNo, setOdooServiceOrderNo] = useState("");
   const [odooNote, setOdooNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const previewRef = useRef(null);
   const preferenceHydrated = useRef(false);
   const queuePreferences = useWorkorderPreferences("surveillance");
 
@@ -103,15 +114,18 @@ export function SurveillanceWorkspace({ actor }) {
     ...(dashboard?.entered || []),
   ], [dashboard]);
   const locations = useMemo(() => [...new Set(allRows.map((row) => row.locationName).filter(Boolean))].sort(), [allRows]);
+  const effectiveLocationFilter = locations.includes(locationFilter) ? locationFilter : "";
   const rows = useMemo(() => (dashboard?.[activeTab] || [])
     .filter((workorder) => workorderMatchesSearch(workorder, search))
-    .filter((workorder) => !locationFilter || workorder.locationName === locationFilter)
-    .filter((workorder) => !dateFilter || localDate(workorder.closedAt || workorder.updatedAt) === dateFilter), [dashboard, activeTab, search, locationFilter, dateFilter]);
+    .filter((workorder) => !effectiveLocationFilter || workorder.locationName === effectiveLocationFilter)
+    .filter((workorder) => !dateFilter || localDate(workorder.closedAt || workorder.updatedAt) === dateFilter), [dashboard, activeTab, search, effectiveLocationFilter, dateFilter]);
 
   async function openWorkorder(id) {
     setError("");
     try {
       setDetail(await api(`/api/surveillance/workorders/${encodeURIComponent(id)}`));
+      setDetailSection("work");
+      setFullscreenPageIndex(0);
       setOdooServiceOrderNo("");
       setOdooNote("");
     } catch (openError) {
@@ -123,6 +137,14 @@ export function SurveillanceWorkspace({ actor }) {
     const currentIndex = rows.findIndex((row) => row.id === detail?.workorder?.id);
     const next = rows[currentIndex + offset];
     if (next) openWorkorder(next.id);
+  }
+
+  function togglePreview() {
+    if (typeof window !== "undefined" && window.innerWidth <= 760) {
+      setPreviewFullscreen(true);
+      return;
+    }
+    setPreviewOpen((open) => !open);
   }
 
   async function finishAndAdvance(request) {
@@ -174,62 +196,219 @@ export function SurveillanceWorkspace({ actor }) {
     const currentIndex = rows.findIndex((row) => row.id === workorder.id);
     const canProcessOdoo = ["closed", "odoo_entered"].includes(workorder.status);
     const progress = progressTimestamp(workorder);
+    const detailSections = [
+      {
+        id: "work",
+        label: canProcessOdoo ? "Odoo" : "Work",
+        attention: canProcessOdoo && missing.length > 0,
+      },
+      {
+        id: "parts",
+        label: "Parts",
+        count: usedParts.length || undefined,
+      },
+      {
+        id: "unit",
+        label: unitType || "Unit",
+      },
+      {
+        id: "activity",
+        label: "Activity",
+        count: detail.timeline?.length || undefined,
+      },
+    ];
+    const selectedSection = detailSections.some((section) => section.id === detailSection) ? detailSection : "work";
+    const workDates = workDateRangeLabel({
+      workStartDate: formData.workStartDate || workorder.workStartDate || workorder.createdAt,
+      workEndDate: formData.workEndDate || workorder.workEndDate || formData.workStartDate || workorder.createdAt,
+    });
+    const customerName = workorder.customerCompanyName || formData.customerCompanyName || formData.companyName;
+    const assetLabel = workorder.asset?.unitNo || workorder.asset?.name;
+    const previewForm = normalizeWorkorderFormData({
+      ...formData,
+      mechanicConcern: formData.mechanicConcern || workorder.concern || "",
+      customerCompanyName: customerName || "",
+      unitNo: formData.unitNo || assetLabel || "",
+      unitType: formData.unitType || unitType || "",
+      model: formData.model || workorder.asset?.model || "",
+      vinNo: formData.vinNo || workorder.asset?.vin || "",
+      licenseNo: formData.licenseNo || workorder.asset?.licensePlate || "",
+      workStartDate: formData.workStartDate || formData.workDate || workorder.workStartDate || localDate(workorder.createdAt),
+      workEndDate: formData.workEndDate || workorder.workEndDate || formData.workStartDate || formData.workDate || localDate(workorder.createdAt),
+      parts: Array.isArray(formData.parts) ? formData.parts : [],
+    }, { assetOwnerName: customerName || "" });
+    const pageCount = workorderPhysicalPageCount(previewForm);
+    const vehicleLabel = [
+      formData.model || workorder.asset?.model,
+      formData.mileage ? `${formData.mileage} mi` : "",
+    ].filter(Boolean).join(" · ");
     return (
-      <main className="prototype surveillance-detail">
-        <header className="surveillance-detail-header">
-          <ProfileMenu actor={actor} />
-          <button className="icon-button" type="button" onClick={() => setDetail(null)} aria-label="Back to workorders" title="Back"><ArrowLeft /></button>
-          <div className="surveillance-detail-title"><strong>{workorder.serial}</strong><span>{valueOrDash(workorder.asset?.unitNo || workorder.asset?.name)}</span></div>
-          <WorkorderStatusPill status={workorder.status} />
-          <nav className="surveillance-batch-nav" aria-label="Batch navigation">
-            <button type="button" onClick={() => openRelative(-1)} disabled={currentIndex <= 0} aria-label="Previous workorder"><ArrowLeft /></button>
-            <span>{currentIndex >= 0 ? `${currentIndex + 1} of ${rows.length}` : ""}</span>
-            <button type="button" onClick={() => openRelative(1)} disabled={currentIndex < 0 || currentIndex >= rows.length - 1} aria-label="Next workorder"><ArrowRight /></button>
-          </nav>
-        </header>
-
-        {error ? <p className="ops-error" role="alert">{error}</p> : null}
-        <div className="surveillance-detail-layout">
-          <section className="surveillance-record" aria-label={canProcessOdoo ? "Approved workorder" : "Workorder progress"}>
-            <div className="surveillance-record-grid">
-              <div><span>{unitType}</span><strong>{valueOrDash(workorder.asset?.unitNo || workorder.asset?.name)}</strong></div>
-              <div><span>Mechanics</span><strong>{valueOrDash(mechanicNames)}</strong></div>
-              <div><span>Location</span><strong>{valueOrDash(workorder.location?.name)}</strong></div>
-              <div><span>Customer company</span><strong>{valueOrDash(workorder.customerCompanyName || formData.customerCompanyName || formData.companyName)}</strong></div>
-              <div><span>{progress.label}</span><strong>{valueOrDash(progress.value ? new Date(progress.value).toLocaleString() : "")}</strong></div>
+      <main className="prototype workorder-detail-page surveillance-detail-page">
+        <style>{workorderTemplateStyles}</style>
+        <WorkorderDetailLayout detail previewOpen={previewOpen}>
+        <section className="surveillance-detail-shell control-panel">
+          <div className="detail-context-bar">
+            <button className="icon-button" type="button" onClick={() => setDetail(null)} aria-label="Back to surveillance queue" title="Back to queue"><ArrowLeft /></button>
+            <div>
+              <strong>{valueOrDash(assetLabel || workorder.serial)}</strong>
+              <span>{workorder.serial}</span>
             </div>
-            <div className="surveillance-copy-block"><span>Concern</span><p>{valueOrDash(workorder.concern)}</p></div>
-            <div className="surveillance-copy-block"><span>Diagnosis</span><p>{valueOrDash(workorder.diagnosis)}</p></div>
-            <div className="surveillance-copy-block"><span>Work performed</span><p>{valueOrDash(workorder.workPerformed)}</p></div>
-            <div className="surveillance-parts">
-              <span>Parts used</span>
-              {usedParts.length ? usedParts.map((part, index) => (
-                <div key={`${part.partNo || part.description}-${index}`}><strong>{valueOrDash(part.partNo || part.description)}</strong><span>Qty {part.qty || 1}</span><p>{part.repairOrder || part.description || ""}</p></div>
-              )) : <p>No parts recorded.</p>}
+            <div className="detail-context-actions">
+              <WorkorderStatusPill status={workorder.status} />
+              <nav className="surveillance-batch-nav" aria-label="Batch navigation">
+                <button type="button" onClick={() => openRelative(-1)} disabled={currentIndex <= 0} aria-label="Previous workorder"><ArrowLeft /></button>
+                <span>{currentIndex >= 0 ? `${currentIndex + 1} of ${rows.length}` : ""}</span>
+                <button type="button" onClick={() => openRelative(1)} disabled={currentIndex < 0 || currentIndex >= rows.length - 1} aria-label="Next workorder"><ArrowRight /></button>
+              </nav>
+              <PreviewToggle
+                open={previewOpen || previewFullscreen}
+                onToggle={togglePreview}
+                controls="workorder-preview-panel"
+              />
             </div>
-          </section>
+          </div>
 
-          <aside className="surveillance-odoo-panel">
-            {canProcessOdoo ? (
-              <form onSubmit={markEntered}>
-                <h2>Odoo service order</h2>
-                {missing.length ? <div className="surveillance-missing"><strong>Missing</strong><span>{missing.join(", ")}</span></div> : <p className="surveillance-complete">Workorder information complete</p>}
-                <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
-                <label><span>Note</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" /></label>
-                <button type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</button>
-                <button className="surveillance-missing-button" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</button>
-              </form>
-            ) : (
-              <div className="surveillance-progress-state">
-                <h2>{workorder.status === "mechanic_done" ? "Awaiting office approval" : "Work in progress"}</h2>
-                <p>{workorder.status === "mechanic_done"
-                  ? "The mechanic finished this workorder. It moves to Needs Odoo when office approves it."
-                  : "This workorder is active. Odoo entry becomes available after the mechanic finishes and office approves it."}</p>
+          {error ? <p className="ops-error" role="alert">{error}</p> : null}
+
+          <WorkorderObjectSummary
+            concern={workorder.concern}
+            customer={customerName}
+            dates={workDates}
+            location={workorder.location?.name}
+            mechanics={mechanicNames}
+            unit={assetLabel}
+            unitType={unitType}
+          >
+            <div className="workorder-object-inline-detail surveillance-inline-detail">
+              <span>{unitType} details</span>
+              <strong>{vehicleLabel || valueOrDash(formData.model || workorder.asset?.model)}</strong>
+              <span>{progress.label}</span>
+              <strong>{valueOrDash(progress.value ? new Date(progress.value).toLocaleString() : "")}</strong>
+            </div>
+          </WorkorderObjectSummary>
+
+          <WorkorderSectionNav sections={detailSections} activeSection={selectedSection} onSelect={setDetailSection} />
+
+          <div className="accordion-stack workorder-progressive-stack surveillance-detail-sections">
+            <ProgressiveWorkorderSection
+              id="work"
+              title={canProcessOdoo ? "Odoo service order" : "Work progress"}
+              summary={canProcessOdoo ? "Enter Odoo details or send back for information" : "Monitor mechanic and office progress"}
+              activeSection={selectedSection}
+              onSelect={setDetailSection}
+              attention={canProcessOdoo && missing.length > 0}
+              displayMode="panel"
+            >
+              <div className="surveillance-work-panel">
+                <div className="surveillance-copy-grid">
+                  <div><span>Concern</span><p>{valueOrDash(workorder.concern)}</p></div>
+                  <div><span>Diagnosis</span><p>{valueOrDash(workorder.diagnosis)}</p></div>
+                  <div><span>Work performed</span><p>{valueOrDash(workorder.workPerformed)}</p></div>
+                </div>
+                {canProcessOdoo ? (
+                  <form className="surveillance-odoo-form" onSubmit={markEntered}>
+                    {missing.length ? <div className="surveillance-missing"><strong>Missing information</strong><span>{missing.join(", ")}</span></div> : <p className="surveillance-complete">Workorder information complete</p>}
+                    <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
+                    <label><span>Note</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" /></label>
+                    <div className="surveillance-odoo-actions">
+                      <button className="surveillance-primary-action" type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</button>
+                      <button className="surveillance-secondary-action" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="surveillance-progress-state">
+                    <h3>{workorder.status === "mechanic_done" ? "Awaiting office approval" : "Work in progress"}</h3>
+                    <p>{workorder.status === "mechanic_done"
+                      ? "The mechanic finished this workorder. It moves to Needs Odoo when office approves it."
+                      : "This workorder is active. Odoo entry becomes available after the mechanic finishes and office approves it."}</p>
+                  </div>
+                )}
               </div>
-            )}
-          </aside>
-        </div>
-        <WorkorderTimelinePanel timeline={detail.timeline || []} participants={detail.participants || []} />
+            </ProgressiveWorkorderSection>
+
+            <ProgressiveWorkorderSection
+              id="parts"
+              title="Parts used"
+              summary={usedParts.length ? `${usedParts.length} recorded` : "No parts recorded"}
+              activeSection={selectedSection}
+              onSelect={setDetailSection}
+              displayMode="panel"
+            >
+              <div className="surveillance-parts-list">
+                {usedParts.length ? usedParts.map((part, index) => (
+                  <div key={`${part.partNo || part.description}-${index}`}>
+                    <strong>{valueOrDash(part.partNo || part.description)}</strong>
+                    <span>Qty {part.qty || 1}</span>
+                    <p>{part.repairOrder || part.description || ""}</p>
+                  </div>
+                )) : <p>No parts recorded.</p>}
+              </div>
+            </ProgressiveWorkorderSection>
+
+            <ProgressiveWorkorderSection
+              id="unit"
+              title={`${unitType || "Unit"} details`}
+              summary={[assetLabel, customerName].filter(Boolean).join(" · ") || "Unit and customer information"}
+              activeSection={selectedSection}
+              onSelect={setDetailSection}
+              displayMode="panel"
+            >
+              <dl className="surveillance-readonly-grid">
+                <div><dt>Unit</dt><dd>{valueOrDash(assetLabel)}</dd></div>
+                <div><dt>Type</dt><dd>{valueOrDash(unitType)}</dd></div>
+                <div><dt>VIN</dt><dd>{valueOrDash(formData.vinNo || workorder.asset?.vin)}</dd></div>
+                <div><dt>License</dt><dd>{valueOrDash(formData.licenseNo || workorder.asset?.licensePlate)}</dd></div>
+                <div><dt>Model</dt><dd>{valueOrDash(formData.model || workorder.asset?.model)}</dd></div>
+                <div><dt>Mileage</dt><dd>{formData.mileage ? `${formData.mileage} mi` : "Not listed"}</dd></div>
+                <div><dt>Customer</dt><dd>{valueOrDash(customerName)}</dd></div>
+                <div><dt>Location</dt><dd>{valueOrDash(workorder.location?.name)}</dd></div>
+              </dl>
+            </ProgressiveWorkorderSection>
+
+            <ProgressiveWorkorderSection
+              id="activity"
+              title="Activity"
+              summary={`${detail.timeline?.length || 0} ${(detail.timeline?.length || 0) === 1 ? "event" : "events"}`}
+              activeSection={selectedSection}
+              onSelect={setDetailSection}
+              displayMode="panel"
+            >
+              <WorkorderTimelinePanel timeline={detail.timeline || []} participants={detail.participants || []} />
+            </ProgressiveWorkorderSection>
+          </div>
+        </section>
+        <PreviewPane
+          id="workorder-preview-panel"
+          open={previewOpen}
+          variant="dock"
+          panelRef={previewRef}
+          status={<WorkorderStatusPill status={workorder.status} />}
+          countLabel="1 workorder"
+          range={workorder.serial}
+          onFullscreen={() => setPreviewFullscreen(true)}
+          onOpenPreview={() => setPreviewFullscreen(true)}
+        >
+          <div className="preview-grid single mechanic-preview-grid">
+            <WorkorderPreview label="First page" serial={workorder.serial} form={previewForm} />
+            {pageCount > 1
+              ? <WorkorderPreview label="Last page" serial={workorder.serial} form={previewForm} pageIndex={pageCount - 1} />
+              : null}
+          </div>
+        </PreviewPane>
+        </WorkorderDetailLayout>
+        <PreviewFullscreen
+          open={previewFullscreen}
+          form={previewForm}
+          serials={[workorder.serial]}
+          pageIndex={fullscreenPageIndex}
+          zoom={fullscreenZoom}
+          range={workorder.serial}
+          countLabel="1 workorder"
+          actionLabel="Preview workorder"
+          onClose={() => setPreviewFullscreen(false)}
+          onPageChange={setFullscreenPageIndex}
+          onZoomChange={setFullscreenZoom}
+        />
       </main>
     );
   }
@@ -243,7 +422,7 @@ export function SurveillanceWorkspace({ actor }) {
           <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
-            {locations.length > 1 ? <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}
+            {locations.length > 1 ? <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}
             <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} aria-label="Activity date filter" />
           </div>
         </div>
