@@ -56,7 +56,7 @@ export function mechanicChatVehicleContext(row) {
 
 export async function identifyMechanicChatPart({ message, imageDataUrl, workorderContext }, dependencies = {}) {
   const config = dependencies.config || partsHelperConfig;
-  if (!config.enabled || !config.openAiApiKey) {
+  if (!config.openAiApiKey) {
     const error = new Error("Parts helper is not configured.");
     error.code = "PARTS_HELPER_UNAVAILABLE";
     throw error;
