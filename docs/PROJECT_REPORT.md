@@ -1,0 +1,234 @@
+# Workorder Organizer - Project Report
+
+## What This Project Is
+
+Workorder Organizer is a multi-user shop workflow app for creating, assigning, repairing, reviewing, printing, and closing truck/trailer workorders.
+
+The app is built for four roles:
+
+- Admin: manages locations, users, templates, settings, and integrations.
+- Office/Manager: creates workorders, assigns mechanics, reviews work, handles parts, and closes workorders.
+- Mechanic: sees assigned/open/active jobs, joins work, creates workorders, records repair progress, requests parts, chats with office, and finishes work.
+- Surveillance: reviews completed/closed workorders and tracks Odoo entry/backlog.
+
+GitHub:
+https://github.com/truckerio/shotu
+
+## How It Works
+
+Postgres is the source of truth.
+
+Main flow:
+
+1. Admin creates locations, templates, users, and integration settings.
+2. Office or mechanic creates a workorder.
+3. Workorder enters operational queue.
+4. Mechanic accepts or joins work.
+5. Mechanic records diagnosis, repair, used parts, chat, and photos.
+6. Office reviews details, parts, and timeline.
+7. Completed work moves to surveillance/Odoo flow.
+8. Workorder preview/print uses the location template.
+
+Samsara integration:
+
+- Backend syncs Samsara trucks/trailers into Postgres.
+- UI searches local cached assets instead of calling Samsara per keystroke.
+- Selecting a unit fills VIN, mileage, license, type, model, company/owner, and location when available.
+- Admin Settings owns integration status and actions.
+
+## Tech Stack
+
+Frontend:
+
+- React 19
+- Vite
+- React Aria Components
+- Untitled UI icons
+- Plain CSS organized by feature/component
+
+Backend:
+
+- Node.js 22+
+- Native HTTP server
+- PostgreSQL via `pg`
+- Zod for validation
+- Better Auth for login/session/auth tables
+
+Database:
+
+- PostgreSQL
+- SQL migrations in `src/server/db/migrations`
+- Repository layer in `src/server/db/repositories`
+
+Deployment:
+
+- Railway
+- Dockerfile
+- Railway pre-deploy runs migrations
+- App starts with `npm start`
+
+Testing:
+
+- Node test runner
+- Playwright for browser checks
+- `npm run verify` for structure, backend tests, unit tests, syntax check, and production build
+
+## Main Commands
+
+Install:
+
+```bash
+npm install
+```
+
+Run locally:
+
+```bash
+npm start
+```
+
+Run migrations:
+
+```bash
+npm run db:migrate
+```
+
+Check database:
+
+```bash
+npm run db:check
+```
+
+Full verification:
+
+```bash
+npm run verify
+```
+
+Production build:
+
+```bash
+npm run build
+```
+
+## Environment
+
+Required core env:
+
+- `DATABASE_URL`
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_URL`
+- `AUTH_TRUSTED_ORIGINS`
+
+Useful integration env:
+
+- `SAMSARA_API_TOKEN` for token fallback
+- Samsara OAuth env values for production OAuth flow
+- `HERE_BROWSER_API_KEY` or map provider config when enabled
+- `WORKORDER_STORAGE_DIR` for durable uploads/chat media/printed files
+
+Use `.env.example` as the starter template. Do not commit real secrets.
+
+## Folder Ownership
+
+Frontend:
+
+- `frontend/src/app/routes` - role routing and URL state.
+- `frontend/src/features/auth` - login/session gate.
+- `frontend/src/features/create-workorder` - create workorder page and draft/create flow.
+- `frontend/src/features/workorder-detail` - shared workorder detail page behavior.
+- `frontend/src/features/mechanic` - mechanic home and mechanic-specific work/progress UI.
+- `frontend/src/features/office` - office queue/home UI.
+- `frontend/src/features/admin` - admin locations/users/templates/settings/integrations.
+- `frontend/src/features/surveillance` - completed/Odoo review flow.
+- `frontend/src/components/workorders` - shared workorder UI components.
+- `frontend/src/components/forms` - shared operational form pieces.
+- `frontend/src/components/layout` - shared page/workspace headers.
+- `frontend/src/lib` - API helpers, maps, timing, route helpers.
+
+Backend:
+
+- `src/server/routes` - API route handlers.
+- `src/server/modules` - role/domain service logic.
+- `src/server/db/repositories` - SQL/database access.
+- `src/server/db/migrations` - schema changes.
+- `src/server/auth` - session actor, permissions, authorization.
+- `src/server/integrations` - external providers like Samsara and VIN.
+- `src/server/services` - cross-domain services.
+- `src/server/print` - print/PDF behavior.
+- `src/server/security` - origin/rate-limit/security checks.
+
+## Core Data Model
+
+Important tables/areas:
+
+- Users/auth: Better Auth tables plus app user profiles and memberships.
+- Companies/locations: company-scoped yards/shops and assigned users.
+- Templates: location-specific workorder print/template settings.
+- Assets: cached Samsara vehicle/trailer records.
+- Workorders: one operational workorder truth.
+- Mechanic assignments: primary and support mechanics on a workorder.
+- Parts: mechanic requests, office review, usage, and feedback.
+- Chat/media: workorder conversation and attachments.
+- Timeline/activity: who changed what and when.
+- Drafts: unfinished create-workorder records before operational submission.
+
+Lifecycle:
+
+```text
+open -> accepted/in_progress -> mechanic_done -> closed -> odoo_entered
+```
+
+Attention signals are separate from lifecycle:
+
+- parts request
+- office help
+- missing info
+- overdue
+- unread activity
+
+## Important Rules For Engineers
+
+- Do not create a second workorder truth.
+- Office, mechanic, admin, and surveillance must read the same backend workorder record.
+- Shared workorder UI belongs in `features/workorder-detail` or `components/workorders`.
+- Role-only behavior belongs inside its role folder.
+- Do not call Samsara on every search keystroke; sync first, search Postgres.
+- Do not expose provider tokens to the browser.
+- Do not bypass server-side actor/session authorization with browser-supplied user IDs.
+- Keep migrations backward-compatible for Railway deploys.
+- Run `npm run verify` before pushing important backend or shared UI changes.
+
+## Current Product Capabilities
+
+- Login/session with role-based access.
+- Admin locations, users, templates, settings, and Samsara integration UI.
+- Office operational queue with filters.
+- Create workorder with preview/template.
+- Draft saving for office/admin create flow.
+- Mechanic queue with assigned, open, active, waiting, and finished work.
+- Multiple mechanics can work on one active workorder.
+- Primary/support mechanic assignments.
+- Mechanic can create workorders.
+- Shared workorder detail page with tabs/sections.
+- Chat between mechanic and office.
+- Parts request workflow.
+- Workorder timeline/activity log.
+- Samsara asset lookup and autofill.
+- Satellite asset location card.
+- Print/preview workorder template.
+- Surveillance completed/Odoo backlog flow.
+
+## Good First Files To Read
+
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DATABASE.md`
+- `server.js`
+- `frontend/src/app/routes/RoleRouter.jsx`
+- `frontend/src/features/workorder-detail/WorkorderDetailPage.jsx`
+- `src/server/routes/mechanic.routes.js`
+- `src/server/routes/office.routes.js`
+- `src/server/routes/admin.routes.js`
+- `src/server/db/repositories/operational-workorders.repo.js`
+

@@ -14,6 +14,7 @@ import { PreviewFullscreen, WorkorderPreview } from "../generator/GeneratorUi.js
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { useWorkorderDetailRealtime } from "../workorder-detail/useWorkorderDetailRealtime.js";
 import { normalizeWorkorderFormData, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import "./surveillance.css";
 
@@ -204,6 +205,16 @@ export function SurveillanceWorkspace({ actor }) {
       setError(openError.message);
     }
   }
+
+  useWorkorderDetailRealtime({
+    enabled: Boolean(detail?.workorder?.id),
+    workorderId: detail?.workorder?.id,
+    paused: saving,
+    onRefresh: async () => {
+      const refreshed = await api(`/api/surveillance/workorders/${encodeURIComponent(detail.workorder.id)}`);
+      setDetail(refreshed);
+    },
+  });
 
   function openRelative(offset) {
     const currentIndex = rows.findIndex((row) => row.id === detail?.workorder?.id);

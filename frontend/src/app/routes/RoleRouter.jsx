@@ -25,6 +25,7 @@ import {
   defaultDetailSection,
   defaultSupportingView,
 } from "../../features/workorder-detail/workorder-detail-sections.js";
+import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
 import { validateCreateWorkorder } from "../../features/generator/create-workorder-validation.js";
 import {
   splitSerial,
@@ -41,6 +42,7 @@ import {
 } from "../../features/generator/workorder-draft.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
+import { visibleConversationMessages } from "../../components/workorders/chat-messages.js";
 import { emptyPart, workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx").then((module) => ({ default: module.AdminWorkspace })));
@@ -250,7 +252,7 @@ export function RoleRouter({ actor }) {
         createdAt: null,
       }]
       : [];
-    return [...officeNote, ...(activeWorkorder.messages || [])];
+    return visibleConversationMessages([...officeNote, ...(activeWorkorder.messages || [])]);
   }, [activeWorkorder]);
   const filledPartCount = form.parts.filter((part) => part.partNo || part.qty || part.repairOrder).length;
   const mechanicAsset = activeWorkorder?.workorder?.asset || {};
@@ -1345,7 +1347,13 @@ export function RoleRouter({ actor }) {
     }
   }
 
-  async function reloadActiveWorkorder() {
+  function shouldPreserveActiveWorkorderForm() {
+    if (isMechanicDetail && (mechanicProgress.hasUnsyncedChanges || mechanicProgress.status === "saving")) return true;
+    const activeElement = document.activeElement;
+    return Boolean(activeElement?.closest?.(".workorder-detail-page input, .workorder-detail-page textarea, .workorder-detail-page select, .workorder-detail-page [contenteditable='true']"));
+  }
+
+  async function reloadActiveWorkorder(options = {}) {
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId) return;
     const detail = isOfficeDetail
@@ -1353,37 +1361,17 @@ export function RoleRouter({ actor }) {
       : await api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}`);
     setActiveWorkorder(detail);
     setDetailStatus(detail.workorder.status);
-    setForm((current) => workorderFormValues(detail, current));
+    if (!options.preserveForm) {
+      setForm((current) => workorderFormValues(detail, current));
+    }
   }
 
-  useEffect(() => {
-    if (mode !== "mechanic" || !activeWorkorder?.workorder?.id) return undefined;
-    const workorderId = activeWorkorder.workorder.id;
-    let cancelled = false;
-    const refreshDetail = async () => {
-      try {
-        const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}`);
-        if (cancelled) return;
-        setActiveWorkorder(detail);
-        setDetailStatus(detail.workorder.status);
-        if (!mechanicProgress.hasUnsyncedChanges && mechanicProgress.status !== "saving") {
-          setForm((current) => workorderFormValues(detail, current));
-        }
-      } catch {
-        // Keep the current detail visible; dashboard refresh handles missing workorders.
-      }
-    };
-    const interval = window.setInterval(refreshDetail, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [
-    activeWorkorder?.workorder?.id,
-    mechanicProgress.hasUnsyncedChanges,
-    mechanicProgress.status,
-    mode,
-  ]);
+  useWorkorderDetailRealtime({
+    enabled: Boolean(activeWorkorder?.workorder?.id && ["office", "mechanic"].includes(detailSource)),
+    workorderId: activeWorkorder?.workorder?.id,
+    paused: isMechanicDetail && (mechanicProgress.hasUnsyncedChanges || mechanicProgress.status === "saving"),
+    onRefresh: () => reloadActiveWorkorder({ preserveForm: shouldPreserveActiveWorkorderForm() }),
+  });
 
   async function saveMechanicWorkNotes() {
     if (!activeWorkorder?.workorder?.id || !isMechanicDetail) return;
