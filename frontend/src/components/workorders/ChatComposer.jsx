@@ -24,6 +24,7 @@ export function ChatComposer({
   compact = false,
 }) {
   const inputId = useId();
+  const fileInputId = useId();
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const [body, setBody] = useState("");
@@ -148,6 +149,7 @@ export function ChatComposer({
       <div className="chat-composer-actions">
         <input
           ref={fileInputRef}
+          id={fileInputId}
           className="chat-composer-file-input"
           type="file"
           accept="image/*"
@@ -155,18 +157,28 @@ export function ChatComposer({
           hidden
           onChange={selectImage}
           disabled={busy}
-          aria-label={cameraLabel}
+          tabIndex={-1}
+          aria-hidden="true"
         />
-        <button
-          className="chat-camera-button"
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
+        <label
+          className={`chat-camera-button ${busy ? "is-disabled" : ""}`}
+          htmlFor={fileInputId}
+          role="button"
+          tabIndex={busy ? -1 : 0}
+          onClick={(event) => {
+            if (busy) event.preventDefault();
+          }}
+          onKeyDown={(event) => {
+            if (busy || !["Enter", " "].includes(event.key)) return;
+            event.preventDefault();
+            fileInputRef.current?.click();
+          }}
+          aria-disabled={busy || undefined}
           aria-label={readingImage ? "Loading photo" : cameraLabel}
           title={readingImage ? "Loading photo" : cameraLabel}
         >
           <Plus aria-hidden="true" />
-        </button>
+        </label>
         <button
           className="chat-send-button"
           type="submit"

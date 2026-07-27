@@ -106,7 +106,7 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   }
   return (
     <div className="mechanic-list-head queue-variant-mechanic" aria-hidden="true">
-      <span>Unit / Workorder</span><span>Problem</span><span className="queue-wide-only">Location</span><span className="queue-wide-only">Team</span><span>Attention</span><span>Created</span><span>Status</span><span></span>
+      <span>Unit / Workorder</span><span>Problem</span><span className="queue-wide-only">Location</span><span className="queue-wide-only">Team</span><span>Attention</span><span className="queue-header-created">Created</span><span className="queue-header-status">Status</span><span></span>
     </div>
   );
 }

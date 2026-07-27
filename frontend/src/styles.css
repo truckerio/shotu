@@ -1390,6 +1390,8 @@ body.is-resizing-workorder {
 
 .chat-composer textarea {
   min-height: 64px;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .chat-composer-actions {
@@ -1409,6 +1411,7 @@ body.is-resizing-workorder {
 }
 
 .chat-composer-actions button,
+.chat-composer-actions .chat-camera-button,
 .done-action {
   align-items: center;
   background: #fff;
@@ -1424,7 +1427,8 @@ body.is-resizing-workorder {
   padding: 7px 8px;
 }
 
-.chat-composer-actions button {
+.chat-composer-actions button,
+.chat-composer-actions .chat-camera-button {
   border-radius: 50%;
   flex: 0 0 38px;
   height: 38px;
@@ -1433,7 +1437,8 @@ body.is-resizing-workorder {
   width: 38px;
 }
 
-.chat-composer-actions button:hover {
+.chat-composer-actions button:hover,
+.chat-composer-actions .chat-camera-button:hover {
   color: #175cd3;
 }
 
@@ -1447,6 +1452,21 @@ body.is-resizing-workorder {
   background: transparent !important;
   border-color: transparent !important;
   color: #344054;
+  touch-action: manipulation;
+}
+
+.chat-camera-button.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.chat-composer-file-input {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
 }
 
 .chat-camera-button svg,
@@ -4477,12 +4497,16 @@ textarea:focus {
 
 .chat-composer.is-compact textarea {
   max-height: 120px;
-  min-height: 46px;
+  min-height: 48px;
   resize: none;
 }
 
-.chat-composer.is-compact .chat-composer-actions button {
-  min-height: 38px;
+.chat-composer.is-compact .chat-composer-actions button,
+.chat-composer.is-compact .chat-composer-actions .chat-camera-button {
+  flex-basis: 44px;
+  height: 44px;
+  min-height: 44px;
+  width: 44px;
 }
 
 .mechanic-detail-page .used-parts-editor .button {
@@ -4611,6 +4635,19 @@ textarea:focus {
 
   .mechanic-detail-page .remove-row::before {
     display: none;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1180px) {
+  .mechanic-detail-page .part-row input {
+    min-height: 44px;
+  }
+
+  .mechanic-detail-page .used-part-number-control button,
+  .mechanic-detail-page .remove-row {
+    height: 44px;
+    min-height: 44px;
+    width: 44px;
   }
 }
 

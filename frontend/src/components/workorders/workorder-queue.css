@@ -139,8 +139,14 @@
     grid-template-columns: minmax(140px, .8fr) minmax(220px, 1.35fr) minmax(150px, .85fr) 128px 20px;
   }
 
+  .queue-variant-mechanic .queue-header-created,
   .queue-variant-mechanic .work-row-created {
     display: none;
+  }
+
+  .queue-variant-mechanic .queue-header-status,
+  .queue-variant-mechanic .ops-status {
+    justify-self: start;
   }
 
   .mechanic-list-head.queue-variant-office,
@@ -166,7 +172,28 @@
   }
 }
 
+@media (min-width: 701px) and (max-width: 1180px) {
+  .mechanic-work-row.queue-row-mechanic:has(.accept-work-button) {
+    display: grid;
+  }
+
+  .mechanic-work-row.queue-row-mechanic > .accept-work-button {
+    margin: 0 18px 12px;
+    min-height: 44px;
+    width: auto;
+  }
+}
+
 @media (max-width: 700px) {
+  .mechanic-work-open.queue-variant-mechanic .work-row-location,
+  .mechanic-work-open.queue-variant-mechanic .work-row-mechanic {
+    display: none;
+  }
+
+  .queue-variant-mechanic .work-row-created {
+    display: block;
+  }
+
   .mechanic-work-open.queue-variant-mechanic,
   .mechanic-work-open.queue-variant-office,
   .mechanic-work-open.queue-variant-surveillance {
