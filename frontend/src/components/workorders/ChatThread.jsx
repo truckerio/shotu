@@ -25,7 +25,13 @@ function getImageAttachments(message) {
 export function ChatThread({ messages, currentRole = "mechanic", currentUserId = "", empty = "No messages yet." }) {
   const visibleMessages = visibleConversationMessages(messages || []);
   return (
-    <div className="chat-thread" aria-label="Conversation" aria-live="polite" role="log" tabIndex={0}>
+    <div
+      className={`chat-thread ${visibleMessages.length ? "" : "is-empty"}`.trim()}
+      aria-label="Conversation"
+      aria-live="polite"
+      role="log"
+      tabIndex={0}
+    >
       {visibleMessages.length ? visibleMessages.map((message) => {
         const mine = currentUserId
           ? message.senderUserId === currentUserId

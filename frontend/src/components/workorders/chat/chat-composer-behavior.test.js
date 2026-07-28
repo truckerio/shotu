@@ -41,6 +41,7 @@ test("image validation rejects non-images and oversized images", () => {
 
 test("Enter sends while Shift+Enter and composition preserve multiline input", () => {
   assert.equal(shouldSubmitChatKey({ key: "Enter", shiftKey: false, nativeEvent: {} }), true);
+  assert.equal(shouldSubmitChatKey({ key: "Enter", shiftKey: false }), true);
   assert.equal(shouldSubmitChatKey({ key: "Enter", shiftKey: true, nativeEvent: {} }), false);
   assert.equal(shouldSubmitChatKey({ key: "Enter", shiftKey: false, nativeEvent: { isComposing: true } }), false);
   assert.equal(shouldSubmitChatKey({ key: "a", shiftKey: false, nativeEvent: {} }), false);

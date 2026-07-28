@@ -13,8 +13,10 @@
 
 .chat-prompt-composer {
   background: #fff;
+  box-sizing: border-box;
   gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .chat-prompt-composer .chat-composer-label {
@@ -35,6 +37,7 @@
   background: #fff;
   border: 1px solid #d0d5dd;
   border-radius: 24px;
+  box-sizing: border-box;
   box-shadow: 0 1px 2px rgb(16 24 40 / 6%);
   display: grid;
   gap: 2px;
@@ -141,16 +144,28 @@
 
   .workorder-detail-page .chat-content:has(> .chat-thread + .chat-prompt-composer) {
     height: max(360px, calc(100dvh - 258px - env(safe-area-inset-bottom)));
+    max-width: 100%;
+    overflow-x: clip;
+    width: 100%;
   }
 
   .workorder-detail-page .chat-content > .chat-thread {
     background: #fff;
+    border: 0;
+    border-radius: 0;
+    max-width: 100%;
     padding: 8px 2px 12px;
+  }
+
+  .workorder-detail-page .chat-content > .chat-thread.is-empty {
+    align-content: center;
+    min-height: 0;
   }
 
   .workorder-detail-page .chat-content > .chat-prompt-composer {
     bottom: calc(59px + env(safe-area-inset-bottom));
-    padding: 8px 0;
+    max-width: 100%;
+    padding: 8px clamp(12px, 3.5vw, 16px);
     position: sticky;
     z-index: 12;
   }
