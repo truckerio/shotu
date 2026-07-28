@@ -1,7 +1,6 @@
 import React from "react";
 import { ChevronDown, LogOut01, UserCircle } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
-import { OwlProfileMark, OwlWordmark, PRODUCT_NAME } from "../brand/OwlWordmark.jsx";
 import { authClient } from "../../lib/auth-client.js";
 import "./profile-menu.css";
 
@@ -20,7 +19,7 @@ function roleLabel(role) {
   return role ? `${role[0].toUpperCase()}${role.slice(1)}` : "Account";
 }
 
-export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false }) {
+export function ProfileMenu({ actor, compactOnPhone = false }) {
   async function signOut() {
     await authClient.signOut();
     window.location.replace("/");
@@ -45,43 +44,19 @@ export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false })
     </Popover>
   );
 
-  if (wordmark) {
-    return (
-      <div className="profile-menu profile-menu-brand">
-        <OwlWordmark
-          mark={(
-            <span className="profile-menu-brand-mark">
-              <OwlProfileMark />
-              <MenuTrigger>
-                <Button className="profile-menu-brand-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`} />
-                {accountMenu}
-              </MenuTrigger>
-            </span>
-          )}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className={`profile-menu${compactOnPhone ? " profile-menu-with-phone-brand" : ""}`}>
-      <OwlWordmark
-        className="profile-menu-wordmark"
-        mark={(
-          <MenuTrigger>
-            <Button className="profile-menu-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`}>
-              <span className="profile-menu-phone-o" aria-hidden="true"><OwlProfileMark /></span>
-              <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
-              <span className="profile-menu-identity">
-                <strong>{actor?.name || "User"}</strong>
-                <small>{roleLabel(actor?.role)}</small>
-              </span>
-              <ChevronDown aria-hidden="true" />
-            </Button>
-            {accountMenu}
-          </MenuTrigger>
-        )}
-      />
+      <MenuTrigger>
+        <Button className="profile-menu-trigger" aria-label="Open account menu">
+          <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
+          <span className="profile-menu-identity">
+            <strong>{actor?.name || "User"}</strong>
+            <small>{roleLabel(actor?.role)}</small>
+          </span>
+          <ChevronDown aria-hidden="true" />
+        </Button>
+        {accountMenu}
+      </MenuTrigger>
     </div>
   );
 }

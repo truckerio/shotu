@@ -40,22 +40,32 @@ body:has(.auth-shell) {
   min-width: 0;
 }
 
-.auth-invite-brand-row {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  min-width: 0;
+.auth-heading-text-only {
+  display: block;
 }
 
-.auth-invite-brand-row small {
+.auth-heading-text-only .auth-heading-copy {
+  width: 100%;
+}
+
+.auth-heading-text-only p {
+  color: #667085;
+  font-size: var(--text-secondary);
+  line-height: var(--leading-body);
+  margin: 6px 0 0;
+}
+
+.auth-context {
   color: #667085;
   font-size: var(--text-caption);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.auth-context + h1 {
+  margin-top: 4px;
 }
 
 .auth-heading strong {
@@ -73,22 +83,6 @@ body:has(.auth-shell) {
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   letter-spacing: 0;
-}
-
-.auth-mark {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border: 1px solid #d5d9df;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.auth-mark svg {
-  width: 21px;
-  height: 21px;
-  color: #175cd3;
 }
 
 .auth-form {
@@ -232,12 +226,7 @@ body:has(.auth-shell) {
   }
 
   .auth-invite-heading {
-    align-items: flex-start;
     margin-bottom: 22px;
-  }
-
-  .auth-invite-heading .auth-mark {
-    display: none;
   }
 
   .auth-invite-heading .auth-heading-copy {

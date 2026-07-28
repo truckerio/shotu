@@ -6,14 +6,14 @@ const page = readFileSync(new URL("./InviteAcceptPage.jsx", import.meta.url), "u
 const authCss = readFileSync(new URL("../auth/auth.css", import.meta.url), "utf8");
 const passwordCss = readFileSync(new URL("../../components/ui/password-visibility-toggle.css", import.meta.url), "utf8");
 
-test("invitation page uses a collision-free compact phone header", () => {
+test("invitation page uses a logo-free compact phone header", () => {
   assert.match(page, /auth-shell auth-invite-shell/);
   assert.match(page, /auth-panel auth-invite-panel/);
-  assert.match(page, /auth-heading auth-invite-heading/);
-  assert.match(page, /auth-invite-brand-row/);
+  assert.match(page, /auth-heading auth-heading-text-only auth-invite-heading/);
+  assert.match(page, /className="auth-context"/);
+  assert.doesNotMatch(page, /auth-mark|OwlWordmark|ClipboardCheck/);
 
   const phoneCss = authCss.slice(authCss.indexOf("@media (max-width: 520px)"));
-  assert.match(phoneCss, /\.auth-invite-heading \.auth-mark\s*\{[\s\S]*display: none;/);
   assert.match(phoneCss, /\.auth-invite-heading \.auth-heading-copy\s*\{[\s\S]*width: 100%;/);
 });
 

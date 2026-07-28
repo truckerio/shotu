@@ -17,11 +17,6 @@
   cursor: pointer;
 }
 
-.profile-menu-phone-o,
-.profile-menu-wordmark > .owl-wordmark-suffix {
-  display: none;
-}
-
 .profile-menu-trigger:hover,
 .profile-menu-trigger[data-pressed] {
   border-color: #d5d9df;
@@ -67,51 +62,6 @@
 .profile-menu-trigger > svg {
   width: 16px;
   height: 16px;
-}
-
-.profile-menu-brand {
-  color: #101828;
-}
-
-.profile-menu-brand .owl-wordmark {
-  font-size: 29px;
-  transform: translateY(3px);
-}
-
-.profile-menu-brand-mark {
-  align-items: center;
-  display: inline-grid;
-  line-height: 1;
-  position: relative;
-}
-
-.profile-menu-brand-mark > .owl-profile-mark {
-  height: 40px;
-  width: 40px;
-}
-
-.profile-menu-brand-trigger {
-  background: transparent;
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  height: 44px;
-  left: 50%;
-  padding: 0;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 44px;
-}
-
-.profile-menu-brand-trigger:hover,
-.profile-menu-brand-trigger[data-pressed] {
-  background: transparent;
-}
-
-.profile-menu-brand-trigger[data-focus-visible] {
-  outline: 3px solid rgb(21 112 239 / 22%);
-  outline-offset: 1px;
 }
 
 .profile-menu-popover {
@@ -174,10 +124,6 @@
 }
 
 @media (max-width: 600px) {
-  .profile-menu-with-phone-brand {
-    color: #101828;
-  }
-
   .profile-menu-with-phone-brand .profile-menu-trigger {
     align-items: center;
     border: 0;
@@ -202,23 +148,13 @@
     outline-offset: 1px;
   }
 
-  .profile-menu-with-phone-brand .profile-menu-initials,
   .profile-menu-with-phone-brand .profile-menu-identity,
   .profile-menu-with-phone-brand .profile-menu-trigger > svg {
     display: none;
   }
 
-  .profile-menu-with-phone-brand .profile-menu-phone-o {
-    display: block;
-  }
-
-  .profile-menu-with-phone-brand .profile-menu-phone-o > .owl-profile-mark {
-    height: 30px;
-    width: 30px;
-  }
-
-  .profile-menu-wordmark > .owl-wordmark-suffix {
-    display: inline;
-    pointer-events: none;
+  .profile-menu-with-phone-brand .profile-menu-initials {
+    height: 32px;
+    width: 32px;
   }
 }

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, ClipboardCheck } from "@untitledui/icons";
-import { OwlWordmark } from "../../components/brand/OwlWordmark.jsx";
+import { CheckCircle } from "@untitledui/icons";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { api } from "../../lib/api.js";
 import "../auth/auth.css";
@@ -58,14 +57,11 @@ export function InviteAcceptPage({ token }) {
   return (
     <main className="auth-shell auth-invite-shell">
       <section className="auth-panel auth-invite-panel" aria-labelledby="invite-title">
-        <header className="auth-heading auth-invite-heading">
-          <span className="auth-mark" aria-hidden="true"><ClipboardCheck /></span>
+        <header className="auth-heading auth-heading-text-only auth-invite-heading">
           <div className="auth-heading-copy">
-            <div className="auth-invite-brand-row">
-              <OwlWordmark />
-              {invitation?.locationName ? <small>{invitation.locationName}</small> : null}
-            </div>
+            {invitation?.locationName ? <small className="auth-context">{invitation.locationName}</small> : null}
             <h1 id="invite-title">Accept invitation</h1>
+            <p>Create credentials for your work account.</p>
           </div>
         </header>
         {state.error && !invitation ? <p className="auth-error" role="alert">{state.error}</p> : (

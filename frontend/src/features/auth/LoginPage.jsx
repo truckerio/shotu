@@ -1,7 +1,5 @@
 import React, { useRef, useState } from "react";
-import { ClipboardCheck } from "@untitledui/icons";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
-import { OwlWordmark } from "../../components/brand/OwlWordmark.jsx";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
@@ -67,13 +65,10 @@ export function LoginPage() {
       style={viewportStyle}
     >
       <section className="auth-panel" aria-labelledby="login-title">
-        <header className="auth-heading">
-          <span className="auth-mark" aria-hidden="true">
-            <ClipboardCheck />
-          </span>
-          <div>
-            <OwlWordmark />
+        <header className="auth-heading auth-heading-text-only">
+          <div className="auth-heading-copy">
             <h1 id="login-title">Sign in</h1>
+            <p>Use your work account to continue.</p>
           </div>
         </header>
 
