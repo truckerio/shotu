@@ -1,5 +1,11 @@
 import { useId, useRef, useState } from "react";
 import { ArrowUp, Plus, XClose } from "@untitledui/icons";
+import {
+  buildChatPayload,
+  getImageValidationError,
+  shouldSubmitChatKey,
+} from "./chat/chat-composer-behavior.js";
+import "./chat/chat.css";
 
 const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -50,13 +56,9 @@ export function ChatComposer({
     setError("");
 
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("Choose a photo file such as JPG, PNG, or HEIC.");
-      clearFileInput();
-      return;
-    }
-    if (file.size > maxImageBytes) {
-      setError("Photo is larger than 10 MB. Choose a smaller photo.");
+    const validationError = getImageValidationError(file, maxImageBytes);
+    if (validationError) {
+      setError(validationError);
       clearFileInput();
       return;
     }
@@ -78,16 +80,7 @@ export function ChatComposer({
 
     setError("");
     try {
-      const result = await onSend({
-        body: body.trim(),
-        attachment: attachment
-          ? {
-              dataUrl: attachment.dataUrl,
-              fileName: attachment.fileName,
-              mimeType: attachment.mimeType,
-            }
-          : null,
-      });
+      const result = await onSend(buildChatPayload(body, attachment));
 
       if (result === false) return;
       setBody("");
@@ -100,32 +93,20 @@ export function ChatComposer({
   }
 
   function handleKeyDown(event) {
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (!shouldSubmitChatKey(event)) return;
     event.preventDefault();
     void sendMessage();
   }
 
   function updateBody(event) {
     setBody(event.target.value);
-    if (!compact) return;
     event.target.style.height = "auto";
     event.target.style.height = `${Math.min(event.target.scrollHeight, 120)}px`;
   }
 
   return (
-    <form className={`chat-composer ${compact ? "is-compact" : ""}`} onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+    <form className={`chat-composer chat-prompt-composer ${compact ? "is-compact" : ""}`} onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
       <label className="chat-composer-label" htmlFor={inputId}>{textareaLabel}</label>
-      <textarea
-        ref={textareaRef}
-        id={inputId}
-        className="chat-composer-input"
-        rows={compact ? 1 : 3}
-        value={body}
-        onChange={updateBody}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={busy}
-      />
 
       {attachment ? (
         <figure className="chat-composer-preview">
@@ -146,7 +127,7 @@ export function ChatComposer({
 
       {error ? <p className="chat-composer-error" role="alert">{error}</p> : null}
 
-      <div className="chat-composer-actions">
+      <div className="chat-prompt-surface">
         <input
           ref={fileInputRef}
           id={fileInputId}
@@ -179,6 +160,17 @@ export function ChatComposer({
         >
           <Plus aria-hidden="true" />
         </label>
+        <textarea
+          ref={textareaRef}
+          id={inputId}
+          className="chat-composer-input"
+          rows={1}
+          value={body}
+          onChange={updateBody}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={busy}
+        />
         <button
           className="chat-send-button"
           type="submit"

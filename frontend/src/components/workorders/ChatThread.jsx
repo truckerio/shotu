@@ -1,5 +1,6 @@
 import { formatChatTime } from "../../lib/dates.js";
 import { visibleConversationMessages } from "./chat-messages.js";
+import "./chat/chat.css";
 
 function getImageAttachments(message) {
   const attachments = Array.isArray(message.attachments)
@@ -24,7 +25,7 @@ function getImageAttachments(message) {
 export function ChatThread({ messages, currentRole = "mechanic", currentUserId = "", empty = "No messages yet." }) {
   const visibleMessages = visibleConversationMessages(messages || []);
   return (
-    <div className="chat-thread" aria-label="Conversation" aria-live="polite">
+    <div className="chat-thread" aria-label="Conversation" aria-live="polite" role="log" tabIndex={0}>
       {visibleMessages.length ? visibleMessages.map((message) => {
         const mine = currentUserId
           ? message.senderUserId === currentUserId
