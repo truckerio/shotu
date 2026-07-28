@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { meaningfulTimelineEvents, timelineEventTitle } from "./workorder-timeline-model.js";
+import {
+  meaningfulTimelineEvents,
+  timelineEventDescription,
+  timelineEventTitle,
+} from "./workorder-timeline-model.js";
 
 test("lifecycle labels use human language while preserving status data", () => {
   const event = { type: "status", from_status: "created", to_status: "in_progress" };
@@ -14,4 +18,23 @@ test("compact timeline count excludes access audit noise", () => {
     { id: 1, type: "access" },
     { id: 2, type: "status", to_status: "completed" },
   ]).length, 1);
+});
+
+test("timeline titles and descriptions use human labels without raw arrows", () => {
+  const assignment = {
+    type: "assignment",
+    action: "reassigned",
+    from_mechanic_id: "mechanic-1",
+    from_mechanic_name: "Alex",
+    to_mechanic_name: "Jordan",
+  };
+  assert.equal(timelineEventTitle(assignment), "Mechanic reassigned");
+  assert.equal(timelineEventDescription(assignment), "Alex changed to Jordan.");
+  assert.equal(timelineEventDescription({
+    type: "field",
+    field_label: "Mileage",
+    old_value: "100",
+    new_value: "125",
+  }), "Mileage updated to 125.");
+  assert.equal(timelineEventDescription(assignment).includes("->"), false);
 });

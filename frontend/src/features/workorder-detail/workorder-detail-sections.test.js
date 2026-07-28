@@ -7,6 +7,7 @@ import {
   defaultSupportingView,
   workorderDetailSectionMode,
   workorderNeedsChatAttention,
+  workorderPreviewState,
 } from "./workorder-detail-sections.js";
 
 test("workorder detail sections keep shared tab contract across roles", () => {
@@ -65,4 +66,12 @@ test("compact phone detail keeps role actions visible and moves supporting secti
   assert.deepEqual(surveillance.map(({ id }) => id), ["work", "parts", "preview", "activity", "unit", "team"]);
   assert.equal(surveillance[0].label, "Review");
   assert.deepEqual(surveillance.filter(({ overflow }) => overflow).map(({ id }) => id), ["unit", "team"]);
+});
+
+test("phone preview is present whenever workorder form data exists", () => {
+  assert.deepEqual(
+    workorderPreviewState({ workorder: { id: "wo-1" } }, { parts: [{ partNo: "LF3972" }] }),
+    { status: "ready", message: "" },
+  );
+  assert.equal(workorderPreviewState(null, null).status, "loading");
 });

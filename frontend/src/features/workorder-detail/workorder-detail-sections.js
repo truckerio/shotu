@@ -91,3 +91,10 @@ export function buildCompactPhoneDetailSections(sections, role) {
 export function workorderNeedsChatAttention(status) {
   return ATTENTION_STATUSES.has(status);
 }
+
+export function workorderPreviewState(activeWorkorder, form, error = "") {
+  if (error) return { status: "error", message: error };
+  if (!activeWorkorder) return { status: "loading", message: "Loading workorder preview…" };
+  if (!form) return { status: "empty", message: "Workorder preview is unavailable." };
+  return { status: "ready", message: "" };
+}

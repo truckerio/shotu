@@ -1,5 +1,16 @@
 export const MAX_USED_PARTS = 18;
 
+export function canEditUsedParts(role, allowedActions = {}) {
+  if (allowedActions.recordUsedParts === true) return true;
+  return role === "office" && allowedActions.recordUsedParts !== false;
+}
+
+export function usedPartsAccessState(role, allowedActions = {}) {
+  return canEditUsedParts(role, allowedActions)
+    ? { editable: true, message: "" }
+    : { editable: false, message: "Used parts are read-only for your role." };
+}
+
 export function emptyUsedPart() {
   return { partNo: "", qty: "", repairOrder: "" };
 }

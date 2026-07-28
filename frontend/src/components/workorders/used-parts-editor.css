@@ -23,6 +23,13 @@
   list-style: none;
 }
 
+.used-parts-readonly-state {
+  margin: 0 0 10px;
+  color: var(--text-secondary, #475467);
+  font-size: var(--text-caption, 12px);
+  font-weight: 600;
+}
+
 .used-parts-readonly-list li {
   display: grid;
   grid-template-columns: minmax(120px, 1fr) auto minmax(160px, 2fr);

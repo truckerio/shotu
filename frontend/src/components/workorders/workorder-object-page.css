@@ -178,4 +178,32 @@
     min-height: 360px;
     overflow: auto;
   }
+
+  .workorder-detail-page .workorder-compact-preview .preview-grid,
+  .workorder-detail-page .workorder-compact-preview .preview-grid.single {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+    overflow: visible;
+    padding: 6px 0;
+  }
+
+  .workorder-detail-page .workorder-compact-preview .preview-page-card,
+  .workorder-detail-page .workorder-compact-preview .preview-grid.single.mechanic-preview-grid .preview-page-card {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .workorder-detail-page .workorder-compact-preview .workorder-preview-shell {
+    width: 100%;
+  }
+
+  .workorder-preview-state {
+    display: grid;
+    min-height: 280px;
+    place-items: center;
+    padding: 24px;
+    color: #667085;
+    text-align: center;
+  }
 }

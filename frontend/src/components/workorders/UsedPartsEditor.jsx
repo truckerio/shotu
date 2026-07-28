@@ -47,6 +47,7 @@ export function UsedPartsEditor({
   disabled = false,
   minimumRows = 0,
   suggestionsEnabled = true,
+  readonlyMessage = "Used parts are read-only for your role.",
 }) {
   const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
   const [visibleRowCount, setVisibleRowCount] = useState(() => normalizeUsedParts(parts, minimum).length);
@@ -155,6 +156,7 @@ export function UsedPartsEditor({
     const savedParts = readonlyUsedParts(parts);
     return (
       <div className="used-parts-editor is-readonly" aria-label="Used parts">
+        <p className="used-parts-readonly-state" role="status">{readonlyMessage}</p>
         {savedParts.length ? (
           <ul className="used-parts-readonly-list">
             {savedParts.map((part, index) => (

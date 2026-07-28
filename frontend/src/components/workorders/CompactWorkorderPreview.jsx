@@ -12,6 +12,7 @@ export function CompactWorkorderPreview({
   status,
   onPrint,
   onTogglePrintMenu,
+  previewState = { status: "ready", message: "" },
 }) {
   return (
     <div className="workorder-compact-preview">
@@ -30,7 +31,9 @@ export function CompactWorkorderPreview({
         onFullscreen={onFullscreen}
         onOpenPreview={onOpenPreview}
       >
-        {children}
+        {previewState.status === "ready"
+          ? children
+          : <div className={`workorder-preview-state is-${previewState.status}`} role="status">{previewState.message}</div>}
       </PreviewPane>
     </div>
   );

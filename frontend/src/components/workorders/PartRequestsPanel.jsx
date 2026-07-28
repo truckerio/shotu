@@ -3,6 +3,7 @@ import { CheckCircle, Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { Button } from "../ui/Button.jsx";
 import { UsedPartsEditor } from "./UsedPartsEditor.jsx";
+import { usedPartsAccessState } from "./used-parts-model.js";
 import "./part-requests-panel.css";
 
 const SOURCE_LABELS = {
@@ -571,6 +572,7 @@ function OfficePartComposer({ detail, onChanged }) {
 
 export function PartRequestsPanel({ role, detail, parts, onPartsChange, onSaveParts, onChanged }) {
   const requests = detail.partRequests || [];
+  const usedPartsAccess = usedPartsAccessState(role, detail.allowedActions || {});
   const reviewCount = useMemo(() => requests.filter((request) => request.approvalStatus === "submitted").length, [requests]);
   const clarificationCount = useMemo(() => requests.filter((request) => request.approvalStatus === "needs_info").length, [requests]);
   const officeQueueText = [
@@ -585,7 +587,8 @@ export function PartRequestsPanel({ role, detail, parts, onPartsChange, onSavePa
         parts={parts}
         onChange={onPartsChange}
         onSave={onSaveParts}
-        disabled={role !== "mechanic" || !detail.allowedActions?.recordUsedParts}
+        disabled={!usedPartsAccess.editable}
+        readonlyMessage={usedPartsAccess.message}
         minimumRows={0}
         suggestionsEnabled={role !== "mechanic"}
       />

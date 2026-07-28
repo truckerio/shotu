@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addUsedPart,
+  canEditUsedParts,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
+  usedPartsAccessState,
 } from "./used-parts-model.js";
 
 test("zero used parts stay empty until Add part", () => {
@@ -23,4 +25,22 @@ test("readonly used parts omit blank rows and retain saved values", () => {
     { partNo: "ABC-123", qty: 2, repairOrder: "Installed" },
     { partNo: "", qty: "", repairOrder: "" },
   ]), [{ partNo: "ABC-123", qty: "2", repairOrder: "Installed" }]);
+});
+
+test("Add part access follows server permission for every editing role", () => {
+  assert.equal(canEditUsedParts("mechanic", { recordUsedParts: true }), true);
+  assert.equal(canEditUsedParts("office", {}), true);
+  assert.equal(canEditUsedParts("office", { recordUsedParts: false }), false);
+  assert.equal(canEditUsedParts("mechanic", { recordUsedParts: false }), false);
+  assert.match(usedPartsAccessState("mechanic", {}).message, /read-only/i);
+});
+
+test("saved used parts normalize directly into preview form data", () => {
+  const form = { parts: [] };
+  const savedParts = normalizeUsedParts([{ partNo: "LF3972", qty: 2, repairOrder: "Oil service" }]);
+  const previewForm = { ...form, parts: savedParts };
+
+  assert.deepEqual(previewForm.parts, [
+    { partNo: "LF3972", qty: "2", repairOrder: "Oil service" },
+  ]);
 });

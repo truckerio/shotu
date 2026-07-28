@@ -11,7 +11,11 @@ import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatus
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { workDateRangeLabel, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
-import { buildCompactPhoneDetailSections, workorderNeedsChatAttention } from "./workorder-detail-sections.js";
+import {
+  buildCompactPhoneDetailSections,
+  workorderNeedsChatAttention,
+  workorderPreviewState,
+} from "./workorder-detail-sections.js";
 
 export function WorkorderDetailPage({
   activeWorkorder,
@@ -113,6 +117,7 @@ export function WorkorderDetailPage({
       : detailSections),
     [detailSections, isMechanicDetail, isPhone],
   );
+  const compactPreviewState = workorderPreviewState(activeWorkorder, form);
   const workorderChatContent = (
     <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className="chat-content">
       <ChatThread messages={conversationMessages} currentRole={isOfficeDetail ? "office" : "mechanic"} currentUserId={actor.id} />
@@ -294,6 +299,7 @@ export function WorkorderDetailPage({
               } : undefined}
               primaryActionLabel={primaryActionLabel}
               onFullscreen={openFullscreenPreview}
+              previewState={compactPreviewState}
             >
               <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
                 <WorkorderPreview label="First page" serial={firstSerial} form={form} />
