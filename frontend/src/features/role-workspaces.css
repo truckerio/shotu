@@ -35,6 +35,20 @@
   padding: 9px 12px;
 }
 
+.role-mobile-primary-queues,
+.role-mobile-secondary-queues,
+.role-secondary-controls > summary {
+  display: none;
+}
+
+.role-secondary-controls {
+  display: contents;
+}
+
+.role-secondary-controls-body {
+  display: contents;
+}
+
 @media (max-width: 1180px) {
   .workspace-operations .office-mechanic-panel {
     display: flex;
@@ -108,6 +122,82 @@
     overflow-x: auto;
   }
 
+  .workspace-operations > .page-header {
+    align-items: stretch;
+  }
+
+  .workspace-operations > .page-header .button,
+  .workspace-operations > .page-header button {
+    min-height: 48px;
+  }
+
+  .role-desktop-queues {
+    display: none;
+  }
+
+  .role-mobile-primary-queues,
+  .role-mobile-secondary-queues {
+    display: block;
+    width: 100%;
+  }
+
+  .workspace-operations .role-mobile-primary-queues .mechanic-queue-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .workspace-operations .role-mobile-primary-queues .mechanic-queue-tabs button {
+    justify-content: center;
+    min-height: 48px;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .workspace-operations .role-mobile-primary-queues .mechanic-queue-tabs button svg {
+    display: none;
+  }
+
+  .role-secondary-controls {
+    display: block;
+    width: 100%;
+  }
+
+  .role-secondary-controls > summary {
+    align-items: center;
+    color: #344054;
+    cursor: pointer;
+    display: flex;
+    font-size: 14px;
+    font-weight: 600;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  .role-secondary-controls > summary::marker {
+    content: "";
+  }
+
+  .role-secondary-controls[open] > summary {
+    border-bottom: 1px solid #eaecf0;
+  }
+
+  .role-secondary-controls-body {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .workspace-operations .role-mobile-secondary-queues .mechanic-queue-tabs button {
+    min-height: 44px;
+  }
+
+  .workspace-operations:not(.office-home) .queue-toolbar .mechanic-search {
+    margin: 0;
+    width: 100%;
+  }
+
   .workspace-operations .office-filter-row.operations-filter-row {
     align-items: stretch;
     display: grid;
@@ -121,6 +211,56 @@
     grid-column: auto;
     margin: 0;
     min-width: 0;
+  }
+
+  .workspace-operations .mechanic-list-head {
+    display: none;
+  }
+
+  .workspace-operations .role-task-list .mechanic-work-row,
+  .workspace-operations.office-home .mechanic-work-row {
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    margin: 8px 10px;
+    overflow: hidden;
+  }
+
+  .workspace-operations .role-task-list .mechanic-work-open,
+  .workspace-operations.office-home .mechanic-work-open.queue-variant-office {
+    min-height: 112px;
+    padding: 12px;
+    padding-bottom: 48px;
+    position: relative;
+  }
+
+  .workspace-operations .role-task-list .mechanic-work-open::after,
+  .workspace-operations.office-home .mechanic-work-open.queue-variant-office::after {
+    align-items: center;
+    background: #f2f4f7;
+    border-radius: 6px;
+    bottom: 8px;
+    color: #344054;
+    content: attr(aria-label);
+    display: flex;
+    font-size: 14px;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 36px;
+    padding-inline: 16px;
+    position: absolute;
+    right: 8px;
+  }
+
+  .workspace-operations .role-task-list-myWork .mechanic-work-open::after {
+    content: "Finish / open";
+  }
+
+  .workspace-operations .role-task-list-openWork .mechanic-work-open::after {
+    content: "Open";
+  }
+
+  .workspace-operations .accept-work-button {
+    min-height: 48px;
   }
 
 }

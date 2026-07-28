@@ -7,6 +7,11 @@ import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import {
+  MECHANIC_PRIMARY_TABS,
+  MECHANIC_SECONDARY_TABS,
+  mechanicActionLabel,
+} from "./mechanicWorkspaceConfig.js";
 import "../role-workspaces.css";
 
 function workRank(workorder) {
@@ -106,6 +111,14 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
     { key: "done", label: "Finished", count: dashboard?.counts.done || 0, icon: FileCheck02 },
     { key: "activeWork", label: "All active", count: dashboard?.counts.active || 0, icon: Users01 },
   ];
+  const mobilePrimaryTabs = MECHANIC_PRIMARY_TABS.map((tab) => ({
+    ...tab,
+    count: dashboard?.counts[tab.countKey] || 0,
+  }));
+  const mobileSecondaryTabs = MECHANIC_SECONDARY_TABS.map((tab) => ({
+    ...tab,
+    count: dashboard?.counts[tab.countKey] || 0,
+  }));
   const rows = useMemo(() => (dashboard?.[activeTab] || [])
     .filter((workorder) => workorderMatchesSearch(workorder, search))
     .sort((left, right) => workRank(left) - workRank(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt)), [dashboard, activeTab, search]);
@@ -120,17 +133,30 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
       <section className="mechanic-queue-shell">
-        <div className="queue-toolbar">
-          <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-          <label className="mechanic-search">
-            <SearchMd />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
-          </label>
+        <div className="queue-toolbar role-queue-toolbar">
+          <div className="role-desktop-queues">
+            <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+          </div>
+          <div className="role-mobile-primary-queues">
+            <WorkorderQueueTabs tabs={mobilePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+          </div>
+          <details className="role-secondary-controls">
+            <summary>More <span aria-hidden="true">·</span> Search and other queues</summary>
+            <div className="role-secondary-controls-body">
+              <div className="role-mobile-secondary-queues">
+                <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+              </div>
+              <label className="mechanic-search">
+                <SearchMd />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
+              </label>
+            </div>
+          </details>
         </div>
 
         {error ? <p className="ops-error" role="alert">{error}</p> : null}
         <WorkorderTableHeader variant="mechanic" />
-        <div className="mechanic-work-list" aria-live="polite">
+        <div className={`mechanic-work-list role-task-list role-task-list-${activeTab}`} aria-live="polite" data-mobile-action={mechanicActionLabel(activeTab)}>
           {loading ? (
             <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
           ) : rows.length ? rows.map((workorder, index) => (

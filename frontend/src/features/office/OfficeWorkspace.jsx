@@ -9,6 +9,11 @@ import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
 import { MobileFilterSheet } from "../../components/responsive/MobileFilterSheet.jsx";
+import {
+  OFFICE_PRIMARY_TABS,
+  OFFICE_SECONDARY_TAB_KEYS,
+  officeRowsForTab,
+} from "./officeWorkspaceConfig.js";
 import "../role-workspaces.css";
 
 function uniqueRows(...groups) {
@@ -146,7 +151,7 @@ export function OfficeWorkspace({
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    if (!legacyDraftRoute && ["needs", "open", "active", "parts", "done", "drafts", "all", "closed"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
+    if (!legacyDraftRoute && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "all", "closed"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
     setLifecycleFilter(saved.lifecycleFilter || "");
     setMechanicFilter(saved.mechanicFilter || "");
     setLocationFilter(saved.locationFilter || "");
@@ -184,9 +189,16 @@ export function OfficeWorkspace({
     { key: "all", label: "All", count: allRows.length, icon: Briefcase02 },
     { key: "closed", label: "Closed", count: dashboard?.counts.closed || 0, icon: FileCheck02 },
   ];
-  const tabRows = activeTab === "needs" ? needsRows
-    : activeTab === "all" ? allRows
-      : dashboard?.[activeTab] || [];
+  const mobilePrimaryTabs = OFFICE_PRIMARY_TABS.map((tab) => ({
+    ...tab,
+    count: tab.key === "needs"
+      ? needsRows.length
+      : tab.key === "active"
+        ? dashboard?.counts.active || 0
+        : (dashboard?.counts.done || 0) + (dashboard?.counts.closed || 0),
+  }));
+  const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key));
+  const tabRows = officeRowsForTab(activeTab, dashboard, allRows, needsRows);
   const filteredRows = tabRows
     .filter((row) => !lifecycleFilter || lifecycle(row) === lifecycleFilter)
     .filter((row) => !mechanicFilter || rowMechanicNames(row).includes(mechanicFilter))
@@ -218,37 +230,50 @@ export function OfficeWorkspace({
         </aside> : null}
 
         <section className="mechanic-queue-shell office-table-shell">
-          <div className="queue-toolbar office-toolbar">
-            <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-            {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row">
-              <label className="mechanic-search">
-                <SearchMd />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
-              </label>
-              <Button
-                className="office-mobile-filter-button"
-                type="button"
-                icon={FilterLines}
-                onClick={() => setMobileFiltersOpen(true)}
-              >
-                Filters
-              </Button>
-              {locations.length > 1 ? (
-                <select className="office-inline-filter" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
-                  <option value="">All locations</option>
-                  {locations.map((location) => <option key={location} value={location}>{location}</option>)}
-                </select>
-              ) : null}
-              <select className="office-inline-filter" value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)} aria-label="Lifecycle filter">
-                <option value="">All stages</option>
-                <option value="open">Unassigned</option>
-                <option value="accepted">Accepted</option>
-                <option value="in_progress">In progress</option>
-                <option value="mechanic_done">Ready for review</option>
-                <option value="closed">Closed</option>
-                <option value="odoo_entered">Odoo entered</option>
-              </select>
-            </div> : null}
+          <div className="queue-toolbar office-toolbar role-queue-toolbar">
+            <div className="role-desktop-queues">
+              <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+            </div>
+            <div className="role-mobile-primary-queues">
+              <WorkorderQueueTabs tabs={mobilePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+            </div>
+            <details className="role-secondary-controls">
+              <summary>More <span aria-hidden="true">·</span> Drafts, search and filters</summary>
+              <div className="role-secondary-controls-body">
+                <div className="role-mobile-secondary-queues">
+                  <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+                </div>
+                {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row">
+                  <label className="mechanic-search">
+                    <SearchMd />
+                    <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
+                  </label>
+                  <Button
+                    className="office-mobile-filter-button"
+                    type="button"
+                    icon={FilterLines}
+                    onClick={() => setMobileFiltersOpen(true)}
+                  >
+                    Filters
+                  </Button>
+                  {locations.length > 1 ? (
+                    <select className="office-inline-filter" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
+                      <option value="">All locations</option>
+                      {locations.map((location) => <option key={location} value={location}>{location}</option>)}
+                    </select>
+                  ) : null}
+                  <select className="office-inline-filter" value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)} aria-label="Lifecycle filter">
+                    <option value="">All stages</option>
+                    <option value="open">Unassigned</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="mechanic_done">Ready for review</option>
+                    <option value="closed">Closed</option>
+                    <option value="odoo_entered">Odoo entered</option>
+                  </select>
+                </div> : null}
+              </div>
+            </details>
           </div>
 
           {activeTab === "drafts" ? (
