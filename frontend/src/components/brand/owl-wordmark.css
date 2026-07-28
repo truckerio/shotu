@@ -1,0 +1,21 @@
+.owl-wordmark {
+  align-items: center;
+  color: #101828;
+  display: inline-flex;
+  font-size: 24px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.owl-wordmark-mark {
+  align-items: center;
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 32px;
+}
+
+.owl-wordmark-suffix {
+  margin-left: -5px;
+}

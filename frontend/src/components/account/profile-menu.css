@@ -18,7 +18,7 @@
 }
 
 .profile-menu-phone-o,
-.profile-menu-phone-suffix {
+.profile-menu-wordmark > .owl-wordmark-suffix {
   display: none;
 }
 
@@ -131,10 +131,6 @@
 @media (max-width: 600px) {
   .profile-menu-with-phone-brand {
     color: #101828;
-    font-size: 24px;
-    font-weight: var(--weight-semibold);
-    letter-spacing: -.04em;
-    line-height: 1;
   }
 
   .profile-menu-with-phone-brand .profile-menu-trigger {
@@ -171,9 +167,8 @@
     display: inline;
   }
 
-  .profile-menu-phone-suffix {
+  .profile-menu-wordmark > .owl-wordmark-suffix {
     display: inline;
-    margin-left: -11px;
     pointer-events: none;
   }
 }

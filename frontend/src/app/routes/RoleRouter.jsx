@@ -43,6 +43,7 @@ import {
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { visibleConversationMessages } from "../../components/workorders/chat-messages.js";
+import { normalizeUsedParts } from "../../components/workorders/used-parts-model.js";
 import { emptyPart, workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx").then((module) => ({ default: module.AdminWorkspace })));
@@ -926,9 +927,7 @@ export function RoleRouter({ actor }) {
     const savedForm = workorder.formData || {};
     const serial = splitSerial(workorder.serial);
     const model = [asset.year, asset.make, asset.model].filter(Boolean).join(" ");
-    const savedParts = Array.isArray(savedForm.parts) && savedForm.parts.length
-      ? savedForm.parts
-      : [emptyPart(), emptyPart(), emptyPart()];
+    const savedParts = normalizeUsedParts(savedForm.parts);
     const assignedMechanicName = workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
       || workorder.mechanic?.name
       || (detail.user?.role === "mechanic" ? detail.user.name : "");

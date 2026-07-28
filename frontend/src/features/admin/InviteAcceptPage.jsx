@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, ClipboardCheck } from "@untitledui/icons";
+import { OwlWordmark } from "../../components/brand/OwlWordmark.jsx";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
-import { PRODUCT_NAME } from "../../components/account/ProfileMenu.jsx";
 import { api } from "../../lib/api.js";
 import "../auth/auth.css";
 
@@ -60,7 +60,11 @@ export function InviteAcceptPage({ token }) {
       <section className="auth-panel" aria-labelledby="invite-title">
         <header className="auth-heading">
           <span className="auth-mark" aria-hidden="true"><ClipboardCheck /></span>
-          <div><strong>{invitation?.locationName ? `${PRODUCT_NAME} · ${invitation.locationName}` : PRODUCT_NAME}</strong><h1 id="invite-title">Accept invitation</h1></div>
+          <div>
+            <OwlWordmark />
+            {invitation?.locationName ? <small>{invitation.locationName}</small> : null}
+            <h1 id="invite-title">Accept invitation</h1>
+          </div>
         </header>
         {state.error && !invitation ? <p className="auth-error" role="alert">{state.error}</p> : (
           <form className="auth-form" onSubmit={accept}>
