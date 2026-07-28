@@ -1,6 +1,6 @@
 .chat-content:has(> .chat-thread + .chat-prompt-composer) {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
 }
 
@@ -163,10 +163,12 @@
   }
 
   .workorder-detail-page .chat-content > .chat-prompt-composer {
-    bottom: calc(59px + env(safe-area-inset-bottom));
+    --chat-composer-inset: clamp(12px, 3.5vw, 16px);
+
+    align-self: end;
     max-width: 100%;
-    padding: 8px clamp(12px, 3.5vw, 16px);
-    position: sticky;
+    padding: 8px var(--chat-composer-inset) var(--chat-composer-inset);
+    position: static;
     z-index: 12;
   }
 
