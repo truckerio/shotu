@@ -6,6 +6,8 @@ import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js"
 import { WorkorderDraftQueue } from "../../features/workorder-drafts/index.js";
 import { ProgressiveQueue } from "../responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../responsive/ProgressiveQueue.js";
+import { WorkorderQueueTabs } from "../workorders/WorkorderQueue.jsx";
+import { MobileQueueToolbar } from "./MobileQueueToolbar.jsx";
 import {
   ATTENTION_OPTIONS,
   LIFECYCLE_OPTIONS,
@@ -28,6 +30,53 @@ const emptyCounts = {
   odooBacklog: 0,
   all: 0,
 };
+
+const ADMIN_PRIMARY_CATEGORY_IDS = new Set(["needs_attention", "active", "ready_review"]);
+
+function OperationsFilters({
+  filters,
+  fixedLocationId,
+  locations,
+  onSearchChange,
+  onUpdate,
+  searchInput,
+}) {
+  return (
+    <>
+      <label className="operations-search">
+        <span className="operations-field-label">Search workorders</span>
+        <span className="operations-input-with-icon"><SearchMd /><input type="search" value={searchInput} onChange={(event) => onSearchChange(event.target.value)} placeholder="Unit, serial, concern" /></span>
+      </label>
+      {!fixedLocationId ? (
+        <label>
+          <span className="operations-field-label">Location</span>
+          <select value={filters.locationId} onChange={(event) => onUpdate("locationId", event.target.value)}>
+            <option value="">All locations</option>
+            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+          </select>
+        </label>
+      ) : null}
+      <label>
+        <span className="operations-field-label">Lifecycle</span>
+        <select value={filters.lifecycle} onChange={(event) => onUpdate("lifecycle", event.target.value)}>
+          {LIFECYCLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+      <label>
+        <span className="operations-field-label">Attention</span>
+        <select value={filters.attentionReason} onChange={(event) => onUpdate("attentionReason", event.target.value)}>
+          {ATTENTION_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+      <label>
+        <span className="operations-field-label">Sort</span>
+        <select value={filters.sort} onChange={(event) => onUpdate("sort", event.target.value)}>
+          {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+    </>
+  );
+}
 
 function OperationRow({ item, onOpenWorkorder }) {
   const attentionReasons = Array.isArray(item.attentionReasons) ? item.attentionReasons : [];
@@ -247,6 +296,21 @@ export function OperationsWorkspace({
     () => ({ ...summary.counts, drafts: visibleDraftCount }),
     [summary.counts, visibleDraftCount],
   );
+  const mobileCategories = OPERATION_CATEGORIES.map((category) => ({
+    key: category.id,
+    label: category.label,
+    count: categoryCounts[category.countKey],
+  }));
+  const mobilePrimaryCategories = mobileCategories.filter((category) => ADMIN_PRIMARY_CATEGORY_IDS.has(category.key));
+  const mobileSecondaryCategories = mobileCategories.filter((category) => !ADMIN_PRIMARY_CATEGORY_IDS.has(category.key));
+  const mobileFiltersActive = Boolean(
+    filters.search
+    || filters.locationId
+    || filters.lifecycle
+    || filters.attentionReason
+    || filters.sort !== "timeInStatus:desc"
+    || !ADMIN_PRIMARY_CATEGORY_IDS.has(filters.category),
+  );
 
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -259,7 +323,7 @@ export function OperationsWorkspace({
 
   return (
     <section className="operations-workspace" aria-label="Workorder operations">
-      <div className="operations-tabs-wrap">
+      <div className="operations-tabs-wrap role-desktop-queues">
         <div className="operations-tabs" role="tablist" aria-label="Workorder categories">
           {OPERATION_CATEGORIES.map((category) => (
             <button
@@ -278,39 +342,58 @@ export function OperationsWorkspace({
           ))}
         </div>
       </div>
-
-      {filters.category !== "drafts" ? <div className="operations-toolbar">
-        <label className="operations-search">
-          <span className="operations-field-label">Search workorders</span>
-          <span className="operations-input-with-icon"><SearchMd /><input type="search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Unit, serial, concern" /></span>
-        </label>
-        {!fixedLocationId ? (
-          <label>
-            <span className="operations-field-label">Location</span>
-            <select value={filters.locationId} onChange={(event) => updateFilter("locationId", event.target.value)}>
-              <option value="">All locations</option>
-              {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-            </select>
-          </label>
+      <MobileQueueToolbar
+        className="role-mobile-primary-queues"
+        tabs={mobilePrimaryCategories}
+        activeTab={filters.category}
+        onChange={(category) => updateFilter("category", category)}
+        label="Open admin queues, search, and filters"
+        title="Queues, search, and filters"
+        filtersActive={mobileFiltersActive}
+        onClearFilters={() => {
+          setSearchInput("");
+          setFilters((current) => ({
+            ...current,
+            category: "needs_attention",
+            locationId: fixedLocationId,
+            lifecycle: "",
+            attentionReason: "",
+            search: "",
+            sort: "timeInStatus:desc",
+          }));
+          setPage(1);
+        }}
+      >
+        <div className="role-mobile-secondary-queues">
+          <WorkorderQueueTabs
+            tabs={mobileSecondaryCategories}
+            activeTab={filters.category}
+            onChange={(category) => updateFilter("category", category)}
+          />
+        </div>
+        {filters.category !== "drafts" ? (
+          <div className="operations-toolbar">
+            <OperationsFilters
+              filters={filters}
+              fixedLocationId={fixedLocationId}
+              locations={locations}
+              onSearchChange={setSearchInput}
+              onUpdate={updateFilter}
+              searchInput={searchInput}
+            />
+          </div>
         ) : null}
-        <label>
-          <span className="operations-field-label">Lifecycle</span>
-          <select value={filters.lifecycle} onChange={(event) => updateFilter("lifecycle", event.target.value)}>
-            {LIFECYCLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
-        <label>
-          <span className="operations-field-label">Attention</span>
-          <select value={filters.attentionReason} onChange={(event) => updateFilter("attentionReason", event.target.value)}>
-            {ATTENTION_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
-        <label>
-          <span className="operations-field-label">Sort</span>
-          <select value={filters.sort} onChange={(event) => updateFilter("sort", event.target.value)}>
-            {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
+      </MobileQueueToolbar>
+
+      {filters.category !== "drafts" ? <div className="operations-toolbar role-desktop-filters">
+        <OperationsFilters
+          filters={filters}
+          fixedLocationId={fixedLocationId}
+          locations={locations}
+          onSearchChange={setSearchInput}
+          onUpdate={updateFilter}
+          searchInput={searchInput}
+        />
       </div> : null}
 
       {filters.category !== "drafts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}

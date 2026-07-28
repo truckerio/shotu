@@ -2,6 +2,10 @@
   display: none;
 }
 
+.mobile-queue-toolbar {
+  display: none;
+}
+
 .mobile-queue-tools-trigger {
   align-items: center;
   background: transparent;
@@ -86,7 +90,7 @@
     width: 100%;
   }
 
-  .workspace-operations .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs {
+  .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs {
     display: flex;
     flex: 1 1 auto;
     gap: 6px;
@@ -97,7 +101,7 @@
     width: 100%;
   }
 
-  .workspace-operations .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button {
+  .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button {
     flex: 0 0 auto;
     font-size: 11px;
     gap: 2px;
@@ -106,7 +110,7 @@
     white-space: nowrap;
   }
 
-  .workspace-operations .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button strong {
+  .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button strong {
     font-size: 11px;
     height: 20px;
     min-width: 20px;
