@@ -141,6 +141,21 @@
     width: 100%;
   }
 
+  .role-queue-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .role-queue-toolbar .role-mobile-primary-queues {
+    min-width: 0;
+    width: auto;
+  }
+
+  .role-desktop-search,
+  .role-desktop-filters {
+    display: none !important;
+  }
+
   .workspace-operations .role-mobile-primary-queues .mechanic-queue-tabs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -156,37 +171,6 @@
 
   .workspace-operations .role-mobile-primary-queues .mechanic-queue-tabs button svg {
     display: none;
-  }
-
-  .role-secondary-controls {
-    display: block;
-    width: 100%;
-  }
-
-  .role-secondary-controls > summary {
-    align-items: center;
-    color: #344054;
-    cursor: pointer;
-    display: flex;
-    font-size: 14px;
-    font-weight: 600;
-    justify-content: center;
-    min-height: 44px;
-    padding: 0 12px;
-  }
-
-  .role-secondary-controls > summary::marker {
-    content: "";
-  }
-
-  .role-secondary-controls[open] > summary {
-    border-bottom: 1px solid #eaecf0;
-  }
-
-  .role-secondary-controls-body {
-    display: grid;
-    gap: 10px;
-    padding: 10px;
   }
 
   .workspace-operations .role-mobile-secondary-queues .mechanic-queue-tabs button {

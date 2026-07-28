@@ -1,0 +1,75 @@
+.mobile-queue-tools {
+  display: none;
+}
+
+.mobile-queue-tools-trigger {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  color: #344054;
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  position: relative;
+  width: 44px;
+}
+
+.mobile-queue-tools-trigger svg {
+  height: 20px;
+  width: 20px;
+}
+
+.mobile-queue-tools-trigger:focus-visible {
+  outline: 3px solid rgb(21 112 239 / 18%);
+  outline-offset: 2px;
+}
+
+.mobile-queue-tools-indicator {
+  background: #175cd3;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  height: 9px;
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 9px;
+}
+
+.mobile-queue-tools-footer {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.mobile-queue-tools-footer button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: #344054;
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.mobile-queue-tools-footer button:disabled {
+  color: #98a2b3;
+}
+
+.mobile-queue-tools-footer .mobile-queue-tools-done {
+  background: #175cd3;
+  color: #fff;
+}
+
+.mobile-queue-tools .role-mobile-secondary-queues {
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .mobile-queue-tools {
+    display: block;
+    flex: 0 0 44px;
+  }
+}

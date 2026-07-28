@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, FilterLines, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -8,7 +8,7 @@ import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
-import { MobileFilterSheet } from "../../components/responsive/MobileFilterSheet.jsx";
+import { MobileQueueTools } from "../../components/operations/MobileQueueTools.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import {
@@ -125,7 +125,6 @@ export function OfficeWorkspace({
   const [locationFilter, setLocationFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const preferenceHydrated = useRef(false);
   const legacyDraftRoute = useMemo(
     () => new URLSearchParams(window.location.search).get("view") === "drafts",
@@ -239,25 +238,11 @@ export function OfficeWorkspace({
             <div className="role-mobile-primary-queues">
               <WorkorderQueueTabs tabs={mobilePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
             </div>
-            <details className="role-secondary-controls">
-              <summary>More <span aria-hidden="true">·</span> Drafts, search and filters</summary>
-              <div className="role-secondary-controls-body">
-                <div className="role-mobile-secondary-queues">
-                  <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
-                </div>
-                {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row">
+            {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row role-desktop-filters">
                   <label className="mechanic-search">
                     <SearchMd />
                     <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
                   </label>
-                  <Button
-                    className="office-mobile-filter-button"
-                    type="button"
-                    icon={FilterLines}
-                    onClick={() => setMobileFiltersOpen(true)}
-                  >
-                    Filters
-                  </Button>
                   {locations.length > 1 ? (
                     <select className="office-inline-filter" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
                       <option value="">All locations</option>
@@ -274,8 +259,25 @@ export function OfficeWorkspace({
                     <option value="odoo_entered">Odoo entered</option>
                   </select>
                 </div> : null}
+            <MobileQueueTools
+              label="Open office queues, search, and filters"
+              title="Queues, search, and filters"
+              filtersActive={Boolean(search || mechanicFilter || locationFilter || lifecycleFilter)}
+              onClearFilters={() => { setSearch(""); setMechanicFilter(""); setLocationFilter(""); setLifecycleFilter(""); }}
+            >
+              <div className="role-mobile-secondary-queues">
+                <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
               </div>
-            </details>
+              {activeTab !== "drafts" ? <>
+                <label className="mechanic-search">
+                  <SearchMd />
+                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
+                </label>
+                <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
+                {locations.length > 1 ? <label><span>Location</span><select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label> : null}
+                <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option></select></label>
+              </> : null}
+            </MobileQueueTools>
           </div>
 
           {activeTab === "drafts" ? (
@@ -320,41 +322,6 @@ export function OfficeWorkspace({
           )}
         </section>
       </section>
-      <MobileFilterSheet
-        open={mobileFiltersOpen}
-        onOpenChange={setMobileFiltersOpen}
-        title="Filter workorders"
-        footer={<Button type="button" variant="primary" onClick={() => setMobileFiltersOpen(false)}>Show results</Button>}
-      >
-        <label>
-          <span>Mechanic</span>
-          <select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}>
-            <option value="">All mechanics</option>
-            {mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}
-          </select>
-        </label>
-        {locations.length > 1 ? (
-          <label>
-            <span>Location</span>
-            <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-              <option value="">All locations</option>
-              {locations.map((location) => <option key={location} value={location}>{location}</option>)}
-            </select>
-          </label>
-        ) : null}
-        <label>
-          <span>Stage</span>
-          <select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}>
-            <option value="">All stages</option>
-            <option value="open">Unassigned</option>
-            <option value="accepted">Accepted</option>
-            <option value="in_progress">In progress</option>
-            <option value="mechanic_done">Ready for review</option>
-            <option value="closed">Closed</option>
-            <option value="odoo_entered">Odoo entered</option>
-          </select>
-        </label>
-      </MobileFilterSheet>
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, LogOut01, UserCircle } from "@untitledui/icons";
+import { ChevronDown, DotsVertical, LogOut01, UserCircle } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
 import { authClient } from "../../lib/auth-client.js";
 import "./profile-menu.css";
@@ -19,7 +19,7 @@ function roleLabel(role) {
   return role ? `${role[0].toUpperCase()}${role.slice(1)}` : "Account";
 }
 
-export function ProfileMenu({ actor }) {
+export function ProfileMenu({ actor, compactOnPhone = false }) {
   async function signOut() {
     await authClient.signOut();
     window.location.replace("/");
@@ -27,7 +27,8 @@ export function ProfileMenu({ actor }) {
 
   return (
     <MenuTrigger>
-      <Button className="profile-menu-trigger" aria-label="Open profile menu">
+      <Button className={`profile-menu-trigger${compactOnPhone ? " profile-menu-trigger-phone-compact" : ""}`} aria-label="Open account menu">
+        {compactOnPhone ? <DotsVertical className="profile-menu-more-icon" aria-hidden="true" /> : null}
         <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
         <span className="profile-menu-identity">
           <strong>{actor?.name || "User"}</strong>
@@ -54,4 +55,3 @@ export function ProfileMenu({ actor }) {
     </MenuTrigger>
   );
 }
-
