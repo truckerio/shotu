@@ -1,4 +1,4 @@
-export const DEFAULT_UOM_CODE = "ea";
+export const DEFAULT_UOM_CODE = "pc";
 export const MAX_QUANTITY = 999_999.999;
 
 export const UOM_CATEGORIES = Object.freeze({

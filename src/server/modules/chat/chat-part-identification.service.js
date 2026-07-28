@@ -3,6 +3,7 @@ import { findHuggingFaceTruckContext } from "../parts-helper/providers/huggingfa
 import { identifyOfficePartRequestWithOpenAI } from "../parts-helper/providers/openai.provider.js";
 import { requireSupportedTruck } from "../parts-helper/supported-trucks.js";
 import { findCompanyCatalogPart } from "../../db/repositories/parts-catalog.repo.js";
+import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 
 function inferredMake(make, model) {
   if (make) return make;
@@ -63,7 +64,7 @@ function catalogIdentification(part) {
     description: part.description,
     category: part.category,
     suggestedQuantity: 1,
-    uomCode: part.uomCode || "ea",
+    uomCode: part.uomCode || DEFAULT_UOM_CODE,
     repairOrder: part.repairOrder,
     fitmentStatus: "unknown",
     confidence: 100,
@@ -81,7 +82,7 @@ function typedPartIdentification(partNumber, description) {
     description: description || "",
     category: "",
     suggestedQuantity: 1,
-    uomCode: "ea",
+    uomCode: DEFAULT_UOM_CODE,
     repairOrder: "",
     fitmentStatus: "unknown",
     confidence: 0,

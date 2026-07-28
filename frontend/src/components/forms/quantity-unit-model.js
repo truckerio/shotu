@@ -10,6 +10,7 @@ import {
 } from "../../../../shared/units-of-measure.js";
 
 export const COMMON_UOM_CODES = Object.freeze([
+  "pc",
   "ea",
   "qt",
   "gal",
@@ -58,7 +59,9 @@ export function unitOptionGroups(query = "") {
     || definition.label.toLowerCase().includes(normalizedQuery)
     || definition.symbol.toLowerCase().includes(normalizedQuery);
   const commonCodes = new Set(COMMON_UOM_CODES);
-  const common = UNITS_OF_MEASURE.filter((definition) => commonCodes.has(definition.code) && matches(definition));
+  const common = COMMON_UOM_CODES
+    .map((code) => getUnitDefinition(code))
+    .filter((definition) => definition && matches(definition));
   const categories = Object.entries(UOM_CATEGORIES)
     .map(([category, config]) => ({
       category,

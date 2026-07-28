@@ -14,8 +14,8 @@ const inputSchema = z.object({
   uomCode: uomCodeSchema,
 }).superRefine(validateQuantityUnit);
 
-test("legacy quantities default to each and count units reject decimals", () => {
-  assert.deepEqual(inputSchema.parse({ quantity: 2 }), { quantity: 2, uomCode: "ea" });
+test("legacy quantities default to piece and count units reject decimals", () => {
+  assert.deepEqual(inputSchema.parse({ quantity: 2 }), { quantity: 2, uomCode: "pc" });
   assert.equal(inputSchema.safeParse({ quantity: 2.5, uomCode: "ea" }).success, false);
   assert.equal(inputSchema.safeParse({ quantity: 2.5, uomCode: "case" }).success, false);
 });

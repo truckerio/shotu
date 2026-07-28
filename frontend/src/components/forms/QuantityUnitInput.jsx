@@ -30,7 +30,7 @@ export function QuantityUnitInput({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [menuPlacement, setMenuPlacement] = useState("below");
-  const [mobileMenuStyle, setMobileMenuStyle] = useState(undefined);
+  const [menuStyle, setMenuStyle] = useState(undefined);
   const model = quantityInputModel(quantity, uomCode);
   const groups = useMemo(() => unitOptionGroups(query), [query]);
 
@@ -53,7 +53,7 @@ export function QuantityUnitInput({
   useLayoutEffect(() => {
     if (!open) {
       setMenuPlacement("below");
-      setMobileMenuStyle(undefined);
+      setMenuStyle(undefined);
       return undefined;
     }
 
@@ -70,22 +70,27 @@ export function QuantityUnitInput({
       const availableAbove = triggerRect.top - gap - gutter;
       const isMobile = window.matchMedia("(max-width: 700px)").matches;
       const menuHeight = Math.min(menu.scrollHeight, isMobile ? 420 : 360);
-      const openBelow = availableBelow >= menuHeight || availableBelow >= availableAbove;
+      const minimumUsefulHeight = isMobile ? 180 : 240;
+      const openBelow = availableBelow >= Math.min(menuHeight, minimumUsefulHeight)
+        || availableBelow >= availableAbove;
       setMenuPlacement(openBelow ? "below" : "above");
 
+      const availableHeight = Math.max(160, openBelow ? availableBelow : availableAbove);
+      const boundedHeight = Math.min(isMobile ? 420 : 360, availableHeight);
+      const nextStyle = {
+        "--quantity-menu-max-height": `${boundedHeight}px`,
+      };
       if (!isMobile) {
-        setMobileMenuStyle(undefined);
+        setMenuStyle(nextStyle);
         return;
       }
 
-      const availableHeight = Math.max(160, openBelow ? availableBelow : availableAbove);
-      const boundedHeight = Math.min(420, availableHeight);
       const top = openBelow
         ? triggerRect.bottom + gap
         : Math.max(gutter, triggerRect.top - gap - boundedHeight);
 
-      setMobileMenuStyle({
-        "--quantity-menu-max-height": `${boundedHeight}px`,
+      setMenuStyle({
+        ...nextStyle,
         "--quantity-menu-top": `${top}px`,
       });
     }
@@ -164,7 +169,7 @@ export function QuantityUnitInput({
             className="quantity-unit-menu"
             data-placement={menuPlacement}
             ref={menuRef}
-            style={mobileMenuStyle}
+            style={menuStyle}
           >
             <label className="quantity-unit-search">
               <SearchMd aria-hidden="true" />

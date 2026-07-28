@@ -6,7 +6,7 @@ import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import { UsedPartsEditor } from "./UsedPartsEditor.jsx";
 import { usedPartsAccessState } from "./used-parts-model.js";
-import { normalizeUomCode } from "../../../../shared/units-of-measure.js";
+import { DEFAULT_UOM_CODE, normalizeUomCode } from "../../../../shared/units-of-measure.js";
 import "./part-requests-panel.css";
 
 const SOURCE_LABELS = {
@@ -45,7 +45,7 @@ const emptyDraft = () => ({
   description: "",
   category: "",
   quantity: "",
-  uomCode: "ea",
+  uomCode: DEFAULT_UOM_CODE,
   repairOrder: "",
   fitmentStatus: "unknown",
   fitmentNotes: "",

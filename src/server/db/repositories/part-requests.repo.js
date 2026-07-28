@@ -8,6 +8,7 @@ import {
 } from "../../modules/parts/part-feedback.js";
 import { publicQuantity, quantityLabel } from "../../modules/parts/quantity-uom.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
+import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 
 const TERMINAL_WORKORDER_STATUSES = [WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED, WORKORDER_STATUS.CANCELLED];
 
@@ -17,7 +18,7 @@ function publicAllocation(row) {
     sourceType: row.source_type,
     status: row.status,
     quantity: publicQuantity(row.quantity),
-    uomCode: row.uom_code || "ea",
+    uomCode: row.uom_code || DEFAULT_UOM_CODE,
     locationId: row.location_id,
     locationName: row.location_name || "",
     inventoryItemId: row.inventory_item_id,
@@ -39,7 +40,7 @@ function publicInventory(row) {
     quantityOnHand: publicQuantity(row.quantity_on_hand),
     quantityReserved: publicQuantity(row.quantity_reserved),
     quantityAvailable: publicQuantity(row.quantity_on_hand) - publicQuantity(row.quantity_reserved),
-    uomCode: row.uom_code || "ea",
+    uomCode: row.uom_code || DEFAULT_UOM_CODE,
     binLocation: row.bin_location,
     updatedAt: row.updated_at,
   };
@@ -57,7 +58,7 @@ function publicRequest(row) {
     description: row.description,
     category: row.category,
     quantity: publicQuantity(row.quantity),
-    uomCode: row.uom_code || "ea",
+    uomCode: row.uom_code || DEFAULT_UOM_CODE,
     repairOrder: row.repair_order,
     approvalStatus: row.approval_status,
     fitmentStatus: row.fitment_status,
@@ -191,7 +192,7 @@ export async function createPartRequest(workorderId, input) {
         input.description || input.query,
         input.category || "",
         input.quantity,
-        input.uomCode || "ea",
+        input.uomCode || DEFAULT_UOM_CODE,
         input.repairOrder || "",
         input.fitmentStatus || "unknown",
         input.fitmentNotes || "",
@@ -242,7 +243,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       description: input.description || input.query,
       category: input.category || "",
       quantity: input.quantity,
-      uomCode: input.uomCode || "ea",
+      uomCode: input.uomCode || DEFAULT_UOM_CODE,
       repairOrder: input.repairOrder || "",
     };
     const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values, input.query);
@@ -353,7 +354,7 @@ async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
       values.category,
       values.repairOrder,
       JSON.stringify(aliases),
-      values.uomCode || "ea",
+      values.uomCode || DEFAULT_UOM_CODE,
     ]
   );
   return result.rows[0].id;
@@ -378,7 +379,7 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
           allocation.inventoryItemId,
           workorder.company_id,
           normalizedPartNumber,
-          allocation.uomCode || "ea",
+          allocation.uomCode || DEFAULT_UOM_CODE,
           requestedLocationId,
         ],
       )
@@ -395,7 +396,7 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
           workorder.company_id,
           normalizedPartNumber,
           allocation.locationId || workorder.location_id,
-          allocation.uomCode || "ea",
+          allocation.uomCode || DEFAULT_UOM_CODE,
         ],
       );
     if (!match.rows[0]) {
@@ -433,7 +434,7 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
       allocation.unitPrice ?? null,
       allocation.quoteUrl || "",
       actorUserId || null,
-      allocation.uomCode || "ea",
+      allocation.uomCode || DEFAULT_UOM_CODE,
     ]
   );
 }
@@ -446,7 +447,7 @@ async function appendOfficeAddedPart(client, workorderId, values) {
     {
       partNo: values.partNumber,
       qty: String(values.quantity),
-      uomCode: values.uomCode || "ea",
+      uomCode: values.uomCode || DEFAULT_UOM_CODE,
       repairOrder: values.repairOrder,
     },
   ];
@@ -508,7 +509,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       description: input.description || request.description,
       category: input.category || request.category,
       quantity: input.quantity,
-      uomCode: input.uomCode || request.uom_code || "ea",
+      uomCode: input.uomCode || request.uom_code || DEFAULT_UOM_CODE,
       repairOrder: input.repairOrder || request.repair_order,
     };
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
@@ -654,7 +655,7 @@ export async function updatePartAllocation(workorderId, requestId, allocationId,
         from: allocation.status,
         to: input.status,
         quantity: publicQuantity(allocation.quantity),
-        uomCode: allocation.uom_code || "ea",
+        uomCode: allocation.uom_code || DEFAULT_UOM_CODE,
       },
     });
     await addSystemMessage(client, workorderId, formatAllocationFeedback({
@@ -709,7 +710,7 @@ export async function updatePartUsage(workorderId, requestId, input) {
         from: request.usage_status,
         to: input.usageStatus,
         quantity: publicQuantity(request.quantity),
-        uomCode: request.uom_code || "ea",
+        uomCode: request.uom_code || DEFAULT_UOM_CODE,
       },
     });
     await addSystemMessage(client, workorderId, formatUsageFeedback({

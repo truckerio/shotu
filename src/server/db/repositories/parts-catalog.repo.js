@@ -1,5 +1,6 @@
 import { query } from "../pool.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
+import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 
 function publicCatalogPart(row) {
   return {
@@ -9,7 +10,7 @@ function publicCatalogPart(row) {
     manufacturer: row.manufacturer,
     description: row.description,
     category: row.category,
-    uomCode: row.uom_code || "ea",
+    uomCode: row.uom_code || DEFAULT_UOM_CODE,
     repairOrder: row.repair_template,
     aliases: Array.isArray(row.aliases) ? row.aliases : [],
     matchType: row.match_type,

@@ -37,7 +37,7 @@ test("draft values restore into the controlled create form", () => {
   assert.equal(restored.mechanicConcern, "Brake inspection");
 });
 
-test("draft quantity serialization preserves units and defaults legacy parts to each", () => {
+test("draft quantity serialization preserves units and defaults legacy parts to piece", () => {
   const payload = buildWorkorderDraftPayload({
     actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
     form: {
@@ -51,9 +51,9 @@ test("draft quantity serialization preserves units and defaults legacy parts to 
 
   assert.deepEqual(payload.formData.parts, [
     { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
-    { partNo: "FILTER", qty: "1", uomCode: "ea", repairOrder: "Replace" },
+    { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" },
   ]);
   assert.equal(formValuesFromWorkorderDraft({
     formData: { parts: [{ partNo: "FILTER", qty: "1" }] },
-  }, { parts: [] }).parts[0].uomCode, "ea");
+  }, { parts: [] }).parts[0].uomCode, "pc");
 });

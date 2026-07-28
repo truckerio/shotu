@@ -17,7 +17,7 @@ test("create and mechanic save paths serialize uomCode", () => {
   assert.match(roleRouter, /qty:\s*part\.qty,\s*\n\s*uomCode:\s*part\.uomCode,/);
 });
 
-test("preview prints quantity with the selected symbol and legacy each fallback", () => {
+test("preview prints quantity with the selected symbol and piece fallback", () => {
   const html = renderWorkorderPageHtml({
     parts: [
       { partNo: "COOLANT", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
@@ -26,8 +26,8 @@ test("preview prints quantity with the selected symbol and legacy each fallback"
   }, "WO-UOM-1");
 
   assert.match(html, />2\.5 gal</);
-  assert.match(html, />1 ea</);
-  assert.deepEqual(emptyPart(), { partNo: "", qty: "", uomCode: "ea", repairOrder: "" });
+  assert.match(html, />1 pc</);
+  assert.deepEqual(emptyPart(), { partNo: "", qty: "", uomCode: "pc", repairOrder: "" });
 });
 
 test("surveillance read-only parts use the shared quantity formatter", () => {

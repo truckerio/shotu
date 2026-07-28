@@ -9,6 +9,7 @@ import { createPartRequest } from "../../db/repositories/part-requests.repo.js";
 import { classifyMechanicPartIntent } from "./chat-part-intent.js";
 import { identifyMechanicChatPart } from "./chat-part-identification.service.js";
 import { persistChatImageAttachment, removeStoredChatImage } from "./chat-media.service.js";
+import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 
 function summarizedIdentification(part, resolutionSource) {
   if (!part) return "";
@@ -110,7 +111,7 @@ export async function processMechanicChatMessage(workorderId, input, dependencie
     description: identifiedPart?.description || classification.partDescription || rawDescription(input.body, message.attachment),
     category: identifiedPart?.category || "",
     quantity: identifiedPart?.suggestedQuantity || 1,
-    uomCode: identifiedPart?.uomCode || "ea",
+    uomCode: identifiedPart?.uomCode || DEFAULT_UOM_CODE,
     repairOrder: identifiedPart?.repairOrder || "",
     fitmentStatus: identifiedPart?.fitmentStatus || "unknown",
     fitmentNotes: identifiedPart?.evidenceSummary || "Office verification required.",

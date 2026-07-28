@@ -21,10 +21,10 @@ test("liquid, mass, gas, and length units preserve up to three decimals", () => 
   }
 });
 
-test("legacy and invalid units normalize to each", () => {
-  assert.deepEqual(normalizeQuantityUnit("2", ""), { quantity: "2", uomCode: "ea" });
-  assert.deepEqual(normalizeQuantityUnit("1", "not-real"), { quantity: "1", uomCode: "ea" });
-  assert.equal(formatQuantityUnit("", ""), "1 ea");
+test("legacy and invalid units normalize to piece", () => {
+  assert.deepEqual(normalizeQuantityUnit("2", ""), { quantity: "2", uomCode: "pc" });
+  assert.deepEqual(normalizeQuantityUnit("1", "not-real"), { quantity: "1", uomCode: "pc" });
+  assert.equal(formatQuantityUnit("", ""), "1 pc");
 });
 
 test("search groups are sourced from the shared UoM catalog", () => {

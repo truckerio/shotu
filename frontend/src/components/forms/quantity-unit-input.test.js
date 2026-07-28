@@ -27,10 +27,15 @@ test("quantity control keeps a bounded mobile menu and stable grid", () => {
   assert.match(css, /left:\s*16px/);
   assert.match(css, /right:\s*16px/);
   assert.match(component, /trigger\.getBoundingClientRect\(\)/);
-  assert.match(component, /availableBelow >= menuHeight \|\| availableBelow >= availableAbove/);
+  assert.match(component, /minimumUsefulHeight = isMobile \? 180 : 240/);
+  assert.match(component, /availableBelow >= Math\.min\(menuHeight,\s*minimumUsefulHeight\)/);
   assert.match(component, /setMenuPlacement\(openBelow \? "below" : "above"\)/);
+  assert.match(component, /setMenuStyle\(nextStyle\)/);
   assert.match(component, /data-placement=\{menuPlacement\}/);
   assert.match(component, /--quantity-menu-top/);
+  assert.match(css, /grid-template-rows:\s*auto minmax\(0,\s*1fr\)/);
+  assert.match(css, /max-height:\s*var\(--quantity-menu-max-height,\s*min\(360px,\s*60vh\)\)/);
+  assert.match(css, /\.quantity-unit-options\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s);
   assert.match(css, /\.quantity-unit-menu\[data-placement="above"\]/);
   assert.match(css, /top:\s*var\(--quantity-menu-top,\s*16px\)/);
   assert.doesNotMatch(css, /bottom:\s*16px/);
