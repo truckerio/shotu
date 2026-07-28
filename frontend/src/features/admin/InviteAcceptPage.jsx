@@ -56,13 +56,15 @@ export function InviteAcceptPage({ token }) {
   }
 
   return (
-    <main className="auth-shell">
-      <section className="auth-panel" aria-labelledby="invite-title">
-        <header className="auth-heading">
+    <main className="auth-shell auth-invite-shell">
+      <section className="auth-panel auth-invite-panel" aria-labelledby="invite-title">
+        <header className="auth-heading auth-invite-heading">
           <span className="auth-mark" aria-hidden="true"><ClipboardCheck /></span>
-          <div>
-            <OwlWordmark />
-            {invitation?.locationName ? <small>{invitation.locationName}</small> : null}
+          <div className="auth-heading-copy">
+            <div className="auth-invite-brand-row">
+              <OwlWordmark />
+              {invitation?.locationName ? <small>{invitation.locationName}</small> : null}
+            </div>
             <h1 id="invite-title">Accept invitation</h1>
           </div>
         </header>

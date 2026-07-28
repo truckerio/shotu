@@ -36,6 +36,28 @@ body:has(.auth-shell) {
   margin-bottom: 28px;
 }
 
+.auth-heading-copy {
+  min-width: 0;
+}
+
+.auth-invite-brand-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.auth-invite-brand-row small {
+  color: #667085;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .auth-heading strong {
   display: block;
   margin-bottom: 2px;
@@ -87,6 +109,7 @@ body:has(.auth-shell) {
 }
 
 .auth-form input {
+  box-sizing: border-box;
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -98,6 +121,13 @@ body:has(.auth-shell) {
   font: inherit;
   font-size: var(--text-body);
   box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.auth-form input:disabled {
+  background: #f9fafb;
+  color: #667085;
+  opacity: 1;
+  -webkit-text-fill-color: #667085;
 }
 
 .auth-form input:focus {
@@ -197,15 +227,44 @@ body:has(.auth-shell) {
     box-shadow: 0 14px 34px rgb(16 24 40 / 12%);
   }
 
+  .auth-invite-panel {
+    padding: 22px 20px;
+  }
+
+  .auth-invite-heading {
+    align-items: flex-start;
+    margin-bottom: 22px;
+  }
+
+  .auth-invite-heading .auth-mark {
+    display: none;
+  }
+
+  .auth-invite-heading .auth-heading-copy {
+    width: 100%;
+  }
+
+  .auth-invite-heading h1 {
+    font-size: 24px;
+  }
+
+  .auth-invite-panel .auth-form {
+    gap: 15px;
+  }
+
   .auth-shell.auth-shell--keyboard-open {
     align-content: start;
     height: var(--auth-visual-viewport-height, 100dvh);
-    min-height: var(--auth-visual-viewport-height, 100dvh);
+    inset: var(--auth-visual-viewport-offset-top, 0px) 0 auto;
+    max-height: var(--auth-visual-viewport-height, 100dvh);
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior-y: contain;
-    padding-top: max(calc(12px + var(--auth-visual-viewport-offset-top, 0px)), env(safe-area-inset-top));
+    padding-top: max(12px, env(safe-area-inset-top));
     padding-bottom: max(12px, env(safe-area-inset-bottom));
+    position: fixed;
     scroll-padding-block: 12px;
+    width: 100%;
   }
 
   .auth-shell--keyboard-open .auth-panel {
