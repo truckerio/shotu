@@ -6,6 +6,7 @@ const componentUrl = new URL("./MobileQueueTools.jsx", import.meta.url);
 const toolbarUrl = new URL("./MobileQueueToolbar.jsx", import.meta.url);
 const adminWorkspaceUrl = new URL("./OperationsWorkspace.jsx", import.meta.url);
 const cssUrl = new URL("./mobile-queue-tools.css", import.meta.url);
+const sheetCssUrl = new URL("../responsive/mobile-filter-sheet.css", import.meta.url);
 
 test("mobile queue tools use the accessible shared dialog contract", async () => {
   const source = await readFile(componentUrl, "utf8");
@@ -58,4 +59,14 @@ test("queue search exposes keyboard state and removes only temporary chrome", as
   assert.match(css, /body:has\(\.mobile-queue-toolbar\[data-keyboard-open="true"\]\) \.mobile-filter-dialog > header,[\s\S]*\.mobile-filter-dialog > footer\s*\{[\s\S]*display: none;/);
   assert.match(css, /body:has\(\.mobile-queue-toolbar\[data-keyboard-open="true"\]\) \.mobile-filter-content \.mechanic-queue-tabs\s*\{[\s\S]*display: none;/);
   assert.match(css, /\.mobile-filter-content\s*\{[\s\S]*padding-bottom: max\(12px, env\(safe-area-inset-bottom\)\);/);
+});
+
+test("mobile filter sheet contains fields while queue tabs scroll independently", async () => {
+  const sheetCss = await readFile(sheetCssUrl, "utf8");
+
+  assert.match(sheetCss, /\.mobile-filter-content\s*\{[\s\S]*min-width:\s*0;[\s\S]*overflow-x:\s*hidden;[\s\S]*width:\s*100%;/);
+  assert.match(sheetCss, /\.mobile-filter-content label\.mechanic-search\s*\{[\s\S]*align-items:\s*center;[\s\S]*display:\s*flex;[\s\S]*width:\s*100%;/);
+  assert.match(sheetCss, /\.mobile-filter-content \.mechanic-search input\s*\{[\s\S]*min-width:\s*0;[\s\S]*width:\s*100%;/);
+  assert.match(sheetCss, /\.mobile-filter-content \.role-mobile-secondary-queues\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*width:\s*100%;/);
+  assert.match(sheetCss, /\.mobile-filter-content \.mechanic-queue-tabs\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;[\s\S]*width:\s*100%;/);
 });

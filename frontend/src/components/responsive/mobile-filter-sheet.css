@@ -39,7 +39,10 @@
 .mobile-filter-dialog {
   display: grid;
   max-height: inherit;
+  min-width: 0;
   outline: 0;
+  overflow: hidden;
+  width: 100%;
 }
 
 .mobile-filter-dialog > header {
@@ -76,17 +79,30 @@
 }
 
 .mobile-filter-content {
+  box-sizing: border-box;
   display: grid;
   gap: 16px;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding: 16px;
   scrollbar-gutter: stable;
+  width: 100%;
+}
+
+.mobile-filter-content > * {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .mobile-filter-content label {
+  box-sizing: border-box;
   display: grid;
   gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .mobile-filter-content label > span {
@@ -96,8 +112,41 @@
 }
 
 .mobile-filter-content select {
+  box-sizing: border-box;
   max-width: 100%;
+  min-width: 0;
   min-height: 46px;
+  width: 100%;
+}
+
+.mobile-filter-content label.mechanic-search {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.mobile-filter-content .mechanic-search input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+.mobile-filter-content .role-mobile-secondary-queues {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.mobile-filter-content .mechanic-queue-tabs {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   width: 100%;
 }
 
