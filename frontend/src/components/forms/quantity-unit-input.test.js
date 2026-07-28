@@ -35,3 +35,10 @@ test("quantity control keeps a bounded mobile menu and stable grid", () => {
   assert.match(css, /top:\s*var\(--quantity-menu-top,\s*16px\)/);
   assert.doesNotMatch(css, /bottom:\s*16px/);
 });
+
+test("known parts rows wrap inside narrow desktop create cards", () => {
+  assert.match(css, /@container \(max-width:\s*520px\)/);
+  assert.match(css, /grid-template-columns:\s*24px minmax\(0,\s*1fr\) minmax\(120px,\s*0\.75fr\) 64px/);
+  assert.match(css, /\.operational-part-row\.has-quantity-unit\s*>\s*input:nth-last-of-type\(1\)\s*\{[^}]*grid-column:\s*2 \/ 4;/s);
+  assert.match(css, /\.operational-part-row\.has-quantity-unit\s*>\s*button\s*\{[^}]*grid-row:\s*1 \/ 3;/s);
+});

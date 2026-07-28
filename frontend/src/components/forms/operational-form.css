@@ -362,6 +362,7 @@
 }
 
 .operational-parts-editor {
+  container-type: inline-size;
   display: grid;
   gap: 8px;
 }

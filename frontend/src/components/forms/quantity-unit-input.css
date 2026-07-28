@@ -170,7 +170,33 @@
 }
 
 .operational-part-row.has-quantity-unit {
-  grid-template-columns: 24px minmax(100px, 1fr) minmax(138px, .8fr) minmax(130px, 1.4fr) auto;
+  grid-template-columns: 24px minmax(0, 1.1fr) minmax(126px, 0.85fr) minmax(0, 1fr) 64px;
+  min-width: 0;
+}
+
+.operational-part-row.has-quantity-unit > button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 520px) {
+  .operational-part-row.has-quantity-unit {
+    align-items: start;
+    grid-template-columns: 24px minmax(0, 1fr) minmax(120px, 0.75fr) 64px;
+  }
+
+  .operational-part-row.has-quantity-unit > input:nth-last-of-type(1) {
+    grid-column: 2 / 4;
+  }
+
+  .operational-part-row.has-quantity-unit > button {
+    align-self: center;
+    grid-column: 4;
+    grid-row: 1 / 3;
+    justify-self: stretch;
+  }
 }
 
 @media (max-width: 700px) {

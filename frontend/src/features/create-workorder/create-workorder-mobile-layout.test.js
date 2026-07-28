@@ -33,6 +33,13 @@ test("shared operational controls include padding inside their contained width",
   );
 });
 
+test("known parts editor can container-wrap rows inside narrow desktop cards", () => {
+  assert.match(
+    operationalFormCss,
+    /\.operational-parts-editor\s*\{[^}]*container-type:\s*inline-size;/s,
+  );
+});
+
 test("phone Create opts date fields out of Safari intrinsic control sizing", () => {
   assert.match(
     createCss,
