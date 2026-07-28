@@ -4,17 +4,72 @@ import { closePool, getPool } from "../pool.js";
 
 const DEFAULT_PASSWORD = "WorkorderDemo2026!";
 const COMPANY_ID = DEFAULT_COMPANY_ID;
-const LOCATION_NAME = "Chino Yard";
+const COMPANY_SLUG = "default";
+const COMPANY_NAME = "Default Company";
+
+const locations = [
+  {
+    key: "chino",
+    name: "Chino Yard",
+    managers: 2,
+    mechanics: 10,
+  },
+  {
+    key: "texas",
+    name: "Texas Yard",
+    managers: 1,
+    mechanics: 1,
+  },
+  {
+    key: "arizona",
+    name: "Arizona Yard",
+    managers: 1,
+    mechanics: 1,
+  },
+  {
+    key: "newjersey",
+    name: "New Jersey Yard",
+    managers: 1,
+    mechanics: 1,
+  },
+];
 
 const demoUsers = [
-  { name: "Admin Demo", email: "admin@example.com", username: "admin", role: "admin" },
-  { name: "Office Demo", email: "office@example.com", username: "office", role: "office" },
-  { name: "Mechanic Demo 1", email: "mechanic@example.com", username: "mechanic1", role: "mechanic" },
-  { name: "Mechanic Demo 2", email: "mechanic2@example.com", username: "mechanic2", role: "mechanic" },
-  { name: "Mechanic Demo 3", email: "mechanic3@example.com", username: "mechanic3", role: "mechanic" },
-  { name: "Mechanic Demo 4", email: "mechanic4@example.com", username: "mechanic4", role: "mechanic" },
-  { name: "Mechanic Demo 5", email: "mechanic5@example.com", username: "mechanic5", role: "mechanic" },
-  { name: "Surveillance Demo", email: "surveillance@example.com", username: "surveillance", role: "surveillance" },
+  {
+    name: "Admin Demo",
+    email: "admin@example.com",
+    username: "admin",
+    role: "admin",
+    locationKeys: locations.map((location) => location.key),
+  },
+  {
+    name: "Surveillance Demo",
+    email: "surveillance@example.com",
+    username: "surveillance",
+    role: "surveillance",
+    locationKeys: locations.map((location) => location.key),
+  },
+  ...locations.flatMap((location) => {
+    const managers = Array.from({ length: location.managers }, (_, index) => ({
+      name: `${location.name.replace(" Yard", "")} Manager ${index + 1}`,
+      email: `${location.key}.manager${index + 1}@example.com`,
+      username: `${location.key}manager${index + 1}`,
+      role: "office",
+      locationKeys: [location.key],
+    }));
+    const mechanics = Array.from({ length: location.mechanics }, (_, index) => ({
+      name: `${location.name.replace(" Yard", "")} Mechanic ${index + 1}`,
+      email: location.key === "chino" && index === 0
+        ? "mechanic@example.com"
+        : `${location.key}.mechanic${index + 1}@example.com`,
+      username: location.key === "chino" && index === 0
+        ? "mechanic1"
+        : `${location.key}mechanic${index + 1}`,
+      role: "mechanic",
+      locationKeys: [location.key],
+    }));
+    return [...managers, ...mechanics];
+  }),
 ];
 
 function seedPassword() {
@@ -24,6 +79,55 @@ function seedPassword() {
   const password = process.env.DEMO_USER_PASSWORD || DEFAULT_PASSWORD;
   if (password.length < 12) throw new Error("DEMO_USER_PASSWORD must contain at least 12 characters.");
   return password;
+}
+
+async function ensureCompany(client) {
+  await client.query(
+    `insert into companies (id, slug, name, active)
+     values ($1, $2, $3, true)
+     on conflict (id) do update
+       set slug = excluded.slug,
+           name = excluded.name,
+           active = true,
+           updated_at = now()`,
+    [COMPANY_ID, COMPANY_SLUG, COMPANY_NAME],
+  );
+}
+
+async function ensureLocations(client) {
+  const result = new Map();
+  for (const location of locations) {
+    const existing = await client.query(
+      `select id
+         from locations
+        where company_id = $1
+          and lower(btrim(name)) = lower(btrim($2))
+        order by created_at, id
+        limit 1`,
+      [COMPANY_ID, location.name],
+    );
+    if (existing.rows[0]) {
+      await client.query(
+        `update locations
+            set type = 'yard',
+                active = true,
+                updated_at = now()
+          where id = $1`,
+        [existing.rows[0].id],
+      );
+      result.set(location.key, existing.rows[0].id);
+      continue;
+    }
+
+    const created = await client.query(
+      `insert into locations (company_id, name, type, active)
+       values ($1, $2, 'yard', true)
+       returning id`,
+      [COMPANY_ID, location.name],
+    );
+    result.set(location.key, created.rows[0].id);
+  }
+  return result;
 }
 
 async function ensureAuthUser(user, password) {
@@ -46,48 +150,43 @@ async function ensureAuthUser(user, password) {
   return created.rows[0].id;
 }
 
-async function ensureLocation(client) {
-  const existing = await client.query(
-    `select id
-      from locations
-      where company_id = $1 and lower(name) = lower($2) and active = true
-      order by created_at, id
-      limit 1`,
-    [COMPANY_ID, LOCATION_NAME],
-  );
-  if (existing.rows[0]) return existing.rows[0].id;
-
-  const created = await client.query(
-    "insert into locations (company_id, name, type) values ($1, $2, 'yard') returning id",
-    [COMPANY_ID, LOCATION_NAME],
-  );
-  return created.rows[0].id;
-}
-
-async function linkOperationalUser(user, authUserId, locationId) {
+async function linkOperationalUser(user, authUserId, locationIds) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
-    const result = await client.query(
-      `insert into user_profiles (display_name, contact_email, active, auth_user_id)
-       values ($1, $2, true, $3)
-       on conflict (auth_user_id) do update
-         set display_name = excluded.display_name,
-             contact_email = excluded.contact_email,
-             active = true,
-             auth_user_id = excluded.auth_user_id,
-             updated_at = now()
-       returning id`,
-      [user.name, user.email, authUserId],
+    const existing = await client.query(
+      `select id
+         from user_profiles
+        where auth_user_id = $1
+           or lower(contact_email) = lower($2)
+        order by created_at, id
+        limit 1
+        for update`,
+      [authUserId, user.email],
     );
-    const appUserId = result.rows[0].id;
+    let appUserId = existing.rows[0]?.id;
+    if (appUserId) {
+      await client.query(
+        `update user_profiles
+            set display_name = $1,
+                contact_email = $2,
+                active = true,
+                auth_user_id = $3,
+                deleted_at = null,
+                updated_at = now()
+          where id = $4`,
+        [user.name, user.email, authUserId, appUserId],
+      );
+    } else {
+      const result = await client.query(
+        `insert into user_profiles (display_name, contact_email, active, auth_user_id)
+         values ($1, $2, true, $3)
+         returning id`,
+        [user.name, user.email, authUserId],
+      );
+      appUserId = result.rows[0].id;
+    }
 
-    await client.query(
-      `insert into user_location_memberships (user_id, location_id, company_id, active)
-       values ($1, $2, $3, true)
-       on conflict (user_id, location_id) do update set active = true, updated_at = now()`,
-      [appUserId, locationId, COMPANY_ID],
-    );
     await client.query(
       `insert into user_company_memberships (user_id, company_id, role, active)
        values ($1, $2, $3, true)
@@ -97,6 +196,29 @@ async function linkOperationalUser(user, authUserId, locationId) {
              updated_at = now()`,
       [appUserId, COMPANY_ID, user.role],
     );
+
+    await client.query(
+      `update user_location_memberships
+          set active = false,
+              updated_at = now()
+        where user_id = $1
+          and company_id = $2
+          and location_id <> all($3::uuid[])`,
+      [appUserId, COMPANY_ID, locationIds],
+    );
+
+    for (const locationId of locationIds) {
+      await client.query(
+        `insert into user_location_memberships (user_id, location_id, company_id, active)
+         values ($1, $2, $3, true)
+         on conflict (user_id, location_id) do update
+           set company_id = excluded.company_id,
+               active = true,
+               updated_at = now()`,
+        [appUserId, locationId, COMPANY_ID],
+      );
+    }
+
     await client.query("commit");
     return appUserId;
   } catch (error) {
@@ -110,9 +232,15 @@ async function linkOperationalUser(user, authUserId, locationId) {
 async function seed() {
   const password = seedPassword();
   const client = await getPool().connect();
-  let locationId;
+  let locationIds;
   try {
-    locationId = await ensureLocation(client);
+    await client.query("begin");
+    await ensureCompany(client);
+    locationIds = await ensureLocations(client);
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
   } finally {
     client.release();
   }
@@ -120,11 +248,26 @@ async function seed() {
   const seeded = [];
   for (const user of demoUsers) {
     const authUserId = await ensureAuthUser(user, password);
-    const appUserId = await linkOperationalUser(user, authUserId, locationId);
-    seeded.push({ username: user.username, email: user.email, role: user.role, appUserId });
+    const userLocationIds = user.locationKeys.map((key) => {
+      const locationId = locationIds.get(key);
+      if (!locationId) throw new Error(`Missing seeded location ${key}.`);
+      return locationId;
+    });
+    const appUserId = await linkOperationalUser(user, authUserId, userLocationIds);
+    seeded.push({
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      locations: user.locationKeys,
+      appUserId,
+    });
   }
 
-  console.log(JSON.stringify({ companyId: COMPANY_ID, locationId, users: seeded }, null, 2));
+  console.log(JSON.stringify({
+    companyId: COMPANY_ID,
+    locations: Object.fromEntries(locationIds),
+    users: seeded,
+  }, null, 2));
 }
 
 seed()

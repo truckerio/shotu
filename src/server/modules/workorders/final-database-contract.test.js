@@ -62,9 +62,10 @@ test("constraint names use the final company_id vocabulary", async () => {
 
 test("named not-null constraints use the final tenant and profile vocabulary", async () => {
   const sql = await migration("019_not_null_constraint_name_cleanup.sql");
-  assert.match(sql, /rename constraint assets_company_uuid_not_null to assets_company_id_not_null/i);
-  assert.match(sql, /rename constraint operational_workorders_company_uuid_not_null to operational_workorders_company_id_not_null/i);
-  assert.match(sql, /rename constraint app_users_name_not_null to user_profiles_display_name_not_null/i);
+  assert.match(sql, /rename_constraint_if_present\('assets', 'assets_company_uuid_not_null', 'assets_company_id_not_null'\)/i);
+  assert.match(sql, /rename_constraint_if_present\('operational_workorders', 'operational_workorders_company_uuid_not_null', 'operational_workorders_company_id_not_null'\)/i);
+  assert.match(sql, /rename_constraint_if_present\('user_profiles', 'app_users_name_not_null', 'user_profiles_display_name_not_null'\)/i);
+  assert.match(sql, /to_regclass\(table_name\)/i);
 });
 
 test("operational profile auth identity remains unique after rename", async () => {

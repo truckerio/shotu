@@ -12,6 +12,20 @@ function checksum(sql) {
   return createHash("sha256").update(sql).digest("hex");
 }
 
+const LEGACY_MIGRATION_CHECKSUMS = new Map([
+  [
+    "019_not_null_constraint_name_cleanup.sql",
+    new Set([
+      "69b4787e8422993a3b83efba357c06163f1dc1d76c7919116650371871452d5b",
+    ]),
+  ],
+]);
+
+function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {
+  if (appliedChecksum === currentChecksum) return true;
+  return LEGACY_MIGRATION_CHECKSUMS.get(name)?.has(appliedChecksum) || false;
+}
+
 async function orderedMigrations() {
   const migrationsDir = join(__dirname, "migrations");
   const names = (await readdir(migrationsDir, { withFileTypes: true }))
@@ -46,7 +60,7 @@ async function runMigrations() {
         [migration.name],
       );
       if (applied.rows[0]) {
-        if (applied.rows[0].checksum !== migration.checksum) {
+        if (!migrationChecksumMatches(migration.name, applied.rows[0].checksum, migration.checksum)) {
           throw new Error(`Applied migration ${migration.name} has been modified.`);
         }
         continue;
