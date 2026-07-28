@@ -181,7 +181,7 @@
   }
 
   .workorder-detail-page .chat-content > .chat-prompt-composer {
-    --chat-composer-inset: clamp(12px, 3.5vw, 16px);
+    --chat-composer-inset: clamp(8px, 2.5vw, 12px);
 
     align-self: end;
     max-width: 100%;
