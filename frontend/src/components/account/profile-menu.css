@@ -76,17 +76,17 @@
 .profile-menu-brand-mark {
   align-items: center;
   display: inline-block;
-  height: 24px;
+  height: 28px;
   line-height: 1;
   position: relative;
-  width: 24px;
+  width: 20px;
 }
 
 .profile-menu-brand-icon {
-  color: #175cd3;
+  color: #101828;
   display: block;
-  height: 24px;
-  width: 24px;
+  height: 28px;
+  width: 20px;
 }
 
 .profile-menu-brand-letter {
