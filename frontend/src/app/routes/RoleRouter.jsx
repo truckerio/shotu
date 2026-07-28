@@ -1333,7 +1333,7 @@ export function RoleRouter({ actor }) {
     }
   }
 
-  async function sendWorkorderChat({ body, attachment }) {
+  async function sendWorkorderChat({ body, attachment, clientMessageId }) {
     const workorderId = activeWorkorder?.workorder?.id;
     if ((!body && !attachment) || !workorderId) return false;
 
@@ -1342,7 +1342,11 @@ export function RoleRouter({ actor }) {
       const rolePath = isOfficeDetail ? "office" : "mechanic";
       await api(`/api/${rolePath}/workorders/${workorderId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ body, ...(attachment ? { attachment } : {}) }),
+        body: JSON.stringify({
+          body,
+          clientMessageId,
+          ...(attachment ? { attachment } : {}),
+        }),
       });
       await reloadActiveWorkorder();
       setMechanicAction({ busy: "", message: "" });

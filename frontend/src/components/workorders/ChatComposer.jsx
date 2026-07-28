@@ -2,6 +2,7 @@ import { useId, useRef, useState } from "react";
 import { ArrowUp, Plus, XClose } from "@untitledui/icons";
 import {
   buildChatPayload,
+  createClientMessageId,
   getImageValidationError,
   shouldSubmitChatKey,
 } from "./chat/chat-composer-behavior.js";
@@ -32,6 +33,7 @@ export function ChatComposer({
   const inputId = useId();
   const fileInputId = useId();
   const fileInputRef = useRef(null);
+  const pendingClientMessageIdRef = useRef("");
   const textareaRef = useRef(null);
   const [body, setBody] = useState("");
   const [attachment, setAttachment] = useState(null);
@@ -46,6 +48,7 @@ export function ChatComposer({
   }
 
   function removeAttachment() {
+    pendingClientMessageIdRef.current = "";
     setAttachment(null);
     setError("");
     clearFileInput();
@@ -66,6 +69,7 @@ export function ChatComposer({
     setReadingImage(true);
     try {
       const dataUrl = await readFileAsDataUrl(file);
+      pendingClientMessageIdRef.current = "";
       setAttachment({ dataUrl, fileName: file.name, mimeType: file.type });
     } catch (readError) {
       setError(readError instanceof Error ? readError.message : "The photo could not be read. Please try again.");
@@ -80,9 +84,12 @@ export function ChatComposer({
 
     setError("");
     try {
-      const result = await onSend(buildChatPayload(body, attachment));
+      const clientMessageId = pendingClientMessageIdRef.current || createClientMessageId();
+      pendingClientMessageIdRef.current = clientMessageId;
+      const result = await onSend(buildChatPayload(body, attachment, clientMessageId));
 
       if (result === false) return;
+      pendingClientMessageIdRef.current = "";
       setBody("");
       setAttachment(null);
       clearFileInput();
@@ -99,6 +106,7 @@ export function ChatComposer({
   }
 
   function updateBody(event) {
+    pendingClientMessageIdRef.current = "";
     setBody(event.target.value);
     event.target.style.height = "auto";
     event.target.style.height = `${Math.min(event.target.scrollHeight, 120)}px`;

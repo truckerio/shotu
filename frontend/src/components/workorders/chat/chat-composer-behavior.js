@@ -16,9 +16,17 @@ export function shouldSubmitChatKey(event) {
     && !event.nativeEvent?.isComposing;
 }
 
-export function buildChatPayload(body, attachment) {
+export function createClientMessageId(randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto)) {
+  if (typeof randomUUID !== "function") {
+    throw new Error("This browser cannot create a message identity. Refresh and try again.");
+  }
+  return randomUUID();
+}
+
+export function buildChatPayload(body, attachment, clientMessageId) {
   return {
     body: body.trim(),
+    clientMessageId,
     attachment: attachment
       ? {
           dataUrl: attachment.dataUrl,
