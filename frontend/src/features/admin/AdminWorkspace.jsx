@@ -36,6 +36,7 @@ import {
   ADMIN_MOBILE_DESTINATIONS,
   adminLocationTarget,
   adminMobileDestinationState,
+  initialAdminView,
 } from "./adminNavigation.js";
 import "./admin.css";
 
@@ -317,13 +318,7 @@ export function AdminWorkspace({
   onRefreshDrafts,
 }) {
   const [locations, setLocations] = useState([]);
-  const [view, setView] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("samsara")) return "settings";
-    if (params.get("adminLocation") || params.get("adminView") === "locations") return "locations";
-    if (params.get("adminView") === "settings") return "settings";
-    return "operations";
-  });
+  const [view, setView] = useState(() => initialAdminView(window.location.search));
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("work");

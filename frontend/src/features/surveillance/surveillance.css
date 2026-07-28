@@ -249,6 +249,11 @@
 }
 
 @media (max-width: 640px) {
+  .surveillance-detail-page .surveillance-batch-nav button {
+    height: 44px;
+    width: 44px;
+  }
+
   .surveillance-home {
     overflow-x: clip;
   }

@@ -4066,9 +4066,18 @@ textarea:focus {
 }
 
 @media (max-width: 700px) {
+  body {
+    min-width: 0;
+    touch-action: pan-y;
+  }
+
   .prototype {
     gap: 16px;
-    padding: 16px 16px 76px;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      12px
+      calc(76px + env(safe-area-inset-bottom));
+    width: 100%;
   }
 
   h1 {
@@ -4201,11 +4210,26 @@ textarea:focus {
     cursor: pointer;
     font-size: 13px;
     font-weight: 800;
-    min-height: 34px;
+    min-height: 44px;
   }
 
   .detail-context-bar {
     grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .office-create-nav {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+  }
+
+  .office-create-nav > button,
+  .office-create-nav .detail-create-button,
+  .office-create-nav .preview-pane-toggle {
+    min-height: 44px;
+  }
+
+  .office-create-nav > button,
+  .office-create-nav .preview-pane-toggle {
+    width: 44px;
   }
 
   .detail-context-actions {
@@ -4214,7 +4238,7 @@ textarea:focus {
 
   .mobile-preview-pane-toggle {
     border: 0;
-    height: 34px;
+    height: 44px;
     width: 100%;
   }
 
@@ -4261,6 +4285,7 @@ textarea:focus {
   }
 
   .button {
+    min-height: 44px;
     width: 100%;
   }
 
@@ -4316,8 +4341,8 @@ textarea:focus {
   }
 
   .preview-tool-button {
-    height: 38px;
-    width: 38px;
+    height: 44px;
+    width: 44px;
   }
 
   .preview-fullscreen-toolbar {
@@ -5583,13 +5608,35 @@ textarea:focus {
   }
 
   .workorder-detail-page .detail-context-bar {
+    gap: 6px;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     margin: 0;
-    padding: 8px 12px;
+    min-height: 60px;
+    padding: 7px 8px;
+  }
+
+  .workorder-detail-page .detail-context-bar > button,
+  .workorder-detail-page .detail-save-button,
+  .workorder-detail-page .preview-pane-toggle {
+    height: 44px;
+    width: 44px;
+  }
+
+  .workorder-detail-page .detail-close-workorder-button {
+    min-height: 44px;
+  }
+
+  .workorder-detail-page .detail-context-actions {
+    gap: 4px !important;
+  }
+
+  .workorder-detail-page .detail-context-actions:has(.detail-close-workorder-button) .ops-status {
+    display: none;
   }
 
   .workorder-object-summary {
-    gap: 14px;
-    padding: 16px 12px;
+    gap: 12px;
+    padding: 14px 12px;
   }
 
   .workorder-object-primary h1 {
@@ -5597,8 +5644,8 @@ textarea:focus {
   }
 
   .workorder-object-facts {
-    gap: 12px 16px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .workorder-object-facts > div,
@@ -5608,12 +5655,19 @@ textarea:focus {
     padding: 0;
   }
 
-  .workorder-object-facts > div:last-child {
-    grid-column: 1 / -1;
+  .workorder-object-facts > div:nth-child(n + 4) {
+    display: none;
+  }
+
+  .workorder-object-facts dd {
+    font-size: 13px;
+    line-height: 1.3;
+    overflow: visible;
+    white-space: normal;
   }
 
   .workorder-object-inline-detail {
-    grid-template-columns: auto minmax(0, 1fr);
+    display: none;
   }
 
   .workorder-section-nav {

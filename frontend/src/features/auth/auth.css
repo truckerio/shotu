@@ -1,4 +1,10 @@
+body:has(.auth-shell) {
+  margin: 0;
+}
+
 .auth-shell {
+  box-sizing: border-box;
+  width: 100%;
   min-height: 100dvh;
   display: grid;
   place-items: center;
@@ -12,8 +18,13 @@
 }
 
 .auth-panel {
-  width: min(100%, 360px);
-  padding: 28px 0;
+  box-sizing: border-box;
+  width: min(100%, 392px);
+  padding: 28px;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgb(16 24 40 / 10%);
 }
 
 .auth-heading {
@@ -172,13 +183,16 @@
 
 @media (max-width: 520px) {
   .auth-shell {
-    place-items: start stretch;
-    padding: 56px 20px 24px;
+    place-items: center;
+    padding: 24px 18px;
   }
 
   .auth-panel {
-    width: 100%;
+    width: min(100%, 360px);
     margin: 0 auto;
+    padding: 24px;
+    border-radius: 10px;
+    box-shadow: 0 14px 34px rgb(16 24 40 / 12%);
   }
 }
 

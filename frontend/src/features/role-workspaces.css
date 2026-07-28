@@ -93,7 +93,7 @@
     display: none;
   }
 
-  .office-mobile-filter-button {
+  .workspace-operations .office-mobile-filter-button {
     min-height: 44px;
     min-width: 44px;
     padding-inline: 12px;
@@ -227,36 +227,14 @@
 
   .workspace-operations .role-task-list .mechanic-work-open,
   .workspace-operations.office-home .mechanic-work-open.queue-variant-office {
-    min-height: 112px;
+    min-height: 0;
     padding: 12px;
-    padding-bottom: 48px;
     position: relative;
   }
 
   .workspace-operations .role-task-list .mechanic-work-open::after,
   .workspace-operations.office-home .mechanic-work-open.queue-variant-office::after {
-    align-items: center;
-    background: #f2f4f7;
-    border-radius: 6px;
-    bottom: 8px;
-    color: #344054;
-    content: attr(aria-label);
-    display: flex;
-    font-size: 14px;
-    font-weight: 700;
-    justify-content: center;
-    min-height: 36px;
-    padding-inline: 16px;
-    position: absolute;
-    right: 8px;
-  }
-
-  .workspace-operations .role-task-list-myWork .mechanic-work-open::after {
-    content: "Finish / open";
-  }
-
-  .workspace-operations .role-task-list-openWork .mechanic-work-open::after {
-    content: "Open";
+    display: none;
   }
 
   .workspace-operations .accept-work-button {

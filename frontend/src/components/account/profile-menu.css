@@ -118,6 +118,12 @@
 }
 
 @media (max-width: 600px) {
+  .profile-menu-trigger {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px;
+  }
+
   .profile-menu-identity,
   .profile-menu-trigger > svg {
     display: none;

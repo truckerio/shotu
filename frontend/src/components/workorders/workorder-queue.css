@@ -299,6 +299,10 @@
     grid-row: 4;
   }
 
+  .queue-variant-mechanic .work-row-created {
+    display: none;
+  }
+
   .queue-variant-office .work-row-location,
   .queue-variant-office .work-row-mechanic,
   .queue-variant-surveillance .work-row-location,

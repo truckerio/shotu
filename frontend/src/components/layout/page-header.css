@@ -68,6 +68,7 @@
 
   .page-header-actions .button {
     gap: 6px;
+    min-height: 44px;
     padding-inline: 11px;
     width: auto;
   }

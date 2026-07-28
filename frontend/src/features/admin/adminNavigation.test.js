@@ -4,6 +4,7 @@ import {
   ADMIN_MOBILE_DESTINATIONS,
   adminLocationTarget,
   adminMobileDestinationState,
+  initialAdminView,
 } from "./adminNavigation.js";
 
 test("phone admin navigation keeps setup destinations ahead of operations", () => {
@@ -29,4 +30,12 @@ test("location-local destination state includes active tab", () => {
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "users" }, users), true);
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "template" }, users), false);
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "rules" }, locations), true);
+});
+
+test("admin opens location setup by default while explicit destinations remain linkable", () => {
+  assert.equal(initialAdminView(""), "locations");
+  assert.equal(initialAdminView("?adminView=locations"), "locations");
+  assert.equal(initialAdminView("?adminView=operations"), "operations");
+  assert.equal(initialAdminView("?adminView=settings&settingsTab=integrations"), "settings");
+  assert.equal(initialAdminView("?samsara=connected"), "settings");
 });
