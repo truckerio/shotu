@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, LogOut01, UserCircle } from "@untitledui/icons";
+import { ChevronDown, LogOut01, User03, UserCircle } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
 import { OwlWordmark, PRODUCT_NAME } from "../brand/OwlWordmark.jsx";
 import { authClient } from "../../lib/auth-client.js";
@@ -51,8 +51,8 @@ export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false })
         <OwlWordmark
           mark={(
             <span className="profile-menu-brand-mark">
-              <UserCircle className="profile-menu-brand-icon" aria-hidden="true" />
               <span className="profile-menu-brand-letter">O</span>
+              <User03 className="profile-menu-brand-icon" aria-hidden="true" />
               <MenuTrigger>
                 <Button className="profile-menu-brand-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`} />
                 {accountMenu}
