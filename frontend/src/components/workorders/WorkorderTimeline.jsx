@@ -2,7 +2,6 @@ import { formatCreatedAt } from "../../lib/dates.js";
 import {
   meaningfulTimelineEvents,
   timelineEventDescription,
-  timelineEventStatus,
   timelineEventTitle,
 } from "./workorder-timeline-model.js";
 import "./workorder-timeline.css";
@@ -15,23 +14,18 @@ export function WorkorderTimeline({ timeline }) {
     <ol className="workorder-timeline-list">
       {meaningfulTimeline.map((event) => (
         <li key={`${event.type}-${event.id}`}>
-          {event.created_at ? (
-            <time className="workorder-timeline-date" dateTime={event.created_at}>
-              {formatCreatedAt(event.created_at)}
-            </time>
-          ) : <span className="workorder-timeline-date">Time unavailable</span>}
+          <span className="workorder-timeline-date">
+            <strong>{event.changed_by_name || "System"}</strong>
+            {event.created_at ? (
+              <time dateTime={event.created_at}>{formatCreatedAt(event.created_at)}</time>
+            ) : <span>Time unavailable</span>}
+          </span>
           <span className="workorder-timeline-marker" aria-hidden="true" />
           <div className="workorder-timeline-event">
             <div className="workorder-timeline-event-heading">
               <strong>{timelineEventTitle(event)}</strong>
-              {timelineEventStatus(event) ? (
-                <span className="workorder-timeline-status">{timelineEventStatus(event)}</span>
-              ) : null}
             </div>
             <span className="workorder-timeline-description">{timelineEventDescription(event)}</span>
-            <small className="workorder-timeline-meta">
-              <span>By {event.changed_by_name || "System"}</span>
-            </small>
           </div>
         </li>
       ))}

@@ -4,7 +4,6 @@ import {
   meaningfulTimelineEvents,
   timelineEventCount,
   timelineEventDescription,
-  timelineEventStatus,
   timelineEventTitle,
 } from "./workorder-timeline-model.js";
 
@@ -44,11 +43,32 @@ test("timeline titles and descriptions use human labels without raw arrows", () 
   assert.equal(timelineEventDescription(assignment).includes("->"), false);
 });
 
-test("status metadata keeps lifecycle state visible beside human event copy", () => {
-  assert.equal(timelineEventStatus({
-    type: "status",
-    from_status: "assigned",
-    to_status: "in_progress",
-  }), "Work started");
-  assert.equal(timelineEventStatus({ type: "assignment", action: "accepted" }), "");
+test("multi-event timeline keeps distinct operational activity readable", () => {
+  const events = [
+    { id: 1, type: "status", from_status: "created", to_status: "assigned", note: "Assigned by office." },
+    {
+      id: 2,
+      type: "assignment",
+      action: "reassigned",
+      from_mechanic_id: "mechanic-1",
+      from_mechanic_name: "Alex",
+      to_mechanic_name: "Jordan",
+    },
+    { id: 3, type: "field", field_key: "work_details_updated", new_value: "{\"fieldsChanged\":[\"diagnosis\"]}" },
+    { id: 4, type: "part", action: "requested", note: "Brake chamber requested." },
+  ];
+
+  assert.equal(timelineEventCount(events), 4);
+  assert.deepEqual(events.map(timelineEventTitle), [
+    "Created to Assigned",
+    "Mechanic reassigned",
+    "Work details updated",
+    "Part requested",
+  ]);
+  assert.deepEqual(events.map(timelineEventDescription), [
+    "Assigned by office.",
+    "Alex changed to Jordan.",
+    "Diagnosis saved.",
+    "Brake chamber requested.",
+  ]);
 });

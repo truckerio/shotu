@@ -88,11 +88,6 @@ export function timelineEventDescription(event) {
   return event.note || "Workorder updated.";
 }
 
-export function timelineEventStatus(event) {
-  if (event.type !== "status") return "";
-  return humanizeStatus(event.to_status || event.from_status);
-}
-
 export function meaningfulTimelineEvents(timeline) {
   return (timeline || []).filter((event) => event.type !== "access");
 }
