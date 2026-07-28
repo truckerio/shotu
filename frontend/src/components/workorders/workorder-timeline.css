@@ -37,7 +37,7 @@
 .workorder-timeline-list > li {
   position: relative;
   display: grid;
-  grid-template-columns: 120px 18px minmax(0, 1fr);
+  grid-template-columns: 230px 18px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
   min-width: 0;
@@ -48,15 +48,16 @@
   position: absolute;
   top: 30px;
   bottom: -12px;
-  left: 140.5px;
+  left: 250.5px;
   width: 1px;
   background: #d0d5dd;
   content: "";
 }
 
 .workorder-timeline-date {
-  display: grid;
-  gap: 1px;
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
   justify-self: end;
   max-width: 100%;
   margin-top: 1px;
@@ -68,6 +69,7 @@
   font-weight: 600;
   line-height: 1.35;
   text-align: right;
+  white-space: nowrap;
 }
 
 .workorder-timeline-date strong {
@@ -173,7 +175,10 @@
     grid-column: 2;
     justify-self: start;
     margin: 0;
+    max-width: 100%;
+    overflow: hidden;
     text-align: left;
+    text-overflow: ellipsis;
   }
 
   .workorder-timeline-marker {

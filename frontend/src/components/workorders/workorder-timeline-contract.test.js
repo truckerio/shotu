@@ -13,6 +13,7 @@ test("shared activity surface has one hierarchy and retains actor, time, status,
   assert.match(component, /event\.changed_by_name \|\| "System"/);
   assert.match(component, /workorder-timeline-date/);
   assert.match(component, /<time dateTime=\{event\.created_at\}>/);
+  assert.match(css, /\.workorder-timeline-date\s*\{[^}]*display:\s*inline-flex;[^}]*white-space:\s*nowrap;/s);
   assert.doesNotMatch(component, /workorder-timeline-status/);
   assert.doesNotMatch(component, /timelineEventStatus/);
   assert.doesNotMatch(surveillance, /detail\.timeline\?\.length/);

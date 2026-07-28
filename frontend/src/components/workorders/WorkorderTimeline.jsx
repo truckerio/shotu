@@ -16,6 +16,7 @@ export function WorkorderTimeline({ timeline }) {
         <li key={`${event.type}-${event.id}`}>
           <span className="workorder-timeline-date">
             <strong>{event.changed_by_name || "System"}</strong>
+            <span aria-hidden="true">·</span>
             {event.created_at ? (
               <time dateTime={event.created_at}>{formatCreatedAt(event.created_at)}</time>
             ) : <span>Time unavailable</span>}
