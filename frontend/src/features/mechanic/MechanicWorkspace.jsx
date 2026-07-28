@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { MobileQueueTools } from "../../components/operations/MobileQueueTools.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
@@ -128,9 +128,8 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
 
   return (
     <main className="prototype mechanic-home workspace-operations">
-      <WorkspaceHeader actor={actor} />
       <PageHeader
-        title="Workorders"
+        title={<ProfileMenu actor={actor} wordmark />}
         actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
       />
 

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { Button } from "../../components/ui/Button.jsx";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
@@ -209,9 +209,8 @@ export function OfficeWorkspace({
 
   return (
     <main className="prototype mechanic-home office-home workspace-operations">
-      <WorkspaceHeader actor={actor} />
       <PageHeader
-        title="Workorders"
+        title={<ProfileMenu actor={actor} wordmark />}
         actions={<Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
       />
 

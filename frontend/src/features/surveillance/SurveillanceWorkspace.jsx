@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle, ClipboardCheck, Clock, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { MobileQueueTools } from "../../components/operations/MobileQueueTools.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -539,8 +539,7 @@ export function SurveillanceWorkspace({ actor }) {
 
   return (
     <main className="prototype mechanic-home surveillance-home workspace-operations">
-      <WorkspaceHeader actor={actor} />
-      <PageHeader title="Workorders" />
+      <PageHeader title={<ProfileMenu actor={actor} wordmark />} />
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
           <div className="surveillance-desktop-queues">

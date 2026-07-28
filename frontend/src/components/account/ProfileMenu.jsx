@@ -20,10 +20,47 @@ function roleLabel(role) {
   return role ? `${role[0].toUpperCase()}${role.slice(1)}` : "Account";
 }
 
-export function ProfileMenu({ actor, compactOnPhone = false }) {
+export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false }) {
   async function signOut() {
     await authClient.signOut();
     window.location.replace("/");
+  }
+
+  const accountMenu = (
+    <Popover className="profile-menu-popover" placement="bottom end">
+      <Menu className="profile-menu-list" aria-label="Profile actions">
+        <MenuItem className="profile-menu-summary" textValue={actor?.name || "Profile"}>
+          <UserCircle />
+          <span>
+            <strong>{actor?.name || "User"}</strong>
+            <small>{actor?.email || roleLabel(actor?.role)}</small>
+          </span>
+        </MenuItem>
+        <Separator />
+        <MenuItem className="profile-menu-action" onAction={signOut} textValue="Sign out">
+          <LogOut01 />
+          <span>Sign out</span>
+        </MenuItem>
+      </Menu>
+    </Popover>
+  );
+
+  if (wordmark) {
+    return (
+      <div className="profile-menu profile-menu-brand">
+        <OwlWordmark
+          mark={(
+            <span className="profile-menu-brand-mark">
+              <span aria-hidden="true">O</span>
+              <MenuTrigger>
+                <Button className="profile-menu-brand-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`} />
+                {accountMenu}
+              </MenuTrigger>
+            </span>
+          )}
+        />
+      </div>
+    );
   }
 
   return (
@@ -41,22 +78,7 @@ export function ProfileMenu({ actor, compactOnPhone = false }) {
               </span>
               <ChevronDown aria-hidden="true" />
             </Button>
-            <Popover className="profile-menu-popover" placement="bottom end">
-              <Menu className="profile-menu-list" aria-label="Profile actions">
-                <MenuItem className="profile-menu-summary" textValue={actor?.name || "Profile"}>
-                  <UserCircle />
-                  <span>
-                    <strong>{actor?.name || "User"}</strong>
-                    <small>{actor?.email || roleLabel(actor?.role)}</small>
-                  </span>
-                </MenuItem>
-                <Separator />
-                <MenuItem className="profile-menu-action" onAction={signOut} textValue="Sign out">
-                  <LogOut01 />
-                  <span>Sign out</span>
-                </MenuItem>
-              </Menu>
-            </Popover>
+            {accountMenu}
           </MenuTrigger>
         )}
       />

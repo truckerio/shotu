@@ -11,11 +11,9 @@
 .owl-wordmark-mark {
   align-items: center;
   display: inline-flex;
-  height: 44px;
   justify-content: center;
-  width: 32px;
 }
 
 .owl-wordmark-suffix {
-  margin-left: -5px;
+  margin-left: 0;
 }
