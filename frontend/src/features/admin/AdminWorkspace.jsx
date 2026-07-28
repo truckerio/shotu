@@ -25,6 +25,7 @@ import {
 } from "react-aria-components";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -34,7 +35,6 @@ import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../
 import { IntegrationsSettings } from "./integrations/IntegrationsSettings.jsx";
 import {
   ADMIN_MOBILE_DESTINATIONS,
-  adminLocationTarget,
   adminMobileDestinationState,
   initialAdminView,
 } from "./adminNavigation.js";
@@ -435,17 +435,7 @@ export function AdminWorkspace({
   }
 
   function openMobileDestination(destination) {
-    if (!destination.requiresLocation) {
-      changeView(destination.view);
-      return;
-    }
-    const locationId = adminLocationTarget(selectedId, locations);
-    if (!locationId) {
-      changeView("locations");
-      return;
-    }
-    openLocation(locationId, destination.tab)
-      .catch((error) => setState((current) => ({ ...current, error: error.message })));
+    changeView(destination.view);
   }
 
   async function createLocation(event) {
@@ -713,6 +703,7 @@ export function AdminWorkspace({
             </button>
           );
         })}
+        <ProfileMenu actor={actor} mobileNav />
       </nav>
     </main>
   );

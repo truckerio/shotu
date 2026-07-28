@@ -175,7 +175,7 @@
 @media (max-width: 640px) {
   .admin-shell { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
   .admin-content { padding: 20px 14px 32px; }
-  .admin-workspace-header { padding: 12px 14px 0; }
+  .admin-workspace-header { display: none; }
   .admin-workspace-header .workspace-header-actions { display: none; }
   .admin-mobile-nav {
     align-items: stretch;
@@ -183,7 +183,7 @@
     border-top: 1px solid #d0d5dd;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     height: calc(58px + env(safe-area-inset-bottom));
     left: 0;
     padding: 4px 8px env(safe-area-inset-bottom);

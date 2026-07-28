@@ -19,14 +19,14 @@ function roleLabel(role) {
   return role ? `${role[0].toUpperCase()}${role.slice(1)}` : "Account";
 }
 
-export function ProfileMenu({ actor, compactOnPhone = false }) {
+export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false }) {
   async function signOut() {
     await authClient.signOut();
     window.location.replace("/");
   }
 
   const accountMenu = (
-    <Popover className="profile-menu-popover" placement="bottom end">
+    <Popover className="profile-menu-popover" placement={mobileNav ? "top end" : "bottom end"}>
       <Menu className="profile-menu-list" aria-label="Profile actions">
         <MenuItem className="profile-menu-summary" textValue={actor?.name || "Profile"}>
           <UserCircle />
@@ -43,6 +43,33 @@ export function ProfileMenu({ actor, compactOnPhone = false }) {
       </Menu>
     </Popover>
   );
+
+  if (mobileNav) {
+    return (
+      <div className="profile-menu profile-menu-mobile-nav">
+        <MenuTrigger>
+          <Button className="profile-menu-mobile-nav-trigger" aria-label="Open profile menu">
+            <UserCircle aria-hidden="true" />
+            <span>Profile</span>
+          </Button>
+          {accountMenu}
+        </MenuTrigger>
+      </div>
+    );
+  }
+
+  if (mobileAction) {
+    return (
+      <div className="profile-menu profile-menu-mobile-action">
+        <MenuTrigger>
+          <Button className="profile-menu-mobile-action-trigger" aria-label="Open profile menu">
+            <UserCircle aria-hidden="true" />
+          </Button>
+          {accountMenu}
+        </MenuTrigger>
+      </div>
+    );
+  }
 
   return (
     <div className={`profile-menu${compactOnPhone ? " profile-menu-with-phone-brand" : ""}`}>

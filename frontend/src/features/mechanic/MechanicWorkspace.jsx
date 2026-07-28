@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
-import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
+import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
+import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
-import { Button } from "../../components/ui/Button.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { api } from "../../lib/api.js";
@@ -128,9 +128,10 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
 
   return (
     <main className="prototype mechanic-home workspace-operations">
+      <WorkspaceHeader actor={actor} className="role-home-account-header" />
       <PageHeader
-        title={<ProfileMenu actor={actor} wordmark />}
-        actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>Create workorder</Button>}
+        title="Workorders"
+        actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={onCreateWorkorder} />}
       />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
