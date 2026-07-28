@@ -90,6 +90,40 @@ function Modal({ title, children, onClose }) {
   );
 }
 
+function userLocationIds(user, currentLocationId) {
+  const assigned = user.locationIds || user.location_ids || [];
+  return assigned.length ? assigned : currentLocationId ? [currentLocationId] : [];
+}
+
+function LocationSelector({ locations, value, onChange, requiredIds = [], disabled = false }) {
+  function toggle(locationId) {
+    if (requiredIds.includes(locationId)) return;
+    onChange(value.includes(locationId)
+      ? value.filter((id) => id !== locationId)
+      : [...value, locationId]);
+  }
+
+  return (
+    <fieldset className="admin-location-selector" disabled={disabled}>
+      <legend>Locations</legend>
+      <p>Select every location this user can access.</p>
+      <div className="admin-location-options">
+        {locations.map((location) => (
+          <label key={location.id}>
+            <input
+              type="checkbox"
+              checked={value.includes(location.id)}
+              disabled={requiredIds.includes(location.id)}
+              onChange={() => toggle(location.id)}
+            />
+            <span><strong>{location.name}</strong>{location.address ? <small>{location.address}</small> : null}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function LocationsHome({ locations, loading, onCreate, onOpen }) {
   return (
     <section className="admin-content">
@@ -143,6 +177,14 @@ function UserActionsMenu({ active, onManage, self, user }) {
         <Menu className="admin-user-menu" aria-label={`Actions for ${user.name}`}>
           <MenuItem
             className="admin-user-menu-item"
+            onAction={() => onManage("locations", user)}
+            textValue="Manage locations"
+          >
+            <MarkerPin01 />
+            <span>{user.role === "admin" ? "View location access" : "Manage locations"}</span>
+          </MenuItem>
+          <MenuItem
+            className="admin-user-menu-item"
             isDisabled={self}
             onAction={() => onManage("password", user)}
             textValue="Reset password"
@@ -193,6 +235,7 @@ function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }
               <span className="admin-role">{user.role}</span>
               <span><span className={`admin-user-status ${active ? "active" : "inactive"}`}>{active ? "Active" : "Inactive"}</span></span>
               <span className="admin-user-actions admin-user-actions-desktop">
+                <button type="button" title={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} aria-label={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} onClick={() => onManage("locations", user)}><MarkerPin01 /></button>
                 <button type="button" title={self ? "Use your profile to change your own password" : `Reset password for ${user.name}`} aria-label={`Reset password for ${user.name}`} disabled={self} onClick={() => onManage("password", user)}><Key01 /></button>
                 <button
                   type="button"
@@ -327,12 +370,14 @@ export function AdminWorkspace({
   const [modal, setModal] = useState("");
   const [locationDraft, setLocationDraft] = useState(blankLocation);
   const [inviteDraft, setInviteDraft] = useState(blankInvite);
+  const [inviteLocationIds, setInviteLocationIds] = useState([]);
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteLinkRecipient, setInviteLinkRecipient] = useState("");
   const [resendingInviteId, setResendingInviteId] = useState("");
   const inviteCreateInFlight = useRef(false);
   const inviteResendInFlight = useRef(false);
   const [userAction, setUserAction] = useState(null);
+  const [userLocationDraft, setUserLocationDraft] = useState([]);
   const [passwordDraft, setPasswordDraft] = useState(blankPassword);
   const [visiblePasswords, setVisiblePasswords] = useState(hiddenPasswords);
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
@@ -346,6 +391,10 @@ export function AdminWorkspace({
     onTakeoverDraft,
     onRefreshDrafts,
   };
+  const selectedCompanyId = detail?.location?.company_id || detail?.location?.companyId || "";
+  const companyLocations = selectedCompanyId
+    ? locations.filter((location) => (location.company_id || location.companyId) === selectedCompanyId)
+    : [];
 
   async function loadLocations() {
     const result = await api("/api/admin/locations");
@@ -413,9 +462,10 @@ export function AdminWorkspace({
     inviteCreateInFlight.current = true;
     setState((current) => ({ ...current, busy: true, error: "" }));
     try {
+      const locationIds = [...new Set([selectedId, ...inviteLocationIds].filter(Boolean))];
       const result = await api(`/api/admin/locations/${selectedId}/invitations`, {
         method: "POST",
-        body: JSON.stringify(inviteDraft),
+        body: JSON.stringify({ ...inviteDraft, locationIds }),
         timeoutMs: 15_000,
       });
       setInviteUrl(result.inviteUrl);
@@ -495,6 +545,7 @@ export function AdminWorkspace({
   function openUserAction(type, user) {
     setPasswordDraft(blankPassword);
     setVisiblePasswords(hiddenPasswords);
+    setUserLocationDraft(userLocationIds(user, selectedId));
     setUserAction({ type, user });
     setState((current) => ({ ...current, error: "", message: "" }));
   }
@@ -502,6 +553,10 @@ export function AdminWorkspace({
   async function submitUserAction(event) {
     event.preventDefault();
     if (!userAction) return;
+    if (userAction.type === "locations" && userAction.user.role !== "admin" && !userLocationDraft.length) {
+      setState((current) => ({ ...current, error: "Select at least one location." }));
+      return;
+    }
     if (userAction.type === "password") {
       if (passwordDraft.password.length < 12) {
         setState((current) => ({ ...current, error: "Password must be at least 12 characters." }));
@@ -519,7 +574,12 @@ export function AdminWorkspace({
     setState((current) => ({ ...current, busy: true, error: "", message: "" }));
     const base = `/api/admin/locations/${selectedId}/users/${userAction.user.id}`;
     try {
-      if (userAction.type === "password") {
+      if (userAction.type === "locations") {
+        await api(`/api/admin/users/${userAction.user.id}/locations`, {
+          method: "PUT",
+          body: JSON.stringify({ companyId: selectedCompanyId, locationIds: userLocationDraft }),
+        });
+      } else if (userAction.type === "password") {
         await api(`${base}/password`, {
           method: "POST",
           body: JSON.stringify({ password: passwordDraft.password }),
@@ -533,7 +593,9 @@ export function AdminWorkspace({
           body: JSON.stringify({ active: userAction.type === "activate" }),
         });
       }
-      const message = userAction.type === "password"
+      const message = userAction.type === "locations"
+        ? `Location access updated for ${userAction.user.name}.`
+        : userAction.type === "password"
         ? `Password reset for ${userAction.user.name}. Existing sessions were signed out.`
         : userAction.type === "delete"
           ? `${userAction.user.name} was deleted.`
@@ -564,19 +626,33 @@ export function AdminWorkspace({
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
       {view === "operations" ? <OperationsHome actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
       {view === "settings" ? <IntegrationsSettings /> : null}
-      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} draftQueue={draftQueue} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} policy={policy} setPolicy={setPolicy} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} onSavePolicy={savePolicy} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
+      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} draftQueue={draftQueue} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} policy={policy} setPolicy={setPolicy} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteLocationIds(selectedId ? [selectedId] : []); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} onSavePolicy={savePolicy} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
       {modal === "location" ? <Modal title="New location" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createLocation}><label><span>Name</span><input required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label><label><span>Address</span><input value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label><Button variant="primary" type="submit" disabled={state.busy}>Create location</Button></form></Modal> : null}
-      {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}>{state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}<label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option></select></label><Button variant="primary" type="submit" disabled={state.busy}>{state.busy ? "Creating" : "Create invite"}</Button></form></Modal> : null}
+      {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}>{state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}<label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option></select></label><LocationSelector locations={companyLocations} value={inviteLocationIds} onChange={setInviteLocationIds} requiredIds={selectedId ? [selectedId] : []} /><Button variant="primary" type="submit" disabled={state.busy || !inviteLocationIds.length}>{state.busy ? "Creating" : "Create invite"}</Button></form></Modal> : null}
       {modal === "inviteLink" ? <Modal title="Invite link" onClose={() => setModal("")}><div className="admin-invite-result"><p>Share this new link with <strong>{inviteLinkRecipient}</strong>. Any previous link for this invitation no longer works.</p><code>{inviteUrl}</code><Button icon={Copy01} onClick={copyInviteLink}>Copy link</Button></div></Modal> : null}
       {userAction ? (
         <Modal
-          title={userAction.type === "password" ? "Reset password" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
+          title={userAction.type === "locations" ? "Location access" : userAction.type === "password" ? "Reset password" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
           onClose={() => !state.busy && setUserAction(null)}
         >
           <form className="admin-modal-form" onSubmit={submitUserAction}>
             {state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}
-            {userAction.type === "password" ? (
+            {userAction.type === "locations" ? (
+              userAction.user.role === "admin" ? (
+                <div className="admin-inherited-access">
+                  <strong>All locations</strong>
+                  <p>Admins automatically inherit access to every current and future location.</p>
+                  <Button type="button" onClick={() => setUserAction(null)}>Done</Button>
+                </div>
+              ) : (
+                <>
+                  <p className="admin-modal-copy">Choose the locations <strong>{userAction.user.name}</strong> can access. Their company role remains unchanged.</p>
+                  <LocationSelector locations={companyLocations} value={userLocationDraft} onChange={setUserLocationDraft} />
+                  <Button variant="primary" type="submit" disabled={state.busy || !userLocationDraft.length}>{state.busy ? "Saving" : "Save location access"}</Button>
+                </>
+              )
+            ) : userAction.type === "password" ? (
               <>
                 <p className="admin-modal-copy">Set a new password for <strong>{userAction.user.name}</strong>. Their current sessions will be signed out.</p>
                 <div className="password-field-group admin-password-field-group">

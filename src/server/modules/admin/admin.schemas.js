@@ -28,6 +28,12 @@ export const createInvitationSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(320),
   role: z.enum(["mechanic", "office", "surveillance"]),
+  locationIds: z.array(z.string().uuid()).min(1).max(100).optional(),
+});
+
+export const updateManagedUserLocationsSchema = z.object({
+  companyId: z.string().uuid().optional(),
+  locationIds: z.array(z.string().uuid()).max(100).transform((ids) => [...new Set(ids)]),
 });
 
 export const acceptInvitationSchema = z.object({

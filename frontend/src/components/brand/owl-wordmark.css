@@ -42,7 +42,7 @@
   font-weight: var(--weight-bold);
   letter-spacing: 0;
   line-height: 1;
-  margin-left: 0.035em;
+  margin-left: -0.06em;
   transform: translateY(0.16em) scaleX(1.2);
   transform-origin: left center;
 }

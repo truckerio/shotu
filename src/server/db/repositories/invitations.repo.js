@@ -26,28 +26,30 @@ export async function getPendingInvitationByLocationEmail(locationId, email) {
   return result.rows[0] || null;
 }
 
-export async function createUserInvitation(input) {
+export async function createUserInvitations(inputs) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
-    await client.query(
-      `update user_invitations
-          set status = 'revoked', updated_at = now()
-        where location_id = $1
-          and lower(email) = lower($2)
-          and status = 'pending'
-          and expires_at <= now()`,
-      [input.locationId, input.email],
-    );
-    const result = await client.query(
-      `insert into user_invitations (
-         company_id, location_id, email, name, role, token_hash, invited_by_user_id, expires_at
-       ) values ($1, $2, lower($3), $4, $5, $6, $7, $8)
-       returning id, company_id, location_id, email, name, role, status, expires_at, created_at`,
-      [input.companyId, input.locationId, input.email, input.name, input.role, input.tokenHash, input.actorId, input.expiresAt],
-    );
+    const created = [];
+    for (const input of inputs) {
+      await client.query(
+        `update user_invitations
+            set status = 'revoked', updated_at = now()
+          where location_id = $1 and lower(email) = lower($2)
+            and status = 'pending' and expires_at <= now()`,
+        [input.locationId, input.email],
+      );
+      const result = await client.query(
+        `insert into user_invitations (
+           company_id, location_id, email, name, role, token_hash, invited_by_user_id, expires_at, batch_id
+         ) values ($1, $2, lower($3), $4, $5, $6, $7, $8, $9)
+         returning id, company_id, location_id, email, name, role, status, expires_at, created_at, batch_id`,
+        [input.companyId, input.locationId, input.email, input.name, input.role, input.tokenHash, input.actorId, input.expiresAt, input.batchId],
+      );
+      created.push(result.rows[0]);
+    }
     await client.query("commit");
-    return result.rows[0];
+    return created;
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;
@@ -63,20 +65,34 @@ export async function rotateUserInvitation({
   tokenHash,
   expiresAt,
 }) {
-  const result = await query(
-    `update user_invitations
-        set token_hash = $3,
-            invited_by_user_id = $4,
-            expires_at = $5,
-            updated_at = now()
-      where id = $1
-        and location_id = $2
-        and status = 'pending'
-      returning id, company_id, location_id, email, name, role,
-                status, expires_at, accepted_at, created_at`,
-    [invitationId, locationId, tokenHash, actorId, expiresAt],
-  );
-  return result.rows[0] || null;
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const selected = await client.query(
+      `select id, batch_id from user_invitations
+        where id = $1 and location_id = $2 and status = 'pending' for update`,
+      [invitationId, locationId],
+    );
+    if (!selected.rows[0]) { await client.query("rollback"); return null; }
+    const result = await client.query(
+      `update user_invitations
+          set token_hash = case
+                when id = $1 then $2
+                else md5(gen_random_uuid()::text || clock_timestamp()::text || id::text)
+              end,
+              invited_by_user_id = $3, expires_at = $4, updated_at = now()
+        where status = 'pending'
+          and (id = $1 or (batch_id is not null and batch_id = $5))
+        returning id, company_id, location_id, email, name, role,
+                  status, expires_at, accepted_at, created_at, batch_id`,
+      [invitationId, tokenHash, actorId, expiresAt, selected.rows[0].batch_id],
+    );
+    await client.query("commit");
+    return result.rows.find(({ id }) => id === invitationId) || null;
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally { client.release(); }
 }
 
 export async function getInvitationByTokenHash(tokenHash) {
@@ -136,30 +152,47 @@ export async function acceptUserInvitation({ invitationId, authUserId, username 
         [userId, invitation.company_id, invitation.role],
       );
     }
-    const locationMembership = await client.query(
-      `update user_location_memberships
-          set company_id = $3,
-              active = true,
-              updated_at = now()
-        where user_id = $1
-          and location_id = $2`,
-      [userId, invitation.location_id, invitation.company_id],
+    const groupedInvitations = await client.query(
+      `select id, location_id from user_invitations
+        where company_id = $1 and lower(email) = lower($2)
+          and (id = $3 or (batch_id is not null and batch_id = $4))
+          and status = 'pending' and expires_at > now()
+        for update`,
+      [
+        invitation.company_id,
+        invitation.email,
+        invitation.id,
+        invitation.batch_id,
+      ],
     );
-    if (!locationMembership.rowCount) {
-      await client.query(
-        `insert into user_location_memberships (user_id, location_id, company_id, active)
-         values ($1, $2, $3, true)`,
-        [userId, invitation.location_id, invitation.company_id],
+    for (const grouped of groupedInvitations.rows) {
+      const updatedLocation = await client.query(
+        `update user_location_memberships
+            set company_id = $3, active = true, updated_at = now()
+          where user_id = $1 and location_id = $2`,
+        [userId, grouped.location_id, invitation.company_id],
       );
+      if (!updatedLocation.rowCount) {
+        await client.query(
+          `insert into user_location_memberships (user_id, location_id, company_id, active)
+           values ($1, $2, $3, true)`,
+          [userId, grouped.location_id, invitation.company_id],
+        );
+      }
     }
     await client.query(
       `update user_invitations
           set status = 'accepted', accepted_at = now(), updated_at = now()
-        where id = $1`,
-      [invitation.id],
+        where id = any($1::uuid[])`,
+      [groupedInvitations.rows.map(({ id }) => id)],
     );
     await client.query("commit");
-    return { userId, username, role: invitation.role };
+    return {
+      userId,
+      username,
+      role: invitation.role,
+      locationIds: groupedInvitations.rows.map(({ location_id }) => location_id),
+    };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;

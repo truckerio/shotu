@@ -59,7 +59,14 @@ export async function listUsersByLocation(locationId) {
             company_membership.role,
             app_user.active,
             auth_user.username,
-            membership.active as membership_active, membership.created_at
+            membership.active as membership_active, membership.created_at,
+            coalesce((
+              select array_agg(other.location_id order by other.location_id)
+              from user_location_memberships other
+              where other.user_id = app_user.id
+                and other.company_id = membership.company_id
+                and other.active
+            ), array[]::uuid[]) as location_ids
        from user_location_memberships membership
        join user_company_memberships company_membership
          on company_membership.user_id = membership.user_id
@@ -68,10 +75,76 @@ export async function listUsersByLocation(locationId) {
        left join auth_user on auth_user.id = app_user.auth_user_id
       where membership.location_id = $1
         and app_user.deleted_at is null
+        and (membership.active or not app_user.active)
       order by membership.active desc, app_user.display_name`,
     [locationId],
   );
   return result.rows;
+}
+
+export async function getManagedUserByCompanies(userId, companyIds) {
+  const result = await query(
+    `select profile.id, profile.display_name as name, profile.active,
+            membership.company_id, membership.role, membership.active as company_membership_active
+       from user_profiles profile
+       join user_company_memberships membership on membership.user_id = profile.id
+      where profile.id = $1
+        and membership.company_id = any($2::uuid[])
+        and profile.deleted_at is null
+      order by membership.created_at`,
+    [userId, companyIds],
+  );
+  return result.rows;
+}
+
+export async function replaceManagedUserLocations({ userId, companyId, locationIds, actorId }) {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const membership = await client.query(
+      `select role from user_company_memberships
+        where user_id = $1 and company_id = $2 for update`,
+      [userId, companyId],
+    );
+    if (!membership.rows[0]) throw new Error("User not found.");
+    if (membership.rows[0].role === "admin") throw new Error("Admin locations are implicit.");
+
+    const valid = await client.query(
+      `select id from locations
+        where company_id = $1 and id = any($2::uuid[])`,
+      [companyId, locationIds],
+    );
+    if (valid.rowCount !== locationIds.length) throw new Error("One or more locations are invalid.");
+
+    await client.query(
+      `delete from user_location_memberships
+        where user_id = $1 and company_id = $2
+          and not (location_id = any($3::uuid[]))`,
+      [userId, companyId, locationIds],
+    );
+    if (locationIds.length) {
+      await client.query(
+        `insert into user_location_memberships (user_id, location_id, company_id, active)
+         select $1, location_id, $2, true from unnest($3::uuid[]) as location_id
+         on conflict (user_id, location_id)
+         do update set company_id = excluded.company_id, active = true, updated_at = now()`,
+        [userId, companyId, locationIds],
+      );
+    }
+    await client.query(
+      `insert into admin_user_events (
+         company_id, actor_user_id, target_user_id, action, details
+       ) values ($1, $2, $3, 'locations_updated', $4::jsonb)`,
+      [companyId, actorId, userId, JSON.stringify({ locationIds })],
+    );
+    await client.query("commit");
+    return { id: userId, locationIds };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function listMechanicsByLocations(locationIds) {

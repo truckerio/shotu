@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ClipboardCheck } from "@untitledui/icons";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
 import { OwlWordmark } from "../../components/brand/OwlWordmark.jsx";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
+import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { authClient } from "../../lib/auth-client.js";
 import "./auth.css";
@@ -24,6 +25,14 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const shellRef = useRef(null);
+
+  useFocusedFieldVisibility({
+    enabled: true,
+    containerRef: shellRef,
+    keyboardOpen,
+    margin: 12,
+  });
 
   async function submit(event) {
     event.preventDefault();
@@ -52,6 +61,7 @@ export function LoginPage() {
 
   return (
     <main
+      ref={shellRef}
       className={`auth-shell${keyboardOpen ? " auth-shell--keyboard-open" : ""}`}
       data-keyboard-open={keyboardOpen ? "true" : "false"}
       style={viewportStyle}

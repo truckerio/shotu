@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migrationUrl = new URL("../../db/migrations/003_location_admin.sql", import.meta.url);
+const locationEventsMigrationUrl = new URL("../../db/migrations/032_admin_user_location_events.sql", import.meta.url);
+const invitationBatchesMigrationUrl = new URL("../../db/migrations/033_invitation_batches.sql", import.meta.url);
 
 test("location admin migration preserves one location identity and owned settings", async () => {
   const sql = await readFile(migrationUrl, "utf8");
@@ -12,4 +14,16 @@ test("location admin migration preserves one location identity and owned setting
   assert.match(sql, /location_id uuid not null unique references locations\(id\) on delete cascade/);
   assert.match(sql, /create table if not exists user_invitations/);
   assert.match(sql, /token_hash text not null unique/);
+});
+
+test("multi-location invitations have a durable batch identity", async () => {
+  const sql = await readFile(invitationBatchesMigrationUrl, "utf8");
+  assert.match(sql, /add column if not exists batch_id uuid/);
+  assert.match(sql, /user_invitations_batch_status_idx/);
+});
+
+test("admin location assignment has a dedicated audit event", async () => {
+  const sql = await readFile(locationEventsMigrationUrl, "utf8");
+  assert.match(sql, /locations_updated/);
+  assert.match(sql, /admin_user_events_action_check/);
 });

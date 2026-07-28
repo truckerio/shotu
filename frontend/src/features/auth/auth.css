@@ -280,6 +280,27 @@ body:has(.auth-shell) {
   }
 }
 
+@media (max-height: 520px) {
+  .auth-shell {
+    align-content: start;
+    justify-items: center;
+    overflow-y: auto;
+    padding-block: 12px;
+  }
+
+  .auth-panel {
+    padding: 20px 24px;
+  }
+
+  .auth-heading {
+    margin-bottom: 18px;
+  }
+
+  .auth-form {
+    gap: 14px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-loading { animation-duration: 1400ms; }
 }

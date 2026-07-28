@@ -25,6 +25,7 @@ test("shared Owl profile mark contains the approved open ring, head, and shoulde
 test("shared Owl wordmark keeps its capital mark larger than its suffix", () => {
   assert.match(styles, /\.owl-wordmark-mark\s*\{[^}]*height:\s*1\.34em;[^}]*width:\s*1\.34em;/s);
   assert.match(styles, /\.owl-wordmark-suffix\s*\{[^}]*font-family:\s*Arial, Helvetica, sans-serif;[^}]*font-size:\s*1em;[^}]*transform:\s*translateY\(0\.16em\) scaleX\(1\.2\);/s);
+  assert.match(styles, /\.owl-wordmark-suffix\s*\{[^}]*margin-left:\s*-0\.06em;/s);
 });
 
 test("workspace header wordmark stays subordinate to the mobile primary action", () => {

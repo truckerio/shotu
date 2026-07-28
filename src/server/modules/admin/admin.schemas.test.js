@@ -6,6 +6,7 @@ import {
   createLocationSchema,
   resetManagedUserPasswordSchema,
   updateManagedUserStatusSchema,
+  updateManagedUserLocationsSchema,
   updateLocationTemplateSchema,
   updateLocationWorkorderPolicySchema,
 } from "./admin.schemas.js";
@@ -21,6 +22,41 @@ test("location input keeps the admin model compact", () => {
 test("location invites allow operating roles but never admin", () => {
   assert.equal(createInvitationSchema.parse({ name: "Sam Tech", email: "sam@example.com", role: "mechanic" }).role, "mechanic");
   assert.throws(() => createInvitationSchema.parse({ name: "Admin", email: "admin2@example.com", role: "admin" }));
+  assert.deepEqual(
+    createInvitationSchema.parse({
+      name: "Sam Tech",
+      email: "sam@example.com",
+      role: "mechanic",
+      locationIds: ["11111111-1111-4111-8111-111111111111"],
+    }).locationIds,
+    ["11111111-1111-4111-8111-111111111111"],
+  );
+});
+
+test("managed user locations are validated and de-duplicated", () => {
+  assert.deepEqual(
+    updateManagedUserLocationsSchema.parse({
+      locationIds: [
+        "11111111-1111-4111-8111-111111111111",
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
+      ],
+    }),
+    {
+      locationIds: [
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
+      ],
+    },
+  );
+  assert.equal(
+    updateManagedUserLocationsSchema.parse({
+      companyId: "33333333-3333-4333-8333-333333333333",
+      locationIds: [],
+    }).companyId,
+    "33333333-3333-4333-8333-333333333333",
+  );
+  assert.throws(() => updateManagedUserLocationsSchema.parse({ locationIds: ["not-a-location"] }));
 });
 
 test("invite acceptance requires a strong password and normalized username shape", () => {

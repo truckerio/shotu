@@ -42,7 +42,7 @@
 .admin-rule-row small { color: #667085; font-size: var(--text-secondary); line-height: 1.45; }
 .admin-rule-row input { accent-color: #1570ef; height: 20px; margin: 0; width: 20px; }
 .admin-users-table { border: 1px solid #eaecf0; border-radius: 6px; margin-top: 20px; overflow: hidden; }
-.admin-users-head, .admin-user-row { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(220px, 1fr) 130px 100px 132px; min-height: 56px; padding: 0 16px; }
+.admin-users-head, .admin-user-row { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(220px, 1fr) 130px 100px 169px; min-height: 56px; padding: 0 16px; }
 .admin-users-head { background: #f9fafb; color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); min-height: 40px; }
 .admin-user-row { border-top: 1px solid #eaecf0; }
 .admin-role { text-transform: capitalize; }
@@ -125,6 +125,21 @@
 .admin-modal > header button svg { height: 20px; width: 20px; }
 .admin-modal-form { margin-top: 8px; }
 .admin-modal-form > .button { margin-top: 20px; width: 100%; }
+.admin-location-selector { border: 0; margin: 20px 0 0; min-width: 0; padding: 0; }
+.admin-location-selector legend { color: #344054; font-size: var(--text-secondary); font-weight: var(--weight-semibold); padding: 0; }
+.admin-location-selector > p { color: #667085; font-size: var(--text-secondary); line-height: 1.4; margin: 4px 0 10px; }
+.admin-location-options { border: 1px solid #d0d5dd; border-radius: 6px; max-height: 220px; overflow-y: auto; }
+.admin-location-options label { align-items: center; cursor: pointer; display: flex; gap: 11px; margin: 0; min-height: 52px; padding: 8px 11px; }
+.admin-location-options label + label { border-top: 1px solid #eaecf0; }
+.admin-location-options label:hover { background: #f9fafb; }
+.admin-location-options input { accent-color: #1570ef; flex: 0 0 auto; height: 20px; margin: 0; width: 20px; }
+.admin-location-options label > span { display: grid; gap: 2px; min-width: 0; }
+.admin-location-options strong { color: #182230; font-size: var(--text-body); overflow-wrap: anywhere; }
+.admin-location-options small { color: #667085; font-size: var(--text-caption); overflow-wrap: anywhere; }
+.admin-inherited-access { background: #f9fafb; border: 1px solid #eaecf0; border-radius: 6px; margin-top: 18px; padding: 16px; }
+.admin-inherited-access > strong { color: #182230; }
+.admin-inherited-access p { color: #667085; line-height: 1.5; margin: 5px 0 16px; }
+.admin-inherited-access .button { width: 100%; }
 .admin-modal-copy { color: #475467; font-size: var(--text-body); line-height: 1.5; margin: 18px 0 4px; }
 .admin-password-rules { color: #667085; display: flex; flex-wrap: wrap; font-size: var(--text-secondary); gap: 8px 16px; margin-top: 10px; }
 .admin-password-rules span::before { content: "○"; margin-right: 6px; }

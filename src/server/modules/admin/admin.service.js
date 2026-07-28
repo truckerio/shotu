@@ -1,8 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { auth } from "../../auth/auth.js";
 import {
   acceptUserInvitation,
-  createUserInvitation,
+  createUserInvitations,
   getInvitationByTokenHash,
   getPendingInvitationByLocationEmail,
   listInvitationsByLocation,
@@ -22,9 +22,11 @@ import {
 import { findAuthUserByEmail, getAuthActorByAuthUserId } from "../../db/repositories/auth-users.repo.js";
 import {
   deleteManagedUser,
+  getManagedUserByCompanies,
   getManagedUser,
   listUsersByLocation,
   recordAdminUserEvent,
+  replaceManagedUserLocations,
   setManagedUserActive,
 } from "../../db/repositories/users.repo.js";
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
@@ -227,33 +229,77 @@ export async function saveAdminLocationWorkorderPolicy(context, locationId, inpu
   });
 }
 
-export async function inviteLocationUser(location, input, actorId, origin) {
-  const existing = await getPendingInvitationByLocationEmail(location.id, input.email);
-  if (existing && new Date(existing.expires_at) > new Date()) {
+export async function updateAdminUserLocations(context, actor, userId, input) {
+  if (actor.id === userId) throw invalidRequest("You cannot change your own location access.");
+  const targets = await getManagedUserByCompanies(userId, authorizedCompanyIds(context));
+  if (!targets.length) throw resourceNotFound("User");
+  const target = input.companyId
+    ? targets.find(({ company_id: companyId }) => companyId === input.companyId)
+    : targets.length === 1 ? targets[0] : null;
+  if (!target) throw invalidRequest("Select an authorized company for this user.");
+  requireCompanyAccess(context, target.company_id);
+  if (target.role === "admin") {
+    throw invalidRequest("Admins automatically have access to every company location.");
+  }
+  try {
+    return await replaceManagedUserLocations({
+      userId,
+      companyId: target.company_id,
+      locationIds: input.locationIds,
+      actorId: actor.id,
+    });
+  } catch (error) {
+    if (error?.message === "One or more locations are invalid.") throw invalidRequest(error.message);
+    throw error;
+  }
+}
+
+export async function inviteLocationUser(context, location, input, actorId, origin) {
+  const locationIds = [...new Set([location.id, ...(input.locationIds || [])])];
+  const locations = await Promise.all(locationIds.map((locationId) => authorizedLocation(context, locationId)));
+  if (locations.some((candidate) => candidate.company_id !== location.company_id)) {
+    throw invalidRequest("Every invitation location must belong to the same company.");
+  }
+  const pending = await Promise.all(
+    locationIds.map((locationId) => getPendingInvitationByLocationEmail(locationId, input.email)),
+  );
+  if (pending.some((existing) => existing && new Date(existing.expires_at) > new Date())) {
     throw invalidRequest("A pending invitation already exists for this email. Use Resend link.");
   }
 
-  const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  let invitation;
+  const batchId = randomUUID();
+  const invitations = locationIds.map((locationId) => {
+    const token = randomBytes(32).toString("base64url");
+    return {
+      input: {
+        name: input.name,
+        email: input.email,
+        role: input.role,
+        companyId: location.company_id,
+        locationId,
+        actorId,
+        tokenHash: tokenHash(token),
+        expiresAt,
+        batchId,
+      },
+      token,
+    };
+  });
+  let created;
   try {
-    invitation = await createUserInvitation({
-      ...input,
-      companyId: location.company_id,
-      locationId: location.id,
-      actorId,
-      tokenHash: tokenHash(token),
-      expiresAt,
-    });
+    created = await createUserInvitations(invitations.map(({ input: invitation }) => invitation));
   } catch (error) {
     if (error?.code === "23505") {
       throw invalidRequest("A pending invitation already exists for this email. Use Resend link.");
     }
     throw error;
   }
+  const primaryIndex = locationIds.indexOf(location.id);
   return {
-    invitation: invitationView(invitation),
-    inviteUrl: buildInvitationUrl(origin, token),
+    invitation: invitationView(created[primaryIndex]),
+    invitations: created.map(invitationView),
+    inviteUrl: buildInvitationUrl(origin, invitations[primaryIndex].token),
   };
 }
 

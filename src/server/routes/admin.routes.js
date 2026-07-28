@@ -14,6 +14,7 @@ import {
   removeAdminUser,
   resendLocationInvitation,
   resetAdminUserPassword,
+  updateAdminUserLocations,
   saveAdminTemplate,
   saveAdminLocationWorkorderPolicy,
 } from "../modules/admin/admin.service.js";
@@ -25,6 +26,7 @@ import {
   createLocationSchema,
   resetManagedUserPasswordSchema,
   updateManagedUserStatusSchema,
+  updateManagedUserLocationsSchema,
   updateLocationSchema,
   updateLocationTemplateSchema,
   updateLocationWorkorderPolicySchema,
@@ -49,6 +51,12 @@ function managedUserPath(pathname, suffix = "") {
     locationId: decodeURIComponent(match[1]),
     userId: decodeURIComponent(match[2]),
   } : null;
+}
+
+function companyManagedUserPath(pathname, suffix = "") {
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^/api/admin/users/([^/]+)${escaped}$`).exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function locationInvitationPath(pathname, suffix = "") {
@@ -150,7 +158,16 @@ export async function handleAdminApi(req, res, url, helpers) {
     const input = createInvitationSchema.parse(await readBody(req));
     const origin = invitationPublicOrigin(req);
     res.setHeader("cache-control", "no-store");
-    sendJson(res, 201, await inviteLocationUser(location.location, input, actor.id, origin));
+    sendJson(res, 201, await inviteLocationUser(requestContext, location.location, input, actor.id, origin));
+    return true;
+  }
+
+  const userLocations = companyManagedUserPath(url.pathname, "/locations");
+  if (req.method === "PUT" && userLocations) {
+    const input = updateManagedUserLocationsSchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      user: await updateAdminUserLocations(requestContext, actor, userLocations, input),
+    });
     return true;
   }
 
