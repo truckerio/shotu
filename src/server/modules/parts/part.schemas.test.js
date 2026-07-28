@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decidePartRequestSchema } from "./part.schemas.js";
+import { createPartRequestSchema, decidePartRequestSchema } from "./part.schemas.js";
 
 function decision(overrides = {}) {
   return {
@@ -59,4 +59,38 @@ test("questions and declines require feedback for the mechanic", () => {
     allocations: [],
     reason: "Wrong application.",
   })).success, true);
+});
+
+test("part quantities support measured decimals and default legacy payloads to each", () => {
+  assert.equal(createPartRequestSchema.parse({
+    query: "Oil filter",
+    quantity: 2,
+  }).uomCode, "ea");
+
+  assert.equal(createPartRequestSchema.parse({
+    query: "Engine oil",
+    quantity: 2.5,
+    uomCode: "gal",
+  }).quantity, 2.5);
+
+  assert.equal(createPartRequestSchema.safeParse({
+    query: "Oil filters",
+    quantity: 2.5,
+    uomCode: "ea",
+  }).success, false);
+});
+
+test("approved allocations use the same unit as the request", () => {
+  const result = decidePartRequestSchema.safeParse(decision({
+    quantity: 2.5,
+    uomCode: "gal",
+    allocations: [{
+      sourceType: "inventory",
+      status: "reserved",
+      quantity: 2.5,
+      uomCode: "l",
+    }],
+  }));
+
+  assert.equal(result.success, false);
 });

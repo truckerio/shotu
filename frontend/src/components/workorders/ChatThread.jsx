@@ -1,6 +1,11 @@
+import { useLayoutEffect, useRef } from "react";
 import { formatChatTime } from "../../lib/dates.js";
 import { shouldRenderMessageReceipt } from "../../lib/chat-receipts.js";
 import { visibleConversationMessages } from "./chat-messages.js";
+import {
+  isChatNearBottom,
+  nextChatScrollTop,
+} from "./chat/chat-composer-behavior.js";
 import { MessageReceipt } from "./chat/MessageReceipt.jsx";
 import "./chat/chat.css";
 
@@ -24,15 +29,49 @@ function getImageAttachments(message) {
     ));
 }
 
-export function ChatThread({ messages, currentRole = "mechanic", currentUserId = "", empty = "No messages yet." }) {
+export function ChatThread({
+  messages,
+  currentRole = "mechanic",
+  currentUserId = "",
+  empty = "No messages yet.",
+  keyboardOpen = false,
+  viewportHeight = 0,
+}) {
   const visibleMessages = visibleConversationMessages(messages || []);
+  const threadRef = useRef(null);
+  const nearBottomRef = useRef(true);
+  const scrollTopRef = useRef(0);
+  const latestMessageId = visibleMessages.at(-1)?.id || "";
+
+  useLayoutEffect(() => {
+    const thread = threadRef.current;
+    if (!thread) return;
+
+    thread.scrollTop = nextChatScrollTop({
+      wasNearBottom: nearBottomRef.current,
+      previousScrollTop: scrollTopRef.current,
+      scrollHeight: thread.scrollHeight,
+      clientHeight: thread.clientHeight,
+    });
+    scrollTopRef.current = thread.scrollTop;
+    nearBottomRef.current = isChatNearBottom(thread);
+  }, [keyboardOpen, latestMessageId, viewportHeight]);
+
+  function trackScroll(event) {
+    scrollTopRef.current = event.currentTarget.scrollTop;
+    nearBottomRef.current = isChatNearBottom(event.currentTarget);
+  }
+
   return (
     <div
+      ref={threadRef}
       className={`chat-thread ${visibleMessages.length ? "" : "is-empty"}`.trim()}
       aria-label="Conversation"
       aria-live="polite"
+      aria-relevant="additions text"
       role="log"
       tabIndex={0}
+      onScroll={trackScroll}
     >
       {visibleMessages.length ? visibleMessages.map((message) => {
         const mine = currentUserId

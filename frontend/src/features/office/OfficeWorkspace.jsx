@@ -211,7 +211,7 @@ export function OfficeWorkspace({
     <main className="prototype mechanic-home office-home workspace-operations">
       <PageHeader
         title={<ProfileMenu actor={actor} wordmark />}
-        actions={<Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
+        actions={<Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>Create workorder</Button>}
       />
 
       <section className={`office-layout${activeTab === "drafts" ? " is-drafts" : ""}`}>

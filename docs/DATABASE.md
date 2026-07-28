@@ -35,7 +35,7 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Open/read audit | `workorder_access_events`, `workorder_read_state` | workorder repositories |
 | Chat | `chat_messages`, `chat_message_attachments` | `repositories/chat.repo.js` |
 | Attention | `workorder_attention_state`, `workorder_attention_events` | `repositories/workorder-attention.repo.js` |
-| Parts and stock | catalog, inventory, request, allocation tables | `repositories/part-requests.repo.js` |
+| Parts and stock | catalog, inventory, request, allocation, and UoM tables | `repositories/part-requests.repo.js` |
 | Odoo handoff | `odoo_entry_status` | workorder repository and surveillance service |
 | Provider connection | `integration_accounts` | `repositories/integrations.repo.js` |
 | Provider sync history | `integration_sync_runs` | integration repository |
@@ -91,6 +91,16 @@ Mechanic ownership comes only from `workorder_mechanic_assignments`:
 - business actions also append `workorder_assignment_events`.
 
 `operational_workorders.form_data` is a printable snapshot. Typed columns and normalized child tables remain operational truth.
+
+Parts and inventory quantities use `numeric`, never floating point. A durable
+quantity always has a `uom_code` referencing `units_of_measure`. Existing
+unit-less records are interpreted as `ea`. Universal conversions are limited
+to compatible measured categories; product packaging conversions belong to
+`part_uom_conversions`. Inventory identity includes company, location,
+normalized part number, and unit so the same part can have separate `ea`,
+`case`, or measured balances without overwriting another row. Database triggers
+enforce whole-number balances for count and packaging units, including direct
+imports that bypass application schemas.
 
 ## Integration Rules
 
@@ -155,6 +165,11 @@ erDiagram
     CHAT_MESSAGES ||--o| CHAT_MESSAGE_ATTACHMENTS : attaches
     PARTS_CATALOG o|--o{ INVENTORY_ITEMS : identifies
     PARTS_CATALOG o|--o{ WORKORDER_PART_REQUESTS : identifies
+    PARTS_CATALOG ||--o{ PART_UOM_CONVERSIONS : converts
+    UNITS_OF_MEASURE ||--o{ PART_UOM_CONVERSIONS : maps
+    UNITS_OF_MEASURE ||--o{ INVENTORY_ITEMS : measures
+    UNITS_OF_MEASURE ||--o{ WORKORDER_PART_REQUESTS : measures
+    UNITS_OF_MEASURE ||--o{ PART_ALLOCATIONS : measures
     WORKORDER_PART_REQUESTS ||--o{ PART_ALLOCATIONS : sources
     INVENTORY_ITEMS o|--o{ PART_ALLOCATIONS : fulfills
 

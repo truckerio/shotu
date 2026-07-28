@@ -8,6 +8,7 @@ import {
   MechanicMultiSelect,
   OperationalForm,
   OptionalSection,
+  QuantityUnitInput,
   UnitSummary,
 } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
@@ -22,10 +23,14 @@ export function CreateWorkorderForm({
   canAssign = true,
   errors,
   errorFocusKey,
+  errorFocusReady = true,
   form,
   locations,
   mapsConfig,
   message,
+  mobileSection = "work",
+  mobileScrollRef,
+  onErrorFocusTarget,
   onAddPart,
   onAssignmentChange,
   onFieldChange,
@@ -39,7 +44,6 @@ export function CreateWorkorderForm({
   vehicleLookup,
 }) {
   const [unitDetailsOpen, setUnitDetailsOpen] = useState(false);
-  const [partsOpen, setPartsOpen] = useState(false);
   const locationOptions = locations || [];
   const mechanics = assignment?.mechanics || [];
   const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
@@ -51,8 +55,10 @@ export function CreateWorkorderForm({
 
   return (
     <OperationalForm
+      ref={mobileScrollRef}
       id={CREATE_WORKORDER_FORM_ID}
       className="create-workorder-form"
+      data-mobile-section={mobileSection}
       busy={busy}
       onSubmit={onSubmit}
       noValidate
@@ -62,6 +68,8 @@ export function CreateWorkorderForm({
         focusFirstField
         focusKey={errorFocusKey}
         focusOnMount
+        focusReady={errorFocusReady}
+        onFocusTarget={onErrorFocusTarget}
         title="Check the workorder details"
       />
       {message ? <p className="create-workorder-form-message" role="status">{message}</p> : null}
@@ -69,7 +77,7 @@ export function CreateWorkorderForm({
       <div className="create-workorder-columns">
         <div className="create-workorder-column create-workorder-primary-column">
       <FormCard
-        className="create-workorder-card"
+        className="create-workorder-card create-workorder-section-card"
         title="Workorder"
         description="Repair location, schedule, and requested work."
       >
@@ -118,68 +126,73 @@ export function CreateWorkorderForm({
 
       {canAssign ? (
         <FormCard
-          className="create-assignment-card"
+          className="create-assignment-card create-workorder-section-card"
           title="Assignment"
-          description="Choose the mechanic team and record any parts already known."
+          description="Choose the mechanic team for this workorder."
         >
-          <FormSection title="Mechanics" description="Leave the team empty to make this work available for mechanics to accept.">
+          <div className="create-assignment-content">
             <MechanicMultiSelect
               mechanics={mechanics}
               selectedIds={assignment?.mechanicUserIds || []}
               onChange={onAssignmentChange}
               disabled={assignment?.loading}
               emptyMessage={assignment?.loading ? "Loading mechanics..." : "No active mechanics at this location."}
-              description=""
+              description="Leave the team empty to make this work available for mechanics to accept."
             />
             {!assignment?.mechanicUserIds?.length ? (
               <p className="operational-availability-note">This workorder will appear in the available queue.</p>
             ) : null}
-          </FormSection>
-
-          <OptionalSection
-            title="Known parts"
-            description="Optional. Mechanics can confirm the parts actually used later."
-            open={partsOpen}
-            onToggle={setPartsOpen}
-          >
-            <div className="operational-parts-editor">
-              {form.parts.map((part, index) => (
-                <div className="operational-part-row" key={index}>
-                  <strong>{index + 1}</strong>
-                  <input
-                    value={part.partNo}
-                    onChange={(event) => onPartChange(index, "partNo", event.target.value)}
-                    aria-label={`Part number ${index + 1}`}
-                    placeholder="Part number"
-                  />
-                  <input
-                    value={part.qty}
-                    onChange={(event) => onPartChange(index, "qty", event.target.value)}
-                    aria-label={`Quantity ${index + 1}`}
-                    placeholder="Qty"
-                    inputMode="numeric"
-                  />
-                  <input
-                    value={part.repairOrder}
-                    onChange={(event) => onPartChange(index, "repairOrder", event.target.value)}
-                    aria-label={`Repair order ${index + 1}`}
-                    placeholder="Repair order"
-                  />
-                  <button type="button" onClick={() => onRemovePart(index)} disabled={form.parts.length <= 1}>
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-            <Button type="button" variant="secondary" onClick={onAddPart}>Add part</Button>
-          </OptionalSection>
+          </div>
         </FormCard>
       ) : null}
+
+      <FormCard
+        className="create-parts-card create-workorder-section-card"
+        title="Parts"
+        description="Optional. Record parts already known before work begins."
+      >
+        <div className="create-known-parts-content">
+          {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
+          <div className="operational-parts-editor">
+            {form.parts.map((part, index) => (
+              <div className="operational-part-row has-quantity-unit" key={index}>
+                <strong>{index + 1}</strong>
+                <input
+                  value={part.partNo}
+                  onChange={(event) => onPartChange(index, "partNo", event.target.value)}
+                  aria-label={`Part number ${index + 1}`}
+                  placeholder="Part number"
+                />
+                <QuantityUnitInput
+                  id={`known-part-quantity-${index}`}
+                  quantity={part.qty}
+                  uomCode={part.uomCode}
+                  onQuantityChange={(value) => onPartChange(index, "qty", value)}
+                  onUomCodeChange={(value) => onPartChange(index, "uomCode", value)}
+                  quantityLabel={`Quantity ${index + 1}`}
+                  unitLabel={`Unit ${index + 1}`}
+                  compact
+                />
+                <input
+                  value={part.repairOrder}
+                  onChange={(event) => onPartChange(index, "repairOrder", event.target.value)}
+                  aria-label={`Repair order ${index + 1}`}
+                  placeholder="Repair order"
+                />
+                <button type="button" onClick={() => onRemovePart(index)} disabled={form.parts.length <= 1}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="secondary" onClick={onAddPart}>Add part</Button>
+        </div>
+      </FormCard>
         </div>
 
         <div className="create-workorder-column create-workorder-unit-column">
       <FormCard
-        className="create-unit-card"
+        className="create-unit-card create-workorder-section-card"
         title="Unit & customer"
         description="Select the equipment and confirm who owns or operates it."
       >
@@ -192,6 +205,7 @@ export function CreateWorkorderForm({
               aria-controls="create-vehicle-suggestions"
               aria-expanded={Boolean(vehicleLookup.results?.length)}
               autoComplete="off"
+              enterKeyHint="search"
               value={form.unitNo}
               onChange={(event) => onUnitChange(event.target.value)}
               placeholder="Unit, VIN, or license"
@@ -256,17 +270,17 @@ export function CreateWorkorderForm({
                 </select>
               </FormField>
               <FormField id="workorder-license" label="License">
-                <input value={form.licenseNo} onChange={(event) => onFieldChange("licenseNo", event.target.value)} />
+                <input enterKeyHint="next" value={form.licenseNo} onChange={(event) => onFieldChange("licenseNo", event.target.value)} />
               </FormField>
               <FormField id="workorder-mileage" label="Mileage">
-                <input inputMode="numeric" value={form.mileage} onChange={(event) => onFieldChange("mileage", event.target.value)} />
+                <input enterKeyHint="next" inputMode="numeric" value={form.mileage} onChange={(event) => onFieldChange("mileage", event.target.value)} />
               </FormField>
               <FormField id="workorder-model" label="Model">
-                <input value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} />
+                <input enterKeyHint="next" value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} />
               </FormField>
             </div>
             <FormField id="workorder-vin" label="VIN">
-              <input value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} />
+              <input enterKeyHint="done" value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} />
             </FormField>
           </OptionalSection>
         ) : null}

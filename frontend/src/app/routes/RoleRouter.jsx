@@ -691,6 +691,7 @@ export function RoleRouter({ actor }) {
       const mechanicRows = parts.map((part) => ({
         partNo: part.partNo,
         qty: part.qty,
+        uomCode: part.uomCode,
         repairOrder: part.repairOrder,
       }));
       await api(`/api/mechanic/workorders/${workorderId}/used-parts`, {

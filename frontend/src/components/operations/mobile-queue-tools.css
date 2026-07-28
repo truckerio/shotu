@@ -128,4 +128,41 @@
     width: 44px;
     z-index: 1;
   }
+
+  .mobile-queue-toolbar--keyboard-open {
+    min-height: 0;
+  }
+
+  .mobile-queue-toolbar--keyboard-open .mechanic-queue-tabs,
+  .mobile-queue-toolbar--keyboard-open > .mobile-queue-tools {
+    display: none;
+  }
+
+  body:has(.mobile-queue-toolbar[data-keyboard-open="true"]) .mobile-filter-overlay {
+    align-items: start;
+    box-sizing: border-box;
+    height: var(--mobile-queue-visual-viewport-height, 100dvh);
+    inset: var(--mobile-queue-visual-viewport-offset-top, 0px) 0 auto;
+  }
+
+  body:has(.mobile-queue-toolbar[data-keyboard-open="true"]) .mobile-filter-modal {
+    border-radius: 0;
+    max-height: 100%;
+  }
+
+  body:has(.mobile-queue-toolbar[data-keyboard-open="true"]) .mobile-filter-dialog > header,
+  body:has(.mobile-queue-toolbar[data-keyboard-open="true"]) .mobile-filter-dialog > footer {
+    display: none;
+  }
+
+  body:has(.mobile-queue-toolbar[data-keyboard-open="true"]) .mobile-filter-content .mechanic-queue-tabs {
+    display: none;
+  }
+
+  body:has(.mobile-queue-toolbar[data-keyboard-open="true"]) .mobile-filter-content {
+    gap: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-top: max(12px, env(safe-area-inset-top));
+    scroll-padding-block: 12px;
+  }
 }

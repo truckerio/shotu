@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  quantitySchema,
+  uomCodeSchema,
+  validateQuantityUnit,
+} from "../parts/quantity-uom.js";
 
 const optionalText = z.string().trim().max(500).optional().default("");
 
@@ -33,7 +38,8 @@ export const identifyPartResultSchema = z.object({
   manufacturer: z.string(),
   description: z.string(),
   category: z.string(),
-  suggestedQuantity: z.number().int().min(1).max(100),
+  suggestedQuantity: quantitySchema,
+  uomCode: uomCodeSchema,
   repairOrder: z.string(),
   fitmentStatus: z.enum(["confirmed", "possible", "unknown", "conflict"]),
   confidence: z.number().int().min(0).max(100),
@@ -44,16 +50,17 @@ export const identifyPartResultSchema = z.object({
     description: z.string(),
     reason: z.string(),
   })),
-});
+}).superRefine((value, context) => validateQuantityUnit(value, context, ["suggestedQuantity"]));
 
 export const livePriceInputSchema = z.object({
   partNumber: z.string().trim().min(2).max(200),
   manufacturer: optionalText,
   description: z.string().trim().min(2).max(500),
-  quantity: z.coerce.number().int().min(1).max(100).default(1),
+  quantity: quantitySchema.default(1),
+  uomCode: uomCodeSchema,
   vehicle: vehicleInputSchema,
   location: locationInputSchema,
-});
+}).superRefine(validateQuantityUnit);
 
 const supportedImageUrlSchema = z.string().trim().min(1).max(15_000_000).refine(
   (value) => /^https:\/\//i.test(value) || /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(value),

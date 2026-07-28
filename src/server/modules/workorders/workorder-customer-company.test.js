@@ -78,6 +78,26 @@ test("workorder schemas type and normalize customerCompanyName while preserving 
   assert.equal(updated.formData.customerCompanyName, "New Owner");
 });
 
+test("create and office snapshots enforce part quantity units", () => {
+  assert.throws(() => createWorkorderSchema.parse({
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    concern: "Invalid count quantity.",
+    formData: { parts: [{ partNo: "FILTER", qty: "1.5", uomCode: "ea" }] },
+  }), /valid quantity/i);
+  assert.throws(() => updateOfficeWorkorderSchema.parse({
+    formData: { parts: [{ partNo: "OIL", qty: "1", uomCode: "unknown" }] },
+  }), /valid unit/i);
+
+  const valid = createWorkorderSchema.parse({
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    concern: "Measured fluid quantity.",
+    formData: { parts: [{ partNo: "OIL", qty: "1.5", uomCode: "gal" }] },
+  });
+  assert.equal(valid.formData.parts[0].uomCode, "gal");
+});
+
 test("public workorder projection exposes asset owner and a canonical form snapshot", () => {
   const workorder = publicWorkorderRow({
     id: "33333333-3333-4333-8333-333333333333",

@@ -6,6 +6,7 @@ import {
   formatUsageFeedback,
   partRequestLabel,
 } from "../../modules/parts/part-feedback.js";
+import { publicQuantity, quantityLabel } from "../../modules/parts/quantity-uom.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 
 const TERMINAL_WORKORDER_STATUSES = [WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED, WORKORDER_STATUS.CANCELLED];
@@ -15,7 +16,8 @@ function publicAllocation(row) {
     id: row.id,
     sourceType: row.source_type,
     status: row.status,
-    quantity: row.quantity,
+    quantity: publicQuantity(row.quantity),
+    uomCode: row.uom_code || "ea",
     locationId: row.location_id,
     locationName: row.location_name || "",
     inventoryItemId: row.inventory_item_id,
@@ -34,9 +36,10 @@ function publicInventory(row) {
     locationId: row.location_id,
     locationName: row.location_name || "",
     partNumber: row.part_number,
-    quantityOnHand: row.quantity_on_hand,
-    quantityReserved: row.quantity_reserved,
-    quantityAvailable: row.quantity_on_hand - row.quantity_reserved,
+    quantityOnHand: publicQuantity(row.quantity_on_hand),
+    quantityReserved: publicQuantity(row.quantity_reserved),
+    quantityAvailable: publicQuantity(row.quantity_on_hand) - publicQuantity(row.quantity_reserved),
+    uomCode: row.uom_code || "ea",
     binLocation: row.bin_location,
     updatedAt: row.updated_at,
   };
@@ -53,7 +56,8 @@ function publicRequest(row) {
     manufacturer: row.manufacturer,
     description: row.description,
     category: row.category,
-    quantity: row.quantity,
+    quantity: publicQuantity(row.quantity),
+    uomCode: row.uom_code || "ea",
     repairOrder: row.repair_order,
     approvalStatus: row.approval_status,
     fitmentStatus: row.fitment_status,
@@ -96,6 +100,7 @@ export async function listWorkorderPartRequests(workorderId) {
             left join locations l on l.id = ii.location_id
             where ii.company_id = wo.company_id
               and ii.normalized_part_number = pr.normalized_part_number
+              and ii.uom_code = pr.uom_code
               and pr.normalized_part_number <> ''
           ) inventory_row
         ), '[]'::jsonb) as inventory
@@ -169,11 +174,11 @@ export async function createPartRequest(workorderId, input) {
       `
         insert into workorder_part_requests (
           workorder_id, requested_by_user_id, raw_query, part_number, normalized_part_number,
-          manufacturer, description, category, quantity, repair_order, fitment_status,
+          manufacturer, description, category, quantity, uom_code, repair_order, fitment_status,
           fitment_notes, resume_workorder_status, source_chat_message_id,
           source_attachment_id, raw_context
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
         returning id
       `,
       [
@@ -186,6 +191,7 @@ export async function createPartRequest(workorderId, input) {
         input.description || input.query,
         input.category || "",
         input.quantity,
+        input.uomCode || "ea",
         input.repairOrder || "",
         input.fitmentStatus || "unknown",
         input.fitmentNotes || "",
@@ -201,9 +207,9 @@ export async function createPartRequest(workorderId, input) {
       partRequestId: requestId,
       eventType: "submitted",
       actorUserId: input.mechanicUserId,
-      note: `Requested ${input.quantity} x ${partNumber || input.description || input.query}.`,
+      note: `Requested ${quantityLabel(input.quantity, input.uomCode)} ${partNumber || input.description || input.query}.`,
     });
-    await addSystemMessage(client, workorderId, `Part request submitted: ${input.quantity} x ${partNumber || input.description || input.query}.`);
+    await addSystemMessage(client, workorderId, `Part request submitted: ${quantityLabel(input.quantity, input.uomCode)} ${partNumber || input.description || input.query}.`);
     await setWorkorderStatus(client, {
       workorderId,
       fromStatus: workorder.status,
@@ -236,6 +242,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       description: input.description || input.query,
       category: input.category || "",
       quantity: input.quantity,
+      uomCode: input.uomCode || "ea",
       repairOrder: input.repairOrder || "",
     };
     const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values, input.query);
@@ -244,9 +251,9 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
         insert into workorder_part_requests (
           workorder_id, requested_by_user_id, catalog_part_id, raw_query, part_number,
           normalized_part_number, manufacturer, description, category, quantity,
-          repair_order, approval_status, fitment_status, fitment_notes,
+          uom_code, repair_order, approval_status, fitment_status, fitment_notes,
           approved_by_user_id, approved_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'approved', $12, $13, $2, now())
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'approved', $13, $14, $2, now())
         returning id
       `,
       [
@@ -260,13 +267,19 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
         values.description,
         values.category,
         values.quantity,
+        values.uomCode,
         values.repairOrder,
         input.fitmentStatus || "unknown",
         input.fitmentNotes || "",
       ]
     );
     const requestId = inserted.rows[0].id;
-    const allocations = input.allocations.length ? input.allocations : [{ sourceType: "unknown", status: "proposed", quantity: values.quantity }];
+    const allocations = input.allocations.length ? input.allocations : [{
+      sourceType: "unknown",
+      status: "proposed",
+      quantity: values.quantity,
+      uomCode: values.uomCode,
+    }];
     for (const allocation of allocations) {
       await createAllocation(client, {
         requestId,
@@ -283,10 +296,10 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       partRequestId: requestId,
       eventType: "office_added",
       actorUserId,
-      note: `Office added ${values.quantity} x ${label}.`,
+      note: `Office added ${quantityLabel(values.quantity, values.uomCode)} ${label}.`,
       metadata: { allocations: allocations.length, fitmentStatus: input.fitmentStatus },
     });
-    await addSystemMessage(client, workorderId, `Office added approved part: ${values.quantity} x ${label}.`);
+    await addSystemMessage(client, workorderId, `Office added approved part: ${quantityLabel(values.quantity, values.uomCode)} ${label}.`);
     await client.query("commit");
     return (await listWorkorderPartRequests(workorderId)).find((request) => request.id === requestId);
   } catch (error) {
@@ -312,8 +325,9 @@ async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
   const result = await client.query(
     `
       insert into parts_catalog (
-        company_id, normalized_part_number, part_number, manufacturer, description, category, repair_template, aliases
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+        company_id, normalized_part_number, part_number, manufacturer, description, category,
+        repair_template, aliases, uom_code
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
       on conflict (company_id, normalized_part_number) do update set
         part_number = excluded.part_number,
         manufacturer = excluded.manufacturer,
@@ -339,23 +353,56 @@ async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
       values.category,
       values.repairOrder,
       JSON.stringify(aliases),
+      values.uomCode || "ea",
     ]
   );
   return result.rows[0].id;
 }
 
 async function createAllocation(client, { requestId, workorder, actorUserId, allocation, normalizedPartNumber }) {
-  let inventoryItemId = allocation.inventoryItemId || null;
-  if (allocation.sourceType === "inventory" && !inventoryItemId && normalizedPartNumber) {
-    const match = await client.query(
-      `select id from inventory_items
-       where company_id = $1 and normalized_part_number = $2
-         and ($3::uuid is null or location_id = $3)
-       order by case when location_id = $3 then 0 else 1 end, updated_at desc
-       limit 1 for update`,
-      [workorder.company_id, normalizedPartNumber, allocation.locationId || workorder.location_id]
-    );
-    inventoryItemId = match.rows[0]?.id || null;
+  let inventoryItemId = null;
+  let allocationLocationId = allocation.locationId || workorder.location_id || null;
+  if (allocation.sourceType === "inventory") {
+    const requestedLocationId = allocation.locationId || null;
+    const match = allocation.inventoryItemId
+      ? await client.query(
+        `select id, location_id
+         from inventory_items
+         where id = $1
+           and company_id = $2
+           and normalized_part_number = $3
+           and uom_code = $4
+           and ($5::uuid is null or location_id = $5)
+         for update`,
+        [
+          allocation.inventoryItemId,
+          workorder.company_id,
+          normalizedPartNumber,
+          allocation.uomCode || "ea",
+          requestedLocationId,
+        ],
+      )
+      : await client.query(
+        `select id, location_id
+         from inventory_items
+         where company_id = $1
+           and normalized_part_number = $2
+           and uom_code = $4
+           and ($3::uuid is null or location_id = $3)
+         order by case when location_id = $3 then 0 else 1 end, updated_at desc
+         limit 1 for update`,
+        [
+          workorder.company_id,
+          normalizedPartNumber,
+          allocation.locationId || workorder.location_id,
+          allocation.uomCode || "ea",
+        ],
+      );
+    if (!match.rows[0]) {
+      throw new Error("Selected inventory does not match this company, part, location, and unit.");
+    }
+    inventoryItemId = match.rows[0].id;
+    allocationLocationId = match.rows[0].location_id;
   }
   if (inventoryItemId && allocation.sourceType === "inventory" && allocation.status === "reserved") {
     const reserved = await client.query(
@@ -371,21 +418,22 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
     `
       insert into part_allocations (
         part_request_id, source_type, status, quantity, location_id, inventory_item_id,
-        vendor, source_reference, unit_price, quote_url, created_by_user_id
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        vendor, source_reference, unit_price, quote_url, created_by_user_id, uom_code
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     `,
     [
       requestId,
       allocation.sourceType,
       allocation.status,
       allocation.quantity,
-      allocation.locationId || workorder.location_id || null,
+      allocationLocationId,
       inventoryItemId,
       allocation.vendor || "",
       allocation.sourceReference || "",
       allocation.unitPrice ?? null,
       allocation.quoteUrl || "",
       actorUserId || null,
+      allocation.uomCode || "ea",
     ]
   );
 }
@@ -398,6 +446,7 @@ async function appendOfficeAddedPart(client, workorderId, values) {
     {
       partNo: values.partNumber,
       qty: String(values.quantity),
+      uomCode: values.uomCode || "ea",
       repairOrder: values.repairOrder,
     },
   ];
@@ -459,6 +508,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       description: input.description || request.description,
       category: input.category || request.category,
       quantity: input.quantity,
+      uomCode: input.uomCode || request.uom_code || "ea",
       repairOrder: input.repairOrder || request.repair_order,
     };
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
@@ -474,13 +524,14 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
           description = $6,
           category = $7,
           quantity = $8,
-          repair_order = $9,
-          approval_status = $10,
-          fitment_status = $11,
-          fitment_notes = $12,
-          approved_by_user_id = case when $10 = 'approved' then $13::uuid else null end,
-          approved_at = case when $10 = 'approved' then now() else null end,
-          decision_reason = $14,
+          uom_code = $9,
+          repair_order = $10,
+          approval_status = $11,
+          fitment_status = $12,
+          fitment_notes = $13,
+          approved_by_user_id = case when $11 = 'approved' then $14::uuid else null end,
+          approved_at = case when $11 = 'approved' then now() else null end,
+          decision_reason = $15,
           updated_at = now()
         where id = $1
       `,
@@ -493,6 +544,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
         values.description,
         values.category,
         values.quantity,
+        values.uomCode,
         values.repairOrder,
         input.decision,
         input.fitmentStatus,
@@ -502,7 +554,12 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       ]
     );
     if (input.decision === PART_APPROVAL_STATUS.APPROVED) {
-      const allocations = input.allocations.length ? input.allocations : [{ sourceType: "unknown", status: "proposed", quantity: values.quantity }];
+      const allocations = input.allocations.length ? input.allocations : [{
+        sourceType: "unknown",
+        status: "proposed",
+        quantity: values.quantity,
+        uomCode: values.uomCode,
+      }];
       for (const allocation of allocations) {
         await createAllocation(client, {
           requestId,
@@ -521,11 +578,17 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       eventType,
       actorUserId,
       note: input.reason || `Part request ${eventType}: ${label}.`,
-      metadata: { allocations: input.allocations.length, fitmentStatus: input.fitmentStatus },
+      metadata: {
+        allocations: input.allocations.length,
+        fitmentStatus: input.fitmentStatus,
+        quantity: values.quantity,
+        uomCode: values.uomCode,
+      },
     });
     await addSystemMessage(client, workorderId, formatPartDecisionFeedback({
       decision: input.decision,
       quantity: values.quantity,
+      uomCode: values.uomCode,
       label,
       reason: input.reason,
       allocations: input.allocations,
@@ -586,10 +649,17 @@ export async function updatePartAllocation(workorderId, requestId, allocationId,
       eventType: "allocation_updated",
       actorUserId,
       note: input.note || `${allocation.source_type} allocation changed from ${allocation.status} to ${input.status}.`,
-      metadata: { allocationId, from: allocation.status, to: input.status },
+      metadata: {
+        allocationId,
+        from: allocation.status,
+        to: input.status,
+        quantity: publicQuantity(allocation.quantity),
+        uomCode: allocation.uom_code || "ea",
+      },
     });
     await addSystemMessage(client, workorderId, formatAllocationFeedback({
       quantity: allocation.quantity,
+      uomCode: allocation.uom_code,
       label: partRequestLabel(allocation),
       sourceType: allocation.source_type,
       status: input.status,
@@ -635,10 +705,16 @@ export async function updatePartUsage(workorderId, requestId, input) {
       eventType: "usage_updated",
       actorUserId: input.mechanicUserId,
       note: input.note || `Part usage changed from ${request.usage_status} to ${input.usageStatus}.`,
-      metadata: { from: request.usage_status, to: input.usageStatus },
+      metadata: {
+        from: request.usage_status,
+        to: input.usageStatus,
+        quantity: publicQuantity(request.quantity),
+        uomCode: request.uom_code || "ea",
+      },
     });
     await addSystemMessage(client, workorderId, formatUsageFeedback({
       quantity: request.quantity,
+      uomCode: request.uom_code,
       label: partRequestLabel(request),
       usageStatus: input.usageStatus,
       note: input.note,

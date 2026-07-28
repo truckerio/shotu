@@ -1,5 +1,6 @@
 import { partsHelperConfig } from "../parts-helper.config.js";
 import { identifyPartResultSchema, livePriceModelResultSchema } from "../parts-helper.schemas.js";
+import { MAX_QUANTITY, UNITS_OF_MEASURE } from "../../../../../shared/units-of-measure.js";
 
 export class PartsHelperProviderError extends Error {
   constructor(message, statusCode = 502) {
@@ -12,14 +13,15 @@ export class PartsHelperProviderError extends Error {
 const identificationJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["status", "normalizedPartNumber", "manufacturer", "description", "category", "suggestedQuantity", "repairOrder", "fitmentStatus", "confidence", "evidenceSummary", "cautions", "alternatives"],
+  required: ["status", "normalizedPartNumber", "manufacturer", "description", "category", "suggestedQuantity", "uomCode", "repairOrder", "fitmentStatus", "confidence", "evidenceSummary", "cautions", "alternatives"],
   properties: {
     status: { type: "string", enum: ["matched", "ambiguous", "not_found"] },
     normalizedPartNumber: { type: "string" },
     manufacturer: { type: "string" },
     description: { type: "string" },
     category: { type: "string" },
-    suggestedQuantity: { type: "integer", minimum: 1, maximum: 100 },
+    suggestedQuantity: { type: "number", exclusiveMinimum: 0, maximum: MAX_QUANTITY, multipleOf: 0.001 },
+    uomCode: { type: "string", enum: UNITS_OF_MEASURE.map((unit) => unit.code) },
     repairOrder: { type: "string" },
     fitmentStatus: { type: "string", enum: ["confirmed", "possible", "unknown", "conflict"] },
     confidence: { type: "integer", minimum: 0, maximum: 100 },
@@ -163,6 +165,8 @@ export async function identifyPartWithOpenAI(input, truckContext, options = {}) 
     "Use engineSerial as stronger fitment context than truck year/model. Search the engine serial and engine family explicitly.",
     "Set fitment confirmed only when manufacturer or OEM evidence explicitly supports the selected engine, engine serial, or VIN. Retailer model-only claims are possible, not confirmed.",
     "If an exact part number cannot be proven, return ambiguous and include source-supported candidate part numbers in alternatives instead of guessing one.",
+    "Choose uomCode from the supplied schema. Use count/packaging for discrete parts, liquid volume for fluids, mass for refrigerant sold by weight, gas volume for measured compressed gas, and cylinder only for a whole container.",
+    "Use at most three decimal places for measured quantities and whole numbers for count or packaging quantities.",
     "Repair order is a short editable recommended instruction, not a claim work was completed.",
     `Mechanic request: ${input.query}`,
     `Selected vehicle: ${JSON.stringify(input.vehicle)}`,
@@ -187,6 +191,8 @@ export async function identifyOfficePartRequestWithOpenAI(input, truckContext, o
     "If photo text is unreadable or evidence conflicts, return ambiguous or not_found.",
     "Set fitment confirmed only when manufacturer or OEM evidence explicitly supports the selected engine, engine serial, or VIN. Retailer model-only claims are possible, not confirmed.",
     "If an exact part number cannot be proven, return ambiguous and include source-supported candidate part numbers in alternatives instead of guessing one.",
+    "Choose uomCode from the supplied schema. Use count/packaging for discrete parts, liquid volume for fluids, mass for refrigerant sold by weight, gas volume for measured compressed gas, and cylinder only for a whole container.",
+    "Use at most three decimal places for measured quantities and whole numbers for count or packaging quantities.",
     "Repair order is a short editable recommended instruction, not a claim work was completed.",
     `Mechanic message: ${input.message || "No text supplied; identify photo."}`,
     `Selected vehicle: ${JSON.stringify(input.vehicle)}`,
@@ -217,7 +223,7 @@ export async function findLivePricesWithOpenAI(input, truckContext, options = {}
     "Keep new, remanufactured, and used conditions distinct.",
     "For each listing, set fitment confirmed only when manufacturer or OEM evidence explicitly supports the selected engine, engine serial, or VIN. Retailer model-only claims are possible, not confirmed.",
     "Prefer vendors serving supplied purchasing location. Shipping may be null when not visible.",
-    `Part: ${JSON.stringify({ partNumber: input.partNumber, manufacturer: input.manufacturer, description: input.description, quantity: input.quantity })}`,
+    `Part: ${JSON.stringify({ partNumber: input.partNumber, manufacturer: input.manufacturer, description: input.description, quantity: input.quantity, uomCode: input.uomCode })}`,
     `Vehicle: ${JSON.stringify(input.vehicle)}`,
     `Location: ${JSON.stringify(input.location)}`,
     `Hugging Face vehicle context: ${JSON.stringify(truckContext)}`,

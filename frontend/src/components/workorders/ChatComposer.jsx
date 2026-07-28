@@ -178,6 +178,7 @@ export function ChatComposer({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={busy}
+          enterKeyHint="send"
         />
         <button
           className="chat-send-button"

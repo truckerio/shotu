@@ -1,8 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { findLivePartPrices, identifyPart, resolveOfficePartRequest } from "./parts-helper.service.js";
+import { identifyPartResultSchema } from "./parts-helper.schemas.js";
 import { requireSupportedTruck, supportedTruckFamily, UnsupportedTruckError } from "./supported-trucks.js";
 import { identifyPartWithOpenAI, PartsHelperProviderError } from "./providers/openai.provider.js";
+
+test("AI quantity suggestions respect the selected unit", () => {
+  const baseResult = {
+    status: "matched",
+    normalizedPartNumber: "TEST",
+    manufacturer: "Test",
+    description: "Test part",
+    category: "test",
+    repairOrder: "Install test part.",
+    fitmentStatus: "possible",
+    confidence: 80,
+    evidenceSummary: "Test result.",
+    cautions: [],
+    alternatives: [],
+  };
+
+  assert.equal(identifyPartResultSchema.safeParse({
+    ...baseResult,
+    suggestedQuantity: 1.5,
+    uomCode: "ea",
+  }).success, false);
+  assert.equal(identifyPartResultSchema.safeParse({
+    ...baseResult,
+    suggestedQuantity: 1.5,
+    uomCode: "gal",
+  }).success, true);
+});
 
 test("supported truck scope stays narrow", () => {
   assert.equal(supportedTruckFamily({ make: "Volvo", model: "VNL" }), "volvo");
@@ -57,6 +85,7 @@ test("identification uses company catalog without calling AI", async () => {
       manufacturer: "Fleetguard",
       description: "Engine oil filter",
       category: "lube_filter",
+      uomCode: "case",
       repairOrder: "Replace engine oil filter.",
     }),
     identifyWithOpenAI: async () => {
@@ -68,6 +97,7 @@ test("identification uses company catalog without calling AI", async () => {
   assert.equal(result.resolutionSource, "company_catalog");
   assert.equal(result.experimental, false);
   assert.equal(result.part.description, "Engine oil filter");
+  assert.equal(result.part.uomCode, "case");
   assert.equal(aiCalled, false);
 });
 
@@ -198,6 +228,8 @@ test("OpenAI provider requires live web search and structured output", async () 
   assert.equal(requestBody.tools[0].external_web_access, true);
   assert.equal(requestBody.text.format.type, "json_schema");
   assert.equal(requestBody.text.format.strict, true);
+  assert.ok(requestBody.text.format.schema.required.includes("uomCode"));
+  assert.ok(requestBody.text.format.schema.properties.uomCode.enum.includes("gal"));
 });
 
 test("OpenAI provider fails closed without server key", async () => {

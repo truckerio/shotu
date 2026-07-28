@@ -9,6 +9,7 @@ import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDeta
 import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
+import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { workDateRangeLabel, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
@@ -112,6 +113,7 @@ export function WorkorderDetailPage({
   vehicleMileage,
   vehicleModelText,
 }) {
+  const viewport = useVisualViewport();
   const visibleDetailSections = useMemo(
     () => (isPhone
       ? buildCompactPhoneDetailSections(detailSections, isMechanicDetail ? "mechanic" : "office")
@@ -128,7 +130,13 @@ export function WorkorderDetailPage({
   });
   const workorderChatContent = (
     <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className="chat-content">
-      <ChatThread messages={conversationMessages} currentRole={isOfficeDetail ? "office" : "mechanic"} currentUserId={actor.id} />
+      <ChatThread
+        messages={conversationMessages}
+        currentRole={isOfficeDetail ? "office" : "mechanic"}
+        currentUserId={actor.id}
+        keyboardOpen={viewport.keyboardOpen}
+        viewportHeight={viewport.viewportHeight}
+      />
       <ChatComposer
         onSend={sendWorkorderChat}
         disabled={isMechanicDetail && !activeWorkorder.allowedActions.sendMessage}
@@ -144,7 +152,15 @@ export function WorkorderDetailPage({
   );
 
   return (
-    <main className={`prototype workorder-detail-page ${isMechanicDetail ? "mechanic-detail-page" : ""}`.trim()}>
+    <main
+      className={`prototype workorder-detail-page ${isMechanicDetail ? "mechanic-detail-page" : ""} ${viewport.keyboardOpen ? "is-keyboard-open" : ""}`.trim()}
+      data-keyboard-open={viewport.keyboardOpen ? "true" : "false"}
+      data-detail-section={detailSection}
+      style={{
+        "--workorder-visual-viewport-height": viewport.viewportHeight ? `${viewport.viewportHeight}px` : "100dvh",
+        "--workorder-visual-viewport-offset-top": `${viewport.viewportOffsetTop}px`,
+      }}
+    >
       <style>{workorderTemplateStyles}</style>
       <BrowserPrintDocument payload={browserPrintPayload} />
       <WorkorderDetailLayout detail previewOpen={!isPhone && showEmbeddedPreview}>

@@ -110,6 +110,7 @@ export async function processMechanicChatMessage(workorderId, input, dependencie
     description: identifiedPart?.description || classification.partDescription || rawDescription(input.body, message.attachment),
     category: identifiedPart?.category || "",
     quantity: identifiedPart?.suggestedQuantity || 1,
+    uomCode: identifiedPart?.uomCode || "ea",
     repairOrder: identifiedPart?.repairOrder || "",
     fitmentStatus: identifiedPart?.fitmentStatus || "unknown",
     fitmentNotes: identifiedPart?.evidenceSummary || "Office verification required.",

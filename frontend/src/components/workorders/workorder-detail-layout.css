@@ -22,3 +22,35 @@
 .generator-layout .preview-header-actions .icon-tooltip:focus-visible::after {
   transform: translateY(0);
 }
+
+@media (max-width: 1180px) {
+  .workorder-detail-page.is-keyboard-open {
+    height: var(--workorder-visual-viewport-height, 100dvh);
+    inset: var(--workorder-visual-viewport-offset-top, 0) 0 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+    position: fixed;
+    width: 100%;
+  }
+
+  .workorder-detail-page.is-keyboard-open .workorder-detail-layout,
+  .workorder-detail-page.is-keyboard-open .control-panel {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  .workorder-detail-page.is-keyboard-open .control-panel {
+    padding-bottom: 0;
+  }
+
+  .workorder-detail-page.is-keyboard-open .workorder-section-nav-mobile,
+  .workorder-detail-page.is-keyboard-open .mechanic-compact-primary-action {
+    display: none !important;
+  }
+
+  .workorder-detail-page.is-keyboard-open .workorder-progressive-stack {
+    padding-bottom: 8px;
+  }
+}

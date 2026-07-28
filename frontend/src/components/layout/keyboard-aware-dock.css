@@ -1,0 +1,18 @@
+.keyboard-aware-dock {
+  box-sizing: border-box;
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.keyboard-aware-dock--hide[data-keyboard-open="true"] {
+  display: none;
+}
+
+.keyboard-aware-dock--follow[data-keyboard-open="true"] {
+  bottom: var(--keyboard-inset, 0px);
+  padding-bottom: 0;
+}

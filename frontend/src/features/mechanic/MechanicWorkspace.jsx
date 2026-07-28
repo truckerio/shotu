@@ -130,7 +130,7 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
     <main className="prototype mechanic-home workspace-operations">
       <PageHeader
         title={<ProfileMenu actor={actor} wordmark />}
-        actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button>}
+        actions={<Button type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>Create workorder</Button>}
       />
 
       {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}

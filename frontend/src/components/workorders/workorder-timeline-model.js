@@ -1,3 +1,5 @@
+import { formatQuantity } from "../../../../shared/units-of-measure.js";
+
 const STATUS_LABELS = {
   created: "Created",
   pending: "Pending",
@@ -75,7 +77,7 @@ export function timelineEventDescription(event) {
       try {
         const parts = JSON.parse(event.new_value || "[]")
           .filter((part) => part?.partNo)
-          .map((part) => `${part.qty || 1} × ${part.partNo}`);
+          .map((part) => `${formatQuantity(part.qty, part.uomCode) || "Quantity not recorded"} × ${part.partNo}`);
         return parts.length ? `Used parts: ${parts.join(", ")}.` : "Used parts cleared.";
       } catch {
         return "Used parts updated.";

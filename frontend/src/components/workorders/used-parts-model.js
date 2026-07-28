@@ -1,3 +1,5 @@
+import { DEFAULT_UOM_CODE, normalizeUomCode } from "../../../../shared/units-of-measure.js";
+
 export const MAX_USED_PARTS = 18;
 
 export function canEditUsedParts(role, allowedActions = {}) {
@@ -12,7 +14,7 @@ export function usedPartsAccessState(role, allowedActions = {}) {
 }
 
 export function emptyUsedPart() {
-  return { partNo: "", qty: "", repairOrder: "" };
+  return { partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" };
 }
 
 export function usedPartHasValue(part) {
@@ -23,6 +25,7 @@ export function normalizeUsedParts(parts, minimumRows = 0) {
   const rows = Array.isArray(parts) ? parts.map((part) => ({
     partNo: String(part?.partNo || ""),
     qty: part?.qty === null || part?.qty === undefined ? "" : String(part.qty),
+    uomCode: normalizeUomCode(part?.uomCode),
     repairOrder: String(part?.repairOrder || ""),
     ...(part?.requestId ? { requestId: part.requestId } : {}),
   })) : [];

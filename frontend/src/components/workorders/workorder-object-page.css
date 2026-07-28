@@ -64,7 +64,7 @@
   padding: 0 6px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   .workorder-section-nav-desktop {
     display: none;
   }

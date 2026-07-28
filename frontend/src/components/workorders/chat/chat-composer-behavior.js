@@ -1,4 +1,5 @@
 export const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const CHAT_BOTTOM_THRESHOLD_PX = 80;
 
 export function getImageValidationError(file, maxImageBytes = DEFAULT_MAX_IMAGE_BYTES) {
   if (!file?.type?.startsWith("image/")) {
@@ -14,6 +15,25 @@ export function shouldSubmitChatKey(event) {
   return event.key === "Enter"
     && !event.shiftKey
     && !event.nativeEvent?.isComposing;
+}
+
+export function isChatNearBottom(metrics, threshold = CHAT_BOTTOM_THRESHOLD_PX) {
+  const scrollHeight = Number(metrics?.scrollHeight) || 0;
+  const scrollTop = Number(metrics?.scrollTop) || 0;
+  const clientHeight = Number(metrics?.clientHeight) || 0;
+  return scrollHeight - scrollTop - clientHeight <= threshold;
+}
+
+export function nextChatScrollTop({
+  wasNearBottom,
+  previousScrollTop,
+  scrollHeight,
+  clientHeight,
+}) {
+  if (wasNearBottom) {
+    return Math.max(0, (Number(scrollHeight) || 0) - (Number(clientHeight) || 0));
+  }
+  return Math.max(0, Number(previousScrollTop) || 0);
 }
 
 export function createClientMessageId(randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto)) {

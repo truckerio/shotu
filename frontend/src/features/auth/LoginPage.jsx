@@ -3,6 +3,7 @@ import { ClipboardCheck } from "@untitledui/icons";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
 import { OwlWordmark } from "../../components/brand/OwlWordmark.jsx";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
+import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { authClient } from "../../lib/auth-client.js";
 import "./auth.css";
 
@@ -13,6 +14,11 @@ function loginErrorMessage(error) {
 }
 
 export function LoginPage() {
+  const {
+    keyboardOpen,
+    viewportHeight,
+    viewportOffsetTop,
+  } = useVisualViewport();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -39,8 +45,17 @@ export function LoginPage() {
     window.location.replace("/");
   }
 
+  const viewportStyle = {
+    "--auth-visual-viewport-height": viewportHeight ? `${viewportHeight}px` : "100dvh",
+    "--auth-visual-viewport-offset-top": `${viewportOffsetTop}px`,
+  };
+
   return (
-    <main className="auth-shell">
+    <main
+      className={`auth-shell${keyboardOpen ? " auth-shell--keyboard-open" : ""}`}
+      data-keyboard-open={keyboardOpen ? "true" : "false"}
+      style={viewportStyle}
+    >
       <section className="auth-panel" aria-labelledby="login-title">
         <header className="auth-heading">
           <span className="auth-mark" aria-hidden="true">
@@ -55,14 +70,24 @@ export function LoginPage() {
         <Form className="auth-form" onSubmit={submit} validationBehavior="native">
           <TextField isRequired name="identifier" value={identifier} onChange={setIdentifier}>
             <Label>Username or email</Label>
-            <Input autoComplete="username" autoCapitalize="none" spellCheck="false" autoFocus />
+            <Input
+              autoComplete="username"
+              autoCapitalize="none"
+              enterKeyHint="next"
+              spellCheck="false"
+            />
             <FieldError />
           </TextField>
 
           <TextField isRequired name="password" value={password} onChange={setPassword}>
             <Label>Password</Label>
             <div className="auth-password-field password-input-control">
-              <Input id="login-password" type={showPassword ? "text" : "password"} autoComplete="current-password" />
+              <Input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                enterKeyHint="done"
+              />
               <PasswordVisibilityToggle
                 visible={showPassword}
                 controls="login-password"

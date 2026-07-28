@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { DATABASE_UUID_PATTERN, DEFAULT_COMPANY_ID } from "../../db/company.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
+import {
+  DEFAULT_UOM_CODE,
+  MAX_QUANTITY,
+  getUnitDefinition,
+  normalizeQuantity,
+} from "../../../../shared/units-of-measure.js";
+import { uomCodeSchema, validateQuantityUnit } from "../parts/quantity-uom.js";
 
 export const userRoleSchema = z.enum(["mechanic", "office", "surveillance", "admin"]);
 
@@ -16,7 +23,36 @@ const customerCompanyNameSchema = z.string().trim().max(300, "Customer company m
 export const workorderFormDataSchema = z.object({
   customerCompanyName: customerCompanyNameSchema.optional(),
   companyName: customerCompanyNameSchema.optional(),
-}).catchall(z.unknown()).transform((formData) => normalizeWorkorderFormData(formData));
+}).catchall(z.unknown()).superRefine((formData, context) => {
+  if (formData.parts === undefined) return;
+  if (!Array.isArray(formData.parts)) {
+    context.addIssue({ code: "custom", path: ["parts"], message: "Parts must be a list." });
+    return;
+  }
+  if (formData.parts.length > 18) {
+    context.addIssue({ code: "custom", path: ["parts"], message: "A workorder can contain at most 18 part rows." });
+  }
+  formData.parts.forEach((part, index) => {
+    if (!part || typeof part !== "object" || Array.isArray(part)) {
+      context.addIssue({ code: "custom", path: ["parts", index], message: "Part row is invalid." });
+      return;
+    }
+    const hasContent = Boolean(part.partNo || part.qty || part.repairOrder || part.requestId);
+    if (!hasContent) return;
+    const code = String(part.uomCode || DEFAULT_UOM_CODE).trim().toLowerCase();
+    if (!getUnitDefinition(code)) {
+      context.addIssue({ code: "custom", path: ["parts", index, "uomCode"], message: "Select a valid unit." });
+      return;
+    }
+    if (!normalizeQuantity(part.qty, code)) {
+      context.addIssue({
+        code: "custom",
+        path: ["parts", index, "qty"],
+        message: "Enter a valid quantity for the selected unit.",
+      });
+    }
+  });
+}).transform((formData) => normalizeWorkorderFormData(formData));
 
 export const createWorkorderSchema = z.object({
   companyId: z.string()
@@ -48,18 +84,28 @@ export const releaseWorkorderSchema = z.object({
 
 const usedPartQuantitySchema = z.union([
   z.literal(""),
-  z.number().int().positive().max(9999),
+  z.number().positive().max(MAX_QUANTITY),
   z.string().trim()
-    .regex(/^[1-9]\d*$/, "Quantity must be blank or a positive integer.")
-    .refine((value) => Number(value) <= 9999, "Quantity must be 9999 or less."),
-]).transform((value) => value === "" ? "" : String(value));
+    .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/, "Quantity must be positive with at most three decimals.")
+    .refine((value) => Number(value) > 0 && Number(value) <= MAX_QUANTITY, "Quantity is outside the supported range."),
+]);
 
 export const updateMechanicUsedPartsSchema = z.object({
   parts: z.array(z.object({
     partNo: z.string().trim().max(200).default(""),
     qty: usedPartQuantitySchema.default(""),
+    uomCode: uomCodeSchema,
     repairOrder: z.string().trim().max(2000).default(""),
-  })).max(18, "A workorder can contain at most 18 used-part rows."),
+  }).superRefine((part, context) => {
+    if (part.qty === "") return;
+    validateQuantityUnit({
+      qty: Number(part.qty),
+      uomCode: part.uomCode,
+    }, context, ["qty"]);
+  }).transform((part) => ({
+    ...part,
+    qty: part.qty === "" ? "" : String(Number(part.qty)),
+  }))).max(18, "A workorder can contain at most 18 used-part rows."),
 });
 
 export const markDoneSchema = z.object({

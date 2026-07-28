@@ -15,6 +15,7 @@ import "./workorder-object-page.css";
 
 const SECTION_ICONS = Object.freeze({
   activity: ClockRewind,
+  assignment: Users01,
   chat: MessageChatCircle,
   parts: Package,
   preview: FileSearch01,

@@ -19,7 +19,7 @@ export function draftFormData(draft) {
 export function draftUnit(draft) {
   const payload = draftPayload(draft);
   const form = draftFormData(draft);
-  return text(form.unitNo || payload.unitNo || payload.assetUnitNo || payload.asset?.unitNo) || "New workorder";
+  return text(form.unitNo || payload.unitNo || payload.assetUnitNo || payload.asset?.unitNo) || "Create workorder";
 }
 
 export function draftConcern(draft) {

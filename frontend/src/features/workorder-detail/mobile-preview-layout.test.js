@@ -8,7 +8,7 @@ const css = readFileSync(
 );
 
 function phonePreviewCss() {
-  const marker = "@media (max-width: 640px)";
+  const marker = "@media (max-width: 700px)";
   const start = css.indexOf(marker);
   assert.notEqual(start, -1, "phone workorder breakpoint must exist");
   return css.slice(start);

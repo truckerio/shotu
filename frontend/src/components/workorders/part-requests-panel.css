@@ -2,6 +2,19 @@
   gap: 16px;
 }
 
+.part-office-fields > .quantity-unit-input,
+.part-suggestion-fields > .quantity-unit-input {
+  align-self: end;
+}
+
+.allocation-row {
+  grid-template-columns: minmax(110px, 1fr) minmax(138px, .8fr) minmax(90px, 1fr) 30px;
+}
+
+.allocation-row .quantity-unit-input {
+  min-width: 0;
+}
+
 @media (max-width: 640px) {
   .part-request-card {
     padding: 12px;
@@ -10,5 +23,9 @@
   .part-request-summary,
   .part-request-meta {
     gap: 6px;
+  }
+
+  .allocation-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

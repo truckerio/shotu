@@ -9,6 +9,7 @@ function publicCatalogPart(row) {
     manufacturer: row.manufacturer,
     description: row.description,
     category: row.category,
+    uomCode: row.uom_code || "ea",
     repairOrder: row.repair_template,
     aliases: Array.isArray(row.aliases) ? row.aliases : [],
     matchType: row.match_type,

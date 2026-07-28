@@ -1,9 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 import { CheckCircle, Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
+import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
+import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import { UsedPartsEditor } from "./UsedPartsEditor.jsx";
 import { usedPartsAccessState } from "./used-parts-model.js";
+import { normalizeUomCode } from "../../../../shared/units-of-measure.js";
 import "./part-requests-panel.css";
 
 const SOURCE_LABELS = {
@@ -42,6 +45,7 @@ const emptyDraft = () => ({
   description: "",
   category: "",
   quantity: "",
+  uomCode: "ea",
   repairOrder: "",
   fitmentStatus: "unknown",
   fitmentNotes: "",
@@ -75,6 +79,10 @@ function statusText(value) {
   return String(value || "").replaceAll("_", " ");
 }
 
+function requestUomCode(request) {
+  return normalizeUomCode(request?.uomCode);
+}
+
 function RequestSummary({ request }) {
   return (
     <div className="part-request-summary">
@@ -83,7 +91,7 @@ function RequestSummary({ request }) {
         <span>{[request.manufacturer, request.description].filter(Boolean).join(" · ")}</span>
       </div>
       <div className="part-request-meta">
-        <span>Qty {request.quantity}</span>
+        <span>{formatQuantityUnit(request.quantity, requestUomCode(request))}</span>
         <span className={`part-state part-state-${request.approvalStatus}`}>{APPROVAL_LABELS[request.approvalStatus] || statusText(request.approvalStatus)}</span>
       </div>
     </div>
@@ -118,7 +126,7 @@ function MechanicRequestCard({ request, detail, onChanged }) {
       {request.allocations.length ? (
         <div className="part-allocation-list">
           {request.allocations.map((allocation) => (
-            <span key={allocation.id}>{SOURCE_LABELS[allocation.sourceType]} · {allocation.quantity} · {ALLOCATION_STATUS_LABELS[allocation.status]}</span>
+            <span key={allocation.id}>{SOURCE_LABELS[allocation.sourceType]} · {formatQuantityUnit(allocation.quantity, allocation.uomCode || request.uomCode)} · {ALLOCATION_STATUS_LABELS[allocation.status]}</span>
           ))}
         </div>
       ) : null}
@@ -141,7 +149,7 @@ function MechanicRequestCard({ request, detail, onChanged }) {
   );
 }
 
-function AllocationEditor({ allocations, setAllocations, quantity, inventory }) {
+function AllocationEditor({ allocations, setAllocations, quantity, uomCode, inventory }) {
   function update(index, field, value) {
     setAllocations((current) => current.map((allocation, allocationIndex) => (
       allocationIndex === index ? { ...allocation, [field]: value } : allocation
@@ -149,7 +157,13 @@ function AllocationEditor({ allocations, setAllocations, quantity, inventory }) 
   }
 
   function add() {
-    setAllocations((current) => [...current, { sourceType: "unknown", status: "proposed", quantity: 1, vendor: "" }]);
+    setAllocations((current) => [...current, {
+      sourceType: "unknown",
+      status: "proposed",
+      quantity: 1,
+      uomCode,
+      vendor: "",
+    }]);
   }
 
   function remove(index) {
@@ -175,7 +189,18 @@ function AllocationEditor({ allocations, setAllocations, quantity, inventory }) 
           }} aria-label={`Supply source ${index + 1}`}>
             {Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <input type="number" min="1" max={quantity} value={allocation.quantity} onChange={(event) => update(index, "quantity", Number(event.target.value) || 1)} aria-label={`Supply quantity ${index + 1}`} />
+          <QuantityUnitInput
+            id={`allocation-quantity-${index}`}
+            quantity={allocation.quantity}
+            uomCode={allocation.uomCode || uomCode}
+            onQuantityChange={(value) => update(index, "quantity", value)}
+            onUomCodeChange={() => {}}
+            quantityLabel={`Supply quantity ${index + 1}`}
+            unitLabel={`Supply unit ${index + 1}`}
+            max={quantity}
+            unitReadOnly
+            compact
+          />
           {allocation.sourceType === "purchase" ? (
             <input value={allocation.vendor || ""} onChange={(event) => update(index, "vendor", event.target.value)} placeholder="Vendor optional" aria-label={`Vendor ${index + 1}`} />
           ) : <span className="allocation-source-status">{ALLOCATION_STATUS_LABELS[allocation.status]}</span>}
@@ -187,13 +212,16 @@ function AllocationEditor({ allocations, setAllocations, quantity, inventory }) 
 }
 
 function OfficeRequestCard({ request, detail, onChanged }) {
-  const firstInventory = request.inventory.find((item) => item.quantityAvailable > 0);
+  const firstInventory = request.inventory.find(
+    (item) => item.uomCode === requestUomCode(request) && item.quantityAvailable > 0,
+  );
   const [form, setForm] = useState({
     partNumber: request.partNumber,
     manufacturer: request.manufacturer,
     description: request.description,
     category: request.category,
     quantity: request.quantity,
+    uomCode: requestUomCode(request),
     repairOrder: request.repairOrder,
     fitmentStatus: request.fitmentStatus,
     fitmentNotes: request.fitmentNotes,
@@ -203,10 +231,17 @@ function OfficeRequestCard({ request, detail, onChanged }) {
     sourceType: "inventory",
     status: "reserved",
     quantity: Math.min(request.quantity, firstInventory.quantityAvailable),
+    uomCode: requestUomCode(request),
     inventoryItemId: firstInventory.id,
     locationId: firstInventory.locationId,
     vendor: "",
-  } : { sourceType: "unknown", status: "proposed", quantity: request.quantity, vendor: "" }]);
+  } : {
+    sourceType: "unknown",
+    status: "proposed",
+    quantity: request.quantity,
+    uomCode: requestUomCode(request),
+    vendor: "",
+  }]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("error");
@@ -215,6 +250,11 @@ function OfficeRequestCard({ request, detail, onChanged }) {
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateRequestUnit(value) {
+    update("uomCode", value);
+    setAllocations((current) => current.map((allocation) => ({ ...allocation, uomCode: value })));
   }
 
   async function decide(decision) {
@@ -237,9 +277,9 @@ function OfficeRequestCard({ request, detail, onChanged }) {
       return;
     }
     const allocatedQuantity = allocations.reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0);
-    if (decision === "approved" && allocatedQuantity !== Number(form.quantity)) {
+    if (decision === "approved" && Math.abs(allocatedQuantity - Number(form.quantity)) > 0.0005) {
       setMessageTone("error");
-      setMessage(`Supply quantities must total ${form.quantity}.`);
+      setMessage(`Supply quantities must total ${formatQuantityUnit(form.quantity, form.uomCode)}.`);
       return;
     }
     setBusy(decision);
@@ -280,6 +320,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
           location: purchasingLocation(detail),
         }),
       });
+      const suggestedUomCode = normalizeUomCode(result.part.uomCode || form.uomCode);
       setForm((current) => ({
         ...current,
         partNumber: result.part.normalizedPartNumber || current.partNumber,
@@ -287,10 +328,15 @@ function OfficeRequestCard({ request, detail, onChanged }) {
         description: result.part.description || current.description,
         category: result.part.category || current.category,
         quantity: result.part.suggestedQuantity || current.quantity,
+        uomCode: suggestedUomCode,
         repairOrder: result.part.repairOrder || current.repairOrder,
         fitmentStatus: result.part.fitmentStatus || "unknown",
         fitmentNotes: result.part.evidenceSummary || current.fitmentNotes,
       }));
+      setAllocations((current) => current.map((allocation) => ({
+        ...allocation,
+        uomCode: suggestedUomCode,
+      })));
       setMessageTone("success");
       setMessage(result.resolutionSource === "company_catalog"
         ? "Matched company-approved part data."
@@ -333,6 +379,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
           manufacturer: request.manufacturer,
           description: request.description,
           quantity: request.quantity,
+          uomCode: requestUomCode(request),
           vehicle: vehicleInput(detail),
           location: purchasingLocation(detail),
         }),
@@ -367,7 +414,15 @@ function OfficeRequestCard({ request, detail, onChanged }) {
           </div>
           <div className="part-office-fields">
             <label>Part number<input value={form.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
-            <label>Quantity<input type="number" min="1" max="999" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value) || 1)} /></label>
+            <QuantityUnitInput
+              id={`request-quantity-${request.id}`}
+              quantity={form.quantity}
+              uomCode={form.uomCode}
+              onQuantityChange={(value) => update("quantity", value)}
+              onUomCodeChange={updateRequestUnit}
+              quantityLabel="Quantity"
+              unitLabel="Unit"
+            />
             <label className="part-field-wide">Description<input value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
             <label className="part-field-wide">Repair order<input value={form.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
             <label>Fitment
@@ -383,14 +438,20 @@ function OfficeRequestCard({ request, detail, onChanged }) {
           <div className="part-review-section">
             <div className="part-review-section-heading">
               <strong>Supply</strong>
-              <span>Approved quantity: {form.quantity}</span>
+              <span>Approved quantity: {formatQuantityUnit(form.quantity, form.uomCode)}</span>
             </div>
             <div className="inventory-summary">
               {request.inventory.length ? request.inventory.map((item) => (
-                <span key={item.id}><strong>{item.quantityAvailable}</strong> available · {item.locationName || "Inventory"}{item.binLocation ? ` · ${item.binLocation}` : ""}</span>
+                <span key={item.id}><strong>{formatQuantityUnit(item.quantityAvailable, item.uomCode || form.uomCode)}</strong> available · {item.locationName || "Inventory"}{item.binLocation ? ` · ${item.binLocation}` : ""}</span>
               )) : <span>Inventory is not tracked for this part yet.</span>}
             </div>
-            <AllocationEditor allocations={allocations} setAllocations={setAllocations} quantity={form.quantity} inventory={request.inventory} />
+            <AllocationEditor
+              allocations={allocations}
+              setAllocations={setAllocations}
+              quantity={form.quantity}
+              uomCode={form.uomCode}
+              inventory={request.inventory}
+            />
           </div>
           <div className="part-response-composer">
             <label htmlFor={`part-response-${request.id}`}>Message to mechanic</label>
@@ -423,7 +484,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
             <div className="part-allocation-list office-allocation-list">
               {request.allocations.map((allocation) => (
                 <label key={allocation.id}>
-                  <span>{SOURCE_LABELS[allocation.sourceType]} · Qty {allocation.quantity}</span>
+                  <span>{SOURCE_LABELS[allocation.sourceType]} · {formatQuantityUnit(allocation.quantity, allocation.uomCode || request.uomCode)}</span>
                   <select value={allocation.status} onChange={(event) => updateAllocation(allocation, event.target.value)} disabled={busy === allocation.id}>
                     {Object.entries(ALLOCATION_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                   </select>
@@ -486,6 +547,7 @@ function OfficePartComposer({ detail, onChanged }) {
         description: result.part.description,
         category: result.part.category,
         quantity: result.part.suggestedQuantity || 1,
+        uomCode: normalizeUomCode(result.part.uomCode || current.uomCode),
         repairOrder: result.part.repairOrder,
         fitmentStatus: result.part.fitmentStatus,
         fitmentNotes: result.part.evidenceSummary,
@@ -515,6 +577,7 @@ function OfficePartComposer({ detail, onChanged }) {
             sourceType,
             status: sourceType === "inventory" ? "reserved" : "proposed",
             quantity: draft.quantity,
+            uomCode: draft.uomCode,
           }],
         }),
       });
@@ -547,7 +610,15 @@ function OfficePartComposer({ detail, onChanged }) {
       </label>
       <div className="part-suggestion-fields">
         <label>Part number<input value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
-        <label>Qty<input type="number" min="1" max="999" value={draft.quantity} onChange={(event) => update("quantity", event.target.value === "" ? "" : Number(event.target.value))} /></label>
+        <QuantityUnitInput
+          id="office-part-quantity"
+          quantity={draft.quantity}
+          uomCode={draft.uomCode}
+          onQuantityChange={(value) => update("quantity", value)}
+          onUomCodeChange={(value) => update("uomCode", value)}
+          quantityLabel="Quantity"
+          unitLabel="Unit"
+        />
         <label className="part-field-wide">Description<input value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
         <label className="part-field-wide">Repair order<input value={draft.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
         <label>Fitment

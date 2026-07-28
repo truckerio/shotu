@@ -118,7 +118,7 @@ function OperationsHome({ actor, locations, draftQueue, onOpenWorkorder, onCreat
     <section className="admin-content admin-operations-content">
       <PageHeader
         title="Operations"
-        actions={onCreateWorkorder ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>New workorder</Button> : null}
+        actions={onCreateWorkorder ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>Create workorder</Button> : null}
       />
       <OperationsWorkspace actor={actor} locations={locations} {...draftQueue} onOpenWorkorder={onOpenWorkorder} />
     </section>

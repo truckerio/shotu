@@ -1,3 +1,5 @@
+import { normalizeUomCode } from "../../../../shared/units-of-measure.js";
+
 function text(value) {
   return String(value || "").trim();
 }
@@ -8,6 +10,7 @@ function filledParts(parts) {
     .map((part) => ({
       partNo: text(part.partNo),
       qty: text(part.qty),
+      uomCode: normalizeUomCode(part.uomCode),
       repairOrder: text(part.repairOrder),
     }));
 }
@@ -83,6 +86,9 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
 
 export function formValuesFromWorkorderDraft(payload, currentForm) {
   const saved = payload?.formData || {};
+  const savedParts = Array.isArray(saved.parts)
+    ? saved.parts.map((part) => ({ ...part, uomCode: normalizeUomCode(part?.uomCode) }))
+    : [];
   return {
     ...currentForm,
     ...saved,
@@ -90,7 +96,7 @@ export function formValuesFromWorkorderDraft(payload, currentForm) {
     customerCompanyName: saved.customerCompanyName || saved.companyName || "",
     mechanicConcern: saved.mechanicConcern || payload?.concern || "",
     officeNotes: payload?.officeNotes || "",
-    parts: Array.isArray(saved.parts) && saved.parts.length ? saved.parts : currentForm.parts,
+    parts: savedParts.length ? savedParts : currentForm.parts,
   };
 }
 

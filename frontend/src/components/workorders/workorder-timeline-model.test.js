@@ -72,3 +72,14 @@ test("multi-event timeline keeps distinct operational activity readable", () => 
     "Brake chamber requested.",
   ]);
 });
+
+test("used-parts activity formats quantity with its unit", () => {
+  assert.equal(timelineEventDescription({
+    type: "field",
+    field_label: "Used parts",
+    new_value: JSON.stringify([
+      { partNo: "COOLANT", qty: "2.5", uomCode: "gal" },
+      { partNo: "FILTER", qty: 1 },
+    ]),
+  }), "Used parts: 2.5 gal × COOLANT, 1 ea × FILTER.");
+});

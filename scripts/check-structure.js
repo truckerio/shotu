@@ -26,6 +26,9 @@ for (const file of frontendFiles) {
   if (/from\s+["'][^"']*src\/server\//.test(source)) {
     fail(file, "frontend code must use the HTTP API, not import server modules");
   }
+  if (/\b(?:UNITS_OF_MEASURE|UOM_DEFINITIONS)\s*=\s*(?:Object\.freeze\()?\s*\[/.test(source)) {
+    fail(file, "unit definitions belong in shared/units-of-measure.js");
+  }
 }
 
 const routeFiles = (await filesUnder(join(root, "src", "server", "routes")))
@@ -58,6 +61,9 @@ for (const file of serverFiles) {
   const source = await readFile(file, "utf8");
   if (source.includes("admin.repo.js")) {
     fail(file, "use the repository that owns the table instead of admin.repo.js");
+  }
+  if (/\b(?:UNITS_OF_MEASURE|UOM_DEFINITIONS)\s*=\s*(?:Object\.freeze\()?\s*\[/.test(source)) {
+    fail(file, "unit definitions belong in shared/units-of-measure.js");
   }
 }
 

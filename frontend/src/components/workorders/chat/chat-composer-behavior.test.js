@@ -5,6 +5,8 @@ import {
   buildChatPayload,
   createClientMessageId,
   getImageValidationError,
+  isChatNearBottom,
+  nextChatScrollTop,
   shouldSubmitChatKey,
 } from "./chat-composer-behavior.js";
 
@@ -59,4 +61,25 @@ test("Enter sends while Shift+Enter and composition preserve multiline input", (
   assert.equal(shouldSubmitChatKey({ key: "Enter", shiftKey: true, nativeEvent: {} }), false);
   assert.equal(shouldSubmitChatKey({ key: "Enter", shiftKey: false, nativeEvent: { isComposing: true } }), false);
   assert.equal(shouldSubmitChatKey({ key: "a", shiftKey: false, nativeEvent: {} }), false);
+});
+
+test("near-bottom detection tolerates a small distance from latest message", () => {
+  assert.equal(isChatNearBottom({ scrollHeight: 1000, scrollTop: 520, clientHeight: 400 }), true);
+  assert.equal(isChatNearBottom({ scrollHeight: 1000, scrollTop: 519, clientHeight: 400 }), false);
+  assert.equal(isChatNearBottom({ scrollHeight: 0, scrollTop: 0, clientHeight: 0 }), true);
+});
+
+test("viewport changes anchor latest messages only for users already near bottom", () => {
+  assert.equal(nextChatScrollTop({
+    wasNearBottom: true,
+    previousScrollTop: 240,
+    scrollHeight: 1200,
+    clientHeight: 360,
+  }), 840);
+  assert.equal(nextChatScrollTop({
+    wasNearBottom: false,
+    previousScrollTop: 240,
+    scrollHeight: 1200,
+    clientHeight: 360,
+  }), 240);
 });

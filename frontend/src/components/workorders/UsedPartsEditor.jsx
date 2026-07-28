@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
+import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
+import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import {
   MAX_USED_PARTS,
@@ -111,6 +113,10 @@ export function UsedPartsEditor({
     onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
   }
 
+  function updateFields(index, fields) {
+    onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...fields } : row));
+  }
+
   function addRow() {
     const next = addUsedPart(rows);
     setVisibleRowCount(next.length);
@@ -141,6 +147,8 @@ export function UsedPartsEditor({
       next[index] = {
         ...row,
         partNo: result.part.normalizedPartNumber || row.partNo,
+        qty: result.part.suggestedQuantity || row.qty,
+        uomCode: result.part.uomCode || row.uomCode,
         repairOrder: result.part.repairOrder || row.repairOrder,
       };
       onChange(next);
@@ -162,7 +170,7 @@ export function UsedPartsEditor({
             {savedParts.map((part, index) => (
               <li key={`${part.partNo}-${index}`}>
                 <strong>{part.partNo || "Part number not recorded"}</strong>
-                <span>Qty {part.qty || 1}</span>
+                <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
                 {part.repairOrder ? <span>{part.repairOrder}</span> : null}
               </li>
             ))}
@@ -185,7 +193,7 @@ export function UsedPartsEditor({
         <div className="part-row part-row-head" aria-hidden="true">
           <span>S.No</span>
           <span>Part no.</span>
-          <span>Qty</span>
+          <span>Qty / unit</span>
           <span>Repair order</span>
           <span></span>
         </div>
@@ -203,11 +211,19 @@ export function UsedPartsEditor({
                 ) : null}
               </div>
             </label>
-            <label className="used-part-field">
-              <span>Quantity</span>
-              <input type="number" min="0" max="999" value={part.qty} onChange={(event) => update(index, "qty", event.target.value)} aria-label={`Quantity ${index + 1}`} placeholder="Qty" disabled={disabled} />
-            </label>
-            <label className="used-part-field">
+            <div className="used-part-field used-part-quantity">
+              <QuantityUnitInput
+                id={`used-part-quantity-${index}`}
+                quantity={part.qty}
+                uomCode={part.uomCode}
+                onValueChange={({ quantity, uomCode }) => updateFields(index, { qty: quantity, uomCode })}
+                quantityLabel={`Quantity ${index + 1}`}
+                unitLabel={`Unit ${index + 1}`}
+                disabled={disabled}
+                compact
+              />
+            </div>
+            <label className="used-part-field used-part-repair">
               <span>Work performed</span>
               <input value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
             </label>

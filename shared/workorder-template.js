@@ -1,4 +1,6 @@
-export const emptyPart = () => ({ partNo: "", qty: "", repairOrder: "" });
+import { DEFAULT_UOM_CODE, formatQuantity, normalizeUomCode } from "./units-of-measure.js";
+
+export const emptyPart = () => ({ partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" });
 
 function trimmedText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -427,7 +429,7 @@ export function renderWorkorderPageHtml(form, serial, {
               <div class="wo-part-row">
                 <div>${rowOffset + index + 1}</div>
                 <div>${escapeHtml(row.partNo)}</div>
-                <div>${escapeHtml(row.qty)}</div>
+                <div>${escapeHtml(row.qty ? formatQuantity(row.qty, normalizeUomCode(row.uomCode)) : "")}</div>
                 <div>${escapeHtml(row.repairOrder)}</div>
               </div>
             `,

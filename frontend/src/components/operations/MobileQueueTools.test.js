@@ -43,3 +43,19 @@ test("phone queue toolbar keeps shared tabs and filter on one line", async () =>
   assert.match(css, /\.mobile-queue-tools-trigger:focus-visible\s*\{/);
   assert.match(css, /\.mobile-queue-tools-indicator\s*\{/);
 });
+
+test("queue search exposes keyboard state and removes only temporary chrome", async () => {
+  const css = await readFile(cssUrl, "utf8");
+  const toolbar = await readFile(toolbarUrl, "utf8");
+
+  assert.match(toolbar, /useVisualViewport/);
+  assert.match(toolbar, /isMobileQueueSearchTarget/);
+  assert.match(toolbar, /data-keyboard-open=\{searchKeyboardOpen \? "true" : "false"\}/);
+  assert.match(toolbar, /mobile-queue-toolbar--keyboard-open/);
+  assert.match(toolbar, /--mobile-queue-visual-viewport-height/);
+  assert.match(css, /\.mobile-queue-toolbar--keyboard-open \.mechanic-queue-tabs,[\s\S]*display: none;/);
+  assert.match(css, /\.mobile-filter-overlay\s*\{[\s\S]*height: var\(--mobile-queue-visual-viewport-height, 100dvh\);[\s\S]*inset: var\(--mobile-queue-visual-viewport-offset-top, 0px\) 0 auto;/);
+  assert.match(css, /body:has\(\.mobile-queue-toolbar\[data-keyboard-open="true"\]\) \.mobile-filter-dialog > header,[\s\S]*\.mobile-filter-dialog > footer\s*\{[\s\S]*display: none;/);
+  assert.match(css, /body:has\(\.mobile-queue-toolbar\[data-keyboard-open="true"\]\) \.mobile-filter-content \.mechanic-queue-tabs\s*\{[\s\S]*display: none;/);
+  assert.match(css, /\.mobile-filter-content\s*\{[\s\S]*padding-bottom: max\(12px, env\(safe-area-inset-bottom\)\);/);
+});

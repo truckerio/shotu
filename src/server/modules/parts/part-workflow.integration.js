@@ -101,6 +101,48 @@ try {
      ) values ($1, $2, $3, $4, $5, $6, 10, 0, 'B-12') returning id`,
     [companyId, locationId, normalizePartNumber("LF14000NN"), "LF14000NN", "Fleetguard", "Engine oil filter"]
   );
+  const wrongUnitInventory = await query(
+    `insert into inventory_items (
+       company_id, location_id, normalized_part_number, part_number, manufacturer,
+       description, quantity_on_hand, quantity_reserved, bin_location, uom_code
+     ) values ($1, $2, $3, $4, $5, $6, 10, 0, 'B-13', 'gal') returning id`,
+    [companyId, locationId, normalizePartNumber("LF14000NN"), "LF14000NN", "Fleetguard", "Engine oil filter"]
+  );
+  await assert.rejects(
+    query(
+      `insert into inventory_items (
+         company_id, location_id, normalized_part_number, part_number,
+         description, quantity_on_hand, quantity_reserved, uom_code
+       ) values ($1, $2, $3, $4, $5, 1.5, 0, 'ea')`,
+      [companyId, locationId, "FRACTIONAL-EACH", "FRACTIONAL-EACH", "Invalid fractional count"],
+    ),
+    /whole numbers/,
+  );
+  await assert.rejects(
+    decidePartRequest(workorderId, request.id, {
+      officeUserId: office.id,
+      decision: "approved",
+      partNumber: "LF14000NN",
+      manufacturer: "Fleetguard",
+      description: "Engine oil filter",
+      category: "engine_oil_filter",
+      quantity: 2,
+      uomCode: "ea",
+      repairOrder: "Replace engine oil filter and inspect for leaks.",
+      fitmentStatus: "confirmed",
+      fitmentNotes: "Verified by office.",
+      reason: "",
+      allocations: [{
+        sourceType: "inventory",
+        status: "reserved",
+        quantity: 2,
+        uomCode: "ea",
+        locationId,
+        inventoryItemId: wrongUnitInventory.rows[0].id,
+      }],
+    }, office.id),
+    /does not match this company, part, location, and unit/,
+  );
   const approved = await decidePartRequest(workorderId, request.id, {
     officeUserId: office.id,
     decision: "approved",
@@ -144,13 +186,13 @@ try {
     "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
     [workorderId]
   );
-  assert.match(approvalMessage.rows[0].body, /Office approved 2 x LF14000NN/);
+  assert.match(approvalMessage.rows[0].body, /Office approved 2 ea LF14000NN/);
   assert.match(approvalMessage.rows[0].body, /inventory \(Reserved\)/);
 
   await updatePartAllocation(workorderId, request.id, approved.allocations[0].id, { status: "issued", note: "Issued to mechanic." }, office.id);
   const issuedInventory = await query("select quantity_on_hand, quantity_reserved from inventory_items where id = $1", [inventory.rows[0].id]);
-  assert.equal(issuedInventory.rows[0].quantity_on_hand, 8);
-  assert.equal(issuedInventory.rows[0].quantity_reserved, 0);
+  assert.equal(Number(issuedInventory.rows[0].quantity_on_hand), 8);
+  assert.equal(Number(issuedInventory.rows[0].quantity_reserved), 0);
   const issuedMessage = await query(
     "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
     [workorderId]
@@ -167,7 +209,7 @@ try {
     "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
     [workorderId]
   );
-  assert.match(installedMessage.rows[0].body, /Mechanic marked 2 x LF14000NN as Installed/);
+  assert.match(installedMessage.rows[0].body, /Mechanic marked 2 ea LF14000NN as Installed/);
   const officeAdded = await createApprovedOfficePart(workorderId, {
     officeUserId: office.id,
     query: "Customer supplied air filter",
@@ -196,11 +238,73 @@ try {
   assert.equal(afterOfficeAdd.formData.parts.length, 1);
   assert.equal(afterOfficeAdd.formData.parts[0].partNo, "AF-TEST-1");
   assert.equal(afterOfficeAdd.formData.parts[0].requestId, undefined);
+
+  const measuredPart = await createApprovedOfficePart(workorderId, {
+    officeUserId: office.id,
+    query: "Bulk engine oil",
+    partNumber: "OIL-TEST-1",
+    manufacturer: "Test",
+    description: "Engine oil",
+    category: "fluid",
+    quantity: 2.375,
+    uomCode: "gal",
+    repairOrder: "Add engine oil.",
+    fitmentStatus: "confirmed",
+    fitmentNotes: "Verified by office.",
+    allocations: [{
+      sourceType: "customer_supplied",
+      status: "received",
+      quantity: 2.375,
+      uomCode: "gal",
+      vendor: "",
+      sourceReference: "Customer",
+      unitPrice: null,
+      quoteUrl: "",
+    }],
+  }, office.id);
+  assert.equal(measuredPart.quantity, 2.375);
+  assert.equal(measuredPart.uomCode, "gal");
+  assert.equal(measuredPart.allocations[0].quantity, 2.375);
+  assert.equal(measuredPart.allocations[0].uomCode, "gal");
+  const afterMeasuredPart = await getOperationalWorkorderById(workorderId);
+  assert.equal(afterMeasuredPart.formData.parts.length, 2);
+  assert.deepEqual(afterMeasuredPart.formData.parts[1], {
+    partNo: "OIL-TEST-1",
+    qty: "2.375",
+    uomCode: "gal",
+    repairOrder: "Add engine oil.",
+  });
+  await createApprovedOfficePart(workorderId, {
+    officeUserId: office.id,
+    query: "LF14000NN alternate package",
+    partNumber: "LF14000NN",
+    manufacturer: "Fleetguard",
+    description: "Engine oil filter",
+    category: "engine_oil_filter",
+    quantity: 1,
+    uomCode: "case",
+    repairOrder: "Replace engine oil filter.",
+    fitmentStatus: "confirmed",
+    fitmentNotes: "Alternate package entered for workflow test.",
+    allocations: [{
+      sourceType: "customer_supplied",
+      status: "received",
+      quantity: 1,
+      uomCode: "case",
+      sourceReference: "Customer",
+    }],
+  }, office.id);
+  const catalogUnit = await query(
+    `select uom_code from parts_catalog
+     where company_id = $1 and normalized_part_number = $2`,
+    [companyId, normalizePartNumber("LF14000NN")],
+  );
+  assert.equal(catalogUnit.rows[0].uom_code, "ea");
   assert.ok((await getWorkorderTimeline(workorderId)).filter((event) => event.type === "part").length >= 4);
 
   console.log(JSON.stringify({
     passed: true,
-    workflow: ["submitted", "approved", "inventory_reserved", "issued", "installed", "office_added_customer_part"],
+    workflow: ["submitted", "unit_mismatch_rejected", "approved", "inventory_reserved", "issued", "installed", "office_added_customer_part", "measured_part", "catalog_unit_preserved"],
     printableProjection: true,
     auditTimeline: true,
   }));

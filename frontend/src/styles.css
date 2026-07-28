@@ -4829,6 +4829,10 @@ textarea:focus {
   order: 3;
 }
 
+.create-parts-card {
+  order: 4;
+}
+
 @media (min-width: 1800px) {
   .create-workorder-form {
     max-width: 1320px;

@@ -68,6 +68,7 @@ export async function identifyPart(input, dependencies = {}) {
         description: catalogPart.description,
         category: catalogPart.category,
         suggestedQuantity: 1,
+        uomCode: catalogPart.uomCode,
         repairOrder: catalogPart.repairOrder,
         fitmentStatus: "unknown",
         confidence: 100,
@@ -187,6 +188,7 @@ export async function resolveOfficePartRequest(input, dependencies = {}) {
     manufacturer: identification.result.manufacturer,
     description: identification.result.description,
     quantity: identification.result.suggestedQuantity,
+    uomCode: identification.result.uomCode,
     vehicle: parsed.vehicle,
     location: parsed.location,
   });

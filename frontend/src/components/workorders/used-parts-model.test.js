@@ -11,7 +11,7 @@ import {
 
 test("zero used parts stay empty until Add part", () => {
   assert.deepEqual(normalizeUsedParts([], 0), []);
-  assert.deepEqual(addUsedPart([]), [{ partNo: "", qty: "", repairOrder: "" }]);
+  assert.deepEqual(addUsedPart([]), [{ partNo: "", qty: "", uomCode: "ea", repairOrder: "" }]);
 });
 
 test("used part rows add and remove without changing serialization fields", () => {
@@ -24,7 +24,7 @@ test("readonly used parts omit blank rows and retain saved values", () => {
   assert.deepEqual(readonlyUsedParts([
     { partNo: "ABC-123", qty: 2, repairOrder: "Installed" },
     { partNo: "", qty: "", repairOrder: "" },
-  ]), [{ partNo: "ABC-123", qty: "2", repairOrder: "Installed" }]);
+  ]), [{ partNo: "ABC-123", qty: "2", uomCode: "ea", repairOrder: "Installed" }]);
 });
 
 test("Add part access follows server permission for every editing role", () => {
@@ -41,6 +41,16 @@ test("saved used parts normalize directly into preview form data", () => {
   const previewForm = { ...form, parts: savedParts };
 
   assert.deepEqual(previewForm.parts, [
-    { partNo: "LF3972", qty: "2", repairOrder: "Oil service" },
+    { partNo: "LF3972", qty: "2", uomCode: "ea", repairOrder: "Oil service" },
+  ]);
+});
+
+test("used parts preserve valid units and default old rows to each", () => {
+  assert.deepEqual(normalizeUsedParts([
+    { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refilled" },
+    { partNo: "FILTER", qty: 1, repairOrder: "Replaced" },
+  ]), [
+    { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refilled" },
+    { partNo: "FILTER", qty: "1", uomCode: "ea", repairOrder: "Replaced" },
   ]);
 });

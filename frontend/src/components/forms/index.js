@@ -7,5 +7,6 @@ export { FormSection } from "./FormSection.jsx";
 export { MechanicMultiSelect } from "./MechanicMultiSelect.jsx";
 export { OperationalForm } from "./OperationalForm.jsx";
 export { OptionalSection } from "./OptionalSection.jsx";
+export { QuantityUnitInput } from "./QuantityUnitInput.jsx";
 export { UnitSummary } from "./UnitSummary.jsx";
 export { normalizeFormErrors } from "./form-utils.js";

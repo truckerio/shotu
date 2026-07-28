@@ -22,6 +22,7 @@ import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js"
 import { buildCompactPhoneDetailSections } from "../workorder-detail/workorder-detail-sections.js";
 import { useWorkorderDetailRealtime } from "../workorder-detail/useWorkorderDetailRealtime.js";
 import { normalizeWorkorderFormData, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import { formatQuantity } from "../../../../shared/units-of-measure.js";
 import {
   SURVEILLANCE_PHONE_PRIMARY_TABS,
   SURVEILLANCE_PHONE_SECONDARY_TABS,
@@ -444,7 +445,7 @@ export function SurveillanceWorkspace({ actor }) {
                 {usedParts.length ? usedParts.map((part, index) => (
                   <div key={`${part.partNo || part.description}-${index}`}>
                     <strong>{valueOrDash(part.partNo || part.description)}</strong>
-                    <span>Qty {part.qty || 1}</span>
+                    <span>{formatQuantity(part.qty, part.uomCode) || "Quantity not recorded"}</span>
                     <p>{part.repairOrder || part.description || ""}</p>
                   </div>
                 )) : <p>No parts recorded.</p>}

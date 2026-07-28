@@ -36,6 +36,7 @@ frontend/src/
   lib/                  Browser API and date utilities
 
 shared/
+  units-of-measure.js   Canonical quantity units, symbols, precision, conversion rules
   workorder-template.js Browser/server-safe workorder rendering
 
 src/server/
@@ -71,6 +72,19 @@ server.js               Composition root plus contained legacy print/share endpo
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### Quantity And Inventory Units
+
+`shared/units-of-measure.js` is the application contract for unit codes,
+categories, symbols, precision, and universal conversions. PostgreSQL owns
+durable quantities and product-specific packaging conversions. All role
+surfaces, print output, timeline output, and integrations consume the shared
+contract instead of defining their own unit lists.
+
+Measured quantities use decimal-safe values. Count and packaging units remain
+whole numbers. Cases, boxes, jugs, drums, and cylinders never receive a global
+conversion factor because their contents depend on the product. See
+`docs/UNITS_OF_MEASURE.md`.
 
 ### User Lifecycle
 
