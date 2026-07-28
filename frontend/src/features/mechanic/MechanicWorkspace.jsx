@@ -4,6 +4,8 @@ import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { Button } from "../../components/ui/Button.jsx";
+import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
+import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
@@ -159,19 +161,24 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
         <div className={`mechanic-work-list role-task-list role-task-list-${activeTab}`} aria-live="polite" data-mobile-action={mechanicActionLabel(activeTab)}>
           {loading ? (
             <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
-          ) : rows.length ? rows.map((workorder, index) => (
-            <WorkorderRow
-              key={workorder.id}
-              workorder={workorder}
-              featured={activeTab === "myWork" && index === 0}
-              available={activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
-              busy={acceptingId === workorder.id}
-              acceptLabel={activeTab === "activeWork" ? "Join work" : "Accept work"}
-              busyLabel={activeTab === "activeWork" ? "Joining..." : "Accepting..."}
-              onOpen={() => openWorkorder(workorder.id)}
-              onAccept={() => acceptFromCard(workorder.id)}
+          ) : rows.length ? (
+            <ProgressiveQueue
+              items={rows}
+              resetKey={progressiveQueueResetKey([activeTab, search])}
+              renderItem={(workorder, index) => (
+                <WorkorderRow
+                  workorder={workorder}
+                  featured={activeTab === "myWork" && index === 0}
+                  available={activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
+                  busy={acceptingId === workorder.id}
+                  acceptLabel={activeTab === "activeWork" ? "Join work" : "Accept work"}
+                  busyLabel={activeTab === "activeWork" ? "Joining..." : "Accepting..."}
+                  onOpen={() => openWorkorder(workorder.id)}
+                  onAccept={() => acceptFromCard(workorder.id)}
+                />
+              )}
             />
-          )) : (
+          ) : (
             <div className="mechanic-empty-state"><strong>{search ? "No matching jobs" : "No jobs here"}</strong></div>
           )}
         </div>

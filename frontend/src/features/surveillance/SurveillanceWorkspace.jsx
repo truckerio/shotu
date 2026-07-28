@@ -5,6 +5,8 @@ import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { Button } from "../../components/ui/Button.jsx";
+import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
+import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
 import { ProgressiveWorkorderSection, WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
@@ -569,7 +571,21 @@ export function SurveillanceWorkspace({ actor }) {
         <WorkorderTableHeader variant="surveillance" />
         <div className="mechanic-work-list" aria-live="polite">
           {loading ? <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
-            : rows.length ? rows.map((workorder) => <WorkorderRow key={workorder.id} workorder={workorder} variant="surveillance" onOpen={() => openWorkorder(workorder.id)} />)
+            : rows.length ? (
+              <ProgressiveQueue
+                items={rows}
+                resetKey={progressiveQueueResetKey([
+                  activeTab,
+                  search,
+                  effectiveLocationFilter,
+                  dateStartFilter,
+                  dateEndFilter,
+                ])}
+                renderItem={(workorder) => (
+                  <WorkorderRow workorder={workorder} variant="surveillance" onOpen={() => openWorkorder(workorder.id)} />
+                )}
+              />
+            )
               : <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>}
         </div>
       </section>

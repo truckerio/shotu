@@ -4,6 +4,8 @@ import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../../features/workorder-drafts/index.js";
+import { ProgressiveQueue } from "../responsive/ProgressiveQueue.jsx";
+import { progressiveQueueResetKey } from "../responsive/ProgressiveQueue.js";
 import {
   ATTENTION_OPTIONS,
   LIFECYCLE_OPTIONS,
@@ -356,7 +358,21 @@ export function OperationsWorkspace({
             <strong>No {activeCategory.label.toLowerCase()} workorders.</strong>
           </div>
         ) : null}
-        {!list.loading && !list.error ? list.items.map((item) => <OperationRow key={item.id} item={item} onOpenWorkorder={onOpenWorkorder} />) : null}
+        {!list.loading && !list.error ? (
+          <ProgressiveQueue
+            items={list.items}
+            resetKey={progressiveQueueResetKey([
+              filters.category,
+              filters.locationId,
+              filters.lifecycle,
+              filters.attentionReason,
+              filters.search,
+              filters.sort,
+              page,
+            ])}
+            renderItem={(item) => <OperationRow item={item} onOpenWorkorder={onOpenWorkorder} />}
+          />
+        ) : null}
       </div>}
 
       {filters.category !== "drafts" && list.pageCount > 1 ? (

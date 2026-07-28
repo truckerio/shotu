@@ -1,0 +1,21 @@
+.progressive-queue-more {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .progressive-queue-more {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 8px 0;
+  }
+
+  .progressive-queue-more button {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .progressive-queue-more button span {
+    margin-left: 0.35rem;
+  }
+}

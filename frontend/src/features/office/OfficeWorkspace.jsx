@@ -9,6 +9,8 @@ import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
 import { MobileFilterSheet } from "../../components/responsive/MobileFilterSheet.jsx";
+import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
+import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import {
   OFFICE_PRIMARY_TABS,
   OFFICE_SECONDARY_TAB_KEYS,
@@ -296,9 +298,21 @@ export function OfficeWorkspace({
               <div className="mechanic-work-list" aria-live="polite">
                 {loading ? (
                   <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
-                ) : filteredRows.length ? filteredRows.map((workorder) => (
-                  <WorkorderRow key={workorder.id} workorder={workorder} variant="office" onOpen={() => openDetail(workorder.id)} />
-                )) : (
+                ) : filteredRows.length ? (
+                  <ProgressiveQueue
+                    items={filteredRows}
+                    resetKey={progressiveQueueResetKey([
+                      activeTab,
+                      search,
+                      lifecycleFilter,
+                      mechanicFilter,
+                      locationFilter,
+                    ])}
+                    renderItem={(workorder) => (
+                      <WorkorderRow workorder={workorder} variant="office" onOpen={() => openDetail(workorder.id)} />
+                    )}
+                  />
+                ) : (
                   <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>
                 )}
               </div>
