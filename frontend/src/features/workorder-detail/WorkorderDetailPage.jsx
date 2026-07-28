@@ -4,6 +4,7 @@ import { Button } from "../../components/ui/Button.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { ChatComposer } from "../../components/workorders/ChatComposer.jsx";
 import { ChatThread } from "../../components/workorders/ChatThread.jsx";
+import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
 import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
 import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
@@ -119,8 +120,8 @@ export function WorkorderDetailPage({
         onSend={sendWorkorderChat}
         disabled={isMechanicDetail && !activeWorkorder.allowedActions.sendMessage}
         sending={mechanicAction.busy === "chat"}
-        placeholder={isOfficeDetail ? "Message mechanic..." : "Type a message to office..."}
-        textareaLabel={isOfficeDetail ? "Message mechanic" : "Message office"}
+        placeholder="Message..."
+        textareaLabel="Chat message"
         cameraLabel={isOfficeDetail ? "Take or add photo" : "Take photo"}
         sendLabel="Send"
         compact={isMechanicDetail}
@@ -269,7 +270,7 @@ export function WorkorderDetailPage({
             saveMechanicWorkNotes={saveMechanicWorkNotes}
             saveOfficeWorkorder={saveOfficeWorkorder}
             selectOfficeLocation={selectOfficeLocation}
-            setDetailSection={setDetailSection}
+            setDetailSection={selectDetailSection}
             setOfficeAssignment={setOfficeAssignment}
             updateActiveUsedParts={updateActiveUsedParts}
             updateField={updateField}
@@ -280,33 +281,27 @@ export function WorkorderDetailPage({
             vehicleModelText={vehicleModelText}
           />
           {isPhone && detailSection === "preview" ? (
-            <div className="workorder-compact-preview">
-              <PreviewPane
-                id="workorder-preview-panel"
-                open
-                variant="dock"
-                panelRef={previewRef}
-                status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
-                countLabel={workorderCountLabel}
-                range={range}
-                printMenuOpen={printMenuOpen}
-                onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-                onPrint={canPrint ? () => {
-                  setPrintMenuOpen(false);
-                  printWorkorders();
-                } : undefined}
-                primaryActionLabel={primaryActionLabel}
-                onFullscreen={openFullscreenPreview}
-                onOpenPreview={openFullscreenPreview}
-              >
-                <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-                  <WorkorderPreview label="First page" serial={firstSerial} form={form} />
-                  {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                    ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
-                    : null}
-                </div>
-              </PreviewPane>
-            </div>
+            <CompactWorkorderPreview
+              panelRef={previewRef}
+              status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
+              countLabel={workorderCountLabel}
+              range={range}
+              printMenuOpen={printMenuOpen}
+              onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
+              onPrint={canPrint ? () => {
+                setPrintMenuOpen(false);
+                printWorkorders();
+              } : undefined}
+              primaryActionLabel={primaryActionLabel}
+              onFullscreen={openFullscreenPreview}
+            >
+              <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
+                <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+                {effectiveCopies > 1 || lastPhysicalPageIndex > 0
+                  ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                  : null}
+              </div>
+            </CompactWorkorderPreview>
           ) : null}
         </aside>
 

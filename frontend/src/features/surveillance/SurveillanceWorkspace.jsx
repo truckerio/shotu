@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
+import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
 import { ProgressiveWorkorderSection, WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkorderTimelinePanel } from "../../components/workorders/WorkorderTimeline.jsx";
@@ -16,7 +17,9 @@ import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatus
 import { PreviewFullscreen, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
+import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { buildCompactPhoneDetailSections } from "../workorder-detail/workorder-detail-sections.js";
 import { useWorkorderDetailRealtime } from "../workorder-detail/useWorkorderDetailRealtime.js";
 import { normalizeWorkorderFormData, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import {
@@ -101,6 +104,7 @@ function progressTimestamp(workorder) {
 }
 
 export function SurveillanceWorkspace({ actor }) {
+  const isPhone = useMediaQuery("(max-width: 640px)");
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("active");
   const [search, setSearch] = useState("");
@@ -292,7 +296,7 @@ export function SurveillanceWorkspace({ actor }) {
     const currentIndex = rows.findIndex((row) => row.id === workorder.id);
     const canProcessOdoo = ["closed", "odoo_entered"].includes(workorder.status);
     const progress = progressTimestamp(workorder);
-    const detailSections = [
+    const baseDetailSections = [
       {
         id: "work",
         label: canProcessOdoo ? "Odoo" : "Work",
@@ -313,6 +317,9 @@ export function SurveillanceWorkspace({ actor }) {
         count: detail.timeline?.length || undefined,
       },
     ];
+    const detailSections = isPhone
+      ? buildCompactPhoneDetailSections(baseDetailSections, "surveillance")
+      : baseDetailSections;
     const selectedSection = detailSections.some((section) => section.id === detailSection) ? detailSection : "work";
     const workDates = workDateRangeLabel({
       workStartDate: formData.workStartDate || workorder.workStartDate || workorder.createdAt,
@@ -341,7 +348,7 @@ export function SurveillanceWorkspace({ actor }) {
     return (
       <main className="prototype workorder-detail-page surveillance-detail-page">
         <style>{workorderTemplateStyles}</style>
-        <WorkorderDetailLayout detail previewOpen={previewOpen}>
+        <WorkorderDetailLayout detail previewOpen={!isPhone && previewOpen}>
         <section className="surveillance-detail-shell control-panel">
           <div className="detail-context-bar">
             <button className="icon-button" type="button" onClick={() => setDetail(null)} aria-label="Back to surveillance queue" title="Back to queue"><ArrowLeft /></button>
@@ -356,11 +363,13 @@ export function SurveillanceWorkspace({ actor }) {
                 <span>{currentIndex >= 0 ? `${currentIndex + 1} of ${rows.length}` : ""}</span>
                 <button type="button" onClick={() => openRelative(1)} disabled={currentIndex < 0 || currentIndex >= rows.length - 1} aria-label="Next workorder"><ArrowRight /></button>
               </nav>
-              <PreviewToggle
-                open={previewOpen || previewFullscreen}
-                onToggle={togglePreview}
-                controls="workorder-preview-panel"
-              />
+              {!isPhone ? (
+                <PreviewToggle
+                  open={previewOpen || previewFullscreen}
+                  onToggle={togglePreview}
+                  controls="workorder-preview-panel"
+                />
+              ) : null}
             </div>
           </div>
 
@@ -469,11 +478,31 @@ export function SurveillanceWorkspace({ actor }) {
               onSelect={setDetailSection}
               displayMode="panel"
             >
-              <WorkorderTimelinePanel timeline={detail.timeline || []} participants={detail.participants || []} />
+              <WorkorderTimelinePanel
+                timeline={detail.timeline || []}
+                participants={detail.participants || []}
+                compact={isPhone}
+              />
             </ProgressiveWorkorderSection>
+            {isPhone && selectedSection === "preview" ? (
+              <CompactWorkorderPreview
+                panelRef={previewRef}
+                status={<WorkorderStatusPill status={workorder.status} />}
+                countLabel="1 workorder"
+                range={workorder.serial}
+                onFullscreen={() => setPreviewFullscreen(true)}
+              >
+                <div className="preview-grid single mechanic-preview-grid">
+                  <WorkorderPreview label="First page" serial={workorder.serial} form={previewForm} />
+                  {pageCount > 1
+                    ? <WorkorderPreview label="Last page" serial={workorder.serial} form={previewForm} pageIndex={pageCount - 1} />
+                    : null}
+                </div>
+              </CompactWorkorderPreview>
+            ) : null}
           </div>
         </section>
-        <PreviewPane
+        {!isPhone ? <PreviewPane
           id="workorder-preview-panel"
           open={previewOpen}
           variant="dock"
@@ -490,7 +519,7 @@ export function SurveillanceWorkspace({ actor }) {
               ? <WorkorderPreview label="Last page" serial={workorder.serial} form={previewForm} pageIndex={pageCount - 1} />
               : null}
           </div>
-        </PreviewPane>
+        </PreviewPane> : null}
         </WorkorderDetailLayout>
         <PreviewFullscreen
           open={previewFullscreen}

@@ -73,7 +73,12 @@ export function buildCompactPhoneDetailSections(sections, role) {
       : ["unit", "team", "activity"];
 
   const primary = primaryIds
-    .map((id) => (id === "preview" ? preview : byId.get(id)))
+    .map((id) => {
+      if (id === "preview") return preview;
+      const section = byId.get(id);
+      if (id === "work" && section && role !== "mechanic") return { ...section, label: "Review" };
+      return section;
+    })
     .filter(Boolean);
   const overflow = overflowIds
     .map((id) => byId.get(id))

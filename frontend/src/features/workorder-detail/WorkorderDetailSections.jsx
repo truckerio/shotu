@@ -61,7 +61,7 @@ export function WorkorderDetailSections({
       {activeWorkorder && isCompact ? (
         <ProgressiveWorkorderSection
           id="chat"
-          title={isOfficeDetail ? "Chat with mechanic" : "Messages with office"}
+          title="Chat"
           summary={`${conversationMessages.length} ${conversationMessages.length === 1 ? "message" : "messages"}`}
           activeSection={detailSection}
           onSelect={setDetailSection}
@@ -357,7 +357,7 @@ export function WorkorderDetailSections({
         <ProgressiveWorkorderSection
           id="activity"
           title="Activity"
-          summary={`${visibleTimeline.length} events`}
+          summary={`${visibleTimeline.length} ${visibleTimeline.length === 1 ? "event" : "events"}`}
           activeSection={detailSection}
           onSelect={setDetailSection}
           className="is-detail-end-timeline"

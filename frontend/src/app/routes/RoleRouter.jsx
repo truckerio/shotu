@@ -959,7 +959,7 @@ export function RoleRouter({ actor }) {
   function openOperationalWorkorder(detail) {
     const workorder = detail.workorder;
     const requestedSection = currentRouteParams().get("section");
-    const compactSections = ["work", "chat", "parts", "unit", "activity"];
+    const compactSections = ["work", "chat", "parts", "preview", "unit", "activity"];
     const nextSection = compactSections.includes(requestedSection)
       ? requestedSection
       : defaultDetailSection("mechanic", workorder.status, isCompact);
@@ -1469,7 +1469,7 @@ export function RoleRouter({ actor }) {
       return;
     }
     setDetailSection(section);
-    if (isMechanicDetail && activeWorkorder?.workorder?.id) {
+    if (activeWorkorder?.workorder?.id) {
       replaceRouteSearch(workorderDetailSearch(activeWorkorder.workorder.id, section));
     }
   }

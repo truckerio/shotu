@@ -161,11 +161,16 @@
   .workorder-detail-page .workorder-compact-preview .preview-panel {
     border: 1px solid #d5d7da;
     border-radius: 8px;
-    display: flex;
+    display: grid;
+    height: auto;
     max-height: none;
     min-height: 0;
+    opacity: 1;
     overflow: hidden;
+    padding: 10px;
+    pointer-events: auto;
     position: static;
+    visibility: visible;
     width: 100%;
   }
 

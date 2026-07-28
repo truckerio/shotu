@@ -123,8 +123,24 @@
 }
 
 @media (max-width: 640px) {
+  .workorder-detail-page .workorder-progressive-stack > .workorder-section-panel.chat-section {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+    min-height: calc(100dvh - 245px - env(safe-area-inset-bottom));
+  }
+
+  .workorder-detail-page .workorder-progressive-stack > .chat-section .workorder-section-panel-heading {
+    padding-inline: 2px;
+  }
+
+  .workorder-detail-page .workorder-progressive-stack > .chat-section .workorder-section-panel-content {
+    padding: 0;
+  }
+
   .workorder-detail-page .chat-content:has(> .chat-thread + .chat-prompt-composer) {
-    height: max(360px, calc(100dvh - 190px - env(safe-area-inset-bottom)));
+    height: max(360px, calc(100dvh - 258px - env(safe-area-inset-bottom)));
   }
 
   .workorder-detail-page .chat-content > .chat-thread {
