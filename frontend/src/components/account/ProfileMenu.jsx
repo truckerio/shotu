@@ -1,7 +1,7 @@
 import React from "react";
-import { ChevronDown, LogOut01, User03, UserCircle } from "@untitledui/icons";
+import { ChevronDown, LogOut01, UserCircle } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
-import { OwlWordmark, PRODUCT_NAME } from "../brand/OwlWordmark.jsx";
+import { OwlProfileMark, OwlWordmark, PRODUCT_NAME } from "../brand/OwlWordmark.jsx";
 import { authClient } from "../../lib/auth-client.js";
 import "./profile-menu.css";
 
@@ -51,8 +51,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false })
         <OwlWordmark
           mark={(
             <span className="profile-menu-brand-mark">
-              <span className="profile-menu-brand-letter">O</span>
-              <User03 className="profile-menu-brand-icon" aria-hidden="true" />
+              <OwlProfileMark />
               <MenuTrigger>
                 <Button className="profile-menu-brand-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`} />
                 {accountMenu}
@@ -71,7 +70,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false })
         mark={(
           <MenuTrigger>
             <Button className="profile-menu-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`}>
-              <span className="profile-menu-phone-o" aria-hidden="true">O</span>
+              <span className="profile-menu-phone-o" aria-hidden="true"><OwlProfileMark /></span>
               <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
               <span className="profile-menu-identity">
                 <strong>{actor?.name || "User"}</strong>

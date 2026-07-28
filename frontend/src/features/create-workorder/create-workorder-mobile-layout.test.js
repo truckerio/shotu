@@ -5,6 +5,10 @@ import test from "node:test";
 const createCss = readFileSync(new URL("./create-workorder-page.css", import.meta.url), "utf8");
 const createPage = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const createForm = readFileSync(new URL("../generator/CreateWorkorderForm.jsx", import.meta.url), "utf8");
+const operationalFormCss = readFileSync(
+  new URL("../../components/forms/operational-form.css", import.meta.url),
+  "utf8",
+);
 const sharedNavigationCss = readFileSync(
   new URL("../../components/workorders/workorder-object-page.css", import.meta.url),
   "utf8",
@@ -13,6 +17,27 @@ const sharedNavigationCss = readFileSync(
 test("Create and shared detail navigation use the same phone breakpoint", () => {
   assert.match(createCss, /@media \(max-width: 700px\)/);
   assert.match(sharedNavigationCss, /@media \(max-width: 700px\)/);
+});
+
+test("phone Create select and date fields share the 44px control height", () => {
+  assert.match(
+    createCss,
+    /\.create-workorder-page\s+\.operational-form\s+select,\s*\.create-workorder-page\s+\.operational-form\s+input\[type="date"\]\s*\{[^}]*block-size:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*inline-size:\s*100%;[^}]*max-block-size:\s*44px;[^}]*max-inline-size:\s*100%;[^}]*min-block-size:\s*44px;[^}]*min-inline-size:\s*0;[^}]*padding-block:\s*0;/s,
+  );
+});
+
+test("shared operational controls include padding inside their contained width", () => {
+  assert.match(
+    operationalFormCss,
+    /\.operational-form\s+:where\(input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\), select, textarea\)\s*\{[^}]*box-sizing:\s*border-box;[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
+  );
+});
+
+test("phone Create opts date fields out of Safari intrinsic control sizing", () => {
+  assert.match(
+    createCss,
+    /\.create-workorder-page\s+\.operational-form\s+input\[type="date"\]\s*\{[^}]*-webkit-appearance:\s*none;[^}]*appearance:\s*none;[^}]*display:\s*block;/s,
+  );
 });
 
 test("phone Create uses shared keyboard foundation and one docked primary action", () => {

@@ -1,6 +1,6 @@
 .owl-wordmark {
   align-items: center;
-  color: #101828;
+  color: #000;
   display: inline-flex;
   font-size: 24px;
   font-weight: var(--weight-semibold);
@@ -8,12 +8,41 @@
   line-height: 1;
 }
 
+.owl-profile-mark {
+  color: currentColor;
+  display: block;
+  flex: 0 0 auto;
+  height: 1em;
+  overflow: visible;
+  width: 1em;
+}
+
+.owl-profile-mark-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  stroke-width: 4.25;
+}
+
+.owl-profile-mark-shoulders,
+.owl-profile-mark-head {
+  fill: #1570ef;
+}
+
 .owl-wordmark-mark {
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
+  height: 1.34em;
+  width: 1.34em;
 }
 
 .owl-wordmark-suffix {
-  margin-left: 0;
+  display: inline-block;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1em;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0;
+  line-height: 1;
+  margin-left: 0.035em;
+  transform: translateY(0.16em) scaleX(1.2);
+  transform-origin: left center;
 }
