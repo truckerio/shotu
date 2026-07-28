@@ -21,8 +21,7 @@ test("390px and 430px phone chat use a rectangular full-width workspace with ins
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(mobileCss, /\.chat-content:has\(>\s*\.chat-thread\s*\+\s*\.chat-prompt-composer\)\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*clip;[^}]*width:\s*100%;/s);
   assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-thread\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*max-width:\s*100%;/s);
-  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*--chat-composer-inset:\s*clamp\(12px,\s*3\.5vw,\s*16px\);[^}]*align-self:\s*end;[^}]*max-width:\s*100%;[^}]*padding:\s*8px var\(--chat-composer-inset\) var\(--chat-composer-inset\);[^}]*position:\s*static;/s);
-  assert.doesNotMatch(mobileCss, /\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*bottom:\s*calc\(59px/s);
+  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*--chat-composer-inset:\s*clamp\(12px,\s*3\.5vw,\s*16px\);[^}]*align-self:\s*end;[^}]*bottom:\s*calc\(59px \+ env\(safe-area-inset-bottom\)\);[^}]*max-width:\s*100%;[^}]*padding:\s*8px var\(--chat-composer-inset\) var\(--chat-composer-inset\);[^}]*position:\s*sticky;/s);
 
   for (const viewportWidth of [390, 430]) {
     const inset = Math.min(16, Math.max(12, viewportWidth * 0.035));

@@ -166,9 +166,10 @@
     --chat-composer-inset: clamp(12px, 3.5vw, 16px);
 
     align-self: end;
+    bottom: calc(59px + env(safe-area-inset-bottom));
     max-width: 100%;
     padding: 8px var(--chat-composer-inset) var(--chat-composer-inset);
-    position: static;
+    position: sticky;
     z-index: 12;
   }
 
