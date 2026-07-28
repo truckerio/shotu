@@ -15,6 +15,11 @@ export function WorkorderTimeline({ timeline }) {
     <ol className="workorder-timeline-list">
       {meaningfulTimeline.map((event) => (
         <li key={`${event.type}-${event.id}`}>
+          {event.created_at ? (
+            <time className="workorder-timeline-date" dateTime={event.created_at}>
+              {formatCreatedAt(event.created_at)}
+            </time>
+          ) : <span className="workorder-timeline-date">Time unavailable</span>}
           <span className="workorder-timeline-marker" aria-hidden="true" />
           <div className="workorder-timeline-event">
             <div className="workorder-timeline-event-heading">
@@ -25,8 +30,7 @@ export function WorkorderTimeline({ timeline }) {
             </div>
             <span className="workorder-timeline-description">{timelineEventDescription(event)}</span>
             <small className="workorder-timeline-meta">
-              <span>{event.changed_by_name || "System"}</span>
-              {event.created_at ? <time dateTime={event.created_at}>{formatCreatedAt(event.created_at)}</time> : null}
+              <span>By {event.changed_by_name || "System"}</span>
             </small>
           </div>
         </li>

@@ -37,37 +37,72 @@
 .workorder-timeline-list > li {
   position: relative;
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 120px 18px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
   min-width: 0;
-  padding: 11px 0;
+  padding: 12px 0;
 }
 
 .workorder-timeline-list > li:not(:last-child)::after {
   position: absolute;
-  top: 26px;
-  bottom: -5px;
-  left: 5px;
-  width: 2px;
-  background: var(--border-subtle, #e4e7ec);
+  top: 30px;
+  bottom: -12px;
+  left: 140.5px;
+  width: 1px;
+  background: #d0d5dd;
   content: "";
+}
+
+.workorder-timeline-date {
+  justify-self: end;
+  max-width: 100%;
+  margin-top: 1px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorder-timeline-list > li:first-child .workorder-timeline-date {
+  background: #181d27;
+  color: #fff;
 }
 
 .workorder-timeline-marker {
   position: relative;
   z-index: 1;
-  width: 12px;
-  height: 12px;
-  margin-top: 3px;
-  border: 3px solid #d1e9ff;
+  justify-self: center;
+  width: 13px;
+  height: 13px;
+  margin-top: 5px;
+  border: 3px solid #eaecf0;
   border-radius: 999px;
+  background: #98a2b3;
+  box-shadow: 0 0 0 4px #f2f4f7;
+}
+
+.workorder-timeline-list > li:first-child .workorder-timeline-marker {
+  border-color: #d1e9ff;
   background: #1570ef;
+  box-shadow: 0 0 0 4px #eff8ff;
 }
 
 .workorder-timeline-event {
   display: grid;
-  gap: 3px;
+  gap: 5px;
   min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
 }
 
 .workorder-timeline-event-heading {
@@ -80,8 +115,9 @@
 
 .workorder-timeline-list strong {
   color: var(--text-primary, #181d27);
-  font-size: var(--text-secondary, 13px);
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .workorder-timeline-description,
@@ -96,11 +132,7 @@
   display: flex;
   gap: 5px;
   align-items: center;
-}
-
-.workorder-timeline-meta time::before {
-  margin-right: 5px;
-  content: "·";
+  padding-top: 2px;
 }
 
 .workorder-timeline-status {
@@ -129,8 +161,32 @@
   }
 
   .workorder-timeline-list > li {
-    gap: 8px;
-    padding: 10px 0;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 6px 10px;
+    padding: 11px 0;
+  }
+
+  .workorder-timeline-list > li:not(:last-child)::after {
+    top: 29px;
+    bottom: -11px;
+    left: 7px;
+  }
+
+  .workorder-timeline-date {
+    grid-column: 2;
+    justify-self: start;
+    margin: 0;
+  }
+
+  .workorder-timeline-marker {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+    margin-top: 5px;
+  }
+
+  .workorder-timeline-event {
+    grid-column: 2;
+    padding: 12px 13px;
   }
 
   .workorder-timeline-event-heading {
