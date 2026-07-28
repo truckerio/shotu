@@ -145,14 +145,17 @@ test("repository acknowledgement is idempotent, excludes self and system message
   assert.match(source, /on conflict \(message_id, user_id\) do update/i);
   assert.match(source, /least\(chat_message_receipts\.delivered_at, excluded\.delivered_at\)/i);
   assert.match(source, /coalesce\(chat_message_receipts\.read_at, excluded\.read_at\)/i);
-  assert.match(source, /case when \$5 = 'read' then now\(\) else null end/i);
+  assert.match(source, /case when \$4 = 'read' then now\(\) else null end/i);
   assert.match(source, /sender_user_id is not null[\s\S]*sender_user_id <> \$3/i);
   assert.match(source, /select id, created_at[\s\S]*sender_role <> 'system'[\s\S]*message_type <> 'system'/i);
-  assert.match(source, /\(cm\.created_at, cm\.id\) <= \(\$3, \$4\)[\s\S]*cm\.sender_user_id is not null/i);
+  assert.match(source, /join chat_messages boundary[\s\S]*boundary\.id = \$3[\s\S]*boundary\.workorder_id = \$1/i);
+  assert.match(source, /\(cm\.created_at, cm\.id\) <= \(boundary\.created_at, boundary\.id\)[\s\S]*cm\.sender_user_id is not null/i);
   assert.match(source, /cm\.sender_user_id is distinct from \$2/i);
   assert.match(source, /cm\.sender_role <> 'system'/i);
   assert.match(source, /cm\.message_type <> 'system'/i);
-  assert.match(source, /cm\.workorder_id = \$1[\s\S]*\(cm\.created_at, cm\.id\) <= \(\$3, \$4\)/i);
+  assert.match(source, /cm\.workorder_id = \$1[\s\S]*\(cm\.created_at, cm\.id\) <= \(boundary\.created_at, boundary\.id\)/i);
+  assert.match(source, /\[workorderId, actorUserId, target\.rows\[0\]\.id, status\]/i);
+  assert.doesNotMatch(source, /\[workorderId, actorUserId, target\.rows\[0\]\.created_at/);
   assert.match(source, /where id = \$1[\s\S]*and workorder_id = \$2/i);
 });
 

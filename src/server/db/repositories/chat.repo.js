@@ -130,10 +130,13 @@ export async function acknowledgeChatMessageReceiptsThrough({
           cm.id,
           $2,
           now(),
-          case when $5 = 'read' then now() else null end
+          case when $4 = 'read' then now() else null end
         from chat_messages cm
+        join chat_messages boundary
+          on boundary.id = $3
+         and boundary.workorder_id = $1
         where cm.workorder_id = $1
-          and (cm.created_at, cm.id) <= ($3, $4)
+          and (cm.created_at, cm.id) <= (boundary.created_at, boundary.id)
           and cm.sender_user_id is not null
           and cm.sender_user_id is distinct from $2
           and cm.sender_role <> 'system'
@@ -141,12 +144,12 @@ export async function acknowledgeChatMessageReceiptsThrough({
         on conflict (message_id, user_id) do update
         set delivered_at = least(chat_message_receipts.delivered_at, excluded.delivered_at),
             read_at = case
-              when $5 = 'read' then coalesce(chat_message_receipts.read_at, excluded.read_at)
+              when $4 = 'read' then coalesce(chat_message_receipts.read_at, excluded.read_at)
               else chat_message_receipts.read_at
             end
         returning message_id, delivered_at, read_at
       `,
-      [workorderId, actorUserId, target.rows[0].created_at, target.rows[0].id, status],
+      [workorderId, actorUserId, target.rows[0].id, status],
     );
 
     await client.query("commit");
