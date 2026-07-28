@@ -151,4 +151,26 @@
     padding-bottom: 8px;
     z-index: 39;
   }
+
+  .workorder-detail-page .workorder-compact-preview {
+    min-width: 0;
+    padding: 10px 12px 20px;
+    width: 100%;
+  }
+
+  .workorder-detail-page .workorder-compact-preview .preview-panel {
+    border: 1px solid #d5d7da;
+    border-radius: 8px;
+    display: flex;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+    position: static;
+    width: 100%;
+  }
+
+  .workorder-detail-page .workorder-compact-preview .preview-pane-content {
+    min-height: 360px;
+    overflow: auto;
+  }
 }

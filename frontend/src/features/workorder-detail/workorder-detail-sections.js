@@ -60,6 +60,29 @@ export function buildWorkorderDetailSections({
   return sections;
 }
 
+export function buildCompactPhoneDetailSections(sections, role) {
+  const byId = new Map(sections.map((section) => [section.id, section]));
+  const preview = { id: "preview", label: "Preview" };
+  const primaryIds = role === "surveillance"
+    ? ["work", "parts", "preview", "activity"]
+    : ["work", "chat", "parts", "preview"];
+  const overflowIds = role === "mechanic"
+    ? ["unit", "activity"]
+    : role === "surveillance"
+      ? ["unit", "team"]
+      : ["unit", "team", "activity"];
+
+  const primary = primaryIds
+    .map((id) => (id === "preview" ? preview : byId.get(id)))
+    .filter(Boolean);
+  const overflow = overflowIds
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((section) => ({ ...section, overflow: true }));
+
+  return [...primary, ...overflow];
+}
+
 export function workorderNeedsChatAttention(status) {
   return ATTENTION_STATUSES.has(status);
 }

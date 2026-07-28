@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildWorkorderDetailSections,
+  buildCompactPhoneDetailSections,
   defaultDetailSection,
   defaultSupportingView,
   workorderDetailSectionMode,
@@ -40,4 +41,27 @@ test("compact attention status starts on chat and opens chat dock", () => {
 
 test("workorder detail tabs render as page panels", () => {
   assert.equal(workorderDetailSectionMode(), "panel");
+});
+
+test("compact phone detail keeps role actions visible and moves supporting sections into More", () => {
+  const sections = [
+    { id: "work", label: "Review" },
+    { id: "chat", label: "Chat" },
+    { id: "parts", label: "Parts" },
+    { id: "unit", label: "Truck" },
+    { id: "team", label: "Team" },
+    { id: "activity", label: "Activity" },
+  ];
+
+  const office = buildCompactPhoneDetailSections(sections, "office");
+  assert.deepEqual(office.map(({ id }) => id), ["work", "chat", "parts", "preview", "unit", "team", "activity"]);
+  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["unit", "team", "activity"]);
+
+  const mechanic = buildCompactPhoneDetailSections(sections, "mechanic");
+  assert.deepEqual(mechanic.map(({ id }) => id), ["work", "chat", "parts", "preview", "unit", "activity"]);
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["unit", "activity"]);
+
+  const surveillance = buildCompactPhoneDetailSections(sections, "surveillance");
+  assert.deepEqual(surveillance.map(({ id }) => id), ["work", "parts", "preview", "activity", "unit", "team"]);
+  assert.deepEqual(surveillance.filter(({ overflow }) => overflow).map(({ id }) => id), ["unit", "team"]);
 });

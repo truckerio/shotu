@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { ArrowLeft, CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
@@ -9,7 +10,7 @@ import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatus
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { workDateRangeLabel, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
-import { workorderNeedsChatAttention } from "./workorder-detail-sections.js";
+import { buildCompactPhoneDetailSections, workorderNeedsChatAttention } from "./workorder-detail-sections.js";
 
 export function WorkorderDetailPage({
   activeWorkorder,
@@ -105,6 +106,12 @@ export function WorkorderDetailPage({
   vehicleMileage,
   vehicleModelText,
 }) {
+  const visibleDetailSections = useMemo(
+    () => (isPhone
+      ? buildCompactPhoneDetailSections(detailSections, isMechanicDetail ? "mechanic" : "office")
+      : detailSections),
+    [detailSections, isMechanicDetail, isPhone],
+  );
   const workorderChatContent = (
     <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className="chat-content">
       <ChatThread messages={conversationMessages} currentRole={isOfficeDetail ? "office" : "mechanic"} currentUserId={actor.id} />
@@ -126,7 +133,7 @@ export function WorkorderDetailPage({
     <main className={`prototype workorder-detail-page ${isMechanicDetail ? "mechanic-detail-page" : ""}`.trim()}>
       <style>{workorderTemplateStyles}</style>
       <BrowserPrintDocument payload={browserPrintPayload} />
-      <WorkorderDetailLayout detail previewOpen={showEmbeddedPreview}>
+      <WorkorderDetailLayout detail previewOpen={!isPhone && showEmbeddedPreview}>
         <aside className="control-panel" ref={formRef}>
           <div className="detail-context-bar">
             <button
@@ -171,13 +178,15 @@ export function WorkorderDetailPage({
                   <span>Approve</span>
                 </button>
               ) : null}
-              <PreviewToggle
-                open={showEmbeddedPreview || previewFullscreen}
-                onToggle={toggleWorkorderTools}
-                controls="workorder-preview-panel"
-                openLabel="Open workorder tools"
-                closeLabel="Close workorder tools"
-              />
+              {!isPhone ? (
+                <PreviewToggle
+                  open={showEmbeddedPreview || previewFullscreen}
+                  onToggle={toggleWorkorderTools}
+                  controls="workorder-preview-panel"
+                  openLabel="Open workorder tools"
+                  closeLabel="Close workorder tools"
+                />
+              ) : null}
             </div>
           </div>
 
@@ -211,7 +220,7 @@ export function WorkorderDetailPage({
             ) : null}
             {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
           </WorkorderObjectSummary>
-          <WorkorderSectionNav sections={detailSections} activeSection={detailSection} onSelect={selectDetailSection} />
+          <WorkorderSectionNav sections={visibleDetailSections} activeSection={detailSection} onSelect={selectDetailSection} />
           {isMechanicDetail && isCompact && detailSection === "work" ? (
             <div className="mechanic-compact-primary-action">
               <button
@@ -270,9 +279,38 @@ export function WorkorderDetailPage({
             vehicleMileage={vehicleMileage}
             vehicleModelText={vehicleModelText}
           />
+          {isPhone && detailSection === "preview" ? (
+            <div className="workorder-compact-preview">
+              <PreviewPane
+                id="workorder-preview-panel"
+                open
+                variant="dock"
+                panelRef={previewRef}
+                status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
+                countLabel={workorderCountLabel}
+                range={range}
+                printMenuOpen={printMenuOpen}
+                onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
+                onPrint={canPrint ? () => {
+                  setPrintMenuOpen(false);
+                  printWorkorders();
+                } : undefined}
+                primaryActionLabel={primaryActionLabel}
+                onFullscreen={openFullscreenPreview}
+                onOpenPreview={openFullscreenPreview}
+              >
+                <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
+                  <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+                  {effectiveCopies > 1 || lastPhysicalPageIndex > 0
+                    ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                    : null}
+                </div>
+              </PreviewPane>
+            </div>
+          ) : null}
         </aside>
 
-        <PreviewPane
+        {!isPhone ? <PreviewPane
           id="workorder-preview-panel"
           open={showEmbeddedPreview}
           variant="dock"
@@ -302,7 +340,7 @@ export function WorkorderDetailPage({
               ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
               : null}
           </div>
-        </PreviewPane>
+        </PreviewPane> : null}
       </WorkorderDetailLayout>
 
       <PreviewFullscreen

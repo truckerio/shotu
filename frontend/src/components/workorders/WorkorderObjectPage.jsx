@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ClockRewind,
   DotsHorizontal,
+  FileSearch01,
   MessageChatCircle,
   Package,
   Tool02,
@@ -16,6 +17,7 @@ const SECTION_ICONS = Object.freeze({
   activity: ClockRewind,
   chat: MessageChatCircle,
   parts: Package,
+  preview: FileSearch01,
   team: Users01,
   unit: Truck01,
   work: Tool02,
@@ -74,8 +76,13 @@ export function WorkorderObjectSummary({
 }
 
 export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
-  const primarySections = sections.length > 5 ? sections.slice(0, 4) : sections;
-  const overflowSections = sections.length > 5 ? sections.slice(4) : [];
+  const markedOverflowSections = sections.filter((section) => section.overflow);
+  const primarySections = markedOverflowSections.length
+    ? sections.filter((section) => !section.overflow)
+    : sections.length > 5 ? sections.slice(0, 4) : sections;
+  const overflowSections = markedOverflowSections.length
+    ? markedOverflowSections
+    : sections.length > 5 ? sections.slice(4) : [];
   const activeOverflowSection = overflowSections.find(({ id }) => id === activeSection);
 
   function SectionContent({ section, showIcon = false }) {
