@@ -505,7 +505,10 @@
 
   .surveillance-home .surveillance-queue-primary-row .mechanic-queue-tabs,
   .surveillance-home .surveillance-compact-queues > .mechanic-queue-tabs {
+    display: flex;
     flex: 1 1 auto;
+    gap: 0;
+    justify-content: space-between;
     min-width: 0;
     width: 100%;
   }
