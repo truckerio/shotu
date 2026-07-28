@@ -488,3 +488,29 @@
     width: 100%;
   }
 }
+
+@media (max-width: 700px) {
+  .surveillance-home .surveillance-compact-queues {
+    align-items: center;
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs {
+    grid-column: 1;
+  }
+
+  .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs button {
+    gap: 4px;
+    padding-inline: 3px;
+    white-space: nowrap;
+  }
+
+  .surveillance-home .surveillance-compact-queues > .mobile-queue-tools {
+    flex: 0 0 44px;
+    grid-column: 2;
+    min-height: 44px;
+    padding: 0;
+    width: 44px;
+  }
+}
