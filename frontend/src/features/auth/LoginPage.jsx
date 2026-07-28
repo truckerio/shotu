@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ClipboardCheck } from "@untitledui/icons";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
+import { PRODUCT_NAME } from "../../components/account/ProfileMenu.jsx";
 import { authClient } from "../../lib/auth-client.js";
 import "./auth.css";
 
@@ -46,7 +47,7 @@ export function LoginPage() {
             <ClipboardCheck />
           </span>
           <div>
-            <strong>Workorders</strong>
+            <strong>{PRODUCT_NAME}</strong>
             <h1 id="login-title">Sign in</h1>
           </div>
         </header>

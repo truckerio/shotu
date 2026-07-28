@@ -21,3 +21,13 @@ test("mobile queue trigger and actions meet the 44px target", async () => {
   assert.match(css, /\.mobile-queue-tools-trigger\s*\{[\s\S]*height: 44px;[\s\S]*width: 44px;/);
   assert.match(css, /\.mobile-queue-tools-footer button\s*\{[\s\S]*min-height: 44px;/);
 });
+
+test("phone queue tools occupy a centered transparent row below tabs", async () => {
+  const css = await readFile(cssUrl, "utf8");
+  const phoneRules = css.slice(css.indexOf("@media (max-width: 700px)"));
+
+  assert.match(phoneRules, /\.mobile-queue-tools\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*justify-content: center;/);
+  assert.match(css, /\.mobile-queue-tools-trigger\s*\{[\s\S]*background: transparent;[\s\S]*border: 0;/);
+  assert.match(css, /\.mobile-queue-tools-trigger:focus-visible\s*\{/);
+  assert.match(css, /\.mobile-queue-tools-indicator\s*\{/);
+});

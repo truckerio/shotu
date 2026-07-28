@@ -15,19 +15,8 @@
 
 @media (max-width: 700px) {
   .workspace-header {
-    height: 0;
-    min-height: 0;
-    position: relative;
+    min-height: 52px;
     z-index: 70;
-  }
-
-  .workspace-header > .profile-menu-trigger {
-    background: #fff;
-    border-color: #d0d5dd;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    box-shadow: 0 4px 12px rgb(16 24 40 / 16%);
-    position: fixed;
-    right: 16px;
   }
 
   .workspace-header-actions {

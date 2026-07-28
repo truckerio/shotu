@@ -4,8 +4,8 @@
 
 .mobile-queue-tools-trigger {
   align-items: center;
-  background: #fff;
-  border: 1px solid #d0d5dd;
+  background: transparent;
+  border: 0;
   border-radius: 7px;
   color: #344054;
   display: inline-flex;
@@ -69,7 +69,14 @@
 
 @media (max-width: 700px) {
   .mobile-queue-tools {
-    display: block;
-    flex: 0 0 44px;
+    align-items: center;
+    background: transparent;
+    display: flex;
+    flex: 0 0 100%;
+    grid-column: 1 / -1;
+    justify-content: center;
+    min-height: 52px;
+    padding: 4px 0;
+    width: 100%;
   }
 }
