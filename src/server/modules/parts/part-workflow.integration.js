@@ -139,9 +139,7 @@ try {
   assert.equal(afterApproval.status, "accepted");
   const resolvedAttention = await queryOperationalWorkorders({ companyIds: [companyId], attentionReason: "parts" });
   assert.equal(resolvedAttention.items.some((item) => item.id === workorderId), false);
-  assert.equal(afterApproval.formData.parts.length, 1);
-  assert.equal(afterApproval.formData.parts[0].requestId, request.id);
-  assert.equal(afterApproval.formData.parts[0].partNo, "LF14000NN");
+  assert.deepEqual(afterApproval.formData.parts, []);
   const approvalMessage = await query(
     "select body from chat_messages where workorder_id = $1 and message_type = 'system' order by created_at desc limit 1",
     [workorderId]
@@ -194,7 +192,10 @@ try {
   assert.equal(officeAdded.approvalStatus, "approved");
   assert.equal(officeAdded.allocations[0].sourceType, "customer_supplied");
   assert.equal((await listWorkorderPartRequests(workorderId)).length, 2);
-  assert.equal((await getOperationalWorkorderById(workorderId)).formData.parts.length, 2);
+  const afterOfficeAdd = await getOperationalWorkorderById(workorderId);
+  assert.equal(afterOfficeAdd.formData.parts.length, 1);
+  assert.equal(afterOfficeAdd.formData.parts[0].partNo, "AF-TEST-1");
+  assert.equal(afterOfficeAdd.formData.parts[0].requestId, undefined);
   assert.ok((await getWorkorderTimeline(workorderId)).filter((event) => event.type === "part").length >= 4);
 
   console.log(JSON.stringify({

@@ -276,7 +276,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
         normalizedPartNumber: normalizePartNumber(values.partNumber),
       });
     }
-    await projectApprovedParts(client, workorderId);
+    await appendOfficeAddedPart(client, workorderId, values);
     const label = values.partNumber || values.description || input.query;
     await addPartEvent(client, {
       workorderId,
@@ -390,27 +390,16 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
   );
 }
 
-async function projectApprovedParts(client, workorderId) {
+async function appendOfficeAddedPart(client, workorderId, values) {
   const workorderResult = await client.query("select form_data from operational_workorders where id = $1 for update", [workorderId]);
   const formData = workorderResult.rows[0]?.form_data || {};
-  const manualParts = (Array.isArray(formData.parts) ? formData.parts : [])
-    .filter((part) => !part?.requestId)
-    .filter((part) => part?.partNo || part?.qty || part?.repairOrder);
-  const approved = await client.query(
-    `select id, part_number, quantity, repair_order
-     from workorder_part_requests
-     where workorder_id = $1 and approval_status = 'approved'
-     order by created_at asc`,
-    [workorderId]
-  );
   formData.parts = [
-    ...manualParts,
-    ...approved.rows.map((part) => ({
-      requestId: part.id,
-      partNo: part.part_number,
-      qty: String(part.quantity),
-      repairOrder: part.repair_order,
-    })),
+    ...(Array.isArray(formData.parts) ? formData.parts : []),
+    {
+      partNo: values.partNumber,
+      qty: String(values.quantity),
+      repairOrder: values.repairOrder,
+    },
   ];
   await client.query("update operational_workorders set form_data = $2::jsonb, updated_at = now() where id = $1", [workorderId, JSON.stringify(formData)]);
 }
@@ -523,7 +512,6 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
           normalizedPartNumber: normalizePartNumber(values.partNumber),
         });
       }
-      await projectApprovedParts(client, workorderId);
     }
     const eventType = input.decision;
     const label = values.partNumber || values.description || request.raw_query;

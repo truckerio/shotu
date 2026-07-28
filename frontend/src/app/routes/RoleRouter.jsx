@@ -674,6 +674,7 @@ export function RoleRouter({ actor }) {
   async function saveActiveUsedParts(parts) {
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId) throw new Error("Open a workorder before saving parts.");
+    let savedParts = parts;
 
     if (isOfficeDetail) {
       await api(`/api/office/workorders/${workorderId}`, {
@@ -686,18 +687,24 @@ export function RoleRouter({ actor }) {
         }),
       });
     } else {
-      const mechanicRows = parts.filter((part) => !part.requestId);
+      const mechanicRows = parts.map((part) => ({
+        partNo: part.partNo,
+        qty: part.qty,
+        repairOrder: part.repairOrder,
+      }));
       await api(`/api/mechanic/workorders/${workorderId}/used-parts`, {
         method: "PATCH",
         body: JSON.stringify({ parts: mechanicRows }),
       });
+      savedParts = mechanicRows;
     }
 
+    setForm((current) => ({ ...current, parts: savedParts }));
     setActiveWorkorder((current) => current ? {
       ...current,
       workorder: {
         ...current.workorder,
-        formData: { ...(current.workorder.formData || {}), parts },
+        formData: { ...(current.workorder.formData || {}), parts: savedParts },
       },
     } : current);
   }

@@ -1141,11 +1141,9 @@ export async function updateMechanicUsedParts(workorderId, mechanicUserId, parts
     if (terminalStatuses.includes(before.status)) throw new Error("Used parts cannot be changed on a completed workorder.");
 
     const formData = before.form_data || {};
-    const approvedRequestParts = (Array.isArray(formData.parts) ? formData.parts : [])
-      .filter((part) => part?.requestId);
     const nextFormData = {
       ...formData,
-      parts: [...parts, ...approvedRequestParts],
+      parts,
     };
     const nextInput = { formData: nextFormData };
     const partsChanged = JSON.stringify(canonicalJson(formData.parts || [])) !== JSON.stringify(canonicalJson(nextFormData.parts));

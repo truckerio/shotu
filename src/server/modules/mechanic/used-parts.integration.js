@@ -65,7 +65,11 @@ try {
      values ($1, $2, 1, 4)`,
     [companyId, `UP-${suffix}-`]
   );
-  const approvedRequestId = "11111111-1111-4111-8111-111111111111";
+  await query(
+    `insert into location_workorder_policies (company_id, location_id, mechanic_can_record_parts)
+     values ($1, $2, true)`,
+    [companyId, locationId],
+  );
   const workorder = await createOperationalWorkorder({
     companyId,
     locationId,
@@ -74,7 +78,7 @@ try {
     formData: {
       companyName: "Preserve this company",
       unitNo: "TEST-101",
-      parts: [{ requestId: approvedRequestId, partNo: "APPROVED-1", qty: "1", repairOrder: "Approved request" }],
+      parts: [{ requestId: "11111111-1111-4111-8111-111111111111", partNo: "APPROVED-1", qty: "1", repairOrder: "Legacy approved request projection" }],
     },
   });
   workorderId = workorder.id;
@@ -96,9 +100,9 @@ try {
   const saved = await saveMechanicUsedParts(workorderId, mechanicId, input.parts);
   assert.equal(saved.formData.companyName, "Preserve this company");
   assert.equal(saved.formData.unitNo, "TEST-101");
-  assert.equal(saved.formData.parts.length, 3);
+  assert.equal(saved.formData.parts.length, 2);
   assert.equal(saved.formData.parts[0].partNo, "LF14000NN");
-  assert.equal(saved.formData.parts[2].requestId, approvedRequestId);
+  assert.equal(saved.formData.parts.some((part) => part.requestId), false);
 
   const auditAfterChange = await query(
     `select count(*)::int as count from workorder_field_events
@@ -129,13 +133,14 @@ try {
     passed: true,
     autosave: true,
     preservedFormData: true,
-    preservedApprovedRequests: true,
+    removesLegacyRequestProjections: true,
     authorization: true,
     audit: true,
   }));
 } finally {
   if (workorderId) await query("delete from operational_workorders where id = $1", [workorderId]);
   if (companyId) await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
+  if (locationId) await query("delete from location_workorder_policies where location_id = $1", [locationId]);
   const userIds = [mechanicId, otherMechanicId, officeId].filter(Boolean);
   if (userIds.length) await query("delete from user_profiles where id = any($1::uuid[])", [userIds]);
   if (locationId) await query("delete from locations where id = $1", [locationId]);

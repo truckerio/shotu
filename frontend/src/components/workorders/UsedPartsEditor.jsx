@@ -181,9 +181,9 @@ export function UsedPartsEditor({
             <label className="used-part-field">
               <span>Part number</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
-                <input value={part.partNo} onChange={(event) => update(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" disabled={disabled || Boolean(part.requestId)} />
+                <input value={part.partNo} onChange={(event) => update(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" disabled={disabled} />
                 {suggestionsEnabled ? (
-                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || Boolean(part.requestId) || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Suggest repair order from part number" aria-label={`Suggest repair order for row ${index + 1}`}>
+                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Suggest repair order from part number" aria-label={`Suggest repair order for row ${index + 1}`}>
                     <SearchMd />
                   </button>
                 ) : null}
@@ -191,13 +191,13 @@ export function UsedPartsEditor({
             </label>
             <label className="used-part-field">
               <span>Quantity</span>
-              <input type="number" min="0" max="999" value={part.qty} onChange={(event) => update(index, "qty", event.target.value)} aria-label={`Quantity ${index + 1}`} placeholder="Qty" disabled={disabled || Boolean(part.requestId)} />
+              <input type="number" min="0" max="999" value={part.qty} onChange={(event) => update(index, "qty", event.target.value)} aria-label={`Quantity ${index + 1}`} placeholder="Qty" disabled={disabled} />
             </label>
             <label className="used-part-field">
               <span>Work performed</span>
-              <input value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled || Boolean(part.requestId)} />
+              <input value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
             </label>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled || Boolean(part.requestId) || rows.length <= minimum} aria-label={`Remove part row ${index + 1}`}>Remove</button>
+            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled || rows.length <= minimum} aria-label={`Remove part row ${index + 1}`}>Remove</button>
           </div>
         ))}
       </div>
