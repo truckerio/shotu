@@ -1,0 +1,95 @@
+.used-parts-empty-state {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px dashed var(--border-subtle, #d0d5dd);
+  border-radius: 12px;
+}
+
+.used-parts-empty-state p,
+.used-parts-empty {
+  margin: 0;
+  color: var(--text-secondary, #475467);
+}
+
+.used-parts-readonly-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.used-parts-readonly-list li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(160px, 2fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle, #e4e7ec);
+  border-radius: 10px;
+}
+
+.used-parts-readonly-list span {
+  color: var(--text-secondary, #475467);
+}
+
+.used-parts-editor .remove-row svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 640px) {
+  .used-parts-editor .part-row-head {
+    display: none;
+  }
+
+  .used-parts-editor .part-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px;
+    gap: 8px;
+    padding: 12px 44px 12px 12px;
+    border: 1px solid var(--border-subtle, #e4e7ec);
+    border-radius: 12px;
+  }
+
+  .used-parts-editor .part-row > strong {
+    display: none;
+  }
+
+  .used-parts-editor .used-part-field {
+    min-width: 0;
+  }
+
+  .used-parts-editor .used-part-field:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+
+  .used-parts-editor .remove-row {
+    position: absolute;
+    top: 10px;
+    right: 8px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 6px;
+    font-size: 0;
+  }
+
+  .used-parts-empty-state {
+    min-height: 0;
+  }
+
+  .used-parts-readonly-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+
+  .used-parts-readonly-list li span:last-child {
+    grid-column: 1 / -1;
+  }
+}

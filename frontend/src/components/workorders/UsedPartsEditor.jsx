@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, SearchMd } from "@untitledui/icons";
-import { emptyPart } from "../../../../shared/workorder-template.js";
+import { Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { Button } from "../ui/Button.jsx";
+import {
+  MAX_USED_PARTS,
+  addUsedPart,
+  normalizeUsedParts,
+  readonlyUsedParts,
+  removeUsedPart,
+} from "./used-parts-model.js";
+import "./used-parts-editor.css";
 
 function vehicleInput(detail) {
   const asset = detail.workorder.asset || {};
@@ -27,23 +34,6 @@ function purchasingLocation(detail) {
   };
 }
 
-function rowHasValue(part) {
-  return Boolean(part?.partNo || part?.qty || part?.repairOrder || part?.requestId);
-}
-
-function normalizedRows(parts, minimumRows = 3) {
-  const rows = Array.isArray(parts) ? parts.map((part) => ({
-    partNo: String(part?.partNo || ""),
-    qty: part?.qty === null || part?.qty === undefined ? "" : String(part.qty),
-    repairOrder: String(part?.repairOrder || ""),
-    ...(part?.requestId ? { requestId: part.requestId } : {}),
-  })) : [];
-  const minimum = Math.max(1, Math.min(18, Number(minimumRows) || 1));
-  while (rows.length > minimum && !rowHasValue(rows.at(-1))) rows.pop();
-  while (rows.length < minimum) rows.push(emptyPart());
-  return rows.slice(0, 18);
-}
-
 function looksLikePartNumber(value) {
   const text = String(value || "").trim();
   return text.length >= 3 && /\d/.test(text) && !/\s/.test(text) && /^[a-z0-9._/-]+$/i.test(text);
@@ -55,12 +45,12 @@ export function UsedPartsEditor({
   onChange,
   onSave,
   disabled = false,
-  minimumRows = 3,
+  minimumRows = 0,
   suggestionsEnabled = true,
 }) {
-  const minimum = Math.max(1, Math.min(18, Number(minimumRows) || 1));
-  const [visibleRowCount, setVisibleRowCount] = useState(() => normalizedRows(parts, minimum).length);
-  const rows = normalizedRows(parts, Math.max(minimum, visibleRowCount));
+  const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
+  const [visibleRowCount, setVisibleRowCount] = useState(() => normalizeUsedParts(parts, minimum).length);
+  const rows = normalizeUsedParts(parts, Math.max(minimum, visibleRowCount));
   const storageKey = `workorder-used-parts:${detail.workorder.id}`;
   const persistedRef = useRef(JSON.stringify(rows));
   const hydratedRef = useRef(false);
@@ -74,7 +64,7 @@ export function UsedPartsEditor({
   }, [onSave]);
 
   useEffect(() => {
-    const currentRows = normalizedRows(parts, minimum);
+    const currentRows = normalizeUsedParts(parts, minimum);
     setVisibleRowCount(currentRows.length);
     hydratedRef.current = false;
     persistedRef.current = JSON.stringify(currentRows);
@@ -85,7 +75,7 @@ export function UsedPartsEditor({
     try {
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
-      const recovered = normalizedRows(JSON.parse(stored), minimum);
+      const recovered = normalizeUsedParts(JSON.parse(stored), minimum);
       setVisibleRowCount(recovered.length);
       if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
         onChange(recovered);
@@ -121,17 +111,13 @@ export function UsedPartsEditor({
   }
 
   function addRow() {
-    if (rows.length >= 18) return;
-    const next = [...rows, emptyPart()];
+    const next = addUsedPart(rows);
     setVisibleRowCount(next.length);
     onChange(next);
   }
 
   function removeRow(index) {
-    const next = rows.length <= minimum
-      ? Array.from({ length: minimum }, emptyPart)
-      : rows.filter((_, rowIndex) => rowIndex !== index);
-    const normalized = normalizedRows(next, minimum);
+    const normalized = removeUsedPart(rows, index, minimum);
     setVisibleRowCount(normalized.length);
     onChange(normalized);
   }
@@ -165,8 +151,34 @@ export function UsedPartsEditor({
     }
   }
 
+  if (disabled) {
+    const savedParts = readonlyUsedParts(parts);
+    return (
+      <div className="used-parts-editor is-readonly" aria-label="Used parts">
+        {savedParts.length ? (
+          <ul className="used-parts-readonly-list">
+            {savedParts.map((part, index) => (
+              <li key={`${part.partNo}-${index}`}>
+                <strong>{part.partNo || "Part number not recorded"}</strong>
+                <span>Qty {part.qty || 1}</span>
+                {part.repairOrder ? <span>{part.repairOrder}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : <p className="used-parts-empty">No used parts recorded.</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="used-parts-editor">
+      {!rows.length ? (
+        <div className="used-parts-empty-state">
+          <p>No used parts recorded.</p>
+          <Button icon={Plus} onClick={addRow}>Add part</Button>
+        </div>
+      ) : null}
+      {rows.length ? (
       <div className="parts-editor">
         <div className="part-row part-row-head" aria-hidden="true">
           <span>S.No</span>
@@ -197,11 +209,12 @@ export function UsedPartsEditor({
               <span>Work performed</span>
               <input value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
             </label>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled || rows.length <= minimum} aria-label={`Remove part row ${index + 1}`}>Remove</button>
+            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} title="Remove part" aria-label={`Remove part row ${index + 1}`}><Trash01 /></button>
           </div>
         ))}
       </div>
-      <Button icon={Plus} onClick={addRow} disabled={disabled || rows.length >= 18}>Add another part</Button>
+      ) : null}
+      {rows.length ? <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>Add another part</Button> : null}
       <div className="used-parts-feedback" aria-live="polite">
         {message ? <span>{message}</span> : <span></span>}
         {saveState ? <strong>{saveState}</strong> : null}

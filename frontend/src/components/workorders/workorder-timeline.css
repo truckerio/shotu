@@ -1,0 +1,29 @@
+.workorder-timeline-panel.is-compact {
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.workorder-timeline-panel.is-compact .workorder-participants {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--border-subtle, #e4e7ec);
+}
+
+.workorder-timeline-panel.is-compact .workorder-participants strong,
+.workorder-timeline-panel.is-compact .workorder-participants span {
+  display: inline;
+}
+
+@media (max-width: 640px) {
+  .workorder-timeline-panel.is-compact .office-timeline {
+    gap: 0;
+  }
+
+  .workorder-timeline-panel.is-compact .office-timeline > div {
+    padding: 12px 0;
+  }
+}

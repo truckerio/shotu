@@ -3,6 +3,7 @@ import { CheckCircle, Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { Button } from "../ui/Button.jsx";
 import { UsedPartsEditor } from "./UsedPartsEditor.jsx";
+import "./part-requests-panel.css";
 
 const SOURCE_LABELS = {
   inventory: "Inventory",
@@ -584,8 +585,8 @@ export function PartRequestsPanel({ role, detail, parts, onPartsChange, onSavePa
         parts={parts}
         onChange={onPartsChange}
         onSave={onSaveParts}
-        disabled={role === "mechanic" && !detail.allowedActions?.recordUsedParts}
-        minimumRows={role === "mechanic" ? 1 : 3}
+        disabled={role !== "mechanic" || !detail.allowedActions?.recordUsedParts}
+        minimumRows={0}
         suggestionsEnabled={role !== "mechanic"}
       />
       {role === "office" ? (

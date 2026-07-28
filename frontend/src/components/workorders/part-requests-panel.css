@@ -1,0 +1,14 @@
+.part-requests-panel {
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .part-request-card {
+    padding: 12px;
+  }
+
+  .part-request-summary,
+  .part-request-meta {
+    gap: 6px;
+  }
+}

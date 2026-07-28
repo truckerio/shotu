@@ -1,23 +1,6 @@
 import { formatCreatedAt } from "../../lib/dates.js";
-
-function timelineTitle(event) {
-  if (event.type === "access") return "Workorder opened";
-  if (event.type === "part") return `Part ${String(event.action || "updated").replaceAll("_", " ")}`;
-  if (event.type === "attention") {
-    const subject = event.field_key === "missing_info" ? "Information request" : String(event.field_key || "Attention").replaceAll("_", " ");
-    return event.action === "resolved" ? `${subject} resolved` : subject;
-  }
-  if (event.type === "field") {
-    if (event.field_key === "work_details_updated") return "Work details updated";
-    return `${event.field_label || event.action || "Field"} changed`;
-  }
-  if (event.type === "assignment") {
-    if (event.action === "reassigned") return event.from_mechanic_id ? "Mechanic reassigned" : "Mechanic assigned";
-    if (event.action === "unassigned") return "Returned to available queue";
-    return "Assignment changed";
-  }
-  return `${event.from_status || "created"} -> ${event.to_status}`;
-}
+import { meaningfulTimelineEvents, timelineEventTitle } from "./workorder-timeline-model.js";
+import "./workorder-timeline.css";
 
 function timelineBody(event) {
   if (event.type === "assignment") {
@@ -57,14 +40,14 @@ function timelineBody(event) {
 }
 
 export function WorkorderTimeline({ timeline }) {
-  const meaningfulTimeline = (timeline || []).filter((event) => event.type !== "access");
+  const meaningfulTimeline = meaningfulTimelineEvents(timeline);
   if (!meaningfulTimeline.length) return <p className="chat-empty">No activity yet.</p>;
 
   return (
     <div className="office-timeline">
       {meaningfulTimeline.map((event) => (
         <div key={`${event.type}-${event.id}`}>
-          <strong>{timelineTitle(event)}</strong>
+          <strong>{timelineEventTitle(event)}</strong>
           <span>{timelineBody(event)}</span>
           <small>
             {[event.changed_by_name, formatCreatedAt(event.created_at)].filter(Boolean).join(" / ")}
@@ -75,16 +58,16 @@ export function WorkorderTimeline({ timeline }) {
   );
 }
 
-export function WorkorderTimelinePanel({ timeline, participants = [], className = "" }) {
-  const meaningfulTimeline = (timeline || []).filter((event) => event.type !== "access");
+export function WorkorderTimelinePanel({ timeline, participants = [], className = "", compact = className.includes("is-control-timeline") }) {
+  const meaningfulTimeline = meaningfulTimelineEvents(timeline);
   const count = meaningfulTimeline.length;
 
   return (
-    <section className={`workorder-timeline-panel ${className}`.trim()} aria-label="Workorder timeline">
-      <header>
+    <section className={`workorder-timeline-panel ${compact ? "is-compact" : ""} ${className}`.trim()} aria-label="Workorder timeline">
+      {!compact ? <header>
         <h2>Timeline</h2>
         <span>{count} {count === 1 ? "event" : "events"}</span>
-      </header>
+      </header> : null}
       {participants.length ? (
         <div className="workorder-participants">
           <strong>Mechanics involved</strong>
