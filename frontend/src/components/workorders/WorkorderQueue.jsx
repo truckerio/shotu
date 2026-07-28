@@ -1,5 +1,6 @@
 import { ChevronRight } from "@untitledui/icons";
 import { ageLabel, durationLabel, formatCreatedAt } from "../../lib/dates.js";
+import { workorderMobileMeta, workorderOpenLabel } from "../responsive/workorder-queue-config.js";
 import { WorkorderStatusPill } from "./WorkorderStatusPill.jsx";
 import "./workorder-queue.css";
 
@@ -68,10 +69,10 @@ export function WorkorderQueueTabs({ tabs, activeTab, onChange }) {
   return (
     <nav className="mechanic-queue-tabs" aria-label="Workorder queues">
       {tabs.map(({ key, label, count, icon: Icon }) => (
-        <button className={activeTab === key ? "active" : ""} type="button" key={key} onClick={() => onChange(key)} aria-current={activeTab === key ? "page" : undefined}>
-          {Icon ? <Icon /> : null}
+        <button className={activeTab === key ? "active" : ""} type="button" key={key} onClick={() => onChange(key)} aria-current={activeTab === key ? "page" : undefined} aria-label={`${label}, ${count || 0} workorders`}>
+          {Icon ? <Icon aria-hidden="true" /> : null}
           <span>{label}</span>
-          <strong>{count || 0}</strong>
+          <strong aria-hidden="true">{count || 0}</strong>
         </button>
       ))}
     </nav>
@@ -129,10 +130,12 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
     ? (workorder.odooStatus === "entered" ? "odoo_entered" : workorder.odooStatus === "missing_info" ? "waiting_office" : "closed")
     : lifecycle;
   const rowStatusLabel = isSurveillance && hasOdooStage ? odooLabel(workorder.odooStatus) : statusLabel;
+  const mobileMeta = workorderMobileMeta({ location, mechanic });
+  const openLabel = workorderOpenLabel({ serial: workorder.serial, unit, concern: workorder.concern });
 
   return (
     <article className={`mechanic-work-row queue-row-${variant} ${workorder.unread ? "is-unread" : ""} ${featured ? "is-current" : ""}`}>
-      <button className={`mechanic-work-open queue-variant-${variant}`} type="button" onClick={onOpen} aria-label={`Open ${workorder.serial}`}>
+      <button className={`mechanic-work-open queue-variant-${variant}`} type="button" onClick={onOpen} aria-label={openLabel}>
         <span className="work-row-identity">
           <span className="work-row-unit"><strong>{unit}</strong>{workorder.unread ? <small className="queue-unread-label">New</small> : null}</span>
           <small>{workorder.serial}</small>
@@ -142,6 +145,7 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
             <span className="work-row-concern queue-wide-only">{workorder.concern || "Problem not recorded"}</span>
             <span className="work-row-location">{location}</span>
             <span className="work-row-mechanic">{mechanic}</span>
+            {mobileMeta ? <span className="work-row-mobile-meta" aria-hidden="true">{mobileMeta}</span> : null}
             <span className="work-row-age queue-wide-only">{waiting || "Now"}</span>
             <span className="work-row-created">{formatCreatedAt(lastActivity)}</span>
           </>
@@ -152,6 +156,7 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
             {variant === "mechanic" ? <span className="work-row-mechanic queue-wide-only">{mechanic}</span> : null}
             {variant === "office" ? <span className="work-row-location">{location}</span> : null}
             {variant === "office" ? <span className="work-row-mechanic">{mechanic}</span> : null}
+            {mobileMeta ? <span className="work-row-mobile-meta" aria-hidden="true">{mobileMeta}</span> : null}
             <WorkorderAttention reasons={attention} />
             {variant === "office" ? <span className="work-row-age">{waiting || "Now"}</span> : <span className="work-row-created">{formatCreatedAt(workorder.createdAt)}</span>}
           </>

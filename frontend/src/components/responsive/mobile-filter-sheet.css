@@ -5,6 +5,7 @@
   inset: 0;
   justify-content: center;
   position: fixed;
+  touch-action: pan-y;
   z-index: 90;
 }
 
@@ -23,6 +24,7 @@
   max-width: 640px;
   outline: 0;
   overflow: hidden;
+  overscroll-behavior: contain;
   width: 100%;
 }
 
@@ -79,6 +81,7 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding: 16px;
+  scrollbar-gutter: stable;
 }
 
 .mobile-filter-content label {
@@ -93,6 +96,7 @@
 }
 
 .mobile-filter-content select {
+  max-width: 100%;
   min-height: 46px;
   width: 100%;
 }
@@ -122,6 +126,17 @@
 @media (max-width: 900px) {
   .mobile-filter-overlay {
     display: flex;
+  }
+}
+
+@media (max-width: 700px) {
+  .mobile-filter-modal {
+    max-height: 88dvh;
+    max-width: 100%;
+  }
+
+  .mobile-filter-content {
+    padding-inline: 14px;
   }
 }
 
