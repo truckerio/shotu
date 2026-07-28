@@ -72,11 +72,56 @@
     align-items: center;
     background: transparent;
     display: flex;
-    flex: 0 0 100%;
-    grid-column: 1 / -1;
     justify-content: center;
-    min-height: 52px;
-    padding: 4px 0;
+    min-height: 44px;
+  }
+
+  .mobile-queue-toolbar.mobile-queue-toolbar {
+    align-items: center;
+    box-sizing: border-box;
+    display: flex;
+    min-width: 0;
+    padding-right: 48px;
+    position: relative;
     width: 100%;
+  }
+
+  .workspace-operations .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 6px;
+    grid-template-columns: none;
+    justify-content: space-between;
+    min-width: 0;
+    overflow: visible;
+    width: 100%;
+  }
+
+  .workspace-operations .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button {
+    flex: 0 0 auto;
+    font-size: 11px;
+    gap: 2px;
+    min-width: 0;
+    padding-inline: 2px;
+    white-space: nowrap;
+  }
+
+  .workspace-operations .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button strong {
+    font-size: 11px;
+    height: 20px;
+    min-width: 20px;
+    padding-inline: 5px;
+  }
+
+  .mobile-queue-toolbar > .mobile-queue-tools {
+    display: flex;
+    min-height: 44px;
+    padding: 0;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    z-index: 1;
   }
 }

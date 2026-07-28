@@ -8,7 +8,7 @@ import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
-import { MobileQueueTools } from "../../components/operations/MobileQueueTools.jsx";
+import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import {
@@ -234,9 +234,29 @@ export function OfficeWorkspace({
             <div className="role-desktop-queues">
               <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
             </div>
-            <div className="role-mobile-primary-queues">
-              <WorkorderQueueTabs tabs={mobilePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
-            </div>
+            <MobileQueueToolbar
+              className="role-mobile-primary-queues"
+              tabs={mobilePrimaryTabs}
+              activeTab={activeTab}
+              onChange={setActiveTab}
+              label="Open office queues, search, and filters"
+              title="Queues, search, and filters"
+              filtersActive={Boolean(search || mechanicFilter || locationFilter || lifecycleFilter)}
+              onClearFilters={() => { setSearch(""); setMechanicFilter(""); setLocationFilter(""); setLifecycleFilter(""); }}
+            >
+              <div className="role-mobile-secondary-queues">
+                <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+              </div>
+              {activeTab !== "drafts" ? <>
+                <label className="mechanic-search">
+                  <SearchMd />
+                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
+                </label>
+                <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
+                {locations.length > 1 ? <label><span>Location</span><select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label> : null}
+                <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option></select></label>
+              </> : null}
+            </MobileQueueToolbar>
             {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row role-desktop-filters">
                   <label className="mechanic-search">
                     <SearchMd />
@@ -258,25 +278,6 @@ export function OfficeWorkspace({
                     <option value="odoo_entered">Odoo entered</option>
                   </select>
                 </div> : null}
-            <MobileQueueTools
-              label="Open office queues, search, and filters"
-              title="Queues, search, and filters"
-              filtersActive={Boolean(search || mechanicFilter || locationFilter || lifecycleFilter)}
-              onClearFilters={() => { setSearch(""); setMechanicFilter(""); setLocationFilter(""); setLifecycleFilter(""); }}
-            >
-              <div className="role-mobile-secondary-queues">
-                <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
-              </div>
-              {activeTab !== "drafts" ? <>
-                <label className="mechanic-search">
-                  <SearchMd />
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
-                </label>
-                <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
-                {locations.length > 1 ? <label><span>Location</span><select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label> : null}
-                <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option></select></label>
-              </> : null}
-            </MobileQueueTools>
           </div>
 
           {activeTab === "drafts" ? (

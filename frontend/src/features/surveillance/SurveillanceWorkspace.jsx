@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle, ClipboardCheck, Clock, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
-import { MobileQueueTools } from "../../components/operations/MobileQueueTools.jsx";
+import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
@@ -547,10 +547,11 @@ export function SurveillanceWorkspace({ actor }) {
           <div className="surveillance-desktop-queues">
             <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
           </div>
-          <div className="surveillance-compact-queues">
-            <div className="surveillance-queue-primary-row">
-              <WorkorderQueueTabs tabs={compactTabs} activeTab={activeTab} onChange={setActiveTab} />
-              <MobileQueueTools
+          <MobileQueueToolbar
+                className="surveillance-compact-queues"
+                tabs={compactTabs}
+                activeTab={activeTab}
+                onChange={setActiveTab}
                 label="Open surveillance queues, search, and filters"
                 title="Queues, search, and filters"
                 filtersActive={Boolean(search || effectiveLocationFilter || dateStartFilter || dateEndFilter)}
@@ -567,9 +568,7 @@ export function SurveillanceWorkspace({ actor }) {
                 {locations.length > 1 ? <label><span>Location</span><select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></label> : null}
                 <label><span>From</span><input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" /></label>
                 <label><span>To</span><input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" /></label>
-              </MobileQueueTools>
-            </div>
-          </div>
+          </MobileQueueToolbar>
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}

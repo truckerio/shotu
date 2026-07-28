@@ -3,7 +3,7 @@ import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, 
 import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
-import { MobileQueueTools } from "../../components/operations/MobileQueueTools.jsx";
+import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
@@ -139,14 +139,11 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
           <div className="role-desktop-queues">
             <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
           </div>
-          <div className="role-mobile-primary-queues">
-            <WorkorderQueueTabs tabs={mobilePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
-          </div>
-          <label className="mechanic-search role-desktop-search">
-            <SearchMd />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
-          </label>
-          <MobileQueueTools
+          <MobileQueueToolbar
+            className="role-mobile-primary-queues"
+            tabs={mobilePrimaryTabs}
+            activeTab={activeTab}
+            onChange={setActiveTab}
             label="Open mechanic queue search and filters"
             title="Queue search and filters"
             filtersActive={Boolean(search)}
@@ -159,7 +156,11 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
               <SearchMd />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
             </label>
-          </MobileQueueTools>
+          </MobileQueueToolbar>
+          <label className="mechanic-search role-desktop-search">
+            <SearchMd />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
+          </label>
         </div>
 
         {error ? <p className="ops-error" role="alert">{error}</p> : null}
