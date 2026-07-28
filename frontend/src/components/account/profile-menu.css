@@ -74,15 +74,35 @@
 }
 
 .profile-menu-brand-mark {
+  align-items: center;
   display: inline-block;
+  height: 24px;
   line-height: 1;
   position: relative;
+  width: 24px;
+}
+
+.profile-menu-brand-icon {
+  color: #175cd3;
+  display: block;
+  height: 24px;
+  width: 24px;
+}
+
+.profile-menu-brand-letter {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .profile-menu-brand-trigger {
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
   height: 44px;
   left: 50%;
@@ -95,7 +115,7 @@
 
 .profile-menu-brand-trigger:hover,
 .profile-menu-brand-trigger[data-pressed] {
-  background: rgb(242 244 247 / 72%);
+  background: transparent;
 }
 
 .profile-menu-brand-trigger[data-focus-visible] {

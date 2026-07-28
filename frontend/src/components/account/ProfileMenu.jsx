@@ -51,7 +51,8 @@ export function ProfileMenu({ actor, compactOnPhone = false, wordmark = false })
         <OwlWordmark
           mark={(
             <span className="profile-menu-brand-mark">
-              <span aria-hidden="true">O</span>
+              <UserCircle className="profile-menu-brand-icon" aria-hidden="true" />
+              <span className="profile-menu-brand-letter">O</span>
               <MenuTrigger>
                 <Button className="profile-menu-brand-trigger" aria-label={`Open ${PRODUCT_NAME} account menu`} />
                 {accountMenu}
