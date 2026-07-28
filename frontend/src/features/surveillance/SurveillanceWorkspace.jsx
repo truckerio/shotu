@@ -12,6 +12,7 @@ import { CompactWorkorderPreview } from "../../components/workorders/CompactWork
 import { ProgressiveWorkorderSection, WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { WorkorderTimelinePanel } from "../../components/workorders/WorkorderTimeline.jsx";
+import { timelineEventCount } from "../../components/workorders/workorder-timeline-model.js";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { PreviewFullscreen, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { api } from "../../lib/api.js";
@@ -295,6 +296,7 @@ export function SurveillanceWorkspace({ actor }) {
     const currentIndex = rows.findIndex((row) => row.id === workorder.id);
     const canProcessOdoo = ["closed", "odoo_entered"].includes(workorder.status);
     const progress = progressTimestamp(workorder);
+    const activityCount = timelineEventCount(detail.timeline);
     const baseDetailSections = [
       {
         id: "work",
@@ -313,7 +315,7 @@ export function SurveillanceWorkspace({ actor }) {
       {
         id: "activity",
         label: "Activity",
-        count: detail.timeline?.length || undefined,
+        count: activityCount || undefined,
       },
     ];
     const detailSections = isPhone
@@ -472,7 +474,7 @@ export function SurveillanceWorkspace({ actor }) {
             <ProgressiveWorkorderSection
               id="activity"
               title="Activity"
-              summary={`${detail.timeline?.length || 0} ${(detail.timeline?.length || 0) === 1 ? "event" : "events"}`}
+              summary={`${activityCount} ${activityCount === 1 ? "event" : "events"}`}
               activeSection={selectedSection}
               onSelect={setDetailSection}
               displayMode="panel"
