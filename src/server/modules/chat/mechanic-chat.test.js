@@ -41,6 +41,44 @@ test("photo ambiguity fails open as a persisted normal message when AI fails", a
   assert.equal(deps.calls.requests.length, 0);
 });
 
+test("commit-time retry reuses message and removes the redundant uploaded file", async () => {
+  const removed = [];
+  let addInput = null;
+  const result = await processMechanicChatMessage("wo-1", {
+    senderUserId: "mechanic-1",
+    clientMessageId: "33333333-3333-4333-8333-333333333333",
+    messageType: "normal",
+    body: "Repair update",
+    attachment: { dataUrl: "data:image/png;base64,test", fileName: "retry.png" },
+  }, {
+    persistAttachment: async () => ({
+      storageKey: "redundant-retry.png",
+      fileName: "retry.png",
+      mimeType: "image/png",
+      byteSize: 10,
+      sha256: "abc",
+    }),
+    removeAttachment: async (storageKey) => removed.push(storageKey),
+    getContext: async () => ({}),
+    identifyPart: async () => null,
+    addMessage: async (input) => {
+      addInput = input;
+      return {
+        id: "committed-message",
+        body: "Repair update",
+        messageType: "normal",
+        attachment: { id: "committed-attachment", fileName: "original.png" },
+        deduplicated: true,
+      };
+    },
+  });
+
+  assert.match(addInput.dedupeKey, /^client-message:mechanic-1:/);
+  assert.deepEqual(removed, ["redundant-retry.png"]);
+  assert.equal(result.message.id, "committed-message");
+  assert.equal(result.partRequest, null);
+});
+
 test("obvious request remains structured when identification is unavailable", async () => {
   const deps = dependencies({ identifyPart: async () => { throw new Error("AI unavailable"); } });
   const result = await processMechanicChatMessage("wo-1", {

@@ -1,5 +1,5 @@
 import { defaultLocation } from "../../db/repositories/locations.repo.js";
-import { addChatMessage } from "../../db/repositories/chat.repo.js";
+import { addChatMessage, chatMessageDedupeKey } from "../../db/repositories/chat.repo.js";
 import { persistChatImageAttachment, removeStoredChatImage } from "../chat/chat-media.service.js";
 import { createApprovedOfficePart, decidePartRequest, updatePartAllocation } from "../../db/repositories/part-requests.repo.js";
 import {
@@ -98,7 +98,8 @@ export async function createOfficeWorkorder(input) {
 }
 
 export async function officeWorkorderDetail(workorderId, officeUserId) {
-  const [detail, user] = await Promise.all([loadWorkorderDetail(workorderId), requireOffice(officeUserId)]);
+  const user = await requireOffice(officeUserId);
+  const detail = await loadWorkorderDetail(workorderId, { viewerUserId: user.id });
   const assignableMechanics = detail.workorder.location?.id
     ? (await listUsersByLocation(detail.workorder.location.id))
       .filter((candidate) => candidate.role === "mechanic" && candidate.active && candidate.membership_active)
@@ -151,14 +152,19 @@ export async function sendOfficeMessage(workorderId, input) {
   await requireOffice(input.senderUserId);
   const attachment = input.attachment ? await persistChatImageAttachment(input.attachment) : null;
   try {
-    return await addChatMessage({
+    const message = await addChatMessage({
       workorderId,
       senderUserId: input.senderUserId,
       senderRole: "office",
       messageType: "normal",
       body: input.body,
       attachment,
+      dedupeKey: chatMessageDedupeKey(input.senderUserId, input.clientMessageId),
     });
+    if (message.deduplicated && attachment) {
+      await removeStoredChatImage(attachment.storageKey).catch(() => {});
+    }
+    return message;
   } catch (error) {
     if (attachment) await removeStoredChatImage(attachment.storageKey).catch(() => {});
     throw error;

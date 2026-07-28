@@ -1,6 +1,7 @@
 import {
   addChatMessage,
   addSystemChatMessageOnce,
+  chatMessageDedupeKey,
   getMechanicChatContext,
   updateChatMessageType,
 } from "../../db/repositories/chat.repo.js";
@@ -46,7 +47,12 @@ export async function processMechanicChatMessage(workorderId, input, dependencie
       messageType: input.messageType === "help_request" ? "help_request" : "normal",
       body: input.body,
       attachment: storedAttachment,
+      dedupeKey: chatMessageDedupeKey(input.senderUserId, input.clientMessageId),
     });
+    if (message.deduplicated && storedAttachment) {
+      await removeAttachment(storedAttachment.storageKey).catch(() => {});
+      storedAttachment = null;
+    }
   } catch (error) {
     if (storedAttachment) await removeAttachment(storedAttachment.storageKey).catch(() => {});
     throw error;

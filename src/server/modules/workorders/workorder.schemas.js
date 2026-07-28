@@ -74,6 +74,7 @@ const chatAttachmentSchema = z.object({
 });
 
 export const sendMessageSchema = z.object({
+  clientMessageId: z.uuid().optional(),
   messageType: z.enum(["normal", "part_request", "help_request"]).default("normal"),
   body: z.string().trim().max(5000).optional().default(""),
   attachment: chatAttachmentSchema.optional(),

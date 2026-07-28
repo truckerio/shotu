@@ -25,6 +25,8 @@ import { requireWorkorderAccess } from "../auth/resource-access.js";
 import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
 import { getLocationTemplates } from "../db/repositories/templates.repo.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
+import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
+import { acknowledgeChatReceipts } from "../modules/chat/chat-receipts.service.js";
 
 function workorderIdFrom(pathname, suffix = "") {
   const escapedSuffix = suffix ? suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
@@ -166,6 +168,20 @@ export async function handleOfficeApi(req, res, url, helpers) {
     await requireWorkorderAccess(requestContext, messageId);
     const input = sendMessageSchema.parse({ ...(await readBody(req)), messageType: "normal" });
     sendJson(res, 200, { message: await sendOfficeMessage(messageId, { ...input, senderUserId: officeUserId, senderRole: "office" }) });
+    return true;
+  }
+
+  const receiptWorkorderId = workorderIdFrom(url.pathname, "/message-receipts");
+  if (req.method === "POST" && receiptWorkorderId) {
+    await requireWorkorderAccess(requestContext, receiptWorkorderId);
+    const input = acknowledgeChatReceiptsSchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      receipt: await acknowledgeChatReceipts({
+        workorderId: receiptWorkorderId,
+        actorUserId: officeUserId,
+        ...input,
+      }),
+    });
     return true;
   }
 

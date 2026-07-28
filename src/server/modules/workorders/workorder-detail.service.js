@@ -67,14 +67,23 @@ function mechanicParticipants(workorder, timeline) {
   ));
 }
 
-export async function loadWorkorderDetail(workorderId) {
-  const [workorder, messages, timeline, partRequests] = await Promise.all([
-    getOperationalWorkorderById(workorderId),
-    listChatMessages(workorderId),
+export function canViewWorkorderChat(workorder, { viewerUserId = null, participantChatOnly = false } = {}) {
+  if (!participantChatOnly) return true;
+  return Boolean(viewerUserId && workorder?.mechanicIds?.includes(viewerUserId));
+}
+
+export async function loadWorkorderDetail(
+  workorderId,
+  { viewerUserId = null, participantChatOnly = false } = {},
+) {
+  const workorder = await getOperationalWorkorderById(workorderId);
+  if (!workorder) throw new Error("Workorder not found.");
+  const includeChat = canViewWorkorderChat(workorder, { viewerUserId, participantChatOnly });
+  const [messages, timeline, partRequests] = await Promise.all([
+    includeChat ? listChatMessages(workorderId, { viewerUserId }) : [],
     getWorkorderTimeline(workorderId),
     listWorkorderPartRequests(workorderId),
   ]);
-  if (!workorder) throw new Error("Workorder not found.");
   return {
     workorder,
     messages,

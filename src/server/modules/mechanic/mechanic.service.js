@@ -122,7 +122,10 @@ export function mechanicAllowedActions(workorder, mechanicId, policy = {}) {
 export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
   const mechanic = mechanicUserId ? await requireMechanic(mechanicUserId) : await defaultMechanicUser();
   if (!mechanic) throw new Error("No mechanic user exists.");
-  const detail = await loadWorkorderDetail(workorderId);
+  const detail = await loadWorkorderDetail(workorderId, {
+    viewerUserId: mechanic.id,
+    participantChatOnly: true,
+  });
   await markWorkorderRead({
     workorderId,
     userId: mechanic.id,

@@ -27,6 +27,8 @@ import { readStoredChatImage } from "../modules/chat/chat-media.service.js";
 import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
+import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
+import { acknowledgeChatReceipts } from "../modules/chat/chat-receipts.service.js";
 
 function workorderIdFrom(pathname, suffix = "") {
   const escapedSuffix = suffix ? suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
@@ -206,6 +208,20 @@ export async function handleMechanicApi(req, res, url, helpers) {
     sendJson(res, 200, {
       ...result,
       reloadUrl: `/api/mechanic/workorders/${encodeURIComponent(messageId)}`,
+    });
+    return true;
+  }
+
+  const receiptWorkorderId = workorderIdFrom(url.pathname, "/message-receipts");
+  if (req.method === "POST" && receiptWorkorderId) {
+    await requireWorkorderAccess(requestContext, receiptWorkorderId);
+    const input = acknowledgeChatReceiptsSchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      receipt: await acknowledgeChatReceipts({
+        workorderId: receiptWorkorderId,
+        actorUserId: mechanicUserId,
+        ...input,
+      }),
     });
     return true;
   }
