@@ -1345,7 +1345,7 @@ export function RoleRouter({ actor }) {
         body: JSON.stringify({ body, ...(attachment ? { attachment } : {}) }),
       });
       await reloadActiveWorkorder();
-      setMechanicAction({ busy: "", message: "Message sent." });
+      setMechanicAction({ busy: "", message: "" });
       return true;
     } catch (error) {
       setMechanicAction({ busy: "", message: error.message });

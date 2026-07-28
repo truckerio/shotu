@@ -8,6 +8,7 @@ import { CompactWorkorderPreview } from "../../components/workorders/CompactWork
 import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
 import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
+import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { workDateRangeLabel, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
@@ -118,6 +119,13 @@ export function WorkorderDetailPage({
     [detailSections, isMechanicDetail, isPhone],
   );
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
+  useChatReceipts({
+    active: detailSection === "chat" || (!isCompact && supportingView === "chat"),
+    currentUserId: actor.id,
+    messages: conversationMessages,
+    role: isOfficeDetail ? "office" : "mechanic",
+    workorderId: activeWorkorder.workorder.id,
+  });
   const workorderChatContent = (
     <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className="chat-content">
       <ChatThread messages={conversationMessages} currentRole={isOfficeDetail ? "office" : "mechanic"} currentUserId={actor.id} />

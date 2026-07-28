@@ -125,6 +125,38 @@
   border-radius: 12px;
 }
 
+.chat-message-delivery {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.message-receipt {
+  align-items: center;
+  color: #667085;
+  display: inline-flex;
+  height: 14px;
+  justify-content: flex-end;
+  line-height: 1;
+  width: 16px;
+}
+
+.message-receipt svg {
+  flex: 0 0 auto;
+  height: 13px;
+  stroke-width: 2;
+  width: 13px;
+}
+
+.message-receipt svg + svg {
+  margin-left: -7px;
+}
+
+.message-receipt.is-read {
+  color: #1570ef;
+}
+
 @media (max-width: 640px) {
   .workorder-detail-page .control-panel:has(.workorder-progressive-stack > .chat-section) {
     display: flex;

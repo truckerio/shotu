@@ -1,5 +1,7 @@
 import { formatChatTime } from "../../lib/dates.js";
+import { shouldRenderMessageReceipt } from "../../lib/chat-receipts.js";
 import { visibleConversationMessages } from "./chat-messages.js";
+import { MessageReceipt } from "./chat/MessageReceipt.jsx";
 import "./chat/chat.css";
 
 function getImageAttachments(message) {
@@ -48,7 +50,12 @@ export function ChatThread({ messages, currentRole = "mechanic", currentUserId =
             <div className="chat-message-body">
               <div className="chat-message-meta">
                 <strong>{senderName}</strong>
-                {message.createdAt ? <time dateTime={message.createdAt}>{formatChatTime(message.createdAt)}</time> : null}
+                <span className="chat-message-delivery">
+                  {message.createdAt ? <time dateTime={message.createdAt}>{formatChatTime(message.createdAt)}</time> : null}
+                  {shouldRenderMessageReceipt({ currentUserId, message })
+                    ? <MessageReceipt receipt={message.receipt} />
+                    : null}
+                </span>
               </div>
               <div className="chat-bubble">
                 {requestLabel ? <span className="chat-request-label">{requestLabel}</span> : null}
