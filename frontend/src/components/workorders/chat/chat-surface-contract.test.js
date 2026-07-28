@@ -18,6 +18,7 @@ test("390px and 430px phone chat use a rectangular full-width workspace with ins
 
   assert.match(css, /grid-template-rows:\s*minmax\(0,\s*1fr\) auto;/);
   assert.match(mobileCss, /\.control-panel:has\(\.workorder-progressive-stack\s*>\s*\.chat-section\)\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;[^}]*padding-bottom:\s*calc\(75px \+ env\(safe-area-inset-bottom\)\);/s);
+  assert.match(mobileCss, /\.control-panel:has\(\.workorder-progressive-stack\s*>\s*\.chat-section\)\s*>\s*\.workorder-progressive-stack\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*padding-bottom:\s*16px;/s);
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border:\s*0;/s);
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(mobileCss, /\.chat-content:has\(>\s*\.chat-thread\s*\+\s*\.chat-prompt-composer\)\s*\{[^}]*height:\s*100%;[^}]*max-width:\s*100%;[^}]*overflow-x:\s*clip;[^}]*width:\s*100%;/s);
