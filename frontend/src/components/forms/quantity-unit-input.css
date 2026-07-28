@@ -71,6 +71,11 @@
   z-index: 80;
 }
 
+.quantity-unit-menu[data-placement="above"] {
+  bottom: calc(100% + 6px);
+  top: auto;
+}
+
 .quantity-unit-search {
   align-items: center;
   border: 1px solid #d0d5dd;
@@ -177,13 +182,13 @@
     grid-column: 2 / -1;
   }
 
-  .quantity-unit-menu {
+  .quantity-unit-menu[data-placement] {
     position: fixed;
-    bottom: 16px;
+    bottom: auto;
     left: 16px;
-    max-height: min(420px, calc(100dvh - 32px));
+    max-height: var(--quantity-menu-max-height, min(420px, calc(100dvh - 32px)));
     right: 16px;
-    top: auto;
+    top: var(--quantity-menu-top, 16px);
   }
 
   .quantity-unit-options section > div {

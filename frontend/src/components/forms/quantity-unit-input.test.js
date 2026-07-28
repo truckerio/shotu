@@ -14,9 +14,24 @@ test("quantity control exposes a searchable grouped unit listbox", () => {
   assert.doesNotMatch(component, /quantity:\s*normalized,\s*uomCode:\s*nextCode/);
 });
 
+test("opening the quantity unit list does not focus search or summon a phone keyboard", () => {
+  assert.doesNotMatch(component, /searchRef/);
+  assert.doesNotMatch(component, /\.focus\(\)/);
+  assert.match(component, /inputMode="search"/);
+  assert.match(component, /enterKeyHint="search"/);
+});
+
 test("quantity control keeps a bounded mobile menu and stable grid", () => {
   assert.match(css, /min-width:\s*min\(320px,\s*calc\(100vw - 32px\)\)/);
   assert.match(css, /position:\s*fixed/);
   assert.match(css, /left:\s*16px/);
   assert.match(css, /right:\s*16px/);
+  assert.match(component, /trigger\.getBoundingClientRect\(\)/);
+  assert.match(component, /availableBelow >= menuHeight \|\| availableBelow >= availableAbove/);
+  assert.match(component, /setMenuPlacement\(openBelow \? "below" : "above"\)/);
+  assert.match(component, /data-placement=\{menuPlacement\}/);
+  assert.match(component, /--quantity-menu-top/);
+  assert.match(css, /\.quantity-unit-menu\[data-placement="above"\]/);
+  assert.match(css, /top:\s*var\(--quantity-menu-top,\s*16px\)/);
+  assert.doesNotMatch(css, /bottom:\s*16px/);
 });

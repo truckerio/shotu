@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, SearchMd } from "@untitledui/icons";
 import {
   quantityInputModel,
@@ -25,15 +25,17 @@ export function QuantityUnitInput({
   const inputId = id || `quantity-${generatedId}`;
   const listboxId = `${inputId}-units`;
   const rootRef = useRef(null);
-  const searchRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [menuPlacement, setMenuPlacement] = useState("below");
+  const [mobileMenuStyle, setMobileMenuStyle] = useState(undefined);
   const model = quantityInputModel(quantity, uomCode);
   const groups = useMemo(() => unitOptionGroups(query), [query]);
 
   useEffect(() => {
     if (!open) return undefined;
-    searchRef.current?.focus();
     function closeOnOutsidePointer(event) {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     }
@@ -45,6 +47,57 @@ export function QuantityUnitInput({
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
       document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPlacement("below");
+      setMobileMenuStyle(undefined);
+      return undefined;
+    }
+
+    function positionMenu() {
+      const trigger = triggerRef.current;
+      const menu = menuRef.current;
+      if (!trigger || !menu) return;
+
+      const gutter = 16;
+      const gap = 6;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const triggerRect = trigger.getBoundingClientRect();
+      const availableBelow = viewportHeight - triggerRect.bottom - gap - gutter;
+      const availableAbove = triggerRect.top - gap - gutter;
+      const isMobile = window.matchMedia("(max-width: 700px)").matches;
+      const menuHeight = Math.min(menu.scrollHeight, isMobile ? 420 : 360);
+      const openBelow = availableBelow >= menuHeight || availableBelow >= availableAbove;
+      setMenuPlacement(openBelow ? "below" : "above");
+
+      if (!isMobile) {
+        setMobileMenuStyle(undefined);
+        return;
+      }
+
+      const availableHeight = Math.max(160, openBelow ? availableBelow : availableAbove);
+      const boundedHeight = Math.min(420, availableHeight);
+      const top = openBelow
+        ? triggerRect.bottom + gap
+        : Math.max(gutter, triggerRect.top - gap - boundedHeight);
+
+      setMobileMenuStyle({
+        "--quantity-menu-max-height": `${boundedHeight}px`,
+        "--quantity-menu-top": `${top}px`,
+      });
+    }
+
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    window.visualViewport?.addEventListener("resize", positionMenu);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+      window.visualViewport?.removeEventListener("resize", positionMenu);
     };
   }, [open]);
 
@@ -93,6 +146,7 @@ export function QuantityUnitInput({
       <div className="quantity-unit-picker">
         <span>{unitLabel}</span>
         <button
+          ref={triggerRef}
           type="button"
           className="quantity-unit-trigger"
           aria-expanded={open}
@@ -106,15 +160,21 @@ export function QuantityUnitInput({
           {!unitReadOnly ? <ChevronDown aria-hidden="true" /> : null}
         </button>
         {open ? (
-          <div className="quantity-unit-menu">
+          <div
+            className="quantity-unit-menu"
+            data-placement={menuPlacement}
+            ref={menuRef}
+            style={mobileMenuStyle}
+          >
             <label className="quantity-unit-search">
               <SearchMd aria-hidden="true" />
               <input
-                ref={searchRef}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search units"
                 aria-label="Search units"
+                inputMode="search"
+                enterKeyHint="search"
               />
             </label>
             <div id={listboxId} className="quantity-unit-options" role="listbox" aria-label="Units of measure">
