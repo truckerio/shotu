@@ -17,11 +17,12 @@ test("390px and 430px phone chat use a rectangular full-width workspace with ins
   const mobileCss = mobileChatCss();
 
   assert.match(css, /grid-template-rows:\s*minmax\(0,\s*1fr\) auto;/);
+  assert.match(mobileCss, /\.control-panel:has\(\.workorder-progressive-stack\s*>\s*\.chat-section\)\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;[^}]*padding-bottom:\s*calc\(75px \+ env\(safe-area-inset-bottom\)\);/s);
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border:\s*0;/s);
   assert.match(mobileCss, /\.workorder-section-panel\.chat-section\s*\{[^}]*border-radius:\s*0;/s);
-  assert.match(mobileCss, /\.chat-content:has\(>\s*\.chat-thread\s*\+\s*\.chat-prompt-composer\)\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*clip;[^}]*width:\s*100%;/s);
-  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-thread\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*max-width:\s*100%;[^}]*padding:\s*8px 2px 88px;/s);
-  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*--chat-composer-inset:\s*clamp\(12px,\s*3\.5vw,\s*16px\);[^}]*bottom:\s*calc\(59px \+ env\(safe-area-inset-bottom\)\);[^}]*left:\s*13px;[^}]*max-width:\s*none;[^}]*padding:\s*8px var\(--chat-composer-inset\) var\(--chat-composer-inset\);[^}]*position:\s*fixed;[^}]*right:\s*13px;[^}]*width:\s*auto;/s);
+  assert.match(mobileCss, /\.chat-content:has\(>\s*\.chat-thread\s*\+\s*\.chat-prompt-composer\)\s*\{[^}]*height:\s*100%;[^}]*max-width:\s*100%;[^}]*overflow-x:\s*clip;[^}]*width:\s*100%;/s);
+  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-thread\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*max-width:\s*100%;[^}]*padding:\s*8px 2px 12px;/s);
+  assert.match(mobileCss, /\.chat-content\s*>\s*\.chat-prompt-composer\s*\{[^}]*--chat-composer-inset:\s*clamp\(12px,\s*3\.5vw,\s*16px\);[^}]*max-width:\s*100%;[^}]*padding:\s*8px var\(--chat-composer-inset\) var\(--chat-composer-inset\);[^}]*position:\s*static;[^}]*width:\s*100%;/s);
 
   for (const viewportWidth of [390, 430]) {
     const inset = Math.min(16, Math.max(12, viewportWidth * 0.035));

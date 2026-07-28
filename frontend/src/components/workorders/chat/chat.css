@@ -126,12 +126,29 @@
 }
 
 @media (max-width: 640px) {
+  .workorder-detail-page .control-panel:has(.workorder-progressive-stack > .chat-section) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    padding-bottom: calc(75px + env(safe-area-inset-bottom));
+  }
+
+  .workorder-detail-page .control-panel:has(.workorder-progressive-stack > .chat-section) > .workorder-progressive-stack {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
   .workorder-detail-page .workorder-progressive-stack > .workorder-section-panel.chat-section {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
     margin: 0;
-    min-height: calc(100dvh - 245px - env(safe-area-inset-bottom));
+    min-height: 0;
   }
 
   .workorder-detail-page .workorder-progressive-stack > .chat-section .workorder-section-panel-heading {
@@ -139,11 +156,12 @@
   }
 
   .workorder-detail-page .workorder-progressive-stack > .chat-section .workorder-section-panel-content {
+    min-height: 0;
     padding: 0;
   }
 
   .workorder-detail-page .chat-content:has(> .chat-thread + .chat-prompt-composer) {
-    height: max(360px, calc(100dvh - 258px - env(safe-area-inset-bottom)));
+    height: 100%;
     max-width: 100%;
     overflow-x: clip;
     width: 100%;
@@ -154,7 +172,7 @@
     border: 0;
     border-radius: 0;
     max-width: 100%;
-    padding: 8px 2px 88px;
+    padding: 8px 2px 12px;
   }
 
   .workorder-detail-page .chat-content > .chat-thread.is-empty {
@@ -166,13 +184,10 @@
     --chat-composer-inset: clamp(12px, 3.5vw, 16px);
 
     align-self: end;
-    bottom: calc(59px + env(safe-area-inset-bottom));
-    left: 13px;
-    max-width: none;
+    max-width: 100%;
     padding: 8px var(--chat-composer-inset) var(--chat-composer-inset);
-    position: fixed;
-    right: 13px;
-    width: auto;
+    position: static;
+    width: 100%;
     z-index: 12;
   }
 
