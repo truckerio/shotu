@@ -16,6 +16,11 @@ import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { useWorkorderDetailRealtime } from "../workorder-detail/useWorkorderDetailRealtime.js";
 import { normalizeWorkorderFormData, workDateRangeLabel, workorderPhysicalPageCount, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import {
+  SURVEILLANCE_PHONE_PRIMARY_TABS,
+  SURVEILLANCE_PHONE_SECONDARY_TABS,
+  isSurveillancePhonePrimaryTab,
+} from "./surveillanceQueue.js";
 import "./surveillance.css";
 
 function valueOrDash(value) {
@@ -172,13 +177,10 @@ export function SurveillanceWorkspace({ actor }) {
     { key: "missingInfo", label: "Missing info", count: dashboard?.counts.missingInfo || 0, icon: Tool02 },
     { key: "entered", label: "Entered", count: dashboard?.counts.entered || 0, icon: CheckCircle },
   ];
-  const compactTabs = [
-    tabs[2],
-    tabs[3],
-    { ...tabs[1], label: "Completed" },
-    tabs[4],
-    tabs[0],
-  ];
+  const compactTabs = SURVEILLANCE_PHONE_PRIMARY_TABS.map((phoneTab) => ({
+    ...tabs.find(({ key }) => key === phoneTab.key),
+    label: phoneTab.label,
+  }));
   const allRows = useMemo(() => [
     ...(dashboard?.active || []),
     ...(dashboard?.awaitingOffice || []),
@@ -515,6 +517,19 @@ export function SurveillanceWorkspace({ actor }) {
           </div>
           <div className="surveillance-compact-queues">
             <WorkorderQueueTabs tabs={compactTabs} activeTab={activeTab} onChange={setActiveTab} />
+            <label className="surveillance-secondary-queue">
+              <span>More queues</span>
+              <select
+                aria-label="More surveillance queues"
+                value={isSurveillancePhonePrimaryTab(activeTab) ? "" : activeTab}
+                onChange={(event) => event.target.value && setActiveTab(event.target.value)}
+              >
+                <option value="">Choose queue</option>
+                {SURVEILLANCE_PHONE_SECONDARY_TABS.map((phoneTab) => (
+                  <option key={phoneTab.key} value={phoneTab.key}>{phoneTab.label} ({dashboard?.counts[phoneTab.key] || 0})</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>

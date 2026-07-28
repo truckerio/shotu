@@ -285,9 +285,10 @@
 
   .surveillance-compact-queues {
     border-bottom: 1px solid #e4e7ec;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: none;
+    display: grid;
+    gap: 8px;
+    overflow: visible;
+    padding-bottom: 10px;
   }
 
   .surveillance-compact-queues::-webkit-scrollbar {
@@ -295,16 +296,43 @@
   }
 
   .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs {
-    display: flex;
-    flex-wrap: nowrap;
-    min-width: max-content;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-width: 0;
     padding: 0 4px;
   }
 
   .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs button {
     justify-content: center;
     min-height: 48px;
-    padding-inline: 10px;
+    min-width: 0;
+    padding-inline: 4px;
+  }
+
+  .surveillance-secondary-queue {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 0 4px;
+  }
+
+  .surveillance-secondary-queue span {
+    color: #667085;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+  }
+
+  .surveillance-secondary-queue select {
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    color: #344054;
+    font: inherit;
+    min-height: 44px;
+    min-width: 0;
+    padding: 0 10px;
+    width: 100%;
   }
 
   .surveillance-detail-page { padding: 0 0 28px; }

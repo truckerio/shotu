@@ -32,6 +32,11 @@ import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { IntegrationsSettings } from "./integrations/IntegrationsSettings.jsx";
+import {
+  ADMIN_MOBILE_DESTINATIONS,
+  adminLocationTarget,
+  adminMobileDestinationState,
+} from "./adminNavigation.js";
 import "./admin.css";
 
 const blankLocation = { name: "", type: "yard", address: "" };
@@ -385,6 +390,20 @@ export function AdminWorkspace({
     window.history.replaceState({}, "", `/${query}`);
   }
 
+  function openMobileDestination(destination) {
+    if (!destination.requiresLocation) {
+      changeView(destination.view);
+      return;
+    }
+    const locationId = adminLocationTarget(selectedId, locations);
+    if (!locationId) {
+      changeView("locations");
+      return;
+    }
+    openLocation(locationId, destination.tab)
+      .catch((error) => setState((current) => ({ ...current, error: error.message })));
+  }
+
   async function createLocation(event) {
     event.preventDefault();
     setState((current) => ({ ...current, busy: true, error: "" }));
@@ -600,9 +619,29 @@ export function AdminWorkspace({
         </Modal>
       ) : null}
       <nav className="admin-mobile-nav" aria-label="Admin workspace">
-        <button className={view === "operations" ? "active" : ""} type="button" onClick={() => changeView("operations")}><Tool02 /><span>Operations</span></button>
-        <button className={view === "locations" ? "active" : ""} type="button" onClick={() => changeView("locations")}><MarkerPin01 /><span>Locations</span></button>
-        <button className={view === "settings" ? "active" : ""} type="button" onClick={() => changeView("settings")}><Settings01 /><span>Settings</span></button>
+        {ADMIN_MOBILE_DESTINATIONS.map((destination) => {
+          const Icon = destination.key === "locations"
+            ? MarkerPin01
+            : destination.key === "users"
+              ? Users01
+              : destination.key === "template"
+                ? File02
+                : destination.key === "settings"
+                  ? Settings01
+                  : Tool02;
+          const active = adminMobileDestinationState({ view, tab, selectedId }, destination);
+          return (
+            <button
+              className={`${active ? "active" : ""}${destination.secondary ? " secondary" : ""}`}
+              key={destination.key}
+              type="button"
+              onClick={() => openMobileDestination(destination)}
+            >
+              <Icon />
+              <span>{destination.label}</span>
+            </button>
+          );
+        })}
       </nav>
     </main>
   );
