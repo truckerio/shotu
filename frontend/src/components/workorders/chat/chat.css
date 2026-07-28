@@ -116,7 +116,7 @@
 
 .chat-prompt-surface .chat-send-button:disabled {
   background: #e4e7ec;
-  color: #98a2b3;
+  color: #1570ef;
   cursor: not-allowed;
   opacity: 1;
 }

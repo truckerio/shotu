@@ -40,6 +40,7 @@ test("shared composer keeps camera capture, autosize, keyboard submit, and 44px 
   assert.match(composer, /await onSend\(buildChatPayload\(body,\s*attachment\)\)/);
   assert.match(css, /grid-template-columns:\s*44px minmax\(0,\s*1fr\) 44px;/);
   assert.match(css, /\.chat-camera-button,[\s\S]*?\.chat-send-button\s*\{[\s\S]*?height:\s*44px;[\s\S]*?width:\s*44px;/);
+  assert.match(css, /\.chat-send-button:disabled\s*\{[^}]*background:\s*#e4e7ec;[^}]*color:\s*#1570ef;/s);
 });
 
 test("empty conversation uses shared thread without a bordered placeholder card", () => {
