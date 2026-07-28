@@ -33,6 +33,12 @@ test("admin access is inherited and not editable", () => {
   assert.match(workspace, /Admins automatically inherit access to every current and future location/);
 });
 
+test("admin invitations use inherited company-wide access", () => {
+  assert.match(workspace, /<option value="admin">Admin<\/option>/);
+  assert.match(workspace, /inviteDraft\.role === "admin"/);
+  assert.match(workspace, /inviteDraft\.role !== "admin" && !inviteLocationIds\.length/);
+});
+
 test("location selector remains contained on mobile", () => {
   assert.match(css, /\.admin-location-selector \{[^}]*min-width: 0;/s);
   assert.match(css, /\.admin-location-options \{[^}]*max-height: 220px;[^}]*overflow-y: auto;/s);

@@ -356,7 +356,7 @@ export async function createInvitationAuthUser({ invitation, input, authApi = au
       name: invitation.name,
       email: invitation.email,
       password: input.password,
-      role: "user",
+      role: invitation.role === "admin" ? "admin" : "user",
       data: {
         username: input.username,
         displayUsername: input.username,

@@ -59,24 +59,33 @@ export async function listUsersByLocation(locationId) {
             company_membership.role,
             app_user.active,
             auth_user.username,
-            membership.active as membership_active, membership.created_at,
+            coalesce(membership.active, company_membership.active) as membership_active,
+            coalesce(membership.created_at, company_membership.created_at) as created_at,
             coalesce((
               select array_agg(other.location_id order by other.location_id)
               from user_location_memberships other
               where other.user_id = app_user.id
-                and other.company_id = membership.company_id
+                and other.company_id = company_membership.company_id
                 and other.active
             ), array[]::uuid[]) as location_ids
-       from user_location_memberships membership
+       from locations target_location
        join user_company_memberships company_membership
-         on company_membership.user_id = membership.user_id
-        and company_membership.company_id = membership.company_id
-       join user_profiles app_user on app_user.id = membership.user_id
+         on company_membership.company_id = target_location.company_id
+       join user_profiles app_user on app_user.id = company_membership.user_id
+       left join user_location_memberships membership
+         on membership.user_id = company_membership.user_id
+        and membership.company_id = company_membership.company_id
+        and membership.location_id = target_location.id
        left join auth_user on auth_user.id = app_user.auth_user_id
-      where membership.location_id = $1
+      where target_location.id = $1
         and app_user.deleted_at is null
-        and (membership.active or not app_user.active)
-      order by membership.active desc, app_user.display_name`,
+        and (
+          company_membership.role = 'admin'
+          or (membership.user_id is not null and (membership.active or not app_user.active))
+        )
+      order by (company_membership.role = 'admin') desc,
+               coalesce(membership.active, company_membership.active) desc,
+               app_user.display_name`,
     [locationId],
   );
   return result.rows;

@@ -165,7 +165,7 @@ export async function acceptUserInvitation({ invitationId, authUserId, username 
         invitation.batch_id,
       ],
     );
-    for (const grouped of groupedInvitations.rows) {
+    for (const grouped of invitation.role === "admin" ? [] : groupedInvitations.rows) {
       const updatedLocation = await client.query(
         `update user_location_memberships
             set company_id = $3, active = true, updated_at = now()
@@ -191,7 +191,9 @@ export async function acceptUserInvitation({ invitationId, authUserId, username 
       userId,
       username,
       role: invitation.role,
-      locationIds: groupedInvitations.rows.map(({ location_id }) => location_id),
+      locationIds: invitation.role === "admin"
+        ? []
+        : groupedInvitations.rows.map(({ location_id }) => location_id),
     };
   } catch (error) {
     await client.query("rollback").catch(() => {});

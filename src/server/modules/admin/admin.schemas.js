@@ -27,7 +27,7 @@ export const updateLocationWorkorderPolicySchema = z.object({
 export const createInvitationSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(320),
-  role: z.enum(["mechanic", "office", "surveillance"]),
+  role: z.enum(["mechanic", "office", "surveillance", "admin"]),
   locationIds: z.array(z.string().uuid()).min(1).max(100).optional(),
 });
 

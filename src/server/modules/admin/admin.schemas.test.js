@@ -19,9 +19,9 @@ test("location input keeps the admin model compact", () => {
   });
 });
 
-test("location invites allow operating roles but never admin", () => {
+test("location invites allow operating and company-wide admin roles", () => {
   assert.equal(createInvitationSchema.parse({ name: "Sam Tech", email: "sam@example.com", role: "mechanic" }).role, "mechanic");
-  assert.throws(() => createInvitationSchema.parse({ name: "Admin", email: "admin2@example.com", role: "admin" }));
+  assert.equal(createInvitationSchema.parse({ name: "Admin", email: "admin2@example.com", role: "admin" }).role, "admin");
   assert.deepEqual(
     createInvitationSchema.parse({
       name: "Sam Tech",

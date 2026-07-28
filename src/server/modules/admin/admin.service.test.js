@@ -41,6 +41,24 @@ test("invitation acceptance creates credentials through Better Auth admin API", 
   });
 });
 
+test("admin invitations create a Better Auth admin identity", async () => {
+  let payload;
+  await createInvitationAuthUser({
+    authApi: { createUser: async (input) => { payload = input; } },
+    invitation: {
+      name: "Second Admin",
+      email: "admin2@example.com",
+      role: "admin",
+    },
+    input: {
+      username: "admin2",
+      password: "AdminPassword@1234",
+    },
+  });
+
+  assert.equal(payload.body.role, "admin");
+});
+
 test("invitation acceptance links profiles without conflict-index dependencies", async () => {
   const repository = await readFile(new URL("../../db/repositories/invitations.repo.js", import.meta.url), "utf8");
   const acceptBody = repository.slice(repository.indexOf("export async function acceptUserInvitation"));
@@ -55,6 +73,7 @@ test("invitation acceptance links profiles without conflict-index dependencies",
   assert.match(acceptBody, /groupedInvitations/i);
   assert.match(acceptBody, /locationIds:/i);
   assert.match(acceptBody, /batch_id is not null and batch_id = \$4/i);
+  assert.match(acceptBody, /invitation\.role === "admin" \? \[\] : groupedInvitations\.rows/);
 });
 
 test("resending one invitation rotates every token in its durable batch", async () => {
@@ -98,4 +117,14 @@ test("location user lists hide removed active assignments but retain inactive ac
     repository.indexOf("export async function getManagedUserByCompanies"),
   );
   assert.match(listBody, /membership\.active or not app_user\.active/i);
+});
+
+test("location user lists include company-wide admins without location memberships", async () => {
+  const repository = await readFile(new URL("../../db/repositories/users.repo.js", import.meta.url), "utf8");
+  const listBody = repository.slice(
+    repository.indexOf("export async function listUsersByLocation"),
+    repository.indexOf("export async function getManagedUserByCompanies"),
+  );
+  assert.match(listBody, /company_membership\.role = 'admin'/i);
+  assert.match(listBody, /left join user_location_memberships/i);
 });
