@@ -90,7 +90,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                 inputMode="numeric"
                 minLength="4"
                 pattern="[0-9]{4,}"
-                type="password"
+                type="text"
                 value={pin}
                 onChange={(event) => {
                   setPin(kioskPinValue(event.target.value));
@@ -111,7 +111,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                     inputMode="numeric"
                     minLength="4"
                     pattern="[0-9]{4,}"
-                    type="password"
+                    type="text"
                     value={newPin}
                     onChange={(event) => {
                       setNewPin(kioskPinValue(event.target.value));
@@ -128,7 +128,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                     inputMode="numeric"
                     minLength="4"
                     pattern="[0-9]{4,}"
-                    type="password"
+                    type="text"
                     value={confirmPin}
                     onChange={(event) => {
                       setConfirmPin(kioskPinValue(event.target.value));
