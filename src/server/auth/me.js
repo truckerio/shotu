@@ -18,7 +18,10 @@ export async function handleCurrentUserApi(req, res, url, helpers) {
   const resolveContext = helpers.resolveRequestContext || resolveRequestContext;
   const context = await resolveContext(req);
   const actor = requireActor(context);
-  helpers.sendJson(res, 200, { user: publicActor(actor) });
+  helpers.sendJson(res, 200, {
+    user: publicActor(actor),
+    sessionMode: context.sessionMode || "standard",
+    kiosk: context.sessionMode === "kiosk" ? context.kiosk : null,
+  });
   return true;
 }
-

@@ -28,6 +28,7 @@ test("Locations stays active throughout location-owned users and template pages"
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "users" }, locations), true);
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "template" }, locations), true);
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "rules" }, locations), true);
+  assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "kiosk" }, locations), true);
 });
 
 test("admin opens location setup by default while explicit destinations remain linkable", () => {

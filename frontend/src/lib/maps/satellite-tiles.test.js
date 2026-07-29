@@ -59,5 +59,20 @@ test("HERE location links preserve exact coordinates and satellite view", () => 
     buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }),
     "https://share.here.com/l/34.012345,-117.654321?z=17&t=satellite&p=yes&ref=shotu",
   );
+  assert.equal(
+    buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }, 19),
+    "https://share.here.com/l/34.012345,-117.654321?z=19&t=satellite&p=yes&ref=shotu",
+  );
   assert.equal(buildHereLocationUrl({ latitude: "missing", longitude: -117 }), "");
+});
+
+test("asset-level zoom is preserved across HERE and fallback tile URLs", () => {
+  const hereLayer = buildSatelliteTileLayer(
+    { latitude: 34.0522, longitude: -118.2437 },
+    { satelliteProvider: "here", hereBrowserApiKey: "browser-key" },
+    19,
+  );
+  assert.equal(hereLayer.tiles.every((tile) => tile.key.startsWith("19-")), true);
+  assert.equal(hereLayer.tiles.every((tile) => tile.src.includes("/mc/19/")), true);
+  assert.equal(hereLayer.tiles.every((tile) => tile.fallbackSrc.includes("/tile/19/")), true);
 });

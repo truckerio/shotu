@@ -1,5 +1,6 @@
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { closePool, getPool } from "../pool.js";
+import { assertLocalDemoSeed } from "./demo-seed-policy.js";
 
 const COMPANY_ID = DEFAULT_COMPANY_ID;
 const LOCATION_NAME = "Chino Yard";
@@ -195,9 +196,7 @@ async function seedWorkorders(client, { count, locationId, creatorId, mechanics 
 }
 
 async function seed() {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_USER_SEED !== "true") {
-    throw new Error("Chino volume seed is disabled in production. Set ALLOW_DEMO_USER_SEED=true to run intentionally.");
-  }
+  assertLocalDemoSeed(process.env, "Chino volume seed");
 
   const count = requestedCount();
   const client = await getPool().connect();

@@ -20,6 +20,7 @@ function fingerprint(value) {
 }
 
 export function useMechanicProgress({
+  actorId,
   workorderId,
   value,
   initialVersion = 1,
@@ -34,6 +35,7 @@ export function useMechanicProgress({
   const baselineRef = useRef(fingerprint(value));
   const activityBaselineRef = useRef(fingerprint(value));
   const workorderIdRef = useRef(workorderId);
+  const actorIdRef = useRef(actorId);
   const timerRef = useRef(null);
   const inFlightRef = useRef(null);
   const mountedRef = useRef(true);
@@ -80,7 +82,7 @@ export function useMechanicProgress({
       versionRef.current = Number(progress.version || result?.version || versionRef.current);
       baselineRef.current = currentFingerprint;
       if (needsActivity) activityBaselineRef.current = currentFingerprint;
-      clearProgressBackup(workorderIdRef.current);
+      clearProgressBackup(actorIdRef.current, workorderIdRef.current);
       if (mountedRef.current) {
         setVersion(versionRef.current);
         setStatus("saved");
@@ -88,7 +90,7 @@ export function useMechanicProgress({
       }
       return result;
     } catch (saveError) {
-      writeProgressBackup(workorderIdRef.current, currentValue);
+      writeProgressBackup(actorIdRef.current, workorderIdRef.current, currentValue);
       if (mountedRef.current) {
         setStatus("error");
         setError(saveError);
@@ -119,6 +121,10 @@ export function useMechanicProgress({
   }, [clearTimer]);
 
   useEffect(() => {
+    actorIdRef.current = actorId;
+  }, [actorId]);
+
+  useEffect(() => {
     if (workorderId === workorderIdRef.current) return;
     reset({ id: workorderId, progress: value, nextVersion: initialVersion });
   }, [initialVersion, reset, value, workorderId]);
@@ -129,7 +135,7 @@ export function useMechanicProgress({
     const currentFingerprint = fingerprint(valueRef.current);
     if (currentFingerprint === baselineRef.current) return undefined;
 
-    writeProgressBackup(workorderId, valueRef.current);
+    writeProgressBackup(actorId, workorderId, valueRef.current);
     setStatus("dirty");
     setError(null);
     clearTimer();
@@ -138,7 +144,7 @@ export function useMechanicProgress({
       persist({ recordActivity: true }).catch(() => {});
     }, Math.max(0, debounceMs));
     return clearTimer;
-  }, [clearTimer, debounceMs, persist, value, workorderId]);
+  }, [actorId, clearTimer, debounceMs, persist, value, workorderId]);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -152,7 +158,7 @@ export function useMechanicProgress({
     version,
     flush,
     reset,
-    backup: readProgressBackup(workorderId),
+    backup: readProgressBackup(actorId, workorderId),
     hasUnsyncedChanges: Boolean(workorderId) && renderedFingerprint !== baselineRef.current,
   };
 }

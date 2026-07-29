@@ -15,13 +15,13 @@ const UNIT_FIELDS = new Set([
   "vinNo",
 ]);
 
-export function buildCreateWorkorderSections({ canAssign = true } = {}) {
+export function buildCreateWorkorderSections({ canAssign = true, includePreview = true } = {}) {
   return [
     { id: "work", label: "Work" },
     { id: "unit", label: "Unit" },
     ...(canAssign ? [{ id: "assignment", label: "Assignment" }] : []),
     { id: "parts", label: "Parts" },
-    { id: "preview", label: "Preview" },
+    ...(includePreview ? [{ id: "preview", label: "Preview" }] : []),
   ];
 }
 

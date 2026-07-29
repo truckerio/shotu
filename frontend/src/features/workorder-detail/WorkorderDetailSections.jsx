@@ -14,6 +14,7 @@ import {
 
 export function WorkorderDetailSections({
   activeWorkorder,
+  actorId,
   assignedMechanicIds,
   conversationMessages,
   detailMechanicNames,
@@ -56,6 +57,9 @@ export function WorkorderDetailSections({
   vehicleMileage,
   vehicleModelText,
 }) {
+  const detailMapVehicle = selectedVehicle || mechanicMapVehicle;
+  const detailMapLocation = getVehicleLocation(selectedVehicle) || mechanicMapLocation;
+
   return (
     <div className="accordion-stack workorder-progressive-stack">
       {activeWorkorder && isCompact ? (
@@ -83,6 +87,12 @@ export function WorkorderDetailSections({
           className="mechanic-work-section"
           displayMode={workorderDetailSectionMode()}
         >
+          <AssetLocationCard
+            vehicle={detailMapVehicle}
+            location={detailMapLocation}
+            mapsConfig={mapsConfig}
+            showVehicleLabel={false}
+          />
           <div className="operational-form detail-workflow-fields">
             <OperationalFormField id="mechanic-diagnosis" label="Diagnosis" hint="What did you inspect or find?">
               <textarea rows="3" value={form.diagnosis} onChange={(event) => updateField("diagnosis", event.target.value)} />
@@ -109,6 +119,12 @@ export function WorkorderDetailSections({
           displayMode={workorderDetailSectionMode()}
         >
           <div className="workorder-review-content">
+            <AssetLocationCard
+              vehicle={detailMapVehicle}
+              location={detailMapLocation}
+              mapsConfig={mapsConfig}
+              showVehicleLabel={false}
+            />
             <div className="workorder-review-copy">
               <div><span>Diagnosis</span><p>{form.diagnosis || "No diagnosis recorded yet."}</p></div>
               <div><span>Work performed</span><p>{form.workPerformed || "No completed work recorded yet."}</p></div>
@@ -135,6 +151,7 @@ export function WorkorderDetailSections({
       >
         <div id={isMechanicDetail ? "mechanic-parts-section" : undefined}>
           <PartRequestsPanel
+            actorId={actorId}
             role={isOfficeDetail ? "office" : "mechanic"}
             detail={activeWorkorder}
             parts={form.parts}
@@ -240,11 +257,6 @@ export function WorkorderDetailSections({
                   <input value={form.vinNo} onChange={(event) => updateField("vinNo", event.target.value)} />
                 </Field>
               </div>
-              <AssetLocationCard
-                vehicle={selectedVehicle}
-                location={getVehicleLocation(selectedVehicle)}
-                mapsConfig={mapsConfig}
-              />
               <Field label="Mechanic concern">
                 <input value={form.mechanicConcern} onChange={(event) => updateField("mechanicConcern", event.target.value)} />
               </Field>
@@ -344,12 +356,6 @@ export function WorkorderDetailSections({
             <div><dt>Work dates</dt><dd>{workDateRangeLabel(form) || "Not listed"}</dd></div>
             <div><dt>Workorder</dt><dd>{activeWorkorder.workorder.serial}</dd></div>
           </dl>
-          <AssetLocationCard
-            vehicle={mechanicMapVehicle}
-            location={mechanicMapLocation}
-            mapsConfig={mapsConfig}
-            showVehicleLabel={false}
-          />
         </ProgressiveWorkorderSection>
       )}
 

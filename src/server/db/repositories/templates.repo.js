@@ -57,7 +57,17 @@ export async function getLocationTemplates(locationIds) {
        location.name as location_name,
        location.type as location_type,
        location.address as location_address,
-       ${templateColumns}
+       template.id,
+       template.location_id as template_location_id,
+       template.header_title,
+       template.brand_top,
+       template.brand_bottom,
+       template.warranty_text,
+       template.responsibility_text,
+       template.authorization_text,
+       template.active,
+       template.version,
+       template.updated_at
      from locations location
      left join location_workorder_templates template
        on template.location_id = location.id and template.active = true

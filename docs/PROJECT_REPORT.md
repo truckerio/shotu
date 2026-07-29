@@ -135,7 +135,8 @@ Frontend:
 
 - `frontend/src/app/routes` - role routing and URL state.
 - `frontend/src/features/auth` - login/session gate.
-- `frontend/src/features/create-workorder` - create workorder page and draft/create flow.
+- `frontend/src/features/create-workorder` - shared Admin, Manager, and Mechanic create workorder page shell.
+- `frontend/src/features/generator` - shared create form content and print/preview primitives.
 - `frontend/src/features/workorder-detail` - shared workorder detail page behavior.
 - `frontend/src/features/mechanic` - mechanic home and mechanic-specific work/progress UI.
 - `frontend/src/features/office` - office queue/home UI.
@@ -192,6 +193,7 @@ Attention signals are separate from lifecycle:
 - Do not create a second workorder truth.
 - Office, mechanic, admin, and surveillance must read the same backend workorder record.
 - Shared workorder UI belongs in `features/workorder-detail` or `components/workorders`.
+- Shared create-workorder UI belongs in `features/create-workorder`; role differences should be passed as capabilities.
 - Role-only behavior belongs inside its role folder.
 - Do not call Samsara on every search keystroke; sync first, search Postgres.
 - Do not expose provider tokens to the browser.
@@ -231,4 +233,3 @@ Attention signals are separate from lifecycle:
 - `src/server/routes/office.routes.js`
 - `src/server/routes/admin.routes.js`
 - `src/server/db/repositories/operational-workorders.repo.js`
-

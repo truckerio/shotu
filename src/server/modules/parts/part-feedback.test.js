@@ -16,7 +16,7 @@ test("part decision feedback explains approval and supply", () => {
       reason: "Use the filters in bin B-12",
       allocations: [{ sourceType: "inventory", status: "reserved" }],
     }),
-    "Office approved 2 ea LF9009. Supply: inventory (Reserved). Use the filters in bin B-12."
+    "Office approved 2 pc LF9009. Supply: inventory (Reserved). Use the filters in bin B-12."
   );
 });
 
@@ -28,7 +28,7 @@ test("part decision feedback makes a clarification actionable", () => {
       label: "fuel filter",
       reason: "Send a photo of the existing filter",
     }),
-    "Office needs more information for 1 ea fuel filter. Send a photo of the existing filter."
+    "Office needs more information for 1 pc fuel filter. Send a photo of the existing filter."
   );
 });
 
@@ -41,7 +41,7 @@ test("allocation and usage feedback use readable status labels", () => {
       status: "ordered",
       note: "",
     }),
-    "Part update: 1 ea A83911 from purchase is now Ordered."
+    "Part update: 1 pc A83911 from purchase is now Ordered."
   );
   assert.equal(
     formatUsageFeedback({
@@ -50,7 +50,7 @@ test("allocation and usage feedback use readable status labels", () => {
       usageStatus: "partially_installed",
       note: "Waiting for a second seal",
     }),
-    "Mechanic marked 1 ea A83911 as Partially Installed. Waiting for a second seal."
+    "Mechanic marked 1 pc A83911 as Partially Installed. Waiting for a second seal."
   );
 });
 

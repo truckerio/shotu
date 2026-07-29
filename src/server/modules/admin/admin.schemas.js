@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  issueKioskPinSchema,
+  registerKioskDeviceSchema,
+} from "../kiosk/kiosk.schemas.js";
 
 export const createLocationSchema = z.object({
   companyId: z.string().uuid().optional(),
@@ -48,3 +52,5 @@ export const updateManagedUserStatusSchema = z.object({
 export const resetManagedUserPasswordSchema = z.object({
   password: z.string().min(12).max(128),
 });
+
+export { issueKioskPinSchema, registerKioskDeviceSchema };

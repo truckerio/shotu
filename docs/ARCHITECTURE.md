@@ -20,7 +20,7 @@ React feature -> /api route -> domain service -> repository -> PostgreSQL
 
 ```text
 frontend/src/
-  app/                  Application composition and the legacy generator container
+  app/                  Application composition, role routing, and URL state
   components/           Shared UI used by multiple roles
     preview/            The single shared preview implementation
     ui/                 Small UI primitives
@@ -28,6 +28,7 @@ frontend/src/
   features/             Role or workflow-owned UI
     admin/              Operations, locations, users, templates, and invitations
     auth/               Session gate and login
+    create-workorder/   Shared admin, office, and mechanic create-workorder page shell
     generator/          Physical workorder generator UI
     mechanic/           Mechanic workspace and active-work progress autosave
     office/             Office workspace
@@ -54,7 +55,7 @@ src/server/
 server.js               Composition root plus contained legacy print/share endpoints
 ```
 
-`server.js` and `frontend/src/styles.css` contain the original physical generator implementation. Do not add new domain workflows there. New APIs belong under `src/server/routes` and new UI styling belongs with its feature.
+`server.js` contains the remaining physical print/share composition endpoints. Do not add new domain workflows there. New APIs belong under `src/server/routes` and new UI styling belongs with its feature.
 
 ## API Ownership
 
@@ -72,6 +73,26 @@ server.js               Composition root plus contained legacy print/share endpo
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### Create Workorder
+
+`frontend/src/features/create-workorder/` owns the create-workorder page for
+Admin, Manager/office, and Mechanic. It intentionally reuses the shared
+workorder-detail layout primitives so create and detail screens do not drift:
+
+- `CreateWorkorderPage.jsx` composes the shared split layout, preview, keyboard
+  handling, and section state.
+- `CreateWorkorderShell.jsx` owns the create header, summary strip, section
+  navigation, draft indicator, preview toggle, and mobile dock.
+- `CreateWorkorderForm.jsx` remains the shared operational form content.
+- `RoleRouter.jsx` supplies authenticated actor scope, location/template data,
+  draft persistence, submit handlers, and role capabilities.
+
+Role differences must stay capability-driven: Admin and Manager can assign
+mechanics and use the draft lifecycle; Mechanic create omits Assignment,
+self-assigns the current mechanic on submit, and creates the real workorder
+directly. Location changes must update the create summary strip, template fields,
+draft payload, and assignment mechanic list from the same selected location.
 
 ### Quantity And Inventory Units
 
@@ -134,8 +155,11 @@ The frontend reflects the same ownership:
 
 - `features/workorder-drafts/` owns the office/admin drafts queue.
 - `components/drafts/useDraftForm.js` owns create-form persistence.
+- `features/create-workorder/` owns the shared create page; it does not own
+  operational workorder truth after submit.
 - `features/mechanic/progress/` owns assigned-work autosave and local recovery.
-- `App.jsx` composes these features and owns URL transitions only.
+- `app/routes/RoleRouter.jsx` composes these features and owns role/URL
+  transitions only.
 
 ## Adding A Feature
 

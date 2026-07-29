@@ -94,7 +94,8 @@ Mechanic ownership comes only from `workorder_mechanic_assignments`:
 
 Parts and inventory quantities use `numeric`, never floating point. A durable
 quantity always has a `uom_code` referencing `units_of_measure`. Existing
-unit-less records are interpreted as `ea`. Universal conversions are limited
+unit-less records are interpreted as `pc`, the current create-flow default.
+Universal conversions are limited
 to compatible measured categories; product packaging conversions belong to
 `part_uom_conversions`. Inventory identity includes company, location,
 normalized part number, and unit so the same part can have separate `ea`,

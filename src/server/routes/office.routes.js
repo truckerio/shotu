@@ -74,7 +74,7 @@ export async function handleOfficeApi(req, res, url, helpers) {
       },
       template: row.id ? {
         id: row.id,
-        location_id: row.location_id,
+        location_id: row.template_location_id,
         header_title: row.header_title,
         brand_top: row.brand_top,
         brand_bottom: row.brand_bottom,

@@ -5267,6 +5267,10 @@ textarea:focus {
   min-width: 0;
 }
 
+.workorder-section-panel.is-hidden {
+  display: none;
+}
+
 .workorder-section-panel.has-attention {
   box-shadow: inset 3px 0 #f79009;
 }

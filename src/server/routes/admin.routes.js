@@ -4,6 +4,7 @@ import {
   addAdminLocation,
   adminLocationDetail,
   adminLocationWorkorderPolicy,
+  adminKioskDevices,
   adminLocations,
   adminOperations,
   adminOperationsSummary,
@@ -14,6 +15,9 @@ import {
   removeAdminUser,
   resendLocationInvitation,
   resetAdminUserPassword,
+  registerAdminKioskDevice,
+  revokeAdminKioskDevice,
+  setAdminMechanicKioskPin,
   updateAdminUserLocations,
   saveAdminTemplate,
   saveAdminLocationWorkorderPolicy,
@@ -25,12 +29,15 @@ import {
   createInvitationSchema,
   createLocationSchema,
   resetManagedUserPasswordSchema,
+  issueKioskPinSchema,
+  registerKioskDeviceSchema,
   updateManagedUserStatusSchema,
   updateManagedUserLocationsSchema,
   updateLocationSchema,
   updateLocationTemplateSchema,
   updateLocationWorkorderPolicySchema,
 } from "../modules/admin/admin.schemas.js";
+import { kioskDeviceCookie } from "../modules/kiosk/kiosk-cookie.js";
 
 function locationPath(pathname, suffix = "") {
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -65,6 +72,15 @@ function locationInvitationPath(pathname, suffix = "") {
   return match ? {
     locationId: decodeURIComponent(match[1]),
     invitationId: decodeURIComponent(match[2]),
+  } : null;
+}
+
+function locationKioskDevicePath(pathname, suffix = "") {
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^/api/admin/locations/([^/]+)/kiosk-devices/([^/]+)${escaped}$`).exec(pathname);
+  return match ? {
+    locationId: decodeURIComponent(match[1]),
+    deviceId: decodeURIComponent(match[2]),
   } : null;
 }
 
@@ -122,6 +138,35 @@ export async function handleAdminApi(req, res, url, helpers) {
     const input = updateLocationSchema.parse(await readBody(req));
     const location = await editAdminLocation(requestContext, detailId, input);
     sendJson(res, location ? 200 : 404, location ? { location } : { error: "Location not found." });
+    return true;
+  }
+
+  const kioskDevicesId = locationPath(url.pathname, "/kiosk-devices");
+  if (req.method === "GET" && kioskDevicesId) {
+    sendJson(res, 200, { devices: await adminKioskDevices(requestContext, kioskDevicesId) });
+    return true;
+  }
+
+  const registerKioskId = locationPath(url.pathname, "/kiosk-devices/register");
+  if (req.method === "POST" && registerKioskId) {
+    const input = registerKioskDeviceSchema.parse(await readBody(req));
+    const registered = await registerAdminKioskDevice(requestContext, actor, registerKioskId, input);
+    res.setHeader("set-cookie", kioskDeviceCookie(registered.token));
+    res.setHeader("cache-control", "no-store");
+    sendJson(res, 201, { device: registered.device });
+    return true;
+  }
+
+  const revokeKiosk = locationKioskDevicePath(url.pathname, "/revoke");
+  if (req.method === "POST" && revokeKiosk) {
+    sendJson(res, 200, {
+      device: await revokeAdminKioskDevice(
+        requestContext,
+        actor,
+        revokeKiosk.locationId,
+        revokeKiosk.deviceId,
+      ),
+    });
     return true;
   }
 
@@ -211,6 +256,28 @@ export async function handleAdminApi(req, res, url, helpers) {
         userPassword.userId,
         input,
         fromNodeHeaders(req.headers),
+      ),
+    });
+    return true;
+  }
+
+  const userKioskPin = managedUserPath(url.pathname, "/kiosk-pin");
+  if (req.method === "POST" && userKioskPin) {
+    const parsed = issueKioskPinSchema.safeParse(await readBody(req));
+    if (!parsed.success) {
+      sendJson(res, 400, {
+        error: parsed.error.issues[0]?.message || "Enter a valid PIN.",
+        issues: parsed.error.issues,
+      });
+      return true;
+    }
+    sendJson(res, 200, {
+      credential: await setAdminMechanicKioskPin(
+        requestContext,
+        actor,
+        userKioskPin.locationId,
+        userKioskPin.userId,
+        parsed.data,
       ),
     });
     return true;

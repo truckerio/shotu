@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   CustomerCompanyField,
-  FormCard,
   FormErrorSummary,
   FormField,
   FormSection,
@@ -13,6 +12,7 @@ import {
 } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { AssetLocationCard } from "../../components/workorders/AssetLocationCard.jsx";
+import { ProgressiveWorkorderSection } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { createWorkorderSummaryErrors } from "./create-workorder-validation.js";
 
 export const CREATE_WORKORDER_FORM_ID = "create-workorder-form";
@@ -45,7 +45,6 @@ export function CreateWorkorderForm({
 }) {
   const [unitDetailsOpen, setUnitDetailsOpen] = useState(false);
   const locationOptions = locations || [];
-  const mechanics = assignment?.mechanics || [];
   const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
   const summaryErrors = createWorkorderSummaryErrors(errors);
 
@@ -74,12 +73,16 @@ export function CreateWorkorderForm({
       />
       {message ? <p className="create-workorder-form-message" role="status">{message}</p> : null}
 
-      <div className="create-workorder-columns">
-        <div className="create-workorder-column create-workorder-primary-column">
-      <FormCard
-        className="create-workorder-card create-workorder-section-card"
+      <div className="accordion-stack workorder-progressive-stack create-workorder-progressive-stack">
+      <ProgressiveWorkorderSection
+        id="work"
+        className="create-workorder-card"
         title="Workorder"
-        description="Repair location, schedule, and requested work."
+        summary="Repair location, schedule, and requested work."
+        activeSection={mobileSection}
+        onSelect={() => {}}
+        displayMode="panel"
+        keepMounted
       >
         <FormSection title="Work context">
           {locationOptions.length ? (
@@ -122,17 +125,22 @@ export function CreateWorkorderForm({
             />
           </FormField>
         </FormSection>
-      </FormCard>
+      </ProgressiveWorkorderSection>
 
       {canAssign ? (
-        <FormCard
-          className="create-assignment-card create-workorder-section-card"
+        <ProgressiveWorkorderSection
+          id="assignment"
+          className="create-assignment-card"
           title="Assignment"
-          description="Choose the mechanic team for this workorder."
+          summary="Choose the mechanic team for this workorder."
+          activeSection={mobileSection}
+          onSelect={() => {}}
+          displayMode="panel"
+          keepMounted
         >
           <div className="create-assignment-content">
             <MechanicMultiSelect
-              mechanics={mechanics}
+              mechanics={assignment?.mechanics || []}
               selectedIds={assignment?.mechanicUserIds || []}
               onChange={onAssignmentChange}
               disabled={assignment?.loading}
@@ -143,13 +151,18 @@ export function CreateWorkorderForm({
               <p className="operational-availability-note">This workorder will appear in the available queue.</p>
             ) : null}
           </div>
-        </FormCard>
+        </ProgressiveWorkorderSection>
       ) : null}
 
-      <FormCard
-        className="create-parts-card create-workorder-section-card"
+      <ProgressiveWorkorderSection
+        id="parts"
+        className="create-parts-card"
         title="Parts"
-        description="Optional. Record parts already known before work begins."
+        summary="Optional. Record parts already known before work begins."
+        activeSection={mobileSection}
+        onSelect={() => {}}
+        displayMode="panel"
+        keepMounted
       >
         <div className="create-known-parts-content">
           {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
@@ -187,14 +200,17 @@ export function CreateWorkorderForm({
           </div>
           <Button type="button" variant="secondary" onClick={onAddPart}>Add part</Button>
         </div>
-      </FormCard>
-        </div>
+      </ProgressiveWorkorderSection>
 
-        <div className="create-workorder-column create-workorder-unit-column">
-      <FormCard
-        className="create-unit-card create-workorder-section-card"
+      <ProgressiveWorkorderSection
+        id="unit"
+        className="create-unit-card"
         title="Unit & customer"
-        description="Select the equipment and confirm who owns or operates it."
+        summary="Select the equipment and confirm who owns or operates it."
+        activeSection={mobileSection}
+        onSelect={() => {}}
+        displayMode="panel"
+        keepMounted
       >
         <FormSection title="Unit" description="Search by unit number, VIN, truck name, or license plate.">
         <div className="operational-unit-lookup">
@@ -294,8 +310,7 @@ export function CreateWorkorderForm({
             required
           />
         </FormSection>
-      </FormCard>
-        </div>
+      </ProgressiveWorkorderSection>
       </div>
     </OperationalForm>
   );

@@ -33,6 +33,7 @@ import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { IntegrationsSettings } from "./integrations/IntegrationsSettings.jsx";
+import { KioskSettingsPanel } from "./KioskSettingsPanel.jsx";
 import {
   ADMIN_MOBILE_DESTINATIONS,
   adminMobileDestinationState,
@@ -338,11 +339,13 @@ function LocationDetail({ actor, detail, draftQueue, tab, setTab, template, setT
         <button className={tab === "users" ? "active" : ""} type="button" onClick={() => setTab("users")}><Users01 /> Users <span>{detail.users.length}</span></button>
         <button className={tab === "template" ? "active" : ""} type="button" onClick={() => setTab("template")}><File02 /> Template</button>
         <button className={tab === "rules" ? "active" : ""} type="button" onClick={() => setTab("rules")}><Settings01 /> Rules</button>
+        <button className={tab === "kiosk" ? "active" : ""} type="button" onClick={() => setTab("kiosk")}><Key01 /> Kiosk</button>
       </nav>
       {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace actor={actor} locations={[detail.location]} fixedLocationId={detail.location.id} {...draftQueue} onOpenWorkorder={onOpenWorkorder} /></div> : null}
       {tab === "users" ? <UsersPanel actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} onResend={onResendInvite} resendingId={resendingInviteId} /> : null}
       {tab === "template" ? <TemplatePanel detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
       {tab === "rules" ? <RulesPanel policy={policy} onChange={(mechanicCanRecordParts) => setPolicy((current) => ({ ...current, mechanicCanRecordParts }))} onSave={onSavePolicy} saving={saving} /> : null}
+      {tab === "kiosk" ? <KioskSettingsPanel locationId={detail.location.id} users={detail.users} /> : null}
     </section>
   );
 }

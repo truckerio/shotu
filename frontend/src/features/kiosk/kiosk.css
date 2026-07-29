@@ -1,0 +1,323 @@
+.kiosk-shell {
+  align-items: center;
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(#e9edf2 1px, transparent 1px),
+    linear-gradient(90deg, #e9edf2 1px, transparent 1px);
+  background-size: 32px 32px;
+  box-sizing: border-box;
+  color: #181d27;
+  display: grid;
+  justify-items: center;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  width: 100%;
+}
+
+.kiosk-panel {
+  background: #fff;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgb(16 24 40 / 10%);
+  box-sizing: border-box;
+  max-width: 760px;
+  padding: 28px;
+  width: 100%;
+}
+
+.kiosk-unlock-panel {
+  max-width: 440px;
+}
+
+.kiosk-heading,
+.kiosk-selected-mechanic {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.kiosk-heading p,
+.kiosk-selected-mechanic p {
+  color: #667085;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 3px;
+}
+
+.kiosk-heading h1,
+.kiosk-selected-mechanic h1 {
+  color: #182230;
+  font-size: var(--text-page-title);
+  margin: 0;
+}
+
+.kiosk-heading-icon,
+.kiosk-mechanic-initials {
+  align-items: center;
+  background: #eaf2ff;
+  border-radius: 50%;
+  color: #175cd3;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-weight: var(--weight-semibold);
+  height: 52px;
+  justify-content: center;
+  width: 52px;
+}
+
+.kiosk-heading-icon svg {
+  height: 24px;
+  width: 24px;
+}
+
+.kiosk-roster {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.kiosk-mechanic {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  color: #182230;
+  cursor: pointer;
+  display: flex;
+  gap: 14px;
+  min-height: 76px;
+  min-width: 0;
+  padding: 11px 14px;
+  text-align: left;
+}
+
+.kiosk-mechanic:hover {
+  background: #f5f8ff;
+  border-color: #84adff;
+}
+
+.kiosk-mechanic:focus-visible,
+.kiosk-footer-actions button:focus-visible,
+.kiosk-standard-login:focus-visible,
+.kiosk-back:focus-visible,
+.kiosk-return-button:focus-visible,
+.kiosk-primary-action:focus-visible {
+  outline: 3px solid rgb(21 112 239 / 24%);
+  outline-offset: 2px;
+}
+
+.kiosk-mechanic > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.kiosk-mechanic strong {
+  font-size: var(--text-heading);
+  overflow-wrap: anywhere;
+}
+
+.kiosk-mechanic small {
+  color: #667085;
+  font-size: var(--text-secondary);
+}
+
+.kiosk-footer-actions {
+  border-top: 1px solid #eaecf0;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 18px;
+}
+
+.kiosk-footer-actions button,
+.kiosk-standard-login,
+.kiosk-back,
+.kiosk-return-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #475467;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.kiosk-footer-actions svg,
+.kiosk-standard-login svg,
+.kiosk-back svg,
+.kiosk-return-button svg {
+  height: 18px;
+  width: 18px;
+}
+
+.kiosk-back {
+  margin: -8px 0 18px -8px;
+}
+
+.kiosk-pin-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.kiosk-pin-form label {
+  color: #414651;
+  display: grid;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  gap: 6px;
+}
+
+.kiosk-pin-form input {
+  background: #fff;
+  border: 1px solid #cfd4dc;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: #181d27;
+  font-size: 22px;
+  letter-spacing: .3em;
+  min-height: 52px;
+  padding: 10px 12px;
+  text-align: center;
+  width: 100%;
+}
+
+.kiosk-pin-form input:focus {
+  border-color: #1570ef;
+  box-shadow: 0 0 0 3px rgb(46 144 250 / 16%);
+  outline: none;
+}
+
+.kiosk-pin-change {
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.kiosk-pin-change > p {
+  color: #475467;
+  margin: 0;
+}
+
+.kiosk-error {
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 6px;
+  color: #b42318;
+  font-size: var(--text-secondary);
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.kiosk-primary-action {
+  background: #1570ef;
+  border: 1px solid #1570ef;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  min-height: 56px;
+  padding: 12px 16px;
+}
+
+.kiosk-primary-action:disabled {
+  background: #b2ccff;
+  border-color: #b2ccff;
+  cursor: not-allowed;
+}
+
+.kiosk-standard-login {
+  justify-content: center;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.kiosk-empty {
+  align-items: center;
+  border: 1px dashed #d0d5dd;
+  border-radius: 8px;
+  display: grid;
+  justify-items: center;
+  margin-top: 24px;
+  min-height: 150px;
+  padding: 20px;
+  text-align: center;
+}
+
+.kiosk-empty p {
+  margin-top: 4px;
+}
+
+.kiosk-return-button {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 8px 20px rgb(16 24 40 / 12%);
+  position: fixed;
+  right: 16px;
+  z-index: 10;
+}
+
+@media (max-width: 560px) {
+  .kiosk-shell {
+    align-items: start;
+    padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .kiosk-panel {
+    border-radius: 10px;
+    padding: 20px 16px;
+  }
+
+  .kiosk-roster {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 20px;
+  }
+
+  .kiosk-mechanic {
+    min-height: 72px;
+  }
+
+  .kiosk-footer-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kiosk-footer-actions button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .kiosk-return-button {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 14px;
+    right: 14px;
+  }
+}
+
+@media (max-height: 560px) {
+  .kiosk-shell {
+    align-items: start;
+    overflow-y: auto;
+    padding-block: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-mechanic {
+    scroll-behavior: auto;
+  }
+}

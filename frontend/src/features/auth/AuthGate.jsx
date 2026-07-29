@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { LogOut01 } from "@untitledui/icons";
 import { authClient } from "../../lib/auth-client.js";
+import { api } from "../../lib/api.js";
+import { KioskGate, KioskStandardLogin } from "../kiosk/KioskGate.jsx";
+import { KioskSessionProvider } from "../kiosk/KioskSessionContext.jsx";
 import { LoginPage } from "./LoginPage.jsx";
 import "./auth.css";
 
@@ -37,11 +40,31 @@ export function AuthGate({ children }) {
   const [actor, setActor] = useState(null);
   const [actorState, setActorState] = useState("idle");
   const [actorError, setActorError] = useState("");
+  const [actorSession, setActorSession] = useState({ kiosk: null, sessionMode: "standard" });
+  const [kioskContext, setKioskContext] = useState(undefined);
+  const [standardLogin, setStandardLogin] = useState(false);
+
+  const loadKioskContext = useCallback(async () => {
+    setKioskContext(undefined);
+    try {
+      const context = await api("/api/kiosk/context");
+      setKioskContext(context?.registered ? context : { registered: false });
+    } catch {
+      setKioskContext({ registered: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    loadKioskContext();
+    window.addEventListener("kiosk-registration-changed", loadKioskContext);
+    return () => window.removeEventListener("kiosk-registration-changed", loadKioskContext);
+  }, [loadKioskContext]);
 
   useEffect(() => {
     if (!session?.user) {
       setActor(null);
       setActorState("idle");
+      setActorSession({ kiosk: null, sessionMode: "standard" });
       return;
     }
 
@@ -61,6 +84,10 @@ export function AuthGate({ children }) {
       })
       .then((body) => {
         setActor(body.user);
+        setActorSession({
+          kiosk: body.kiosk || null,
+          sessionMode: body.sessionMode === "kiosk" ? "kiosk" : "standard",
+        });
         setActorState("ready");
       })
       .catch((error) => {
@@ -73,9 +100,36 @@ export function AuthGate({ children }) {
   }, [session?.user?.id]);
 
   if (isPending || actorState === "loading") return <LoadingScreen />;
-  if (!session?.user) return <LoginPage />;
+  if (!session?.user) {
+    if (kioskContext === undefined) return <LoadingScreen />;
+    if (kioskContext.registered && !standardLogin) {
+      return (
+        <KioskGate
+          context={kioskContext}
+          onRefresh={loadKioskContext}
+          onStandardLogin={() => setStandardLogin(true)}
+        />
+      );
+    }
+    return (
+      <>
+        <LoginPage />
+        {kioskContext.registered ? (
+          <KioskStandardLogin onReturnToKiosk={() => setStandardLogin(false)} />
+        ) : null}
+      </>
+    );
+  }
   if (actorState === "error") return <AccessUnavailable message={actorError} />;
   if (!actor) return <LoadingScreen />;
 
-  return children({ actor, session, authClient });
+  return (
+    <KioskSessionProvider
+      kiosk={actorSession.kiosk}
+      registered={Boolean(kioskContext?.registered)}
+      sessionMode={actorSession.sessionMode}
+    >
+      {children({ actor, session, authClient })}
+    </KioskSessionProvider>
+  );
 }

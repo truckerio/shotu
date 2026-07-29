@@ -11,6 +11,10 @@ import {
   readonlyUsedParts,
   removeUsedPart,
 } from "./used-parts-model.js";
+import {
+  mechanicWorkStorageKey,
+  removeLegacyMechanicWorkStorage,
+} from "../../features/mechanic/progress/mechanic-work-storage.js";
 import "./used-parts-editor.css";
 
 function vehicleInput(detail) {
@@ -42,6 +46,7 @@ function looksLikePartNumber(value) {
 }
 
 export function UsedPartsEditor({
+  actorId,
   detail,
   parts,
   onChange,
@@ -54,7 +59,9 @@ export function UsedPartsEditor({
   const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
   const [visibleRowCount, setVisibleRowCount] = useState(() => normalizeUsedParts(parts, minimum).length);
   const rows = normalizeUsedParts(parts, Math.max(minimum, visibleRowCount));
-  const storageKey = `workorder-used-parts:${detail.workorder.id}`;
+  const storageKey = actorId
+    ? mechanicWorkStorageKey("used-parts", actorId, detail.workorder.id)
+    : "";
   const persistedRef = useRef(JSON.stringify(rows));
   const hydratedRef = useRef(false);
   const saveRef = useRef(onSave);
@@ -75,6 +82,8 @@ export function UsedPartsEditor({
     setMessage("");
 
     hydratedRef.current = true;
+    removeLegacyMechanicWorkStorage();
+    if (!storageKey) return;
     try {
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
@@ -90,7 +99,7 @@ export function UsedPartsEditor({
   }, [storageKey]);
 
   useEffect(() => {
-    if (!hydratedRef.current || disabled) return undefined;
+    if (!hydratedRef.current || disabled || !storageKey) return undefined;
     const payload = JSON.stringify(rows);
     if (payload === persistedRef.current) return undefined;
     window.localStorage.setItem(storageKey, payload);

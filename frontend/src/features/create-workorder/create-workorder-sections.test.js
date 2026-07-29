@@ -15,6 +15,14 @@ test("create workorder phone sections follow the shared detail navigation shape"
     buildCreateWorkorderSections({ canAssign: false }).map(({ id }) => id),
     ["work", "unit", "parts", "preview"],
   );
+  assert.deepEqual(
+    buildCreateWorkorderSections({ canAssign: false }).map(({ label }) => label),
+    ["Work", "Unit", "Parts", "Preview"],
+  );
+  assert.deepEqual(
+    buildCreateWorkorderSections({ includePreview: false }).map(({ id }) => id),
+    ["work", "unit", "assignment", "parts"],
+  );
 });
 
 test("create validation waits until the invalid phone section is active", () => {

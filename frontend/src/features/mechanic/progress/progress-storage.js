@@ -1,13 +1,15 @@
-const STORAGE_PREFIX = "shotu:mechanic-progress:";
+import {
+  mechanicWorkStorageKey,
+  removeLegacyMechanicWorkStorage,
+} from "./mechanic-work-storage.js";
 
-function storageKey(workorderId) {
-  return `${STORAGE_PREFIX}${workorderId}`;
-}
-
-export function readProgressBackup(workorderId) {
-  if (!workorderId || typeof window === "undefined") return null;
+export function readProgressBackup(actorId, workorderId) {
+  if (!actorId || !workorderId || typeof window === "undefined") return null;
+  removeLegacyMechanicWorkStorage();
   try {
-    const value = JSON.parse(window.localStorage.getItem(storageKey(workorderId)) || "null");
+    const value = JSON.parse(
+      window.localStorage.getItem(mechanicWorkStorageKey("progress", actorId, workorderId)) || "null",
+    );
     if (!value || typeof value !== "object") return null;
     return {
       diagnosis: String(value.diagnosis || ""),
@@ -19,16 +21,17 @@ export function readProgressBackup(workorderId) {
   }
 }
 
-export function writeProgressBackup(workorderId, value) {
-  if (!workorderId || typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey(workorderId), JSON.stringify({
+export function writeProgressBackup(actorId, workorderId, value) {
+  if (!actorId || !workorderId || typeof window === "undefined") return;
+  removeLegacyMechanicWorkStorage();
+  window.localStorage.setItem(mechanicWorkStorageKey("progress", actorId, workorderId), JSON.stringify({
     diagnosis: String(value.diagnosis || ""),
     workPerformed: String(value.workPerformed || ""),
     savedAt: new Date().toISOString(),
   }));
 }
 
-export function clearProgressBackup(workorderId) {
-  if (!workorderId || typeof window === "undefined") return;
-  window.localStorage.removeItem(storageKey(workorderId));
+export function clearProgressBackup(actorId, workorderId) {
+  if (!actorId || !workorderId || typeof window === "undefined") return;
+  window.localStorage.removeItem(mechanicWorkStorageKey("progress", actorId, workorderId));
 }

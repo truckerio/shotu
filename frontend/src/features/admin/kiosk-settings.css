@@ -1,0 +1,195 @@
+.admin-kiosk-settings {
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.admin-kiosk-panel {
+  margin-top: 0;
+}
+
+.admin-kiosk-register {
+  align-items: end;
+  border-top: 1px solid #eaecf0;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.admin-kiosk-register label,
+.admin-kiosk-pin-form label {
+  color: #344054;
+  display: grid;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-kiosk-register input,
+.admin-kiosk-pin-form input,
+.admin-kiosk-pin-form select {
+  background-color: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #182230;
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 11px;
+  width: 100%;
+}
+
+.admin-kiosk-register .button,
+.admin-kiosk-pin-form .button {
+  min-height: 44px;
+}
+
+.admin-kiosk-device-list {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.admin-kiosk-device {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 72px;
+  padding: 10px 12px;
+}
+
+.admin-kiosk-device + .admin-kiosk-device {
+  border-top: 1px solid #eaecf0;
+}
+
+.admin-kiosk-device-icon {
+  align-items: center;
+  background: #eff8ff;
+  border-radius: 7px;
+  color: #175cd3;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.admin-kiosk-device-icon svg {
+  height: 20px;
+  width: 20px;
+}
+
+.admin-kiosk-device > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-kiosk-device strong,
+.admin-kiosk-device small {
+  overflow-wrap: anywhere;
+}
+
+.admin-kiosk-device small {
+  color: #667085;
+  font-size: var(--text-caption);
+}
+
+.admin-kiosk-revoke.button.danger {
+  color: #b42318;
+}
+
+.admin-kiosk-pin-form {
+  border-top: 1px solid #eaecf0;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.admin-kiosk-pin-form input {
+  letter-spacing: .18em;
+}
+
+.admin-kiosk-pin-form input[aria-invalid="true"] {
+  border-color: #f04438;
+  box-shadow: 0 0 0 1px #f04438;
+}
+
+.admin-kiosk-field-error {
+  color: #b42318;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+
+.admin-kiosk-empty {
+  align-items: center;
+  color: #667085;
+  display: flex;
+  justify-content: center;
+  min-height: 86px;
+  padding: 18px;
+  text-align: center;
+}
+
+.admin-kiosk-error,
+.admin-kiosk-success {
+  border-radius: 6px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.admin-kiosk-error {
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  color: #b42318;
+}
+
+.admin-kiosk-success {
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  color: #067647;
+}
+
+@media (max-width: 900px) {
+  .admin-kiosk-pin-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-kiosk-settings {
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .admin-kiosk-register,
+  .admin-kiosk-pin-form {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-kiosk-register .button,
+  .admin-kiosk-pin-form .button {
+    width: 100%;
+  }
+
+  .admin-kiosk-device {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .admin-kiosk-revoke {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

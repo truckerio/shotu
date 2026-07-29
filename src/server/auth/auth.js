@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { admin, username } from "better-auth/plugins";
 import { getPool } from "../db/pool.js";
 import { resolveAuthConfig } from "./config.js";
+import { kioskAuthPlugin } from "./kiosk-plugin.js";
 
 const config = resolveAuthConfig();
 
@@ -113,5 +114,6 @@ export const auth = betterAuth({
         },
       },
     }),
+    kioskAuthPlugin(),
   ],
 });

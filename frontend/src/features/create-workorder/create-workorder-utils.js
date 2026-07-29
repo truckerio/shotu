@@ -26,3 +26,79 @@ export function uniqueExactVehicleMatch(vehicles, query) {
   const matches = vehicles.filter((vehicle) => vehicleLookupValues(vehicle).includes(normalizedQuery));
   return matches.length === 1 ? matches[0] : null;
 }
+
+export function resolveCreateLocation(locations = [], value = "") {
+  const locationValue = String(value || "").trim();
+  if (!locationValue) return null;
+  const normalizedName = locationValue.toLowerCase();
+  return locations.find((entry) => {
+    const location = entry.location || {};
+    return String(location.id || "").trim() === locationValue
+      || String(location.name || "").trim().toLowerCase() === normalizedName;
+  }) || null;
+}
+
+const DEFAULT_TEMPLATE_FIELDS = Object.freeze({
+  brandTop: "PRO TEC",
+  brandBottom: "REPAIR",
+  warrantyText: "NO WARRANTY ON PARTS SUPPLIED BY CUSTOMER",
+  responsibilityText: "Not responsible for loss or damage to vehicle in case of fire, theft or any other cause beyond our control.",
+  authorizationText: "I authorize the above repair to be completed along with necessary material(s). I grant you and/or your employees permission to operate the vehicle described herein on street, highways, or elsewhere for the purpose of testing and/or inspection. An express mechanic's lien is hereby acknowledged on above vehicle to secure the amount of repairs thereto.",
+});
+
+export function templateFieldsFromLocationTemplate(template) {
+  if (!template) return {};
+  return {
+    headerTitle: template.header_title,
+    brandTop: template.brand_top,
+    brandBottom: template.brand_bottom,
+    warrantyText: template.warranty_text,
+    responsibilityText: template.responsibility_text,
+    authorizationText: template.authorization_text,
+  };
+}
+
+export function templateFieldsForCreateLocation(location, template) {
+  if (template) return templateFieldsFromLocationTemplate(template);
+  const locationName = String(location?.name || "").trim();
+  return {
+    ...DEFAULT_TEMPLATE_FIELDS,
+    headerTitle: locationName ? `${locationName.toUpperCase()} WORKORDER` : "WORKORDER",
+  };
+}
+
+export function createLocationDefaultPatch({
+  currentLocationId = "",
+  defaultLocation,
+  locations = [],
+  template,
+} = {}) {
+  const currentLocation = resolveCreateLocation(locations, currentLocationId);
+  if (currentLocation?.location?.id) {
+    return {
+      locationId: currentLocation.location.id,
+      locationName: currentLocation.location.name || "",
+    };
+  }
+  if (!defaultLocation?.id) return {};
+  return {
+    locationId: defaultLocation.id,
+    locationName: defaultLocation.name || "",
+    ...templateFieldsForCreateLocation(defaultLocation, template),
+  };
+}
+
+export function createLocationTemplatePatch(form = {}, locations = []) {
+  const selectedLocation = resolveCreateLocation(locations, form.locationId);
+  if (!selectedLocation?.location?.id) return {};
+
+  const nextFields = {
+    locationId: selectedLocation.location.id,
+    locationName: selectedLocation.location.name || "",
+    ...templateFieldsForCreateLocation(selectedLocation.location, selectedLocation.template),
+  };
+
+  return Object.fromEntries(
+    Object.entries(nextFields).filter(([field, value]) => String(form[field] || "") !== String(value || "")),
+  );
+}

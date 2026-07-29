@@ -1,8 +1,8 @@
 import { auth } from "../../auth/auth.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { closePool, getPool } from "../pool.js";
+import { resolveDemoUserPassword } from "./demo-seed-policy.js";
 
-const DEFAULT_PASSWORD = "WorkorderDemo2026!";
 const COMPANY_ID = DEFAULT_COMPANY_ID;
 const COMPANY_SLUG = "default";
 const COMPANY_NAME = "Default Company";
@@ -71,15 +71,6 @@ const demoUsers = [
     return [...managers, ...mechanics];
   }),
 ];
-
-function seedPassword() {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_USER_SEED !== "true") {
-    throw new Error("Demo users are disabled in production. Set ALLOW_DEMO_USER_SEED=true to seed intentionally.");
-  }
-  const password = process.env.DEMO_USER_PASSWORD || DEFAULT_PASSWORD;
-  if (password.length < 12) throw new Error("DEMO_USER_PASSWORD must contain at least 12 characters.");
-  return password;
-}
 
 async function ensureCompany(client) {
   await client.query(
@@ -230,7 +221,7 @@ async function linkOperationalUser(user, authUserId, locationIds) {
 }
 
 async function seed() {
-  const password = seedPassword();
+  const password = resolveDemoUserPassword();
   const client = await getPool().connect();
   let locationIds;
   try {

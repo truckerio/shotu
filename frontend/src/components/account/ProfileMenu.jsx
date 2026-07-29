@@ -1,6 +1,7 @@
 import React from "react";
-import { ChevronDown, LogOut01, UserCircle } from "@untitledui/icons";
+import { ChevronDown, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
+import { useKioskSession } from "../../features/kiosk/KioskSessionContext.jsx";
 import { authClient } from "../../lib/auth-client.js";
 import "./profile-menu.css";
 
@@ -20,6 +21,8 @@ function roleLabel(role) {
 }
 
 export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false }) {
+  const kioskSession = useKioskSession();
+
   async function signOut() {
     await authClient.signOut();
     window.location.replace("/");
@@ -36,6 +39,22 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           </span>
         </MenuItem>
         <Separator />
+        {kioskSession?.canSwitch ? (
+          <MenuItem
+            className="profile-menu-action"
+            onAction={() => kioskSession.leaveForKiosk("switch")}
+            textValue={kioskSession.kioskSession ? "Switch mechanic" : "Open kiosk"}
+          >
+            <Users01 />
+            <span>
+              {kioskSession.leaving
+                ? "Opening kiosk..."
+                : kioskSession.kioskSession
+                  ? "Switch mechanic"
+                  : "Open kiosk"}
+            </span>
+          </MenuItem>
+        ) : null}
         <MenuItem className="profile-menu-action" onAction={signOut} textValue="Sign out">
           <LogOut01 />
           <span>Sign out</span>

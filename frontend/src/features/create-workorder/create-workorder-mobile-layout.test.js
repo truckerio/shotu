@@ -4,6 +4,8 @@ import test from "node:test";
 
 const createCss = readFileSync(new URL("./create-workorder-page.css", import.meta.url), "utf8");
 const createPage = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta.url), "utf8");
+const createShell = readFileSync(new URL("./CreateWorkorderShell.jsx", import.meta.url), "utf8");
+const createSections = readFileSync(new URL("./create-workorder-sections.js", import.meta.url), "utf8");
 const createForm = readFileSync(new URL("../generator/CreateWorkorderForm.jsx", import.meta.url), "utf8");
 const operationalFormCss = readFileSync(
   new URL("../../components/forms/operational-form.css", import.meta.url),
@@ -50,20 +52,20 @@ test("phone Create opts date fields out of Safari intrinsic control sizing", () 
 test("phone Create uses shared keyboard foundation and one docked primary action", () => {
   assert.match(createPage, /useVisualViewport/);
   assert.match(createPage, /useFocusedFieldVisibility/);
-  assert.match(createPage, /<KeyboardAwareDock/);
-  assert.match(createPage, /"Creating\.\.\." : "Create workorder"/);
-  assert.match(createPage, /\{!isPhone \? <button[\s\S]*className="detail-create-button"/);
+  assert.match(createShell, /<KeyboardAwareDock/);
+  assert.match(createShell, /"Creating\.\.\." : "Create workorder"/);
+  assert.match(createShell, /\{!isPhone \? \([\s\S]*className="detail-create-button"/);
   assert.match(createCss, /\.create-workorder-page\.is-keyboard-open\s*\{[^}]*position:\s*fixed;[^}]*width:\s*100%;/s);
   assert.match(createCss, /\.create-workorder-page\.is-keyboard-open\s+\.create-workorder-form\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s);
 });
 
 test("phone keyboard hides Create dock while the active form remains scrollable", () => {
   assert.match(createPage, /keyboardOpen=\{keyboardOpen\}/);
-  assert.match(createPage, /mode="hide"/);
+  assert.match(createShell, /mode="hide"/);
   assert.match(createPage, /mobileScrollRef=\{mobileScrollRef\}/);
   assert.match(createPage, /margin:\s*12/);
   assert.match(createPage, /window\.scrollTo\(\{ top: 0, left: 0, behavior: "auto" \}\)/);
-  assert.match(createPage, /dismissKeyboard\(\);[\s\S]*setMobileSection\(errorSection\);[\s\S]*resetMobileScroll\(errorSection\);/);
+  assert.match(createPage, /dismissKeyboard\(\);[\s\S]*setActiveSection\(errorSection\);[\s\S]*resetMobileScroll\(errorSection\);/);
 });
 
 test("Create fields provide keyboard intent without changing textarea behavior", () => {
@@ -73,10 +75,10 @@ test("Create fields provide keyboard intent without changing textarea behavior",
 });
 
 test("phone Create renders one form page and a contained compact Preview", () => {
-  assert.match(
-    createCss,
-    /\.create-workorder-form\[data-mobile-section\]\s+\.create-workorder-section-card\s*\{[^}]*display:\s*none;/s,
-  );
+  assert.match(createForm, /<ProgressiveWorkorderSection[\s\S]*displayMode="panel"/);
+  assert.match(createForm, /keepMounted/);
+  assert.doesNotMatch(createForm, /<FormCard/);
+  assert.match(createPage, /<WorkorderDetailLayout detail previewOpen=\{showEmbeddedPreview\}>/);
   assert.match(
     createCss,
     /\.create-workorder-page\.create-section-preview\s+\.create-workorder-form\s*\{[^}]*display:\s*none;/s,
@@ -85,4 +87,19 @@ test("phone Create renders one form page and a contained compact Preview", () =>
     createCss,
     /\.workorder-compact-preview\s+\.preview-pane-content\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
   );
+});
+
+test("Create shell owns shared summary and section navigation", () => {
+  assert.match(createShell, /<WorkorderObjectSummary/);
+  assert.match(createShell, /<WorkorderSectionNav/);
+  assert.match(createShell, /showPristine/);
+  assert.doesNotMatch(createShell, /create-workorder-section-tabs/);
+  assert.match(createPage, /<CreateWorkorderShell/);
+});
+
+test("mechanic Create omits assignment page while preserving assigned mechanic data", () => {
+  assert.match(createSections, /\.\.\.\(canAssign \? \[\{ id: "assignment", label: "Assignment" \}\] : \[\]\)/);
+  assert.doesNotMatch(createForm, /You are assigned to this workorder\./);
+  assert.doesNotMatch(createCss, /\.create-self-assignment\s*\{/);
+  assert.match(createPage, /canAssign=\{canAssign\}/);
 });

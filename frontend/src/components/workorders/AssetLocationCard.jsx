@@ -5,6 +5,17 @@ import { createMapVisibilityController } from "../../lib/maps/map-visibility-con
 import { MAP_SURFACE_TRANSITION_MS } from "../../lib/ui-timings.js";
 import "./asset-location-card.css";
 
+const DESKTOP_MAP_QUERY = "(min-width: 701px)";
+const ASSET_LOCATION_ZOOM = 19;
+const MIN_ASSET_LOCATION_ZOOM = 17;
+const MAX_ASSET_LOCATION_ZOOM = 20;
+
+function isDesktopMapViewport() {
+  return typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia(DESKTOP_MAP_QUERY).matches;
+}
+
 export function getVehicleLocation(vehicle) {
   const gps = vehicle?.lastLocation || vehicle?.last_location || null;
   const latitude = Number(gps?.latitude);
@@ -31,6 +42,8 @@ export function AssetLocationCard({
   const [mapOpen, setMapOpen] = useState(false);
   const [mapPinned, setMapPinned] = useState(false);
   const [mapContentMounted, setMapContentMounted] = useState(false);
+  const [desktopMapOpen, setDesktopMapOpen] = useState(isDesktopMapViewport);
+  const [mapZoom, setMapZoom] = useState(ASSET_LOCATION_ZOOM);
   if (!mapControllerRef.current) {
     mapControllerRef.current = createMapVisibilityController({
       onMount: () => setMapContentMounted(true),
@@ -40,13 +53,22 @@ export function AssetLocationCard({
     });
   }
   const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || "Vehicle";
-  const mapVisible = Boolean(location) && (mapOpen || mapPinned);
-  const tileLayer = mapContentMounted && location
-    ? buildSatelliteTileLayer(location, mapsConfig)
+  const mapVisible = Boolean(location) && (desktopMapOpen || mapOpen || mapPinned);
+  const mapContentVisible = desktopMapOpen || mapContentMounted;
+  const tileLayer = mapContentVisible && location
+    ? buildSatelliteTileLayer(location, mapsConfig, mapZoom)
     : null;
+  const locationCopy = (
+    <>
+      {showVehicleLabel ? <strong>{unitLabel}</strong> : null}
+      <span className="asset-location-address">
+        {location ? (location.address || `${location.latitude}, ${location.longitude}`) : "Location not available yet"}
+      </span>
+    </>
+  );
 
   function enterCard(event) {
-    if (event.pointerType !== "mouse" || !location || mapPinned) return;
+    if (desktopMapOpen || event.pointerType !== "mouse" || !location || mapPinned) return;
     mapControllerRef.current.cancelClose();
     if (!mapOpen) {
       mapControllerRef.current.open({ immediate: mapContentMounted });
@@ -54,14 +76,23 @@ export function AssetLocationCard({
   }
 
   function leaveCard() {
-    if (mapPinned) return;
+    if (desktopMapOpen || mapPinned) return;
     mapControllerRef.current.close();
   }
 
   useEffect(() => () => mapControllerRef.current?.dispose(), []);
 
   useEffect(() => {
-    if (!mapOpen || mapPinned) return undefined;
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const mediaQuery = window.matchMedia(DESKTOP_MAP_QUERY);
+    const syncDesktopMap = () => setDesktopMapOpen(mediaQuery.matches);
+    syncDesktopMap();
+    mediaQuery.addEventListener?.("change", syncDesktopMap);
+    return () => mediaQuery.removeEventListener?.("change", syncDesktopMap);
+  }, []);
+
+  useEffect(() => {
+    if (desktopMapOpen || !mapOpen || mapPinned) return undefined;
 
     const closeMapOutside = (event) => {
       if (cardRef.current?.contains(event.target)) return;
@@ -70,7 +101,7 @@ export function AssetLocationCard({
 
     document.addEventListener("pointerdown", closeMapOutside);
     return () => document.removeEventListener("pointerdown", closeMapOutside);
-  }, [mapOpen, mapPinned]);
+  }, [desktopMapOpen, mapOpen, mapPinned]);
 
   useEffect(() => {
     if (location) return;
@@ -78,36 +109,39 @@ export function AssetLocationCard({
     mapControllerRef.current.reset();
   }, [location]);
 
-  if (!vehicle?.id) return null;
+  if (!vehicle?.id && !location) return null;
 
   return (
     <div
       ref={cardRef}
-      className={`asset-location-card ${mapVisible ? "is-map-visible" : ""} ${mapPinned ? "is-map-pinned" : ""}`}
+      className={`asset-location-card ${mapVisible ? "is-map-visible" : ""} ${mapPinned ? "is-map-pinned" : ""} ${desktopMapOpen ? "is-map-desktop" : ""}`}
       style={{ "--map-surface-transition": `${MAP_SURFACE_TRANSITION_MS}ms` }}
       onPointerEnter={enterCard}
       onPointerLeave={leaveCard}
     >
       <div className="asset-location-header">
-        <button
-          className="asset-location-copy asset-location-toggle"
-          type="button"
-          aria-controls={location ? mapPanelId : undefined}
-          aria-expanded={mapVisible}
-          disabled={!location}
-          onClick={() => {
-            if (mapPinned) return;
-            if (mapOpen) mapControllerRef.current.close({ immediate: true });
-            else mapControllerRef.current.open({ immediate: true });
-          }}
-        >
-          {showVehicleLabel ? <strong>{unitLabel}</strong> : null}
-          <span className="asset-location-address">
-            {location ? (location.address || `${location.latitude}, ${location.longitude}`) : "Location not available yet"}
-          </span>
-        </button>
+        {desktopMapOpen ? (
+          <div className="asset-location-copy">
+            {locationCopy}
+          </div>
+        ) : (
+          <button
+            className="asset-location-copy asset-location-toggle"
+            type="button"
+            aria-controls={location ? mapPanelId : undefined}
+            aria-expanded={mapVisible}
+            disabled={!location}
+            onClick={() => {
+              if (mapPinned) return;
+              if (mapOpen) mapControllerRef.current.close({ immediate: true });
+              else mapControllerRef.current.open({ immediate: true });
+            }}
+          >
+            {locationCopy}
+          </button>
+        )}
         <div className="asset-location-actions">
-          {location ? (
+          {location && !desktopMapOpen ? (
             <button
               className="map-hover-trigger map-pin-button icon-tooltip"
               type="button"
@@ -134,15 +168,15 @@ export function AssetLocationCard({
           aria-label="Satellite asset location"
           aria-hidden={!mapVisible}
           onClick={(event) => {
-            if (mapPinned || event.target.closest?.("a, button")) return;
+            if (desktopMapOpen || mapPinned || event.target.closest?.("a, button")) return;
             mapControllerRef.current.open({ immediate: true });
             setMapPinned(true);
           }}
         >
-          {mapContentMounted && tileLayer ? (
+          {mapContentVisible && tileLayer ? (
             <>
-              <div className="asset-map-tiles" aria-hidden="true">
-                <div className="asset-map-tile-layer" style={tileLayer.layerStyle}>
+              <div className="asset-map-tiles">
+                <div className="asset-map-tile-layer" style={tileLayer.layerStyle} aria-hidden="true">
                   {tileLayer.tiles.map((tile) => (
                     <img
                       key={tile.key}
@@ -157,7 +191,27 @@ export function AssetLocationCard({
                     />
                   ))}
                 </div>
-                <span className="asset-map-pin" />
+                <span className="asset-map-pin" aria-hidden="true" />
+                <div className="asset-map-zoom-controls" role="group" aria-label="Map zoom controls">
+                  <button
+                    type="button"
+                    aria-label="Zoom in"
+                    title="Zoom in"
+                    disabled={mapZoom >= MAX_ASSET_LOCATION_ZOOM}
+                    onClick={() => setMapZoom((current) => Math.min(MAX_ASSET_LOCATION_ZOOM, current + 1))}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Zoom out"
+                    title="Zoom out"
+                    disabled={mapZoom <= MIN_ASSET_LOCATION_ZOOM}
+                    onClick={() => setMapZoom((current) => Math.max(MIN_ASSET_LOCATION_ZOOM, current - 1))}
+                  >
+                    −
+                  </button>
+                </div>
               </div>
               <div className="asset-map-meta">
                 <div className="asset-map-meta-copy">
@@ -165,7 +219,7 @@ export function AssetLocationCard({
                   <small>{tileLayer.attribution}</small>
                 </div>
                 <a
-                  href={buildHereLocationUrl(location)}
+                  href={buildHereLocationUrl(location, mapZoom)}
                   target="_blank"
                   rel="noreferrer"
                 >

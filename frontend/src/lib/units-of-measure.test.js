@@ -10,7 +10,7 @@ import {
   quantityStep,
 } from "../../../shared/units-of-measure.js";
 
-test("unit codes are unique and resolve to the backward-compatible each default", () => {
+test("unit codes are unique and unknown values resolve to the piece default", () => {
   const codes = UNITS_OF_MEASURE.map((unit) => unit.code);
 
   assert.equal(new Set(codes).size, codes.length);

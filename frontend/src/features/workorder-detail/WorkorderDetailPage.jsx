@@ -267,6 +267,7 @@ export function WorkorderDetailPage({
 
           <WorkorderDetailSections
             activeWorkorder={activeWorkorder}
+            actorId={actor.id}
             assignedMechanicIds={assignedMechanicIds}
             conversationMessages={conversationMessages}
             detailMechanicNames={detailMechanicNames}

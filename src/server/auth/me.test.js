@@ -10,6 +10,8 @@ test("GET /api/me returns linked operational actor", async () => {
     new URL("http://localhost/api/me"),
     {
       resolveRequestContext: async () => ({
+        sessionMode: "standard",
+        kiosk: null,
         actor: {
           id: "app-user-1",
           authUserId: "auth-user-1",
@@ -29,6 +31,36 @@ test("GET /api/me returns linked operational actor", async () => {
   assert.equal(response.status, 200);
   assert.equal(response.body.user.id, "app-user-1");
   assert.equal(response.body.user.authUserId, undefined);
+  assert.equal(response.body.sessionMode, "standard");
+  assert.equal(response.body.kiosk, null);
+});
+
+test("GET /api/me exposes minimal kiosk companion context", async () => {
+  let response;
+  await handleCurrentUserApi(
+    { method: "GET", headers: {} },
+    {},
+    new URL("http://localhost/api/me"),
+    {
+      resolveRequestContext: async () => ({
+        sessionMode: "kiosk",
+        kiosk: { deviceId: "device-1", locationId: "location-1" },
+        actor: {
+          id: "mechanic-1",
+          name: "Mechanic One",
+          email: "mechanic@example.com",
+          phone: null,
+          role: "mechanic",
+          locationIds: ["location-1"],
+          companyMemberships: [{ companyId: "company-1", role: "mechanic" }],
+        },
+      }),
+      sendJson: (_res, status, body) => { response = { status, body }; },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.body.sessionMode, "kiosk");
+  assert.deepEqual(response.body.kiosk, { deviceId: "device-1", locationId: "location-1" });
 });
 
 test("/api/auth paths are not claimed by /api/me handler", async () => {
@@ -40,4 +72,3 @@ test("/api/auth paths are not claimed by /api/me handler", async () => {
   );
   assert.equal(handled, false);
 });
-

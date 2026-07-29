@@ -18,6 +18,7 @@ import { handleVehiclesApi } from "./src/server/routes/vehicles.routes.js";
 import { handleWorkorderDraftsApi } from "./src/server/routes/workorder-drafts.routes.js";
 import { handleWorkorderPreferencesApi } from "./src/server/routes/workorder-preferences.routes.js";
 import { handleHealthRoute } from "./src/server/routes/health.routes.js";
+import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
 import {
   startSamsaraAutoSync,
   stopSamsaraAutoSync,
@@ -689,6 +690,7 @@ async function handleApi(req, res) {
   const helpers = { sendJson, readBody, requestContext };
 
   if (await handleAdminApi(req, res, url, helpers)) return;
+  if (await handleKioskApi(req, res, url, helpers)) return;
   if (await handleConfigApi(req, res, url, helpers)) return;
   if (await handleVehiclesApi(req, res, url, helpers)) return;
   if (await handleIntegrationsApi(req, res, url, helpers)) return;

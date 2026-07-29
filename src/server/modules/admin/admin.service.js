@@ -33,6 +33,12 @@ import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../wor
 import { requireCompanyAccess } from "../../auth/authorize.js";
 import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import { buildInvitationUrl } from "./invitation-link.js";
+import {
+  issueMechanicKioskPin,
+  kioskDevicesForLocation,
+  registerKioskBrowser,
+  revokeRegisteredKiosk,
+} from "../kiosk/kiosk.service.js";
 
 function tokenHash(token) {
   return createHash("sha256").update(token).digest("hex");
@@ -125,6 +131,42 @@ export async function adminLocationDetail(context, locationId) {
     getLocationWorkorderPolicy(locationId, authorizedCompanyIds(context)),
   ]);
   return { location, users, invitations: invitations.map(invitationView), template, policy };
+}
+
+export async function adminKioskDevices(context, locationId) {
+  await authorizedLocation(context, locationId);
+  return kioskDevicesForLocation(authorizedCompanyIds(context), locationId);
+}
+
+export async function registerAdminKioskDevice(context, actor, locationId, input) {
+  const location = await authorizedLocation(context, locationId);
+  return registerKioskBrowser({
+    companyId: location.company_id,
+    locationId,
+    name: input.name,
+    actorUserId: actor.id,
+  });
+}
+
+export async function revokeAdminKioskDevice(context, actor, locationId, deviceId) {
+  await authorizedLocation(context, locationId);
+  return revokeRegisteredKiosk({
+    companyIds: authorizedCompanyIds(context),
+    locationId,
+    deviceId,
+    actorUserId: actor.id,
+  });
+}
+
+export async function setAdminMechanicKioskPin(context, actor, locationId, userId, input) {
+  await authorizedLocation(context, locationId);
+  return issueMechanicKioskPin({
+    companyIds: authorizedCompanyIds(context),
+    locationId,
+    userId,
+    pin: input.pin,
+    actorUserId: actor.id,
+  });
 }
 
 export async function changeAdminUserStatus(context, actor, locationId, userId, input, headers) {

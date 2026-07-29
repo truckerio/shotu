@@ -11,7 +11,6 @@
   display: grid;
   gap: 16px;
   min-width: 0;
-  padding-top: 20px;
 }
 
 .create-assignment-content .operational-mechanic-select > legend {
@@ -22,6 +21,18 @@
   position: absolute;
   white-space: nowrap;
   width: 1px;
+}
+
+.create-workorder-progressive-stack {
+  min-width: 0;
+}
+
+.create-workorder-page .workorder-section-panel-content .operational-form-section:first-child {
+  margin-top: 0;
+}
+
+.create-workorder-page .workorder-section-panel-content > .button {
+  justify-self: start;
 }
 
 @media (max-width: 700px) {
@@ -47,7 +58,7 @@
     padding-bottom: calc(132px + env(safe-area-inset-bottom));
   }
 
-  .create-workorder-page .generator-layout {
+  .create-workorder-page .workorder-detail-layout {
     min-height: 0;
   }
 
@@ -66,7 +77,7 @@
     width: 100%;
   }
 
-  .create-workorder-page.is-keyboard-open .generator-layout,
+  .create-workorder-page.is-keyboard-open .workorder-detail-layout,
   .create-workorder-page.is-keyboard-open .control-panel {
     height: 100%;
     max-height: 100%;
@@ -93,17 +104,6 @@
     padding-bottom: 12px;
     scroll-padding: 12px 0;
     width: 100%;
-  }
-
-  .create-workorder-page .create-workorder-form[data-mobile-section] .create-workorder-section-card {
-    display: none;
-  }
-
-  .create-workorder-page .create-workorder-form[data-mobile-section="work"] .create-workorder-card,
-  .create-workorder-page .create-workorder-form[data-mobile-section="unit"] .create-unit-card,
-  .create-workorder-page .create-workorder-form[data-mobile-section="assignment"] .create-assignment-card,
-  .create-workorder-page .create-workorder-form[data-mobile-section="parts"] .create-parts-card {
-    display: block;
   }
 
   .create-workorder-page.create-section-preview .create-workorder-form {
@@ -221,7 +221,12 @@
     display: block;
   }
 
+  .create-workorder-page .control-panel > .workorder-section-nav-mobile {
+    display: none;
+  }
+
   .create-workorder-mobile-nav .workorder-section-nav-mobile {
+    display: grid;
     padding-bottom: 5px;
     position: static;
   }

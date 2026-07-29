@@ -641,7 +641,7 @@ function OfficePartComposer({ detail, onChanged }) {
   );
 }
 
-export function PartRequestsPanel({ role, detail, parts, onPartsChange, onSaveParts, onChanged }) {
+export function PartRequestsPanel({ actorId, role, detail, parts, onPartsChange, onSaveParts, onChanged }) {
   const requests = detail.partRequests || [];
   const usedPartsAccess = usedPartsAccessState(role, detail.allowedActions || {});
   const reviewCount = useMemo(() => requests.filter((request) => request.approvalStatus === "submitted").length, [requests]);
@@ -654,6 +654,7 @@ export function PartRequestsPanel({ role, detail, parts, onPartsChange, onSavePa
   return (
     <div className="part-requests-panel">
       <UsedPartsEditor
+        actorId={actorId}
         detail={detail}
         parts={parts}
         onChange={onPartsChange}

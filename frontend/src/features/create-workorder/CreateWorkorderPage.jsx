@@ -1,16 +1,14 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Plus } from "@untitledui/icons";
-import { DraftLeaveDialog, DraftSaveStatus } from "../../components/drafts/index.js";
-import { KeyboardAwareDock } from "../../components/layout/KeyboardAwareDock.jsx";
-import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { DraftLeaveDialog } from "../../components/drafts/index.js";
+import { PreviewPane } from "../../components/preview/PreviewPane.jsx";
 import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
 import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
-import { WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { BrowserPrintDocument, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
-import { CREATE_WORKORDER_FORM_ID, CreateWorkorderForm } from "../generator/CreateWorkorderForm.jsx";
+import { CreateWorkorderForm } from "../generator/CreateWorkorderForm.jsx";
 import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
+import { CreateWorkorderShell } from "./CreateWorkorderShell.jsx";
 import {
   buildCreateWorkorderSections,
   createSectionForErrors,
@@ -75,13 +73,13 @@ export function CreateWorkorderPage({
   const isMechanicCreate = actor.role === "mechanic";
   const canAssign = !isMechanicCreate;
   const backLabel = actor.role === "admin" ? "Back to Operations" : isMechanicCreate ? "Back to My Work" : "Back to Office";
-  const [mobileSection, setMobileSection] = useState("work");
+  const [activeSection, setActiveSection] = useState("work");
   const mobileScrollRef = useRef(null);
   const viewport = useVisualViewport();
   const keyboardOpen = Boolean(isPhone && viewport.keyboardOpen);
-  const mobileSections = useMemo(
-    () => buildCreateWorkorderSections({ canAssign }),
-    [canAssign],
+  const createSections = useMemo(
+    () => buildCreateWorkorderSections({ canAssign, includePreview: isPhone }),
+    [canAssign, isPhone],
   );
 
   const ensureFocusedFieldVisible = useFocusedFieldVisibility({
@@ -92,7 +90,7 @@ export function CreateWorkorderPage({
   });
   const errorSection = createSectionForErrors(officeCreateErrors);
   const errorFocusReady = !isPhone || isCreateErrorSectionReady({
-    activeSection: mobileSection,
+    activeSection,
     errors: officeCreateErrors,
   });
 
@@ -100,9 +98,14 @@ export function CreateWorkorderPage({
     if (!isPhone || !officeCreateAttempt) return;
     if (!errorSection) return;
     dismissKeyboard();
-    setMobileSection(errorSection);
+    setActiveSection(errorSection);
     resetMobileScroll(errorSection);
   }, [errorSection, isPhone, officeCreateAttempt]);
+
+  useEffect(() => {
+    if (createSections.some((section) => section.id === activeSection)) return;
+    setActiveSection("work");
+  }, [activeSection, createSections]);
 
   function dismissKeyboard() {
     const activeElement = document.activeElement;
@@ -123,87 +126,70 @@ export function CreateWorkorderPage({
   function selectMobileSection(section) {
     dismissKeyboard();
     if (section === "preview" && !showEmbeddedPreview) jumpToPreview();
-    setMobileSection(section);
+    setActiveSection(section);
     resetMobileScroll(section);
   }
 
   return (
     <main
-      className={`prototype create-workorder-page create-section-${mobileSection}${keyboardOpen ? " is-keyboard-open" : ""}`}
+      className={`prototype workorder-detail-page create-workorder-page create-section-${activeSection}${keyboardOpen ? " is-keyboard-open" : ""}`}
       data-keyboard-open={keyboardOpen ? "true" : "false"}
       style={{
         "--create-visual-viewport-height": viewport.viewportHeight ? `${viewport.viewportHeight}px` : "100dvh",
         "--create-visual-viewport-offset-top": `${viewport.viewportOffsetTop}px`,
+        "--workorder-visual-viewport-height": viewport.viewportHeight ? `${viewport.viewportHeight}px` : "100dvh",
+        "--workorder-visual-viewport-offset-top": `${viewport.viewportOffsetTop}px`,
         "--keyboard-inset": `${viewport.keyboardInset}px`,
       }}
     >
       <style>{workorderTemplateStyles}</style>
       <BrowserPrintDocument payload={browserPrintPayload} />
-      <WorkorderDetailLayout detail={false} previewOpen={showEmbeddedPreview}>
+      <WorkorderDetailLayout detail previewOpen={showEmbeddedPreview}>
         <aside className="control-panel" ref={formRef}>
-          <div className="detail-context-bar office-create-nav">
-            <button
-              type="button"
-              onClick={openOfficeWorkspace}
-              aria-label={backLabel}
-              title={backLabel}
-            >
-              <ArrowLeft />
-            </button>
-            <div>
-              <strong>Create workorder</strong>
-              {!isMechanicCreate ? (
-                <DraftSaveStatus
-                  status={workorderDraft.status}
-                  error={workorderDraft.error}
-                  labels={{ dirty: "Draft changed" }}
-                  className="office-create-draft-status"
-                />
-              ) : null}
-            </div>
-            <div className="detail-context-actions">
-              {!isPhone ? <button
-                className="detail-create-button"
-                type="submit"
-                form={CREATE_WORKORDER_FORM_ID}
-                disabled={officeCreateState.busy}
-              >
-                <Plus />
-                <span>{officeCreateState.busy ? "Creating..." : "Create"}</span>
-              </button> : null}
-              {!isPhone ? (
-                <PreviewToggle open={showEmbeddedPreview || previewFullscreen} onToggle={jumpToPreview} controls="workorder-preview-panel" />
-              ) : null}
-            </div>
-          </div>
-
-          <CreateWorkorderForm
+          <CreateWorkorderShell
+            activeSection={activeSection}
             assignment={assignment}
-            busy={officeCreateState.busy}
-            errors={officeCreateErrors}
-            errorFocusKey={officeCreateAttempt}
-            errorFocusReady={errorFocusReady}
+            backLabel={backLabel}
+            canSaveDraft={!isMechanicCreate}
             form={form}
+            isPhone={isPhone}
+            keyboardOpen={keyboardOpen}
             locations={officeLocations}
-            message={officeCreateState.message}
-            onAddPart={addPartRow}
-            onAssignmentChange={(mechanicUserIds) => setCreateAssignment((current) => ({ ...current, mechanicUserIds }))}
-            onFieldChange={updateField}
-            onLocationChange={selectOfficeLocation}
-            onPartChange={updatePart}
-            onRemovePart={removePartRow}
-            onSubmit={createOfficeWorkorder}
-            onUnitChange={updateUnitNumber}
-            onVehicleSelect={applyVehicle}
-            canAssign={canAssign}
-            mapsConfig={mapsConfig}
-            mobileSection={mobileSection}
-            mobileScrollRef={mobileScrollRef}
-            onErrorFocusTarget={ensureFocusedFieldVisible}
-            selectedVehicle={selectedVehicle}
-            vehicleLookup={vehicleLookup}
-          />
-          {isPhone && mobileSection === "preview" ? (
+            officeCreateState={officeCreateState}
+            onBack={openOfficeWorkspace}
+            onSelectSection={selectMobileSection}
+            onTogglePreview={jumpToPreview}
+            previewActive={showEmbeddedPreview || previewFullscreen}
+            sections={createSections}
+            workorderDraft={workorderDraft}
+          >
+            <CreateWorkorderForm
+              assignment={assignment}
+              busy={officeCreateState.busy}
+              errors={officeCreateErrors}
+              errorFocusKey={officeCreateAttempt}
+              errorFocusReady={errorFocusReady}
+              form={form}
+              locations={officeLocations}
+              message={officeCreateState.message}
+              onAddPart={addPartRow}
+              onAssignmentChange={(mechanicUserIds) => setCreateAssignment((current) => ({ ...current, mechanicUserIds }))}
+              onFieldChange={updateField}
+              onLocationChange={selectOfficeLocation}
+              onPartChange={updatePart}
+              onRemovePart={removePartRow}
+              onSubmit={createOfficeWorkorder}
+              onUnitChange={updateUnitNumber}
+              onVehicleSelect={applyVehicle}
+              canAssign={canAssign}
+              mapsConfig={mapsConfig}
+              mobileSection={activeSection}
+              mobileScrollRef={mobileScrollRef}
+              onErrorFocusTarget={ensureFocusedFieldVisible}
+              selectedVehicle={selectedVehicle}
+              vehicleLookup={vehicleLookup}
+            />
+          {isPhone && activeSection === "preview" ? (
             <CompactWorkorderPreview
               panelRef={previewRef}
               countLabel={workorderCountLabel}
@@ -221,6 +207,7 @@ export function CreateWorkorderPage({
               </div>
             </CompactWorkorderPreview>
           ) : null}
+          </CreateWorkorderShell>
         </aside>
 
         {!isPhone ? <PreviewPane
@@ -243,31 +230,6 @@ export function CreateWorkorderPage({
           </div>
         </PreviewPane> : null}
       </WorkorderDetailLayout>
-      {isPhone ? (
-        <KeyboardAwareDock
-          className="create-workorder-mobile-dock"
-          keyboardOpen={keyboardOpen}
-          mode="hide"
-        >
-          <div className="create-workorder-mobile-action">
-            <button
-              type="submit"
-              form={CREATE_WORKORDER_FORM_ID}
-              disabled={officeCreateState.busy}
-            >
-              <Plus aria-hidden="true" />
-              <span>{officeCreateState.busy ? "Creating..." : "Create workorder"}</span>
-            </button>
-          </div>
-          <div className="create-workorder-mobile-nav">
-            <WorkorderSectionNav
-              sections={mobileSections}
-              activeSection={mobileSection}
-              onSelect={selectMobileSection}
-            />
-          </div>
-        </KeyboardAwareDock>
-      ) : null}
 
       <PreviewFullscreen
         open={previewFullscreen}

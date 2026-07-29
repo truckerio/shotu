@@ -57,3 +57,37 @@ test("draft quantity serialization preserves units and defaults legacy parts to 
     formData: { parts: [{ partNo: "FILTER", qty: "1" }] },
   }, { parts: [] }).parts[0].uomCode, "pc");
 });
+
+test("location and template changes make create drafts meaningful after baseline", () => {
+  const actor = { companyIds: ["company-1"], locationIds: ["location-1"] };
+  const form = {
+    locationId: "location-2",
+    headerTitle: "TEXAS YARD WORKORDER",
+    brandTop: "PRO TEC",
+    brandBottom: "REPAIR",
+    warrantyText: "Warranty",
+    responsibilityText: "Responsibility",
+    authorizationText: "Authorization",
+    parts: [],
+  };
+  const baseline = {
+    locationId: "location-1",
+    formData: {
+      headerTitle: "CHINO YARD WORKORDER",
+      brandTop: "PRO TEC",
+      brandBottom: "REPAIR",
+      warrantyText: "Warranty",
+      responsibilityText: "Responsibility",
+      authorizationText: "Authorization",
+    },
+  };
+
+  assert.equal(isMeaningfulWorkorderDraft(buildWorkorderDraftPayload({ actor, form }), baseline), true);
+  assert.equal(
+    isMeaningfulWorkorderDraft(
+      buildWorkorderDraftPayload({ actor, form: { ...form, locationId: "location-1", headerTitle: "CHINO YARD WORKORDER" } }),
+      baseline,
+    ),
+    false,
+  );
+});

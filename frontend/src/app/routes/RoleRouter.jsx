@@ -16,6 +16,7 @@ import {
 import { getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
 import { MechanicWorkspace } from "../../features/mechanic/MechanicWorkspace.jsx";
 import { useMechanicProgress } from "../../features/mechanic/progress/useMechanicProgress.js";
+import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceWorkspace.jsx";
 import { CreateWorkorderPage } from "../../features/create-workorder/CreateWorkorderPage.jsx";
@@ -28,11 +29,15 @@ import {
 import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
 import { validateCreateWorkorder } from "../../features/generator/create-workorder-validation.js";
 import {
+  createLocationDefaultPatch,
+  createLocationTemplatePatch,
   splitSerial,
+  templateFieldsForCreateLocation,
   todayIso,
   uniqueExactVehicleMatch,
   vehicleLookupValues,
   normalizeVehicleLookupValue,
+  resolveCreateLocation,
 } from "../../features/create-workorder/create-workorder-utils.js";
 import {
   buildWorkorderDraftPayload,
@@ -78,6 +83,22 @@ async function discardWorkorderDraft(draftId) {
 
 function workorderDraftOwnerId(draft) {
   return draft?.owner?.id || draft?.ownerId || draft?.createdBy?.id || draft?.creator?.id || "";
+}
+
+function createDraftBaselineFromForm(form) {
+  return {
+    locationId: form.locationId || "",
+    workStartDate: form.workStartDate,
+    workEndDate: form.workEndDate,
+    formData: {
+      headerTitle: form.headerTitle,
+      brandTop: form.brandTop,
+      brandBottom: form.brandBottom,
+      warrantyText: form.warrantyText,
+      responsibilityText: form.responsibilityText,
+      authorizationText: form.authorizationText,
+    },
+  };
 }
 
 async function updateMechanicProgress({
@@ -142,8 +163,17 @@ export function RoleRouter({ actor }) {
   const [draftLeaveOpen, setDraftLeaveOpen] = useState(false);
   const [draftLeaveBusy, setDraftLeaveBusy] = useState(false);
   const createInitialDatesRef = useRef({
+    locationId: actor.locationIds?.[0] || "",
     workStartDate: todayIso(),
     workEndDate: todayIso(),
+    formData: {
+      headerTitle: "CHINO YARD WORKORDER",
+      brandTop: "PRO TEC",
+      brandBottom: "REPAIR",
+      warrantyText: "NO WARRANTY ON PARTS SUPPLIED BY CUSTOMER",
+      responsibilityText: "Not responsible for loss or damage to vehicle in case of fire, theft or any other cause beyond our control.",
+      authorizationText: "I authorize the above repair to be completed along with necessary material(s). I grant you and/or your employees permission to operate the vehicle described herein on street, highways, or elsewhere for the purpose of testing and/or inspection. An express mechanic's lien is hereby acknowledged on above vehicle to secure the amount of repairs thereto.",
+    },
   });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
@@ -157,6 +187,7 @@ export function RoleRouter({ actor }) {
     companyName: "",
     customerCompanyName: "",
     locationId: actor.locationIds?.[0] || "",
+    locationName: "",
     headerTitle: "CHINO YARD WORKORDER",
     brandTop: "PRO TEC",
     brandBottom: "REPAIR",
@@ -179,7 +210,7 @@ export function RoleRouter({ actor }) {
     mechanicConcern: "",
     diagnosis: "",
     workPerformed: "",
-    mechanicName: "",
+    mechanicName: actor.role === "mechanic" ? actor.name || "" : "",
     startTime: "",
     endTime: "",
     managerName: "",
@@ -188,12 +219,29 @@ export function RoleRouter({ actor }) {
     authorizedBy: "",
     parts: [emptyPart(), emptyPart(), emptyPart()],
   });
+  const createMechanicUserIds = useMemo(() => (
+    actor.role === "mechanic"
+      ? [actor.id].filter(Boolean)
+      : createAssignment.mechanicUserIds
+  ), [actor.id, actor.role, createAssignment.mechanicUserIds]);
+  const createAssignmentForRole = useMemo(() => (
+    actor.role === "mechanic"
+      ? {
+        loading: false,
+        mechanicUserIds: createMechanicUserIds,
+        mechanics: [{
+          id: actor.id,
+          name: actor.name || "You",
+        }],
+      }
+      : createAssignment
+  ), [actor.id, actor.name, actor.role, createAssignment, createMechanicUserIds]);
   const workorderDraftPayload = useMemo(() => buildWorkorderDraftPayload({
     actor,
     form,
-    mechanicUserIds: createAssignment.mechanicUserIds,
+    mechanicUserIds: createMechanicUserIds,
     selectedVehicle,
-  }), [actor, createAssignment.mechanicUserIds, form, selectedVehicle]);
+  }), [actor, createMechanicUserIds, form, selectedVehicle]);
   const workorderDraftMeaningful = (
     workspace === "generator"
     && !activeWorkorder
@@ -266,6 +314,7 @@ export function RoleRouter({ actor }) {
   const mechanicMapVehicle = selectedVehicle || mechanicAsset;
   const mechanicMapLocation = getVehicleLocation(mechanicMapVehicle);
   const mechanicProgress = useMechanicProgress({
+    actorId: actor.id,
     workorderId: isMechanicDetail ? activeWorkorder?.workorder?.id : null,
     value: {
       diagnosis: form.diagnosis,
@@ -274,6 +323,9 @@ export function RoleRouter({ actor }) {
     initialVersion: activeWorkorder?.workorder?.progressVersion || 1,
     saveProgress: updateMechanicProgress,
   });
+  useEffect(() => () => {
+    if (actor.role === "mechanic") purgeMechanicWorkStorage();
+  }, [actor.id, actor.role]);
   useEffect(() => {
     const workorderId = activeWorkorder?.workorder?.id;
     const backup = mechanicProgress.backup;
@@ -308,8 +360,9 @@ export function RoleRouter({ actor }) {
   const detailMechanicNames = activeWorkorder?.workorder?.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
     || activeWorkorder?.workorder?.mechanic?.name
     || form.mechanicName;
+  const selectedOfficeLocation = resolveCreateLocation(officeLocations, form.locationId);
   const detailLocationName = activeWorkorder?.workorder?.location?.name
-    || officeLocations.find((entry) => entry.location.id === form.locationId)?.location?.name
+    || selectedOfficeLocation?.location?.name
     || "";
   const pendingPartCount = (activeWorkorder?.partRequests || []).filter((request) => !["approved", "rejected", "cancelled"].includes(request.status)).length;
   const visibleTimeline = useMemo(
@@ -368,20 +421,25 @@ export function RoleRouter({ actor }) {
     const rolePath = actor.role === "mechanic" ? "mechanic" : "office";
     api(`/api/${rolePath}/template`)
       .then(({ location, template, locations }) => {
-        setOfficeLocations(locations || []);
-        if (!location) return;
-        setForm((current) => ({
-          ...current,
-          locationId: location.id,
-          ...(template ? {
-            headerTitle: template.header_title,
-            brandTop: template.brand_top,
-            brandBottom: template.brand_bottom,
-            warrantyText: template.warranty_text,
-            responsibilityText: template.responsibility_text,
-            authorizationText: template.authorization_text,
-          } : {}),
-        }));
+        const availableLocations = locations || [];
+        const defaultLocationEntry = location
+          ? { location, template }
+          : availableLocations[0];
+        setOfficeLocations(availableLocations);
+        if (!defaultLocationEntry?.location) return;
+        setForm((current) => {
+          const patch = createLocationDefaultPatch({
+            currentLocationId: current.locationId,
+            defaultLocation: defaultLocationEntry.location,
+            locations: availableLocations,
+            template: defaultLocationEntry.template,
+          });
+          const next = { ...current, ...patch };
+          if (!current.locationId || !resolveCreateLocation(availableLocations, current.locationId)) {
+            createInitialDatesRef.current = createDraftBaselineFromForm(next);
+          }
+          return next;
+        });
       })
       .catch(() => {});
   }, [actor.role]);
@@ -416,13 +474,23 @@ export function RoleRouter({ actor }) {
   );
 
   useEffect(() => {
-    if (activeWorkorder || !["office", "admin"].includes(actor.role) || !form.locationId) {
+    if (activeWorkorder || workspace !== "generator") return;
+    setForm((current) => {
+      if (current.locationId !== form.locationId) return current;
+      const patch = createLocationTemplatePatch(current, officeLocations);
+      return Object.keys(patch).length ? { ...current, ...patch } : current;
+    });
+  }, [activeWorkorder, form.locationId, officeLocations, workspace]);
+
+  useEffect(() => {
+    const selectedLocation = resolveCreateLocation(officeLocations, form.locationId);
+    if (activeWorkorder || !["office", "admin"].includes(actor.role) || !selectedLocation?.location?.id) {
       setCreateAssignment((current) => ({ ...current, mechanics: [], loading: false }));
       return;
     }
     let cancelled = false;
     setCreateAssignment((current) => ({ ...current, mechanicUserIds: [], loading: true }));
-    api(`/api/office/locations/${encodeURIComponent(form.locationId)}/mechanics`)
+    api(`/api/office/locations/${encodeURIComponent(selectedLocation.location.id)}/mechanics`)
       .then(({ mechanics }) => {
         if (!cancelled) {
           setCreateAssignment({ mechanicUserIds: [], mechanics: mechanics || [], loading: false });
@@ -434,23 +502,17 @@ export function RoleRouter({ actor }) {
     return () => {
       cancelled = true;
     };
-  }, [activeWorkorder, actor.role, form.locationId]);
+  }, [activeWorkorder, actor.role, form.locationId, officeLocations]);
 
   function selectOfficeLocation(locationId) {
-    const selected = officeLocations.find((entry) => entry.location.id === locationId);
+    const selected = resolveCreateLocation(officeLocations, locationId);
     if (!selected) return;
     clearOfficeCreateErrors("locationId");
     setForm((current) => ({
       ...current,
       locationId: selected.location.id,
-      ...(selected.template ? {
-        headerTitle: selected.template.header_title,
-        brandTop: selected.template.brand_top,
-        brandBottom: selected.template.brand_bottom,
-        warrantyText: selected.template.warranty_text,
-        responsibilityText: selected.template.responsibility_text,
-        authorizationText: selected.template.authorization_text,
-      } : {}),
+      locationName: selected.location.name || "",
+      ...templateFieldsForCreateLocation(selected.location, selected.template),
     }));
   }
 
@@ -887,10 +949,7 @@ export function RoleRouter({ actor }) {
       if (actor.role === "mechanic") {
         const result = await api("/api/mechanic/workorders", {
           method: "POST",
-          body: JSON.stringify({
-            ...workorderDraftPayload,
-            mechanicUserIds: [],
-          }),
+          body: JSON.stringify(workorderDraftPayload),
         });
         setOfficeCreateState({ busy: false, message: `${result.workorder.serial} created and assigned to you.` });
         const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(result.workorder.id)}`);
@@ -1119,40 +1178,40 @@ export function RoleRouter({ actor }) {
 
   function openOfficeGenerator() {
     const createDate = todayIso();
-    createInitialDatesRef.current = {
-      workStartDate: createDate,
-      workEndDate: createDate,
-    };
     workorderDraft.reset(null);
     setResumedDraft(null);
     setDraftLeaveOpen(false);
     setActiveWorkorder(null);
     setSelectedVehicle(null);
     setVehicleLookup({ loading: false, status: "", results: [] });
-    setForm((current) => ({
-      ...current,
-      customerCompanyName: "",
-      unitNo: "",
-      unitType: "",
-      licenseNo: "",
-      mileage: "",
-      model: "",
-      vinNo: "",
-      mechanicConcern: "",
-      diagnosis: "",
-      workPerformed: "",
-      mechanicName: "",
-      startTime: "",
-      endTime: "",
-      managerName: "",
-      officeNotes: "",
-      customerSignature: "",
-      authorizedBy: "",
-      workDate: createDate,
-      workStartDate: createDate,
-      workEndDate: createDate,
-      parts: [emptyPart(), emptyPart(), emptyPart()],
-    }));
+    setForm((current) => {
+      const next = {
+        ...current,
+        customerCompanyName: "",
+        unitNo: "",
+        unitType: "",
+        licenseNo: "",
+        mileage: "",
+        model: "",
+        vinNo: "",
+        mechanicConcern: "",
+        diagnosis: "",
+        workPerformed: "",
+        mechanicName: actor.role === "mechanic" ? actor.name || "" : "",
+        startTime: "",
+        endTime: "",
+        managerName: "",
+        officeNotes: "",
+        customerSignature: "",
+        authorizedBy: "",
+        workDate: createDate,
+        workStartDate: createDate,
+        workEndDate: createDate,
+        parts: [emptyPart(), emptyPart(), emptyPart()],
+      };
+      createInitialDatesRef.current = createDraftBaselineFromForm(next);
+      return next;
+    });
     setPreviewPanelOpen(true);
     setDetailSource(null);
     setMode(actor.role === "mechanic" ? "mechanic" : "admin");
@@ -1644,7 +1703,7 @@ export function RoleRouter({ actor }) {
   return (
     <CreateWorkorderPage
       actor={actor}
-      assignment={createAssignment}
+      assignment={createAssignmentForRole}
       browserPrintPayload={browserPrintPayload}
       effectiveCopies={effectiveCopies}
       firstSerial={firstSerial}

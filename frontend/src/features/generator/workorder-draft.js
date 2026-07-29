@@ -4,6 +4,10 @@ function text(value) {
   return String(value || "").trim();
 }
 
+function initialFieldChanged(form, initialForm, field) {
+  return Object.hasOwn(initialForm, field) && text(form[field]) !== text(initialForm[field]);
+}
+
 function filledParts(parts) {
   return (Array.isArray(parts) ? parts : [])
     .filter((part) => text(part?.partNo) || text(part?.qty) || text(part?.repairOrder))
@@ -60,8 +64,10 @@ export function buildWorkorderDraftPayload({
 
 export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
   const form = payload?.formData || {};
+  const initialForm = initialDates.formData || {};
   return Boolean(
-    payload?.assetId
+    (Object.hasOwn(initialDates, "locationId") && text(payload?.locationId) !== text(initialDates.locationId))
+    || payload?.assetId
     || text(payload?.concern)
     || text(payload?.officeNotes)
     || payload?.mechanicUserIds?.length
@@ -79,6 +85,12 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
     || text(form.customerSignature)
     || text(form.authorizedBy)
     || form.parts?.length
+    || initialFieldChanged(form, initialForm, "headerTitle")
+    || initialFieldChanged(form, initialForm, "brandTop")
+    || initialFieldChanged(form, initialForm, "brandBottom")
+    || initialFieldChanged(form, initialForm, "warrantyText")
+    || initialFieldChanged(form, initialForm, "responsibilityText")
+    || initialFieldChanged(form, initialForm, "authorizationText")
     || (initialDates.workStartDate && form.workStartDate !== initialDates.workStartDate)
     || (initialDates.workEndDate && form.workEndDate !== initialDates.workEndDate)
   );

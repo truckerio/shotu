@@ -19,6 +19,64 @@
   transition-delay: 0s;
 }
 
+.asset-map-zoom-controls {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(10 13 18 / 18%);
+  display: grid;
+  overflow: hidden;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
+}
+
+.asset-map-zoom-controls button {
+  align-items: center;
+  appearance: none;
+  background: #fff;
+  border: 0;
+  color: #252b37;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 500;
+  height: 40px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 40px;
+}
+
+.asset-map-zoom-controls button + button {
+  border-top: 1px solid #e1e4ea;
+}
+
+.asset-map-zoom-controls button:hover,
+.asset-map-zoom-controls button:focus-visible {
+  background: #f5f8ff;
+  color: #175cd3;
+  outline: none;
+}
+
+.asset-map-zoom-controls button:focus-visible {
+  box-shadow: inset 0 0 0 2px #84caff;
+}
+
+.asset-map-zoom-controls button:disabled {
+  color: #a4a7ae;
+  cursor: default;
+}
+
+@media (max-width: 700px) {
+  .asset-map-zoom-controls button {
+    height: 44px;
+    width: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .asset-location-card .asset-location-header,
   .asset-location-card .asset-map-hover {

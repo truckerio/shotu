@@ -8,6 +8,7 @@ test("public auth and OAuth callback routes require no app permission", () => {
   assert.equal(permissionForRequest("GET", "/api/integrations/samsara/oauth/callback"), null);
   assert.equal(permissionForRequest("GET", "/api/invitations/token"), null);
   assert.equal(permissionForRequest("POST", "/api/invitations/token/accept"), null);
+  assert.equal(permissionForRequest("GET", "/api/kiosk/context"), null);
 });
 
 test("route families map to domain permissions", () => {
@@ -26,4 +27,5 @@ test("route families map to domain permissions", () => {
   assert.equal(permissionForRequest("GET", "/api/mechanic/chat-media/attachment-1"), PERMISSION.WORKORDER_CHAT_READ);
   assert.equal(permissionForRequest("GET", "/api/unknown"), PERMISSION.AUTHENTICATED);
   assert.equal(permissionForRequest("GET", "/api/admin/locations"), PERMISSION.ADMIN_MANAGE);
+  assert.equal(permissionForRequest("POST", "/api/kiosk/event"), PERMISSION.AUTHENTICATED);
 });

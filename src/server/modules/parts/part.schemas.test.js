@@ -61,11 +61,11 @@ test("questions and declines require feedback for the mechanic", () => {
   })).success, true);
 });
 
-test("part quantities support measured decimals and default legacy payloads to each", () => {
+test("part quantities support measured decimals and default legacy payloads to piece", () => {
   assert.equal(createPartRequestSchema.parse({
     query: "Oil filter",
     quantity: 2,
-  }).uomCode, "ea");
+  }).uomCode, "pc");
 
   assert.equal(createPartRequestSchema.parse({
     query: "Engine oil",
@@ -76,7 +76,7 @@ test("part quantities support measured decimals and default legacy payloads to e
   assert.equal(createPartRequestSchema.safeParse({
     query: "Oil filters",
     quantity: 2.5,
-    uomCode: "ea",
+    uomCode: "pc",
   }).success, false);
 });
 
