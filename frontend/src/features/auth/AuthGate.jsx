@@ -4,6 +4,7 @@ import { authClient } from "../../lib/auth-client.js";
 import { api } from "../../lib/api.js";
 import { KioskGate, KioskStandardLogin } from "../kiosk/KioskGate.jsx";
 import { KioskSessionProvider } from "../kiosk/KioskSessionContext.jsx";
+import { useInactivitySession } from "./inactivity-session.js";
 import { LoginPage } from "./LoginPage.jsx";
 import "./auth.css";
 
@@ -40,6 +41,7 @@ export function AuthGate({ children }) {
   const [actor, setActor] = useState(null);
   const [actorState, setActorState] = useState("idle");
   const [actorError, setActorError] = useState("");
+<<<<<<< HEAD
   const [actorSession, setActorSession] = useState({ kiosk: null, sessionMode: "standard" });
   const [kioskContext, setKioskContext] = useState(undefined);
   const [standardLogin, setStandardLogin] = useState(false);
@@ -59,6 +61,18 @@ export function AuthGate({ children }) {
     window.addEventListener("kiosk-registration-changed", loadKioskContext);
     return () => window.removeEventListener("kiosk-registration-changed", loadKioskContext);
   }, [loadKioskContext]);
+
+  const endInactiveSession = useCallback(async () => {
+    try {
+      await authClient.signOut();
+    } finally {
+      window.location.replace("/");
+    }
+  }, []);
+  const { warningSeconds } = useInactivitySession({
+    enabled: Boolean(session?.user),
+    onTimeout: endInactiveSession,
+  });
 
   useEffect(() => {
     if (!session?.user) {
@@ -130,6 +144,11 @@ export function AuthGate({ children }) {
       sessionMode={actorSession.sessionMode}
     >
       {children({ actor, session, authClient })}
+      {warningSeconds ? (
+        <div className="auth-inactivity-warning" role="status" aria-live="polite">
+          Signing out in {warningSeconds} seconds due to inactivity.
+        </div>
+      ) : null}
     </KioskSessionProvider>
   );
 }

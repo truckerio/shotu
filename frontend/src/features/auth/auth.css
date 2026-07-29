@@ -203,6 +203,24 @@ body:has(.auth-shell) {
   animation: auth-spin 700ms linear infinite;
 }
 
+.auth-inactivity-warning {
+  position: fixed;
+  z-index: 1000;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid #fdb022;
+  border-radius: 8px;
+  background: #fffaeb;
+  color: #7a2e0e;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-body);
+  box-shadow: 0 8px 24px rgb(16 24 40 / 14%);
+}
+
 @keyframes auth-spin {
   to { transform: rotate(360deg); }
 }
