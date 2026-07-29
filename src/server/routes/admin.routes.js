@@ -14,6 +14,7 @@ import {
   inviteLocationUser,
   removeAdminUser,
   resendLocationInvitation,
+  requestAdminUserPasswordReset,
   resetAdminUserPassword,
   registerAdminKioskDevice,
   revokeAdminKioskDevice,
@@ -28,6 +29,7 @@ import {
   acceptInvitationSchema,
   createInvitationSchema,
   createLocationSchema,
+  requestManagedUserPasswordResetSchema,
   resetManagedUserPasswordSchema,
   issueKioskPinSchema,
   registerKioskDeviceSchema,
@@ -212,6 +214,23 @@ export async function handleAdminApi(req, res, url, helpers) {
     const input = updateManagedUserLocationsSchema.parse(await readBody(req));
     sendJson(res, 200, {
       user: await updateAdminUserLocations(requestContext, actor, userLocations, input),
+    });
+    return true;
+  }
+
+  const userPasswordResetEmail = companyManagedUserPath(url.pathname, "/password-reset-email");
+  if (req.method === "POST" && userPasswordResetEmail) {
+    const input = requestManagedUserPasswordResetSchema.parse(await readBody(req));
+    res.setHeader("cache-control", "no-store");
+    sendJson(res, 200, {
+      result: await requestAdminUserPasswordReset(
+        requestContext,
+        actor,
+        userPasswordResetEmail,
+        input,
+        fromNodeHeaders(req.headers),
+        invitationPublicOrigin(req),
+      ),
     });
     return true;
   }

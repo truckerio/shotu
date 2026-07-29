@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { createInvitationAuthUser } from "./admin.service.js";
+import {
+  createInvitationAuthUser,
+  requestAdminUserPasswordReset,
+} from "./admin.service.js";
+
+const COMPANY_ID = "8f84d529-a70a-4ea4-9c93-70ff7336a756";
 
 test("invitation acceptance creates credentials through Better Auth admin API", async () => {
   let payload;
@@ -57,6 +62,85 @@ test("admin invitations create a Better Auth admin identity", async () => {
   });
 
   assert.equal(payload.body.role, "admin");
+});
+
+test("admin password recovery sends the tenant-scoped user a Better Auth reset email", async () => {
+  let request;
+  let event;
+  const result = await requestAdminUserPasswordReset(
+    {
+      actor: { id: "admin-1", role: "admin" },
+      companyIds: new Set([COMPANY_ID]),
+    },
+    { id: "admin-1" },
+    "user-1",
+    { companyId: COMPANY_ID },
+    new Headers({ cookie: "session=test" }),
+    "https://workorders.example.com",
+    {
+      getTargets: async () => [{
+        id: "user-1",
+        company_id: COMPANY_ID,
+        active: true,
+        company_membership_active: true,
+        auth_user_id: "auth-user-1",
+        auth_email: "mechanic@example.com",
+      }],
+      authApi: {
+        async requestPasswordReset(input) {
+          request = input;
+        },
+      },
+      async recordEvent(input) {
+        event = input;
+      },
+    },
+  );
+
+  assert.deepEqual(result, { sent: true });
+  assert.deepEqual(request.body, {
+    email: "mechanic@example.com",
+    redirectTo: "https://workorders.example.com/?resetPassword=1",
+  });
+  assert.equal(event.companyId, COMPANY_ID);
+  assert.equal(event.actorId, "admin-1");
+  assert.equal(event.targetUserId, "user-1");
+  assert.equal(event.action, "password_reset_requested");
+  assert.deepEqual(event.details, { delivery: "email" });
+});
+
+test("admin password recovery refuses inactive users before sending email", async () => {
+  let called = false;
+  await assert.rejects(
+    requestAdminUserPasswordReset(
+      {
+        actor: { id: "admin-1", role: "admin" },
+        companyIds: new Set([COMPANY_ID]),
+      },
+      { id: "admin-1" },
+      "user-1",
+      { companyId: COMPANY_ID },
+      new Headers(),
+      "https://workorders.example.com",
+      {
+        getTargets: async () => [{
+          id: "user-1",
+          company_id: COMPANY_ID,
+          active: false,
+          company_membership_active: false,
+          auth_user_id: "auth-user-1",
+          auth_email: "mechanic@example.com",
+        }],
+        authApi: {
+          async requestPasswordReset() {
+            called = true;
+          },
+        },
+      },
+    ),
+    /Activate this user/,
+  );
+  assert.equal(called, false);
 });
 
 test("invitation acceptance links profiles without conflict-index dependencies", async () => {

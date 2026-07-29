@@ -27,7 +27,6 @@ import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { OperationsWorkspace } from "../../components/operations/OperationsWorkspace.jsx";
-import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
@@ -43,8 +42,6 @@ import "./admin.css";
 
 const blankLocation = { name: "", type: "yard", address: "" };
 const blankInvite = { name: "", email: "", role: "mechanic" };
-const blankPassword = { password: "", confirmation: "" };
-const hiddenPasswords = { password: false, confirmation: false };
 
 function templateForm(template, location) {
   return {
@@ -187,11 +184,11 @@ function UserActionsMenu({ active, onManage, self, user }) {
           <MenuItem
             className="admin-user-menu-item"
             isDisabled={self}
-            onAction={() => onManage("password", user)}
-            textValue="Reset password"
+            onAction={() => onManage("password-reset-email", user)}
+            textValue="Send password reset"
           >
-            <Key01 />
-            <span>Reset password</span>
+            <Mail01 />
+            <span>Send password reset</span>
           </MenuItem>
           <MenuItem
             className="admin-user-menu-item"
@@ -237,7 +234,7 @@ function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }
               <span><span className={`admin-user-status ${active ? "active" : "inactive"}`}>{active ? "Active" : "Inactive"}</span></span>
               <span className="admin-user-actions admin-user-actions-desktop">
                 <button type="button" title={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} aria-label={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} onClick={() => onManage("locations", user)}><MarkerPin01 /></button>
-                <button type="button" title={self ? "Use your profile to change your own password" : `Reset password for ${user.name}`} aria-label={`Reset password for ${user.name}`} disabled={self} onClick={() => onManage("password", user)}><Key01 /></button>
+                <button type="button" title={self ? "Use your profile to change your own password" : `Send password reset to ${user.name}`} aria-label={`Send password reset to ${user.name}`} disabled={self} onClick={() => onManage("password-reset-email", user)}><Mail01 /></button>
                 <button
                   type="button"
                   title={self ? "You cannot change your own status" : `${active ? "Deactivate" : "Activate"} ${user.name}`}
@@ -381,8 +378,6 @@ export function AdminWorkspace({
   const inviteResendInFlight = useRef(false);
   const [userAction, setUserAction] = useState(null);
   const [userLocationDraft, setUserLocationDraft] = useState([]);
-  const [passwordDraft, setPasswordDraft] = useState(blankPassword);
-  const [visiblePasswords, setVisiblePasswords] = useState(hiddenPasswords);
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
   const draftQueue = {
     drafts,
@@ -536,8 +531,6 @@ export function AdminWorkspace({
   }
 
   function openUserAction(type, user) {
-    setPasswordDraft(blankPassword);
-    setVisiblePasswords(hiddenPasswords);
     setUserLocationDraft(userLocationIds(user, selectedId));
     setUserAction({ type, user });
     setState((current) => ({ ...current, error: "", message: "" }));
@@ -550,20 +543,6 @@ export function AdminWorkspace({
       setState((current) => ({ ...current, error: "Select at least one location." }));
       return;
     }
-    if (userAction.type === "password") {
-      if (passwordDraft.password.length < 12) {
-        setState((current) => ({ ...current, error: "Password must be at least 12 characters." }));
-        return;
-      }
-      if (!passwordDraft.confirmation) {
-        setState((current) => ({ ...current, error: "Confirm the new password." }));
-        return;
-      }
-      if (passwordDraft.password !== passwordDraft.confirmation) {
-        setState((current) => ({ ...current, error: "Passwords do not match." }));
-        return;
-      }
-    }
     setState((current) => ({ ...current, busy: true, error: "", message: "" }));
     const base = `/api/admin/locations/${selectedId}/users/${userAction.user.id}`;
     try {
@@ -572,10 +551,10 @@ export function AdminWorkspace({
           method: "PUT",
           body: JSON.stringify({ companyId: selectedCompanyId, locationIds: userLocationDraft }),
         });
-      } else if (userAction.type === "password") {
-        await api(`${base}/password`, {
+      } else if (userAction.type === "password-reset-email") {
+        await api(`/api/admin/users/${userAction.user.id}/password-reset-email`, {
           method: "POST",
-          body: JSON.stringify({ password: passwordDraft.password }),
+          body: JSON.stringify({ companyId: selectedCompanyId }),
           timeoutMs: 15_000,
         });
       } else if (userAction.type === "delete") {
@@ -588,15 +567,14 @@ export function AdminWorkspace({
       }
       const message = userAction.type === "locations"
         ? `Location access updated for ${userAction.user.name}.`
-        : userAction.type === "password"
-        ? `Password reset for ${userAction.user.name}. Existing sessions were signed out.`
+        : userAction.type === "password-reset-email"
+        ? `Password reset email sent to ${userAction.user.name}.`
         : userAction.type === "delete"
           ? `${userAction.user.name} was deleted.`
           : `${userAction.user.name} is now ${userAction.type === "activate" ? "active" : "inactive"}.`;
       setUserAction(null);
-      setPasswordDraft(blankPassword);
       setState((current) => ({ ...current, busy: false, error: "", message }));
-      if (userAction.type !== "password") {
+      if (userAction.type !== "password-reset-email") {
         await openLocation(selectedId, "users");
         await loadLocations();
       }
@@ -626,7 +604,7 @@ export function AdminWorkspace({
       {modal === "inviteLink" ? <Modal title="Invite link" onClose={() => setModal("")}><div className="admin-invite-result"><p>Share this new link with <strong>{inviteLinkRecipient}</strong>. Any previous link for this invitation no longer works.</p><code>{inviteUrl}</code><Button icon={Copy01} onClick={copyInviteLink}>Copy link</Button></div></Modal> : null}
       {userAction ? (
         <Modal
-          title={userAction.type === "locations" ? "Location access" : userAction.type === "password" ? "Reset password" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
+          title={userAction.type === "locations" ? "Location access" : userAction.type === "password-reset-email" ? "Send password reset" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
           onClose={() => !state.busy && setUserAction(null)}
         >
           <form className="admin-modal-form" onSubmit={submitUserAction}>
@@ -645,28 +623,10 @@ export function AdminWorkspace({
                   <Button variant="primary" type="submit" disabled={state.busy || !userLocationDraft.length}>{state.busy ? "Saving" : "Save location access"}</Button>
                 </>
               )
-            ) : userAction.type === "password" ? (
+            ) : userAction.type === "password-reset-email" ? (
               <>
-                <p className="admin-modal-copy">Set a new password for <strong>{userAction.user.name}</strong>. Their current sessions will be signed out.</p>
-                <div className="password-field-group admin-password-field-group">
-                  <label htmlFor="admin-new-password"><span>New password</span></label>
-                  <div className="password-input-control">
-                    <input id="admin-new-password" required autoFocus type={visiblePasswords.password ? "text" : "password"} minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.password.length > 0 && passwordDraft.password.length < 12} value={passwordDraft.password} onChange={(event) => { setPasswordDraft((current) => ({ ...current, password: event.target.value })); setState((current) => ({ ...current, error: "" })); }} />
-                    <PasswordVisibilityToggle visible={visiblePasswords.password} controls="admin-new-password" onToggle={() => setVisiblePasswords((current) => ({ ...current, password: !current.password }))} />
-                  </div>
-                </div>
-                <div className="password-field-group admin-password-field-group">
-                  <label htmlFor="admin-confirm-password"><span>Confirm password</span></label>
-                  <div className="password-input-control">
-                    <input id="admin-confirm-password" required type={visiblePasswords.confirmation ? "text" : "password"} minLength="12" maxLength="128" autoComplete="new-password" aria-invalid={passwordDraft.confirmation.length > 0 && passwordDraft.password !== passwordDraft.confirmation} value={passwordDraft.confirmation} onChange={(event) => { setPasswordDraft((current) => ({ ...current, confirmation: event.target.value })); setState((current) => ({ ...current, error: "" })); }} />
-                    <PasswordVisibilityToggle visible={visiblePasswords.confirmation} controls="admin-confirm-password" onToggle={() => setVisiblePasswords((current) => ({ ...current, confirmation: !current.confirmation }))} />
-                  </div>
-                </div>
-                <div className="admin-password-rules" aria-live="polite">
-                  <span className={passwordDraft.password.length >= 12 ? "valid" : ""}>At least 12 characters</span>
-                  <span className={passwordDraft.confirmation && passwordDraft.password === passwordDraft.confirmation ? "valid" : passwordDraft.confirmation ? "invalid" : ""}>Passwords match</span>
-                </div>
-                <Button variant="primary" icon={Key01} type="submit" disabled={state.busy || passwordDraft.password.length < 12 || passwordDraft.password !== passwordDraft.confirmation}>{state.busy ? "Resetting" : "Reset password"}</Button>
+                <p className="admin-modal-copy">Send a secure, one-use password reset link to <strong>{userAction.user.login_email || userAction.user.email}</strong>. The link expires after 15 minutes.</p>
+                <Button variant="primary" icon={Mail01} type="submit" disabled={state.busy}>{state.busy ? "Sending" : "Send reset email"}</Button>
               </>
             ) : userAction.type === "delete" ? (
               <>

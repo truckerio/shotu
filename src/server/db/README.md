@@ -41,7 +41,9 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 - `workorder_read_state` is per user and workorder. It must never be stored as a global boolean on the workorder.
 - `workorder_access_events` is append-only. Explicit detail opens are recorded there; background polling must not create access events.
 - User deletion is credential deletion plus a `user_profiles.deleted_at` tombstone. Do not delete operational profiles referenced by history.
-- Admin account changes are append-only in `admin_user_events`; password hashes and session invalidation remain Better Auth responsibilities.
+- Admin account changes are append-only in `admin_user_events`. Reset-email
+  delivery is recorded as `password_reset_requested`; password hashes, reset
+  tokens, and session invalidation remain Better Auth responsibilities.
 - Invitation roles and company membership roles share the canonical
   `auth/roles.js` vocabulary. Any role added there requires a forward migration
   for `user_invitations_role_check` in the same release.

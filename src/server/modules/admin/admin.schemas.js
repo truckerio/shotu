@@ -54,4 +54,8 @@ export const resetManagedUserPasswordSchema = z.object({
   password: z.string().min(12).max(128),
 });
 
+export const requestManagedUserPasswordResetSchema = z.object({
+  companyId: z.string().uuid(),
+});
+
 export { issueKioskPinSchema, registerKioskDeviceSchema };

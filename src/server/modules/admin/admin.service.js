@@ -239,6 +239,50 @@ export async function resetAdminUserPassword(context, actor, locationId, userId,
   return { reset: true };
 }
 
+export async function requestAdminUserPasswordReset(
+  context,
+  actor,
+  userId,
+  input,
+  headers,
+  origin,
+  dependencies = {},
+) {
+  if (actor.id === userId) {
+    throw invalidRequest("Use your profile or the sign-in page to reset your own password.");
+  }
+  const getTargets = dependencies.getTargets || getManagedUserByCompanies;
+  const targets = await getTargets(userId, authorizedCompanyIds(context));
+  const target = targets.find(({ company_id: companyId }) => companyId === input.companyId);
+  if (!target) throw resourceNotFound("User");
+  requireCompanyAccess(context, target.company_id);
+  requireLogin(target);
+  if (!target.active || !target.company_membership_active) {
+    throw invalidRequest("Activate this user before sending a password reset email.");
+  }
+  if (!target.auth_email) {
+    throw invalidRequest("This login does not have an email address.");
+  }
+
+  const authApi = dependencies.authApi || auth.api;
+  const recordEvent = dependencies.recordEvent || recordAdminUserEvent;
+  await authApi.requestPasswordReset({
+    body: {
+      email: target.auth_email,
+      redirectTo: `${origin}/?resetPassword=1`,
+    },
+    headers,
+  });
+  await recordEvent({
+    companyId: target.company_id,
+    actorId: actor.id,
+    targetUserId: userId,
+    action: "password_reset_requested",
+    details: { delivery: "email" },
+  });
+  return { sent: true };
+}
+
 export async function removeAdminUser(context, actor, locationId, userId) {
   if (actor.id === userId) {
     throw invalidRequest("You cannot delete your own account.");

@@ -59,6 +59,7 @@ export async function listUsersByLocation(locationId) {
             company_membership.role,
             app_user.active,
             auth_user.username,
+            auth_user.email as login_email,
             coalesce(membership.active, company_membership.active) as membership_active,
             coalesce(membership.created_at, company_membership.created_at) as created_at,
             coalesce((
@@ -94,9 +95,11 @@ export async function listUsersByLocation(locationId) {
 export async function getManagedUserByCompanies(userId, companyIds) {
   const result = await query(
     `select profile.id, profile.display_name as name, profile.active,
+            profile.auth_user_id, auth_user.email as auth_email,
             membership.company_id, membership.role, membership.active as company_membership_active
        from user_profiles profile
        join user_company_memberships membership on membership.user_id = profile.id
+       left join auth_user on auth_user.id = profile.auth_user_id
       where profile.id = $1
         and membership.company_id = any($2::uuid[])
         and profile.deleted_at is null

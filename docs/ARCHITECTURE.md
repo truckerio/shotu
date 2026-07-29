@@ -121,7 +121,13 @@ Better Auth owns passwords, account bans, and session revocation. `user_profiles
 - Deactivation bans the login and deactivates all operational memberships.
 - Activation restores the selected company/location membership and unbans the login.
 - Deletion removes the login and contact data but keeps a tombstoned `user_profiles` row so historical workorder, chat, and audit references remain valid.
-- `admin_user_events` records password reset, activation, deactivation, and deletion. An admin cannot deactivate, delete, or reset their own account through location user management.
+- Admin user management sends the existing 15-minute recovery email instead of
+  asking an administrator to choose another person's password. Delivery requests
+  are recorded as `password_reset_requested`; a delivered link does not prove
+  that the password was changed.
+- `admin_user_events` records password-reset requests, legacy direct resets,
+  activation, deactivation, and deletion. An admin cannot deactivate, delete,
+  or reset their own account through user management.
 
 Direct Better Auth admin transport routes are not public API. The application exposes tenant-checked commands under `/api/admin/locations/:locationId/users/:userId`.
 
