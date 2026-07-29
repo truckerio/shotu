@@ -1,10 +1,13 @@
 import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
 import { admin, username } from "better-auth/plugins";
 import { getPool } from "../db/pool.js";
 import { resolveAuthConfig } from "./config.js";
 import { kioskAuthPlugin } from "./kiosk-plugin.js";
 
 const config = resolveAuthConfig();
+const authOrigin = new URL(config.baseURL).origin;
+const relyingPartyId = new URL(authOrigin).hostname;
 
 export const auth = betterAuth({
   appName: "Workorder Generator",
@@ -115,5 +118,30 @@ export const auth = betterAuth({
       },
     }),
     kioskAuthPlugin(),
+    passkey({
+      rpID: relyingPartyId,
+      rpName: "Owl",
+      origin: authOrigin,
+      authenticatorSelection: {
+        residentKey: "required",
+        userVerification: "required",
+      },
+      registration: {
+        requireSession: true,
+      },
+      schema: {
+        passkey: {
+          modelName: "auth_passkey",
+          fields: {
+            publicKey: "public_key",
+            userId: "user_id",
+            credentialID: "credential_id",
+            deviceType: "device_type",
+            backedUp: "backed_up",
+            createdAt: "created_at",
+          },
+        },
+      },
+    }),
   ],
 });

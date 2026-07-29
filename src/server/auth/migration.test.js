@@ -4,6 +4,7 @@ import test from "node:test";
 
 const migrationUrl = new URL("../db/migrations/002_auth_foundation.sql", import.meta.url);
 const adminUserMigrationUrl = new URL("../db/migrations/013_admin_user_management.sql", import.meta.url);
+const passkeyMigrationUrl = new URL("../db/migrations/034_auth_passkeys.sql", import.meta.url);
 
 test("auth migration matches Better Auth mappings and domain identity links", async () => {
   const sql = await readFile(migrationUrl, "utf8");
@@ -31,4 +32,23 @@ test("admin user management extends Better Auth without deleting operational his
   assert.match(sql, /create table if not exists admin_user_events/);
   assert.match(sql, /'password_reset'/);
   assert.doesNotMatch(sql, /delete from app_users/i);
+});
+
+test("passkey migration stores Better Auth WebAuthn credentials safely", async () => {
+  const sql = await readFile(passkeyMigrationUrl, "utf8");
+
+  assert.match(sql, /create table if not exists auth_passkey \(/);
+  for (const column of [
+    "public_key text not null",
+    "user_id text not null",
+    "credential_id text not null",
+    "counter bigint not null",
+    "device_type text not null",
+    "backed_up boolean not null",
+  ]) {
+    assert.match(sql, new RegExp(column));
+  }
+  assert.match(sql, /references auth_user\(id\) on delete cascade/);
+  assert.match(sql, /create index if not exists auth_passkey_user_id_idx/);
+  assert.match(sql, /create unique index if not exists auth_passkey_credential_id_uidx/);
 });

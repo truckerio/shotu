@@ -33,6 +33,7 @@
     "verify": "npm run check:structure && npm run test:backup-restore && npm run test:load-harness && npm run test:unit && npm run check"
   },
   "dependencies": {
+    "@better-auth/passkey": "^1.6.25",
     "@untitledui/icons": "^0.0.19",
     "@vitejs/plugin-react": "^4.3.4",
     "better-auth": "^1.6.25",
