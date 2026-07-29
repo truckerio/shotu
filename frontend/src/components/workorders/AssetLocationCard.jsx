@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Pin01 } from "@untitledui/icons";
-import { buildExternalMapUrl, buildSatelliteTileLayer, MAX_SATELLITE_ZOOM } from "../../lib/maps/satellite-tiles.js";
+import { buildSatelliteTileLayer, MAX_SATELLITE_ZOOM } from "../../lib/maps/satellite-tiles.js";
 import { createMapVisibilityController } from "../../lib/maps/map-visibility-controller.js";
 import { MAP_SURFACE_TRANSITION_MS } from "../../lib/ui-timings.js";
 import "./asset-location-card.css";
@@ -234,13 +234,6 @@ export function AssetLocationCard({
                   <span>{location.time ? new Date(location.time).toLocaleString() : "Live GPS"}</span>
                   <small>{tileLayer.attribution}</small>
                 </div>
-                <a
-                  href={buildExternalMapUrl(location)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open in HERE
-                </a>
               </div>
             </>
           ) : null}

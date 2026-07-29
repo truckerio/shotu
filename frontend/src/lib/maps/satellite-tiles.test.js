@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildExternalMapUrl,
   buildSatelliteTileLayer,
   MAX_SATELLITE_ZOOM,
   resolveSatelliteProvider,
@@ -78,18 +77,6 @@ test("valid zero coordinates produce a tile layer", () => {
 
 test("invalid coordinates do not produce a tile layer", () => {
   assert.equal(buildSatelliteTileLayer({ latitude: "missing", longitude: 0 }), null);
-});
-
-test("external location links preserve exact coordinates with a visible map marker", () => {
-  assert.equal(
-    buildExternalMapUrl({ latitude: 34.012345, longitude: -117.654321 }),
-    "https://www.google.com/maps/search/?api=1&query=34.012345%2C-117.654321",
-  );
-  assert.equal(
-    buildExternalMapUrl({ latitude: 34.012345, longitude: -117.654321 }),
-    "https://www.google.com/maps/search/?api=1&query=34.012345%2C-117.654321",
-  );
-  assert.equal(buildExternalMapUrl({ latitude: "missing", longitude: -117 }), "");
 });
 
 test("asset-level zoom is preserved across HERE and fallback tile URLs", () => {

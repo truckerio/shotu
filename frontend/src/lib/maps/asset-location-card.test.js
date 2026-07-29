@@ -23,13 +23,14 @@ test("shared asset map stays open on desktop while mobile keeps its reveal contr
   assert.match(component, /createMapVisibilityController/);
 });
 
-test("shared asset map uses precise asset-level zoom and marker handoff", () => {
+test("shared asset map uses precise asset-level zoom without external handoff", () => {
   assert.match(component, /const ASSET_LOCATION_ZOOM = 19/);
   assert.match(
     component,
     /buildSatelliteTileLayer\(location, mapsConfig, mapZoom, \{ pixelRatio: mapPixelRatio \}\)/,
   );
-  assert.match(component, /buildExternalMapUrl\(location\)/);
+  assert.doesNotMatch(component, /buildExternalMapUrl/);
+  assert.doesNotMatch(component, /Open map|Open in HERE/);
   assert.match(component, /browserPixelRatio/);
   assert.match(component, /loading="eager"/);
   assert.match(component, /fetchPriority=\{tile\.priority \? "high" : "auto"\}/);

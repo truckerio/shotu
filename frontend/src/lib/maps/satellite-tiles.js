@@ -48,14 +48,6 @@ export function resolveSatelliteProvider(mapsConfig = {}) {
   return mapsConfig.hereBrowserApiKey ? "here" : "arcgis";
 }
 
-export function buildExternalMapUrl(location) {
-  const latitude = Number(location?.latitude);
-  const longitude = Number(location?.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
-  const query = encodeURIComponent(`${latitude},${longitude}`);
-  return `https://www.google.com/maps/search/?api=1&query=${query}`;
-}
-
 export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAULT_ZOOM, options = {}) {
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
