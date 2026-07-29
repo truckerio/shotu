@@ -32,6 +32,7 @@ import {
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { requireCompanyAccess } from "../../auth/authorize.js";
 import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
+import { sendInvitationEmail } from "../../email/invitation.js";
 import { buildInvitationUrl } from "./invitation-link.js";
 import {
   issueMechanicKioskPin,
@@ -396,15 +397,22 @@ export async function inviteLocationUser(context, location, input, actorId, orig
     throw error;
   }
   const primaryIndex = locationIds.indexOf(location.id);
+  const inviteUrl = buildInvitationUrl(origin, invitations[primaryIndex].token);
+  const delivery = await sendInvitationEmail({
+    invitation: created[primaryIndex],
+    inviteUrl,
+    locationNames: locations.map(({ name }) => name),
+  });
   return {
     invitation: invitationView(created[primaryIndex]),
     invitations: created.map(invitationView),
-    inviteUrl: buildInvitationUrl(origin, invitations[primaryIndex].token),
+    inviteUrl,
+    delivery,
   };
 }
 
 export async function resendLocationInvitation(context, locationId, invitationId, actorId, origin) {
-  await authorizedLocation(context, locationId);
+  const location = await authorizedLocation(context, locationId);
   const token = randomBytes(32).toString("base64url");
   const invitation = await rotateUserInvitation({
     invitationId,
@@ -414,9 +422,15 @@ export async function resendLocationInvitation(context, locationId, invitationId
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
   if (!invitation) throw resourceNotFound("Pending invitation");
+  const inviteUrl = buildInvitationUrl(origin, token);
   return {
     invitation: invitationView(invitation),
-    inviteUrl: buildInvitationUrl(origin, token),
+    inviteUrl,
+    delivery: await sendInvitationEmail({
+      invitation,
+      inviteUrl,
+      locationNames: [location.name],
+    }),
   };
 }
 

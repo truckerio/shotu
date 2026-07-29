@@ -133,6 +133,11 @@ conversion factor because their contents depend on the product. See
 
 Better Auth owns passwords, account bans, and session revocation. `user_profiles` owns operational contact identity. Company and location memberships own role and access. Admin user-management routes authorize the target location and every company membership before changing either layer.
 
+- Creating or resending an invitation attempts SMTP delivery after the durable
+  invitation is saved. The API returns a safe delivery status and the Admin UI
+  always retains the one-time invitation link as a fallback when SMTP is
+  unavailable. Invitation email failure never rolls back or hides the pending
+  invitation.
 - Self-service password change requires the current password and preserves only
   the current session. Forgotten-password recovery uses Better Auth verification
   storage for a single-use 15-minute token, SMTP only transports the reset link,

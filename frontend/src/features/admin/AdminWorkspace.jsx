@@ -421,6 +421,7 @@ export function AdminWorkspace({
   const [inviteLocationIds, setInviteLocationIds] = useState([]);
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteLinkRecipient, setInviteLinkRecipient] = useState("");
+  const [inviteDelivery, setInviteDelivery] = useState(null);
   const [resendingInviteId, setResendingInviteId] = useState("");
   const inviteCreateInFlight = useRef(false);
   const inviteResendInFlight = useRef(false);
@@ -506,12 +507,19 @@ export function AdminWorkspace({
       const result = await api(`/api/admin/locations/${selectedId}/invitations`, {
         method: "POST",
         body: JSON.stringify({ ...inviteDraft, locationIds }),
-        timeoutMs: 15_000,
+        timeoutMs: 30_000,
       });
       setInviteUrl(result.inviteUrl);
       setInviteLinkRecipient(result.invitation.email);
+      setInviteDelivery(result.delivery || { status: "failed" });
       setModal("inviteLink");
-      setState((current) => ({ ...current, busy: false, message: "Invitation created." }));
+      setState((current) => ({
+        ...current,
+        busy: false,
+        message: result.delivery?.status === "sent"
+          ? "Invitation email sent."
+          : "Invitation created. Use the backup link to share it.",
+      }));
       await openLocation(selectedId, "users");
     } catch (error) {
       setState((current) => ({ ...current, busy: false, error: error.message }));
@@ -527,16 +535,22 @@ export function AdminWorkspace({
     try {
       const result = await api(`/api/admin/locations/${selectedId}/invitations/${invite.id}/resend`, {
         method: "POST",
-        timeoutMs: 15_000,
+        timeoutMs: 30_000,
       });
       setInviteUrl(result.inviteUrl);
       setInviteLinkRecipient(result.invitation.email);
+      setInviteDelivery(result.delivery || { status: "failed" });
       setDetail((current) => ({
         ...current,
         invitations: current.invitations.map((item) => item.id === result.invitation.id ? result.invitation : item),
       }));
       setModal("inviteLink");
-      setState((current) => ({ ...current, message: "A new invitation link was created." }));
+      setState((current) => ({
+        ...current,
+        message: result.delivery?.status === "sent"
+          ? "A new invitation email was sent."
+          : "A new invitation was created. Use the backup link to share it.",
+      }));
     } catch (error) {
       setState((current) => ({ ...current, error: error.message }));
     } finally {
@@ -702,11 +716,11 @@ export function AdminWorkspace({
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
       {view === "operations" ? <OperationsHome actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
       {view === "settings" ? <IntegrationsSettings /> : null}
-      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} draftQueue={draftQueue} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} policy={policy} setPolicy={setPolicy} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteLocationIds(selectedId ? [selectedId] : []); setInviteUrl(""); setInviteLinkRecipient(""); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} onSavePolicy={savePolicy} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
+      {view === "locations" && selectedId && detail ? <LocationDetail actor={actor} detail={detail} draftQueue={draftQueue} tab={tab} setTab={setTab} template={template} setTemplate={setTemplate} policy={policy} setPolicy={setPolicy} onBack={() => { setSelectedId(null); setDetail(null); window.history.replaceState({}, "", "/?adminView=locations"); loadLocations(); }} onInvite={() => { setInviteDraft(blankInvite); setInviteLocationIds(selectedId ? [selectedId] : []); setInviteUrl(""); setInviteLinkRecipient(""); setInviteDelivery(null); setState((current) => ({ ...current, error: "" })); setModal("invite"); }} onManageUser={openUserAction} onResendInvite={resendInvite} resendingInviteId={resendingInviteId} onSaveTemplate={saveTemplate} onSavePolicy={savePolicy} saving={state.busy} onOpenWorkorder={onOpenWorkorder} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsHome locations={locations} loading={state.loading} onCreate={() => setModal("location")} onOpen={(id) => openLocation(id).catch((error) => setState((current) => ({ ...current, error: error.message })))} /> : null}
       {modal === "location" ? <Modal title="New location" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createLocation}><label><span>Name</span><input required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label><label><span>Address</span><input value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label><Button variant="primary" type="submit" disabled={state.busy}>Create location</Button></form></Modal> : null}
       {modal === "invite" ? <Modal title="Invite user" onClose={() => setModal("")}><form className="admin-modal-form" onSubmit={createInvite}>{state.error ? <p className="admin-modal-error" role="alert">{state.error}</p> : null}<label><span>Name</span><input required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label><label><span>Email</span><input required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label><label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option><option value="admin">Admin</option></select></label>{inviteDraft.role === "admin" ? <div className="admin-inherited-access"><strong>All locations</strong><p>Admins automatically inherit access to every current and future location in this company.</p></div> : <LocationSelector locations={companyLocations} value={inviteLocationIds} onChange={setInviteLocationIds} requiredIds={selectedId ? [selectedId] : []} />}<Button variant="primary" type="submit" disabled={state.busy || (inviteDraft.role !== "admin" && !inviteLocationIds.length)}>{state.busy ? "Creating" : "Create invite"}</Button></form></Modal> : null}
-      {modal === "inviteLink" ? <Modal title="Invite link" onClose={() => setModal("")}><div className="admin-invite-result"><p>Share this new link with <strong>{inviteLinkRecipient}</strong>. Any previous link for this invitation no longer works.</p><code>{inviteUrl}</code><Button icon={Copy01} onClick={copyInviteLink}>Copy link</Button></div></Modal> : null}
+      {modal === "inviteLink" ? <Modal title={inviteDelivery?.status === "sent" ? "Invitation sent" : "Invitation created"} onClose={() => setModal("")}><div className="admin-invite-result"><p>{inviteDelivery?.status === "sent" ? <>An invitation email was sent to <strong>{inviteLinkRecipient}</strong>. Keep this link as a backup until the invitation is accepted.</> : inviteDelivery?.status === "not_configured" ? <>Email delivery is not configured. Share this invitation link with <strong>{inviteLinkRecipient}</strong>.</> : <>The invitation was saved, but the email could not be sent. Share this link with <strong>{inviteLinkRecipient}</strong>.</>}</p><code>{inviteUrl}</code><Button icon={Copy01} onClick={copyInviteLink}>{inviteDelivery?.status === "sent" ? "Copy backup link" : "Copy link"}</Button></div></Modal> : null}
       {userAction ? (
         <Modal
           title={userAction.type === "locations" ? "Location access" : userAction.type === "password" ? "Set mechanic password" : userAction.type === "password-reset-email" ? "Send password reset" : userAction.type === "kiosk-pin" ? `${userAction.user.kiosk_pin_set ? "Reset" : "Set"} kiosk PIN` : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
