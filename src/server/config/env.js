@@ -8,11 +8,22 @@ function publicEnvValue(value) {
   return lines.at(-1) || "";
 }
 
-function satelliteMapProvider(value) {
-  return String(value || "").trim().toLowerCase() === "here" ? "here" : "arcgis";
+function satelliteMapProvider(value, hasHereBrowserKey = false) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "arcgis") return "arcgis";
+  if (normalized === "here") return "here";
+  return hasHereBrowserKey ? "here" : "arcgis";
 }
 
-const configuredSatelliteMapProvider = satelliteMapProvider(process.env.SATELLITE_MAP_PROVIDER);
+const configuredHereBrowserApiKey = publicEnvValue(
+  process.env.NEXT_PUBLIC_HERE_API_KEY
+    || process.env.HERE_BROWSER_API_KEY
+    || process.env.HERE_API_KEY
+);
+const configuredSatelliteMapProvider = satelliteMapProvider(
+  process.env.SATELLITE_MAP_PROVIDER,
+  Boolean(configuredHereBrowserApiKey),
+);
 
 export const env = {
   port: Number(process.env.PORT || 4173),
@@ -26,11 +37,7 @@ export const env = {
   samsaraSyncOnStartup: process.env.SAMSARA_SYNC_ON_STARTUP !== "false",
   satelliteMapProvider: configuredSatelliteMapProvider,
   googleMapsBrowserApiKey: publicEnvValue(process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY),
-  hereBrowserApiKey: publicEnvValue(
-    process.env.NEXT_PUBLIC_HERE_API_KEY
-      || process.env.HERE_BROWSER_API_KEY
-      || (configuredSatelliteMapProvider === "here" ? process.env.HERE_API_KEY : "")
-  ),
+  hereBrowserApiKey: configuredHereBrowserApiKey,
 };
 
 export function requireDatabaseUrl() {

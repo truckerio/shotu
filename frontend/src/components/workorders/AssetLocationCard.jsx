@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Pin01 } from "@untitledui/icons";
-import { buildHereLocationUrl, buildSatelliteTileLayer } from "../../lib/maps/satellite-tiles.js";
+import { buildHereLocationUrl, buildSatelliteTileLayer, MAX_SATELLITE_ZOOM } from "../../lib/maps/satellite-tiles.js";
 import { createMapVisibilityController } from "../../lib/maps/map-visibility-controller.js";
 import { MAP_SURFACE_TRANSITION_MS } from "../../lib/ui-timings.js";
 import "./asset-location-card.css";
@@ -8,12 +8,18 @@ import "./asset-location-card.css";
 const DESKTOP_MAP_QUERY = "(min-width: 701px)";
 const ASSET_LOCATION_ZOOM = 19;
 const MIN_ASSET_LOCATION_ZOOM = 17;
-const MAX_ASSET_LOCATION_ZOOM = 20;
+const MAX_ASSET_LOCATION_ZOOM = MAX_SATELLITE_ZOOM;
 
 function isDesktopMapViewport() {
   return typeof window !== "undefined"
     && typeof window.matchMedia === "function"
     && window.matchMedia(DESKTOP_MAP_QUERY).matches;
+}
+
+function browserPixelRatio() {
+  return typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio)
+    ? Math.min(Math.max(window.devicePixelRatio, 1), 2)
+    : 1;
 }
 
 export function getVehicleLocation(vehicle) {
@@ -44,6 +50,7 @@ export function AssetLocationCard({
   const [mapContentMounted, setMapContentMounted] = useState(false);
   const [desktopMapOpen, setDesktopMapOpen] = useState(isDesktopMapViewport);
   const [mapZoom, setMapZoom] = useState(ASSET_LOCATION_ZOOM);
+  const [mapPixelRatio, setMapPixelRatio] = useState(browserPixelRatio);
   if (!mapControllerRef.current) {
     mapControllerRef.current = createMapVisibilityController({
       onMount: () => setMapContentMounted(true),
@@ -56,7 +63,7 @@ export function AssetLocationCard({
   const mapVisible = Boolean(location) && (desktopMapOpen || mapOpen || mapPinned);
   const mapContentVisible = desktopMapOpen || mapContentMounted;
   const tileLayer = mapContentVisible && location
-    ? buildSatelliteTileLayer(location, mapsConfig, mapZoom)
+    ? buildSatelliteTileLayer(location, mapsConfig, mapZoom, { pixelRatio: mapPixelRatio })
     : null;
   const locationCopy = (
     <>
@@ -89,6 +96,13 @@ export function AssetLocationCard({
     syncDesktopMap();
     mediaQuery.addEventListener?.("change", syncDesktopMap);
     return () => mediaQuery.removeEventListener?.("change", syncDesktopMap);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const syncPixelRatio = () => setMapPixelRatio(browserPixelRatio());
+    window.addEventListener("resize", syncPixelRatio);
+    return () => window.removeEventListener("resize", syncPixelRatio);
   }, []);
 
   useEffect(() => {
@@ -182,7 +196,9 @@ export function AssetLocationCard({
                       key={tile.key}
                       src={tile.src}
                       alt=""
-                      loading="lazy"
+                      decoding="async"
+                      fetchPriority={tile.priority ? "high" : "auto"}
+                      loading="eager"
                       onError={(event) => {
                         if (!tile.fallbackSrc || event.currentTarget.dataset.fallbackApplied) return;
                         event.currentTarget.dataset.fallbackApplied = "true";

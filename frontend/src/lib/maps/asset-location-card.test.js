@@ -27,14 +27,18 @@ test("shared asset map and HERE handoff use precise asset-level zoom", () => {
   assert.match(component, /const ASSET_LOCATION_ZOOM = 19/);
   assert.match(
     component,
-    /buildSatelliteTileLayer\(location, mapsConfig, mapZoom\)/,
+    /buildSatelliteTileLayer\(location, mapsConfig, mapZoom, \{ pixelRatio: mapPixelRatio \}\)/,
   );
   assert.match(component, /buildHereLocationUrl\(location, mapZoom\)/);
+  assert.match(component, /browserPixelRatio/);
+  assert.match(component, /loading="eager"/);
+  assert.match(component, /fetchPriority=\{tile\.priority \? "high" : "auto"\}/);
 });
 
 test("shared map exposes bounded zoom controls", () => {
   assert.match(component, /const MIN_ASSET_LOCATION_ZOOM = 17/);
-  assert.match(component, /const MAX_ASSET_LOCATION_ZOOM = 20/);
+  assert.match(component, /MAX_SATELLITE_ZOOM/);
+  assert.doesNotMatch(component, /const MAX_ASSET_LOCATION_ZOOM = 20/);
   assert.match(component, /aria-label="Zoom in"/);
   assert.match(component, /aria-label="Zoom out"/);
   assert.match(componentCss, /@media \(max-width: 700px\)[\s\S]*?height: 44px;[\s\S]*?width: 44px;/);

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildHereLocationUrl,
   buildSatelliteTileLayer,
+  MAX_SATELLITE_ZOOM,
   resolveSatelliteProvider,
 } from "./satellite-tiles.js";
 
@@ -19,6 +20,31 @@ test("HERE is primary when its public browser key is configured", () => {
   assert.equal(layer.tiles.length, 15);
   assert.match(layer.tiles[0].src, /^https:\/\/maps\.hereapi\.com\//);
   assert.match(layer.tiles[0].fallbackSrc, /^https:\/\/server\.arcgisonline\.com\//);
+});
+
+test("HERE satellite tiles use higher-density images on Retina screens", () => {
+  const layer = buildSatelliteTileLayer(
+    { latitude: 34.0522, longitude: -118.2437 },
+    { satelliteProvider: "here", hereBrowserApiKey: "browser-key" },
+    19,
+    { pixelRatio: 2 },
+  );
+
+  assert.equal(layer.tiles.every((tile) => tile.src.includes("size=512")), true);
+  assert.equal(layer.tiles.every((tile) => tile.fallbackSrc.includes("arcgisonline.com")), true);
+  assert.equal(layer.tiles.filter((tile) => tile.priority).length, 1);
+});
+
+test("ArcGIS fallback remains standard provider tiles", () => {
+  const layer = buildSatelliteTileLayer(
+    { latitude: 34.0522, longitude: -118.2437 },
+    { satelliteProvider: "arcgis" },
+    19,
+    { pixelRatio: 2 },
+  );
+
+  assert.equal(layer.tiles.every((tile) => tile.src.includes("arcgisonline.com")), true);
+  assert.equal(layer.tiles.every((tile) => !tile.src.includes("size=512")), true);
 });
 
 test("ArcGIS is used when HERE is unavailable", () => {
@@ -75,4 +101,21 @@ test("asset-level zoom is preserved across HERE and fallback tile URLs", () => {
   assert.equal(hereLayer.tiles.every((tile) => tile.key.startsWith("19-")), true);
   assert.equal(hereLayer.tiles.every((tile) => tile.src.includes("/mc/19/")), true);
   assert.equal(hereLayer.tiles.every((tile) => tile.fallbackSrc.includes("/tile/19/")), true);
+});
+
+test("embedded satellite maps cap at provider-safe zoom", () => {
+  assert.equal(MAX_SATELLITE_ZOOM, 19);
+
+  const layer = buildSatelliteTileLayer(
+    { latitude: 34.0522, longitude: -118.2437 },
+    { satelliteProvider: "arcgis" },
+    20,
+  );
+
+  assert.equal(layer.tiles.every((tile) => tile.key.startsWith("19-")), true);
+  assert.equal(layer.tiles.every((tile) => tile.src.includes("/tile/19/")), true);
+  assert.equal(
+    buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }, 20),
+    "https://share.here.com/l/34.012345,-117.654321?z=19&t=satellite&p=yes&ref=shotu",
+  );
 });

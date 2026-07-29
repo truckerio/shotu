@@ -3,7 +3,7 @@ import test from "node:test";
 import { publicMapsConfig } from "./config.routes.js";
 import { hasValidGpsCoordinates } from "../services/vehicles.service.js";
 
-test("map config defaults to ArcGIS and does not expose an unused HERE key", () => {
+test("map config can force ArcGIS and does not expose an unused HERE key", () => {
   assert.deepEqual(
     publicMapsConfig({
       satelliteMapProvider: "arcgis",
@@ -19,7 +19,7 @@ test("map config defaults to ArcGIS and does not expose an unused HERE key", () 
   );
 });
 
-test("map config selects HERE only after explicit opt-in with a browser key", () => {
+test("map config selects HERE when a browser key is configured", () => {
   assert.deepEqual(
     publicMapsConfig({
       satelliteMapProvider: "here",
@@ -31,6 +31,11 @@ test("map config selects HERE only after explicit opt-in with a browser key", ()
       hereBrowserApiKey: "browser-restricted-key",
       googleMapsBrowserApiKey: "",
     }
+  );
+
+  assert.equal(
+    publicMapsConfig({ satelliteMapProvider: "", hereBrowserApiKey: "browser-restricted-key" }).satelliteProvider,
+    "here"
   );
 
   assert.equal(

@@ -1,5 +1,8 @@
 const MAX_MERCATOR_LATITUDE = 85.05112878;
 const DEFAULT_ZOOM = 17;
+export const MAX_SATELLITE_ZOOM = 19;
+const STANDARD_TILE_SIZE = 256;
+const RETINA_TILE_SIZE = 512;
 const GRID_COLUMNS = 5;
 const GRID_ROWS = 3;
 const CENTER_COLUMN = Math.floor(GRID_COLUMNS / 2);
@@ -30,8 +33,12 @@ function arcgisTileUrl(zoom, x, y) {
   return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
 }
 
-function hereTileUrl(apiKey, zoom, x, y) {
-  return `https://maps.hereapi.com/v3/base/mc/${zoom}/${x}/${y}/jpeg?style=satellite.day&size=256&apiKey=${encodeURIComponent(apiKey)}`;
+function satelliteTileSize(pixelRatio = 1) {
+  return Number(pixelRatio) >= 1.5 ? RETINA_TILE_SIZE : STANDARD_TILE_SIZE;
+}
+
+function hereTileUrl(apiKey, zoom, x, y, tileSize = STANDARD_TILE_SIZE) {
+  return `https://maps.hereapi.com/v3/base/mc/${zoom}/${x}/${y}/jpeg?style=satellite.day&size=${tileSize}&apiKey=${encodeURIComponent(apiKey)}`;
 }
 
 export function resolveSatelliteProvider(mapsConfig = {}) {
@@ -45,16 +52,16 @@ export function buildHereLocationUrl(location, zoom = DEFAULT_ZOOM) {
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
-  const safeZoom = clamp(Math.round(Number(zoom) || DEFAULT_ZOOM), 0, 20);
+  const safeZoom = clamp(Math.round(Number(zoom) || DEFAULT_ZOOM), 0, MAX_SATELLITE_ZOOM);
   return `https://share.here.com/l/${latitude},${longitude}?z=${safeZoom}&t=satellite&p=yes&ref=shotu`;
 }
 
-export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAULT_ZOOM) {
+export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAULT_ZOOM, options = {}) {
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
 
-  const safeZoom = clamp(Math.round(Number(zoom) || DEFAULT_ZOOM), 1, 20);
+  const safeZoom = clamp(Math.round(Number(zoom) || DEFAULT_ZOOM), 1, MAX_SATELLITE_ZOOM);
   const projected = projectToTile(latitude, longitude, safeZoom);
   const centerTileX = Math.floor(projected.x);
   const centerTileY = Math.floor(projected.y);
@@ -62,6 +69,7 @@ export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAUL
   const fractionY = projected.y - centerTileY;
   const provider = resolveSatelliteProvider(mapsConfig);
   const hereKey = provider === "here" ? mapsConfig.hereBrowserApiKey : "";
+  const tileSize = satelliteTileSize(options.pixelRatio);
   const tiles = [];
 
   for (let row = 0; row < GRID_ROWS; row += 1) {
@@ -71,8 +79,9 @@ export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAUL
       const fallbackSrc = arcgisTileUrl(safeZoom, x, y);
       tiles.push({
         key: `${safeZoom}-${x}-${y}`,
-        src: hereKey ? hereTileUrl(hereKey, safeZoom, x, y) : fallbackSrc,
+        src: hereKey ? hereTileUrl(hereKey, safeZoom, x, y, tileSize) : fallbackSrc,
         fallbackSrc: hereKey ? fallbackSrc : "",
+        priority: row === CENTER_ROW && column === CENTER_COLUMN,
       });
     }
   }

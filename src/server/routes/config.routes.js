@@ -1,7 +1,8 @@
 import { env } from "../config/env.js";
 
 export function publicMapsConfig(config = env) {
-  const satelliteProvider = config.satelliteMapProvider === "here" && config.hereBrowserApiKey
+  const wantsArcgis = config.satelliteMapProvider === "arcgis";
+  const satelliteProvider = !wantsArcgis && config.hereBrowserApiKey
     ? "here"
     : "arcgis";
   return {

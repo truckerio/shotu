@@ -5,8 +5,8 @@
 ```json
 {
   "maps": {
-    "satelliteProvider": "arcgis",
-    "hereBrowserApiKey": "",
+    "satelliteProvider": "here",
+    "hereBrowserApiKey": "browser-restricted-key",
     "googleMapsBrowserApiKey": ""
   }
 }
@@ -14,15 +14,17 @@
 
 ## Provider selection
 
-- `SATELLITE_MAP_PROVIDER` defaults to `arcgis`.
-- Set `SATELLITE_MAP_PROVIDER=here` only after the HERE Raster Tile API is enabled.
-- HERE is selected only when a browser key is also configured. Otherwise the
-  API reports `arcgis`.
-- The frontend may fall back from a failed HERE tile to ArcGIS World Imagery.
+- HERE is selected when a browser-safe HERE key is configured.
+- Set `SATELLITE_MAP_PROVIDER=arcgis` only when HERE must be disabled.
+- If no browser key is configured, the API reports `arcgis`.
+- The frontend falls back from a failed HERE tile to ArcGIS World Imagery.
+- Visible map tiles load eagerly and prioritize the center GPS tile for faster
+  first paint.
 
 Browser keys are read from `NEXT_PUBLIC_HERE_API_KEY` or
-`HERE_BROWSER_API_KEY`. The legacy `HERE_API_KEY` is exposed only when HERE is
-explicitly selected. Google configuration is read only from
+`HERE_BROWSER_API_KEY`. The legacy `HERE_API_KEY` is supported for existing
+deployments but should be treated as a browser-exposed key when used here.
+Google configuration is read only from
 `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY`.
 
 Do not put server integration credentials in browser-key variables. Samsara
