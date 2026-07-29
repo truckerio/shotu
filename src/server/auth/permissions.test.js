@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { requireCompanyAccess, requireLocationAccess, requirePermission } from "./authorize.js";
 import { PERMISSION, permissionsForRole, roleHasPermission } from "./permissions.js";
+import { USER_ROLES } from "./roles.js";
 
 test("role permission matrix keeps domain capabilities separate", () => {
+  for (const role of USER_ROLES) {
+    assert.equal(roleHasPermission(role, PERMISSION.AUTHENTICATED), true);
+  }
   assert.equal(roleHasPermission("mechanic", PERMISSION.WORKORDER_MECHANIC), true);
   assert.equal(roleHasPermission("mechanic", PERMISSION.AUTHENTICATED), true);
   assert.equal(roleHasPermission("office", PERMISSION.WORKORDER_CHAT_READ), true);

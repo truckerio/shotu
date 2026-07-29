@@ -42,6 +42,9 @@ Repositories are grouped by ownership, not by screen. Admin, office, and mechani
 - `workorder_access_events` is append-only. Explicit detail opens are recorded there; background polling must not create access events.
 - User deletion is credential deletion plus a `user_profiles.deleted_at` tombstone. Do not delete operational profiles referenced by history.
 - Admin account changes are append-only in `admin_user_events`; password hashes and session invalidation remain Better Auth responsibilities.
+- Invitation roles and company membership roles share the canonical
+  `auth/roles.js` vocabulary. Any role added there requires a forward migration
+  for `user_invitations_role_check` in the same release.
 - Workorder drafts never reserve serials. `owner_user_id` is the only current
   editor; admin takeover is explicit and every draft mutation is append-only in
   `workorder_draft_events`.
@@ -64,6 +67,7 @@ npm run verify
 ```
 
 `db:check` is read-only. It verifies migration parity, tenant ownership, location
-coverage, profile memberships, final contract columns, operational views, and tenant-safe indexes.
+coverage, profile memberships, invitation-role parity, final contract columns,
+operational views, and tenant-safe indexes.
 
 `db:create-admin` is idempotent and uses Better Auth to create the credential. It links the login to the operational admin profile, company membership, and location membership. Do not insert password hashes with SQL.

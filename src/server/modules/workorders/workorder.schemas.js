@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { userRoleSchema } from "../../auth/roles.js";
 import { DATABASE_UUID_PATTERN, DEFAULT_COMPANY_ID } from "../../db/company.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 import {
@@ -9,7 +10,7 @@ import {
 } from "../../../../shared/units-of-measure.js";
 import { uomCodeSchema, validateQuantityUnit } from "../parts/quantity-uom.js";
 
-export const userRoleSchema = z.enum(["mechanic", "office", "surveillance", "admin"]);
+export { userRoleSchema };
 
 const customerCompanyNameSchema = z.string().trim().max(300, "Customer company must be 300 characters or less.");
 

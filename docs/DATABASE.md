@@ -59,6 +59,11 @@ Application tables own operating identity:
 
 `user_profiles` never stores role or location. Request context resolves both from active memberships. Browser actor IDs are never trusted.
 
+Invitation and membership roles use the shared server vocabulary in
+`src/server/auth/roles.js`. PostgreSQL enforces the same values through
+`user_invitations_role_check`, and `npm run db:check` verifies that production
+has not drifted from that contract.
+
 ## Tenant Rules
 
 - Tenant foreign key name: `company_id uuid`.

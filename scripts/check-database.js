@@ -1,4 +1,5 @@
 import { readdir } from "node:fs/promises";
+import { USER_ROLES } from "../src/server/auth/roles.js";
 import { closePool, getPool } from "../src/server/db/pool.js";
 
 const migrationDirectory = new URL("../src/server/db/migrations/", import.meta.url);
@@ -119,7 +120,14 @@ async function checkDatabase() {
         ) names
         where object_name like '%company_uuid%'
            or object_name like '%app_users%'
-      ) as legacy_contract_names
+      ) as legacy_contract_names,
+      (
+        select coalesce(string_agg(pg_get_constraintdef(oid), ' '), '')
+        from pg_constraint
+        where conrelid = 'user_invitations'::regclass
+          and conname = 'user_invitations_role_check'
+          and contype = 'c'
+      ) as invitation_role_constraint
   `);
   const report = {
     nodeVersion: process.version,
@@ -142,6 +150,9 @@ async function checkDatabase() {
   if (report.legacy_contract_columns) failures.push("legacy database contract columns remain");
   if (report.global_tenant_indexes) failures.push("global integration or asset uniqueness remains");
   if (report.legacy_contract_names) failures.push("legacy constraint or index names remain");
+  if (!USER_ROLES.every((role) => report.invitation_role_constraint.includes(`'${role}'`))) {
+    failures.push("invitation roles do not match the authenticated role contract");
+  }
 
   console.log(JSON.stringify({ healthy: failures.length === 0, ...report, failures }));
   if (failures.length) process.exitCode = 1;
