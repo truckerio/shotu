@@ -4,13 +4,17 @@ import test from "node:test";
 
 const workspaceUrl = new URL("../features/admin/AdminWorkspace.jsx", import.meta.url);
 
-test("admin user management sends recovery email without collecting passwords", async () => {
+test("admin directly sets mechanic passwords while other roles keep email recovery", async () => {
   const source = await readFile(workspaceUrl, "utf8");
 
+  assert.match(source, /user\.role === "mechanic" \? "password" : "password-reset-email"/);
+  assert.match(source, /Set mechanic password/);
+  assert.match(source, /No email is required/);
+  assert.match(source, /admin-new-password/);
+  assert.match(source, /admin-confirm-password/);
+  assert.match(source, /`\$\{base\}\/password`/);
   assert.match(source, /Send password reset/);
   assert.match(source, /password-reset-email/);
   assert.match(source, /Send reset email/);
   assert.match(source, /userAction\.user\.login_email \|\| userAction\.user\.email/);
-  assert.doesNotMatch(source, /admin-new-password/);
-  assert.doesNotMatch(source, /admin-confirm-password/);
 });

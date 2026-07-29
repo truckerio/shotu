@@ -213,22 +213,36 @@ export async function changeAdminUserStatus(context, actor, locationId, userId, 
   }
 }
 
-export async function resetAdminUserPassword(context, actor, locationId, userId, input, headers) {
+export async function resetAdminUserPassword(
+  context,
+  actor,
+  locationId,
+  userId,
+  input,
+  headers,
+  dependencies = {},
+) {
   if (actor.id === userId) {
     throw invalidRequest("You cannot reset your own password from user management.");
   }
-  const { target } = await authorizedManagedUser(context, locationId, userId);
+  const authorizeTarget = dependencies.authorizeTarget || authorizedManagedUser;
+  const { target } = await authorizeTarget(context, locationId, userId);
   requireLogin(target);
-  await auth.api.setUserPassword({
+  if (target.role !== "mechanic") {
+    throw invalidRequest("Direct password reset is available only for mechanics.");
+  }
+  const authApi = dependencies.authApi || auth.api;
+  const recordEvent = dependencies.recordEvent || recordAdminUserEvent;
+  await authApi.setUserPassword({
     body: { userId: target.auth_user_id, newPassword: input.password },
     headers,
   });
-  await auth.api.revokeUserSessions({
+  await authApi.revokeUserSessions({
     body: { userId: target.auth_user_id },
     headers,
   });
   for (const companyId of managedCompanyIds(target)) {
-    await recordAdminUserEvent({
+    await recordEvent({
       companyId,
       actorId: actor.id,
       targetUserId: userId,

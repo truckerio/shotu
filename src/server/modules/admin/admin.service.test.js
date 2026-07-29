@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createInvitationAuthUser,
   requestAdminUserPasswordReset,
+  resetAdminUserPassword,
 } from "./admin.service.js";
 
 const COMPANY_ID = "8f84d529-a70a-4ea4-9c93-70ff7336a756";
@@ -141,6 +142,78 @@ test("admin password recovery refuses inactive users before sending email", asyn
     /Activate this user/,
   );
   assert.equal(called, false);
+});
+
+test("admin directly resets a mechanic password, revokes sessions, and audits the action", async () => {
+  const calls = [];
+  let event;
+  const result = await resetAdminUserPassword(
+    { companyIds: new Set([COMPANY_ID]) },
+    { id: "admin-1" },
+    "location-1",
+    "mechanic-1",
+    { password: "MechanicPassword@1234" },
+    new Headers({ cookie: "session=test" }),
+    {
+      authorizeTarget: async () => ({
+        target: {
+          id: "mechanic-1",
+          role: "mechanic",
+          auth_user_id: "auth-mechanic-1",
+          company_ids: [COMPANY_ID],
+        },
+      }),
+      authApi: {
+        async setUserPassword(input) {
+          calls.push(["password", input]);
+        },
+        async revokeUserSessions(input) {
+          calls.push(["sessions", input]);
+        },
+      },
+      async recordEvent(input) {
+        event = input;
+      },
+    },
+  );
+
+  assert.deepEqual(result, { reset: true });
+  assert.equal(calls[0][0], "password");
+  assert.equal(calls[0][1].body.newPassword, "MechanicPassword@1234");
+  assert.equal(calls[1][0], "sessions");
+  assert.equal(event.action, "password_reset");
+  assert.deepEqual(event.details, { sessionsRevoked: true });
+});
+
+test("direct admin password reset refuses non-mechanic users", async () => {
+  let authCalled = false;
+  await assert.rejects(
+    resetAdminUserPassword(
+      { companyIds: new Set([COMPANY_ID]) },
+      { id: "admin-1" },
+      "location-1",
+      "office-1",
+      { password: "OfficePassword@1234" },
+      new Headers(),
+      {
+        authorizeTarget: async () => ({
+          target: {
+            id: "office-1",
+            role: "office",
+            auth_user_id: "auth-office-1",
+            company_ids: [COMPANY_ID],
+          },
+        }),
+        authApi: {
+          async setUserPassword() {
+            authCalled = true;
+          },
+        },
+      },
+    ),
+    /only for mechanics/,
+  );
+  assert.equal(authCalled, false);
 });
 
 test("invitation acceptance links profiles without conflict-index dependencies", async () => {
