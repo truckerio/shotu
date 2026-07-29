@@ -48,12 +48,12 @@ export function resolveSatelliteProvider(mapsConfig = {}) {
   return mapsConfig.hereBrowserApiKey ? "here" : "arcgis";
 }
 
-export function buildHereLocationUrl(location, zoom = DEFAULT_ZOOM) {
+export function buildExternalMapUrl(location) {
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
-  const safeZoom = clamp(Math.round(Number(zoom) || DEFAULT_ZOOM), 0, MAX_SATELLITE_ZOOM);
-  return `https://wego.here.com/?map=${latitude},${longitude},${safeZoom},satellite`;
+  const query = encodeURIComponent(`${latitude},${longitude}`);
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
 }
 
 export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAULT_ZOOM, options = {}) {

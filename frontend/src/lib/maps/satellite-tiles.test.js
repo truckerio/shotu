@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildHereLocationUrl,
+  buildExternalMapUrl,
   buildSatelliteTileLayer,
   MAX_SATELLITE_ZOOM,
   resolveSatelliteProvider,
@@ -80,16 +80,16 @@ test("invalid coordinates do not produce a tile layer", () => {
   assert.equal(buildSatelliteTileLayer({ latitude: "missing", longitude: 0 }), null);
 });
 
-test("HERE location links preserve exact coordinates and satellite view", () => {
+test("external location links preserve exact coordinates with a visible map marker", () => {
   assert.equal(
-    buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }),
-    "https://wego.here.com/?map=34.012345,-117.654321,17,satellite",
+    buildExternalMapUrl({ latitude: 34.012345, longitude: -117.654321 }),
+    "https://www.google.com/maps/search/?api=1&query=34.012345%2C-117.654321",
   );
   assert.equal(
-    buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }, 19),
-    "https://wego.here.com/?map=34.012345,-117.654321,19,satellite",
+    buildExternalMapUrl({ latitude: 34.012345, longitude: -117.654321 }),
+    "https://www.google.com/maps/search/?api=1&query=34.012345%2C-117.654321",
   );
-  assert.equal(buildHereLocationUrl({ latitude: "missing", longitude: -117 }), "");
+  assert.equal(buildExternalMapUrl({ latitude: "missing", longitude: -117 }), "");
 });
 
 test("asset-level zoom is preserved across HERE and fallback tile URLs", () => {
@@ -114,8 +114,4 @@ test("embedded satellite maps cap at provider-safe zoom", () => {
 
   assert.equal(layer.tiles.every((tile) => tile.key.startsWith("19-")), true);
   assert.equal(layer.tiles.every((tile) => tile.src.includes("/tile/19/")), true);
-  assert.equal(
-    buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }, 20),
-    "https://wego.here.com/?map=34.012345,-117.654321,19,satellite",
-  );
 });
