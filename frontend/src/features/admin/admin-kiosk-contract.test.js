@@ -22,6 +22,8 @@ test("Admin kiosk panel issues temporary mechanic PIN through location-scoped en
   assert.match(source, /\/users\/\$\{encodeURIComponent\(selectedMechanicId\)\}\/kiosk-pin`/);
   assert.match(source, /JSON\.stringify\(\{ pin \}\)/);
   assert.match(source, /Temporary PIN/);
+  assert.match(source, /DEFAULT_TEMPORARY_KIOSK_PIN = "0000"/);
+  assert.match(source, /useState\(DEFAULT_TEMPORARY_KIOSK_PIN\)/);
   assert.match(source, /minLength="4"/);
   assert.match(source, /pattern="\[0-9\]\{4,\}"/);
   assert.match(source, /admin-kiosk-pin-error/);

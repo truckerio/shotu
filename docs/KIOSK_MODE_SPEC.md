@@ -43,7 +43,7 @@ Kiosk mode is additive. Existing standard login MUST remain available and unchan
 
 - NFR-1 Security: Device credential MUST contain at least 256 bits of entropy; database MUST store SHA-256 hash only.
 - NFR-2 Security: Device cookie MUST be HttpOnly, SameSite=Strict, path `/`, and Secure in production.
-- NFR-3 Security: PIN MUST contain at least four digits without a fixed maximum length in the UI, reject common/repeated/sequential values, and use Better Auth scrypt password hashing.
+- NFR-3 Security: PIN MUST contain at least four digits without a fixed maximum length in the UI and use Better Auth scrypt password hashing. Simple values such as `0000` MAY be issued as temporary onboarding PINs because first unlock requires a different replacement PIN.
 - NFR-4 Security: Five failures within fifteen minutes MUST lock mechanic-device pair for fifteen minutes.
 - NFR-5 Security: Unlock endpoint MUST also use process-level IP/device throttling and same-origin mutation protection.
 - NFR-6 Security: Revocation MUST invalidate subsequent roster and unlock calls immediately.
@@ -70,7 +70,7 @@ Given registered device, when Admin revokes it, then next kiosk context request 
 Given location with eligible and ineligible users, when roster loads, then only active assigned mechanics appear with minimal fields. References FR-5, FR-6, FR-20, and NFR-7.
 
 ### AC-5: Temporary PIN (FR-7, FR-8)
-Given active mechanic, when Admin issues temporary PIN, then weak PINs fail, valid PIN stores only scrypt hash, prior PIN stops working, and first unlock requires replacement. References FR-7, FR-8, and NFR-3.
+Given active mechanic, when Admin issues temporary PIN, then `0000` and other numeric values of at least four digits are accepted, only a scrypt hash is stored, the prior PIN stops working, and first unlock requires a different replacement PIN. References FR-7, FR-8, and NFR-3.
 
 ### AC-6: Mechanic session (FR-9, FR-10, FR-11, FR-12)
 Given registered device and eligible mechanic with valid PIN, when unlock succeeds, then Better Auth session resolves through `/api/me` as mechanic and existing mechanic workspace renders. References FR-9, FR-10, FR-11, and FR-12.
@@ -95,6 +95,14 @@ Given local demo database, when demo kiosk setup runs, then browser can be regis
 
 ### AC-13: Regression safety
 Given existing standard users, when full verification runs, then prior auth, Admin, role routing, and workorder tests remain passing. References NFR-8.
+
+## Operations
+
+- Admin PIN issue fields default to `0000`; Admin MAY replace that value before issuing.
+- Every Admin-issued PIN remains temporary. First successful unlock requires the mechanic to choose a different PIN.
+- `npm run kiosk:pins:reset` is dry-run by default and reports only the eligible active-mechanic count.
+- Production reset requires both `--apply` and `--confirm=RESET_ALL_ACTIVE_MECHANIC_KIOSK_PINS`.
+- The bulk reset creates a unique scrypt hash for each mechanic, clears prior kiosk unlock failures, marks every credential for first-use replacement, and writes one audit event per mechanic. It never prints PINs or hashes.
 
 ## Edge Cases
 

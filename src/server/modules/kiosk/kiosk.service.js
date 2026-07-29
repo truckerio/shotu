@@ -5,11 +5,13 @@ import {
   createKioskDevice,
   getEligibleMechanicForKioskPin,
   getRegisteredKioskContext,
+  listActiveMechanicsForKioskPinReset,
   listKioskDevices,
   prepareKioskUnlock,
   recordKioskSessionEvent,
   revokeKioskDevice,
   saveMechanicKioskPin,
+  saveTemporaryKioskPins,
 } from "../../db/repositories/kiosk.repo.js";
 import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import { KioskPinChangeRequiredError, KioskUnlockError } from "./kiosk-errors.js";
@@ -74,6 +76,21 @@ export async function issueMechanicKioskPin({
     pinHash,
     actorUserId,
   });
+}
+
+export async function resetActiveMechanicTemporaryPins(pin) {
+  const mechanics = await listActiveMechanicsForKioskPinReset();
+  const credentials = [];
+  for (const mechanic of mechanics) {
+    credentials.push({
+      ...mechanic,
+      pinHash: await hashPassword(pin),
+    });
+  }
+  return {
+    candidateCount: mechanics.length,
+    ...(await saveTemporaryKioskPins(credentials)),
+  };
 }
 
 export async function beginKioskUnlock({

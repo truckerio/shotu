@@ -25,7 +25,7 @@ test("kiosk idle policy covers required activity and two-minute lock", () => {
 });
 
 test("unlock errors do not leak credential or lockout details", () => {
-  assert.equal(kioskUnlockError(400), "Use at least four digits and avoid common patterns.");
+  assert.equal(kioskUnlockError(400), "Use at least four digits.");
   assert.equal(kioskUnlockError(401), "Unable to unlock. Check the PIN and try again.");
   assert.equal(kioskUnlockError(423), "Unable to unlock right now. Try again later.");
   assert.equal(kioskUnlockError(429), "Unable to unlock right now. Try again later.");

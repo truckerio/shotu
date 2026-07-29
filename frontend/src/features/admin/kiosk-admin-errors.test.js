@@ -3,10 +3,10 @@ import test from "node:test";
 import { kioskPinFieldError } from "./kiosk-admin-errors.js";
 
 test("extracts a PIN validation message from the serialized API error shape", () => {
-  const error = new Error('[{"code":"custom","path":["pin"],"message":"Choose a less common PIN."}]');
+  const error = new Error('[{"code":"invalid_format","path":["pin"],"message":"PIN must contain at least four digits."}]');
   error.details = { error: error.message };
 
-  assert.equal(kioskPinFieldError(error), "Choose a less common PIN.");
+  assert.equal(kioskPinFieldError(error), "PIN must contain at least four digits.");
 });
 
 test("extracts a PIN validation message from structured API issues", () => {

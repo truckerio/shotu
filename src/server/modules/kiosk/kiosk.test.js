@@ -7,7 +7,7 @@ import {
   kioskDeviceTokenFromCookie,
 } from "./kiosk-cookie.js";
 import {
-  isStrongKioskPin,
+  isValidKioskPin,
   issueKioskPinSchema,
   kioskUnlockSchema,
 } from "./kiosk.schemas.js";
@@ -22,12 +22,13 @@ const repositoryUrl = new URL("../../db/repositories/kiosk.repo.js", import.meta
 const routeUrl = new URL("../../routes/kiosk.routes.js", import.meta.url);
 const adminRouteUrl = new URL("../../routes/admin.routes.js", import.meta.url);
 
-test("kiosk PIN contract accepts strong variable-length values with a four-digit minimum", () => {
-  assert.equal(isStrongKioskPin("7391"), true);
-  assert.equal(isStrongKioskPin("739185"), true);
-  assert.equal(isStrongKioskPin("7391852047"), true);
-  for (const pin of ["123", "abcdef", "1111", "1234", "123456", "654321", "1212"]) {
-    assert.equal(isStrongKioskPin(pin), false, pin);
+test("kiosk PIN contract accepts simple numeric values with a four-digit minimum", () => {
+  for (const pin of ["0000", "1111", "1234", "739185", "7391852047"]) {
+    assert.equal(isValidKioskPin(pin), true, pin);
+    assert.equal(issueKioskPinSchema.safeParse({ pin }).success, true, pin);
+  }
+  for (const pin of ["123", "abcdef", "12 34"]) {
+    assert.equal(isValidKioskPin(pin), false, pin);
     assert.equal(issueKioskPinSchema.safeParse({ pin }).success, false, pin);
   }
   assert.equal(kioskUnlockSchema.safeParse({

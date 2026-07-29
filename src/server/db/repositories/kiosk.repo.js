@@ -381,6 +381,110 @@ export async function saveMechanicKioskPin({
   }
 }
 
+export async function listActiveMechanicsForKioskPinReset() {
+  const result = await query(
+    `select distinct profile.id as user_id, company_membership.company_id
+       from user_profiles profile
+       join user_company_memberships company_membership
+         on company_membership.user_id = profile.id
+        and company_membership.role = 'mechanic'
+        and company_membership.active
+       join companies company
+         on company.id = company_membership.company_id
+        and company.active
+      where profile.active
+        and profile.deleted_at is null
+        and profile.auth_user_id is not null
+        and exists (
+          select 1
+            from user_location_memberships location_membership
+            join locations location
+              on location.id = location_membership.location_id
+             and location.company_id = location_membership.company_id
+             and location.active
+           where location_membership.user_id = profile.id
+             and location_membership.company_id = company_membership.company_id
+             and location_membership.active
+        )
+      order by company_membership.company_id, profile.id`,
+  );
+  return result.rows.map((row) => ({
+    userId: row.user_id,
+    companyId: row.company_id,
+  }));
+}
+
+export async function saveTemporaryKioskPins(credentials) {
+  if (!credentials.length) return { updatedCount: 0 };
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const payload = JSON.stringify(credentials.map((credential) => ({
+      user_id: credential.userId,
+      company_id: credential.companyId,
+      pin_hash: credential.pinHash,
+    })));
+    const updated = await client.query(
+      `with incoming as (
+         select *
+           from jsonb_to_recordset($1::jsonb)
+             as value(user_id uuid, company_id uuid, pin_hash text)
+       ),
+       existing as (
+         select credential.user_id, credential.company_id
+           from mechanic_kiosk_credentials credential
+           join incoming
+             on incoming.user_id = credential.user_id
+            and incoming.company_id = credential.company_id
+       ),
+       saved as (
+         insert into mechanic_kiosk_credentials (
+           user_id, company_id, pin_hash, requires_change, version, updated_by_user_id
+         )
+         select user_id, company_id, pin_hash, true, 1, null
+           from incoming
+         on conflict (user_id, company_id) do update
+           set pin_hash = excluded.pin_hash,
+               requires_change = true,
+               version = mechanic_kiosk_credentials.version + 1,
+               updated_by_user_id = null,
+               updated_at = now()
+         returning user_id, company_id
+       )
+       insert into kiosk_audit_events (
+         company_id, target_user_id, event_type, metadata
+       )
+       select saved.company_id,
+              saved.user_id,
+              case when existing.user_id is null then 'pin_issued' else 'pin_reset' end,
+              '{"source":"bulk_temporary_pin"}'::jsonb
+         from saved
+         left join existing
+           on existing.user_id = saved.user_id
+          and existing.company_id = saved.company_id
+       returning target_user_id`,
+      [payload],
+    );
+    await client.query(
+      `delete from kiosk_unlock_failures failure
+        using kiosk_devices device,
+              jsonb_to_recordset($1::jsonb)
+                as value(user_id uuid, company_id uuid, pin_hash text)
+        where failure.device_id = device.id
+          and failure.user_id = value.user_id
+          and device.company_id = value.company_id`,
+      [payload],
+    );
+    await client.query("commit");
+    return { updatedCount: updated.rowCount };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function prepareKioskUnlock({
   tokenHash,
   mechanicId,

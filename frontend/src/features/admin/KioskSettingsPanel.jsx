@@ -9,6 +9,8 @@ import {
 import { kioskPinFieldError } from "./kiosk-admin-errors.js";
 import "./kiosk-settings.css";
 
+const DEFAULT_TEMPORARY_KIOSK_PIN = "0000";
+
 function formatDeviceDate(value) {
   if (!value) return "Never";
   return new Intl.DateTimeFormat(undefined, {
@@ -21,9 +23,9 @@ export function KioskSettingsPanel({ locationId, users = [] }) {
   const [devices, setDevices] = useState([]);
   const [deviceName, setDeviceName] = useState("");
   const [selectedMechanicId, setSelectedMechanicId] = useState("");
-  const [pin, setPin] = useState("");
+  const [pin, setPin] = useState(DEFAULT_TEMPORARY_KIOSK_PIN);
   const [pinError, setPinError] = useState("");
-  const [confirmation, setConfirmation] = useState("");
+  const [confirmation, setConfirmation] = useState(DEFAULT_TEMPORARY_KIOSK_PIN);
   const [state, setState] = useState({
     busy: "",
     error: "",
@@ -45,9 +47,9 @@ export function KioskSettingsPanel({ locationId, users = [] }) {
 
   useEffect(() => {
     setSelectedMechanicId("");
-    setPin("");
+    setPin(DEFAULT_TEMPORARY_KIOSK_PIN);
     setPinError("");
-    setConfirmation("");
+    setConfirmation(DEFAULT_TEMPORARY_KIOSK_PIN);
     setState({ busy: "", error: "", loading: true, message: "" });
     loadDevices().catch((error) => {
       setState((current) => ({ ...current, error: error.message, loading: false }));
@@ -106,8 +108,8 @@ export function KioskSettingsPanel({ locationId, users = [] }) {
         method: "POST",
         body: JSON.stringify({ pin }),
       });
-      setPin("");
-      setConfirmation("");
+      setPin(DEFAULT_TEMPORARY_KIOSK_PIN);
+      setConfirmation(DEFAULT_TEMPORARY_KIOSK_PIN);
       setState((current) => ({
         ...current,
         busy: "",
