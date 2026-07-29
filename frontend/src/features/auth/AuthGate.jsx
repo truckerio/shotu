@@ -70,6 +70,7 @@ export function AuthGate({ children }) {
   }, []);
   const { warningSeconds } = useInactivitySession({
     enabled: Boolean(session?.user),
+    sessionKey: session?.session?.id,
     onTimeout: endInactiveSession,
   });
 

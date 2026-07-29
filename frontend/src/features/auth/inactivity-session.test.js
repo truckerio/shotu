@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getInactivityRemainingMs,
+  initialActivityTimestamp,
   parseInactivityMessage,
   transitionInactivityState,
 } from "./inactivity-session.js";
@@ -58,4 +59,27 @@ test("late cross-tab activity cannot revive an already timed-out session", () =>
 
   assert.equal(result.status, "expired");
   assert.equal(result.lastActivityAt, 10_000);
+});
+
+test("same session keeps its activity deadline after browser reopen", () => {
+  const stored = JSON.stringify({ sessionKey: "session-1", lastActivityAt: 10_000 });
+
+  assert.equal(initialActivityTimestamp(stored, "session-1", 150_000), 10_000);
+});
+
+test("new login session receives a fresh inactivity deadline", () => {
+  const stored = JSON.stringify({ sessionKey: "session-1", lastActivityAt: 10_000 });
+
+  assert.equal(initialActivityTimestamp(stored, "session-2", 150_000), 150_000);
+});
+
+test("cross-tab events retain session scope", () => {
+  assert.deepEqual(
+    parseInactivityMessage(JSON.stringify({
+      type: "activity",
+      at: 20_000,
+      sessionKey: "session-1",
+    })),
+    { type: "activity", at: 20_000, sessionKey: "session-1" },
+  );
 });
