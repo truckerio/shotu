@@ -1,6 +1,6 @@
 # Workorder Generator
 
-Multi-user workorder application for office, mechanic, surveillance, and admin workflows, with Samsara asset lookup and a physical batch-print generator.
+Multi-user workorder application for office, mechanic, surveillance, and admin workflows, with modular external integrations and a physical batch-print generator.
 
 PostgreSQL is the operational source of truth. Better Auth owns credentials and sessions; application tables own roles, company/location scope, workorders, and audit history.
 
@@ -9,12 +9,34 @@ PostgreSQL is the operational source of truth. Better Auth owns credentials and 
 ```text
 frontend/       React/Vite UI, split into app/components/features/lib
 shared/         Shared workorder HTML/PDF template renderer
-src/server/     Auth, API routes, domain modules, Postgres, Samsara, VIN decode
+src/server/     Auth, API routes, domain modules, Postgres, and provider integrations
 server.js       HTTP server plus legacy print/workorder routes
 templates/      Workorder background assets
 ```
 
 See `docs/ARCHITECTURE.md` and `src/server/db/README.md` before adding new tables or route families.
+
+## Integrations
+
+Start with [`docs/integrations/README.md`](docs/integrations/README.md) for the
+integration documentation index and [`src/server/integrations/README.md`](src/server/integrations/README.md)
+for code ownership, provider boundaries, and the checklist for adding another
+integration.
+
+```text
+docs/integrations/                 External developer documentation and contracts
+src/server/integrations/core/      Shared credentials, clients, jobs, and security
+src/server/integrations/odoo/      Versioned Odoo service API
+src/server/integrations/samsara/   Samsara connection and asset synchronization
+src/server/integrations/vin/       VIN provider adapter
+frontend/src/features/admin/integrations/
+                                   Admin integration management UI
+```
+
+Odoo developers should use the [Odoo API guide](docs/integrations/ODOO_INTEGRATION_API.md)
+and [OpenAPI contract](docs/integrations/ODOO_INTEGRATION_TARGET.openapi.yaml).
+The operational UI is **Admin → Settings → Integrations**, where authorized
+administrators manage provider connections and company-scoped machine clients.
 
 ## Run
 
@@ -50,6 +72,9 @@ SAMSARA_OAUTH_CLIENT_SECRET=your_samsara_oauth_app_secret
 SAMSARA_OAUTH_REDIRECT_URI=https://junior01.up.railway.app/api/integrations/samsara/oauth/callback
 SAMSARA_SYNC_INTERVAL_MINUTES=30
 SAMSARA_SYNC_ON_STARTUP=true
+INTEGRATION_ENCRYPTION_KEY=base64_encoded_32_byte_key
+INTEGRATION_ENCRYPTION_KEY_VERSION=v1
+INTEGRATION_JOB_POLL_MS=5000
 NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY=
 NEXT_PUBLIC_HERE_API_KEY=
 ```

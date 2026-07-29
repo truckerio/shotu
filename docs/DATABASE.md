@@ -39,6 +39,11 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Odoo handoff | `odoo_entry_status` | workorder repository and surveillance service |
 | Provider connection | `integration_accounts` | `repositories/integrations.repo.js` |
 | Provider sync history | `integration_sync_runs` | integration repository |
+| Machine identity | `integration_clients` | `integrations/core/integration-clients.repo.js` |
+| Encrypted provider secret | `integration_credentials` | `integrations/core/integration-credentials.repo.js` |
+| Durable provider work | `integration_jobs`, `integration_job_attempts` | `integrations/core/integration-platform.repo.js` |
+| External identity mapping | `integration_mappings` | integration platform repository |
+| Integration delivery | idempotency, webhook, outbox, and audit tables | integration platform repository |
 
 No role-specific screen owns a second workorder, user, asset, location, or template table.
 
@@ -111,8 +116,16 @@ imports that bypass application schemas.
 ## Integration Rules
 
 - All provider repository calls require company scope.
+- External systems authenticate as scoped `integration_clients`, never browser users.
+- Raw service tokens are returned once; only their SHA-256 hashes and lookup prefixes are stored.
+- Provider credentials are encrypted with AES-256-GCM and tenant/provider/account authenticated data.
 - OAuth state uniquely identifies one pending integration account.
 - Sync runs link to both company and integration account.
+- Provider jobs use PostgreSQL leases, attempts, retry scheduling, and dead-letter state.
+- Incoming mutations use persistent idempotency records.
+- External identities use `integration_mappings`; display labels are not durable identifiers.
+- Domain changes and provider delivery are decoupled through `integration_outbox_events`.
+- Webhook receipts are deduplicated before processing.
 - Environment Samsara token fallback is limited to the initial default company.
 - Tokens never enter browser responses, logs, support views, or screenshots.
 - Typed asset fields drive search and forms; raw payload JSON preserves provenance.
@@ -147,6 +160,10 @@ erDiagram
     COMPANIES ||--o{ PARTS_CATALOG : owns
     COMPANIES ||--o{ INVENTORY_ITEMS : owns
     COMPANIES ||--o{ INTEGRATION_ACCOUNTS : connects
+    COMPANIES ||--o{ INTEGRATION_CLIENTS : authorizes
+    COMPANIES ||--o{ INTEGRATION_JOBS : queues
+    COMPANIES ||--o{ INTEGRATION_MAPPINGS : maps
+    COMPANIES ||--o{ INTEGRATION_OUTBOX_EVENTS : publishes
 
     USER_PROFILES ||--o{ USER_COMPANY_MEMBERSHIPS : belongs
     USER_PROFILES ||--o{ USER_LOCATION_MEMBERSHIPS : assigned
@@ -180,6 +197,10 @@ erDiagram
     INVENTORY_ITEMS o|--o{ PART_ALLOCATIONS : fulfills
 
     INTEGRATION_ACCOUNTS ||--o{ INTEGRATION_SYNC_RUNS : produces
+    INTEGRATION_ACCOUNTS ||--o{ INTEGRATION_CREDENTIALS : protects
+    INTEGRATION_ACCOUNTS o|--o{ INTEGRATION_JOBS : schedules
+    INTEGRATION_CLIENTS ||--o{ INTEGRATION_IDEMPOTENCY_RECORDS : deduplicates
+    INTEGRATION_JOBS ||--o{ INTEGRATION_JOB_ATTEMPTS : retries
 ```
 
 ## Migration Rules

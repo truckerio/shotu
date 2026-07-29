@@ -19,6 +19,16 @@ import { handleWorkorderDraftsApi } from "./src/server/routes/workorder-drafts.r
 import { handleWorkorderPreferencesApi } from "./src/server/routes/workorder-preferences.routes.js";
 import { handleHealthRoute } from "./src/server/routes/health.routes.js";
 import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
+import { handleOdooIntegrationApi } from "./src/server/integrations/odoo/odoo.routes.js";
+import {
+  isServiceIntegrationPath,
+  resolveIntegrationRequestContext,
+} from "./src/server/integrations/core/integration-auth.js";
+import { IntegrationHttpError } from "./src/server/integrations/core/integration-errors.js";
+import {
+  startIntegrationWorker,
+  stopIntegrationWorker,
+} from "./src/server/integrations/core/integration-worker.js";
 import {
   startSamsaraAutoSync,
   stopSamsaraAutoSync,
@@ -674,6 +684,23 @@ async function handleApi(req, res) {
   if (await handleAuthApi(req, res, url)) return;
   if (await handleCurrentUserApi(req, res, url, { sendJson, resolveRequestContext })) return;
 
+  if (isServiceIntegrationPath(url.pathname)) {
+    const integrationContext = await resolveIntegrationRequestContext(req);
+    const handled = await handleOdooIntegrationApi(req, res, url, {
+      sendJson,
+      readBody,
+      integrationContext,
+    });
+    if (!handled) sendJson(res, 404, {
+      error: {
+        code: "INTEGRATION_ROUTE_NOT_FOUND",
+        message: "Integration route not found.",
+        requestId: req.requestId,
+      },
+    });
+    return;
+  }
+
   assertSameOriginMutation(req, {
     allowedOrigins: trustedOrigins,
     allowMissingOrigin: process.env.NODE_ENV !== "production",
@@ -819,6 +846,17 @@ const server = createServer(async (req, res) => {
       await serveStatic(req, res);
     }
   } catch (error) {
+    if (error instanceof IntegrationHttpError) {
+      sendJson(res, error.statusCode, {
+        error: {
+          code: error.code,
+          message: error.message,
+          requestId: req.requestId,
+          ...(error.details === undefined ? {} : { details: error.details }),
+        },
+      });
+      return;
+    }
     if (error instanceof AuthError) {
       sendJson(res, error.statusCode, { error: error.message, code: error.code });
       return;
@@ -846,10 +884,14 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, process.env.HOST || "0.0.0.0", () => {
   console.log(`Workorder generator running at http://localhost:${port}`);
+  startIntegrationWorker();
   startSamsaraAutoSync();
 });
 
 installGracefulShutdown(server, {
   closeDatabase: closePool,
-  stopBackgroundJobs: stopSamsaraAutoSync,
+  stopBackgroundJobs: () => {
+    stopSamsaraAutoSync();
+    stopIntegrationWorker();
+  },
 });

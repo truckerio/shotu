@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button.jsx";
 import { api } from "../../../lib/api.js";
 import { integrationProvider } from "./provider-registry.js";
 import { SamsaraIntegrationCard } from "./SamsaraIntegrationCard.jsx";
+import { IntegrationClientsCard } from "./IntegrationClientsCard.jsx";
 import "./integrations.css";
 
 const samsaraProvider = integrationProvider("samsara");
@@ -30,12 +31,18 @@ export function IntegrationsSettings() {
   const [action, setAction] = useState("");
   const [notice, setNotice] = useState(() => callbackResult() || { message: "", error: "" });
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [createdToken, setCreatedToken] = useState("");
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api("/api/integrations/samsara/status");
+      const [result, clientResult] = await Promise.all([
+        api("/api/integrations/samsara/status"),
+        api("/api/integrations/clients"),
+      ]);
       setStatus(result);
+      setClients(clientResult.clients || []);
     } catch (error) {
       setNotice((current) => ({ ...current, error: error.message }));
     } finally {
@@ -83,6 +90,43 @@ export function IntegrationsSettings() {
     }
   }
 
+  async function createClient(name) {
+    setAction("create-client");
+    setNotice({ message: "", error: "" });
+    try {
+      const result = await api("/api/integrations/clients", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          scopes: ["workorders:read", "workorders:write"],
+        }),
+      });
+      setCreatedToken(result.token || "");
+      setClients((current) => [result.client, ...current]);
+    } catch (error) {
+      setNotice({ message: "", error: error.message });
+    } finally {
+      setAction("");
+    }
+  }
+
+  async function revokeClient(clientId) {
+    setAction(`revoke-${clientId}`);
+    setNotice({ message: "", error: "" });
+    try {
+      const result = await api(`/api/integrations/clients/${encodeURIComponent(clientId)}/revoke`, {
+        method: "POST",
+        body: "{}",
+      });
+      setClients((current) => current.map((client) => client.id === clientId ? result.client : client));
+      setNotice({ message: "Integration client revoked.", error: "" });
+    } catch (error) {
+      setNotice({ message: "", error: error.message });
+    } finally {
+      setAction("");
+    }
+  }
+
   return (
     <section className="admin-content admin-settings-content">
       <PageHeader
@@ -115,6 +159,14 @@ export function IntegrationsSettings() {
             onTest={() => runAction("test", "/api/integrations/samsara/test", "Samsara connection verified.")}
             onSync={() => runAction("sync", "/api/integrations/samsara/sync", "Samsara sync completed.")}
             onDisconnect={() => setConfirmDisconnect(true)}
+          />
+          <IntegrationClientsCard
+            clients={clients}
+            busy={action.startsWith("create-client") || action.startsWith("revoke-")}
+            createdToken={createdToken}
+            onCreate={createClient}
+            onRevoke={revokeClient}
+            onDismissToken={() => setCreatedToken("")}
           />
         </div>
       )}

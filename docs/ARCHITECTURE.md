@@ -36,6 +36,9 @@ frontend/src/
     workorder-drafts/   Office/admin unfinished-creation queue
   lib/                  Browser API and date utilities
 
+docs/
+  integrations/         External integration guides and machine-readable API contracts
+
 shared/
   units-of-measure.js   Canonical quantity units, symbols, precision, conversion rules
   workorder-template.js Browser/server-safe workorder rendering
@@ -47,7 +50,11 @@ src/server/
     migrations/         Immutable ordered schema changes
     repositories/       SQL grouped by owned table or aggregate
     seeds/              Explicit non-production bootstrap data
-  integrations/         Samsara and VIN provider adapters
+  integrations/         Shared integration platform and provider-owned adapters
+    core/                Machine clients, credentials, encryption, jobs, and provider registry
+    odoo/                Company-scoped Odoo service API and result persistence
+    samsara/             Samsara OAuth, connection status, asset sync, and provider adapter
+    vin/                 VIN decoding provider client
   modules/              Business workflows grouped by domain
   routes/               Thin HTTP route families
   services/             Small cross-domain application services
@@ -67,12 +74,27 @@ server.js               Composition root plus contained legacy print/share endpo
 | `/api/mechanic/*` | `routes/mechanic.routes.js` and `modules/mechanic/` |
 | `/api/surveillance/*` | `routes/surveillance.routes.js` and `modules/surveillance/` |
 | `/api/vehicles/*` | `routes/vehicles.routes.js` and `services/vehicles.service.js` |
-| `/api/integrations/samsara/*` | `routes/integrations.routes.js` and `integrations/samsara/` |
+| `/api/integrations/clients`, `/api/integrations/clients/:id/revoke` | `routes/integrations.routes.js` and `integrations/core/` |
+| `/api/integrations/odoo/v1/*` | `integrations/odoo/` with authentication and scopes from `integrations/core/` |
+| `/api/integrations/samsara/*` | `routes/integrations.routes.js` and `integrations/samsara/` via the core provider registry |
 | `/api/parts-helper/*` | `routes/parts-helper.routes.js` and `modules/parts-helper/` |
 | `/api/workorder-drafts/*` | `routes/workorder-drafts.routes.js`, `modules/workorders/workorder-drafts.service.js`, and `repositories/workorder-drafts.repo.js` |
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### Integration Platform
+
+`src/server/integrations/core/` owns shared provider infrastructure; each provider
+keeps its transport and mapping logic in its own directory. Browser-session
+administration creates and revokes company-scoped machine clients through
+`/api/integrations/clients`. External Odoo workers authenticate with those
+clients and call only `/api/integrations/odoo/v1/*`.
+
+Start with [`docs/integrations/README.md`](integrations/README.md). The external
+Odoo contract is available as both the
+[`developer guide`](integrations/ODOO_INTEGRATION_API.md) and
+[`OpenAPI 3.1 specification`](integrations/ODOO_INTEGRATION_TARGET.openapi.yaml).
 
 ### Create Workorder
 

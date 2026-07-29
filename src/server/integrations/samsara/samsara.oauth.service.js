@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { migrate } from "../../db/migrate.js";
 import {
   findIntegrationByOAuthState,
+  getIntegrationOAuthCredential,
   getIntegrationStatus,
   saveOAuthState,
   saveOAuthTokens,
@@ -105,16 +106,19 @@ export async function getSamsaraAccessToken({
 } = {}) {
   await migrate();
   const account = await getIntegrationStatus(PROVIDER, companyId);
-  if (account?.access_token && account?.expires_at && new Date(account.expires_at).getTime() - Date.now() > TOKEN_REFRESH_SKEW_MS) {
-    return { token: account.access_token, source: "oauth" };
+  const credential = account?.has_credentials
+    ? await getIntegrationOAuthCredential(PROVIDER, companyId)
+    : null;
+  if (credential?.accessToken && account?.expires_at && new Date(account.expires_at).getTime() - Date.now() > TOKEN_REFRESH_SKEW_MS) {
+    return { token: credential.accessToken, source: "oauth" };
   }
 
-  if (account?.refresh_token) {
-    const tokens = await tokenRequest({ grant_type: "refresh_token", refresh_token: account.refresh_token });
+  if (credential?.refreshToken) {
+    const tokens = await tokenRequest({ grant_type: "refresh_token", refresh_token: credential.refreshToken });
     const saved = await saveOAuthTokens(PROVIDER, {
       status: "connected",
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token || account.refresh_token,
+      refreshToken: tokens.refresh_token || credential.refreshToken,
       tokenType: tokens.token_type,
       scope: tokens.scope || account.scope,
       expiresAt: expiresAtFromNow(tokens.expires_in),

@@ -37,7 +37,7 @@ export function publicSamsaraStatus({
   latestSync,
   hasApiToken = false,
 }) {
-  const hasOAuth = Boolean(account?.access_token || account?.refresh_token);
+  const hasOAuth = Boolean(account?.has_credentials || account?.access_token || account?.refresh_token);
   const oauthPending = account?.status === "oauth_pending";
   let status = "missing_token";
   if (hasOAuth) status = account?.status || "connected";

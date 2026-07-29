@@ -1,7 +1,9 @@
 import { env } from "../../config/env.js";
 import { migrate } from "../../db/migrate.js";
 import { listConnectedIntegrationAccounts } from "../../db/repositories/integrations.repo.js";
-import { syncSamsaraVehicles } from "./samsara.sync.service.js";
+import { enqueueIntegrationJob } from "../core/integration-platform.repo.js";
+import { runNextIntegrationJob } from "../core/integration-jobs.js";
+import "./samsara.adapter.js";
 
 const MIN_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -19,12 +21,19 @@ export async function runAutomaticSamsaraSync(syncType = "auto") {
     const accounts = await connectedCompanies();
     if (!accounts.length) return [];
     const results = [];
+    const bucket = Math.floor(Date.now() / (5 * 60 * 1000));
     for (const account of accounts) {
-      results.push(await syncSamsaraVehicles({
-        syncType,
-        allowApiTokenFallback: false,
+      results.push(await enqueueIntegrationJob({
         companyId: account.company_id,
+        integrationAccountId: account.id,
+        provider: "samsara",
+        jobType: "sync",
+        payload: { syncType },
+        idempotencyKey: `samsara:${syncType}:${account.company_id}:${bucket}`,
       }));
+    }
+    for (let index = 0; index < results.length; index += 1) {
+      await runNextIntegrationJob();
     }
     return results;
   } catch (error) {

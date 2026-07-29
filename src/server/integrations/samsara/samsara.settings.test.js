@@ -6,6 +6,7 @@ import { PERMISSION } from "../../auth/permissions.js";
 import { publicSamsaraStatus } from "./samsara.sync.service.js";
 
 const repositoryUrl = new URL("../../db/repositories/integrations.repo.js", import.meta.url);
+const credentialsRepositoryUrl = new URL("../core/integration-credentials.repo.js", import.meta.url);
 const routesUrl = new URL("../../routes/integrations.routes.js", import.meta.url);
 
 test("settings status exposes safe OAuth and latest sync metadata", () => {
@@ -104,7 +105,7 @@ test("disconnect route uses existing integration-admin policy and authorized com
   const source = await readFile(routesUrl, "utf8");
   assert.match(source, /DELETE" && url\.pathname === "\/api\/integrations\/samsara"/);
   assert.match(source, /const companyId = selectedCompanyId\(url, requestContext\)/);
-  assert.match(source, /await disconnectSamsara\(companyId\)/);
+  assert.match(source, /await samsara\.disconnect\(companyId\)/);
   for (const [method, path] of [
     ["GET", "/api/integrations/samsara/status"],
     ["POST", "/api/integrations/samsara/test"],
@@ -117,7 +118,9 @@ test("disconnect route uses existing integration-admin policy and authorized com
 
 test("disconnect preserves reconnect through fresh OAuth state and token upsert", async () => {
   const source = await readFile(repositoryUrl, "utf8");
+  const credentialsSource = await readFile(credentialsRepositoryUrl, "utf8");
   assert.match(source, /saveOAuthState[\s\S]*status = 'oauth_pending'/i);
-  assert.match(source, /saveOAuthTokens[\s\S]*access_token = excluded\.access_token/i);
-  assert.match(source, /saveOAuthTokens[\s\S]*oauth_state = null/i);
+  assert.match(source, /saveOAuthTokens[\s\S]*saveOAuthAccountAndCredentialAtomic/i);
+  assert.match(credentialsSource, /saveOAuthAccountAndCredentialAtomic[\s\S]*oauth_state = null/i);
+  assert.match(credentialsSource, /saveOAuthAccountAndCredentialAtomic[\s\S]*await client\.query\("commit"\)/i);
 });

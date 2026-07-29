@@ -4,11 +4,14 @@ import { migrate } from "../../db/migrate.js";
 import { closePool, query } from "../../db/pool.js";
 import {
   disconnectIntegration,
+  getIntegrationOAuthCredential,
   getIntegrationStatus,
   getLatestIntegrationSyncRun,
   saveOAuthState,
   saveOAuthTokens,
 } from "../../db/repositories/integrations.repo.js";
+
+process.env.INTEGRATION_ENCRYPTION_KEY ||= Buffer.alloc(32, 7).toString("base64");
 
 const companyId = randomUUID();
 const slug = `samsara-settings-${companyId.slice(0, 8)}`;
@@ -51,8 +54,7 @@ try {
   assert.equal(disconnected.run.has_error, false);
 
   const cleared = await getIntegrationStatus("samsara", companyId);
-  assert.equal(cleared.access_token, null);
-  assert.equal(cleared.refresh_token, null);
+  assert.equal(cleared.has_credentials, false);
   assert.equal(cleared.token_type, null);
   assert.equal(cleared.scope, null);
   assert.equal(cleared.expires_at, null);
@@ -78,9 +80,11 @@ try {
     expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   }, companyId);
   const reconnected = await getIntegrationStatus("samsara", companyId);
+  const credential = await getIntegrationOAuthCredential("samsara", companyId);
   assert.equal(reconnected.status, "connected");
-  assert.equal(reconnected.access_token, "reconnected-access-token");
-  assert.equal(reconnected.refresh_token, "reconnected-refresh-token");
+  assert.equal(reconnected.has_credentials, true);
+  assert.equal(credential.accessToken, "reconnected-access-token");
+  assert.equal(credential.refreshToken, "reconnected-refresh-token");
   assert.equal(reconnected.oauth_state, null);
 
   process.stdout.write(`${JSON.stringify({

@@ -1,12 +1,25 @@
 import { getPool, query } from "../pool.js";
 import { requireCompanyId } from "../company.js";
+import {
+  readIntegrationCredential,
+  saveOAuthAccountAndCredentialAtomic,
+} from "../../integrations/core/integration-credentials.repo.js";
 
 export async function getIntegrationStatus(provider, companyId) {
   const tenantId = requireCompanyId(companyId);
   const result = await query(
     `
-      select id, company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
-           , access_token, refresh_token, token_type, scope, expires_at, oauth_state, oauth_state_created_at
+      select id, company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at,
+             token_type, scope, expires_at, oauth_state, oauth_state_created_at,
+             (
+               exists (
+                 select 1 from integration_credentials credential
+                 where credential.integration_account_id = integration_accounts.id
+                   and credential.credential_kind = 'oauth'
+               )
+               or access_token is not null
+               or refresh_token is not null
+             ) as has_credentials
       from integration_accounts
       where company_id = $1 and provider = $2
     `,
@@ -35,7 +48,15 @@ export async function listConnectedIntegrationAccounts(provider) {
       from integration_accounts
       where provider = $1
         and status in ('connected', 'configured')
-        and (access_token is not null or refresh_token is not null)
+        and (
+          access_token is not null
+          or refresh_token is not null
+          or exists (
+            select 1 from integration_credentials credential
+            where credential.integration_account_id = integration_accounts.id
+              and credential.credential_kind = 'oauth'
+          )
+        )
       order by company_id
     `,
     [provider],
@@ -109,6 +130,11 @@ export async function disconnectIntegration(provider, companyId) {
       [tenantId, provider],
     );
     const account = accountResult.rows[0];
+    await client.query(
+      `delete from integration_credentials
+       where company_id = $1 and integration_account_id = $2`,
+      [tenantId, account.id],
+    );
     const runResult = await client.query(
       `
         insert into integration_sync_runs (
@@ -169,41 +195,39 @@ export async function saveOAuthState(provider, state, companyId) {
 }
 
 export async function saveOAuthTokens(provider, tokens, companyId) {
+  return saveOAuthAccountAndCredentialAtomic({
+    companyId: requireCompanyId(companyId),
+    provider,
+    tokens,
+  });
+}
+
+export async function getIntegrationOAuthCredential(provider, companyId) {
   const tenantId = requireCompanyId(companyId);
   const result = await query(
-    `
-      insert into integration_accounts (
-        company_id, provider, status, token_env_key, access_token, refresh_token, token_type, scope, expires_at,
-        oauth_state, oauth_state_created_at, updated_at
-      )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, null, null, now())
-      on conflict (company_id, provider)
-      do update set
-        status = excluded.status,
-        token_env_key = excluded.token_env_key,
-        access_token = excluded.access_token,
-        refresh_token = excluded.refresh_token,
-        token_type = excluded.token_type,
-        scope = excluded.scope,
-        expires_at = excluded.expires_at,
-        oauth_state = null,
-        oauth_state_created_at = null,
-        updated_at = now()
-      returning id, company_id, provider, status, token_env_key, token_type, scope, expires_at, last_full_sync_at, updated_at
-    `,
-    [
-      tenantId,
-      provider,
-      tokens.status || "connected",
-      tokens.tokenEnvKey || "SAMSARA_OAUTH",
-      tokens.accessToken,
-      tokens.refreshToken,
-      tokens.tokenType || "bearer",
-      tokens.scope || null,
-      tokens.expiresAt,
-    ]
+    `select id, access_token, refresh_token
+     from integration_accounts
+     where company_id = $1 and provider = $2
+     limit 1`,
+    [tenantId, provider],
   );
-  return result.rows[0];
+  const account = result.rows[0];
+  if (!account) return null;
+  const encrypted = await readIntegrationCredential({
+    companyId: tenantId,
+    integrationAccountId: account.id,
+    provider,
+    credentialKind: "oauth",
+  });
+  if (encrypted) return encrypted;
+  if (account.access_token || account.refresh_token) {
+    return {
+      accessToken: account.access_token || "",
+      refreshToken: account.refresh_token || "",
+      legacyPlaintext: true,
+    };
+  }
+  return null;
 }
 
 export async function upsertIntegrationStatus(provider, updates, companyId) {

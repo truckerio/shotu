@@ -35,6 +35,8 @@ export const env = {
   samsaraOAuthRedirectUri: process.env.SAMSARA_OAUTH_REDIRECT_URI || "",
   samsaraSyncIntervalMinutes: Number(process.env.SAMSARA_SYNC_INTERVAL_MINUTES || 30),
   samsaraSyncOnStartup: process.env.SAMSARA_SYNC_ON_STARTUP !== "false",
+  integrationEncryptionKey: process.env.INTEGRATION_ENCRYPTION_KEY || "",
+  integrationEncryptionKeyVersion: process.env.INTEGRATION_ENCRYPTION_KEY_VERSION || "v1",
   satelliteMapProvider: configuredSatelliteMapProvider,
   googleMapsBrowserApiKey: publicEnvValue(process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY),
   hereBrowserApiKey: configuredHereBrowserApiKey,
