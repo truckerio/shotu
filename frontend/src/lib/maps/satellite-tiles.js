@@ -53,7 +53,7 @@ export function buildHereLocationUrl(location, zoom = DEFAULT_ZOOM) {
   const longitude = Number(location?.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
   const safeZoom = clamp(Math.round(Number(zoom) || DEFAULT_ZOOM), 0, MAX_SATELLITE_ZOOM);
-  return `https://share.here.com/l/${latitude},${longitude}?z=${safeZoom}&t=satellite&p=yes&ref=shotu`;
+  return `https://wego.here.com/?map=${latitude},${longitude},${safeZoom},satellite`;
 }
 
 export function buildSatelliteTileLayer(location, mapsConfig = {}, zoom = DEFAULT_ZOOM, options = {}) {

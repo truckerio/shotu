@@ -83,11 +83,11 @@ test("invalid coordinates do not produce a tile layer", () => {
 test("HERE location links preserve exact coordinates and satellite view", () => {
   assert.equal(
     buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }),
-    "https://share.here.com/l/34.012345,-117.654321?z=17&t=satellite&p=yes&ref=shotu",
+    "https://wego.here.com/?map=34.012345,-117.654321,17,satellite",
   );
   assert.equal(
     buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }, 19),
-    "https://share.here.com/l/34.012345,-117.654321?z=19&t=satellite&p=yes&ref=shotu",
+    "https://wego.here.com/?map=34.012345,-117.654321,19,satellite",
   );
   assert.equal(buildHereLocationUrl({ latitude: "missing", longitude: -117 }), "");
 });
@@ -116,6 +116,6 @@ test("embedded satellite maps cap at provider-safe zoom", () => {
   assert.equal(layer.tiles.every((tile) => tile.src.includes("/tile/19/")), true);
   assert.equal(
     buildHereLocationUrl({ latitude: 34.012345, longitude: -117.654321 }, 20),
-    "https://share.here.com/l/34.012345,-117.654321?z=19&t=satellite&p=yes&ref=shotu",
+    "https://wego.here.com/?map=34.012345,-117.654321,19,satellite",
   );
 });
