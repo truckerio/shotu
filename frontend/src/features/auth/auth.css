@@ -133,8 +133,131 @@ body:has(.auth-shell) {
   position: relative;
 }
 
+.auth-password-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-password-label button {
+  min-height: 32px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #175cd3;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
 .auth-password-field input {
   padding-right: 46px;
+}
+
+.auth-modal-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(16 24 40 / 48%);
+}
+
+.auth-modal {
+  width: min(100%, 460px);
+  max-height: min(680px, calc(100dvh - 40px));
+  overflow: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 48px rgb(16 24 40 / 24%);
+}
+
+.auth-dialog {
+  padding: 24px;
+  outline: none;
+}
+
+.auth-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.auth-dialog-heading h2 {
+  margin: 0;
+  color: #181d27;
+  font-size: var(--text-page-title);
+}
+
+.auth-dialog-heading p {
+  margin: 5px 0 0;
+  color: #667085;
+  font-size: var(--text-secondary);
+}
+
+.auth-dialog-close {
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #344054;
+  cursor: pointer;
+  font: inherit;
+  font-size: 24px;
+}
+
+.auth-recovery-form {
+  margin-top: 24px;
+}
+
+.auth-recovery-message {
+  margin: 0;
+  color: #475467;
+  font-size: var(--text-secondary);
+  line-height: var(--leading-body);
+}
+
+.auth-recovery-message-success {
+  color: #067647;
+}
+
+.auth-recovery-message-error {
+  color: #b42318;
+}
+
+.auth-password-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #667085;
+  font-size: var(--text-secondary);
+}
+
+.auth-password-rules span::before {
+  content: "○";
+  margin-right: 6px;
+}
+
+.auth-password-rules span.valid {
+  color: #067647;
+}
+
+.auth-password-rules span.valid::before {
+  content: "✓";
+}
+
+.auth-password-rules span.invalid {
+  color: #b42318;
+}
+
+.auth-password-rules span.invalid::before {
+  content: "×";
 }
 
 .auth-secondary-action svg {

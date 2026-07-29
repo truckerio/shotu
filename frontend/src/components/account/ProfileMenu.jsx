@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { ChevronDown, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
+import { ChevronDown, Key01, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
 import { useKioskSession } from "../../features/kiosk/KioskSessionContext.jsx";
 import { authClient } from "../../lib/auth-client.js";
+import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
 import { PasskeyManager } from "./PasskeyManager.jsx";
 import "./profile-menu.css";
 
@@ -23,6 +24,7 @@ function roleLabel(role) {
 
 export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false }) {
   const kioskSession = useKioskSession();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
   async function signOut() {
     await authClient.signOut();
@@ -60,6 +62,10 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           <UserCircle />
           <span>Manage passkeys</span>
         </MenuItem>
+        <MenuItem className="profile-menu-action" onAction={() => setChangePasswordOpen(true)} textValue="Change password">
+          <Key01 />
+          <span>Change password</span>
+        </MenuItem>
         <MenuItem className="profile-menu-action" onAction={signOut} textValue="Sign out">
           <LogOut01 />
           <span>Sign out</span>
@@ -80,6 +86,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           {accountMenu}
         </MenuTrigger>
         </div>
+        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
         <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
       </>
     );
@@ -96,6 +103,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           {accountMenu}
         </MenuTrigger>
         </div>
+        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
         <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
       </>
     );
@@ -116,6 +124,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           {accountMenu}
         </MenuTrigger>
       </div>
+      <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
     </>
   );

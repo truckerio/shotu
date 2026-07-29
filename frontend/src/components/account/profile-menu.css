@@ -131,6 +131,140 @@
   background: #f2f4f7;
 }
 
+.account-modal-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(16 24 40 / 48%);
+}
+
+.account-modal {
+  width: min(100%, 480px);
+  max-height: min(720px, calc(100dvh - 40px));
+  overflow: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 48px rgb(16 24 40 / 24%);
+}
+
+.account-dialog {
+  padding: 24px;
+  outline: none;
+}
+
+.account-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.account-dialog-heading h2 {
+  margin: 0;
+  color: #181d27;
+  font-size: var(--text-page-title);
+}
+
+.account-dialog-heading p {
+  margin: 5px 0 0;
+  color: #667085;
+  font-size: var(--text-secondary);
+}
+
+.account-dialog-close {
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #344054;
+  cursor: pointer;
+  font: inherit;
+  font-size: 24px;
+}
+
+.change-password-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.change-password-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #414651;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.change-password-form .password-input-control > input {
+  min-height: 44px;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  padding: 10px 44px 10px 12px;
+  font: inherit;
+}
+
+.change-password-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #667085;
+  font-size: var(--text-secondary);
+}
+
+.change-password-rules span::before {
+  content: "○";
+  margin-right: 6px;
+}
+
+.change-password-rules span.valid {
+  color: #067647;
+}
+
+.change-password-rules span.valid::before {
+  content: "✓";
+}
+
+.change-password-rules span.invalid,
+.account-dialog-message-error {
+  color: #b42318;
+}
+
+.change-password-rules span.invalid::before {
+  content: "×";
+}
+
+.account-dialog-message {
+  margin: 0;
+  font-size: var(--text-secondary);
+}
+
+.account-dialog-message-success {
+  color: #067647;
+}
+
+.change-password-submit {
+  min-height: 44px;
+  border: 1px solid #1570ef;
+  border-radius: 6px;
+  background: #1570ef;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--weight-semibold);
+}
+
+.change-password-submit[data-disabled] {
+  border-color: #b2ccff;
+  background: #b2ccff;
+  cursor: not-allowed;
+}
+
 .passkey-modal-overlay {
   position: fixed;
   z-index: 1000;

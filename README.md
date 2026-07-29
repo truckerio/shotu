@@ -69,8 +69,15 @@ Better Auth owns credentials and database-backed sessions. `user_profiles` owns 
 - Public signup is disabled.
 - Mechanics sign in with a username and password.
 - Office, surveillance, and admin users may use username or email.
+- Signed-in users change their own password from the shared Profile menu. The
+  current password is required and other sessions are revoked.
+- Forgotten passwords use Better Auth single-use 15-minute tokens delivered by
+  SMTP. The login response never reveals whether an email exists.
 - The server resolves the request actor from the session. Browser payloads must never choose a user or role.
 - Production requires `BETTER_AUTH_SECRET`, an HTTPS `BETTER_AUTH_URL`, and matching `AUTH_TRUSTED_ORIGINS`. Railway deployments use its trusted `x-real-ip` header by default; override `AUTH_IP_ADDRESS_HEADERS` only when the deployment proxy supplies a different trusted client-IP header.
+- Password recovery requires `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
+  `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM_NAME`, and `MAIL_FROM_EMAIL`. Gmail must
+  send from its authenticated mailbox or a verified send-as alias.
 - Railway runs `npm run db:migrate` as a pre-deploy command before the application starts.
 
 Create the first production administrator with environment variables instead of

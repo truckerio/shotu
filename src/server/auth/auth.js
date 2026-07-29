@@ -4,6 +4,7 @@ import { admin, username } from "better-auth/plugins";
 import { getPool } from "../db/pool.js";
 import { resolveAuthConfig } from "./config.js";
 import { kioskAuthPlugin } from "./kiosk-plugin.js";
+import { sendPasswordResetEmail } from "../email/password-reset.js";
 
 const config = resolveAuthConfig();
 const authOrigin = new URL(config.baseURL).origin;
@@ -18,6 +19,11 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: false,
+    minPasswordLength: 12,
+    maxPasswordLength: 128,
+    resetPasswordTokenExpiresIn: 60 * 15,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: sendPasswordResetEmail,
   },
   user: {
     modelName: "auth_user",
@@ -81,7 +87,7 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 10 },
       "/sign-in/username": { window: 60, max: 10 },
-      "/forget-password": { window: 300, max: 5 },
+      "/request-password-reset": { window: 60, max: 5 },
     },
   },
   disabledPaths: ["/sign-up/email", "/is-username-available"],

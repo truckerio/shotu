@@ -111,7 +111,13 @@ conversion factor because their contents depend on the product. See
 
 Better Auth owns passwords, account bans, and session revocation. `user_profiles` owns operational contact identity. Company and location memberships own role and access. Admin user-management routes authorize the target location and every company membership before changing either layer.
 
-- Password reset uses Better Auth hashing and revokes all existing sessions.
+- Self-service password change requires the current password and preserves only
+  the current session. Forgotten-password recovery uses Better Auth verification
+  storage for a single-use 15-minute token, SMTP only transports the reset link,
+  and a completed recovery revokes every existing session.
+- Recovery requests return the same public response for known and unknown email
+  addresses. Phone recovery is not an auth source until phone ownership is
+  stored and verified.
 - Deactivation bans the login and deactivates all operational memberships.
 - Activation restores the selected company/location membership and unbans the login.
 - Deletion removes the login and contact data but keeps a tombstoned `user_profiles` row so historical workorder, chat, and audit references remain valid.

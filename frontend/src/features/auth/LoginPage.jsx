@@ -4,6 +4,7 @@ import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibility
 import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { authClient } from "../../lib/auth-client.js";
+import { ForgotPasswordDialog } from "./ForgotPasswordDialog.jsx";
 import "./auth.css";
 
 function loginErrorMessage(error) {
@@ -24,6 +25,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const shellRef = useRef(null);
 
   useFocusedFieldVisibility({
@@ -122,7 +124,10 @@ export function LoginPage() {
           </TextField>
 
           <TextField isRequired name="password" value={password} onChange={setPassword}>
-            <Label>Password</Label>
+            <div className="auth-password-label">
+              <Label>Password</Label>
+              <Button type="button" onPress={() => setForgotPasswordOpen(true)}>Forgot password?</Button>
+            </div>
             <div className="auth-password-field password-input-control">
               <Input
                 id="login-password"
@@ -146,6 +151,11 @@ export function LoginPage() {
           </Button>
         </Form>
       </section>
+      <ForgotPasswordDialog
+        defaultEmail={identifier}
+        isOpen={forgotPasswordOpen}
+        onOpenChange={setForgotPasswordOpen}
+      />
     </main>
   );
 }
