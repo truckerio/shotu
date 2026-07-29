@@ -2,11 +2,17 @@ import { useEffect, useRef, useState } from "react";
 
 export const INACTIVITY_TIMEOUT_MS = 120_000;
 export const INACTIVITY_WARNING_MS = 30_000;
+export const REMEMBERED_STANDARD_ROLES = Object.freeze(["admin", "office"]);
 
 const CHANNEL_NAME = "owl-inactivity-session";
 const STORAGE_KEY = "owl:inactivity-session";
 const ACTIVITY_STATE_STORAGE_KEY = "owl:inactivity-session-state";
 const ACTIVITY_BROADCAST_INTERVAL_MS = 1_000;
+
+export function shouldEnforceInactivity({ authenticated, role, sessionMode }) {
+  if (!authenticated || !role || sessionMode === "kiosk") return false;
+  return !REMEMBERED_STANDARD_ROLES.includes(role);
+}
 
 export function transitionInactivityState(state, event, now, timeoutMs = INACTIVITY_TIMEOUT_MS) {
   if (state.status === "expired") return state;

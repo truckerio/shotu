@@ -62,6 +62,9 @@ export async function listUsersByLocation(locationId) {
             auth_user.email as login_email,
             coalesce(membership.active, company_membership.active) as membership_active,
             coalesce(membership.created_at, company_membership.created_at) as created_at,
+            (kiosk_credential.user_id is not null) as kiosk_pin_set,
+            coalesce(kiosk_credential.requires_change, false) as kiosk_pin_requires_change,
+            kiosk_credential.updated_at as kiosk_pin_updated_at,
             coalesce((
               select array_agg(other.location_id order by other.location_id)
               from user_location_memberships other
@@ -78,6 +81,9 @@ export async function listUsersByLocation(locationId) {
         and membership.company_id = company_membership.company_id
         and membership.location_id = target_location.id
        left join auth_user on auth_user.id = app_user.auth_user_id
+       left join mechanic_kiosk_credentials kiosk_credential
+         on kiosk_credential.user_id = app_user.id
+        and kiosk_credential.company_id = company_membership.company_id
       where target_location.id = $1
         and app_user.deleted_at is null
         and (

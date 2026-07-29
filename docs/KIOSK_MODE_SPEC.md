@@ -38,6 +38,8 @@ Kiosk mode is additive. Existing standard login MUST remain available and unchan
 - FR-20: Mechanic assigned to multiple locations MUST appear on each registered kiosk for an assigned location and use same company-scoped PIN.
 - FR-21: Kiosk setup MUST be optional per browser and MUST NOT automatically convert all devices at a location.
 - FR-22: Demo seed/setup tooling MUST support safe creation of a demo location, mechanic, PIN, and kiosk registration without embedding production credentials.
+- FR-23: Location Users MUST be the single Admin surface for viewing mechanic kiosk PIN status and setting or resetting a temporary PIN.
+- FR-24: The Kiosk location tab MUST manage registered shop computers only and MUST NOT duplicate user PIN assignment.
 
 ## Non-Functional Requirements
 
@@ -164,6 +166,12 @@ success: { credential: { enabled: true; requiresChange: true; updatedAt: string 
 ```
 
 All mutation errors use existing `{ error: string, code?: string }` shape.
+
+The location detail user projection includes only safe kiosk credential metadata:
+`kiosk_pin_set`, `kiosk_pin_requires_change`, and `kiosk_pin_updated_at`. It never
+returns `pin_hash` or the plaintext PIN. Admin sets or resets a mechanic PIN from
+the location Users tab; the Kiosk tab is reserved for browser registration and
+revocation.
 
 ## Data Models
 

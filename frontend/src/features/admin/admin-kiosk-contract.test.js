@@ -13,22 +13,32 @@ test("Admin kiosk panel uses approved device API contracts", async () => {
   assert.match(source, /\/kiosk-devices\/\$\{encodeURIComponent\(device\.id\)\}\/revoke`/);
 });
 
-test("Admin kiosk panel issues temporary mechanic PIN through location-scoped endpoint", async () => {
-  const source = await readFile(featureUrl, "utf8");
+test("Admin users own temporary mechanic PIN management and status", async () => {
+  const source = await readFile(new URL("./AdminWorkspace.jsx", import.meta.url), "utf8");
 
   assert.match(source, /user\.role === "mechanic"/);
-  assert.match(source, /user\.active/);
-  assert.match(source, /user\.membership_active/);
-  assert.match(source, /\/users\/\$\{encodeURIComponent\(selectedMechanicId\)\}\/kiosk-pin`/);
-  assert.match(source, /JSON\.stringify\(\{ pin \}\)/);
-  assert.match(source, /Temporary PIN/);
+  assert.match(source, /user\.kiosk_pin_set/);
+  assert.match(source, /user\.kiosk_pin_requires_change/);
+  assert.match(source, /onManage\("kiosk-pin", user\)/);
+  assert.match(source, /user\.role === "mechanic" \? <Lock01 \/> : <Mail01 \/>/);
+  assert.match(source, /textValue=\{user\.kiosk_pin_set \? "Reset kiosk PIN" : "Set kiosk PIN"\}[\s\S]*?<Passcode \/>/);
+  assert.match(source, /await api\(`\$\{base\}\/kiosk-pin`/);
+  assert.match(source, /JSON\.stringify\(\{ pin: kioskPinDraft\.pin \}\)/);
   assert.match(source, /DEFAULT_TEMPORARY_KIOSK_PIN = "0000"/);
-  assert.match(source, /useState\(DEFAULT_TEMPORARY_KIOSK_PIN\)/);
+  assert.match(source, /useState\(blankKioskPin\)/);
   assert.match(source, /minLength="4"/);
   assert.match(source, /pattern="\[0-9\]\{4,\}"/);
   assert.match(source, /admin-kiosk-pin-error/);
   assert.doesNotMatch(source, /ValidationRequirements/);
-  assert.match(source, /setPinError\(""\)/);
+  assert.match(source, /setKioskPinError\(""\)/);
+});
+
+test("Admin kiosk panel manages devices only", async () => {
+  const source = await readFile(featureUrl, "utf8");
+
+  assert.doesNotMatch(source, /kiosk-pin/);
+  assert.doesNotMatch(source, /Mechanic kiosk PIN/);
+  assert.doesNotMatch(source, /users\s*=/);
 });
 
 test("Admin location detail owns kiosk setup without adding global navigation", async () => {
@@ -37,8 +47,8 @@ test("Admin location detail owns kiosk setup without adding global navigation", 
   const css = await readFile(new URL("./kiosk-settings.css", import.meta.url), "utf8");
 
   assert.match(workspace, /tab === "kiosk"/);
-  assert.match(workspace, /<KioskSettingsPanel locationId=\{detail\.location\.id\} users=\{detail\.users\}/);
+  assert.match(workspace, /<KioskSettingsPanel locationId=\{detail\.location\.id\} \/>/);
   assert.doesNotMatch(navigation, /view:\s*"kiosk"/);
   assert.match(css, /@media \(max-width:\s*640px\)/);
-  assert.match(css, /\.admin-kiosk-register,[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(css, /\.admin-kiosk-register\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
 });

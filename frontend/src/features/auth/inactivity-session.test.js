@@ -4,10 +4,39 @@ import {
   getInactivityRemainingMs,
   initialActivityTimestamp,
   parseInactivityMessage,
+  shouldEnforceInactivity,
   transitionInactivityState,
 } from "./inactivity-session.js";
 
 const TIMEOUT_MS = 120_000;
+
+test("admin and office standard sessions stay remembered while kiosk keeps its own lock", () => {
+  assert.equal(shouldEnforceInactivity({
+    authenticated: true,
+    role: "admin",
+    sessionMode: "standard",
+  }), false);
+  assert.equal(shouldEnforceInactivity({
+    authenticated: true,
+    role: "office",
+    sessionMode: "standard",
+  }), false);
+  assert.equal(shouldEnforceInactivity({
+    authenticated: true,
+    role: "mechanic",
+    sessionMode: "kiosk",
+  }), false);
+  assert.equal(shouldEnforceInactivity({
+    authenticated: true,
+    role: "mechanic",
+    sessionMode: "standard",
+  }), true);
+  assert.equal(shouldEnforceInactivity({
+    authenticated: true,
+    role: "surveillance",
+    sessionMode: "standard",
+  }), true);
+});
 
 test("session expires after 120 seconds without activity", () => {
   const state = { lastActivityAt: 1_000, status: "active" };

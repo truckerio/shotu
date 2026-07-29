@@ -4,7 +4,10 @@ import { authClient } from "../../lib/auth-client.js";
 import { api } from "../../lib/api.js";
 import { KioskGate, KioskStandardLogin } from "../kiosk/KioskGate.jsx";
 import { KioskSessionProvider } from "../kiosk/KioskSessionContext.jsx";
-import { useInactivitySession } from "./inactivity-session.js";
+import {
+  shouldEnforceInactivity,
+  useInactivitySession,
+} from "./inactivity-session.js";
 import { LoginPage } from "./LoginPage.jsx";
 import "./auth.css";
 
@@ -68,8 +71,13 @@ export function AuthGate({ children }) {
       window.location.replace("/");
     }
   }, []);
+  const inactivityEnabled = shouldEnforceInactivity({
+    authenticated: Boolean(session?.user),
+    role: actor?.role,
+    sessionMode: actorSession.sessionMode,
+  });
   const { warningSeconds } = useInactivitySession({
-    enabled: Boolean(session?.user),
+    enabled: inactivityEnabled,
     sessionKey: session?.session?.id,
     onTimeout: endInactiveSession,
   });

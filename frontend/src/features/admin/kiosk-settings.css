@@ -19,8 +19,7 @@
   padding-top: 18px;
 }
 
-.admin-kiosk-register label,
-.admin-kiosk-pin-form label {
+.admin-kiosk-register label {
   color: #344054;
   display: grid;
   font-size: var(--text-secondary);
@@ -29,9 +28,7 @@
   min-width: 0;
 }
 
-.admin-kiosk-register input,
-.admin-kiosk-pin-form input,
-.admin-kiosk-pin-form select {
+.admin-kiosk-register input {
   background-color: #fff;
   border: 1px solid #d0d5dd;
   border-radius: 6px;
@@ -43,8 +40,7 @@
   width: 100%;
 }
 
-.admin-kiosk-register .button,
-.admin-kiosk-pin-form .button {
+.admin-kiosk-register .button {
   min-height: 44px;
 }
 
@@ -104,32 +100,6 @@
   color: #b42318;
 }
 
-.admin-kiosk-pin-form {
-  border-top: 1px solid #eaecf0;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
-  margin-top: 20px;
-  padding-top: 18px;
-}
-
-.admin-kiosk-pin-form input {
-  letter-spacing: .18em;
-}
-
-.admin-kiosk-pin-form input[aria-invalid="true"] {
-  border-color: #f04438;
-  box-shadow: 0 0 0 1px #f04438;
-}
-
-.admin-kiosk-field-error {
-  color: #b42318;
-  font-size: var(--text-caption);
-  font-weight: var(--weight-regular);
-  letter-spacing: normal;
-  line-height: 1.4;
-}
-
 .admin-kiosk-empty {
   align-items: center;
   color: #667085;
@@ -159,26 +129,18 @@
   color: #067647;
 }
 
-@media (max-width: 900px) {
-  .admin-kiosk-pin-form {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 @media (max-width: 640px) {
   .admin-kiosk-settings {
     gap: 14px;
     margin-top: 16px;
   }
 
-  .admin-kiosk-register,
-  .admin-kiosk-pin-form {
+  .admin-kiosk-register {
     align-items: stretch;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .admin-kiosk-register .button,
-  .admin-kiosk-pin-form .button {
+  .admin-kiosk-register .button {
     width: 100%;
   }
 

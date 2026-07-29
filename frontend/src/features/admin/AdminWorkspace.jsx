@@ -5,8 +5,10 @@ import {
   DotsVertical,
   File02,
   Key01,
+  Lock01,
   Mail01,
   MarkerPin01,
+  Passcode,
   Plus,
   Settings01,
   Tool02,
@@ -32,8 +34,13 @@ import { Button } from "../../components/ui/Button.jsx";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import {
+  isCompleteKioskPin,
+  kioskPinValue,
+} from "../kiosk/kiosk-utils.js";
 import { IntegrationsSettings } from "./integrations/IntegrationsSettings.jsx";
 import { KioskSettingsPanel } from "./KioskSettingsPanel.jsx";
+import { kioskPinFieldError } from "./kiosk-admin-errors.js";
 import {
   ADMIN_MOBILE_DESTINATIONS,
   adminMobileDestinationState,
@@ -45,6 +52,11 @@ const blankLocation = { name: "", type: "yard", address: "" };
 const blankInvite = { name: "", email: "", role: "mechanic" };
 const blankPassword = { password: "", confirmation: "" };
 const hiddenPasswords = { password: false, confirmation: false };
+const DEFAULT_TEMPORARY_KIOSK_PIN = "0000";
+const blankKioskPin = {
+  pin: DEFAULT_TEMPORARY_KIOSK_PIN,
+  confirmation: DEFAULT_TEMPORARY_KIOSK_PIN,
+};
 
 function templateForm(template, location) {
   return {
@@ -192,9 +204,20 @@ function UserActionsMenu({ active, onManage, self, user }) {
             onAction={() => onManage(passwordAction, user)}
             textValue={passwordLabel}
           >
-            {user.role === "mechanic" ? <Key01 /> : <Mail01 />}
+            {user.role === "mechanic" ? <Lock01 /> : <Mail01 />}
             <span>{passwordLabel}</span>
           </MenuItem>
+          {user.role === "mechanic" ? (
+            <MenuItem
+              className="admin-user-menu-item"
+              isDisabled={!active}
+              onAction={() => onManage("kiosk-pin", user)}
+              textValue={user.kiosk_pin_set ? "Reset kiosk PIN" : "Set kiosk PIN"}
+            >
+              <Passcode />
+              <span>{user.kiosk_pin_set ? "Reset kiosk PIN" : "Set kiosk PIN"}</span>
+            </MenuItem>
+          ) : null}
           <MenuItem
             className="admin-user-menu-item"
             isDisabled={self}
@@ -225,7 +248,7 @@ function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }
     <section className="admin-panel">
       <header className="admin-panel-header"><h2>Users</h2><Button variant="primary" icon={Mail01} onClick={onInvite}>Invite user</Button></header>
       <div className="admin-users-table">
-        <div className="admin-users-head"><span>User</span><span>Role</span><span>Status</span><span>Actions</span></div>
+        <div className="admin-users-head"><span>User</span><span>Role</span><span>Account</span><span>Kiosk PIN</span><span>Actions</span></div>
         {detail.users.length ? detail.users.map((user) => {
           const active = user.active && user.membership_active;
           const self = user.id === actor.id;
@@ -239,9 +262,27 @@ function UsersPanel({ actor, detail, onInvite, onManage, onResend, resendingId }
               </span>
               <span className="admin-role">{user.role}</span>
               <span><span className={`admin-user-status ${active ? "active" : "inactive"}`}>{active ? "Active" : "Inactive"}</span></span>
+              <span className="admin-kiosk-pin-cell">
+                {user.role === "mechanic" ? (
+                  <span className={`admin-user-status ${user.kiosk_pin_set ? (user.kiosk_pin_requires_change ? "temporary" : "active") : "inactive"}`}>
+                    {user.kiosk_pin_set ? (user.kiosk_pin_requires_change ? "Temporary" : "Set") : "Not set"}
+                  </span>
+                ) : <span className="admin-not-applicable">—</span>}
+              </span>
               <span className="admin-user-actions admin-user-actions-desktop">
                 <button type="button" title={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} aria-label={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} onClick={() => onManage("locations", user)}><MarkerPin01 /></button>
-                <button type="button" title={self ? "Use your profile to change your own password" : `${passwordLabel} for ${user.name}`} aria-label={`${passwordLabel} for ${user.name}`} disabled={self} onClick={() => onManage(passwordAction, user)}>{user.role === "mechanic" ? <Key01 /> : <Mail01 />}</button>
+                <button type="button" title={self ? "Use your profile to change your own password" : `${passwordLabel} for ${user.name}`} aria-label={`${passwordLabel} for ${user.name}`} disabled={self} onClick={() => onManage(passwordAction, user)}>{user.role === "mechanic" ? <Lock01 /> : <Mail01 />}</button>
+                {user.role === "mechanic" ? (
+                  <button
+                    type="button"
+                    title={!active ? "Activate this mechanic before setting a kiosk PIN" : `${user.kiosk_pin_set ? "Reset" : "Set"} kiosk PIN for ${user.name}`}
+                    aria-label={`${user.kiosk_pin_set ? "Reset" : "Set"} kiosk PIN for ${user.name}`}
+                    disabled={!active}
+                    onClick={() => onManage("kiosk-pin", user)}
+                  >
+                    <Passcode />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   title={self ? "You cannot change your own status" : `${active ? "Deactivate" : "Activate"} ${user.name}`}
@@ -349,7 +390,7 @@ function LocationDetail({ actor, detail, draftQueue, tab, setTab, template, setT
       {tab === "users" ? <UsersPanel actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} onResend={onResendInvite} resendingId={resendingInviteId} /> : null}
       {tab === "template" ? <TemplatePanel detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
       {tab === "rules" ? <RulesPanel policy={policy} onChange={(mechanicCanRecordParts) => setPolicy((current) => ({ ...current, mechanicCanRecordParts }))} onSave={onSavePolicy} saving={saving} /> : null}
-      {tab === "kiosk" ? <KioskSettingsPanel locationId={detail.location.id} users={detail.users} /> : null}
+      {tab === "kiosk" ? <KioskSettingsPanel locationId={detail.location.id} /> : null}
     </section>
   );
 }
@@ -387,6 +428,8 @@ export function AdminWorkspace({
   const [userLocationDraft, setUserLocationDraft] = useState([]);
   const [passwordDraft, setPasswordDraft] = useState(blankPassword);
   const [visiblePasswords, setVisiblePasswords] = useState(hiddenPasswords);
+  const [kioskPinDraft, setKioskPinDraft] = useState(blankKioskPin);
+  const [kioskPinError, setKioskPinError] = useState("");
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
   const draftQueue = {
     drafts,
@@ -542,6 +585,8 @@ export function AdminWorkspace({
   function openUserAction(type, user) {
     setPasswordDraft(blankPassword);
     setVisiblePasswords(hiddenPasswords);
+    setKioskPinDraft(blankKioskPin);
+    setKioskPinError("");
     setUserLocationDraft(userLocationIds(user, selectedId));
     setUserAction({ type, user });
     setState((current) => ({ ...current, error: "", message: "" }));
@@ -568,6 +613,16 @@ export function AdminWorkspace({
         return;
       }
     }
+    if (userAction.type === "kiosk-pin") {
+      if (!isCompleteKioskPin(kioskPinDraft.pin)) {
+        setKioskPinError("Use at least 4 digits.");
+        return;
+      }
+      if (kioskPinDraft.pin !== kioskPinDraft.confirmation) {
+        setKioskPinError("PINs do not match.");
+        return;
+      }
+    }
     setState((current) => ({ ...current, busy: true, error: "", message: "" }));
     const base = `/api/admin/locations/${selectedId}/users/${userAction.user.id}`;
     try {
@@ -588,6 +643,11 @@ export function AdminWorkspace({
           body: JSON.stringify({ password: passwordDraft.password }),
           timeoutMs: 15_000,
         });
+      } else if (userAction.type === "kiosk-pin") {
+        await api(`${base}/kiosk-pin`, {
+          method: "POST",
+          body: JSON.stringify({ pin: kioskPinDraft.pin }),
+        });
       } else if (userAction.type === "delete") {
         await api(base, { method: "DELETE" });
       } else {
@@ -602,17 +662,28 @@ export function AdminWorkspace({
         ? `Password reset email sent to ${userAction.user.name}.`
         : userAction.type === "password"
           ? `Password set for ${userAction.user.name}. Existing sessions were signed out.`
+        : userAction.type === "kiosk-pin"
+          ? `Temporary kiosk PIN ${userAction.user.kiosk_pin_set ? "reset" : "set"} for ${userAction.user.name}.`
         : userAction.type === "delete"
           ? `${userAction.user.name} was deleted.`
           : `${userAction.user.name} is now ${userAction.type === "activate" ? "active" : "inactive"}.`;
       setUserAction(null);
       setPasswordDraft(blankPassword);
+      setKioskPinDraft(blankKioskPin);
       setState((current) => ({ ...current, busy: false, error: "", message }));
       if (!["password", "password-reset-email"].includes(userAction.type)) {
         await openLocation(selectedId, "users");
         await loadLocations();
       }
     } catch (error) {
+      if (userAction.type === "kiosk-pin") {
+        const fieldError = kioskPinFieldError(error);
+        if (fieldError) {
+          setKioskPinError(fieldError);
+          setState((current) => ({ ...current, busy: false, error: "" }));
+          return;
+        }
+      }
       setState((current) => ({ ...current, busy: false, error: error.message }));
     }
   }
@@ -638,7 +709,7 @@ export function AdminWorkspace({
       {modal === "inviteLink" ? <Modal title="Invite link" onClose={() => setModal("")}><div className="admin-invite-result"><p>Share this new link with <strong>{inviteLinkRecipient}</strong>. Any previous link for this invitation no longer works.</p><code>{inviteUrl}</code><Button icon={Copy01} onClick={copyInviteLink}>Copy link</Button></div></Modal> : null}
       {userAction ? (
         <Modal
-          title={userAction.type === "locations" ? "Location access" : userAction.type === "password" ? "Set mechanic password" : userAction.type === "password-reset-email" ? "Send password reset" : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
+          title={userAction.type === "locations" ? "Location access" : userAction.type === "password" ? "Set mechanic password" : userAction.type === "password-reset-email" ? "Send password reset" : userAction.type === "kiosk-pin" ? `${userAction.user.kiosk_pin_set ? "Reset" : "Set"} kiosk PIN` : userAction.type === "delete" ? "Delete user" : `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`}
           onClose={() => !state.busy && setUserAction(null)}
         >
           <form className="admin-modal-form" onSubmit={submitUserAction}>
@@ -678,12 +749,55 @@ export function AdminWorkspace({
                   <span className={passwordDraft.password.length >= 12 ? "valid" : ""}>At least 12 characters</span>
                   <span className={passwordDraft.confirmation && passwordDraft.password === passwordDraft.confirmation ? "valid" : passwordDraft.confirmation ? "invalid" : ""}>Passwords match</span>
                 </div>
-                <Button variant="primary" icon={Key01} type="submit" disabled={state.busy || passwordDraft.password.length < 12 || passwordDraft.password !== passwordDraft.confirmation}>{state.busy ? "Setting" : "Set password"}</Button>
+                <Button variant="primary" icon={Lock01} type="submit" disabled={state.busy || passwordDraft.password.length < 12 || passwordDraft.password !== passwordDraft.confirmation}>{state.busy ? "Setting" : "Set password"}</Button>
               </>
             ) : userAction.type === "password-reset-email" ? (
               <>
                 <p className="admin-modal-copy">Send a secure, one-use password reset link to <strong>{userAction.user.login_email || userAction.user.email}</strong>. The link expires after 15 minutes.</p>
                 <Button variant="primary" icon={Mail01} type="submit" disabled={state.busy}>{state.busy ? "Sending" : "Send reset email"}</Button>
+              </>
+            ) : userAction.type === "kiosk-pin" ? (
+              <>
+                <p className="admin-modal-copy">Set a temporary kiosk PIN for <strong>{userAction.user.name}</strong>. They must replace it after their first kiosk unlock.</p>
+                <label htmlFor="admin-kiosk-pin">
+                  <span>Temporary PIN</span>
+                  <input
+                    id="admin-kiosk-pin"
+                    autoFocus
+                    autoComplete="new-password"
+                    inputMode="numeric"
+                    minLength="4"
+                    pattern="[0-9]{4,}"
+                    type="password"
+                    aria-describedby={kioskPinError ? "admin-kiosk-pin-error" : undefined}
+                    aria-invalid={Boolean(kioskPinError)}
+                    value={kioskPinDraft.pin}
+                    onChange={(event) => {
+                      setKioskPinDraft((current) => ({ ...current, pin: kioskPinValue(event.target.value) }));
+                      setKioskPinError("");
+                    }}
+                    required
+                  />
+                </label>
+                <label htmlFor="admin-kiosk-pin-confirmation">
+                  <span>Confirm PIN</span>
+                  <input
+                    id="admin-kiosk-pin-confirmation"
+                    autoComplete="new-password"
+                    inputMode="numeric"
+                    minLength="4"
+                    pattern="[0-9]{4,}"
+                    type="password"
+                    value={kioskPinDraft.confirmation}
+                    onChange={(event) => {
+                      setKioskPinDraft((current) => ({ ...current, confirmation: kioskPinValue(event.target.value) }));
+                      setKioskPinError("");
+                    }}
+                    required
+                  />
+                </label>
+                {kioskPinError ? <small className="admin-kiosk-pin-error" id="admin-kiosk-pin-error" role="alert">{kioskPinError}</small> : null}
+                <Button variant="primary" icon={Passcode} type="submit" disabled={state.busy || !isCompleteKioskPin(kioskPinDraft.pin) || kioskPinDraft.pin !== kioskPinDraft.confirmation}>{state.busy ? "Saving" : `${userAction.user.kiosk_pin_set ? "Reset" : "Set"} temporary PIN`}</Button>
               </>
             ) : userAction.type === "delete" ? (
               <>

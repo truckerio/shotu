@@ -285,3 +285,16 @@ test("location user lists include company-wide admins without location membershi
   assert.match(listBody, /company_membership\.role = 'admin'/i);
   assert.match(listBody, /left join user_location_memberships/i);
 });
+
+test("location user lists expose safe kiosk PIN status without credential secrets", async () => {
+  const repository = await readFile(new URL("../../db/repositories/users.repo.js", import.meta.url), "utf8");
+  const listBody = repository.slice(
+    repository.indexOf("export async function listUsersByLocation"),
+    repository.indexOf("export async function getManagedUserByCompanies"),
+  );
+  assert.match(listBody, /mechanic_kiosk_credentials kiosk_credential/i);
+  assert.match(listBody, /as kiosk_pin_set/i);
+  assert.match(listBody, /as kiosk_pin_requires_change/i);
+  assert.match(listBody, /as kiosk_pin_updated_at/i);
+  assert.doesNotMatch(listBody, /pin_hash/i);
+});

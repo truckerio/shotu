@@ -43,8 +43,16 @@ export function LoginPage() {
     setError("");
 
     const result = identifier.includes("@")
-      ? await authClient.signIn.email({ email: identifier.trim(), password })
-      : await authClient.signIn.username({ username: identifier.trim(), password });
+      ? await authClient.signIn.email({
+        email: identifier.trim(),
+        password,
+        rememberMe: true,
+      })
+      : await authClient.signIn.username({
+        username: identifier.trim(),
+        password,
+        rememberMe: true,
+      });
 
     if (result.error) {
       setError(loginErrorMessage(result.error));

@@ -4,6 +4,10 @@ import { admin, username } from "better-auth/plugins";
 import { getPool } from "../db/pool.js";
 import { resolveAuthConfig } from "./config.js";
 import { kioskAuthPlugin } from "./kiosk-plugin.js";
+import {
+  STANDARD_SESSION_MAX_AGE_SECONDS,
+  STANDARD_SESSION_UPDATE_AGE_SECONDS,
+} from "./session-policy.js";
 import { sendPasswordResetEmail } from "../email/password-reset.js";
 
 const config = resolveAuthConfig();
@@ -46,8 +50,8 @@ export const auth = betterAuth({
       userAgent: "user_agent",
       userId: "user_id",
     },
-    expiresIn: 60 * 60 * 12,
-    updateAge: 60 * 60,
+    expiresIn: STANDARD_SESSION_MAX_AGE_SECONDS,
+    updateAge: STANDARD_SESSION_UPDATE_AGE_SECONDS,
     cookieCache: { enabled: false },
   },
   account: {

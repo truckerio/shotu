@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, SearchMd, Trash01 } from "@untitledui/icons";
+import { Plus, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
@@ -236,7 +236,7 @@ export function UsedPartsEditor({
               <span>Work performed</span>
               <input value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
             </label>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} title="Remove part" aria-label={`Remove part row ${index + 1}`}><Trash01 /></button>
+            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
           </div>
         ))}
       </div>

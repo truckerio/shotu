@@ -1787,20 +1787,15 @@ textarea:focus {
   align-items: center;
   background: transparent;
   border: 0;
-  color: #717680;
+  color: #b42318;
   cursor: pointer;
   display: inline-flex;
-  font-size: 0;
-  font-weight: 800;
-  height: 30px;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  height: 34px;
   justify-content: center;
-  padding: 0;
-  width: 30px;
-}
-
-.remove-row::before {
-  content: "x";
-  font-size: 14px;
+  padding: 0 8px;
+  width: auto;
 }
 
 .remove-row:hover {
@@ -4767,9 +4762,6 @@ textarea:focus {
     width: 100%;
   }
 
-  .mechanic-detail-page .remove-row::before {
-    display: none;
-  }
 }
 
 @media (min-width: 701px) and (max-width: 1180px) {
