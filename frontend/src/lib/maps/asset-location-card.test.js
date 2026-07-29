@@ -40,6 +40,21 @@ test("shared map exposes bounded zoom controls", () => {
   assert.match(componentCss, /@media \(max-width: 700px\)[\s\S]*?height: 44px;[\s\S]*?width: 44px;/);
 });
 
+test("shared map uses a taller responsive viewport without overflowing phones", () => {
+  assert.match(
+    componentCss,
+    /\.asset-location-card\.is-map-visible \.asset-map-hover \{[\s\S]*?display: flex;[\s\S]*?flex-direction: column;[\s\S]*?height: clamp\(390px, 36vw, 490px\);/,
+  );
+  assert.match(
+    componentCss,
+    /\.asset-location-card \.asset-map-tiles \{[\s\S]*?flex: 1 1 auto;[\s\S]*?min-height: 320px;/,
+  );
+  assert.match(
+    componentCss,
+    /@media \(max-width: 700px\)[\s\S]*?\.asset-location-card \.asset-map-tiles \{[\s\S]*?aspect-ratio: 4 \/ 3;[\s\S]*?flex: none;[\s\S]*?height: auto;/,
+  );
+});
+
 test("detail pages place the shared asset map in Review and mechanic Work", () => {
   assert.match(detailSections, /const detailMapVehicle = selectedVehicle \|\| mechanicMapVehicle/);
   assert.match(detailSections, /const detailMapLocation = getVehicleLocation\(selectedVehicle\) \|\| mechanicMapLocation/);

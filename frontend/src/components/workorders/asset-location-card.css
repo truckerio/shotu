@@ -16,7 +16,20 @@
 }
 
 .asset-location-card.is-map-visible .asset-map-hover {
+  display: flex;
+  flex-direction: column;
+  height: clamp(390px, 36vw, 490px);
+  max-height: 520px;
   transition-delay: 0s;
+}
+
+.asset-location-card .asset-map-tiles {
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  height: auto;
+  max-height: none;
+  min-height: 320px;
+  min-width: 0;
 }
 
 .asset-map-zoom-controls {
@@ -71,6 +84,18 @@
 }
 
 @media (max-width: 700px) {
+  .asset-location-card.is-map-visible .asset-map-hover {
+    height: auto;
+    max-height: 420px;
+  }
+
+  .asset-location-card .asset-map-tiles {
+    aspect-ratio: 4 / 3;
+    flex: none;
+    height: auto;
+    min-height: 0;
+  }
+
   .asset-map-zoom-controls button {
     height: 44px;
     width: 44px;
