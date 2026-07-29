@@ -41,7 +41,6 @@ export function AuthGate({ children }) {
   const [actor, setActor] = useState(null);
   const [actorState, setActorState] = useState("idle");
   const [actorError, setActorError] = useState("");
-<<<<<<< HEAD
   const [actorSession, setActorSession] = useState({ kiosk: null, sessionMode: "standard" });
   const [kioskContext, setKioskContext] = useState(undefined);
   const [standardLogin, setStandardLogin] = useState(false);

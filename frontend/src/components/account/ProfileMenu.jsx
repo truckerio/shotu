@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronDown, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
 import { useKioskSession } from "../../features/kiosk/KioskSessionContext.jsx";
 import { authClient } from "../../lib/auth-client.js";
+import { PasskeyManager } from "./PasskeyManager.jsx";
 import "./profile-menu.css";
 
 function initials(name = "") {
@@ -22,7 +23,7 @@ function roleLabel(role) {
 
 export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false }) {
   const kioskSession = useKioskSession();
-
+  const [passkeysOpen, setPasskeysOpen] = useState(false);
   async function signOut() {
     await authClient.signOut();
     window.location.replace("/");
@@ -55,6 +56,10 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
             </span>
           </MenuItem>
         ) : null}
+        <MenuItem className="profile-menu-action" onAction={() => setPasskeysOpen(true)} textValue="Manage passkeys">
+          <UserCircle />
+          <span>Manage passkeys</span>
+        </MenuItem>
         <MenuItem className="profile-menu-action" onAction={signOut} textValue="Sign out">
           <LogOut01 />
           <span>Sign out</span>
@@ -65,7 +70,8 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
 
   if (mobileNav) {
     return (
-      <div className="profile-menu profile-menu-mobile-nav">
+      <>
+        <div className="profile-menu profile-menu-mobile-nav">
         <MenuTrigger>
           <Button className="profile-menu-mobile-nav-trigger" aria-label="Open profile menu">
             <UserCircle aria-hidden="true" />
@@ -73,36 +79,44 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           </Button>
           {accountMenu}
         </MenuTrigger>
-      </div>
+        </div>
+        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
+      </>
     );
   }
 
   if (mobileAction) {
     return (
-      <div className="profile-menu profile-menu-mobile-action">
+      <>
+        <div className="profile-menu profile-menu-mobile-action">
         <MenuTrigger>
           <Button className="profile-menu-mobile-action-trigger" aria-label="Open profile menu">
             <UserCircle aria-hidden="true" />
           </Button>
           {accountMenu}
         </MenuTrigger>
-      </div>
+        </div>
+        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
+      </>
     );
   }
 
   return (
-    <div className={`profile-menu${compactOnPhone ? " profile-menu-with-phone-brand" : ""}`}>
-      <MenuTrigger>
-        <Button className="profile-menu-trigger" aria-label="Open account menu">
-          <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
-          <span className="profile-menu-identity">
-            <strong>{actor?.name || "User"}</strong>
-            <small>{roleLabel(actor?.role)}</small>
-          </span>
-          <ChevronDown aria-hidden="true" />
-        </Button>
-        {accountMenu}
-      </MenuTrigger>
-    </div>
+    <>
+      <div className={`profile-menu${compactOnPhone ? " profile-menu-with-phone-brand" : ""}`}>
+        <MenuTrigger>
+          <Button className="profile-menu-trigger" aria-label="Open account menu">
+            <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
+            <span className="profile-menu-identity">
+              <strong>{actor?.name || "User"}</strong>
+              <small>{roleLabel(actor?.role)}</small>
+            </span>
+            <ChevronDown aria-hidden="true" />
+          </Button>
+          {accountMenu}
+        </MenuTrigger>
+      </div>
+      <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
+    </>
   );
 }

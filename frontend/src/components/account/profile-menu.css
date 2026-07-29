@@ -131,6 +131,261 @@
   background: #f2f4f7;
 }
 
+.passkey-modal-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(16 24 40 / 48%);
+}
+
+.passkey-modal {
+  width: min(100%, 560px);
+  max-height: min(720px, calc(100dvh - 40px));
+  overflow: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 48px rgb(16 24 40 / 24%);
+}
+
+.passkey-dialog {
+  padding: 24px;
+  outline: none;
+}
+
+.passkey-dialog-heading,
+.passkey-list-heading,
+.passkey-item,
+.passkey-item-actions,
+.passkey-rename {
+  display: flex;
+  align-items: center;
+}
+
+.passkey-dialog-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.passkey-dialog-heading h2,
+.passkey-list-heading h3 {
+  margin: 0;
+  color: #181d27;
+}
+
+.passkey-dialog-heading h2 {
+  font-size: var(--text-page-title);
+}
+
+.passkey-dialog-heading p {
+  margin: 5px 0 0;
+  color: #667085;
+  font-size: var(--text-secondary);
+}
+
+.passkey-close,
+.passkey-register button,
+.passkey-list-heading button,
+.passkey-item-actions button,
+.passkey-rename button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #344054;
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--weight-semibold);
+}
+
+.passkey-close {
+  flex: 0 0 44px;
+  font-size: 24px;
+}
+
+.passkey-register {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.passkey-register label {
+  display: block;
+  margin-bottom: 6px;
+  color: #414651;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.passkey-register label span {
+  color: #717680;
+  font-weight: var(--weight-regular);
+}
+
+.passkey-register input,
+.passkey-rename input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.passkey-register button {
+  padding-inline: 16px;
+  border-color: #1570ef;
+  background: #1570ef;
+  color: #fff;
+}
+
+.passkey-message {
+  margin: 14px 0 0;
+  font-size: var(--text-secondary);
+}
+
+.passkey-message-error {
+  color: #b42318;
+}
+
+.passkey-message-success {
+  color: #067647;
+}
+
+.passkey-list-heading {
+  justify-content: space-between;
+  margin-top: 24px;
+}
+
+.passkey-list-heading h3 {
+  font-size: var(--text-section-title);
+}
+
+.passkey-list-heading button,
+.passkey-item-actions button,
+.passkey-rename button {
+  padding-inline: 12px;
+}
+
+.passkey-empty {
+  margin: 14px 0 0;
+  padding: 20px;
+  border: 1px dashed #d5d9df;
+  border-radius: 8px;
+  color: #667085;
+  text-align: center;
+}
+
+.passkey-list {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.passkey-item {
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+}
+
+.passkey-item-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.passkey-item-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.passkey-item-copy small {
+  margin-top: 3px;
+  color: #717680;
+}
+
+.passkey-item-actions,
+.passkey-rename {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.passkey-item-actions span {
+  flex-basis: 100%;
+  color: #b42318;
+  font-size: var(--text-caption);
+  text-align: right;
+}
+
+.passkey-remove,
+.passkey-remove-confirm {
+  color: #b42318 !important;
+}
+
+.passkey-rename {
+  width: 100%;
+}
+
+.passkey-rename [data-rac] {
+  min-width: 160px;
+  flex: 1;
+}
+
+.passkey-close[data-disabled],
+.passkey-register button[data-disabled],
+.passkey-list-heading button[data-disabled],
+.passkey-item-actions button[data-disabled],
+.passkey-rename button[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 600px) {
+  .passkey-modal-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .passkey-modal {
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 16px);
+    border-radius: 14px 14px 0 0;
+  }
+
+  .passkey-dialog {
+    padding: 20px 18px max(20px, env(safe-area-inset-bottom));
+  }
+
+  .passkey-register {
+    grid-template-columns: 1fr;
+  }
+
+  .passkey-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .passkey-item-actions {
+    justify-content: flex-start;
+  }
+
+  .passkey-item-actions span {
+    text-align: left;
+  }
+}
+
 @media (max-width: 640px) {
   .profile-menu-mobile-nav {
     display: contents;

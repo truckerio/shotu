@@ -22,6 +22,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [passkeySubmitting, setPasskeySubmitting] = useState(false);
   const [error, setError] = useState("");
   const shellRef = useRef(null);
 
@@ -52,6 +53,29 @@ export function LoginPage() {
     window.location.replace("/");
   }
 
+  async function signInWithPasskey() {
+    if (!window.PublicKeyCredential) {
+      setError("Passkeys are not available in this browser. Use your password instead.");
+      return;
+    }
+
+    setPasskeySubmitting(true);
+    setError("");
+
+    try {
+      const result = await authClient.signIn.passkey();
+      if (result?.error) {
+        setError("Passkey sign-in was not completed. Try again or use your password.");
+        setPasskeySubmitting(false);
+        return;
+      }
+      window.location.replace("/");
+    } catch {
+      setError("Passkey sign-in was not completed. Try again or use your password.");
+      setPasskeySubmitting(false);
+    }
+  }
+
   const viewportStyle = {
     "--auth-visual-viewport-height": viewportHeight ? `${viewportHeight}px` : "100dvh",
     "--auth-visual-viewport-offset-top": `${viewportOffsetTop}px`,
@@ -72,11 +96,24 @@ export function LoginPage() {
           </div>
         </header>
 
+        <Button
+          className="auth-passkey-submit"
+          type="button"
+          isDisabled={passkeySubmitting || submitting}
+          onPress={signInWithPasskey}
+        >
+          {passkeySubmitting ? "Waiting for passkey..." : "Sign in with a passkey"}
+        </Button>
+
+        <div className="auth-divider" aria-hidden="true">
+          <span>or use your password</span>
+        </div>
+
         <Form className="auth-form" onSubmit={submit} validationBehavior="native">
           <TextField isRequired name="identifier" value={identifier} onChange={setIdentifier}>
             <Label>Username or email</Label>
             <Input
-              autoComplete="username"
+              autoComplete="username webauthn"
               autoCapitalize="none"
               enterKeyHint="next"
               spellCheck="false"
@@ -102,9 +139,9 @@ export function LoginPage() {
             <FieldError />
           </TextField>
 
-          {error ? <p className="auth-error" role="alert">{error}</p> : null}
+          {error ? <p className="auth-error auth-login-error" role="alert">{error}</p> : null}
 
-          <Button className="auth-submit" type="submit" isDisabled={submitting || !identifier.trim() || !password}>
+          <Button className="auth-submit" type="submit" isDisabled={submitting || passkeySubmitting || !identifier.trim() || !password}>
             {submitting ? "Signing in..." : "Sign in"}
           </Button>
         </Form>
