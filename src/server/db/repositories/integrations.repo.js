@@ -230,6 +230,51 @@ export async function getIntegrationOAuthCredential(provider, companyId) {
   return null;
 }
 
+export async function clearIntegrationOAuthCredentials(
+  provider,
+  companyId,
+  { status = "configured", tokenEnvKey = "" } = {},
+) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const result = await client.query(
+      `update integration_accounts
+       set status = $3,
+           token_env_key = $4,
+           access_token = null,
+           refresh_token = null,
+           token_type = null,
+           scope = null,
+           expires_at = null,
+           oauth_state = null,
+           oauth_state_created_at = null,
+           updated_at = now()
+       where company_id = $1 and provider = $2
+       returning id, company_id, provider, status, token_env_key, updated_at`,
+      [tenantId, provider, status, tokenEnvKey],
+    );
+    const account = result.rows[0] || null;
+    if (account) {
+      await client.query(
+        `delete from integration_credentials
+         where company_id = $1
+           and integration_account_id = $2
+           and credential_kind = 'oauth'`,
+        [tenantId, account.id],
+      );
+    }
+    await client.query("commit");
+    return account;
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function upsertIntegrationStatus(provider, updates, companyId) {
   const tenantId = requireCompanyId(companyId);
   const result = await query(

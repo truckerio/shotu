@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { env } from "../../config/env.js";
 import { migrate } from "../../db/migrate.js";
 import {
+  clearIntegrationOAuthCredentials,
   findIntegrationByOAuthState,
   getIntegrationOAuthCredential,
   getIntegrationStatus,
@@ -51,13 +52,25 @@ async function tokenRequest(body) {
   const text = await response.text();
   const payload = text ? JSON.parse(text) : {};
   if (!response.ok) {
-    throw new Error(payload.message || payload.error_description || payload.error || `Samsara OAuth failed with ${response.status}`);
+    const error = new Error(payload.message || payload.error_description || payload.error || `Samsara OAuth failed with ${response.status}`);
+    error.code = payload.error || `oauth_http_${response.status}`;
+    throw error;
   }
   return payload;
 }
 
 function expiresAtFromNow(expiresIn) {
   return new Date(Date.now() + Math.max(1, Number(expiresIn) || 3600) * 1000).toISOString();
+}
+
+export function isRejectedSamsaraOAuthCredential(error) {
+  return ["invalid_grant", "invalid_client", "unauthorized_client"]
+    .includes(String(error?.code || "").toLowerCase());
+}
+
+function apiTokenFallback(allowApiTokenFallback, companyId) {
+  if (!allowApiTokenFallback || companyId !== DEFAULT_COMPANY_ID || !env.samsaraApiToken) return null;
+  return { token: env.samsaraApiToken, source: "env" };
 }
 
 export async function samsaraOAuthStartUrl(req, companyId = DEFAULT_COMPANY_ID) {
@@ -114,20 +127,31 @@ export async function getSamsaraAccessToken({
   }
 
   if (credential?.refreshToken) {
-    const tokens = await tokenRequest({ grant_type: "refresh_token", refresh_token: credential.refreshToken });
-    const saved = await saveOAuthTokens(PROVIDER, {
-      status: "connected",
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token || credential.refreshToken,
-      tokenType: tokens.token_type,
-      scope: tokens.scope || account.scope,
-      expiresAt: expiresAtFromNow(tokens.expires_in),
-    }, companyId);
-    return { token: tokens.access_token, source: saved.token_env_key || "oauth" };
+    try {
+      const tokens = await tokenRequest({ grant_type: "refresh_token", refresh_token: credential.refreshToken });
+      const saved = await saveOAuthTokens(PROVIDER, {
+        status: "connected",
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || credential.refreshToken,
+        tokenType: tokens.token_type,
+        scope: tokens.scope || account.scope,
+        expiresAt: expiresAtFromNow(tokens.expires_in),
+      }, companyId);
+      return { token: tokens.access_token, source: saved.token_env_key || "oauth" };
+    } catch (error) {
+      const fallback = apiTokenFallback(allowApiTokenFallback, companyId);
+      if (!fallback) throw error;
+      if (isRejectedSamsaraOAuthCredential(error)) {
+        await clearIntegrationOAuthCredentials(PROVIDER, companyId, {
+          status: "configured",
+          tokenEnvKey: "SAMSARA_API_TOKEN",
+        });
+      }
+      return fallback;
+    }
   }
 
-  if (allowApiTokenFallback && companyId === DEFAULT_COMPANY_ID && env.samsaraApiToken) {
-    return { token: env.samsaraApiToken, source: "env" };
-  }
+  const fallback = apiTokenFallback(allowApiTokenFallback, companyId);
+  if (fallback) return fallback;
   throw new Error("Connect Samsara with OAuth before syncing vehicles.");
 }
