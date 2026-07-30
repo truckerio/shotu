@@ -17,6 +17,7 @@ import { WorkorderTimelinePanel } from "../../components/workorders/WorkorderTim
 import { timelineEventCount } from "../../components/workorders/workorder-timeline-model.js";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { PreviewFullscreen, WorkorderPreview } from "../generator/GeneratorUi.jsx";
+import { canonicalDetailPreviewTemplate } from "../workorder-detail/workorder-preview-template.js";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
@@ -343,6 +344,7 @@ export function SurveillanceWorkspace({ actor }) {
     const assetLabel = workorder.asset?.unitNo || workorder.asset?.name;
     const previewForm = normalizeWorkorderFormData({
       ...formData,
+      ...canonicalDetailPreviewTemplate(workorder),
       mechanicConcern: formData.mechanicConcern || workorder.concern || "",
       customerCompanyName: customerName || "",
       unitNo: formData.unitNo || assetLabel || "",

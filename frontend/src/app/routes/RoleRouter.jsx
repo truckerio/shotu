@@ -7,6 +7,7 @@ import {
 import {
   createWorkorderSearch,
   currentRouteParams,
+  defaultWorkspaceForRole,
   draftsSearch,
   readInitialWorkspace,
   replaceRouteSearch,
@@ -1404,7 +1405,7 @@ export function RoleRouter({ actor }) {
     setSelectedVehicle(null);
     setPreviewPanelOpen(false);
     setDetailSource(null);
-    setWorkspace(actor.role === "admin" ? "admin" : actor.role === "mechanic" ? "mechanic" : "office");
+    setWorkspace(defaultWorkspaceForRole(actor.role));
     replaceRouteSearch("");
   }
 

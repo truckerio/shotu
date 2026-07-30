@@ -85,6 +85,10 @@ test("phone Create renders one form page and a contained compact Preview", () =>
   );
   assert.match(
     createCss,
+    /\.create-workorder-page\.create-section-preview\s+\.workorder-compact-preview\s+\.preview-panel\s*\{[^}]*display:\s*grid;/s,
+  );
+  assert.match(
+    createCss,
     /\.workorder-compact-preview\s+\.preview-pane-content\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
   );
   assert.match(

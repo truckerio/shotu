@@ -25,6 +25,10 @@ test("compact Preview document has non-zero geometry at supported phone widths",
 test("compact Preview applies measured numeric scale instead of relying on container units", () => {
   assert.match(
     css,
+    /\.workorder-detail-page\s+\.workorder-detail-layout\s+\.workorder-compact-preview\s+\.preview-panel\s*\{[^}]*display:\s*grid;/s,
+  );
+  assert.match(
+    css,
     /\.workorder-compact-preview\s+\.workorder-preview-shell\s*>\s*div\s*\{[^}]*transform:\s*scale\(var\(--workorder-preview-scale,\s*1\)\);/s,
   );
 });

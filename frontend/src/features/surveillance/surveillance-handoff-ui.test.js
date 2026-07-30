@@ -16,3 +16,11 @@ test("Surveillance uses explicit request and correction handoff language", () =>
   assert.match(workspace, />Request information</);
   assert.doesNotMatch(workspace, />Send back for information</);
 });
+
+test("Surveillance Preview overlays stale saved headings with the current location", () => {
+  assert.match(workspace, /import \{ canonicalDetailPreviewTemplate \}/);
+  assert.match(
+    workspace,
+    /\.\.\.formData,\s*\.\.\.canonicalDetailPreviewTemplate\(workorder\),/,
+  );
+});

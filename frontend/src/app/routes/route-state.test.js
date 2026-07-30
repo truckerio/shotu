@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createWorkorderSearch,
+  defaultWorkspaceForRole,
   draftsSearch,
   readInitialWorkspace,
   routeStartsLoading,
@@ -30,4 +31,11 @@ test("initial workspace follows role and URL ownership", () => {
   assert.equal(readInitialWorkspace({ role: "office" }), "office");
   assert.equal(routeStartsLoading(), false);
   globalThis.window = previousWindow;
+});
+
+test("fallback navigation returns every role to its own workspace", () => {
+  assert.equal(defaultWorkspaceForRole("admin"), "admin");
+  assert.equal(defaultWorkspaceForRole("surveillance"), "surveillance");
+  assert.equal(defaultWorkspaceForRole("mechanic"), "mechanic");
+  assert.equal(defaultWorkspaceForRole("office"), "office");
 });
