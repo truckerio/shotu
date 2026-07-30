@@ -19,7 +19,9 @@ import {
   officeAttentionReasons,
   officeHandoffSummary,
   officeLifecycle,
+  officeQueueFilterState,
   officeRowsForTab,
+  officeTabForMechanicFilter,
   officeUrgency,
 } from "./officeWorkspaceConfig.js";
 import "./office.css";
@@ -132,9 +134,13 @@ export function OfficeWorkspace({
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    if (!legacyDraftRoute && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "all", "closed"].includes(saved.activeTab)) setActiveTab(saved.activeTab);
-    setLifecycleFilter(saved.lifecycleFilter || "");
-    setMechanicFilter(saved.mechanicFilter || "");
+    const savedTab = !legacyDraftRoute && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "all", "closed"].includes(saved.activeTab)
+      ? saved.activeTab
+      : legacyDraftRoute ? "drafts" : "needs";
+    const normalized = officeQueueFilterState(savedTab, saved);
+    setActiveTab(normalized.activeTab);
+    setLifecycleFilter(normalized.lifecycleFilter);
+    setMechanicFilter(normalized.mechanicFilter);
     setLocationFilter(saved.locationFilter || "");
     preferenceHydrated.current = true;
   }, [legacyDraftRoute, queuePreferences.ready]);
@@ -154,6 +160,18 @@ export function OfficeWorkspace({
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  function selectQueue(nextTab) {
+    const normalized = officeQueueFilterState(nextTab, { lifecycleFilter, mechanicFilter });
+    setActiveTab(normalized.activeTab);
+    setLifecycleFilter(normalized.lifecycleFilter);
+    setMechanicFilter(normalized.mechanicFilter);
+  }
+
+  function selectMechanic(nextMechanic) {
+    setMechanicFilter(nextMechanic);
+    setActiveTab((current) => officeTabForMechanicFilter(current, nextMechanic));
   }
 
   const allRows = useMemo(() => buildOfficeRows(dashboard), [dashboard]);
@@ -198,11 +216,11 @@ export function OfficeWorkspace({
       <section className={`office-layout${activeTab === "drafts" ? " is-drafts" : ""}`}>
         {activeTab !== "drafts" ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
           <div className="office-panel-head"><strong>Mechanics</strong><span>{mechanics.length}</span></div>
-          <button className={!mechanicFilter ? "active" : ""} type="button" onClick={() => setMechanicFilter("")}>
+          <button className={!mechanicFilter ? "active" : ""} type="button" onClick={() => selectMechanic("")}>
             <span>All mechanics</span><strong>{allRows.length}</strong>
           </button>
           {mechanics.map((mechanic) => (
-            <button className={mechanicFilter === mechanic.name ? "active" : ""} key={mechanic.id || mechanic.name} type="button" onClick={() => setMechanicFilter(mechanic.name)}>
+            <button className={mechanicFilter === mechanic.name ? "active" : ""} key={mechanic.id || mechanic.name} type="button" onClick={() => selectMechanic(mechanic.name)}>
               <span>{mechanic.name}</span>
               <small>{mechanic.active} active · {mechanic.attention} need attention</small>
               <strong>{mechanic.total}</strong>
@@ -213,27 +231,27 @@ export function OfficeWorkspace({
         <section className="mechanic-queue-shell office-table-shell">
           <div className="queue-toolbar office-toolbar role-queue-toolbar">
             <div className="role-desktop-queues">
-              <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+              <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={selectQueue} />
             </div>
             <MobileQueueToolbar
               className="role-mobile-primary-queues"
               tabs={mobilePrimaryTabs}
               activeTab={activeTab}
-              onChange={setActiveTab}
+              onChange={selectQueue}
               label="Open office queues, search, and filters"
               title="Queues, search, and filters"
               filtersActive={Boolean(search || mechanicFilter || locationFilter || lifecycleFilter)}
               onClearFilters={() => { setSearch(""); setMechanicFilter(""); setLocationFilter(""); setLifecycleFilter(""); }}
             >
               <div className="role-mobile-secondary-queues">
-                <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+                <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={selectQueue} />
               </div>
               {activeTab !== "drafts" ? <>
                 <label className="mechanic-search">
                   <SearchMd />
                   <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
                 </label>
-                <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
+                <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => selectMechanic(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
                 {locations.length > 1 ? <label><span>Location</span><select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label> : null}
                 <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option><option value="cancelled">Cancelled</option></select></label>
               </> : null}

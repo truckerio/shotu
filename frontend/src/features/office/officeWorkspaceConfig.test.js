@@ -5,6 +5,8 @@ import {
   OFFICE_SECONDARY_TAB_KEYS,
   needsOfficeAction,
   officeHandoffSummary,
+  officeQueueFilterState,
+  officeTabForMechanicFilter,
   officeUrgency,
   officeRowsForTab,
 } from "./officeWorkspaceConfig.js";
@@ -54,4 +56,25 @@ test("done and Odoo queue combines review and closed work without duplicates", (
     officeRowsForTab("doneOdoo", dashboard, [], []).map(({ id }) => id),
     ["review", "duplicate", "closed"],
   );
+});
+
+test("Unassigned queue cannot retain filters that exclude every unassigned row", () => {
+  assert.deepEqual(officeQueueFilterState("open", {
+    lifecycleFilter: "accepted",
+    mechanicFilter: "Anmol",
+  }), {
+    activeTab: "open",
+    lifecycleFilter: "",
+    mechanicFilter: "",
+  });
+  assert.deepEqual(officeQueueFilterState("active", {
+    lifecycleFilter: "accepted",
+    mechanicFilter: "Anmol",
+  }), {
+    activeTab: "active",
+    lifecycleFilter: "accepted",
+    mechanicFilter: "Anmol",
+  });
+  assert.equal(officeTabForMechanicFilter("open", "Anmol"), "all");
+  assert.equal(officeTabForMechanicFilter("open", ""), "open");
 });

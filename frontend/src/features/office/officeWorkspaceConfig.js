@@ -75,3 +75,18 @@ export function officeRowsForTab(activeTab, dashboard, allRows, needsRows) {
   }
   return dashboard?.[activeTab] || [];
 }
+
+export function officeQueueFilterState(activeTab, {
+  lifecycleFilter = "",
+  mechanicFilter = "",
+} = {}) {
+  return {
+    activeTab,
+    lifecycleFilter: activeTab === "open" ? "" : lifecycleFilter,
+    mechanicFilter: activeTab === "open" ? "" : mechanicFilter,
+  };
+}
+
+export function officeTabForMechanicFilter(activeTab, mechanicFilter) {
+  return activeTab === "open" && mechanicFilter ? "all" : activeTab;
+}

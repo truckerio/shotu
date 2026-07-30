@@ -26,3 +26,10 @@ test("Manager and Mechanic share one phone Create and profile action owner", () 
     assert.match(source, /<WorkspaceCreateActions actor=\{actor\} onCreateWorkorder=\{onCreateWorkorder\}/);
   }
 });
+
+test("Manager queue controls clear incompatible Unassigned filters", () => {
+  assert.match(workspace, /officeQueueFilterState\(nextTab, \{ lifecycleFilter, mechanicFilter \}\)/);
+  assert.match(workspace, /officeTabForMechanicFilter\(current, nextMechanic\)/);
+  assert.match(workspace, /WorkorderQueueTabs tabs=\{tabs\} activeTab=\{activeTab\} onChange=\{selectQueue\}/);
+  assert.match(workspace, /onClick=\{\(\) => selectMechanic\(mechanic\.name\)\}/);
+});
