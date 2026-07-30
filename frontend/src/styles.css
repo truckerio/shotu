@@ -1709,7 +1709,7 @@ textarea:focus {
   min-width: 0;
 }
 
-.used-part-field > span {
+.used-part-field > .used-part-label {
   display: none;
 }
 

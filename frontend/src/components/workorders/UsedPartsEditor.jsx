@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
@@ -60,11 +60,15 @@ export function UsedPartsEditor({
 }) {
   const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
   const [visibleRowCount, setVisibleRowCount] = useState(() => normalizeUsedParts(parts, minimum).length);
-  const rows = normalizeUsedParts(parts, Math.max(minimum, visibleRowCount));
+  const rows = useMemo(
+    () => normalizeUsedParts(parts, Math.max(minimum, visibleRowCount)),
+    [minimum, parts, visibleRowCount],
+  );
+  const rowsPayload = useMemo(() => JSON.stringify(rows), [rows]);
   const storageKey = actorId
     ? mechanicWorkStorageKey("used-parts", actorId, detail.workorder.id)
     : "";
-  const persistedRef = useRef(JSON.stringify(rows));
+  const persistedRef = useRef(rowsPayload);
   const hydratedRef = useRef(false);
   const saveRef = useRef(onSave);
   const [findingRow, setFindingRow] = useState(-1);
@@ -102,14 +106,13 @@ export function UsedPartsEditor({
 
   useEffect(() => {
     if (!hydratedRef.current || disabled || !storageKey) return undefined;
-    const payload = JSON.stringify(rows);
-    if (payload === persistedRef.current) return undefined;
-    window.localStorage.setItem(storageKey, payload);
+    if (rowsPayload === persistedRef.current) return undefined;
+    window.localStorage.setItem(storageKey, rowsPayload);
     setSaveState("Saving...");
     const timer = window.setTimeout(async () => {
       try {
         await saveRef.current(rows);
-        persistedRef.current = payload;
+        persistedRef.current = rowsPayload;
         window.localStorage.removeItem(storageKey);
         setSaveState("Saved");
       } catch (error) {
@@ -118,7 +121,7 @@ export function UsedPartsEditor({
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [disabled, rows, storageKey]);
+  }, [disabled, rows, rowsPayload, storageKey]);
 
   function update(index, field, value) {
     onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
@@ -212,7 +215,7 @@ export function UsedPartsEditor({
           <div className="part-row" key={index}>
             <strong>{index + 1}</strong>
             <label className="used-part-field">
-              <span>Part number</span>
+              <span className="used-part-label">Part number</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
                 <input {...textEntryProps("identifier")} value={part.partNo} onChange={(event) => update(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" disabled={disabled} />
                 {suggestionsEnabled ? (
@@ -235,8 +238,15 @@ export function UsedPartsEditor({
               />
             </div>
             <label className="used-part-field used-part-repair">
-              <span>Work performed</span>
-              <NarrativeField singleLine value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
+              <span className="used-part-label">Repair order</span>
+              <NarrativeField
+                singleLine
+                value={part.repairOrder}
+                onChange={(event) => update(index, "repairOrder", event.target.value)}
+                aria-label={`Repair order ${index + 1}`}
+                placeholder="Describe repair for this part"
+                disabled={disabled}
+              />
             </label>
             <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
           </div>

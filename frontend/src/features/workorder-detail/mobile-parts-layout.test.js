@@ -29,11 +29,22 @@ test("shared parts editor uses one text remove action without duplicate icons", 
   assert.doesNotMatch(css, /\.remove-row::before/);
 });
 
+test("repair order is a visible, correctly named shared editor control", () => {
+  assert.match(editor, /<span className="used-part-label">Repair order<\/span>/);
+  assert.match(editor, /aria-label=\{`Repair order \$\{index \+ 1\}`\}/);
+  assert.match(editor, /placeholder="Describe repair for this part"/);
+  assert.doesNotMatch(editor, /aria-label=\{`Work performed \$\{index \+ 1\}`\}/);
+  assert.match(globalCss, /\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
+  assert.doesNotMatch(globalCss, /\.used-part-field\s*>\s*span\s*\{[^}]*display:\s*none;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*34px;[^}]*padding:\s*6px 8px;/s);
+});
+
 test("phone parts editor removes desktop labels", () => {
   const mobileCss = phonePartsCss();
 
   assert.match(mobileCss, /\.used-parts-editor\s+\.part-row\.part-row-head\s*\{[^}]*display:\s*none;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-field\s*>\s*span\s*\{[^}]*display:\s*none;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*44px;/s);
 });
 
 test("phone parts row fits 390px and 430px viewports without control overlap", () => {
