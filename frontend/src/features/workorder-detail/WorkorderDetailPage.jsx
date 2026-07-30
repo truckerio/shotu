@@ -85,6 +85,7 @@ export function WorkorderDetailPage({
   visibleTimeline,
   workorderCountLabel,
   applyVehicle,
+  acceptOpenedMechanicWorkorder,
   closeOfficeWorkorder,
   cancelOfficeWorkorder,
   jumpToPreview,
@@ -218,6 +219,18 @@ export function WorkorderDetailPage({
                 >
                   <CheckCircle />
                   <span>Approve</span>
+                </button>
+              ) : null}
+              {isMechanicDetail && activeWorkorder.allowedActions?.accept ? (
+                <button
+                  className="detail-close-workorder-button"
+                  type="button"
+                  onClick={acceptOpenedMechanicWorkorder}
+                  disabled={Boolean(mechanicAction.busy)}
+                  aria-label="Accept work and start this job"
+                >
+                  <CheckCircle />
+                  <span>{mechanicAction.busy === "accept" ? "Accepting..." : "Accept work"}</span>
                 </button>
               ) : null}
               {!isPhone ? (

@@ -16,6 +16,7 @@ import {
 import { getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
 import { MechanicWorkspace } from "../../features/mechanic/MechanicWorkspace.jsx";
 import { useMechanicProgress } from "../../features/mechanic/progress/useMechanicProgress.js";
+import { resolveMechanicProgressFields } from "../../features/mechanic/progress/mechanic-progress-fields.js";
 import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceWorkspace.jsx";
@@ -1068,6 +1069,7 @@ export function RoleRouter({ actor }) {
       || workorder.mechanic?.name
       || (detail.user?.role === "mechanic" ? detail.user.name : "");
     const approvalName = canonicalApprovalName(workorder);
+    const mechanicProgressFields = resolveMechanicProgressFields(workorder, savedForm);
 
     return {
       ...current,
@@ -1084,8 +1086,7 @@ export function RoleRouter({ actor }) {
       model: savedForm.model || model,
       vinNo: savedForm.vinNo || asset.vin || "",
       mechanicConcern: savedForm.mechanicConcern || workorder.concern || "",
-      diagnosis: workorder.diagnosis || savedForm.diagnosis || "",
-      workPerformed: workorder.workPerformed || savedForm.workPerformed || "",
+      ...mechanicProgressFields,
       mechanicName: assignedMechanicName || savedForm.mechanicName,
       officeNotes: workorder.officeNotes || savedForm.officeNotes || "",
       managerName: approvalName || savedForm.managerName || "",
@@ -1630,6 +1631,32 @@ export function RoleRouter({ actor }) {
     }
   }
 
+  async function acceptOpenedMechanicWorkorder() {
+    const workorderId = activeWorkorder?.workorder?.id;
+    if (!workorderId || !isMechanicDetail) return false;
+    setMechanicAction({ busy: "accept", message: "" });
+    try {
+      await api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}/accept`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}`);
+      setActiveWorkorder(detail);
+      setDetailStatus(detail.workorder.status);
+      setForm((current) => workorderFormValues(detail, current));
+      mechanicProgress.reset({
+        id: detail.workorder.id,
+        progress: detail.workorder,
+        nextVersion: detail.workorder.progressVersion,
+      });
+      setMechanicAction({ busy: "", message: "Work accepted. You can start recording progress." });
+      return true;
+    } catch (error) {
+      setMechanicAction({ busy: "", message: error.message });
+      return false;
+    }
+  }
+
   async function markMechanicWorkDone(confirmationName) {
     try {
       await mechanicProgress.flush({ recordActivity: true });
@@ -1845,6 +1872,7 @@ export function RoleRouter({ actor }) {
         cancelOfficeWorkorder={cancelOfficeWorkorder}
         jumpToPreview={jumpToPreview}
         openFullscreenPreview={openFullscreenPreview}
+        acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
         printWorkorders={printWorkorders}
         openOfficeCancel={openOfficeCancel}
         openOfficeReturn={openOfficeReturn}

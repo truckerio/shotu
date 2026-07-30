@@ -87,6 +87,14 @@ test("phone Create renders one form page and a contained compact Preview", () =>
     createCss,
     /\.workorder-compact-preview\s+\.preview-pane-content\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
   );
+  assert.match(
+    createPage,
+    /activeSection === "preview"[\s\S]*<CompactWorkorderPreview[\s\S]*<WorkorderPreview label="First page"/,
+  );
+  assert.match(
+    createCss,
+    /\.workorder-compact-preview\s+\.preview-page-card,[\s\S]*\.workorder-preview-shell\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
+  );
 });
 
 test("Create shell owns shared summary and section navigation", () => {
