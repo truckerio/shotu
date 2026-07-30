@@ -138,7 +138,11 @@ function OperationRow({ item, onOpenWorkorder }) {
         <span className={`operations-lifecycle lifecycle-${item.lifecycle || "unknown"}`}>{operationLabel(item.lifecycle)}</span>
         {attentionReasons.length ? (
           <div className="operations-attention-list">
-            {attentionReasons.map((reason) => <span key={reason}>{operationLabel(reason, reason.replaceAll("_", " "))}</span>)}
+            {attentionReasons.map((reason) => (
+              <span className={`operations-attention-${reason}`} key={reason}>
+                {operationLabel(reason, reason.replaceAll("_", " "))}
+              </span>
+            ))}
           </div>
         ) : <span className="operations-no-attention">No attention needed</span>}
       </div>

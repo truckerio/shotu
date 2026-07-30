@@ -170,6 +170,7 @@
 .operations-cell strong { color: #182230; font-weight: var(--weight-semibold); }
 .operations-location strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operations-identity, .operations-state, .operations-wait, .operations-created, .operations-odoo, .operations-activity { align-items: flex-start; flex-direction: column; justify-content: center; }
+.operations-identity { align-content: flex-start; flex-wrap: nowrap; }
 .operations-identity > span, .operations-wait > span, .operations-created > span, .operations-activity > span { color: #667085; font-size: var(--text-caption); }
 
 .operations-concern span {
@@ -258,16 +259,29 @@
   .operations-loading span { height: 150px; }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .operations-tabs button { min-height: 44px; padding: 0 10px; }
   .operations-toolbar { grid-template-columns: 1fr; }
   .operations-toolbar label { grid-column: 1 / -1; }
   .operations-search { grid-column: 1 !important; }
-  .operations-row {
-    gap: 8px 12px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: 12px;
+  .operations-table {
+    background: transparent;
+    border: 0;
+    display: grid;
+    gap: 10px;
   }
+  .operations-row {
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+    gap: 10px 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    overflow: hidden;
+    padding: 14px;
+  }
+  .operations-row.is-overdue { box-shadow: 0 1px 2px rgb(16 24 40 / 4%); }
+  .operations-row.is-unread::before { border-radius: 10px 0 0 10px; }
   .operations-cell {
     min-width: 0;
     padding: 0;
@@ -275,34 +289,69 @@
   .operations-cell::before {
     display: none;
   }
-  .operations-identity {
+  .operations-row .operations-identity {
+    align-content: flex-start;
+    align-items: flex-start;
     display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 2px;
     grid-column: 1;
     grid-row: 1;
+    grid-template-columns: none;
+    justify-content: flex-start;
   }
   .operations-location {
     align-items: flex-end;
     color: #475467;
+    font-size: var(--text-caption);
     grid-column: 2;
     grid-row: 1;
     justify-content: flex-start;
-    max-width: 120px;
+    max-width: 132px;
+    overflow: hidden;
     text-align: right;
+  }
+  .operations-location strong {
+    max-width: 100%;
+    text-overflow: ellipsis;
   }
   .operations-concern {
     grid-column: 1 / -1;
     grid-row: 2;
+    line-height: 1.45;
   }
   .operations-mechanic {
     color: #667085;
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 3;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
-  .operations-state {
-    align-items: flex-end;
-    display: flex;
+  .operations-row .operations-state {
+    align-items: center;
+    display: grid;
+    gap: 6px 10px;
+    grid-column: 1 / -1;
+    grid-row: 4;
+    grid-template-columns: max-content minmax(0, 1fr);
+    justify-content: initial;
+  }
+  .operations-state .operations-lifecycle {
+    grid-column: 1;
+  }
+  .operations-state .operations-attention-list {
     grid-column: 2;
-    grid-row: 3;
+    justify-content: flex-end;
+    min-width: 0;
+    text-align: right;
+  }
+  .operations-state .operations-attention-list span {
+    overflow-wrap: anywhere;
+  }
+  .operations-state .operations-attention-overdue,
+  .operations-state .operations-no-attention {
+    display: none;
   }
   .operations-wait,
   .operations-created,
