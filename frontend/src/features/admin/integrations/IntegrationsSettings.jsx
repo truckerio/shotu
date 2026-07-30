@@ -29,7 +29,7 @@ export function IntegrationsSettings() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState("");
-  const [notice, setNotice] = useState(() => callbackResult() || { message: "", error: "" });
+  const [notice, setNotice] = useState(() => callbackResult() || { message: "", error: "", target: "" });
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [clients, setClients] = useState([]);
   const [createdToken, setCreatedToken] = useState("");
@@ -44,7 +44,7 @@ export function IntegrationsSettings() {
       setStatus(result);
       setClients(clientResult.clients || []);
     } catch (error) {
-      setNotice((current) => ({ ...current, error: error.message }));
+      setNotice({ message: "", error: error.message, target: "samsara" });
     } finally {
       setLoading(false);
     }
@@ -60,15 +60,14 @@ export function IntegrationsSettings() {
 
   async function runAction(name, path, successMessage) {
     setAction(name);
-    setNotice({ message: "", error: "" });
+    setNotice({ message: "", error: "", target: "" });
     try {
       const result = await api(path, { method: "POST", timeoutMs: name === "sync" ? 120_000 : 20_000 });
       if (result?.status === "failed") throw new Error(result.error || "Samsara sync failed.");
-      setNotice({ message: successMessage, error: "" });
+      setNotice({ message: successMessage, error: "", target: "samsara" });
       await loadStatus();
     } catch (error) {
-      setStatus((current) => ({ ...(current || {}), status: "error", error: error.message }));
-      setNotice({ message: "", error: error.message });
+      setNotice({ message: "", error: error.message, target: "samsara" });
     } finally {
       setAction("");
     }
@@ -81,10 +80,10 @@ export function IntegrationsSettings() {
       await api("/api/integrations/samsara", { method: "DELETE", timeoutMs: 20_000 });
       setConfirmDisconnect(false);
       setStatus(null);
-      setNotice({ message: "Samsara disconnected.", error: "" });
+      setNotice({ message: "Samsara disconnected.", error: "", target: "samsara" });
       await loadStatus();
     } catch (error) {
-      setNotice({ message: "", error: error.message });
+      setNotice({ message: "", error: error.message, target: "samsara" });
     } finally {
       setAction("");
     }
@@ -104,7 +103,7 @@ export function IntegrationsSettings() {
       setCreatedToken(result.token || "");
       setClients((current) => [result.client, ...current]);
     } catch (error) {
-      setNotice({ message: "", error: error.message });
+      setNotice({ message: "", error: error.message, target: "clients" });
     } finally {
       setAction("");
     }
@@ -119,9 +118,9 @@ export function IntegrationsSettings() {
         body: "{}",
       });
       setClients((current) => current.map((client) => client.id === clientId ? result.client : client));
-      setNotice({ message: "Integration client revoked.", error: "" });
+      setNotice({ message: "Integration client revoked.", error: "", target: "clients" });
     } catch (error) {
-      setNotice({ message: "", error: error.message });
+      setNotice({ message: "", error: error.message, target: "clients" });
     } finally {
       setAction("");
     }
@@ -144,7 +143,7 @@ export function IntegrationsSettings() {
         </div>
       </div>
 
-      {notice.error ? <p className="integration-notice error" role="alert"><AlertCircle /> <span>{notice.error}</span></p> : null}
+      {notice.error && notice.target !== "samsara" ? <p className="integration-notice error" role="alert"><AlertCircle /> <span>{notice.error}</span></p> : null}
       {notice.message ? <p className="integration-notice success" role="status">{notice.message}</p> : null}
 
       {loading && !status ? (
@@ -153,6 +152,7 @@ export function IntegrationsSettings() {
         <div className="integration-provider-grid">
           <SamsaraIntegrationCard
             action={action}
+            actionError={notice.target === "samsara" ? notice.error : ""}
             provider={samsaraProvider}
             status={status}
             onConnect={connect}

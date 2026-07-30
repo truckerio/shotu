@@ -6,6 +6,7 @@ import {
   needsOfficeAction,
   officeHandoffSummary,
   officeQueueFilterState,
+  officeQueueForViewport,
   officeTabForMechanicFilter,
   officeUrgency,
   officeRowsForTab,
@@ -18,6 +19,12 @@ test("phone office queues expose decision-first buckets", () => {
     { key: "doneOdoo", label: "Done / Odoo" },
   ]);
   assert.deepEqual(OFFICE_SECONDARY_TAB_KEYS, ["open", "parts", "drafts", "all", "closed"]);
+});
+
+test("mobile-only combined queue maps to a visible desktop queue", () => {
+  assert.equal(officeQueueForViewport("doneOdoo", true), "doneOdoo");
+  assert.equal(officeQueueForViewport("doneOdoo", false), "done");
+  assert.equal(officeQueueForViewport("active", false), "active");
 });
 
 test("Manager Needs action includes and prioritizes cross-role handoffs", () => {

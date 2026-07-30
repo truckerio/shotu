@@ -20,6 +20,7 @@ import {
   officeHandoffSummary,
   officeLifecycle,
   officeQueueFilterState,
+  officeQueueForViewport,
   officeRowsForTab,
   officeTabForMechanicFilter,
   officeUrgency,
@@ -134,9 +135,13 @@ export function OfficeWorkspace({
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    const savedTab = !legacyDraftRoute && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "all", "closed"].includes(saved.activeTab)
+    const savedTabCandidate = !legacyDraftRoute && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "all", "closed"].includes(saved.activeTab)
       ? saved.activeTab
       : legacyDraftRoute ? "drafts" : "needs";
+    const savedTab = officeQueueForViewport(
+      savedTabCandidate,
+      window.matchMedia("(max-width: 700px)").matches,
+    );
     const normalized = officeQueueFilterState(savedTab, saved);
     setActiveTab(normalized.activeTab);
     setLifecycleFilter(normalized.lifecycleFilter);
@@ -144,6 +149,17 @@ export function OfficeWorkspace({
     setLocationFilter(saved.locationFilter || "");
     preferenceHydrated.current = true;
   }, [legacyDraftRoute, queuePreferences.ready]);
+
+  useEffect(() => {
+    const phoneQuery = window.matchMedia("(max-width: 700px)");
+    function normalizeDesktopQueue(event) {
+      if (!event.matches) {
+        setActiveTab((current) => officeQueueForViewport(current, false));
+      }
+    }
+    phoneQuery.addEventListener("change", normalizeDesktopQueue);
+    return () => phoneQuery.removeEventListener("change", normalizeDesktopQueue);
+  }, []);
 
   useEffect(() => {
     if (!preferenceHydrated.current) return;
@@ -185,23 +201,27 @@ export function OfficeWorkspace({
   const needsRows = useMemo(() => allRows.filter(needsOfficeAction), [allRows]);
   const mechanics = useMemo(() => mechanicStats(allRows, dashboard?.mechanics), [allRows, dashboard?.mechanics]);
   const locations = useMemo(() => [...new Set(allRows.map((row) => row.locationName).filter(Boolean))].sort(), [allRows]);
+  const doneOdooRows = useMemo(
+    () => officeRowsForTab("doneOdoo", dashboard, allRows, needsRows),
+    [allRows, dashboard, needsRows],
+  );
   const tabs = [
     { key: "needs", label: "Needs action", count: needsRows.length, icon: Tool02 },
-    { key: "open", label: "Unassigned", count: dashboard?.counts.open || 0, icon: Inbox01 },
-    { key: "active", label: "Active", count: dashboard?.counts.active || 0, icon: Clock },
-    { key: "parts", label: "Parts", count: dashboard?.counts.parts || 0, icon: Tool02 },
-    { key: "done", label: "Ready review", count: dashboard?.counts.done || 0, icon: CheckCircle },
+    { key: "open", label: "Unassigned", count: dashboard?.open?.length || 0, icon: Inbox01 },
+    { key: "active", label: "Active", count: dashboard?.active?.length || 0, icon: Clock },
+    { key: "parts", label: "Parts", count: dashboard?.parts?.length || 0, icon: Tool02 },
+    { key: "done", label: "Ready review", count: dashboard?.done?.length || 0, icon: CheckCircle },
     { key: "drafts", label: "Drafts", count: drafts.length, icon: File02 },
     { key: "all", label: "All", count: allRows.length, icon: Briefcase02 },
-    { key: "closed", label: "Closed", count: dashboard?.counts.closed || 0, icon: FileCheck02 },
+    { key: "closed", label: "Closed", count: dashboard?.closed?.length || 0, icon: FileCheck02 },
   ];
   const mobilePrimaryTabs = OFFICE_PRIMARY_TABS.map((tab) => ({
     ...tab,
     count: tab.key === "needs"
       ? needsRows.length
       : tab.key === "active"
-        ? dashboard?.counts.active || 0
-        : (dashboard?.counts.done || 0) + (dashboard?.counts.closed || 0),
+        ? dashboard?.active?.length || 0
+        : doneOdooRows.length,
   }));
   const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key));
   const tabRows = officeRowsForTab(activeTab, dashboard, allRows, needsRows);

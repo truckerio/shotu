@@ -12,6 +12,10 @@ export const OFFICE_SECONDARY_TAB_KEYS = Object.freeze([
   "closed",
 ]);
 
+export function officeQueueForViewport(activeTab, isPhone) {
+  return !isPhone && activeTab === "doneOdoo" ? "done" : activeTab;
+}
+
 export const OFFICE_ATTENTION_LABELS = Object.freeze({
   missing_info: "Surveillance needs information",
   revision_requested: "Changes requested from mechanic",
