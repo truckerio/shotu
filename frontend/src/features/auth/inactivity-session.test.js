@@ -10,7 +10,7 @@ import {
 
 const TIMEOUT_MS = 120_000;
 
-test("admin and office standard sessions stay remembered while kiosk keeps its own lock", () => {
+test("admin, office, and surveillance standard sessions stay remembered while kiosk keeps its own lock", () => {
   assert.equal(shouldEnforceInactivity({
     authenticated: true,
     role: "admin",
@@ -23,17 +23,17 @@ test("admin and office standard sessions stay remembered while kiosk keeps its o
   }), false);
   assert.equal(shouldEnforceInactivity({
     authenticated: true,
+    role: "surveillance",
+    sessionMode: "standard",
+  }), false);
+  assert.equal(shouldEnforceInactivity({
+    authenticated: true,
     role: "mechanic",
     sessionMode: "kiosk",
   }), false);
   assert.equal(shouldEnforceInactivity({
     authenticated: true,
     role: "mechanic",
-    sessionMode: "standard",
-  }), true);
-  assert.equal(shouldEnforceInactivity({
-    authenticated: true,
-    role: "surveillance",
     sessionMode: "standard",
   }), true);
 });

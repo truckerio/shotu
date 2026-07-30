@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 export const INACTIVITY_TIMEOUT_MS = 120_000;
 export const INACTIVITY_WARNING_MS = 30_000;
-export const REMEMBERED_STANDARD_ROLES = Object.freeze(["admin", "office"]);
+export const REMEMBERED_STANDARD_ROLES = Object.freeze(["admin", "office", "surveillance"]);
 
 const CHANNEL_NAME = "owl-inactivity-session";
 const STORAGE_KEY = "owl:inactivity-session";
