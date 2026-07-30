@@ -206,6 +206,14 @@ export function SurveillanceWorkspace({ actor }) {
     .filter((workorder) => !effectiveLocationFilter || workorder.locationName === effectiveLocationFilter)
     .filter((workorder) => matchesDateFilter(workorder.closedAt || workorder.updatedAt, dateStartFilter, dateEndFilter)), [dashboard, activeTab, search, effectiveLocationFilter, dateStartFilter, dateEndFilter]);
 
+  function clearSurveillanceFilters() {
+    setSearch("");
+    setLocationFilter("");
+    setDateStartFilter("");
+    setDateEndFilter("");
+    setCustomDateOpen(false);
+  }
+
   async function openWorkorder(id) {
     setError("");
     try {
@@ -577,7 +585,7 @@ export function SurveillanceWorkspace({ actor }) {
                 label="Open surveillance queues, search, and filters"
                 title="Queues, search, and filters"
                 filtersActive={Boolean(search || effectiveLocationFilter || dateStartFilter || dateEndFilter)}
-                onClearFilters={() => { setSearch(""); setLocationFilter(""); setDateStartFilter(""); setDateEndFilter(""); setCustomDateOpen(false); }}
+                onClearFilters={clearSurveillanceFilters}
               >
                 <label>
                   <span>Queue</span>
@@ -644,7 +652,17 @@ export function SurveillanceWorkspace({ actor }) {
                 )}
               />
             )
-              : <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>}
+              : (
+                <div className="mechanic-empty-state">
+                  <strong>No matching workorders</strong>
+                  {search || effectiveLocationFilter || dateStartFilter || dateEndFilter ? (
+                    <>
+                      <span>Current filters hide this queue.</span>
+                      <button type="button" onClick={clearSurveillanceFilters}>Clear filters</button>
+                    </>
+                  ) : null}
+                </div>
+              )}
         </div>
       </section>
     </main>

@@ -86,3 +86,20 @@ export function buildOperationsQuery(filters, page, pageSize = 50) {
   if (filters.search.trim()) params.set("search", filters.search.trim());
   return params;
 }
+
+export function normalizeOperationsCategoryFilters(category, filters = {}) {
+  const compatibleLifecycle = {
+    active: ["accepted", "in_progress", "mechanic_done"],
+    odoo_backlog: ["closed"],
+    ready_review: ["mechanic_done"],
+    unassigned: ["open"],
+  }[category];
+  const lifecycle = String(filters.lifecycle || "");
+  return {
+    ...filters,
+    category,
+    lifecycle: lifecycle && compatibleLifecycle && !compatibleLifecycle.includes(lifecycle)
+      ? ""
+      : lifecycle,
+  };
+}

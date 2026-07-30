@@ -188,7 +188,10 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
               )}
             />
           ) : (
-            <div className="mechanic-empty-state"><strong>{search ? "No matching jobs" : "No jobs here"}</strong></div>
+            <div className="mechanic-empty-state">
+              <strong>{search ? "No matching jobs" : "No jobs here"}</strong>
+              {search ? <button type="button" onClick={() => setSearch("")}>Clear search</button> : null}
+            </div>
           )}
         </div>
       </section>

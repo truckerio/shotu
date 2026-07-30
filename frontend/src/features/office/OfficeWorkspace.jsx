@@ -174,6 +174,13 @@ export function OfficeWorkspace({
     setActiveTab((current) => officeTabForMechanicFilter(current, nextMechanic));
   }
 
+  function clearOfficeFilters() {
+    setSearch("");
+    setMechanicFilter("");
+    setLocationFilter("");
+    setLifecycleFilter("");
+  }
+
   const allRows = useMemo(() => buildOfficeRows(dashboard), [dashboard]);
   const needsRows = useMemo(() => allRows.filter(needsOfficeAction), [allRows]);
   const mechanics = useMemo(() => mechanicStats(allRows, dashboard?.mechanics), [allRows, dashboard?.mechanics]);
@@ -241,7 +248,7 @@ export function OfficeWorkspace({
               label="Open office queues, search, and filters"
               title="Queues, search, and filters"
               filtersActive={Boolean(search || mechanicFilter || locationFilter || lifecycleFilter)}
-              onClearFilters={() => { setSearch(""); setMechanicFilter(""); setLocationFilter(""); setLifecycleFilter(""); }}
+              onClearFilters={clearOfficeFilters}
             >
               <div className="role-mobile-secondary-queues">
                 <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={selectQueue} />
@@ -326,7 +333,15 @@ export function OfficeWorkspace({
                     }}
                   />
                 ) : (
-                  <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>
+                  <div className="mechanic-empty-state">
+                    <strong>No matching workorders</strong>
+                    {search || mechanicFilter || locationFilter || lifecycleFilter ? (
+                      <>
+                        <span>Current filters hide this queue.</span>
+                        <button type="button" onClick={clearOfficeFilters}>Clear filters</button>
+                      </>
+                    ) : null}
+                  </div>
                 )}
               </div>
             </>

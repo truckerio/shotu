@@ -33,3 +33,11 @@ test("Manager queue controls clear incompatible Unassigned filters", () => {
   assert.match(workspace, /WorkorderQueueTabs tabs=\{tabs\} activeTab=\{activeTab\} onChange=\{selectQueue\}/);
   assert.match(workspace, /onClick=\{\(\) => selectMechanic\(mechanic\.name\)\}/);
 });
+
+test("every role exposes a recovery action when a narrowing filter hides its queue", () => {
+  assert.match(workspace, /onClearFilters=\{clearOfficeFilters\}/);
+  assert.match(workspace, /Current filters hide this queue/);
+  assert.match(mechanicWorkspace, /No matching jobs[\s\S]*Clear search/);
+  assert.match(surveillanceWorkspace, /onClearFilters=\{clearSurveillanceFilters\}/);
+  assert.match(surveillanceWorkspace, /Current filters hide this queue/);
+});

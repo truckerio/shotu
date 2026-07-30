@@ -519,7 +519,7 @@ body.is-resizing-workorder {
   background: transparent;
   border: 0;
   box-shadow: none;
-  min-height: 36px;
+  min-height: 44px;
   min-width: 0;
   outline: 0;
   padding: 0;
@@ -912,6 +912,23 @@ body.is-resizing-workorder {
 
 .mechanic-empty-state strong {
   font-size: 14px;
+}
+
+.mechanic-empty-state span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.mechanic-empty-state button {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  color: #344054;
+  cursor: pointer;
+  font: inherit;
+  margin-top: 4px;
+  min-height: 36px;
+  padding: 7px 12px;
 }
 
 .route-loading {

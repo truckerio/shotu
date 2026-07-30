@@ -68,13 +68,15 @@ test("Unassigned queue cannot retain filters that exclude every unassigned row",
     mechanicFilter: "",
   });
   assert.deepEqual(officeQueueFilterState("active", {
-    lifecycleFilter: "accepted",
+    lifecycleFilter: "closed",
     mechanicFilter: "Anmol",
   }), {
     activeTab: "active",
-    lifecycleFilter: "accepted",
+    lifecycleFilter: "",
     mechanicFilter: "Anmol",
   });
+  assert.equal(officeQueueFilterState("active", { lifecycleFilter: "accepted" }).lifecycleFilter, "accepted");
+  assert.equal(officeQueueFilterState("closed", { lifecycleFilter: "mechanic_done" }).lifecycleFilter, "");
   assert.equal(officeTabForMechanicFilter("open", "Anmol"), "all");
   assert.equal(officeTabForMechanicFilter("open", ""), "open");
 });

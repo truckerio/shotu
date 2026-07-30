@@ -80,9 +80,18 @@ export function officeQueueFilterState(activeTab, {
   lifecycleFilter = "",
   mechanicFilter = "",
 } = {}) {
+  const compatibleLifecycle = {
+    active: ["accepted", "in_progress"],
+    closed: ["closed", "odoo_entered"],
+    done: ["mechanic_done"],
+    doneOdoo: ["mechanic_done", "closed", "odoo_entered"],
+    open: ["open"],
+  }[activeTab];
   return {
     activeTab,
-    lifecycleFilter: activeTab === "open" ? "" : lifecycleFilter,
+    lifecycleFilter: lifecycleFilter && compatibleLifecycle && !compatibleLifecycle.includes(lifecycleFilter)
+      ? ""
+      : lifecycleFilter,
     mechanicFilter: activeTab === "open" ? "" : mechanicFilter,
   };
 }
