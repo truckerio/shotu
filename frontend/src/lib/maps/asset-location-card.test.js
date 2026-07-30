@@ -14,6 +14,10 @@ const componentCss = readFileSync(
   new URL("../../components/workorders/asset-location-card.css", import.meta.url),
   "utf8",
 );
+const roleRouter = readFileSync(
+  new URL("../../app/routes/RoleRouter.jsx", import.meta.url),
+  "utf8",
+);
 
 test("shared asset map stays open on desktop while mobile keeps its reveal controller", () => {
   assert.match(component, /const DESKTOP_MAP_QUERY = "\(min-width: 701px\)"/);
@@ -65,4 +69,21 @@ test("detail pages place the shared asset map in Review and mechanic Work", () =
   assert.match(detailSections, /const detailMapLocation = getVehicleLocation\(selectedVehicle\) \|\| mechanicMapLocation/);
   assert.equal(detailSections.match(/<AssetLocationCard/g)?.length, 2);
   assert.doesNotMatch(detailSections, /<dl className="workorder-readonly-details">[\s\S]*?<AssetLocationCard/);
+});
+
+test("opening any shared workorder detail lazily refreshes its live asset location", () => {
+  assert.match(
+    roleRouter,
+    /if \(!isWorkorderDetail \|\| !activeWorkorder\?\.workorder\?\.id \|\| !mechanicMapVehicle\?\.id\) \{[\s\S]*?detailLocationRefreshRef\.current = "";[\s\S]*?return;/,
+  );
+  assert.match(
+    roleRouter,
+    /const refreshKey = `\$\{activeWorkorder\.workorder\.id\}:\$\{mechanicMapVehicle\.id\}`;/,
+  );
+  assert.match(
+    roleRouter,
+    /api\(`\/api\/vehicles\/\$\{encodeURIComponent\(vehicle\.id\)\}\/live-location`, \{ method: "POST" \}\)/,
+  );
+  assert.match(roleRouter, /locationRequestRef\.current\.promise === request/);
+  assert.doesNotMatch(roleRouter, /if \(!isMechanicDetail \|\| !activeWorkorder\?\.workorder\?\.id/);
 });

@@ -132,7 +132,8 @@ export function RoleRouter({ actor }) {
   const formRef = useRef(null);
   const previewRef = useRef(null);
   const previewGridRef = useRef(null);
-  const mechanicLocationRefreshRef = useRef("");
+  const detailLocationRefreshRef = useRef("");
+  const locationRequestRef = useRef({ vehicleId: "", promise: null });
   const mechanicProgressBackupRestoredRef = useRef("");
   const officeAutosaveTimerRef = useRef(null);
   const officeAutosaveInFlightRef = useRef(false);
@@ -195,7 +196,6 @@ export function RoleRouter({ actor }) {
   const [usedPartsDirty, setUsedPartsDirty] = useState(false);
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [locationLoading, setLocationLoading] = useState(false);
   const [officeLocations, setOfficeLocations] = useState([]);
   const [mapsConfig, setMapsConfig] = useState({});
   const [detailStatus, setDetailStatus] = useState("open");
@@ -450,12 +450,15 @@ export function RoleRouter({ actor }) {
   useEffect(() => () => window.clearTimeout(officeAutosaveTimerRef.current), []);
 
   useEffect(() => {
-    if (!isMechanicDetail || !activeWorkorder?.workorder?.id || !mechanicMapVehicle?.id) return;
+    if (!isWorkorderDetail || !activeWorkorder?.workorder?.id || !mechanicMapVehicle?.id) {
+      detailLocationRefreshRef.current = "";
+      return;
+    }
     const refreshKey = `${activeWorkorder.workorder.id}:${mechanicMapVehicle.id}`;
-    if (mechanicLocationRefreshRef.current === refreshKey) return;
-    mechanicLocationRefreshRef.current = refreshKey;
+    if (detailLocationRefreshRef.current === refreshKey) return;
+    detailLocationRefreshRef.current = refreshKey;
     refreshVehicleLocation(mechanicMapVehicle);
-  }, [activeWorkorder?.workorder?.id, isMechanicDetail, mechanicMapVehicle?.id]);
+  }, [activeWorkorder?.workorder?.id, isWorkorderDetail, mechanicMapVehicle?.id]);
   useAutomaticRefresh(
     () => refreshVehicleLocation(mechanicMapVehicle),
     { enabled: workspace === "generator" && Boolean(mechanicMapVehicle?.id), intervalMs: 60_000 },
@@ -895,17 +898,31 @@ export function RoleRouter({ actor }) {
   }
 
   async function refreshVehicleLocation(vehicle = selectedVehicle) {
-    if (!vehicle?.id || locationLoading) return;
+    if (!vehicle?.id) return null;
     const requestedVehicleId = vehicle.id;
-    setLocationLoading(true);
-    try {
-      const result = await api(`/api/vehicles/${encodeURIComponent(vehicle.id)}/live-location`, { method: "POST" });
-      setSelectedVehicle((current) => current?.id === requestedVehicleId ? result.vehicle : current);
-    } catch (error) {
-      setVehicleLookup((current) => ({ ...current, status: error.message }));
-    } finally {
-      setLocationLoading(false);
+    if (
+      locationRequestRef.current.vehicleId === requestedVehicleId
+      && locationRequestRef.current.promise
+    ) {
+      return locationRequestRef.current.promise;
     }
+
+    const request = (async () => {
+      try {
+        const result = await api(`/api/vehicles/${encodeURIComponent(vehicle.id)}/live-location`, { method: "POST" });
+        setSelectedVehicle((current) => current?.id === requestedVehicleId ? result.vehicle : current);
+        return result.vehicle;
+      } catch (error) {
+        setVehicleLookup((current) => ({ ...current, status: error.message }));
+        return null;
+      } finally {
+        if (locationRequestRef.current.promise === request) {
+          locationRequestRef.current = { vehicleId: "", promise: null };
+        }
+      }
+    })();
+    locationRequestRef.current = { vehicleId: requestedVehicleId, promise: request };
+    return request;
   }
 
   async function restoreDraftVehicle(payload) {
@@ -1107,7 +1124,6 @@ export function RoleRouter({ actor }) {
     const nextSection = compactSections.includes(requestedSection)
       ? requestedSection
       : defaultDetailSection("mechanic", workorder.status, isCompact);
-    mechanicLocationRefreshRef.current = "";
     setActiveWorkorder(detail);
     setPreviewPanelOpen(true);
     setDetailSource("mechanic");
