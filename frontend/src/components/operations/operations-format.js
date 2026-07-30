@@ -14,9 +14,10 @@ export const LIFECYCLE_OPTIONS = [
   ["open", "Open"],
   ["accepted", "Accepted"],
   ["in_progress", "In progress"],
-  ["mechanic_done", "Mechanic done"],
+  ["mechanic_done", "Work done"],
   ["closed", "Closed"],
   ["odoo_entered", "Entered in Odoo"],
+  ["cancelled", "Cancelled"],
 ];
 
 export const ATTENTION_OPTIONS = [
@@ -24,6 +25,7 @@ export const ATTENTION_OPTIONS = [
   ["parts", "Parts"],
   ["office_help", "Office help"],
   ["missing_info", "Missing information"],
+  ["revision_requested", "Mechanic changes requested"],
   ["overdue", "Overdue"],
 ];
 

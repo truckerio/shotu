@@ -11,6 +11,20 @@ import {
   workorderDetailSectionMode,
   workorderNeedsChatAttention,
 } from "./workorder-detail-sections.js";
+import { workorderHandoffFacts } from "./workorder-handoff.js";
+
+function WorkorderHandoffFacts({ workorder }) {
+  return (
+    <dl className="workorder-handoff-facts" aria-label="Workorder timing">
+      {workorderHandoffFacts(workorder).map((fact) => (
+        <div key={fact.label}>
+          <dt>{fact.label}</dt>
+          <dd>{fact.value}{fact.detail ? <small>{fact.detail}</small> : null}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export function WorkorderDetailSections({
   activeWorkorder,
@@ -46,6 +60,8 @@ export function WorkorderDetailSections({
   saveActiveUsedParts,
   saveMechanicWorkNotes,
   saveOfficeWorkorder,
+  openOfficeCancel,
+  openOfficeReturn,
   selectOfficeLocation,
   setDetailSection,
   setOfficeAssignment,
@@ -59,6 +75,11 @@ export function WorkorderDetailSections({
 }) {
   const detailMapVehicle = selectedVehicle || mechanicMapVehicle;
   const detailMapLocation = getVehicleLocation(selectedVehicle) || mechanicMapLocation;
+  const missingInfoAttention = (activeWorkorder?.activeAttention || [])
+    .find((attention) => attention.reason === "missing_info");
+  const missingInfoNote = missingInfoAttention?.details?.note
+    || missingInfoAttention?.details?.message
+    || "Surveillance needs more information before Odoo entry.";
 
   return (
     <div className="accordion-stack workorder-progressive-stack">
@@ -93,6 +114,7 @@ export function WorkorderDetailSections({
             mapsConfig={mapsConfig}
             showVehicleLabel={false}
           />
+          <WorkorderHandoffFacts workorder={activeWorkorder.workorder} />
           <div className="operational-form detail-workflow-fields">
             <OperationalFormField id="mechanic-diagnosis" label="Diagnosis" hint="What did you inspect or find?">
               <textarea rows="3" value={form.diagnosis} onChange={(event) => updateField("diagnosis", event.target.value)} />
@@ -119,6 +141,13 @@ export function WorkorderDetailSections({
           displayMode={workorderDetailSectionMode()}
         >
           <div className="workorder-review-content">
+            {missingInfoAttention ? (
+              <div className="workorder-correction-callout" role="status">
+                <strong>Information requested by Surveillance</strong>
+                <p>{missingInfoNote}</p>
+                <span>Add the administrative correction or office addendum below, then save changes.</span>
+              </div>
+            ) : null}
             <AssetLocationCard
               vehicle={detailMapVehicle}
               location={detailMapLocation}
@@ -129,12 +158,26 @@ export function WorkorderDetailSections({
               <div><span>Diagnosis</span><p>{form.diagnosis || "No diagnosis recorded yet."}</p></div>
               <div><span>Work performed</span><p>{form.workPerformed || "No completed work recorded yet."}</p></div>
             </div>
-            <Field label="Office notes">
-              <textarea value={form.officeNotes} onChange={(event) => updateField("officeNotes", event.target.value)} rows="3" />
-            </Field>
-            <Button variant="primary" onClick={saveOfficeWorkorder} disabled={officeDetailState.busy}>
-              {officeDetailState.busy ? "Saving" : "Save changes"}
-            </Button>
+            {activeWorkorder.allowedActions?.update ? (
+              <>
+                <Field label="Office notes">
+                  <textarea value={form.officeNotes} onChange={(event) => updateField("officeNotes", event.target.value)} rows="3" />
+                </Field>
+                <Button variant="primary" onClick={saveOfficeWorkorder} disabled={officeDetailState.busy}>
+                  {officeDetailState.busy ? "Saving" : "Save changes"}
+                </Button>
+              </>
+            ) : null}
+            {(activeWorkorder.allowedActions?.returnToMechanic || activeWorkorder.allowedActions?.cancel) ? (
+              <div className="office-handoff-actions" aria-label="Manager workorder actions">
+                {activeWorkorder.allowedActions?.returnToMechanic ? (
+                  <Button type="button" onClick={openOfficeReturn} disabled={officeDetailState.busy}>Return to mechanic</Button>
+                ) : null}
+                {activeWorkorder.allowedActions?.cancel ? (
+                  <Button type="button" variant="danger" onClick={openOfficeCancel} disabled={officeDetailState.busy}>Cancel workorder</Button>
+                ) : null}
+              </div>
+            ) : null}
             {officeDetailState.message ? <p className="mechanic-action-message" role="status">{officeDetailState.message}</p> : null}
           </div>
         </ProgressiveWorkorderSection>
@@ -172,7 +215,7 @@ export function WorkorderDetailSections({
             onSelect={setDetailSection}
             displayMode={workorderDetailSectionMode()}
           >
-            <div className="workorder-unit-content">
+            <fieldset className="workorder-unit-content" disabled={!activeWorkorder.allowedActions?.update}>
               {officeLocations.length ? (
                 <Field label="Location">
                   <select value={form.locationId} onChange={(event) => selectOfficeLocation(event.target.value)}>
@@ -260,7 +303,7 @@ export function WorkorderDetailSections({
               <Field label="Mechanic concern">
                 <input value={form.mechanicConcern} onChange={(event) => updateField("mechanicConcern", event.target.value)} />
               </Field>
-            </div>
+            </fieldset>
           </ProgressiveWorkorderSection>
 
           <ProgressiveWorkorderSection
@@ -273,7 +316,8 @@ export function WorkorderDetailSections({
             displayMode={workorderDetailSectionMode()}
           >
             <div className="workorder-team-content">
-              {isOfficeDetail && !["closed", "odoo_entered"].includes(detailStatus) ? (
+              <WorkorderHandoffFacts workorder={activeWorkorder.workorder} />
+              {activeWorkorder.allowedActions?.assignMechanics ? (
                 <div className="office-assignment-control">
                   <fieldset className="office-mechanic-team">
                     <legend>Assigned mechanics</legend>
@@ -315,25 +359,28 @@ export function WorkorderDetailSections({
                   </Button>
                 </div>
               ) : null}
-              <Field label="Mechanic name">
-                <input value={form.mechanicName} onChange={(event) => updateField("mechanicName", event.target.value)} />
-              </Field>
-              <div className="two-col">
-                <Field label="Start time">
-                  <input type="time" value={form.startTime} onChange={(event) => updateField("startTime", event.target.value)} />
+              <dl className="workorder-assigned-mechanics">
+                <div><dt>Assigned mechanics</dt><dd>{detailMechanicNames || "Unassigned"}</dd></div>
+              </dl>
+              <section className="workorder-authorization" aria-labelledby="workorder-authorization-title">
+                <h3 id="workorder-authorization-title">Customer authorization</h3>
+                <div className="two-col">
+                <Field label="Customer/driver authorization name">
+                  <input
+                    value={form.customerSignature}
+                    onChange={(event) => updateField("customerSignature", event.target.value)}
+                    disabled={!activeWorkorder.allowedActions?.update}
+                    placeholder="Enter customer or driver name"
+                  />
                 </Field>
-                <Field label="End time">
-                  <input type="time" value={form.endTime} onChange={(event) => updateField("endTime", event.target.value)} />
-                </Field>
-              </div>
-              <div className="two-col">
-                <Field label="Customer sign">
-                  <input value={form.customerSignature} onChange={(event) => updateField("customerSignature", event.target.value)} />
-                </Field>
-                <Field label="Authorized by">
-                  <input value={form.authorizedBy} onChange={(event) => updateField("authorizedBy", event.target.value)} />
-                </Field>
-              </div>
+                <div className="field">
+                  <span>Authorized by</span>
+                  <p className={`workorder-authorization-value${form.authorizedBy ? " is-recorded" : ""}`}>
+                    {form.authorizedBy || "Pending Manager approval"}
+                  </p>
+                </div>
+                </div>
+              </section>
             </div>
           </ProgressiveWorkorderSection>
         </>

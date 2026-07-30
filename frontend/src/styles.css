@@ -3741,6 +3741,40 @@ textarea:focus {
   width: 100%;
 }
 
+.office-handoff-modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(10 13 18 / 28%);
+  display: grid;
+  gap: 16px;
+  max-height: min(720px, calc(100dvh - 40px));
+  max-width: 520px;
+  overflow-y: auto;
+  padding: 24px;
+  position: relative;
+  width: 100%;
+}
+
+.office-handoff-modal h2,
+.office-handoff-modal p {
+  margin: 0;
+}
+
+.office-handoff-modal h2 {
+  font-size: var(--text-heading);
+}
+
+.office-handoff-modal textarea {
+  box-sizing: border-box;
+  resize: vertical;
+  width: 100%;
+}
+
+.office-handoff-modal .close-button {
+  height: 44px;
+  width: 44px;
+}
+
 .office-close-modal h2,
 .office-close-modal p {
   margin: 0;
@@ -3833,7 +3867,8 @@ textarea:focus {
 
 @media (max-width: 700px) {
   .mechanic-completion-modal,
-  .office-close-modal {
+  .office-close-modal,
+  .office-handoff-modal {
     border-radius: 8px 8px 0 0;
     margin-top: auto;
     max-width: none;
@@ -5338,10 +5373,138 @@ textarea:focus {
   gap: 16px;
 }
 
+fieldset.workorder-unit-content {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.workorder-correction-callout {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 7px;
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+}
+
+.workorder-correction-callout strong {
+  color: #93370d;
+  font-size: var(--detail-body-size);
+}
+
+.workorder-correction-callout p,
+.workorder-correction-callout span {
+  color: #7a2e0e;
+  font-size: var(--detail-meta-size);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .workorder-review-content > .button {
   justify-self: end;
   min-width: 140px;
   width: auto;
+}
+
+.office-handoff-actions {
+  border-top: 1px solid #e4e7ec;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+.workorder-handoff-facts {
+  background: #f9fafb;
+  border: 1px solid #e4e7ec;
+  border-radius: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+}
+
+.workorder-handoff-facts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.workorder-handoff-facts > div:nth-child(odd) {
+  border-right: 1px solid #e4e7ec;
+}
+
+.workorder-handoff-facts > div:nth-child(-n + 2) {
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.workorder-handoff-facts dt,
+.workorder-assigned-mechanics dt {
+  color: #667085;
+  font-size: var(--detail-meta-size);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.workorder-handoff-facts dd,
+.workorder-assigned-mechanics dd {
+  color: #181d27;
+  font-size: var(--detail-body-size);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workorder-handoff-facts dd small {
+  color: #667085;
+  display: block;
+  font-size: var(--detail-meta-size);
+  margin-top: 2px;
+}
+
+.workorder-assigned-mechanics {
+  margin: 0;
+}
+
+.workorder-assigned-mechanics > div {
+  display: grid;
+  gap: 5px;
+}
+
+.workorder-authorization {
+  border-top: 1px solid #e4e7ec;
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.workorder-authorization h3 {
+  color: #181d27;
+  font-size: var(--detail-body-size);
+  margin: 0;
+}
+
+.workorder-authorization-value {
+  align-items: center;
+  background: #f9fafb;
+  border: 1px solid #d5d9e0;
+  border-radius: 7px;
+  color: #667085;
+  display: flex;
+  font-weight: var(--weight-regular);
+  min-height: 44px;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.workorder-authorization-value.is-recorded {
+  background: #ecfdf3;
+  border-color: #abefc6;
+  color: #067647;
+  font-weight: var(--weight-semibold);
 }
 
 .workorder-review-copy {
@@ -5711,8 +5874,25 @@ textarea:focus {
   }
 
   .workorder-review-copy,
-  .workorder-readonly-details {
+  .workorder-readonly-details,
+  .workorder-handoff-facts {
     grid-template-columns: 1fr;
+  }
+
+  .workorder-handoff-facts > div,
+  .workorder-handoff-facts > div:nth-child(odd),
+  .workorder-handoff-facts > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #e4e7ec;
+    border-right: 0;
+  }
+
+  .workorder-handoff-facts > div:last-child {
+    border-bottom: 0;
+  }
+
+  .office-handoff-actions,
+  .office-handoff-actions .button {
+    width: 100%;
   }
 
   .workorder-review-content > .button {

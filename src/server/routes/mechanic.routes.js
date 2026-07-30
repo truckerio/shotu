@@ -130,8 +130,7 @@ export async function handleMechanicApi(req, res, url, helpers) {
   const openedId = workorderIdFrom(url.pathname, "/opened");
   if (req.method === "POST" && openedId) {
     await requireWorkorderAccess(requestContext, openedId, { allowAvailable: true, allowActiveAtLocation: true });
-    await recordWorkorderOpen(openedId, requestContext.actor);
-    sendJson(res, 200, { recorded: true });
+    sendJson(res, 200, await recordWorkorderOpen(openedId, requestContext.actor));
     return true;
   }
 

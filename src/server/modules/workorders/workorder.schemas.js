@@ -75,6 +75,7 @@ export const updateOfficeWorkorderSchema = z.object({
   concern: z.string().trim().min(1, "Concern is required.").max(2000).optional(),
   officeNotes: z.string().trim().max(4000).optional(),
   formData: workorderFormDataSchema.optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
 });
 
 export const acceptWorkorderSchema = z.object({});
@@ -112,7 +113,7 @@ export const updateMechanicUsedPartsSchema = z.object({
 export const markDoneSchema = z.object({
   diagnosis: z.string().trim().max(5000).default(""),
   workPerformed: z.string().trim().max(5000).default(""),
-  confirmationName: z.string().trim().min(1, "Write your name to finish the workorder.").max(200),
+  confirmationName: z.string().trim().min(1, "Write your name to confirm Work done.").max(200),
 });
 
 const chatAttachmentSchema = z.object({
@@ -133,6 +134,17 @@ export const sendMessageSchema = z.object({
 
 export const closeWorkorderSchema = z.object({
   note: z.string().trim().max(1000).default(""),
+});
+
+export const returnWorkorderSchema = z.object({
+  reason: z.string().trim().min(2, "Return reason is required.").max(1000),
+  categories: z.array(z.enum(["diagnosis", "work_performed", "parts", "photos", "other"]))
+    .transform((categories) => [...new Set(categories)])
+    .default([]),
+});
+
+export const cancelWorkorderSchema = z.object({
+  reason: z.string().trim().min(2, "Cancellation reason is required.").max(1000),
 });
 
 export const reassignWorkorderSchema = z.object({

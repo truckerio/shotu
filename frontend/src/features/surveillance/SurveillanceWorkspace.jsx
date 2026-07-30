@@ -27,6 +27,7 @@ import {
   SURVEILLANCE_PHONE_PRIMARY_TABS,
   SURVEILLANCE_PHONE_SECONDARY_TABS,
   isSurveillancePhonePrimaryTab,
+  surveillanceMissingInfoHandoff,
 } from "./surveillanceQueue.js";
 import "./surveillance.css";
 
@@ -100,7 +101,7 @@ function missingFields(workorder) {
 function progressTimestamp(workorder) {
   if (workorder.status === "accepted") return { label: "Accepted", value: workorder.acceptedAt };
   if (workorder.status === "in_progress") return { label: "Started", value: workorder.startedAt || workorder.acceptedAt };
-  if (workorder.status === "mechanic_done") return { label: "Finished", value: workorder.mechanicDoneAt };
+  if (workorder.status === "mechanic_done") return { label: "Work done", value: workorder.mechanicDoneAt };
   return { label: "Approved", value: workorder.closedAt };
 }
 
@@ -298,6 +299,7 @@ export function SurveillanceWorkspace({ actor }) {
     const canProcessOdoo = ["closed", "odoo_entered"].includes(workorder.status);
     const progress = progressTimestamp(workorder);
     const activityCount = timelineEventCount(detail.timeline);
+    const missingInfoHandoff = surveillanceMissingInfoHandoff(workorder, detail.timeline);
     const baseDetailSections = [
       {
         id: "work",
@@ -414,12 +416,28 @@ export function SurveillanceWorkspace({ actor }) {
                 </div>
                 {canProcessOdoo ? (
                   <form className="surveillance-odoo-form" onSubmit={markEntered}>
+                    {missingInfoHandoff ? (
+                      <section className="surveillance-handoff-summary" aria-label="Missing information handoff">
+                        <div>
+                          <strong>Information requested</strong>
+                          <span>{missingInfoHandoff.note}</span>
+                          <small>{missingInfoHandoff.requestedBy}{missingInfoHandoff.requestedAt ? ` · ${new Date(missingInfoHandoff.requestedAt).toLocaleString()}` : ""}</small>
+                        </div>
+                        {missingInfoHandoff.managerUpdate ? (
+                          <div className="has-manager-update">
+                            <strong>Manager update received</strong>
+                            <span>{missingInfoHandoff.managerUpdate.note}</span>
+                            <small>{missingInfoHandoff.managerUpdate.by}{missingInfoHandoff.managerUpdate.at ? ` · ${new Date(missingInfoHandoff.managerUpdate.at).toLocaleString()}` : ""}</small>
+                          </div>
+                        ) : <p>Waiting for a Manager correction or addendum.</p>}
+                      </section>
+                    ) : null}
                     {missing.length ? <div className="surveillance-missing"><strong>Missing information</strong><span>{missing.join(", ")}</span></div> : <p className="surveillance-complete">Workorder information complete</p>}
                     <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
-                    <label><span>Note</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" /></label>
+                    <label><span>Note for Odoo or Manager</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" placeholder="Required when requesting information" /></label>
                     <div className="surveillance-odoo-actions">
                       <Button variant="primary" type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</Button>
-                      <Button variant="secondary" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Send back for information</Button>
+                      <Button variant="secondary" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Request information</Button>
                     </div>
                   </form>
                 ) : (

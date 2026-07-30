@@ -5,6 +5,12 @@ import { getUserById, listUsersByRole } from "../../db/repositories/users.repo.j
 import { statusLabel } from "../workorders/workorder.presenter.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { markWorkorderRead, setWorkorderAttention } from "../../db/repositories/workorder-attention.repo.js";
+import {
+  MECHANIC_ACTIVE_LIFECYCLES,
+  ODOO_ELIGIBLE_LIFECYCLES,
+  SURVEILLANCE_VISIBLE_LIFECYCLES,
+  lifecycleIn,
+} from "../workorders/workorder-lifecycle-policy.js";
 
 async function requireSurveillance(userId) {
   const user = await getUserById(userId);
@@ -18,9 +24,9 @@ export async function defaultSurveillanceUser() {
 }
 
 export function categorizeSurveillanceRows(rows) {
-  const active = rows.filter((row) => ["accepted", "in_progress"].includes(row.lifecycle));
+  const active = rows.filter((row) => lifecycleIn(row.lifecycle, MECHANIC_ACTIVE_LIFECYCLES));
   const awaitingOffice = rows.filter((row) => row.lifecycle === "mechanic_done");
-  const approved = rows.filter((row) => ["closed", "odoo_entered"].includes(row.lifecycle));
+  const approved = rows.filter((row) => lifecycleIn(row.lifecycle, ODOO_ELIGIBLE_LIFECYCLES));
 
   return {
     active,
@@ -32,7 +38,7 @@ export function categorizeSurveillanceRows(rows) {
 }
 
 export function isOdooEligibleStatus(status) {
-  return ["closed", "odoo_entered"].includes(status);
+  return lifecycleIn(status, ODOO_ELIGIBLE_LIFECYCLES);
 }
 
 async function requireOdooEligibleWorkorder(workorderId) {
@@ -46,7 +52,7 @@ async function requireOdooEligibleWorkorder(workorderId) {
 
 export async function surveillanceDashboard(context) {
   const result = await queryAuthorizedWorkorders(context, {
-    lifecycle: ["accepted", "in_progress", "mechanic_done", "closed", "odoo_entered"],
+    lifecycle: [...SURVEILLANCE_VISIBLE_LIFECYCLES],
     pageSize: 200,
     sortBy: "lastActivityAt",
     sortDirection: "desc",

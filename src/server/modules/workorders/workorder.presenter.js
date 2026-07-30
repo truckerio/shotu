@@ -7,7 +7,7 @@ export function statusLabel(status) {
     in_progress: "In progress",
     waiting_office: "Waiting for office",
     parts_requested: "Parts requested",
-    mechanic_done: "Mechanic done",
+    mechanic_done: "Work done",
     closed: "Closed",
     odoo_entered: "Odoo entered",
     cancelled: "Cancelled",

@@ -1,6 +1,7 @@
 import {
   addOfficePart,
   assignOfficeWorkorderMechanics,
+  cancelOfficeWorkorder,
   closeOfficeWorkorder,
   createOfficeWorkorder,
   officeDashboard,
@@ -8,6 +9,7 @@ import {
   officeWorkorderDetail,
   reviewOfficePartRequest,
   reassignOfficeWorkorder,
+  returnOfficeWorkorder,
   sendOfficeMessage,
   changeOfficePartAllocation,
   updateOfficeWorkorder,
@@ -15,12 +17,15 @@ import {
 import { createOfficePartSchema, decidePartRequestSchema, updatePartAllocationSchema } from "../modules/parts/part.schemas.js";
 import {
   assignMechanicsSchema,
+  cancelWorkorderSchema,
   closeWorkorderSchema,
   createWorkorderSchema,
   reassignWorkorderSchema,
+  returnWorkorderSchema,
   sendMessageSchema,
   updateOfficeWorkorderSchema,
 } from "../modules/workorders/workorder.schemas.js";
+import { invalidRequest } from "../auth/errors.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
 import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
 import { getLocationTemplates } from "../db/repositories/templates.repo.js";
@@ -190,6 +195,24 @@ export async function handleOfficeApi(req, res, url, helpers) {
     await requireWorkorderAccess(requestContext, closeId);
     const input = closeWorkorderSchema.parse(await readBody(req));
     sendJson(res, 200, { workorder: await closeOfficeWorkorder(closeId, { ...input, officeUserId }) });
+    return true;
+  }
+
+  const returnId = workorderIdFrom(url.pathname, "/return");
+  if (req.method === "POST" && returnId) {
+    await requireWorkorderAccess(requestContext, returnId);
+    const parsed = returnWorkorderSchema.safeParse(await readBody(req));
+    if (!parsed.success) throw invalidRequest(parsed.error.issues[0]?.message || "Enter a valid return reason.");
+    sendJson(res, 200, { workorder: await returnOfficeWorkorder(returnId, { ...parsed.data, officeUserId }) });
+    return true;
+  }
+
+  const cancelId = workorderIdFrom(url.pathname, "/cancel");
+  if (req.method === "POST" && cancelId) {
+    await requireWorkorderAccess(requestContext, cancelId);
+    const parsed = cancelWorkorderSchema.safeParse(await readBody(req));
+    if (!parsed.success) throw invalidRequest(parsed.error.issues[0]?.message || "Enter a valid cancellation reason.");
+    sendJson(res, 200, { workorder: await cancelOfficeWorkorder(cancelId, { ...parsed.data, officeUserId }) });
     return true;
   }
 

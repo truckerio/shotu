@@ -4,6 +4,7 @@ import {
   markOperationalWorkorderDone,
   releaseOperationalWorkorder,
   updateMechanicUsedParts,
+  WorkorderLifecycleConflictError,
 } from "../../db/repositories/operational-workorders.repo.js";
 import { createPartRequest, updatePartUsage } from "../../db/repositories/part-requests.repo.js";
 import { getUserById, listUsersByRole } from "../../db/repositories/users.repo.js";
@@ -14,6 +15,7 @@ import {
 import {
   WORKORDER_STATUS,
 } from "../workorders/workorder.constants.js";
+import { MECHANIC_HISTORY_LIFECYCLES } from "../workorders/workorder-lifecycle-policy.js";
 import { statusLabel } from "../workorders/workorder.presenter.js";
 import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
@@ -47,6 +49,7 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
     lifecycle: item.lifecycle,
     statusLabel: statusLabel(compatibilityStatus),
     attentionReasons: item.attentionReasons,
+    attentionDetails: item.attentionDetails || {},
     locationId: item.locationId,
     locationName: item.location?.name || "",
     mechanicId: item.mechanicId,
@@ -73,7 +76,7 @@ export async function mechanicDashboard(mechanicUserId, context) {
     queryAuthorizedWorkorders(context, { category: "active", mechanicPool: true, pageSize: 100 }),
     queryAuthorizedWorkorders(context, { attentionReason: "parts", pageSize: 50 }),
     queryAuthorizedWorkorders(context, { attentionReason: "office_help", pageSize: 50 }),
-    queryAuthorizedWorkorders(context, { lifecycle: ["mechanic_done", "closed", "odoo_entered"], pageSize: 50 }),
+    queryAuthorizedWorkorders(context, { lifecycle: [...MECHANIC_HISTORY_LIFECYCLES], pageSize: 50 }),
   ]);
   const assignedActiveItems = myWork.items.filter((item) => item.mechanicIds?.includes(mechanic.id));
   const waitingById = new Map([
@@ -107,6 +110,7 @@ export function mechanicAllowedActions(workorder, mechanicId, policy = {}) {
     WORKORDER_STATUS.MECHANIC_DONE,
     WORKORDER_STATUS.CLOSED,
     WORKORDER_STATUS.ODOO_ENTERED,
+    WORKORDER_STATUS.CANCELLED,
   ].includes(workorder.status);
   return {
     accept: canAccept,
@@ -154,7 +158,14 @@ export async function updateMechanicPartUsage(workorderId, requestId, input) {
 
 export async function acceptMechanicWorkorder(workorderId, mechanicUserId) {
   await requireMechanic(mechanicUserId);
-  return acceptOperationalWorkorder(workorderId, mechanicUserId);
+  try {
+    return await acceptOperationalWorkorder(workorderId, mechanicUserId);
+  } catch (error) {
+    if (error instanceof WorkorderLifecycleConflictError) {
+      throw new AuthError(error.statusCode, error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 export async function createMechanicWorkorder(input) {
@@ -163,6 +174,7 @@ export async function createMechanicWorkorder(input) {
     ...input,
     createdByUserId: mechanic.id,
     mechanicUserIds: [mechanic.id],
+    startImmediately: true,
   });
 }
 
@@ -209,9 +221,16 @@ export async function markMechanicDone(workorderId, mechanicUserId, input) {
   const mechanic = await requireMechanic(mechanicUserId);
   const normalizeName = (value) => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
   if (normalizeName(input.confirmationName) !== normalizeName(mechanic.name)) {
-    throw new Error(`Write ${mechanic.name} to finish this workorder.`);
+    throw new Error(`Write ${mechanic.name} to confirm Work done.`);
   }
-  return markOperationalWorkorderDone(workorderId, mechanicUserId, input);
+  try {
+    return await markOperationalWorkorderDone(workorderId, mechanicUserId, input);
+  } catch (error) {
+    if (error instanceof WorkorderLifecycleConflictError) {
+      throw new AuthError(error.statusCode, error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 export async function sendMechanicMessage(workorderId, input) {

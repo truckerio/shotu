@@ -3,7 +3,7 @@ import test from "node:test";
 import { officeDashboard } from "./office.service.js";
 
 test("office dashboard includes assigned mechanics without workorders", async () => {
-  const queriedCategories = [];
+  const queries = [];
   const locationIds = new Set([
     "11111111-1111-1111-1111-111111111111",
     "22222222-2222-2222-2222-222222222222",
@@ -17,7 +17,7 @@ test("office dashboard includes assigned mechanics without workorders", async ()
     { locationIds },
     {
       queryWorkorders: async (_context, input) => {
-        queriedCategories.push(input.category);
+        queries.push(input);
         return { items: [], total: 0 };
       },
       listMechanics: async (authorizedLocationIds) => {
@@ -35,5 +35,6 @@ test("office dashboard includes assigned mechanics without workorders", async ()
     done: 0,
     closed: 0,
   });
-  assert.deepEqual(queriedCategories, ["unassigned", "active", "parts", "ready_review", "all"]);
+  assert.deepEqual(queries.map(({ category }) => category), ["unassigned", "all", "parts", "ready_review", "all"]);
+  assert.deepEqual(queries[1].lifecycle, ["accepted", "in_progress"]);
 });

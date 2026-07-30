@@ -61,6 +61,22 @@ export async function markWorkorderRead({ workorderId, userId, lastSeenActivityA
   return result.rows[0];
 }
 
+export async function listActiveWorkorderAttention(workorderId) {
+  const result = await query(
+    `select reason, details, opened_at, updated_at
+     from workorder_attention_state
+     where workorder_id = $1 and active = true
+     order by opened_at asc`,
+    [workorderId],
+  );
+  return result.rows.map((row) => ({
+    reason: row.reason,
+    details: row.details || {},
+    openedAt: row.opened_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
 export async function getWorkorderPreferences(userId) {
   const result = await query(
     `select user_id, default_location_id, default_view, page_size, saved_filters, updated_at

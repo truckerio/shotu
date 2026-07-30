@@ -111,7 +111,7 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
     { key: "myWork", label: "My jobs", count: dashboard?.counts.mine || 0, icon: Briefcase02 },
     { key: "openWork", label: "New jobs", count: dashboard?.counts.open || 0, icon: Inbox01 },
     { key: "waiting", label: "Waiting", count: dashboard?.counts.waiting || 0, icon: Clock },
-    { key: "done", label: "Finished", count: dashboard?.counts.done || 0, icon: FileCheck02 },
+    { key: "done", label: "Work done", count: dashboard?.counts.done || 0, icon: FileCheck02 },
     { key: "activeWork", label: "All active", count: dashboard?.counts.active || 0, icon: Users01 },
   ];
   const mobilePrimaryTabs = MECHANIC_PRIMARY_TABS.map((tab) => ({

@@ -1,8 +1,9 @@
 import { getOperationalWorkorderById } from "../db/repositories/operational-workorders.repo.js";
 import { requireActor } from "./authorize.js";
 import { resourceNotFound } from "./errors.js";
+import { SURVEILLANCE_VISIBLE_LIFECYCLES } from "../modules/workorders/workorder-lifecycle-policy.js";
 
-const SURVEILLANCE_VISIBLE_STATUSES = new Set(["accepted", "in_progress", "mechanic_done", "closed", "odoo_entered"]);
+const SURVEILLANCE_VISIBLE_STATUSES = new Set(SURVEILLANCE_VISIBLE_LIFECYCLES);
 
 export async function requireWorkorderAccess(context, workorderId, options = {}) {
   const actor = requireActor(context);

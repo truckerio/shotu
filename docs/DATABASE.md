@@ -93,6 +93,10 @@ cancelled = terminal exit
 
 Parts, office help, missing information, overdue, and unread activity are attention signals. They do not replace lifecycle.
 
+`started_at` is written once when an assigned mechanic first opens or accepts the workorder; mechanic-created workorders start on creation. `mechanic_done_at` is written by the existing Work done command and is also the canonical end time shown in the document. Returning work to a mechanic preserves the prior completion event in Activity, clears the current completion time, and opens `revision_requested` attention until the mechanic submits Work done again.
+
+Manager approval writes `closed_at` and the approving user. Cancellation is a separate terminal path with its own actor, timestamp, and required reason; its transaction releases active assignments and cancels active parts allocations and requests.
+
 Mechanic ownership comes only from `workorder_mechanic_assignments`:
 
 - one active primary mechanic maximum;

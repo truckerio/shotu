@@ -171,6 +171,8 @@ The projection is paginated and filterable and includes canonical lifecycle, att
 
 Lifecycle and attention are intentionally separate. Lifecycle is one of `open`, `accepted`, `in_progress`, `mechanic_done`, `closed`, `odoo_entered`, or `cancelled`. Parts, office help, missing information, and overdue work are attention reasons; they never create or replace a workorder record.
 
+The handoff reuses the existing mechanic Work done command. An assigned mechanic's first open or accept records the canonical start; Work done records the current completion time. A Manager may approve, return with a revision note, or cancel with a reason. Return preserves Activity history and opens `revision_requested` attention. Surveillance remains read-only and can request missing information on closed work; a Manager may then correct administrative fields without overwriting mechanic-authored evidence.
+
 ### Drafts And Mechanic Progress
 
 Creation drafts and mechanic progress have different lifecycles and must not be

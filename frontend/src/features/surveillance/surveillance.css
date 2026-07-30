@@ -148,6 +148,49 @@
 .surveillance-missing { background: #fffaeb; border: 1px solid #fedf89; color: #7a2e0e; }
 .surveillance-complete { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; }
 
+.surveillance-handoff-summary {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.surveillance-handoff-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.surveillance-handoff-summary > div.has-manager-update {
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  border-radius: 6px;
+  color: #067647;
+  padding: 10px;
+}
+
+.surveillance-handoff-summary strong,
+.surveillance-handoff-summary span,
+.surveillance-handoff-summary small,
+.surveillance-handoff-summary p {
+  overflow-wrap: anywhere;
+}
+
+.surveillance-handoff-summary span,
+.surveillance-handoff-summary p {
+  font-size: var(--text-secondary);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+.surveillance-handoff-summary small {
+  color: #667085;
+  font-size: var(--text-caption);
+}
+
 .surveillance-readonly-grid {
   display: grid;
   gap: 14px 18px;

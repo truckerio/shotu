@@ -3,11 +3,14 @@ import { addChatMessage, chatMessageDedupeKey } from "../../db/repositories/chat
 import { persistChatImageAttachment, removeStoredChatImage } from "../chat/chat-media.service.js";
 import { createApprovedOfficePart, decidePartRequest, updatePartAllocation } from "../../db/repositories/part-requests.repo.js";
 import {
+  cancelOperationalWorkorder,
   closeOperationalWorkorder,
   createOperationalWorkorder,
   reassignOperationalWorkorder,
   setOperationalWorkorderMechanics,
+  returnOperationalWorkorder,
   updateOperationalWorkorder,
+  WorkorderLifecycleConflictError,
 } from "../../db/repositories/operational-workorders.repo.js";
 import {
   getUserById,
@@ -18,8 +21,9 @@ import {
 import { statusLabel } from "../workorders/workorder.presenter.js";
 import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
-import { markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
+import { listActiveWorkorderAttention, markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
+import { AuthError } from "../../auth/errors.js";
 
 async function requireOffice(userId) {
   const user = await getUserById(userId);
@@ -30,6 +34,20 @@ async function requireOffice(userId) {
 export async function defaultOfficeUser() {
   const users = await listUsersByRole("office");
   return users[0] || null;
+}
+
+export function officeAllowedActions(status, activeAttention = []) {
+  const active = ["open", "accepted", "in_progress"].includes(status);
+  const review = status === "mechanic_done";
+  const hasMissingInfo = activeAttention.some((attention) => attention.reason === "missing_info");
+  return {
+    update: active || review || (status === "closed" && hasMissingInfo),
+    updateAdministrative: active || review || (status === "closed" && hasMissingInfo),
+    approve: review,
+    returnToMechanic: review,
+    cancel: active || review,
+    assignMechanics: active,
+  };
 }
 
 function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
@@ -43,6 +61,7 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
     lifecycle: item.lifecycle,
     statusLabel: statusLabel(compatibilityStatus),
     attentionReasons: item.attentionReasons,
+    attentionDetails: item.attentionDetails || {},
     locationId: item.locationId,
     locationName: item.location?.name || "",
     mechanicId: item.mechanicId,
@@ -64,7 +83,7 @@ export async function officeDashboard(context, dependencies = {}) {
   const listMechanics = dependencies.listMechanics || listMechanicsByLocations;
   const [open, active, parts, done, closed, mechanics] = await Promise.all([
     queryWorkorders(context, { category: "unassigned", pageSize: 100 }),
-    queryWorkorders(context, { category: "active", pageSize: 100 }),
+    queryWorkorders(context, { category: "all", lifecycle: ["accepted", "in_progress"], pageSize: 100 }),
     queryWorkorders(context, { category: "parts", pageSize: 100 }),
     queryWorkorders(context, { category: "ready_review", pageSize: 100 }),
     queryWorkorders(context, { category: "all", lifecycle: ["closed", "odoo_entered"], pageSize: 100 }),
@@ -110,7 +129,21 @@ export async function officeWorkorderDetail(workorderId, officeUserId) {
     userId: user.id,
     lastSeenActivityAt: detail.workorder.updatedAt,
   });
-  return { ...detail, user, assignableMechanics };
+  const activeAttention = await listActiveWorkorderAttention(workorderId);
+  return {
+    ...detail,
+    user,
+    assignableMechanics,
+    activeAttention,
+    allowedActions: officeAllowedActions(detail.workorder.status, activeAttention),
+  };
+}
+
+function mapLifecycleConflict(error) {
+  if (error instanceof WorkorderLifecycleConflictError) {
+    throw new AuthError(error.statusCode, error.code, error.message);
+  }
+  throw error;
 }
 
 export async function officeLocationMechanics(locationId, officeUserId) {
@@ -142,10 +175,14 @@ export async function changeOfficePartAllocation(workorderId, requestId, allocat
 export async function updateOfficeWorkorder(workorderId, input) {
   const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
   if (!office && input.officeUserId) throw new Error("Office user not found.");
-  return updateOperationalWorkorder(workorderId, {
-    ...input,
-    changedByUserId: office?.id || input.officeUserId || null,
-  });
+  try {
+    return await updateOperationalWorkorder(workorderId, {
+      ...input,
+      changedByUserId: office?.id || input.officeUserId || null,
+    });
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
 }
 
 export async function sendOfficeMessage(workorderId, input) {
@@ -173,14 +210,36 @@ export async function sendOfficeMessage(workorderId, input) {
 
 export async function closeOfficeWorkorder(workorderId, input) {
   await requireOffice(input.officeUserId);
-  return closeOperationalWorkorder(workorderId, input.officeUserId, input.note);
+  try {
+    return await closeOperationalWorkorder(workorderId, input.officeUserId, input.note);
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
+}
+
+export async function returnOfficeWorkorder(workorderId, input) {
+  await requireOffice(input.officeUserId);
+  try {
+    return await returnOperationalWorkorder(workorderId, input.officeUserId, input);
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
+}
+
+export async function cancelOfficeWorkorder(workorderId, input) {
+  await requireOffice(input.officeUserId);
+  try {
+    return await cancelOperationalWorkorder(workorderId, input.officeUserId, input.reason);
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
 }
 
 export async function reassignOfficeWorkorder(workorderId, input) {
   await requireOffice(input.officeUserId);
   const detail = await loadWorkorderDetail(workorderId);
   if (!["open", "accepted", "in_progress"].includes(detail.workorder.status)) {
-    throw new Error("Only active workorders can be reassigned.");
+    throw new AuthError(409, "WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Only active workorders can be reassigned.");
   }
   if ((detail.workorder.mechanic?.id || null) === input.mechanicUserId) {
     throw new Error("Select a different mechanic before updating the assignment.");
@@ -196,14 +255,18 @@ export async function reassignOfficeWorkorder(workorderId, input) {
     ));
     if (!target) throw new Error("Selected mechanic is not active at this workorder location.");
   }
-  return reassignOperationalWorkorder(workorderId, input.officeUserId, input.mechanicUserId, input.reason);
+  try {
+    return await reassignOperationalWorkorder(workorderId, input.officeUserId, input.mechanicUserId, input.reason);
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
 }
 
 export async function assignOfficeWorkorderMechanics(workorderId, input) {
   await requireOffice(input.officeUserId);
   const detail = await loadWorkorderDetail(workorderId);
   if (!["open", "accepted", "in_progress"].includes(detail.workorder.status)) {
-    throw new Error("Only active workorders can have their mechanic team changed.");
+    throw new AuthError(409, "WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Only active workorders can have their mechanic team changed.");
   }
 
   const locationId = detail.workorder.location?.id;
@@ -214,10 +277,14 @@ export async function assignOfficeWorkorderMechanics(workorderId, input) {
   const invalidId = input.mechanicUserIds.find((id) => !assignableIds.has(id));
   if (invalidId) throw new Error("Every selected mechanic must be active at this workorder location.");
 
-  return setOperationalWorkorderMechanics(
-    workorderId,
-    input.officeUserId,
-    input.mechanicUserIds,
-    input.reason,
-  );
+  try {
+    return await setOperationalWorkorderMechanics(
+      workorderId,
+      input.officeUserId,
+      input.mechanicUserIds,
+      input.reason,
+    );
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
 }

@@ -20,7 +20,7 @@ test("workorder access audit is append-only and included in the shared timeline"
   assert.match(repository, /to_mechanic_name/);
 });
 
-test("finishing a workorder requires a confirmation name", () => {
+test("Work done requires a confirmation name", () => {
   assert.equal(markDoneSchema.safeParse({}).success, false);
   assert.equal(markDoneSchema.safeParse({
     diagnosis: "",

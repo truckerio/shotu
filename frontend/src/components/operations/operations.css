@@ -191,6 +191,7 @@
 .operations-lifecycle.lifecycle-in_progress, .operations-lifecycle.lifecycle-accepted { background: #eff8ff; border-color: #b2ddff; color: #175cd3; }
 .operations-lifecycle.lifecycle-mechanic_done { background: #ecfdf3; border-color: #abefc6; color: #067647; }
 .operations-lifecycle.lifecycle-closed, .operations-lifecycle.lifecycle-odoo_entered { background: #f2f4f7; color: #475467; }
+.operations-lifecycle.lifecycle-cancelled { background: #fef3f2; border-color: #fecdca; color: #b42318; }
 .operations-attention-list { display: flex; flex-wrap: wrap; gap: 3px; }
 .operations-attention-list span { color: #b54708; font-size: 11px; font-weight: var(--weight-semibold); text-transform: capitalize; }
 .operations-no-attention { color: #667085; font-size: var(--text-caption); }

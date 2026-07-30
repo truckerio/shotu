@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { ArrowLeft, CheckCircle, Save01, XClose } from "@untitledui/icons";
+import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { ChatComposer } from "../../components/workorders/ChatComposer.jsx";
@@ -18,6 +19,7 @@ import {
   workorderNeedsChatAttention,
   workorderPreviewState,
 } from "./workorder-detail-sections.js";
+import { RETURN_CATEGORIES } from "./workorder-handoff.js";
 
 export function WorkorderDetailPage({
   activeWorkorder,
@@ -60,6 +62,8 @@ export function WorkorderDetailPage({
   officeAssignmentChanged,
   officeCloseNote,
   officeCloseOpen,
+  officeReturn,
+  officeCancel,
   officeDetailState,
   officeLocations,
   pendingPartCount,
@@ -80,9 +84,12 @@ export function WorkorderDetailPage({
   workorderCountLabel,
   applyVehicle,
   closeOfficeWorkorder,
+  cancelOfficeWorkorder,
   jumpToPreview,
   openFullscreenPreview,
   printWorkorders,
+  openOfficeCancel,
+  openOfficeReturn,
   reloadActiveWorkorder,
   returnToRoleWorkspace,
   saveActiveUsedParts,
@@ -98,12 +105,15 @@ export function WorkorderDetailPage({
   setOfficeAssignment,
   setOfficeCloseNote,
   setOfficeCloseOpen,
+  setOfficeReturn,
+  setOfficeCancel,
   setOfficeDetailState,
   setPreviewFullscreen,
   setPrintMenuOpen,
   setPrintState,
   setSupportingView,
   submitMechanicFinish,
+  returnOfficeWorkorder,
   toggleWorkorderTools,
   updateActiveUsedParts,
   updateField,
@@ -180,7 +190,7 @@ export function WorkorderDetailPage({
             </div>
             <div className="detail-context-actions">
               <WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />
-              {isOfficeDetail ? (
+              {isOfficeDetail && activeWorkorder.allowedActions?.update ? (
                 <button
                   className="detail-save-button"
                   type="button"
@@ -192,7 +202,7 @@ export function WorkorderDetailPage({
                   <Save01 />
                 </button>
               ) : null}
-              {isOfficeDetail && detailStatus === "mechanic_done" ? (
+              {isOfficeDetail && activeWorkorder.allowedActions?.approve ? (
                 <button
                   className="detail-close-workorder-button"
                   type="button"
@@ -236,7 +246,7 @@ export function WorkorderDetailPage({
                 disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
               >
                 <CheckCircle />
-                <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
+                <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>
               </button>
             ) : null}
           >
@@ -260,7 +270,7 @@ export function WorkorderDetailPage({
                 disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
               >
                 <CheckCircle />
-                <span>{mechanicAction.busy === "done" ? "Finishing" : "Finish work"}</span>
+                <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>
               </button>
             </div>
           ) : null}
@@ -299,6 +309,8 @@ export function WorkorderDetailPage({
             saveActiveUsedParts={saveActiveUsedParts}
             saveMechanicWorkNotes={saveMechanicWorkNotes}
             saveOfficeWorkorder={saveOfficeWorkorder}
+            openOfficeCancel={openOfficeCancel}
+            openOfficeReturn={openOfficeReturn}
             selectOfficeLocation={selectOfficeLocation}
             setDetailSection={selectDetailSection}
             setOfficeAssignment={setOfficeAssignment}
@@ -398,17 +410,17 @@ export function WorkorderDetailPage({
             }
           }}
         >
-          <form className="mechanic-completion-modal" role="dialog" aria-modal="true" aria-label="Finish workorder" onSubmit={submitMechanicFinish}>
+          <form className="mechanic-completion-modal" role="dialog" aria-modal="true" aria-label="Mark work as done" onSubmit={submitMechanicFinish}>
             <button
               className="close-button"
               type="button"
               onClick={() => setMechanicFinish({ open: false, name: "", message: "" })}
               disabled={Boolean(mechanicAction.busy)}
-              aria-label="Cancel finishing workorder"
+              aria-label="Cancel marking work as done"
             >
               <XClose />
             </button>
-            <h2>Finish workorder?</h2>
+            <h2>Mark work as done?</h2>
             <p>This sends the workorder to office for review. Write your name to confirm.</p>
             <Field label={`Write "${expectedMechanicName}"`}>
               <input
@@ -431,7 +443,7 @@ export function WorkorderDetailPage({
                 Cancel
               </Button>
               <Button variant="primary" type="submit" disabled={!mechanicFinishNameMatches || Boolean(mechanicAction.busy)}>
-                {mechanicAction.busy === "done" ? "Finishing..." : "Finish workorder"}
+                {mechanicAction.busy === "done" ? "Submitting..." : "Confirm work done"}
               </Button>
             </div>
           </form>
@@ -451,6 +463,52 @@ export function WorkorderDetailPage({
             <div className="mechanic-completion-actions">
               <Button variant="secondary" type="button" onClick={() => setOfficeCloseOpen(false)}>Cancel</Button>
               <Button variant="primary" type="submit" disabled={officeDetailState.busy}>{officeDetailState.busy ? "Approving..." : "Approve workorder"}</Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {officeReturn.open ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !officeDetailState.busy && setOfficeReturn({ open: false, reason: "", categories: [], message: "" })}>
+          <form className="office-handoff-modal" role="dialog" aria-modal="true" aria-label="Return workorder to mechanic" onSubmit={returnOfficeWorkorder}>
+            <button className="close-button" type="button" onClick={() => setOfficeReturn({ open: false, reason: "", categories: [], message: "" })} disabled={officeDetailState.busy} aria-label="Close return dialog"><XClose /></button>
+            <h2>Return to mechanic?</h2>
+            <p>Explain what needs correction. The workorder will return to active work and the mechanic will see this request.</p>
+            <Field label="Reason">
+              <textarea rows="4" required minLength="2" maxLength="1000" value={officeReturn.reason} onChange={(event) => setOfficeReturn((current) => ({ ...current, reason: event.target.value, message: "" }))} autoFocus />
+            </Field>
+            <OperationalCheckboxGroup
+              legend="What needs attention? (optional)"
+              options={RETURN_CATEGORIES}
+              selectedValues={officeReturn.categories}
+              onChange={(categories) => setOfficeReturn((current) => ({
+                ...current,
+                categories,
+                message: "",
+              }))}
+            />
+            {officeReturn.message ? <p className="mechanic-completion-message" role="alert">{officeReturn.message}</p> : null}
+            <div className="mechanic-completion-actions">
+              <Button type="button" onClick={() => setOfficeReturn({ open: false, reason: "", categories: [], message: "" })} disabled={officeDetailState.busy}>Keep in review</Button>
+              <Button variant="primary" type="submit" disabled={officeDetailState.busy || officeReturn.reason.trim().length < 2}>{officeDetailState.busy ? "Returning..." : "Return to mechanic"}</Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {officeCancel.open ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !officeDetailState.busy && setOfficeCancel({ open: false, reason: "", message: "" })}>
+          <form className="office-handoff-modal" role="dialog" aria-modal="true" aria-label="Cancel workorder" onSubmit={cancelOfficeWorkorder}>
+            <button className="close-button" type="button" onClick={() => setOfficeCancel({ open: false, reason: "", message: "" })} disabled={officeDetailState.busy} aria-label="Close cancellation dialog"><XClose /></button>
+            <h2>Cancel workorder?</h2>
+            <p><strong>{activeWorkorder.workorder.serial}</strong> will leave active queues. Assignments and outstanding part commitments will be released. This action remains in Activity.</p>
+            <Field label="Cancellation reason">
+              <textarea rows="4" required minLength="2" maxLength="1000" value={officeCancel.reason} onChange={(event) => setOfficeCancel({ open: true, reason: event.target.value, message: "" })} autoFocus />
+            </Field>
+            {officeCancel.message ? <p className="mechanic-completion-message" role="alert">{officeCancel.message}</p> : null}
+            <div className="mechanic-completion-actions">
+              <Button type="button" onClick={() => setOfficeCancel({ open: false, reason: "", message: "" })} disabled={officeDetailState.busy}>Keep workorder</Button>
+              <Button variant="danger" type="submit" disabled={officeDetailState.busy || officeCancel.reason.trim().length < 2}>{officeDetailState.busy ? "Cancelling..." : "Cancel workorder"}</Button>
             </div>
           </form>
         </div>

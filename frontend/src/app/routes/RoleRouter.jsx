@@ -27,6 +27,12 @@ import {
   defaultSupportingView,
 } from "../../features/workorder-detail/workorder-detail-sections.js";
 import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
+import { canonicalApprovalName, canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
+import {
+  clearOfficeWorkorderEditBackup,
+  readOfficeWorkorderEditBackup,
+  writeOfficeWorkorderEditBackup,
+} from "../../features/workorder-detail/office-workorder-autosave-storage.js";
 import { validateCreateWorkorder } from "../../features/generator/create-workorder-validation.js";
 import {
   createLocationDefaultPatch,
@@ -125,6 +131,10 @@ export function RoleRouter({ actor }) {
   const previewGridRef = useRef(null);
   const mechanicLocationRefreshRef = useRef("");
   const mechanicProgressBackupRestoredRef = useRef("");
+  const officeAutosaveTimerRef = useRef(null);
+  const officeAutosaveInFlightRef = useRef(false);
+  const officeAutosaveQueuedRef = useRef(false);
+  const officeAutosaveRevisionRef = useRef(0);
   const [workspace, setWorkspace] = useState(() => readInitialWorkspace(actor));
   const [mode, setMode] = useState(() => (actor.role === "mechanic" ? "mechanic" : "admin"));
   const [routeLoading, setRouteLoading] = useState(routeStartsLoading);
@@ -133,6 +143,8 @@ export function RoleRouter({ actor }) {
   const [mechanicFinish, setMechanicFinish] = useState({ open: false, name: "", message: "" });
   const [officeCloseOpen, setOfficeCloseOpen] = useState(false);
   const [officeCloseNote, setOfficeCloseNote] = useState("");
+  const [officeReturn, setOfficeReturn] = useState({ open: false, reason: "", categories: [], message: "" });
+  const [officeCancel, setOfficeCancel] = useState({ open: false, reason: "", message: "" });
   const [officeAssignment, setOfficeAssignment] = useState({ mechanicUserIds: [], reason: "" });
   const [createAssignment, setCreateAssignment] = useState({ mechanicUserIds: [], mechanics: [], loading: false });
   const [previewPanelOpen, setPreviewPanelOpen] = useState(true);
@@ -176,6 +188,7 @@ export function RoleRouter({ actor }) {
     },
   });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
+  const [officeAutosaveRevision, setOfficeAutosaveRevision] = useState(0);
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -280,9 +293,10 @@ export function RoleRouter({ actor }) {
     { value: "in_progress", label: "Working" },
     { value: "waiting_office", label: "Need office" },
     { value: "parts_requested", label: "Parts requested" },
-    { value: "mechanic_done", label: "Done" },
+    { value: "mechanic_done", label: "Work done" },
     { value: "closed", label: "Closed" },
     { value: "odoo_entered", label: "Odoo entered" },
+    { value: "cancelled", label: "Cancelled" },
   ];
   const currentStatusLabel = statusOptions.find((option) => option.value === detailStatus)?.label || "Open";
   const isMechanicDetail = detailSource === "mechanic" && Boolean(activeWorkorder);
@@ -403,6 +417,29 @@ export function RoleRouter({ actor }) {
     mechanicFinish.name.trim().replace(/\s+/g, " ").toLowerCase()
     === expectedMechanicName.trim().replace(/\s+/g, " ").toLowerCase()
   );
+
+  useEffect(() => {
+    const workorder = activeWorkorder?.workorder;
+    if (!workorder) return;
+    const canonicalTimes = canonicalPreviewTimes(workorder);
+    setForm((current) => (
+      current.startTime === canonicalTimes.startTime && current.endTime === canonicalTimes.endTime
+        ? current
+        : { ...current, ...canonicalTimes }
+    ));
+  }, [activeWorkorder?.workorder?.startedAt, activeWorkorder?.workorder?.mechanicDoneAt]);
+
+  useEffect(() => {
+    if (!officeAutosaveRevision || !isOfficeDetail || !activeWorkorder?.allowedActions?.update) return undefined;
+    window.clearTimeout(officeAutosaveTimerRef.current);
+    officeAutosaveTimerRef.current = window.setTimeout(() => {
+      officeAutosaveTimerRef.current = null;
+      saveOfficeWorkorder({ automatic: true });
+    }, 700);
+    return () => window.clearTimeout(officeAutosaveTimerRef.current);
+  }, [officeAutosaveRevision]);
+
+  useEffect(() => () => window.clearTimeout(officeAutosaveTimerRef.current), []);
 
   useEffect(() => {
     if (!isMechanicDetail || !activeWorkorder?.workorder?.id || !mechanicMapVehicle?.id) return;
@@ -550,6 +587,7 @@ export function RoleRouter({ actor }) {
         method: "POST",
         body: JSON.stringify({}),
       }).then(() => api(`/api/office/workorders/${encodeURIComponent(workorderId)}`)).then((detail) => {
+        const editBackup = readOfficeWorkorderEditBackup(actor.id, detail.workorder.id);
         setActiveWorkorder(detail);
         setSelectedVehicle(detail.workorder.asset || null);
         setOfficeAssignment({
@@ -563,7 +601,12 @@ export function RoleRouter({ actor }) {
         setDetailStatus(detail.workorder.status);
         setDetailSection(defaultDetailSection(actor.role, detail.workorder.status, isCompact));
         setSupportingView(defaultSupportingView(actor.role, detail.workorder.status));
-        setForm((current) => workorderFormValues(detail, current));
+        setForm((current) => ({ ...workorderFormValues(detail, current), ...(editBackup || {}) }));
+        if (editBackup) {
+          officeAutosaveRevisionRef.current += 1;
+          setOfficeAutosaveRevision((current) => current + 1);
+          setOfficeDetailState({ busy: false, message: "Recovered unsaved changes. Saving automatically..." });
+        }
       })
       : actor.role === "mechanic"
         ? api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}/opened`, {
@@ -685,6 +728,15 @@ export function RoleRouter({ actor }) {
   function updateField(field, value) {
     clearOfficeCreateErrors(field);
     setForm((current) => ({ ...current, [field]: value }));
+    stageOfficeWorkorderAutosave({ [field]: value });
+  }
+
+  function stageOfficeWorkorderAutosave(patch) {
+    const workorderId = activeWorkorder?.workorder?.id;
+    if (!isOfficeDetail || !activeWorkorder?.allowedActions?.update || !workorderId) return;
+    writeOfficeWorkorderEditBackup(actor.id, workorderId, patch);
+    officeAutosaveRevisionRef.current += 1;
+    setOfficeAutosaveRevision((current) => current + 1);
   }
 
   function clearOfficeCreateErrors(...fields) {
@@ -704,12 +756,14 @@ export function RoleRouter({ actor }) {
   }
 
   function updateStartDate(value) {
+    const workEndDate = !form.workEndDate || form.workEndDate < value ? value : form.workEndDate;
     setForm((current) => ({
       ...current,
       workDate: value,
       workStartDate: value,
       workEndDate: !current.workEndDate || current.workEndDate < value ? value : current.workEndDate,
     }));
+    stageOfficeWorkorderAutosave({ workDate: value, workStartDate: value, workEndDate });
   }
 
   function updatePart(index, field, value) {
@@ -794,6 +848,15 @@ export function RoleRouter({ actor }) {
 
   function applyVehicle(vehicle) {
     const modelText = vehicleModelText(vehicle);
+    const vehiclePatch = {
+      customerCompanyName: vehicle.owner_name || form.customerCompanyName,
+      unitNo: vehicle.unit_no || vehicle.name || form.unitNo,
+      unitType: vehicle.unit_type || form.unitType,
+      licenseNo: vehicle.license_plate || form.licenseNo,
+      mileage: vehicleMileage(vehicle) || form.mileage,
+      model: modelText || form.model,
+      vinNo: vehicle.vin || form.vinNo,
+    };
     clearOfficeCreateErrors("unitNo", ...(vehicle.owner_name ? ["customerCompanyName"] : []));
     setForm((current) => ({
       ...current,
@@ -805,6 +868,7 @@ export function RoleRouter({ actor }) {
       model: modelText || current.model,
       vinNo: vehicle.vin || current.vinNo,
     }));
+    stageOfficeWorkorderAutosave(vehiclePatch);
     setVehicleLookup((current) => ({
       ...current,
       loading: false,
@@ -991,6 +1055,7 @@ export function RoleRouter({ actor }) {
     const assignedMechanicName = workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
       || workorder.mechanic?.name
       || (detail.user?.role === "mechanic" ? detail.user.name : "");
+    const approvalName = canonicalApprovalName(workorder);
 
     return {
       ...current,
@@ -1011,6 +1076,9 @@ export function RoleRouter({ actor }) {
       workPerformed: workorder.workPerformed || savedForm.workPerformed || "",
       mechanicName: assignedMechanicName || savedForm.mechanicName,
       officeNotes: workorder.officeNotes || savedForm.officeNotes || "",
+      managerName: approvalName || savedForm.managerName || "",
+      authorizedBy: approvalName || savedForm.authorizedBy || "",
+      ...canonicalPreviewTimes(workorder),
       parts: savedParts,
     };
   }
@@ -1046,6 +1114,7 @@ export function RoleRouter({ actor }) {
       });
       const detail = await api(`/api/office/workorders/${encodeURIComponent(workorderId)}`);
       const workorder = detail.workorder;
+      const editBackup = readOfficeWorkorderEditBackup(actor.id, workorder.id);
       setActiveWorkorder(detail);
       setSelectedVehicle(workorder.asset || null);
       setOfficeAssignment({
@@ -1059,9 +1128,16 @@ export function RoleRouter({ actor }) {
       setDetailStatus(workorder.status);
       setDetailSection(defaultDetailSection(actor.role, workorder.status, isCompact));
       setSupportingView(defaultSupportingView(actor.role, workorder.status));
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => ({ ...workorderFormValues(detail, current), ...(editBackup || {}) }));
       setWorkspace("generator");
-      setOfficeDetailState({ busy: false, message: "" });
+      if (editBackup) {
+        officeAutosaveRevisionRef.current += 1;
+        setOfficeAutosaveRevision((current) => current + 1);
+      }
+      setOfficeDetailState({
+        busy: false,
+        message: editBackup ? "Recovered unsaved changes. Saving automatically..." : "",
+      });
       replaceRouteSearch(workorderDetailSearch(workorder.id));
       return true;
     } catch (error) {
@@ -1070,12 +1146,26 @@ export function RoleRouter({ actor }) {
     }
   }
 
-  async function saveOfficeWorkorder() {
+  async function saveOfficeWorkorder(options = {}) {
     if (!activeWorkorder?.workorder || !isOfficeDetail) return;
+    window.clearTimeout(officeAutosaveTimerRef.current);
+    officeAutosaveTimerRef.current = null;
+    if (officeAutosaveInFlightRef.current) {
+      officeAutosaveQueuedRef.current = true;
+      return;
+    }
+    const automatic = options?.automatic === true;
+    const savingRevision = officeAutosaveRevisionRef.current;
+    officeAutosaveInFlightRef.current = true;
     setOfficeDetailState({ busy: true, message: "Saving..." });
     try {
+      const savedAdministrativeForm = Object.fromEntries(
+        Object.entries(activeWorkorder.workorder.formData || {}).filter(([key]) => (
+          !["diagnosis", "workPerformed", "mechanicName", "startTime", "endTime", "managerName"].includes(key)
+        )),
+      );
       const formData = {
-        ...(activeWorkorder.workorder.formData || {}),
+        ...savedAdministrativeForm,
         companyName: form.customerCompanyName,
         customerCompanyName: form.customerCompanyName,
         headerTitle: form.headerTitle,
@@ -1094,10 +1184,6 @@ export function RoleRouter({ actor }) {
         model: form.model,
         vinNo: form.vinNo,
         mechanicConcern: form.mechanicConcern,
-        mechanicName: form.mechanicName,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        managerName: form.managerName,
         customerSignature: form.customerSignature,
         authorizedBy: form.authorizedBy,
         parts: form.parts,
@@ -1110,15 +1196,28 @@ export function RoleRouter({ actor }) {
           concern: form.mechanicConcern,
           officeNotes: form.officeNotes || "",
           formData,
+          expectedUpdatedAt: activeWorkorder.workorder.updatedAt,
         }),
       });
       const detail = await api(`/api/office/workorders/${result.workorder.id}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      setForm((current) => workorderFormValues(detail, current));
-      setOfficeDetailState({ busy: false, message: "Saved. Mechanic view will update from this record." });
+      if (!automatic) setForm((current) => workorderFormValues(detail, current));
+      if (officeAutosaveRevisionRef.current === savingRevision) {
+        clearOfficeWorkorderEditBackup(actor.id, detail.workorder.id);
+      }
+      setOfficeDetailState({
+        busy: false,
+        message: automatic ? "Saved automatically." : "Saved. Mechanic view will update from this record.",
+      });
     } catch (error) {
       setOfficeDetailState({ busy: false, message: error.message });
+    } finally {
+      officeAutosaveInFlightRef.current = false;
+      if (officeAutosaveQueuedRef.current || officeAutosaveRevisionRef.current > savingRevision) {
+        officeAutosaveQueuedRef.current = false;
+        setOfficeAutosaveRevision((current) => current + 1);
+      }
     }
   }
 
@@ -1140,6 +1239,66 @@ export function RoleRouter({ actor }) {
       setOfficeDetailState({ busy: false, message: "Workorder approved and sent to surveillance." });
     } catch (error) {
       setOfficeDetailState({ busy: false, message: error.message });
+    }
+  }
+
+  function openOfficeReturn() {
+    setOfficeDetailState((current) => ({ ...current, message: "" }));
+    setOfficeReturn({ open: true, reason: "", categories: [], message: "" });
+  }
+
+  function openOfficeCancel() {
+    setOfficeDetailState((current) => ({ ...current, message: "" }));
+    setOfficeCancel({ open: true, reason: "", message: "" });
+  }
+
+  async function returnOfficeWorkorder(event) {
+    event.preventDefault();
+    const reason = officeReturn.reason.trim();
+    if (reason.length < 2) {
+      setOfficeReturn((current) => ({ ...current, message: "Add a reason for the mechanic." }));
+      return;
+    }
+    setOfficeDetailState({ busy: true, message: "" });
+    try {
+      await api(`/api/office/workorders/${activeWorkorder.workorder.id}/return`, {
+        method: "POST",
+        body: JSON.stringify({ reason, categories: officeReturn.categories }),
+      });
+      const detail = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`);
+      setActiveWorkorder(detail);
+      setDetailStatus(detail.workorder.status);
+      setForm((current) => workorderFormValues(detail, current));
+      setOfficeReturn({ open: false, reason: "", categories: [], message: "" });
+      setOfficeDetailState({ busy: false, message: "Returned to the mechanic with your requested changes." });
+    } catch (error) {
+      setOfficeDetailState({ busy: false, message: "" });
+      setOfficeReturn((current) => ({ ...current, message: error.message }));
+    }
+  }
+
+  async function cancelOfficeWorkorder(event) {
+    event.preventDefault();
+    const reason = officeCancel.reason.trim();
+    if (reason.length < 2) {
+      setOfficeCancel((current) => ({ ...current, message: "Add a cancellation reason." }));
+      return;
+    }
+    setOfficeDetailState({ busy: true, message: "" });
+    try {
+      await api(`/api/office/workorders/${activeWorkorder.workorder.id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      const detail = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`);
+      setActiveWorkorder(detail);
+      setDetailStatus(detail.workorder.status);
+      setForm((current) => workorderFormValues(detail, current));
+      setOfficeCancel({ open: false, reason: "", message: "" });
+      setOfficeDetailState({ busy: false, message: "Workorder cancelled. The reason remains in Activity." });
+    } catch (error) {
+      setOfficeDetailState({ busy: false, message: "" });
+      setOfficeCancel((current) => ({ ...current, message: error.message }));
     }
   }
 
@@ -1352,6 +1511,8 @@ export function RoleRouter({ actor }) {
     setActiveWorkorder(null);
     setSelectedVehicle(null);
     setMechanicFinish({ open: false, name: "", message: "" });
+    setOfficeReturn({ open: false, reason: "", categories: [], message: "" });
+    setOfficeCancel({ open: false, reason: "", message: "" });
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace("mechanic");
@@ -1480,14 +1641,14 @@ export function RoleRouter({ actor }) {
     if (!form.workPerformed.trim()) {
       setMechanicFinish((current) => ({
         ...current,
-        message: "Add the work performed before finishing this workorder.",
+        message: "Add the work performed before marking the work as done.",
       }));
       return;
     }
     if (!mechanicFinishNameMatches) {
       setMechanicFinish((current) => ({
         ...current,
-        message: `Write ${expectedMechanicName} to finish this workorder.`,
+        message: `Write ${expectedMechanicName} to confirm the work is done.`,
       }));
       return;
     }
@@ -1644,6 +1805,8 @@ export function RoleRouter({ actor }) {
         officeAssignmentChanged={officeAssignmentChanged}
         officeCloseNote={officeCloseNote}
         officeCloseOpen={officeCloseOpen}
+        officeReturn={officeReturn}
+        officeCancel={officeCancel}
         officeDetailState={officeDetailState}
         officeLocations={officeLocations}
         pendingPartCount={pendingPartCount}
@@ -1664,9 +1827,12 @@ export function RoleRouter({ actor }) {
         workorderCountLabel={workorderCountLabel}
         applyVehicle={applyVehicle}
         closeOfficeWorkorder={closeOfficeWorkorder}
+        cancelOfficeWorkorder={cancelOfficeWorkorder}
         jumpToPreview={jumpToPreview}
         openFullscreenPreview={openFullscreenPreview}
         printWorkorders={printWorkorders}
+        openOfficeCancel={openOfficeCancel}
+        openOfficeReturn={openOfficeReturn}
         reloadActiveWorkorder={reloadActiveWorkorder}
         returnToRoleWorkspace={returnToRoleWorkspace}
         saveActiveUsedParts={saveActiveUsedParts}
@@ -1682,12 +1848,15 @@ export function RoleRouter({ actor }) {
         setOfficeAssignment={setOfficeAssignment}
         setOfficeCloseNote={setOfficeCloseNote}
         setOfficeCloseOpen={setOfficeCloseOpen}
+        setOfficeReturn={setOfficeReturn}
+        setOfficeCancel={setOfficeCancel}
         setOfficeDetailState={setOfficeDetailState}
         setPreviewFullscreen={setPreviewFullscreen}
         setPrintMenuOpen={setPrintMenuOpen}
         setPrintState={setPrintState}
         setSupportingView={setSupportingView}
         submitMechanicFinish={submitMechanicFinish}
+        returnOfficeWorkorder={returnOfficeWorkorder}
         toggleWorkorderTools={toggleWorkorderTools}
         updateActiveUsedParts={updateActiveUsedParts}
         updateField={updateField}

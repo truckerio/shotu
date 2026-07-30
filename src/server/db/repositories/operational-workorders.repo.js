@@ -2,6 +2,7 @@ import { getPool, query } from "../pool.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { reserveWorkorderSerials } from "./serial-counters.repo.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
+import { OPERATIONS_ACTIVE_LIFECYCLES } from "../../modules/workorders/workorder-lifecycle-policy.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
@@ -61,6 +62,12 @@ function workorderSelect() {
       wo.started_at,
       wo.mechanic_done_at,
       wo.closed_at,
+      wo.approved_by_user_id,
+      approver.display_name as approved_by_name,
+      wo.cancelled_at,
+      wo.cancelled_by_user_id,
+      canceller.display_name as cancelled_by_name,
+      wo.cancel_reason,
       wo.created_at,
       wo.updated_at,
       ${publicAssetSelect("a")} as asset,
@@ -71,6 +78,8 @@ function workorderSelect() {
     from operational_workorders wo
     left join assets a on a.id = wo.asset_id
     left join locations l on l.id = wo.location_id
+    left join user_profiles approver on approver.id = wo.approved_by_user_id
+    left join user_profiles canceller on canceller.id = wo.cancelled_by_user_id
     left join lateral (
       select
         jsonb_agg(
@@ -133,6 +142,13 @@ export function publicWorkorderRow(row) {
     startedAt: row.started_at,
     mechanicDoneAt: row.mechanic_done_at,
     closedAt: row.closed_at,
+    approvedByUserId: row.approved_by_user_id,
+    approvedByName: row.approved_by_name || "",
+    approvedBy: row.approved_by_user_id ? { id: row.approved_by_user_id, name: row.approved_by_name || "" } : null,
+    cancelledAt: row.cancelled_at,
+    cancelledByUserId: row.cancelled_by_user_id,
+    cancelledByName: row.cancelled_by_name || "",
+    cancelReason: row.cancel_reason || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     asset,
@@ -141,6 +157,19 @@ export function publicWorkorderRow(row) {
     mechanics: Array.isArray(row.mechanics) ? row.mechanics : [],
     mechanicIds: Array.isArray(row.mechanic_ids) ? row.mechanic_ids : [],
   };
+}
+
+export class WorkorderLifecycleConflictError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "WorkorderLifecycleConflictError";
+    this.statusCode = 409;
+    this.code = code;
+  }
+}
+
+function lifecycleConflict(code, message) {
+  return new WorkorderLifecycleConflictError(code, message);
 }
 
 async function addStatusEvent(client, { workorderId, fromStatus, toStatus, changedByUserId, note = "" }) {
@@ -163,6 +192,54 @@ async function addAssignmentEvent(client, { workorderId, fromMechanicId, toMecha
     `,
     [workorderId, fromMechanicId || null, toMechanicId || null, action, reason, changedByUserId || null]
   );
+}
+
+async function setAttentionInTransaction(client, {
+  workorderId,
+  reason,
+  active,
+  actorUserId,
+  details = {},
+}) {
+  const existing = await client.query(
+    `select id, active from workorder_attention_state
+     where workorder_id = $1 and reason = $2 for update`,
+    [workorderId, reason],
+  );
+  const previous = existing.rows[0];
+  const action = active
+    ? previous?.active === false ? "reopened" : previous ? "updated" : "opened"
+    : "resolved";
+  await client.query(
+    `insert into workorder_attention_state (
+       workorder_id, reason, active, details, opened_by_user_id,
+       resolved_by_user_id, resolved_at, updated_at
+     ) values ($1, $2, $3, $4::jsonb, $5::uuid,
+       case when $3 then null::uuid else $5::uuid end,
+       case when $3 then null else now() end, now())
+     on conflict (workorder_id, reason) do update
+     set active = excluded.active,
+         details = excluded.details,
+         opened_by_user_id = case
+           when excluded.active then coalesce(workorder_attention_state.opened_by_user_id, excluded.opened_by_user_id)
+           else workorder_attention_state.opened_by_user_id
+         end,
+         opened_at = case
+           when excluded.active and workorder_attention_state.active = false then now()
+           else workorder_attention_state.opened_at
+         end,
+         resolved_by_user_id = excluded.resolved_by_user_id,
+         resolved_at = excluded.resolved_at,
+         updated_at = now()`,
+    [workorderId, reason, active, JSON.stringify(details), actorUserId || null],
+  );
+  if (!previous || previous.active !== active || action === "updated") {
+    await client.query(
+      `insert into workorder_attention_events (workorder_id, reason, action, actor_user_id, details)
+       values ($1, $2, $3, $4::uuid, $5::jsonb)`,
+      [workorderId, reason, action, actorUserId || null, JSON.stringify(details)],
+    );
+  }
 }
 
 const INITIAL_ASSIGNMENT_REASON = "Assigned when workorder was created.";
@@ -251,6 +328,13 @@ const FIELD_EVENT_LABELS = {
   "formData.parts": "Used parts",
 };
 
+const MECHANIC_OWNED_FORM_KEYS = new Set([
+  "mechanicName",
+  "startTime",
+  "endTime",
+  "parts",
+]);
+
 function textValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
@@ -263,6 +347,15 @@ function canonicalJson(value) {
     return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
   }
   return value;
+}
+
+function preserveMechanicOwnedFormData(beforeFormData, proposedFormData) {
+  const preserved = { ...(proposedFormData || {}) };
+  for (const key of MECHANIC_OWNED_FORM_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(beforeFormData || {}, key)) preserved[key] = beforeFormData[key];
+    else delete preserved[key];
+  }
+  return preserved;
 }
 
 function changedFields(before, input) {
@@ -366,18 +459,24 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       mechanicUserIds,
       assignedByUserId: input.createdByUserId,
     });
+    const assignedStatus = input.startImmediately
+      ? WORKORDER_STATUS.IN_PROGRESS
+      : WORKORDER_STATUS.ACCEPTED;
     await client.query(
       `update operational_workorders
-          set status = $2, accepted_at = now(), updated_at = now()
+          set status = $2,
+              accepted_at = now(),
+              started_at = case when $3::boolean then now() else null end,
+              updated_at = now()
         where id = $1`,
-      [result.rows[0].id, WORKORDER_STATUS.ACCEPTED],
+      [result.rows[0].id, assignedStatus, input.startImmediately === true],
     );
     await addStatusEvent(client, {
       workorderId: result.rows[0].id,
       fromStatus: result.rows[0].status,
-      toStatus: WORKORDER_STATUS.ACCEPTED,
+      toStatus: assignedStatus,
       changedByUserId: input.createdByUserId,
-      note: INITIAL_ASSIGNMENT_REASON,
+      note: input.startImmediately ? "Mechanic created and started workorder." : INITIAL_ASSIGNMENT_REASON,
     });
   }
   return { id: result.rows[0].id, serial };
@@ -407,6 +506,22 @@ export async function updateOperationalWorkorder(workorderId, input) {
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     if (!before) throw new Error("Workorder not found.");
+    if (input.expectedUpdatedAt && new Date(input.expectedUpdatedAt).getTime() !== new Date(before.updated_at).getTime()) {
+      throw lifecycleConflict("WORKORDER_STALE", "This workorder changed elsewhere. Reload before saving.");
+    }
+    let canCorrectClosed = false;
+    if (before.status === WORKORDER_STATUS.CLOSED) {
+      const attention = await client.query(
+        `select 1 from workorder_attention_state
+         where workorder_id = $1 and reason = 'missing_info' and active = true`,
+        [workorderId],
+      );
+      canCorrectClosed = Boolean(attention.rows[0]);
+    }
+    if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS, WORKORDER_STATUS.MECHANIC_DONE].includes(before.status)
+      && !canCorrectClosed) {
+      throw lifecycleConflict("WORKORDER_UPDATE_NOT_ALLOWED", "This workorder can no longer be edited.");
+    }
     const nextAssetId = Object.prototype.hasOwnProperty.call(input, "assetId")
       ? input.assetId
       : before.asset_id;
@@ -420,7 +535,7 @@ export async function updateOperationalWorkorder(workorderId, input) {
       ? input
       : {
         ...input,
-        formData: normalizeWorkorderFormData(input.formData, {
+        formData: normalizeWorkorderFormData(preserveMechanicOwnedFormData(before.form_data, input.formData), {
           assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
         }),
       };
@@ -513,11 +628,17 @@ const OPERATIONS_SORT = Object.freeze({
   timeInStatus: "time_in_status_seconds",
 });
 
+function staticLifecycleSql(statuses) {
+  return statuses.map((status) => `'${status}'`).join(", ");
+}
+
+const OPERATIONS_ACTIVE_LIFECYCLES_SQL = staticLifecycleSql(OPERATIONS_ACTIVE_LIFECYCLES);
+
 const OPERATIONS_CATEGORY = Object.freeze({
   all: "true",
   needs_attention: "cardinality(attention_reasons) > 0",
   unassigned: "lifecycle = 'open' and cardinality(mechanic_ids) = 0",
-  active: "lifecycle in ('accepted', 'in_progress')",
+  active: `lifecycle in (${OPERATIONS_ACTIVE_LIFECYCLES_SQL})`,
   parts: "'parts' = any(attention_reasons)",
   ready_review: "lifecycle = 'mechanic_done'",
   odoo_backlog: "lifecycle = 'closed' and odoo_status <> 'entered'",
@@ -537,6 +658,7 @@ function operationsProjectionSql() {
         wo.concern,
         wo.work_performed,
         wo.closed_at,
+        wo.cancelled_at,
         wo.created_at,
         greatest(
           wo.updated_at,
@@ -554,6 +676,7 @@ function operationsProjectionSql() {
             when 'mechanic_done' then wo.mechanic_done_at
             when 'closed' then wo.closed_at
             when 'odoo_entered' then oes.entered_at
+            when 'cancelled' then wo.cancelled_at
           end,
           wo.updated_at,
           wo.created_at
@@ -573,6 +696,7 @@ function operationsProjectionSql() {
         coalesce(oes.status, 'not_entered') as odoo_status,
         coalesce(oes.odoo_service_order_no, '') as odoo_service_order_no,
         coalesce(read_state.last_read_at, '-infinity'::timestamptz) as last_read_at,
+        coalesce(attention_summary.details, '{}'::jsonb) as attention_details,
         exists (
           select 1
           from workorder_part_requests request
@@ -630,6 +754,11 @@ function operationsProjectionSql() {
       left join workorder_read_state read_state
         on read_state.workorder_id = wo.id and read_state.user_id = $1::uuid
       left join lateral (
+        select jsonb_object_agg(attention.reason, attention.details) as details
+        from workorder_attention_state attention
+        where attention.workorder_id = wo.id and attention.active = true
+      ) attention_summary on true
+      left join lateral (
         select
           (select max(created_at) from chat_messages where workorder_id = wo.id) as last_chat_at,
           (select max(created_at) from workorder_status_events where workorder_id = wo.id) as last_status_at,
@@ -651,6 +780,7 @@ function operationsProjectionSql() {
           case when needs_parts then 'parts' end,
           case when needs_office_help then 'office_help' end,
           case when missing_info then 'missing_info' end,
+          case when attention_details ? 'revision_requested' then 'revision_requested' end,
           case when (
             (lifecycle = 'open' and status_started_at < now() - interval '24 hours')
             or (lifecycle in ('accepted', 'in_progress') and status_started_at < now() - interval '8 hours')
@@ -710,12 +840,14 @@ function publicOperationRow(row) {
     concern: row.concern,
     workPerformed: row.work_performed,
     closedAt: row.closed_at,
+    cancelledAt: row.cancelled_at,
     mechanic: emptyObjectToNull(row.mechanic),
     mechanicId: row.primary_mechanic_id,
     mechanics: Array.isArray(row.mechanics) ? row.mechanics : [],
     mechanicIds: Array.isArray(row.mechanic_ids) ? row.mechanic_ids : [],
     lifecycle: row.lifecycle,
     attentionReasons: row.attention_reasons || [],
+    attentionDetails: row.attention_details || {},
     odooStatus: row.odoo_status,
     odooServiceOrderNo: row.odoo_service_order_no,
     createdAt: row.created_at,
@@ -764,7 +896,7 @@ export async function summarizeOperationalWorkorders(input = {}) {
         count(*)::integer as all_count,
         count(*) filter (where cardinality(attention_reasons) > 0)::integer as needs_attention_count,
         count(*) filter (where lifecycle = 'open' and cardinality(mechanic_ids) = 0)::integer as unassigned_count,
-        count(*) filter (where lifecycle in ('accepted', 'in_progress'))::integer as active_count,
+        count(*) filter (where lifecycle in (${OPERATIONS_ACTIVE_LIFECYCLES_SQL}))::integer as active_count,
         count(*) filter (where 'parts' = any(attention_reasons))::integer as parts_count,
         count(*) filter (where lifecycle = 'mechanic_done')::integer as ready_review_count,
         count(*) filter (where lifecycle = 'closed' and odoo_status <> 'entered')::integer as odoo_backlog_count
@@ -798,23 +930,62 @@ export async function getOperationalWorkorderById(id) {
 }
 
 export async function recordWorkorderOpened({ workorderId, userId, actorRole }) {
-  const result = await query(
-    `
-      insert into workorder_access_events (workorder_id, user_id, actor_role, event_type)
-      select $1, $2, $3, 'opened'
-      where not exists (
-        select 1
-        from workorder_access_events
-        where workorder_id = $1
-          and user_id = $2
-          and event_type = 'opened'
-          and created_at > now() - interval '30 seconds'
-      )
-      returning id
-    `,
-    [workorderId, userId, actorRole]
-  );
-  return Boolean(result.rows[0]);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const current = await client.query(
+      "select id, status, started_at from operational_workorders where id = $1 for update",
+      [workorderId],
+    );
+    const workorder = current.rows[0];
+    if (!workorder) throw new Error("Workorder not found.");
+    let started = false;
+    if (actorRole === "mechanic" && workorder.status === WORKORDER_STATUS.ACCEPTED && !workorder.started_at) {
+      const assignment = await client.query(
+        `select 1 from workorder_mechanic_assignments
+         where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
+        [workorderId, userId],
+      );
+      if (assignment.rows[0]) {
+        await client.query(
+          `update operational_workorders
+           set status = $2, started_at = now(), updated_at = now()
+           where id = $1 and started_at is null`,
+          [workorderId, WORKORDER_STATUS.IN_PROGRESS],
+        );
+        await addStatusEvent(client, {
+          workorderId,
+          fromStatus: workorder.status,
+          toStatus: WORKORDER_STATUS.IN_PROGRESS,
+          changedByUserId: userId,
+          note: "Assigned mechanic opened and started work.",
+        });
+        started = true;
+      }
+    }
+    const access = await client.query(
+      `insert into workorder_access_events (workorder_id, user_id, actor_role, event_type)
+       select $1, $2, $3, 'opened'
+       where not exists (
+         select 1 from workorder_access_events
+         where workorder_id = $1 and user_id = $2 and event_type = 'opened'
+           and created_at > now() - interval '30 seconds'
+       )
+       returning id`,
+      [workorderId, userId, actorRole],
+    );
+    await client.query("commit");
+    return {
+      recorded: Boolean(access.rows[0]),
+      started,
+      workorder: started ? await getOperationalWorkorderById(workorderId) : undefined,
+    };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getWorkorderTimeline(workorderId) {
@@ -995,22 +1166,22 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
     );
     const mechanicIds = assignments.rows.map((row) => row.mechanic_user_id);
     const previousPrimaryId = assignments.rows.find((row) => row.assignment_role === "primary")?.mechanic_user_id || null;
-    if (!mechanicIds.includes(mechanicUserId)) {
-      const assignmentRole = mechanicIds.length ? "support" : "primary";
-      const assignmentReason = mechanicIds.length ? "Mechanic joined active work" : "Mechanic accepted work";
-      await client.query(
-        `insert into workorder_mechanic_assignments (
-           workorder_id, mechanic_user_id, assignment_role, assigned_by_user_id, reason
-         ) values ($1, $2, $3, $2, $4)`,
-        [workorderId, mechanicUserId, assignmentRole, assignmentReason],
-      );
+    if (workorder.status !== WORKORDER_STATUS.OPEN || mechanicIds.length) {
+      throw lifecycleConflict("WORKORDER_ALREADY_ACCEPTED", "This workorder has already been accepted.");
     }
-    const nextStatus = workorder.status === WORKORDER_STATUS.OPEN ? WORKORDER_STATUS.ACCEPTED : workorder.status;
+    await client.query(
+      `insert into workorder_mechanic_assignments (
+         workorder_id, mechanic_user_id, assignment_role, assigned_by_user_id, reason
+       ) values ($1, $2, 'primary', $2, 'Mechanic accepted work')`,
+      [workorderId, mechanicUserId],
+    );
+    const nextStatus = WORKORDER_STATUS.IN_PROGRESS;
     await client.query(
       `
         update operational_workorders
         set status = $2,
             accepted_at = coalesce(accepted_at, now()),
+            started_at = coalesce(started_at, now()),
             updated_at = now()
         where id = $1
       `,
@@ -1024,15 +1195,13 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
       reason: mechanicIds.length ? "Joined active work." : "",
       changedByUserId: mechanicUserId,
     });
-    if (workorder.status !== nextStatus) {
-      await addStatusEvent(client, {
-        workorderId,
-        fromStatus: workorder.status,
-        toStatus: nextStatus,
-        changedByUserId: mechanicUserId,
-        note: "Mechanic accepted work.",
-      });
-    }
+    await addStatusEvent(client, {
+      workorderId,
+      fromStatus: workorder.status,
+      toStatus: nextStatus,
+      changedByUserId: mechanicUserId,
+      note: "Mechanic accepted and started work.",
+    });
     await client.query("commit");
     return getOperationalWorkorderById(workorderId);
   } catch (error) {
@@ -1186,6 +1355,9 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
     );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
+    if (![WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS].includes(workorder.status)) {
+      throw lifecycleConflict("WORKORDER_NOT_ACTIVE", "Only active work can be marked done.");
+    }
     const assignment = await client.query(
       `select 1 from workorder_mechanic_assignments
        where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
@@ -1206,6 +1378,7 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
             progress_activity_version = progress_version + 1,
             progress_pending_fields = '[]'::jsonb,
             status = $5,
+            started_at = coalesce(started_at, now()),
             mechanic_done_at = now(),
             updated_at = now()
         where id = $1
@@ -1226,10 +1399,189 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
       changedByUserId: mechanicUserId,
       note: "Mechanic marked work done.",
     });
+    const activeRevision = await client.query(
+      `select 1 from workorder_attention_state
+       where workorder_id = $1 and reason = 'revision_requested' and active = true`,
+      [workorderId],
+    );
+    if (activeRevision.rows[0]) {
+      await setAttentionInTransaction(client, {
+        workorderId,
+        reason: "revision_requested",
+        active: false,
+        actorUserId: mechanicUserId,
+        details: { note: "Requested changes completed." },
+      });
+    }
     await client.query("commit");
     return getOperationalWorkorderById(workorderId);
   } catch (error) {
     await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function returnOperationalWorkorder(workorderId, officeUserId, { reason, categories = [] }) {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const current = await client.query(
+      "select id, status, mechanic_done_at from operational_workorders where id = $1 for update",
+      [workorderId],
+    );
+    const workorder = current.rows[0];
+    if (!workorder) throw new Error("Workorder not found.");
+    if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
+      throw lifecycleConflict("WORKORDER_RETURN_NOT_ALLOWED", "Only work ready for Manager review can be returned.");
+    }
+    await client.query(
+      `update operational_workorders
+       set status = $2, mechanic_done_at = null, updated_at = now()
+       where id = $1`,
+      [workorderId, WORKORDER_STATUS.IN_PROGRESS],
+    );
+    await addStatusEvent(client, {
+      workorderId,
+      fromStatus: workorder.status,
+      toStatus: WORKORDER_STATUS.IN_PROGRESS,
+      changedByUserId: officeUserId,
+      note: `Changes requested: ${reason}`,
+    });
+    await setAttentionInTransaction(client, {
+      workorderId,
+      reason: "revision_requested",
+      active: true,
+      actorUserId: officeUserId,
+      details: {
+        note: reason,
+        categories,
+        previousMechanicDoneAt: workorder.mechanic_done_at,
+      },
+    });
+    await client.query("commit");
+    return getOperationalWorkorderById(workorderId);
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function cancelOperationalWorkorder(workorderId, officeUserId, reason) {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const current = await client.query(
+      "select id, status from operational_workorders where id = $1 for update",
+      [workorderId],
+    );
+    const workorder = current.rows[0];
+    if (!workorder) throw new Error("Workorder not found.");
+    if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS, WORKORDER_STATUS.MECHANIC_DONE].includes(workorder.status)) {
+      throw lifecycleConflict("WORKORDER_CANCELLATION_NOT_ALLOWED", "This workorder can no longer be cancelled.");
+    }
+
+    const assignments = await client.query(
+      `select mechanic_user_id from workorder_mechanic_assignments
+       where workorder_id = $1 and active = true for update`,
+      [workorderId],
+    );
+    await client.query(
+      `update workorder_mechanic_assignments
+       set active = false, released_at = now(), reason = $2
+       where workorder_id = $1 and active = true`,
+      [workorderId, `Workorder cancelled: ${reason}`],
+    );
+    for (const assignment of assignments.rows) {
+      await addAssignmentEvent(client, {
+        workorderId,
+        fromMechanicId: assignment.mechanic_user_id,
+        toMechanicId: null,
+        action: "unassigned",
+        reason: `Workorder cancelled: ${reason}`,
+        changedByUserId: officeUserId,
+      });
+    }
+
+    const allocations = await client.query(
+      `select allocation.id, allocation.part_request_id, allocation.status,
+              allocation.inventory_item_id, allocation.quantity
+       from part_allocations allocation
+       join workorder_part_requests request on request.id = allocation.part_request_id
+       where request.workorder_id = $1
+         and allocation.status in ('proposed', 'reserved', 'ordered', 'received', 'transferred')
+       for update of allocation`,
+      [workorderId],
+    );
+    for (const allocation of allocations.rows) {
+      if (allocation.status === "reserved" && allocation.inventory_item_id) {
+        await client.query("select id from inventory_items where id = $1 for update", [allocation.inventory_item_id]);
+        await client.query(
+          `update inventory_items
+           set quantity_reserved = quantity_reserved - $2, updated_at = now()
+           where id = $1`,
+          [allocation.inventory_item_id, allocation.quantity],
+        );
+      }
+      await client.query(
+        "update part_allocations set status = 'cancelled', updated_at = now() where id = $1",
+        [allocation.id],
+      );
+    }
+    const cancelledRequests = await client.query(
+      `update workorder_part_requests
+       set approval_status = 'cancelled', decision_reason = $2, updated_at = now()
+       where workorder_id = $1 and approval_status in ('submitted', 'needs_info', 'approved')
+       returning id`,
+      [workorderId, `Workorder cancelled: ${reason}`],
+    );
+    for (const request of cancelledRequests.rows) {
+      await client.query(
+        `insert into part_request_events (
+           workorder_id, part_request_id, event_type, actor_user_id, note, metadata
+         ) values ($1, $2, 'cancelled', $3, $4, $5::jsonb)`,
+        [workorderId, request.id, officeUserId, `Part request cancelled with workorder: ${reason}`, JSON.stringify({ source: "workorder_cancellation" })],
+      );
+    }
+
+    const activeAttention = await client.query(
+      "select reason from workorder_attention_state where workorder_id = $1 and active = true for update",
+      [workorderId],
+    );
+    for (const attention of activeAttention.rows) {
+      await setAttentionInTransaction(client, {
+        workorderId,
+        reason: attention.reason,
+        active: false,
+        actorUserId: officeUserId,
+        details: { note: "Resolved because the workorder was cancelled." },
+      });
+    }
+
+    await client.query(
+      `update operational_workorders
+       set status = $2,
+           cancelled_at = now(),
+           cancelled_by_user_id = $3,
+           cancel_reason = $4,
+           updated_at = now()
+       where id = $1`,
+      [workorderId, WORKORDER_STATUS.CANCELLED, officeUserId, reason],
+    );
+    await addStatusEvent(client, {
+      workorderId,
+      fromStatus: workorder.status,
+      toStatus: WORKORDER_STATUS.CANCELLED,
+      changedByUserId: officeUserId,
+      note: `Workorder cancelled: ${reason}`,
+    });
+    await client.query("commit");
+    return getOperationalWorkorderById(workorderId);
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
     throw error;
   } finally {
     client.release();
@@ -1245,17 +1597,18 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
     if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
-      throw new Error("Only workorders ready for office review can be approved.");
+      throw lifecycleConflict("WORKORDER_NOT_READY_FOR_APPROVAL", "Only workorders ready for Manager review can be approved.");
     }
     await client.query(
       `
         update operational_workorders
         set status = $2,
             closed_at = now(),
+            approved_by_user_id = $3,
             updated_at = now()
         where id = $1
       `,
-      [workorderId, WORKORDER_STATUS.CLOSED]
+      [workorderId, WORKORDER_STATUS.CLOSED, officeUserId]
     );
     await client.query(
       `
@@ -1293,6 +1646,9 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
     );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
+    if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS].includes(workorder.status)) {
+      throw lifecycleConflict("WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Mechanic assignments can only change on active workorders.");
+    }
     const active = await client.query(
       `select mechanic_user_id, assignment_role
        from workorder_mechanic_assignments

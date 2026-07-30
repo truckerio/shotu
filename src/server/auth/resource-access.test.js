@@ -74,4 +74,9 @@ test("surveillance reads active and completed workflow records but not unassigne
     requireWorkorderAccess(context("surveillance"), open.id, { getWorkorder: async () => open }),
     (error) => error.statusCode === 404,
   );
+  const cancelled = { ...workorder, status: "cancelled" };
+  await assert.rejects(
+    requireWorkorderAccess(context("surveillance"), cancelled.id, { getWorkorder: async () => cancelled }),
+    (error) => error.statusCode === 404,
+  );
 });

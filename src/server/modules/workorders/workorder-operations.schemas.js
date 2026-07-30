@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { WORKORDER_LIFECYCLES } from "./workorder-lifecycle-policy.js";
 
-export const LIFECYCLE_STATUSES = ["open", "accepted", "in_progress", "mechanic_done", "closed", "odoo_entered"];
-export const ATTENTION_REASONS = ["parts", "office_help", "missing_info", "overdue"];
+export const LIFECYCLE_STATUSES = [...WORKORDER_LIFECYCLES];
+export const ATTENTION_REASONS = ["parts", "office_help", "missing_info", "revision_requested", "overdue"];
 export const OPERATIONS_CATEGORIES = ["needs_attention", "unassigned", "active", "parts", "ready_review", "odoo_backlog", "all"];
 
 export const workorderOperationsQuerySchema = z.object({

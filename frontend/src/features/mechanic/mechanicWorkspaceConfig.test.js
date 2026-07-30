@@ -10,7 +10,7 @@ test("phone mechanic queues expose three primary buckets", () => {
   assert.deepEqual(MECHANIC_PRIMARY_TABS.map(({ key, label }) => ({ key, label })), [
     { key: "myWork", label: "My work" },
     { key: "openWork", label: "Available" },
-    { key: "done", label: "Done" },
+    { key: "done", label: "Work done" },
   ]);
   assert.deepEqual(MECHANIC_SECONDARY_TABS.map(({ key }) => key), ["waiting", "activeWork"]);
 });

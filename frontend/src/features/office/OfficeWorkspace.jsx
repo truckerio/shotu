@@ -14,8 +14,14 @@ import { progressiveQueueResetKey } from "../../components/responsive/Progressiv
 import {
   OFFICE_PRIMARY_TABS,
   OFFICE_SECONDARY_TAB_KEYS,
+  needsOfficeAction,
+  officeAttentionReasons,
+  officeHandoffSummary,
+  officeLifecycle,
   officeRowsForTab,
+  officeUrgency,
 } from "./officeWorkspaceConfig.js";
+import "./office.css";
 import "../role-workspaces.css";
 
 function uniqueRows(...groups) {
@@ -33,37 +39,10 @@ function buildOfficeRows(dashboard) {
   return uniqueRows(dashboard.open, dashboard.active, dashboard.parts, dashboard.done, dashboard.closed);
 }
 
-function attentionReasons(row) {
-  if (Array.isArray(row.attentionReasons)) return row.attentionReasons;
-  if (row.status === "parts_requested") return ["parts"];
-  if (row.status === "waiting_office") return ["office_help"];
-  return [];
-}
-
-function lifecycle(row) {
-  if (row.lifecycle) return row.lifecycle;
-  return ["parts_requested", "waiting_office"].includes(row.status) ? "in_progress" : row.status;
-}
-
 function rowMechanicNames(row) {
   const names = row.mechanics?.map((mechanic) => mechanic.name).filter(Boolean) || [];
   if (names.length) return names;
   return row.mechanicName ? [row.mechanicName] : ["Unassigned"];
-}
-
-function needsOfficeAction(row) {
-  const reasons = attentionReasons(row);
-  return lifecycle(row) === "open" || lifecycle(row) === "mechanic_done" || reasons.some((reason) => ["parts", "office_help", "missing_info", "overdue"].includes(reason));
-}
-
-function urgency(row) {
-  const reasons = attentionReasons(row);
-  if (reasons.includes("missing_info")) return 0;
-  if (reasons.includes("overdue")) return 1;
-  if (reasons.includes("parts") || reasons.includes("office_help")) return 2;
-  if (lifecycle(row) === "mechanic_done") return 3;
-  if (lifecycle(row) === "open") return 4;
-  return 5;
 }
 
 function mechanicStats(rows, roster = []) {
@@ -93,9 +72,9 @@ function mechanicStats(rows, roster = []) {
         done: 0,
       };
       current.total += 1;
-      if (["accepted", "in_progress"].includes(lifecycle(row))) current.active += 1;
-      if (attentionReasons(row).length) current.attention += 1;
-      if (["mechanic_done", "closed", "odoo_entered"].includes(lifecycle(row))) current.done += 1;
+      if (["accepted", "in_progress"].includes(officeLifecycle(row))) current.active += 1;
+      if (officeAttentionReasons(row).length) current.attention += 1;
+      if (["mechanic_done", "closed", "odoo_entered"].includes(officeLifecycle(row))) current.done += 1;
       stats.set(key, current);
     }
   }
@@ -201,11 +180,11 @@ export function OfficeWorkspace({
   const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key));
   const tabRows = officeRowsForTab(activeTab, dashboard, allRows, needsRows);
   const filteredRows = tabRows
-    .filter((row) => !lifecycleFilter || lifecycle(row) === lifecycleFilter)
+    .filter((row) => !lifecycleFilter || officeLifecycle(row) === lifecycleFilter)
     .filter((row) => !mechanicFilter || rowMechanicNames(row).includes(mechanicFilter))
     .filter((row) => !locationFilter || row.locationName === locationFilter)
     .filter((row) => workorderMatchesSearch(row, search))
-    .sort((left, right) => urgency(left) - urgency(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt));
+    .sort((left, right) => officeUrgency(left) - officeUrgency(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt));
 
   return (
     <main className="prototype mechanic-home office-home workspace-operations">
@@ -255,7 +234,7 @@ export function OfficeWorkspace({
                 </label>
                 <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
                 {locations.length > 1 ? <label><span>Location</span><select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label> : null}
-                <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option></select></label>
+                <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option><option value="cancelled">Cancelled</option></select></label>
               </> : null}
             </MobileQueueToolbar>
             {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row role-desktop-filters">
@@ -277,6 +256,7 @@ export function OfficeWorkspace({
                     <option value="mechanic_done">Ready for review</option>
                     <option value="closed">Closed</option>
                     <option value="odoo_entered">Odoo entered</option>
+                    <option value="cancelled">Cancelled</option>
                   </select>
                 </div> : null}
           </div>
@@ -311,9 +291,20 @@ export function OfficeWorkspace({
                       mechanicFilter,
                       locationFilter,
                     ])}
-                    renderItem={(workorder) => (
-                      <WorkorderRow workorder={workorder} variant="office" onOpen={() => openDetail(workorder.id)} />
-                    )}
+                    renderItem={(workorder) => {
+                      const handoff = activeTab === "needs" ? officeHandoffSummary(workorder) : null;
+                      return (
+                        <div className={`office-queue-task${handoff ? " has-handoff" : ""}`}>
+                          {handoff ? (
+                            <div className={`office-handoff-callout is-${handoff.reason}`}>
+                              <strong>{handoff.label}</strong>
+                              {handoff.note ? <span>{handoff.note}</span> : null}
+                            </div>
+                          ) : null}
+                          <WorkorderRow workorder={workorder} variant="office" onOpen={() => openDetail(workorder.id)} />
+                        </div>
+                      );
+                    }}
                   />
                 ) : (
                   <div className="mechanic-empty-state"><strong>No matching workorders</strong></div>

@@ -1,0 +1,47 @@
+.office-queue-task {
+  min-width: 0;
+}
+
+.office-queue-task.has-handoff {
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  overflow: clip;
+}
+
+.office-queue-task.has-handoff .mechanic-work-row {
+  border-top: 1px solid #fedf89;
+}
+
+.office-handoff-callout {
+  align-items: baseline;
+  background: #fffaeb;
+  color: #7a2e0e;
+  display: flex;
+  gap: 8px 12px;
+  min-width: 0;
+  padding: 9px 14px;
+}
+
+.office-handoff-callout.is-revision_requested {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.office-handoff-callout strong,
+.office-handoff-callout span {
+  font-size: var(--text-secondary);
+  line-height: var(--leading-body);
+}
+
+.office-handoff-callout span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .office-handoff-callout {
+    align-items: start;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+  }
+}
