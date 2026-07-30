@@ -220,6 +220,10 @@
     width: 100%;
   }
 
+  .workorder-detail-page .workorder-compact-preview .workorder-preview-shell > div {
+    transform: scale(var(--workorder-preview-scale, 1));
+  }
+
   .workorder-preview-state {
     display: grid;
     min-height: 280px;

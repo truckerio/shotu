@@ -7,7 +7,7 @@ import {
 
 const DEFAULT_DEBOUNCE_MS = 900;
 
-function normalizedProgress(value) {
+export function normalizedMechanicProgress(value) {
   return {
     diagnosis: String(value?.diagnosis || ""),
     workPerformed: String(value?.workPerformed || ""),
@@ -15,8 +15,22 @@ function normalizedProgress(value) {
 }
 
 function fingerprint(value) {
-  const progress = normalizedProgress(value);
+  const progress = normalizedMechanicProgress(value);
   return JSON.stringify([progress.diagnosis, progress.workPerformed]);
+}
+
+export function mechanicProgressRequest({
+  workorderId,
+  expectedVersion,
+  value,
+  recordActivity,
+}) {
+  return {
+    workorderId,
+    expectedVersion,
+    ...normalizedMechanicProgress(value),
+    recordActivity: Boolean(recordActivity),
+  };
 }
 
 export function useMechanicProgress({
@@ -30,7 +44,7 @@ export function useMechanicProgress({
   const [status, setStatus] = useState("saved");
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(initialVersion || 1);
-  const valueRef = useRef(normalizedProgress(value));
+  const valueRef = useRef(normalizedMechanicProgress(value));
   const versionRef = useRef(initialVersion || 1);
   const baselineRef = useRef(fingerprint(value));
   const activityBaselineRef = useRef(fingerprint(value));
@@ -39,6 +53,11 @@ export function useMechanicProgress({
   const timerRef = useRef(null);
   const inFlightRef = useRef(null);
   const mountedRef = useRef(true);
+  const renderedValue = normalizedMechanicProgress(value);
+  const renderedFingerprint = fingerprint(renderedValue);
+  if (workorderId === workorderIdRef.current) {
+    valueRef.current = renderedValue;
+  }
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -68,12 +87,12 @@ export function useMechanicProgress({
       setStatus("saving");
       setError(null);
     }
-    const request = Promise.resolve(saveProgress({
+    const request = Promise.resolve(saveProgress(mechanicProgressRequest({
       workorderId: workorderIdRef.current,
       expectedVersion: versionRef.current,
-      ...currentValue,
+      value: currentValue,
       recordActivity: needsActivity,
-    }));
+    })));
     inFlightRef.current = request;
 
     try {
@@ -109,7 +128,7 @@ export function useMechanicProgress({
     nextVersion = 1,
   }) => {
     clearTimer();
-    const normalized = normalizedProgress(progress);
+    const normalized = normalizedMechanicProgress(progress);
     workorderIdRef.current = id;
     valueRef.current = normalized;
     versionRef.current = nextVersion || 1;
@@ -130,10 +149,8 @@ export function useMechanicProgress({
   }, [initialVersion, reset, value, workorderId]);
 
   useEffect(() => {
-    valueRef.current = normalizedProgress(value);
     if (!workorderId) return undefined;
-    const currentFingerprint = fingerprint(valueRef.current);
-    if (currentFingerprint === baselineRef.current) return undefined;
+    if (renderedFingerprint === baselineRef.current) return undefined;
 
     writeProgressBackup(actorId, workorderId, valueRef.current);
     setStatus("dirty");
@@ -144,14 +161,13 @@ export function useMechanicProgress({
       persist({ recordActivity: true }).catch(() => {});
     }, Math.max(0, debounceMs));
     return clearTimer;
-  }, [actorId, clearTimer, debounceMs, persist, value, workorderId]);
+  }, [actorId, clearTimer, debounceMs, persist, renderedFingerprint, workorderId]);
 
   useEffect(() => () => {
     mountedRef.current = false;
     clearTimer();
   }, [clearTimer]);
 
-  const renderedFingerprint = fingerprint(value);
   return {
     status,
     error,

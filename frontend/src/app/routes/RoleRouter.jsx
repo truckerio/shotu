@@ -29,6 +29,7 @@ import {
 } from "../../features/workorder-detail/workorder-detail-sections.js";
 import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
 import { canonicalApprovalName, canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
+import { canonicalDetailPreviewTemplate } from "../../features/workorder-detail/workorder-preview-template.js";
 import {
   clearOfficeWorkorderEditBackup,
   readOfficeWorkorderEditBackup,
@@ -1070,10 +1071,12 @@ export function RoleRouter({ actor }) {
       || (detail.user?.role === "mechanic" ? detail.user.name : "");
     const approvalName = canonicalApprovalName(workorder);
     const mechanicProgressFields = resolveMechanicProgressFields(workorder, savedForm);
+    const canonicalPreviewTemplate = canonicalDetailPreviewTemplate(workorder, officeLocations);
 
     return {
       ...current,
       ...savedForm,
+      ...canonicalPreviewTemplate,
       ...serial,
       copies: 1,
       locationId: workorder.locationId || workorder.location?.id || current.locationId,
