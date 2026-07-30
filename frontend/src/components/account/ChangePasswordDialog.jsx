@@ -10,6 +10,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { authClient } from "../../lib/auth-client.js";
+import { textEntryProps } from "../forms/text-entry-policy.js";
 import { PasswordVisibilityToggle } from "../ui/PasswordVisibilityToggle.jsx";
 
 const EMPTY_PASSWORDS = {
@@ -98,6 +99,7 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
               <Label>Current password</Label>
               <div className="password-input-control">
                 <Input
+                  {...textEntryProps("identifier")}
                   id="current-account-password"
                   autoFocus
                   type={visible.current ? "text" : "password"}
@@ -115,6 +117,7 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
               <Label>New password</Label>
               <div className="password-input-control">
                 <Input
+                  {...textEntryProps("identifier")}
                   id="new-account-password"
                   type={visible.next ? "text" : "password"}
                   minLength={12}
@@ -133,6 +136,7 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
               <Label>Confirm new password</Label>
               <div className="password-input-control">
                 <Input
+                  {...textEntryProps("identifier")}
                   id="confirm-account-password"
                   type={visible.confirmation ? "text" : "password"}
                   minLength={12}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle, ClipboardCheck, Clock, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
+import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
@@ -433,8 +435,8 @@ export function SurveillanceWorkspace({ actor }) {
                       </section>
                     ) : null}
                     {missing.length ? <div className="surveillance-missing"><strong>Missing information</strong><span>{missing.join(", ")}</span></div> : <p className="surveillance-complete">Workorder information complete</p>}
-                    <label><span>Service order no.</span><input value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
-                    <label><span>Note for Odoo or Manager</span><textarea value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" placeholder="Required when requesting information" /></label>
+                    <label><span>Service order no.</span><input {...textEntryProps("identifier")} value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} /></label>
+                    <label><span>Note for Odoo or Manager</span><NarrativeField value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" placeholder="Required when requesting information" /></label>
                     <div className="surveillance-odoo-actions">
                       <Button variant="primary" type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</Button>
                       <Button variant="secondary" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Request information</Button>
@@ -584,13 +586,13 @@ export function SurveillanceWorkspace({ actor }) {
                     {SURVEILLANCE_PHONE_SECONDARY_TABS.map((phoneTab) => <option key={phoneTab.key} value={phoneTab.key}>{phoneTab.label} ({dashboard?.counts[phoneTab.key] || 0})</option>)}
                   </select>
                 </label>
-                <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
+                <label className="mechanic-search"><SearchMd /><input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
                 {locations.length > 1 ? <label><span>Location</span><select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select></label> : null}
                 <label><span>From</span><input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" /></label>
                 <label><span>To</span><input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" /></label>
           </MobileQueueToolbar>
           <div className="surveillance-filter-row">
-            <label className="mechanic-search"><SearchMd /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
+            <label className="mechanic-search"><SearchMd /><input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter"><option value="">All locations</option>{locations.map((location) => <option key={location}>{location}</option>)}</select> : null}
             <label className="surveillance-date-filter surveillance-desktop-date">
               <span>From</span>

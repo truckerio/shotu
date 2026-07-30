@@ -28,7 +28,7 @@
     "test:admin": "node --test src/server/modules/admin/*.test.js",
     "test:backup-restore": "node --test scripts/database/*.test.js",
     "test:load-harness": "node --test scripts/load/*.test.js",
-    "test:unit": "node --test frontend/src/app/routes/*.test.js frontend/src/components/operations/*.test.js frontend/src/features/admin/integrations/*.test.js frontend/src/features/create-workorder/*.test.js frontend/src/features/generator/*.test.js frontend/src/features/workorder-detail/*.test.js frontend/src/lib/*.test.js frontend/src/lib/maps/*.test.js src/server/auth/*.test.js src/server/integrations/*.test.js src/server/integrations/core/*.test.js src/server/integrations/odoo/*.test.js src/server/integrations/samsara/*.test.js src/server/modules/admin/*.test.js src/server/modules/chat/*.test.js src/server/modules/kiosk/*.test.js src/server/modules/mechanic/*.test.js src/server/modules/office/*.test.js src/server/modules/parts/*.test.js src/server/modules/parts-helper/parts-helper.test.js src/server/modules/surveillance/*.test.js src/server/modules/workorders/*.test.js src/server/operations/*.test.js src/server/print/*.test.js src/server/routes/*.test.js src/server/security/*.test.js",
+    "test:unit": "node --test frontend/src/app/routes/*.test.js frontend/src/components/forms/*.test.js frontend/src/components/operations/*.test.js frontend/src/features/admin/integrations/*.test.js frontend/src/features/create-workorder/*.test.js frontend/src/features/generator/*.test.js frontend/src/features/workorder-detail/*.test.js frontend/src/lib/*.test.js frontend/src/lib/maps/*.test.js src/server/auth/*.test.js src/server/integrations/*.test.js src/server/integrations/core/*.test.js src/server/integrations/odoo/*.test.js src/server/integrations/samsara/*.test.js src/server/modules/admin/*.test.js src/server/modules/chat/*.test.js src/server/modules/kiosk/*.test.js src/server/modules/mechanic/*.test.js src/server/modules/office/*.test.js src/server/modules/parts/*.test.js src/server/modules/parts-helper/parts-helper.test.js src/server/modules/surveillance/*.test.js src/server/modules/workorders/*.test.js src/server/operations/*.test.js src/server/print/*.test.js src/server/routes/*.test.js src/server/security/*.test.js",
     "check:structure": "node scripts/check-structure.js",
     "check": "node --check server.js && find src/server scripts -name '*.js' -print | xargs -I{} node --check {} && npm run build",
     "verify": "npm run check:structure && npm run test:backup-restore && npm run test:load-harness && npm run test:unit && npm run check"
@@ -44,6 +44,7 @@
     "react": "^19.0.0",
     "react-aria-components": "^1.5.0",
     "react-dom": "^19.0.0",
+    "rich-textarea": "^0.27.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "zod": "^4.4.3"

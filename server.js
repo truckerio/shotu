@@ -19,6 +19,7 @@ import { handleWorkorderDraftsApi } from "./src/server/routes/workorder-drafts.r
 import { handleWorkorderPreferencesApi } from "./src/server/routes/workorder-preferences.routes.js";
 import { handleHealthRoute } from "./src/server/routes/health.routes.js";
 import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
+import { handleProofreadingApi } from "./src/server/routes/proofreading.routes.js";
 import { handleOdooIntegrationApi } from "./src/server/integrations/odoo/odoo.routes.js";
 import {
   isServiceIntegrationPath,
@@ -725,6 +726,7 @@ async function handleApi(req, res) {
   if (await handleOfficeApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
   if (await handlePartsHelperApi(req, res, url, helpers)) return;
+  if (await handleProofreadingApi(req, res, url, helpers)) return;
   if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;
   if (await handleWorkorderPreferencesApi(req, res, url, helpers)) return;
 

@@ -1,6 +1,7 @@
 import { SearchMd } from "@untitledui/icons";
 import { useId } from "react";
 import { joinClassNames } from "./form-utils.js";
+import { textEntryProps } from "./text-entry-policy.js";
 import "./operational-form.css";
 
 export function MechanicMultiSelect({
@@ -41,6 +42,7 @@ export function MechanicMultiSelect({
           <span className="operational-sr-only">Search mechanics</span>
           <SearchMd aria-hidden="true" />
           <input
+            {...textEntryProps("search")}
             type="search"
             value={filterValue || ""}
             onChange={(event) => onFilterChange(event.target.value)}

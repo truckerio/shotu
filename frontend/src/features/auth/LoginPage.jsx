@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Button, FieldError, Form, Input, Label, TextField } from "react-aria-components";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { authClient } from "../../lib/auth-client.js";
@@ -123,10 +124,9 @@ export function LoginPage() {
           <TextField isRequired name="identifier" value={identifier} onChange={setIdentifier}>
             <Label>Username or email</Label>
             <Input
+              {...textEntryProps("identifier")}
               autoComplete="username webauthn"
-              autoCapitalize="none"
               enterKeyHint="next"
-              spellCheck="false"
             />
             <FieldError />
           </TextField>
@@ -138,6 +138,7 @@ export function LoginPage() {
             </div>
             <div className="auth-password-field password-input-control">
               <Input
+                {...textEntryProps("identifier")}
                 id="login-password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"

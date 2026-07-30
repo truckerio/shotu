@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Monitor01, RefreshCw01, Trash01 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { api } from "../../lib/api.js";
 import "./kiosk-settings.css";
 
@@ -105,6 +106,7 @@ export function KioskSettingsPanel({ locationId }) {
           <label htmlFor="kiosk-device-name">
             <span>Computer name</span>
             <input
+              {...textEntryProps("name")}
               id="kiosk-device-name"
               maxLength="80"
               placeholder="Example: Shop front desk"

@@ -1,4 +1,5 @@
 import { FormField } from "./FormField.jsx";
+import { textEntryProps } from "./text-entry-policy.js";
 import "./operational-form.css";
 
 export function CustomerCompanyField({
@@ -14,6 +15,7 @@ export function CustomerCompanyField({
   return (
     <FormField id={id} label={label} hint={hint} error={error} required={required}>
       <input
+        {...textEntryProps("name")}
         {...inputProps}
         type="text"
         value={value}

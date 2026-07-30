@@ -14,6 +14,8 @@ import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { workDateRangeLabel, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
+import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
 import {
   buildCompactPhoneDetailSections,
   workorderNeedsChatAttention,
@@ -424,6 +426,7 @@ export function WorkorderDetailPage({
             <p>This sends the workorder to office for review. Write your name to confirm.</p>
             <Field label={`Write "${expectedMechanicName}"`}>
               <input
+                {...textEntryProps("name")}
                 type="text"
                 value={mechanicFinish.name}
                 onChange={(event) => setMechanicFinish({ open: true, name: event.target.value, message: "" })}
@@ -457,7 +460,7 @@ export function WorkorderDetailPage({
             <h2>Approve workorder?</h2>
             <p className="office-close-modal-copy">This sends the completed workorder to the surveillance team's Odoo queue.</p>
             <Field label="Approval note (optional)">
-              <textarea rows="3" value={officeCloseNote} onChange={(event) => setOfficeCloseNote(event.target.value)} placeholder="Add an approval note" />
+              <NarrativeField rows="3" value={officeCloseNote} onChange={(event) => setOfficeCloseNote(event.target.value)} placeholder="Add an approval note" />
             </Field>
             {officeDetailState.message ? <p className="mechanic-completion-message" role="status">{officeDetailState.message}</p> : null}
             <div className="mechanic-completion-actions">
@@ -475,7 +478,7 @@ export function WorkorderDetailPage({
             <h2>Return to mechanic?</h2>
             <p>Explain what needs correction. The workorder will return to active work and the mechanic will see this request.</p>
             <Field label="Reason">
-              <textarea rows="4" required minLength="2" maxLength="1000" value={officeReturn.reason} onChange={(event) => setOfficeReturn((current) => ({ ...current, reason: event.target.value, message: "" }))} autoFocus />
+              <NarrativeField rows="4" required minLength="2" maxLength="1000" value={officeReturn.reason} onChange={(event) => setOfficeReturn((current) => ({ ...current, reason: event.target.value, message: "" }))} autoFocus />
             </Field>
             <OperationalCheckboxGroup
               legend="What needs attention? (optional)"
@@ -503,7 +506,7 @@ export function WorkorderDetailPage({
             <h2>Cancel workorder?</h2>
             <p><strong>{activeWorkorder.workorder.serial}</strong> will leave active queues. Assignments and outstanding part commitments will be released. This action remains in Activity.</p>
             <Field label="Cancellation reason">
-              <textarea rows="4" required minLength="2" maxLength="1000" value={officeCancel.reason} onChange={(event) => setOfficeCancel({ open: true, reason: event.target.value, message: "" })} autoFocus />
+              <NarrativeField rows="4" required minLength="2" maxLength="1000" value={officeCancel.reason} onChange={(event) => setOfficeCancel({ open: true, reason: event.target.value, message: "" })} autoFocus />
             </Field>
             {officeCancel.message ? <p className="mechanic-completion-message" role="alert">{officeCancel.message}</p> : null}
             <div className="mechanic-completion-actions">

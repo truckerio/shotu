@@ -5,6 +5,7 @@ import {
   normalizeQuantityInput,
   unitOptionGroups,
 } from "./quantity-unit-model.js";
+import { textEntryProps } from "./text-entry-policy.js";
 import "./quantity-unit-input.css";
 
 export function QuantityUnitInput({
@@ -174,6 +175,7 @@ export function QuantityUnitInput({
             <label className="quantity-unit-search">
               <SearchMd aria-hidden="true" />
               <input
+                {...textEntryProps("search")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search units"

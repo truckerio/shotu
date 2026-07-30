@@ -11,6 +11,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { authClient } from "../../lib/auth-client.js";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 
 const GENERIC_SUCCESS = "If that email has an account, a reset link has been sent.";
 
@@ -74,11 +75,10 @@ export function ForgotPasswordDialog({ defaultEmail = "", isOpen, onOpenChange }
             <TextField isRequired type="email" value={email} onChange={setEmail}>
               <Label>Email</Label>
               <Input
+                {...textEntryProps("identifier")}
                 autoFocus
                 autoComplete="email"
-                autoCapitalize="none"
                 enterKeyHint="send"
-                spellCheck="false"
               />
             </TextField>
 

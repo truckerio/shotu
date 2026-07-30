@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Clock, Inbox01, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
+import { textEntryProps } from "../forms/text-entry-policy.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
 import { WorkorderDraftQueue } from "../../features/workorder-drafts/index.js";
@@ -45,7 +46,7 @@ function OperationsFilters({
     <>
       <label className="operations-search">
         <span className="operations-field-label">Search workorders</span>
-        <span className="operations-input-with-icon"><SearchMd /><input type="search" value={searchInput} onChange={(event) => onSearchChange(event.target.value)} placeholder="Unit, serial, concern" /></span>
+        <span className="operations-input-with-icon"><SearchMd /><input {...textEntryProps("search")} type="search" value={searchInput} onChange={(event) => onSearchChange(event.target.value)} placeholder="Unit, serial, concern" /></span>
       </label>
       {!fixedLocationId ? (
         <label>

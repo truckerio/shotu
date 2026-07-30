@@ -5,6 +5,7 @@ import {
   FormField,
   FormSection,
   MechanicMultiSelect,
+  NarrativeField,
   OperationalForm,
   OptionalSection,
   QuantityUnitInput,
@@ -13,6 +14,7 @@ import {
 import { Button } from "../../components/ui/Button.jsx";
 import { AssetLocationCard } from "../../components/workorders/AssetLocationCard.jsx";
 import { ProgressiveWorkorderSection } from "../../components/workorders/WorkorderObjectPage.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { createWorkorderSummaryErrors } from "./create-workorder-validation.js";
 
 export const CREATE_WORKORDER_FORM_ID = "create-workorder-form";
@@ -118,7 +120,7 @@ export function CreateWorkorderForm({
             error={errors?.mechanicConcern}
             required
           >
-            <textarea
+            <NarrativeField
               rows="4"
               value={form.mechanicConcern}
               onChange={(event) => onFieldChange("mechanicConcern", event.target.value)}
@@ -171,6 +173,7 @@ export function CreateWorkorderForm({
               <div className="operational-part-row has-quantity-unit" key={index}>
                 <strong>{index + 1}</strong>
                 <input
+                  {...textEntryProps("identifier")}
                   value={part.partNo}
                   onChange={(event) => onPartChange(index, "partNo", event.target.value)}
                   aria-label={`Part number ${index + 1}`}
@@ -187,6 +190,7 @@ export function CreateWorkorderForm({
                   compact
                 />
                 <input
+                  {...textEntryProps("identifier")}
                   value={part.repairOrder}
                   onChange={(event) => onPartChange(index, "repairOrder", event.target.value)}
                   aria-label={`Repair order ${index + 1}`}
@@ -216,6 +220,7 @@ export function CreateWorkorderForm({
         <div className="operational-unit-lookup">
           <FormField id="workorder-unit" label="Unit" error={errors?.unitNo} required>
             <input
+              {...textEntryProps("search")}
               role="combobox"
               aria-autocomplete="list"
               aria-controls="create-vehicle-suggestions"
@@ -286,17 +291,17 @@ export function CreateWorkorderForm({
                 </select>
               </FormField>
               <FormField id="workorder-license" label="License">
-                <input enterKeyHint="next" value={form.licenseNo} onChange={(event) => onFieldChange("licenseNo", event.target.value)} />
+                <input {...textEntryProps("identifier")} enterKeyHint="next" value={form.licenseNo} onChange={(event) => onFieldChange("licenseNo", event.target.value)} />
               </FormField>
               <FormField id="workorder-mileage" label="Mileage">
-                <input enterKeyHint="next" inputMode="numeric" value={form.mileage} onChange={(event) => onFieldChange("mileage", event.target.value)} />
+                <input {...textEntryProps("identifier")} enterKeyHint="next" inputMode="numeric" value={form.mileage} onChange={(event) => onFieldChange("mileage", event.target.value)} />
               </FormField>
               <FormField id="workorder-model" label="Model">
-                <input enterKeyHint="next" value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} />
+                <input {...textEntryProps("identifier")} enterKeyHint="next" value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} />
               </FormField>
             </div>
             <FormField id="workorder-vin" label="VIN">
-              <input enterKeyHint="done" value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} />
+              <input {...textEntryProps("identifier")} enterKeyHint="done" value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} />
             </FormField>
           </OptionalSection>
         ) : null}

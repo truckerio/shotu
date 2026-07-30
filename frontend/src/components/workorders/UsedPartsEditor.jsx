@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
+import { NarrativeField } from "../forms/NarrativeField.jsx";
+import { textEntryProps } from "../forms/text-entry-policy.js";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import {
@@ -212,7 +214,7 @@ export function UsedPartsEditor({
             <label className="used-part-field">
               <span>Part number</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
-                <input value={part.partNo} onChange={(event) => update(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" disabled={disabled} />
+                <input {...textEntryProps("identifier")} value={part.partNo} onChange={(event) => update(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" disabled={disabled} />
                 {suggestionsEnabled ? (
                   <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Suggest repair order from part number" aria-label={`Suggest repair order for row ${index + 1}`}>
                     <SearchMd />
@@ -234,7 +236,7 @@ export function UsedPartsEditor({
             </div>
             <label className="used-part-field used-part-repair">
               <span>Work performed</span>
-              <input value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
+              <NarrativeField singleLine value={part.repairOrder} onChange={(event) => update(index, "repairOrder", event.target.value)} aria-label={`Work performed ${index + 1}`} placeholder="Work performed" disabled={disabled} />
             </label>
             <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
           </div>

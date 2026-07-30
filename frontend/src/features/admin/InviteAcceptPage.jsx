@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle } from "@untitledui/icons";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { api } from "../../lib/api.js";
 import "../auth/auth.css";
 
@@ -66,13 +67,13 @@ export function InviteAcceptPage({ token }) {
         </header>
         {state.error && !invitation ? <p className="auth-error" role="alert">{state.error}</p> : (
           <form className="auth-form" onSubmit={accept}>
-            <label><span>Name</span><input value={invitation?.name || ""} disabled /></label>
-            <label><span>Email</span><input value={invitation?.email || ""} disabled /></label>
-            <label><span>Username</span><input value={username} onChange={(event) => setUsername(event.target.value)} minLength="3" required autoCapitalize="none" /></label>
+            <label><span>Name</span><input {...textEntryProps("name")} value={invitation?.name || ""} disabled /></label>
+            <label><span>Email</span><input {...textEntryProps("identifier")} value={invitation?.email || ""} disabled /></label>
+            <label><span>Username</span><input {...textEntryProps("identifier")} value={username} onChange={(event) => setUsername(event.target.value)} minLength="3" required /></label>
             <div className="password-field-group">
               <label htmlFor="invite-password"><span>Password</span></label>
               <div className="password-input-control">
-                <input id="invite-password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength="12" required autoComplete="new-password" />
+                <input {...textEntryProps("identifier")} id="invite-password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength="12" required autoComplete="new-password" />
                 <PasswordVisibilityToggle visible={showPassword} controls="invite-password" onToggle={() => setShowPassword((current) => !current)} />
               </div>
             </div>

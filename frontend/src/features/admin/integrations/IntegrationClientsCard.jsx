@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "../../../components/ui/Button.jsx";
+import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 
 function dateLabel(value) {
   if (!value) return "Never";
@@ -58,6 +59,7 @@ export function IntegrationClientsCard({
           <label htmlFor="integration-client-name">Client name</label>
           <div>
             <input
+              {...textEntryProps("name")}
               id="integration-client-name"
               value={name}
               onChange={(event) => setName(event.target.value)}

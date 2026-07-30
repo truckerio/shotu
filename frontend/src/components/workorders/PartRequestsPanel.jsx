@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from "react";
 import { CheckCircle, Plus, SearchMd, Trash01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
+import { NarrativeField } from "../forms/NarrativeField.jsx";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
+import { textEntryProps } from "../forms/text-entry-policy.js";
 import { Button } from "../ui/Button.jsx";
 import { UsedPartsEditor } from "./UsedPartsEditor.jsx";
 import { usedPartsAccessState } from "./used-parts-model.js";
@@ -202,7 +204,7 @@ function AllocationEditor({ allocations, setAllocations, quantity, uomCode, inve
             compact
           />
           {allocation.sourceType === "purchase" ? (
-            <input value={allocation.vendor || ""} onChange={(event) => update(index, "vendor", event.target.value)} placeholder="Vendor optional" aria-label={`Vendor ${index + 1}`} />
+            <input {...textEntryProps("name")} value={allocation.vendor || ""} onChange={(event) => update(index, "vendor", event.target.value)} placeholder="Vendor optional" aria-label={`Vendor ${index + 1}`} />
           ) : <span className="allocation-source-status">{ALLOCATION_STATUS_LABELS[allocation.status]}</span>}
           <button type="button" onClick={() => remove(index)} disabled={allocations.length <= 1} title="Remove supply source" aria-label="Remove supply source"><Trash01 /></button>
         </div>
@@ -413,7 +415,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
             </div>
           </div>
           <div className="part-office-fields">
-            <label>Part number<input value={form.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
+            <label>Part number<input {...textEntryProps("identifier")} value={form.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
             <QuantityUnitInput
               id={`request-quantity-${request.id}`}
               quantity={form.quantity}
@@ -423,8 +425,8 @@ function OfficeRequestCard({ request, detail, onChanged }) {
               quantityLabel="Quantity"
               unitLabel="Unit"
             />
-            <label className="part-field-wide">Description<input value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
-            <label className="part-field-wide">Repair order<input value={form.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
+            <label className="part-field-wide">Description<NarrativeField singleLine value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
+            <label className="part-field-wide">Repair order<input {...textEntryProps("identifier")} value={form.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
             <label>Fitment
               <select value={form.fitmentStatus} onChange={(event) => update("fitmentStatus", event.target.value)}>
                 <option value="unknown">Not verified</option>
@@ -433,7 +435,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
                 <option value="conflict">Conflict</option>
               </select>
             </label>
-            <label>Fitment note<input value={form.fitmentNotes} onChange={(event) => update("fitmentNotes", event.target.value)} placeholder="How fitment was checked" /></label>
+            <label>Fitment note<NarrativeField singleLine value={form.fitmentNotes} onChange={(event) => update("fitmentNotes", event.target.value)} placeholder="How fitment was checked" /></label>
           </div>
           <div className="part-review-section">
             <div className="part-review-section-heading">
@@ -455,7 +457,7 @@ function OfficeRequestCard({ request, detail, onChanged }) {
           </div>
           <div className="part-response-composer">
             <label htmlFor={`part-response-${request.id}`}>Message to mechanic</label>
-            <textarea
+            <NarrativeField
               id={`part-response-${request.id}`}
               ref={responseRef}
               value={form.reason}
@@ -604,12 +606,12 @@ function OfficePartComposer({ detail, onChanged }) {
       <label>
         Part number or description
         <div className="part-search-control">
-          <input value={draft.query} onChange={(event) => update("query", event.target.value)} placeholder="Part number or description" />
+          <input {...textEntryProps("search")} value={draft.query} onChange={(event) => update("query", event.target.value)} placeholder="Part number or description" />
           <button type="button" onClick={identify} disabled={draft.query.trim().length < 2 || Boolean(busy)}><SearchMd /> {busy === "identify" ? "Finding" : "Find"}</button>
         </div>
       </label>
       <div className="part-suggestion-fields">
-        <label>Part number<input value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
+        <label>Part number<input {...textEntryProps("identifier")} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
         <QuantityUnitInput
           id="office-part-quantity"
           quantity={draft.quantity}
@@ -619,8 +621,8 @@ function OfficePartComposer({ detail, onChanged }) {
           quantityLabel="Quantity"
           unitLabel="Unit"
         />
-        <label className="part-field-wide">Description<input value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
-        <label className="part-field-wide">Repair order<input value={draft.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
+        <label className="part-field-wide">Description<NarrativeField singleLine value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
+        <label className="part-field-wide">Repair order<input {...textEntryProps("identifier")} value={draft.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
         <label>Fitment
           <select value={draft.fitmentStatus} onChange={(event) => update("fitmentStatus", event.target.value)}>
             <option value="unknown">Not verified</option>

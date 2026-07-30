@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase02, CheckCircle, Clock, File02, FileCheck02, Inbox01, RefreshCw01, SearchMd, Tool02 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
@@ -230,7 +231,7 @@ export function OfficeWorkspace({
               {activeTab !== "drafts" ? <>
                 <label className="mechanic-search">
                   <SearchMd />
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
+                  <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
                 </label>
                 <label><span>Mechanic</span><select value={mechanicFilter} onChange={(event) => setMechanicFilter(event.target.value)}><option value="">All mechanics</option>{mechanics.map((mechanic) => <option key={mechanic.id || mechanic.name} value={mechanic.name}>{mechanic.name}</option>)}</select></label>
                 {locations.length > 1 ? <label><span>Location</span><select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((location) => <option key={location} value={location}>{location}</option>)}</select></label> : null}
@@ -240,7 +241,7 @@ export function OfficeWorkspace({
             {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row role-desktop-filters">
                   <label className="mechanic-search">
                     <SearchMd />
-                    <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
+                    <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
                   </label>
                   {locations.length > 1 ? (
                     <select className="office-inline-filter" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">

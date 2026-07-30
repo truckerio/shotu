@@ -13,6 +13,9 @@ test("production headers include transport, framing, MIME, and CSP protections",
   assert.equal(headers["x-content-type-options"], "nosniff");
   assert.match(headers["content-security-policy"], /frame-ancestors 'none'/);
   assert.match(headers["content-security-policy"], /img-src 'self' data: blob: https:/);
+  assert.match(headers["content-security-policy"], /script-src 'self'/);
+  assert.doesNotMatch(headers["content-security-policy"], /svc\.webspellchecker\.net/);
+  assert.doesNotMatch(headers["content-security-policy"], /(?:^|\s)'(?:wasm-)?unsafe-eval'(?:\s|;|$)/);
   assert.equal(headers["cross-origin-opener-policy"], "same-origin-allow-popups");
 });
 

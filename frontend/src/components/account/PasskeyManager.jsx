@@ -10,6 +10,7 @@ import {
   TextField,
 } from "react-aria-components";
 import { authClient } from "../../lib/auth-client.js";
+import { textEntryProps } from "../forms/text-entry-policy.js";
 
 function passkeyLabel(passkey) {
   return passkey.name?.trim() || "Unnamed passkey";
@@ -139,7 +140,7 @@ export function PasskeyManager({ isOpen, onOpenChange }) {
           <form className="passkey-register" onSubmit={registerPasskey}>
             <TextField value={name} onChange={setName}>
               <Label>Passkey name <span>(optional)</span></Label>
-              <Input placeholder="Example: Work MacBook" autoComplete="off" />
+              <Input {...textEntryProps("name")} placeholder="Example: Work MacBook" autoComplete="off" />
             </TextField>
             <Button type="submit" isDisabled={busy || !window.PublicKeyCredential}>
               {busy ? "Please wait..." : "Add passkey"}
@@ -179,7 +180,7 @@ export function PasskeyManager({ isOpen, onOpenChange }) {
                         value={editingName}
                         onChange={setEditingName}
                       >
-                        <Input autoFocus />
+                        <Input {...textEntryProps("name")} autoFocus />
                       </TextField>
                       <Button type="submit" isDisabled={busy || !editingName.trim()}>Save</Button>
                       <Button type="button" isDisabled={busy} onPress={() => setEditingId("")}>Cancel</Button>

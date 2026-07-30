@@ -1,5 +1,6 @@
 import { Button } from "../../components/ui/Button.jsx";
-import { FormField as OperationalFormField } from "../../components/forms/index.js";
+import { FormField as OperationalFormField, NarrativeField } from "../../components/forms/index.js";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { AssetLocationCard, getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
 import { PartRequestsPanel } from "../../components/workorders/PartRequestsPanel.jsx";
 import { ProgressiveWorkorderSection } from "../../components/workorders/WorkorderObjectPage.jsx";
@@ -117,10 +118,10 @@ export function WorkorderDetailSections({
           <WorkorderHandoffFacts workorder={activeWorkorder.workorder} />
           <div className="operational-form detail-workflow-fields">
             <OperationalFormField id="mechanic-diagnosis" label="Diagnosis" hint="What did you inspect or find?">
-              <textarea rows="3" value={form.diagnosis} onChange={(event) => updateField("diagnosis", event.target.value)} />
+              <NarrativeField rows="3" value={form.diagnosis} onChange={(event) => updateField("diagnosis", event.target.value)} />
             </OperationalFormField>
             <OperationalFormField id="mechanic-work-performed" label="Repair completed" hint="Write what was repaired, replaced, adjusted, or checked.">
-              <textarea rows="4" value={form.workPerformed} onChange={(event) => updateField("workPerformed", event.target.value)} />
+              <NarrativeField rows="4" value={form.workPerformed} onChange={(event) => updateField("workPerformed", event.target.value)} />
             </OperationalFormField>
             <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} />
             <Button type="button" variant="secondary" onClick={saveMechanicWorkNotes} disabled={Boolean(mechanicAction.busy)}>
@@ -161,7 +162,7 @@ export function WorkorderDetailSections({
             {activeWorkorder.allowedActions?.update ? (
               <>
                 <Field label="Office notes">
-                  <textarea value={form.officeNotes} onChange={(event) => updateField("officeNotes", event.target.value)} rows="3" />
+                  <NarrativeField value={form.officeNotes} onChange={(event) => updateField("officeNotes", event.target.value)} rows="3" />
                 </Field>
                 <Button variant="primary" onClick={saveOfficeWorkorder} disabled={officeDetailState.busy}>
                   {officeDetailState.busy ? "Saving" : "Save changes"}
@@ -238,6 +239,7 @@ export function WorkorderDetailSections({
                       </button>
                     </span>
                     <input
+                      {...textEntryProps("search")}
                       aria-label="Unit no."
                       aria-autocomplete="list"
                       aria-controls="vehicle-suggestions"
@@ -281,27 +283,27 @@ export function WorkorderDetailSections({
                   </select>
                 </Field>
                 <Field label="License">
-                  <input value={form.licenseNo} onChange={(event) => updateField("licenseNo", event.target.value)} />
+                  <input {...textEntryProps("identifier")} value={form.licenseNo} onChange={(event) => updateField("licenseNo", event.target.value)} />
                 </Field>
               </div>
               <div className="two-col">
                 <Field label="Mileage">
-                  <input value={form.mileage} onChange={(event) => updateField("mileage", event.target.value)} />
+                  <input {...textEntryProps("identifier")} value={form.mileage} onChange={(event) => updateField("mileage", event.target.value)} />
                 </Field>
                 <Field label="Model">
-                  <input value={form.model} onChange={(event) => updateField("model", event.target.value)} />
+                  <input {...textEntryProps("identifier")} value={form.model} onChange={(event) => updateField("model", event.target.value)} />
                 </Field>
               </div>
               <div className="two-col">
                 <Field label="Customer company">
-                  <input value={form.customerCompanyName} onChange={(event) => updateField("customerCompanyName", event.target.value)} />
+                  <input {...textEntryProps("name")} value={form.customerCompanyName} onChange={(event) => updateField("customerCompanyName", event.target.value)} />
                 </Field>
                 <Field label="VIN no.">
-                  <input value={form.vinNo} onChange={(event) => updateField("vinNo", event.target.value)} />
+                  <input {...textEntryProps("identifier")} value={form.vinNo} onChange={(event) => updateField("vinNo", event.target.value)} />
                 </Field>
               </div>
               <Field label="Mechanic concern">
-                <input value={form.mechanicConcern} onChange={(event) => updateField("mechanicConcern", event.target.value)} />
+                <NarrativeField singleLine value={form.mechanicConcern} onChange={(event) => updateField("mechanicConcern", event.target.value)} />
               </Field>
             </fieldset>
           </ProgressiveWorkorderSection>
@@ -342,7 +344,8 @@ export function WorkorderDetailSections({
                     {!(activeWorkorder.assignableMechanics || []).length ? <p>No mechanics assigned to this location.</p> : null}
                   </fieldset>
                   <Field label="Assignment reason">
-                    <input
+                    <NarrativeField
+                      singleLine
                       aria-label="Assignment reason"
                       value={officeAssignment.reason}
                       onChange={(event) => setOfficeAssignment((current) => ({ ...current, reason: event.target.value }))}
@@ -367,6 +370,7 @@ export function WorkorderDetailSections({
                 <div className="two-col">
                 <Field label="Customer/driver authorization name">
                   <input
+                    {...textEntryProps("name")}
                     value={form.customerSignature}
                     onChange={(event) => updateField("customerSignature", event.target.value)}
                     disabled={!activeWorkorder.allowedActions?.update}

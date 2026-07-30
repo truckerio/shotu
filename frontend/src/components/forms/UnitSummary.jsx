@@ -1,6 +1,7 @@
 import { Edit05 } from "@untitledui/icons";
 import { Button } from "../ui/Button.jsx";
 import { joinClassNames } from "./form-utils.js";
+import { textEntryProps } from "./text-entry-policy.js";
 import "./operational-form.css";
 
 function displayValue(value) {
@@ -64,6 +65,7 @@ export function UnitSummary({
                     </select>
                   ) : (
                     <input
+                      {...textEntryProps("identifier")}
                       id={`selected-unit-${field}`}
                       inputMode={inputMode}
                       value={value || ""}

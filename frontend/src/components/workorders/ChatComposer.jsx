@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import { ArrowUp, Plus, XClose } from "@untitledui/icons";
+import { NarrativeField } from "../forms/NarrativeField.jsx";
 import {
   buildChatPayload,
   createClientMessageId,
@@ -168,7 +169,7 @@ export function ChatComposer({
         >
           <Plus aria-hidden="true" />
         </label>
-        <textarea
+        <NarrativeField
           ref={textareaRef}
           id={inputId}
           className="chat-composer-input"

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, LogIn01, RefreshCw01, User01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import {
   isCompleteKioskPin,
   kioskPinValue,
@@ -85,6 +86,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
             <label htmlFor="kiosk-pin">
               <span>{mechanic.requiresPinChange ? "Temporary PIN" : "PIN"}</span>
               <input
+                {...textEntryProps("identifier")}
                 id="kiosk-pin"
                 autoComplete="one-time-code"
                 inputMode="numeric"
@@ -106,6 +108,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                 <label htmlFor="kiosk-new-pin">
                   <span>New PIN</span>
                   <input
+                    {...textEntryProps("identifier")}
                     id="kiosk-new-pin"
                     autoComplete="new-password"
                     inputMode="numeric"
@@ -123,6 +126,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                 <label htmlFor="kiosk-confirm-pin">
                   <span>Confirm new PIN</span>
                   <input
+                    {...textEntryProps("identifier")}
                     id="kiosk-confirm-pin"
                     autoComplete="new-password"
                     inputMode="numeric"

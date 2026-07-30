@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Clock, File02, SearchMd, Trash01, Users01 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { DraftDiscardDialog } from "./DraftDiscardDialog.jsx";
 import {
   draftConcern,
@@ -204,7 +205,7 @@ export function WorkorderDraftQueue({
         <label className="workorder-drafts-search">
           <span className="workorder-drafts-visually-hidden">Search drafts</span>
           <SearchMd aria-hidden="true" />
-          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, concern, location, or owner" />
+          <input {...textEntryProps("search")} type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, concern, location, or owner" />
         </label>
         <label className="workorder-drafts-filter">
           <span className="workorder-drafts-visually-hidden">Filter drafts</span>

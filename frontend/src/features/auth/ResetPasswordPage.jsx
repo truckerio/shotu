@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Button, Form, Input, Label, TextField } from "react-aria-components";
+import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { PasswordVisibilityToggle } from "../../components/ui/PasswordVisibilityToggle.jsx";
 import { authClient } from "../../lib/auth-client.js";
 import "./auth.css";
@@ -61,6 +62,7 @@ export function ResetPasswordPage({ token, tokenError = "" }) {
               <Label>New password</Label>
               <div className="auth-password-field password-input-control">
                 <Input
+                  {...textEntryProps("identifier")}
                   id="reset-new-password"
                   type={showPassword ? "text" : "password"}
                   minLength={12}
@@ -79,6 +81,7 @@ export function ResetPasswordPage({ token, tokenError = "" }) {
               <Label>Confirm new password</Label>
               <div className="auth-password-field password-input-control">
                 <Input
+                  {...textEntryProps("identifier")}
                   id="reset-confirm-password"
                   type={showConfirmation ? "text" : "password"}
                   minLength={12}

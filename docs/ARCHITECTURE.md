@@ -78,6 +78,7 @@ server.js               Composition root plus contained legacy print/share endpo
 | `/api/integrations/odoo/v1/*` | `integrations/odoo/` with authentication and scopes from `integrations/core/` |
 | `/api/integrations/samsara/*` | `routes/integrations.routes.js` and `integrations/samsara/` via the core provider registry |
 | `/api/parts-helper/*` | `routes/parts-helper.routes.js` and `modules/parts-helper/` |
+| `/api/proofreading/*` | `routes/proofreading.routes.js` and the provider boundary in `modules/proofreading/` |
 | `/api/workorder-drafts/*` | `routes/workorder-drafts.routes.js`, `modules/workorders/workorder-drafts.service.js`, and `repositories/workorder-drafts.repo.js` |
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
