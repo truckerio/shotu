@@ -31,6 +31,7 @@ function normalizedState(status) {
 
 export function SamsaraIntegrationCard({
   action = "",
+  actionError = "",
   onConnect,
   onDisconnect,
   onSync,
@@ -51,7 +52,7 @@ export function SamsaraIntegrationCard({
     || status?.latestSyncAt
     || lastSuccessfulSync;
   const latestSyncStatus = status?.latestSync?.status || (lastSuccessfulSync ? "completed" : "Not run");
-  const error = status?.error || status?.lastError || status?.latestSync?.error || "";
+  const error = actionError || status?.error || status?.lastError || status?.latestSync?.error || "";
   const ProviderIcon = provider.icon;
 
   return (

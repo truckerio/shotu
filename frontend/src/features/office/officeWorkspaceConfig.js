@@ -12,6 +12,10 @@ export const OFFICE_SECONDARY_TAB_KEYS = Object.freeze([
   "closed",
 ]);
 
+export function officeQueueForViewport(activeTab, isPhone) {
+  return !isPhone && activeTab === "doneOdoo" ? "done" : activeTab;
+}
+
 export const OFFICE_ATTENTION_LABELS = Object.freeze({
   missing_info: "Surveillance needs information",
   revision_requested: "Changes requested from mechanic",
@@ -80,9 +84,18 @@ export function officeQueueFilterState(activeTab, {
   lifecycleFilter = "",
   mechanicFilter = "",
 } = {}) {
+  const compatibleLifecycle = {
+    active: ["accepted", "in_progress"],
+    closed: ["closed", "odoo_entered"],
+    done: ["mechanic_done"],
+    doneOdoo: ["mechanic_done", "closed", "odoo_entered"],
+    open: ["open"],
+  }[activeTab];
   return {
     activeTab,
-    lifecycleFilter: activeTab === "open" ? "" : lifecycleFilter,
+    lifecycleFilter: lifecycleFilter && compatibleLifecycle && !compatibleLifecycle.includes(lifecycleFilter)
+      ? ""
+      : lifecycleFilter,
     mechanicFilter: activeTab === "open" ? "" : mechanicFilter,
   };
 }

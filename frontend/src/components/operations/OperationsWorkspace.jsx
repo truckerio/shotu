@@ -17,6 +17,7 @@ import {
   buildOperationsQuery,
   formatActivity,
   formatDuration,
+  normalizeOperationsCategoryFilters,
   operationLabel,
 } from "./operations-format.js";
 import "./operations.css";
@@ -206,16 +207,18 @@ export function OperationsWorkspace({
   useEffect(() => {
     if (fixedLocationId || !queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    setFilters((current) => ({
-      ...current,
-      category: !legacyDraftRoute && OPERATION_CATEGORIES.some((item) => item.id === saved.category)
+    setFilters((current) => {
+      const category = !legacyDraftRoute && OPERATION_CATEGORIES.some((item) => item.id === saved.category)
         ? saved.category
-        : current.category,
-      locationId: saved.locationId || "",
-      lifecycle: saved.lifecycle || "",
-      attentionReason: saved.attentionReason || "",
-      sort: SORT_OPTIONS.some(([value]) => value === saved.sort) ? saved.sort : current.sort,
-    }));
+        : current.category;
+      return normalizeOperationsCategoryFilters(category, {
+        ...current,
+        locationId: saved.locationId || "",
+        lifecycle: saved.lifecycle || "",
+        attentionReason: saved.attentionReason || "",
+        sort: SORT_OPTIONS.some(([value]) => value === saved.sort) ? saved.sort : current.sort,
+      });
+    });
     preferenceHydrated.current = true;
   }, [fixedLocationId, legacyDraftRoute, queuePreferences.ready]);
 
@@ -312,9 +315,31 @@ export function OperationsWorkspace({
     || filters.sort !== "timeInStatus:desc"
     || !ADMIN_PRIMARY_CATEGORY_IDS.has(filters.category),
   );
+  const hasNarrowingFilters = Boolean(
+    filters.search
+    || (!fixedLocationId && filters.locationId)
+    || filters.lifecycle
+    || filters.attentionReason
+  );
 
   function updateFilter(key, value) {
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters((current) => (
+      key === "category"
+        ? normalizeOperationsCategoryFilters(value, current)
+        : { ...current, [key]: value }
+    ));
+    setPage(1);
+  }
+
+  function clearNarrowingFilters() {
+    setSearchInput("");
+    setFilters((current) => ({
+      ...current,
+      locationId: fixedLocationId,
+      lifecycle: "",
+      attentionReason: "",
+      search: "",
+    }));
     setPage(1);
   }
 
@@ -440,6 +465,12 @@ export function OperationsWorkspace({
         {!list.loading && !list.error && !list.items.length ? (
           <div className="operations-state-message">
             <strong>No {activeCategory.label.toLowerCase()} workorders.</strong>
+            {hasNarrowingFilters ? (
+              <>
+                <span>Current filters hide this queue.</span>
+                <button type="button" onClick={clearNarrowingFilters}>Clear filters</button>
+              </>
+            ) : null}
           </div>
         ) : null}
         {!list.loading && !list.error ? (

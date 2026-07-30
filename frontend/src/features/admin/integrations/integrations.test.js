@@ -28,3 +28,15 @@ test("integration settings cards remain contained and actionable on phone widths
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.integration-client-form > div[\s\S]*flex-direction:\s*column/);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.integration-client-form \.button[\s\S]*min-height:\s*44px/);
 });
+
+test("Samsara action errors render once inside the provider card", async () => {
+  const [settings, card] = await Promise.all([
+    readFile(settingsUrl, "utf8"),
+    readFile(new URL("./SamsaraIntegrationCard.jsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(settings, /actionError=\{notice\.target === "samsara" \? notice\.error : ""\}/);
+  assert.match(settings, /notice\.error && notice\.target !== "samsara"/);
+  assert.doesNotMatch(settings, /setStatus\(\(current\) => \(\{[\s\S]*status: "error"/);
+  assert.match(card, /const error = actionError \|\| status\?\.error/);
+});

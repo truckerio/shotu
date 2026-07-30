@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LIFECYCLE_OPTIONS, buildOperationsQuery } from "./operations-format.js";
+import {
+  LIFECYCLE_OPTIONS,
+  buildOperationsQuery,
+  normalizeOperationsCategoryFilters,
+} from "./operations-format.js";
 
 test("Admin lifecycle filter exposes every canonical state", () => {
   assert.deepEqual(LIFECYCLE_OPTIONS, [
@@ -28,4 +32,23 @@ test("Admin lifecycle selection is sent to the operations API", () => {
     assert.equal(query.get("lifecycle"), lifecycle || null);
     assert.equal(query.get("category"), "active");
   }
+});
+
+test("Admin category changes discard only incompatible lifecycle refinements", () => {
+  assert.equal(
+    normalizeOperationsCategoryFilters("unassigned", { lifecycle: "accepted" }).lifecycle,
+    "",
+  );
+  assert.equal(
+    normalizeOperationsCategoryFilters("active", { lifecycle: "accepted" }).lifecycle,
+    "accepted",
+  );
+  assert.equal(
+    normalizeOperationsCategoryFilters("ready_review", { lifecycle: "closed" }).lifecycle,
+    "",
+  );
+  assert.equal(
+    normalizeOperationsCategoryFilters("all", { lifecycle: "closed" }).lifecycle,
+    "closed",
+  );
 });

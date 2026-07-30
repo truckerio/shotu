@@ -36,6 +36,7 @@ import { Button } from "../../components/ui/Button.jsx";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
 import { emptyPart, renderWorkorderPageHtml, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import { locationHasTemplate } from "./adminLocationStatus.js";
 import {
   isCompleteKioskPin,
   kioskPinValue,
@@ -153,7 +154,7 @@ function LocationsHome({ locations, loading, onCreate, onOpen }) {
             <span className="admin-location-name"><span className="admin-location-icon"><MarkerPin01 /></span><span><strong>{location.name}</strong><small>{location.address || location.type}</small></span></span>
             <span className="admin-location-stat"><small>Users</small><strong>{location.user_count}</strong></span>
             <span className="admin-location-stat"><small>Open work</small><strong>{location.open_workorder_count}</strong></span>
-            <span className={`admin-location-stat ${location.has_template ? "admin-ready" : "admin-muted"}`}><small>Template</small><strong>{location.has_template ? "Ready" : "Missing"}</strong></span>
+            <span className={`admin-location-stat ${locationHasTemplate(location) ? "admin-ready" : "admin-muted"}`}><small>Template</small><strong>{locationHasTemplate(location) ? "Ready" : "Missing"}</strong></span>
             <span className="admin-location-arrow" aria-hidden="true">›</span>
           </button>
         ))}
