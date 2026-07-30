@@ -189,6 +189,7 @@ export function RoleRouter({ actor }) {
   });
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [officeAutosaveRevision, setOfficeAutosaveRevision] = useState(0);
+  const [usedPartsDirty, setUsedPartsDirty] = useState(false);
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -430,6 +431,10 @@ export function RoleRouter({ actor }) {
   }, [activeWorkorder?.workorder?.startedAt, activeWorkorder?.workorder?.mechanicDoneAt]);
 
   useEffect(() => {
+    setUsedPartsDirty(false);
+  }, [activeWorkorder?.workorder?.id]);
+
+  useEffect(() => {
     if (!officeAutosaveRevision || !isOfficeDetail || !activeWorkorder?.allowedActions?.update) return undefined;
     window.clearTimeout(officeAutosaveTimerRef.current);
     officeAutosaveTimerRef.current = window.setTimeout(() => {
@@ -544,13 +549,17 @@ export function RoleRouter({ actor }) {
   function selectOfficeLocation(locationId) {
     const selected = resolveCreateLocation(officeLocations, locationId);
     if (!selected) return;
-    clearOfficeCreateErrors("locationId");
-    setForm((current) => ({
-      ...current,
+    const locationPatch = {
       locationId: selected.location.id,
       locationName: selected.location.name || "",
       ...templateFieldsForCreateLocation(selected.location, selected.template),
+    };
+    clearOfficeCreateErrors("locationId");
+    setForm((current) => ({
+      ...current,
+      ...locationPatch,
     }));
+    stageOfficeWorkorderAutosave(locationPatch);
   }
 
   useEffect(() => {
@@ -785,6 +794,7 @@ export function RoleRouter({ actor }) {
   }
 
   function updateActiveUsedParts(parts) {
+    setUsedPartsDirty(true);
     setForm((current) => ({ ...current, parts }));
   }
 
@@ -794,15 +804,14 @@ export function RoleRouter({ actor }) {
     let savedParts = parts;
 
     if (isOfficeDetail) {
-      await api(`/api/office/workorders/${workorderId}`, {
+      const result = await api(`/api/office/workorders/${workorderId}/used-parts`, {
         method: "PATCH",
-        body: JSON.stringify({
-          formData: {
-            ...(activeWorkorder.workorder.formData || {}),
-            parts,
-          },
-        }),
+        body: JSON.stringify({ parts }),
       });
+      const detail = await api(`/api/office/workorders/${result.workorder.id}`);
+      savedParts = detail.workorder.formData?.parts || [];
+      setActiveWorkorder(detail);
+      setDetailStatus(detail.workorder.status);
     } else {
       const mechanicRows = parts.map((part) => ({
         partNo: part.partNo,
@@ -818,13 +827,16 @@ export function RoleRouter({ actor }) {
     }
 
     setForm((current) => ({ ...current, parts: savedParts }));
-    setActiveWorkorder((current) => current ? {
-      ...current,
-      workorder: {
-        ...current.workorder,
-        formData: { ...(current.workorder.formData || {}), parts: savedParts },
-      },
-    } : current);
+    if (!isOfficeDetail) {
+      setActiveWorkorder((current) => current ? {
+        ...current,
+        workorder: {
+          ...current.workorder,
+          formData: { ...(current.workorder.formData || {}), parts: savedParts },
+        },
+      } : current);
+    }
+    setUsedPartsDirty(false);
   }
 
   function vehicleMileage(vehicle) {
@@ -1600,7 +1612,10 @@ export function RoleRouter({ actor }) {
   useWorkorderDetailRealtime({
     enabled: Boolean(activeWorkorder?.workorder?.id && ["office", "mechanic"].includes(detailSource)),
     workorderId: activeWorkorder?.workorder?.id,
-    paused: isMechanicDetail && (mechanicProgress.hasUnsyncedChanges || mechanicProgress.status === "saving"),
+    paused: usedPartsDirty || (
+      isMechanicDetail
+      && (mechanicProgress.hasUnsyncedChanges || mechanicProgress.status === "saving")
+    ),
     onRefresh: () => reloadActiveWorkorder({ preserveForm: shouldPreserveActiveWorkorderForm() }),
   });
 

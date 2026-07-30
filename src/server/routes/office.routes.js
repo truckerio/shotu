@@ -10,6 +10,7 @@ import {
   reviewOfficePartRequest,
   reassignOfficeWorkorder,
   returnOfficeWorkorder,
+  saveOfficeUsedParts,
   sendOfficeMessage,
   changeOfficePartAllocation,
   updateOfficeWorkorder,
@@ -23,6 +24,7 @@ import {
   reassignWorkorderSchema,
   returnWorkorderSchema,
   sendMessageSchema,
+  updateMechanicUsedPartsSchema,
   updateOfficeWorkorderSchema,
 } from "../modules/workorders/workorder.schemas.js";
 import { invalidRequest } from "../auth/errors.js";
@@ -55,6 +57,11 @@ function allocationPath(pathname) {
 
 function officePartsPath(pathname) {
   const match = /^\/api\/office\/workorders\/([^/]+)\/parts$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function officeUsedPartsPath(pathname) {
+  const match = /^\/api\/office\/workorders\/([^/]+)\/used-parts$/.exec(pathname);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -136,6 +143,16 @@ export async function handleOfficeApi(req, res, url, helpers) {
     await requireWorkorderAccess(requestContext, detailId);
     const input = updateOfficeWorkorderSchema.parse(await readBody(req));
     sendJson(res, 200, { workorder: await updateOfficeWorkorder(detailId, { ...input, officeUserId }) });
+    return true;
+  }
+
+  const officeUsedPartsId = officeUsedPartsPath(url.pathname);
+  if (req.method === "PATCH" && officeUsedPartsId) {
+    await requireWorkorderAccess(requestContext, officeUsedPartsId);
+    const input = updateMechanicUsedPartsSchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      workorder: await saveOfficeUsedParts(officeUsedPartsId, { ...input, officeUserId }),
+    });
     return true;
   }
 

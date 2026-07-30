@@ -96,8 +96,8 @@ Complete this additional gate before enabling or changing remote proofreading:
   most one bounded lexical recovery pass;
 - deep/context checks run only after blur, never auto-replace, and fail without
   blocking workorder edit, autosave, or submit;
-- stale responses, IME composition, provider timeout/outage, Undo, Ignore once,
-  personal dictionary, company dictionary, keyboard use, mobile viewport
+- stale responses, IME composition, provider timeout/outage, direct editing,
+  Ignore once, personal dictionary, company dictionary, keyboard use, mobile viewport
   containment, and native-spellcheck fallback pass the
   [proofreading runbook](proofreading-runbook.md);
 - dictionary migration 040, tenant isolation, personal self-service, admin-only
@@ -160,8 +160,9 @@ At each width, require:
 - no unexpected browser console errors.
 
 For shared narrative fields, also require exact-offset underlines, keyboard
-suggestions, safe replacement with Undo, autosave persistence, and fail-open
-behavior. Check that password, name, search, identifier, part number, and
+suggestions, safe replacement without correction-history UI, autosave
+persistence, and fail-open behavior. Check that password, name, search,
+identifier, part number, and
 quantity controls never call the remote proofreading endpoint.
 
 ## 6. Post-Deploy Observation

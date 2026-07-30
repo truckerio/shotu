@@ -21,6 +21,7 @@ test("Manager actions reflect active, review, correction, and terminal lifecycle
   assert.deepEqual(officeAllowedActions("in_progress"), {
     update: true,
     updateAdministrative: true,
+    recordUsedParts: true,
     approve: false,
     returnToMechanic: false,
     cancel: true,
@@ -29,7 +30,9 @@ test("Manager actions reflect active, review, correction, and terminal lifecycle
   assert.equal(officeAllowedActions("mechanic_done").approve, true);
   assert.equal(officeAllowedActions("mechanic_done").returnToMechanic, true);
   assert.equal(officeAllowedActions("closed").updateAdministrative, false);
+  assert.equal(officeAllowedActions("closed").recordUsedParts, false);
   assert.equal(officeAllowedActions("closed", [{ reason: "missing_info" }]).updateAdministrative, true);
+  assert.equal(officeAllowedActions("closed", [{ reason: "missing_info" }]).recordUsedParts, true);
   assert.equal(officeAllowedActions("odoo_entered").cancel, false);
   assert.equal(officeAllowedActions("cancelled").update, false);
 });

@@ -91,3 +91,54 @@ test("location and template changes make create drafts meaningful after baseline
     false,
   );
 });
+
+test("create autosave round-trips every editable workorder field", () => {
+  const form = {
+    locationId: "location-2",
+    customerCompanyName: "Customer Two",
+    headerTitle: "CUSTOM WORKORDER",
+    brandTop: "TOP",
+    brandBottom: "BOTTOM",
+    warrantyText: "Warranty text",
+    responsibilityText: "Responsibility text",
+    authorizationText: "Authorization text",
+    workDate: "2026-07-30",
+    workStartDate: "2026-07-30",
+    workEndDate: "2026-07-31",
+    unitNo: "TRUCK-42",
+    unitType: "Tractor",
+    licenseNo: "8ABC123",
+    mileage: "123456",
+    model: "579",
+    vinNo: "1XKWDB0X0XR123456",
+    mechanicConcern: "Clutch slips under load",
+    mechanicName: "Mechanic One",
+    startTime: "09:15",
+    endTime: "11:45",
+    managerName: "Manager One",
+    officeNotes: "Priority customer",
+    customerSignature: "Customer Signer",
+    authorizedBy: "Fleet Manager",
+    parts: [{ partNo: "11011", qty: "3", uomCode: "pc", repairOrder: "Replace clutch assembly" }],
+  };
+  const payload = buildWorkorderDraftPayload({
+    actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
+    form,
+    mechanicUserIds: ["mechanic-1", "mechanic-2"],
+    selectedVehicle: { id: "asset-42" },
+  });
+  const restored = formValuesFromWorkorderDraft(payload, { parts: [] });
+
+  assert.equal(payload.locationId, form.locationId);
+  assert.equal(payload.assetId, "asset-42");
+  assert.equal(payload.concern, form.mechanicConcern);
+  assert.equal(payload.officeNotes, form.officeNotes);
+  assert.deepEqual(payload.mechanicUserIds, ["mechanic-1", "mechanic-2"]);
+  for (const [field, value] of Object.entries(form)) {
+    if (field === "locationId" || field === "officeNotes") continue;
+    assert.deepEqual(restored[field], value, `${field} should survive draft restore`);
+  }
+  assert.equal(restored.locationId, form.locationId);
+  assert.equal(restored.officeNotes, form.officeNotes);
+  assert.equal(isMeaningfulWorkorderDraft(payload), true);
+});

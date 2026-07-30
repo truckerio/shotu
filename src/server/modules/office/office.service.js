@@ -9,6 +9,7 @@ import {
   reassignOperationalWorkorder,
   setOperationalWorkorderMechanics,
   returnOperationalWorkorder,
+  updateOfficeUsedParts,
   updateOperationalWorkorder,
   WorkorderLifecycleConflictError,
 } from "../../db/repositories/operational-workorders.repo.js";
@@ -40,9 +41,11 @@ export function officeAllowedActions(status, activeAttention = []) {
   const active = ["open", "accepted", "in_progress"].includes(status);
   const review = status === "mechanic_done";
   const hasMissingInfo = activeAttention.some((attention) => attention.reason === "missing_info");
+  const canUpdate = active || review || (status === "closed" && hasMissingInfo);
   return {
-    update: active || review || (status === "closed" && hasMissingInfo),
-    updateAdministrative: active || review || (status === "closed" && hasMissingInfo),
+    update: canUpdate,
+    updateAdministrative: canUpdate,
+    recordUsedParts: canUpdate,
     approve: review,
     returnToMechanic: review,
     cancel: active || review,
@@ -180,6 +183,16 @@ export async function updateOfficeWorkorder(workorderId, input) {
       ...input,
       changedByUserId: office?.id || input.officeUserId || null,
     });
+  } catch (error) {
+    return mapLifecycleConflict(error);
+  }
+}
+
+export async function saveOfficeUsedParts(workorderId, input) {
+  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  if (!office) throw new Error("Office user not found.");
+  try {
+    return await updateOfficeUsedParts(workorderId, office.id, input.parts);
   } catch (error) {
     return mapLifecycleConflict(error);
   }

@@ -98,15 +98,3 @@ export function canAutoReplaceNarrativeIssue({
     && selectionStart === issue.end + 1
     && selectionEnd === selectionStart;
 }
-
-export function correctionUndoRange(correction, textValue) {
-  const text = String(textValue || "");
-  if (!correction) return null;
-  const end = correction.start + correction.replacement.length;
-  if (text.slice(correction.start, end) !== correction.replacement) return null;
-  return {
-    end,
-    replacement: correction.original,
-    start: correction.start,
-  };
-}

@@ -1284,7 +1284,9 @@ export async function releaseOperationalWorkorder(workorderId, mechanicUserId, r
   }
 }
 
-export async function updateMechanicUsedParts(workorderId, mechanicUserId, parts) {
+async function updateOperationalUsedParts(workorderId, changedByUserId, parts, {
+  requireAssignedMechanic = false,
+} = {}) {
   const pool = getPool();
   const client = await pool.connect();
   try {
@@ -1295,19 +1297,39 @@ export async function updateMechanicUsedParts(workorderId, mechanicUserId, parts
     );
     const before = beforeResult.rows[0];
     if (!before) throw new Error("Workorder not found.");
-    const assignment = await client.query(
-      `select 1 from workorder_mechanic_assignments
-       where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
-      [workorderId, mechanicUserId],
-    );
-    if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can save used parts.");
-    const terminalStatuses = [
-      WORKORDER_STATUS.MECHANIC_DONE,
-      WORKORDER_STATUS.CLOSED,
-      WORKORDER_STATUS.ODOO_ENTERED,
-      WORKORDER_STATUS.CANCELLED,
-    ];
-    if (terminalStatuses.includes(before.status)) throw new Error("Used parts cannot be changed on a completed workorder.");
+    if (requireAssignedMechanic) {
+      const assignment = await client.query(
+        `select 1 from workorder_mechanic_assignments
+         where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
+        [workorderId, changedByUserId],
+      );
+      if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can save used parts.");
+      const terminalStatuses = [
+        WORKORDER_STATUS.MECHANIC_DONE,
+        WORKORDER_STATUS.CLOSED,
+        WORKORDER_STATUS.ODOO_ENTERED,
+        WORKORDER_STATUS.CANCELLED,
+      ];
+      if (terminalStatuses.includes(before.status)) throw new Error("Used parts cannot be changed on a completed workorder.");
+    } else {
+      let canEdit = [
+        WORKORDER_STATUS.OPEN,
+        WORKORDER_STATUS.ACCEPTED,
+        WORKORDER_STATUS.IN_PROGRESS,
+        WORKORDER_STATUS.MECHANIC_DONE,
+      ].includes(before.status);
+      if (before.status === WORKORDER_STATUS.CLOSED) {
+        const attention = await client.query(
+          `select 1 from workorder_attention_state
+           where workorder_id = $1 and reason = 'missing_info' and active = true`,
+          [workorderId],
+        );
+        canEdit = Boolean(attention.rows[0]);
+      }
+      if (!canEdit) {
+        throw lifecycleConflict("WORKORDER_UPDATE_NOT_ALLOWED", "Used parts can no longer be changed on this workorder.");
+      }
+    }
 
     const formData = before.form_data || {};
     const nextFormData = {
@@ -1324,15 +1346,15 @@ export async function updateMechanicUsedParts(workorderId, mechanicUserId, parts
          set form_data = $3::jsonb,
              updated_at = now()
          where id = $1
-           and exists (
+           and ($4::boolean = false or exists (
              select 1 from workorder_mechanic_assignments assignment
              where assignment.workorder_id = operational_workorders.id
                and assignment.mechanic_user_id = $2
                and assignment.active = true
-           )`,
-        [workorderId, mechanicUserId, JSON.stringify(nextFormData)]
+           ))`,
+        [workorderId, changedByUserId, JSON.stringify(nextFormData), requireAssignedMechanic]
       );
-      await addFieldEvents(client, { workorderId, changes, changedByUserId: mechanicUserId });
+      await addFieldEvents(client, { workorderId, changes, changedByUserId });
     }
     await client.query("commit");
     return getOperationalWorkorderById(workorderId);
@@ -1342,6 +1364,16 @@ export async function updateMechanicUsedParts(workorderId, mechanicUserId, parts
   } finally {
     client.release();
   }
+}
+
+export function updateMechanicUsedParts(workorderId, mechanicUserId, parts) {
+  return updateOperationalUsedParts(workorderId, mechanicUserId, parts, {
+    requireAssignedMechanic: true,
+  });
+}
+
+export function updateOfficeUsedParts(workorderId, officeUserId, parts) {
+  return updateOperationalUsedParts(workorderId, officeUserId, parts);
 }
 
 export async function markOperationalWorkorderDone(workorderId, mechanicUserId, input) {

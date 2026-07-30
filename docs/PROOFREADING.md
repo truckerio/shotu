@@ -35,8 +35,9 @@ result, so the UI is independent of WProofreader and OpenAI response formats.
   validation receive the change.
 - Automatic replacement is limited to one high-confidence, single-token
   spelling correction after a delimiter. It excludes numbers, identifiers,
-  acronyms, mixed technical tokens, grammar, and contextual suggestions. The UI
-  provides an immediate Undo action.
+  acronyms, mixed technical tokens, grammar, and contextual suggestions.
+  Corrections do not add a change-history banner or action; the field remains
+  directly editable.
 - The suggestion menu supports keyboard use, 44 px mobile targets, Ignore once,
   and Add to my dictionary. It is kept inside the visual viewport when the
   mobile keyboard is open.
@@ -232,7 +233,7 @@ npm run verify
 ```
 
 Complete the desktop, phone, keyboard, IME, stale-response, provider-failure,
-dictionary, auto-replace, Undo, and autosave walkthrough in
+dictionary, auto-replace, direct editing, and autosave walkthrough in
 [the runbook](operations/proofreading-runbook.md).
 
 ## Adding or replacing a provider

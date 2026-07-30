@@ -5,6 +5,7 @@ import {
   createOperationalWorkorder,
   getOperationalWorkorderById,
 } from "../../db/repositories/operational-workorders.repo.js";
+import { saveOfficeUsedParts } from "../office/office.service.js";
 import { updateMechanicUsedPartsSchema } from "../workorders/workorder.schemas.js";
 import { saveMechanicUsedParts } from "./mechanic.service.js";
 
@@ -118,6 +119,38 @@ try {
   );
   assert.equal(auditAfterNoop.rows[0].count, 1);
 
+  const officeParts = updateMechanicUsedPartsSchema.parse({
+    parts: [{
+      partNo: "OFFICE-11011",
+      qty: "3",
+      uomCode: "pc",
+      repairOrder: "Replace clutch assembly",
+    }],
+  }).parts;
+  const officeSaved = await saveOfficeUsedParts(workorderId, {
+    officeUserId: officeId,
+    parts: officeParts,
+  });
+  assert.deepEqual(officeSaved.formData.parts, officeParts);
+  assert.equal(officeSaved.formData.companyName, "Preserve this company");
+  const officeAudit = await query(
+    `select changed_by_user_id, count(*) over ()::int as count
+     from workorder_field_events
+     where workorder_id = $1 and field_key = 'formData.parts'
+     order by created_at desc
+     limit 1`,
+    [workorderId],
+  );
+  assert.equal(officeAudit.rows[0].changed_by_user_id, officeId);
+  assert.equal(officeAudit.rows[0].count, 2);
+  await saveOfficeUsedParts(workorderId, { officeUserId: officeId, parts: officeParts });
+  const officeAuditAfterNoop = await query(
+    `select count(*)::int as count from workorder_field_events
+     where workorder_id = $1 and field_key = 'formData.parts'`,
+    [workorderId],
+  );
+  assert.equal(officeAuditAfterNoop.rows[0].count, 2);
+
   await assert.rejects(
     saveMechanicUsedParts(workorderId, otherMechanicId, input.parts),
     /Only an assigned mechanic/
@@ -125,7 +158,18 @@ try {
   await query("update user_profiles set active = false where id = $1", [mechanicId]);
   await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /Mechanic user not found/);
   await query("update user_profiles set active = true where id = $1", [mechanicId]);
-  await query("update operational_workorders set status = 'closed' where id = $1", [workorderId]);
+  await query("update operational_workorders set status = 'mechanic_done' where id = $1", [workorderId]);
+  const reviewParts = [{ ...officeParts[0], repairOrder: "Office review correction" }];
+  assert.deepEqual(
+    (await saveOfficeUsedParts(workorderId, { officeUserId: officeId, parts: reviewParts })).formData.parts,
+    reviewParts,
+  );
+  await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, reviewParts), /completed workorder/);
+  await query("update operational_workorders set status = 'odoo_entered' where id = $1", [workorderId]);
+  await assert.rejects(
+    saveOfficeUsedParts(workorderId, { officeUserId: officeId, parts: reviewParts }),
+    /can no longer be changed/,
+  );
   await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /completed workorder/);
 
   assert.equal((await getOperationalWorkorderById(workorderId)).formData.companyName, "Preserve this company");
@@ -135,6 +179,8 @@ try {
     preservedFormData: true,
     removesLegacyRequestProjections: true,
     authorization: true,
+    officeAutosave: true,
+    officeReviewCorrection: true,
     audit: true,
   }));
 } finally {

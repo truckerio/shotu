@@ -11,7 +11,6 @@ import {
 import { RichTextarea, experimental_RichInput as RichInput } from "rich-textarea";
 import {
   canAutoReplaceNarrativeIssue,
-  correctionUndoRange,
   issueOccurrenceKey,
 } from "./narrative-correction-model.js";
 import {
@@ -60,30 +59,8 @@ function issueLabel(issue) {
   return issue.kind === "spelling" ? "Spelling" : "Grammar and context";
 }
 
-function dispatchReplacementInput(control) {
-  const view = control?.ownerDocument?.defaultView;
-  let event;
-  try {
-    event = new view.InputEvent("input", {
-      bubbles: true,
-      data: null,
-      inputType: "insertReplacementText",
-    });
-  } catch {
-    event = new view.Event("input", { bubbles: true });
-  }
-  control.dispatchEvent(event);
-}
-
 function setControlRange(control, replacement, start, end, selectionMode) {
-  const suppressLibraryInput = (event) => event.stopImmediatePropagation();
-  control.addEventListener("input", suppressLibraryInput);
-  try {
-    control.setRangeText(replacement, start, end, selectionMode);
-  } finally {
-    control.removeEventListener("input", suppressLibraryInput);
-  }
-  dispatchReplacementInput(control);
+  control.setRangeText(replacement, start, end, selectionMode);
 }
 
 export const NarrativeField = forwardRef(function NarrativeField(
@@ -119,7 +96,6 @@ export const NarrativeField = forwardRef(function NarrativeField(
   const statusId = useId();
   const [activeIssue, setActiveIssue] = useState(null);
   const [checkRevision, setCheckRevision] = useState(0);
-  const [correction, setCorrection] = useState(null);
   const [dictionaryBusy, setDictionaryBusy] = useState(false);
   const [focused, setFocused] = useState(false);
   const [issues, setIssues] = useState([]);
@@ -141,12 +117,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
       issue.end,
       automatic ? "preserve" : "end",
     );
-    setCorrection({
-      original: issue.problem,
-      replacement,
-      start: issue.start,
-    });
-    setStatusMessage(`Corrected “${issue.problem}” to “${replacement}”.`);
+    setStatusMessage("");
     setActiveIssue(null);
     setIssues([]);
     if (!automatic) {
@@ -158,12 +129,6 @@ export const NarrativeField = forwardRef(function NarrativeField(
     }
     return true;
   }
-
-  useEffect(() => {
-    if (correction && !correctionUndoRange(correction, text)) {
-      setCorrection(null);
-    }
-  }, [correction, text]);
 
   useEffect(() => {
     const requestId = ++requestRef.current;
@@ -312,19 +277,6 @@ export const NarrativeField = forwardRef(function NarrativeField(
     }
   }
 
-  function undoCorrection() {
-    const range = correctionUndoRange(correction, text);
-    if (!range || !controlRef.current?.setRangeText) {
-      setCorrection(null);
-      setStatusMessage("That correction can no longer be undone.");
-      return;
-    }
-    setControlRange(controlRef.current, range.replacement, range.start, range.end, "preserve");
-    setCorrection(null);
-    setStatusMessage("Correction undone.");
-    requestAnimationFrame(() => controlRef.current?.focus({ preventScroll: true }));
-  }
-
   function handleMenuKeyDown(event) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -364,7 +316,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
         onChange={(event) => {
           setIssues([]);
           setActiveIssue(null);
-          if (!correction) setStatusMessage("");
+          setStatusMessage("");
           onChange?.(event);
         }}
         onCompositionEnd={(event) => {
@@ -452,11 +404,8 @@ export const NarrativeField = forwardRef(function NarrativeField(
           </span>
         </span>
       ) : null}
-      <span className={`narrative-correction-status ${statusMessage || correction ? "is-visible" : ""}`}>
+      <span className={`narrative-correction-status ${statusMessage ? "is-visible" : ""}`}>
         <span id={statusId} role="status" aria-live="polite">{statusMessage}</span>
-        {correction ? (
-          <button type="button" onClick={undoCorrection}>Undo</button>
-        ) : null}
       </span>
     </span>
   );

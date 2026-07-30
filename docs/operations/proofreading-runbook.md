@@ -56,8 +56,8 @@ viewports, including 390 x 844 and 430 x 932.
 1. Type a misspelling, pause, and confirm fast mode underlines it without
    moving the caret or changing surrounding text.
 2. Type through a delimiter and confirm only an eligible single-token spelling
-   correction may auto-apply. Use Undo and confirm the exact original token is
-   restored.
+   correction may auto-apply. Confirm no correction-history banner or Undo
+   control appears and the corrected field remains directly editable.
 3. Enter a grammar issue and a contextual word-choice issue. Blur the multiline
    field and confirm deep suggestions appear without automatic replacement.
 4. Open the suggestion menu with pointer and keyboard. Traverse actions,

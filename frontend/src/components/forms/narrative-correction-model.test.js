@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canAutoReplaceNarrativeIssue,
-  correctionUndoRange,
   issueOccurrenceKey,
   normalizeNarrativeIssues,
 } from "./narrative-correction-model.js";
@@ -71,16 +70,6 @@ test("delimiter auto-replacement accepts only one high-confidence lowercase spel
     selectionEnd: 5,
     isComposing: true,
   }), false);
-});
-
-test("undo targets only the corrected range and preserves later controlled text", () => {
-  const correction = { original: "brke", replacement: "brake", start: 0 };
-  assert.deepEqual(correctionUndoRange(correction, "brake pads added later"), {
-    end: 5,
-    replacement: "brke",
-    start: 0,
-  });
-  assert.equal(correctionUndoRange(correction, "broken range"), null);
 });
 
 test("ignore-once keys distinguish category and occurrence", () => {
