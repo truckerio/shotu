@@ -22,6 +22,7 @@ React feature -> /api route -> domain service -> repository -> PostgreSQL
 frontend/src/
   app/                  Application composition, role routing, and URL state
   components/           Shared UI used by multiple roles
+    forms/              Shared text-entry policy, narratives, and proofreading UI
     preview/            The single shared preview implementation
     ui/                 Small UI primitives
     workorders/         Shared detail, chat, queue, timeline, and parts UI
@@ -83,6 +84,42 @@ server.js               Composition root plus contained legacy print/share endpo
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### Proofreading Boundary
+
+`components/forms/NarrativeField.jsx` is the shared narrative owner for every
+role. It composes the common text-entry policy, highlights normalized issues,
+applies range-safe corrections through real input events, and provides the
+keyboard/mobile suggestion experience. Feature screens pass controlled values
+and normal form callbacks; they do not call a proofreading vendor directly.
+
+```text
+NarrativeField -> routes/proofreading.routes.js
+                         |-> modules/proofreading/proofreading.service.js
+                         |     |-> providers/wproofreader.provider.js
+                         |     `-> providers/openai-context.provider.js (optional)
+                         `-> proofreading-dictionaries.service.js
+                                      `-> proofreading-dictionaries.repo.js -> PostgreSQL
+```
+
+The check path is layered. A fast WProofreader check runs after a typing
+debounce and retains spelling plus only range-safe, single-token grammar.
+Broad grammar spans receive one bounded spelling-only lexical recovery pass.
+After blur, deep mode may add WProofreader AI and an optional high-confidence
+OpenAI contextual pass. Context findings are suggestions only. Every adapter
+returns the same issue contract, validates exact offsets, accepts abort signals,
+and fails open so provider availability never controls workorder persistence.
+
+Personal and company dictionary rows in PostgreSQL are application truth.
+Provider word lists are bounded request-time optimizations, not an identity or
+authorization boundary. The authenticated actor may manage personal terms;
+company terms require an authorized admin. See [`docs/PROOFREADING.md`](PROOFREADING.md)
+for contracts and replacement rules.
+
+Proofreading cache, in-flight coalescing, concurrency, and rate-limit state are
+currently process-local. This is appropriate for the single-replica deployment.
+Move coordination to a shared store before horizontal application scaling to
+avoid multiplied provider traffic and independent limits.
 
 ### Integration Platform
 

@@ -1,0 +1,59 @@
+[
+  {
+    "id": "difficult-inspection",
+    "text": "The mecanic inspcted teh air compresor and fownd a sever presure leeke near teh regulater, but the vehical also had intermitent electrcl falts, corroded conectors, uneaven brke pad ware, and a transsmision vibraition that becme noticable durring accelration.",
+    "expected": [
+      ["mecanic", "mechanic"],
+      ["inspcted", "inspected"],
+      ["teh", "the"],
+      ["compresor", "compressor"],
+      ["fownd", "found"],
+      ["sever", "severe"],
+      ["presure", "pressure"],
+      ["leeke", "leak"],
+      ["regulater", "regulator"],
+      ["vehical", "vehicle"],
+      ["intermitent", "intermittent"],
+      ["electrcl", "electrical"],
+      ["falts", "faults"],
+      ["conectors", "connectors"],
+      ["uneaven", "uneven"],
+      ["brke", "brake"],
+      ["ware", "wear"],
+      ["transsmision", "transmission"],
+      ["vibraition", "vibration"],
+      ["becme", "became"],
+      ["noticable", "noticeable"],
+      ["durring", "during"],
+      ["accelration", "acceleration"]
+    ]
+  },
+  {
+    "id": "brake-repair",
+    "text": "Mecahnic replced the frnt brke pads and torqued the caliper bolts.",
+    "expected": [
+      ["Mecahnic", "Mechanic"],
+      ["replced", "replaced"],
+      ["frnt", "front"],
+      ["brke", "brake"]
+    ]
+  },
+  {
+    "id": "contextual-word-choice",
+    "text": "The inspection found sever tire damage and uneven brake pad ware.",
+    "expected": [
+      ["sever", "severe"],
+      ["ware", "wear"]
+    ]
+  },
+  {
+    "id": "clean-technical-note",
+    "text": "Inspected the air compressor, replaced the pressure regulator, and verified normal operation.",
+    "expected": []
+  },
+  {
+    "id": "clean-identifiers",
+    "text": "Installed Bendix part A90801 on unit TRK-204 and torqued the fasteners to specification.",
+    "expected": []
+  }
+]

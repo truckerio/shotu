@@ -44,6 +44,7 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Durable provider work | `integration_jobs`, `integration_job_attempts` | `integrations/core/integration-platform.repo.js` |
 | External identity mapping | `integration_mappings` | integration platform repository |
 | Integration delivery | idempotency, webhook, outbox, and audit tables | integration platform repository |
+| Proofreading vocabulary | `proofreading_dictionary_terms`, `proofreading_dictionary_events` | `repositories/proofreading-dictionaries.repo.js` |
 
 No role-specific screen owns a second workorder, user, asset, location, or template table.
 
@@ -79,8 +80,44 @@ has not drifted from that contract.
 - Provider connection uniqueness: `(company_id, provider)`.
 - Provider asset identity: `(company_id, provider, provider_vehicle_id)`.
 - Workorder serial uniqueness: `(company_id, serial)`.
+- Proofreading vocabulary is company-scoped. Personal terms additionally bind
+  `owner_user_id` to a company membership through a composite foreign
+  key; a null owner denotes a company term.
 
 Asset owner/customer name is not tenant identity. External provider organization values belong in `external_ids` or `raw_provider_data`.
+
+## Proofreading Dictionary Rules
+
+Migration `040_proofreading_dictionaries.sql` makes PostgreSQL the source of
+truth for accepted workorder vocabulary. The application never treats a vendor
+dictionary name or browser cache as authorization.
+
+- `proofreading_dictionary_terms.company_id` is required for every row.
+- `owner_user_id is null` means a company term. A non-null owner means a
+  personal term and must belong to the same company through
+  `user_company_memberships(user_id, company_id)`.
+- Active uniqueness is case-insensitive within company, owner scope, and
+  normalized term. A personal term may intentionally override the display form
+  of the same effective company term.
+- Terms are normalized with Unicode NFKC and lowercase application rules. The
+  database constrains both stored lengths to 2–64 characters and allows only
+  letters, apostrophes, hyphens, and spaces.
+- Removing a term sets `active = false`, `removed_at`, and the removing actor.
+  Rows are retained so a later add can reactivate the vocabulary without
+  deleting history.
+- `proofreading_dictionary_events` is append-only audit history for add,
+  reactivate-as-add, and remove actions. It records company, optional owner,
+  actor, display term, normalized term, and timestamp.
+- Effective checks read at most 500 active terms from the authorized company
+  plus current user scope. When normalized values collide, the personal row is
+  preferred. The provider transport receives a smaller bounded subset; local
+  suppression still applies to the full effective result.
+
+Only the dictionary service may choose personal versus company scope. Any
+authenticated actor can manage their own personal entries. Company mutations
+require an admin who is authorized for that company. Soft-removed dictionary
+rows and audit events are durable operational records; changes to their
+retention require an explicit privacy and audit policy, not ad hoc cleanup.
 
 ## Workorder Rules
 
@@ -168,9 +205,13 @@ erDiagram
     COMPANIES ||--o{ INTEGRATION_JOBS : queues
     COMPANIES ||--o{ INTEGRATION_MAPPINGS : maps
     COMPANIES ||--o{ INTEGRATION_OUTBOX_EVENTS : publishes
+    COMPANIES ||--o{ PROOFREADING_DICTIONARY_TERMS : scopes
+    COMPANIES ||--o{ PROOFREADING_DICTIONARY_EVENTS : audits
 
     USER_PROFILES ||--o{ USER_COMPANY_MEMBERSHIPS : belongs
     USER_PROFILES ||--o{ USER_LOCATION_MEMBERSHIPS : assigned
+    USER_PROFILES o|--o{ PROOFREADING_DICTIONARY_TERMS : owns
+    USER_PROFILES o|--o{ PROOFREADING_DICTIONARY_EVENTS : acts_or_owns
     LOCATIONS ||--o{ USER_LOCATION_MEMBERSHIPS : grants
     LOCATIONS ||--o| LOCATION_WORKORDER_TEMPLATES : configures
     LOCATIONS ||--o{ USER_INVITATIONS : receives
@@ -205,6 +246,7 @@ erDiagram
     INTEGRATION_ACCOUNTS o|--o{ INTEGRATION_JOBS : schedules
     INTEGRATION_CLIENTS ||--o{ INTEGRATION_IDEMPOTENCY_RECORDS : deduplicates
     INTEGRATION_JOBS ||--o{ INTEGRATION_JOB_ATTEMPTS : retries
+    PROOFREADING_DICTIONARY_TERMS ||--o{ PROOFREADING_DICTIONARY_EVENTS : records
 ```
 
 ## Migration Rules

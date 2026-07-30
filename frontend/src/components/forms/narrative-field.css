@@ -11,12 +11,17 @@
   width: 100%;
 }
 
-.narrative-spelling-error {
+.narrative-proofreading-error {
   text-decoration-color: #c5221f;
   text-decoration-line: underline;
   text-decoration-style: wavy;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
+}
+
+.narrative-proofreading-error.is-grammar,
+.narrative-proofreading-error.is-context {
+  text-decoration-color: #2563eb;
 }
 
 .narrative-suggestion-menu {
@@ -28,18 +33,37 @@
   display: grid;
   gap: 8px;
   left: 0;
-  max-width: min(320px, calc(100vw - 32px));
+  max-width: min(320px, 100%);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 10px;
   position: absolute;
-  top: calc(100% + 6px);
   width: max-content;
   z-index: 30;
+}
+
+.narrative-suggestion-menu.is-below {
+  top: calc(100% + 6px);
+}
+
+.narrative-suggestion-menu.is-above {
+  bottom: calc(100% + 6px);
 }
 
 .narrative-suggestion-label {
   color: var(--text-muted, #667085);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.narrative-suggestion-label.is-spelling {
+  color: #a61b18;
+}
+
+.narrative-suggestion-label.is-grammar,
+.narrative-suggestion-label.is-context {
+  color: #175cd3;
 }
 
 .narrative-suggestion-actions {
@@ -60,8 +84,8 @@
   font: inherit;
   font-size: 14px;
   justify-content: center;
-  min-height: 36px;
-  padding: 6px 10px;
+  min-height: 44px;
+  padding: 8px 12px;
 }
 
 .narrative-suggestion-option:hover,
@@ -79,4 +103,44 @@
 .narrative-field.is-single-line .narrative-field-control {
   min-height: 44px;
   overflow: hidden;
+}
+
+.narrative-correction-status {
+  align-items: center;
+  color: var(--text-muted, #667085);
+  display: none;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 1.4;
+  min-height: 0;
+}
+
+.narrative-correction-status.is-visible {
+  display: flex;
+}
+
+.narrative-correction-status button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--primary, #2563eb);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .narrative-suggestion-menu {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .narrative-suggestion-option,
+  .narrative-suggestion-dismiss {
+    flex: 1 1 auto;
+  }
 }

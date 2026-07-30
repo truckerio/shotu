@@ -30,6 +30,20 @@ npm run test:used-parts
 npm run test:mechanic-chat:integration
 ```
 
+When proofreading code, dictionaries, provider configuration, or shared
+narrative fields changed, also run:
+
+```bash
+npm run test:proofreading
+npm run test:proofreading:benchmark
+# benchmark entry point: node --env-file=.env scripts/proofreading/benchmark.js
+```
+
+The live benchmark sends its synthetic corpus to the configured providers. Run
+it only with an approved test/provider account and retain aggregate recall,
+unexpected results, p95 latency, provider/model, mode, corpus revision, and
+date as release evidence. Do not retain credentials or real workorder text.
+
 ## 2. Database Safety
 
 1. Take a provider snapshot before applying production migrations.
@@ -71,6 +85,36 @@ Confirm:
 The current rate limiter is process-local and is sufficient only while the
 Railway application runs one replica. Move limiter state to a shared
 PostgreSQL or Redis store before horizontal application scaling.
+
+### Proofreading provider and privacy gate
+
+Complete this additional gate before enabling or changing remote proofreading:
+
+- the shared `NarrativeField` remains the only workorder narrative presentation
+  owner and no browser bundle contains a provider credential;
+- fast checks preserve spelling, accept only range-safe grammar, and perform at
+  most one bounded lexical recovery pass;
+- deep/context checks run only after blur, never auto-replace, and fail without
+  blocking workorder edit, autosave, or submit;
+- stale responses, IME composition, provider timeout/outage, Undo, Ignore once,
+  personal dictionary, company dictionary, keyboard use, mobile viewport
+  containment, and native-spellcheck fallback pass the
+  [proofreading runbook](proofreading-runbook.md);
+- dictionary migration 040, tenant isolation, personal self-service, admin-only
+  company mutations, soft removal, and audit events pass focused tests;
+- vendor DPA, subprocessors, regions/transfers, operational and backup
+  retention, deletion, training/use restrictions, incident notification,
+  quotas, and escalation contacts are reviewed and recorded;
+- `store: false` is set for optional OpenAI Responses requests, while provider
+  logging/abuse-monitoring retention is assessed separately;
+- application, proxy, APM, and error logs do not contain narrative bodies,
+  provider prompts/responses, dictionary terms, cookies, service IDs, or keys;
+- the release remains single-replica while proofreading cache, coalescing,
+  concurrency, backoff, and rate limiting are process-local.
+
+Unknown retention, residency, or contract terms fail this gate. Keep the
+affected layer disabled; a configured credential is not production approval.
+See [proofreading data processing](proofreading-data-processing.md).
 
 ## 4. Load And Concurrency
 
@@ -115,6 +159,11 @@ At each width, require:
 - readable loading, empty, validation, and failure states;
 - no unexpected browser console errors.
 
+For shared narrative fields, also require exact-offset underlines, keyboard
+suggestions, safe replacement with Undo, autosave persistence, and fail-open
+behavior. Check that password, name, search, identifier, part number, and
+quantity controls never call the remote proofreading endpoint.
+
 ## 6. Post-Deploy Observation
 
 For the first 15 minutes after deployment, monitor:
@@ -127,6 +176,8 @@ For the first 15 minutes after deployment, monitor:
 - Samsara sync failures;
 - print preparation failures;
 - workorder draft conflicts and progress-save failures.
+- proofreading provider timeout/error rate, p95 latency, usage/cost anomalies,
+  and operator reports of false corrections.
 
 Every request log includes a request ID. Use it to correlate the client failure,
 server log, and downstream integration error without logging passwords,
