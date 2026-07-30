@@ -96,6 +96,42 @@ test("check route supplies the active company and personal dictionary union", as
   assert.ok(checked.options.signal instanceof AbortSignal);
 });
 
+test("check failures log bounded provider metadata without narrative text", async () => {
+  let logged;
+  let response;
+  await handleProofreadingApi(
+    request(),
+    {},
+    new URL("http://localhost/api/proofreading/check"),
+    {
+      readBody: async () => ({ text: "Sensitive customer narrative." }),
+      requestContext: context("route-failure-user"),
+      sendJson: (_res, status, body) => { response = { body, status }; },
+    },
+    {
+      check: async () => {
+        const error = new Error("WProofreader returned HTTP 403. Sensitive customer narrative.");
+        error.cause = { code: "PROVIDER_DENIED" };
+        throw error;
+      },
+      listDictionary: async () => [],
+      logFailure: (details) => { logged = details; },
+    },
+  );
+
+  assert.deepEqual(logged, {
+    code: "PROVIDER_DENIED",
+    event: "proofreading.check.failed",
+    name: "Error",
+    status: 403,
+  });
+  assert.equal(JSON.stringify(logged).includes("Sensitive"), false);
+  assert.deepEqual(response, {
+    body: { error: "Proofreading is temporarily unavailable." },
+    status: 503,
+  });
+});
+
 test("dictionary route never accepts a client-selected owner", async () => {
   let received;
   let response;

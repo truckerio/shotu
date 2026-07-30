@@ -76,6 +76,16 @@ function abortSignalForRequest(req) {
   };
 }
 
+function proofreadingFailureDetails(error) {
+  const statusMatch = String(error?.message || "").match(/\bHTTP (\d{3})\b/u);
+  return {
+    code: String(error?.cause?.code || error?.code || "").slice(0, 40) || undefined,
+    event: "proofreading.check.failed",
+    name: String(error?.name || "Error").slice(0, 40),
+    status: statusMatch ? Number(statusMatch[1]) : undefined,
+  };
+}
+
 export async function handleProofreadingApi(req, res, url, helpers, dependencies = {}) {
   if (!url.pathname.startsWith("/api/proofreading/")) return false;
   const check = dependencies.check || checkNarrativeText;
@@ -84,6 +94,7 @@ export async function handleProofreadingApi(req, res, url, helpers, dependencies
   const addPersonal = dependencies.addPersonal || addPersonalProofreadingTerm;
   const removeCompany = dependencies.removeCompany || removeCompanyProofreadingTerm;
   const removePersonal = dependencies.removePersonal || removePersonalProofreadingTerm;
+  const logFailure = dependencies.logFailure || ((details) => console.warn(JSON.stringify(details)));
 
   if (url.pathname === "/api/proofreading/dictionary" && req.method === "GET") {
     consumeRateLimit(helpers.requestContext);
@@ -137,6 +148,7 @@ export async function handleProofreadingApi(req, res, url, helpers, dependencies
     }, { signal: requestAbort.signal }));
   } catch (error) {
     if (error?.name === "AbortError" && req.destroyed) return true;
+    logFailure(proofreadingFailureDetails(error));
     helpers.sendJson(res, 503, { error: "Proofreading is temporarily unavailable." });
   } finally {
     requestAbort.dispose();
