@@ -13,6 +13,10 @@ test("closed desktop workorder tools collapse without relying on a transition", 
     styles,
     /\.workorder-detail-layout:not\(\.has-preview\) \.preview-panel\s*\{[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;[\s\S]*visibility:\s*hidden;/,
   );
+  assert.match(
+    styles,
+    /\.workorder-detail-layout:not\(\.has-preview\) \.control-panel\s*\{[\s\S]*max-width:\s*1280px;[\s\S]*width:\s*100%;/,
+  );
 });
 
 test("desktop workorder tools tooltip stays beside the header control", () => {

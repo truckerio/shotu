@@ -5019,6 +5019,7 @@ textarea:focus {
   border-right: 1px solid #eaecf0;
   margin: 0 auto;
   max-width: 1280px;
+  width: 100%;
 }
 
 .workorder-detail-page .detail-context-bar {
