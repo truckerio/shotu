@@ -71,7 +71,7 @@ test("detail pages place the shared asset map in Review and mechanic Work", () =
   assert.doesNotMatch(detailSections, /<dl className="workorder-readonly-details">[\s\S]*?<AssetLocationCard/);
 });
 
-test("opening any shared workorder detail lazily refreshes its live asset location", () => {
+test("shared workorder details refresh live asset location on open and every minute", () => {
   assert.match(
     roleRouter,
     /if \(!isWorkorderDetail \|\| !activeWorkorder\?\.workorder\?\.id \|\| !mechanicMapVehicle\?\.id\) \{[\s\S]*?detailLocationRefreshRef\.current = "";[\s\S]*?return;/,
@@ -84,6 +84,11 @@ test("opening any shared workorder detail lazily refreshes its live asset locati
     roleRouter,
     /api\(`\/api\/vehicles\/\$\{encodeURIComponent\(vehicle\.id\)\}\/live-location`, \{ method: "POST" \}\)/,
   );
+  assert.match(
+    roleRouter,
+    /enabled: Boolean\(mechanicMapVehicle\?\.id\) && \(workspace === "generator" \|\| isWorkorderDetail\)/,
+  );
+  assert.match(roleRouter, /intervalMs: 60_000/);
   assert.match(roleRouter, /locationRequestRef\.current\.promise === request/);
   assert.doesNotMatch(roleRouter, /if \(!isMechanicDetail \|\| !activeWorkorder\?\.workorder\?\.id/);
 });

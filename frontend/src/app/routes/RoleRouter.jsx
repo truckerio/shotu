@@ -461,7 +461,10 @@ export function RoleRouter({ actor }) {
   }, [activeWorkorder?.workorder?.id, isWorkorderDetail, mechanicMapVehicle?.id]);
   useAutomaticRefresh(
     () => refreshVehicleLocation(mechanicMapVehicle),
-    { enabled: workspace === "generator" && Boolean(mechanicMapVehicle?.id), intervalMs: 60_000 },
+    {
+      enabled: Boolean(mechanicMapVehicle?.id) && (workspace === "generator" || isWorkorderDetail),
+      intervalMs: 60_000,
+    },
   );
 
   useEffect(() => {
