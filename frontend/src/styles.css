@@ -178,6 +178,12 @@ small {
   grid-column: 3;
 }
 
+.workorder-detail-layout:not(.has-preview) {
+  --preview-pane-width: 0% !important;
+  --detail-resizer-width: 0px !important;
+  transition: none;
+}
+
 .workorder-detail-layout.is-resizing {
   transition: none;
 }
@@ -2892,6 +2898,14 @@ textarea:focus {
   visibility: visible;
 }
 
+.workorder-detail-layout:not(.has-preview) .preview-panel {
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+  transition: none;
+  visibility: hidden;
+}
+
 .preview-pane-content {
   min-height: 0;
   min-width: 0;
@@ -5033,6 +5047,18 @@ textarea:focus {
 .workorder-detail-page .detail-context-actions .icon-tooltip:hover::after,
 .workorder-detail-page .detail-context-actions .icon-tooltip:focus-visible::after {
   transform: translateY(0);
+}
+
+.workorder-detail-page .detail-context-actions .preview-pane-toggle::after {
+  left: auto;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translate(3px, -50%);
+}
+
+.workorder-detail-page .detail-context-actions .preview-pane-toggle:hover::after,
+.workorder-detail-page .detail-context-actions .preview-pane-toggle:focus-visible::after {
+  transform: translate(0, -50%);
 }
 
 .workorder-object-summary {
