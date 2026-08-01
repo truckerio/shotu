@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { isRejectedSamsaraApiCredential, SamsaraApiError } from "./samsara.client.js";
 import { isRejectedSamsaraOAuthCredential } from "./samsara.oauth.service.js";
 
 test("invalid OAuth grants are treated as rejected credentials", () => {
@@ -11,6 +12,13 @@ test("invalid OAuth grants are treated as rejected credentials", () => {
   assert.equal(isRejectedSamsaraOAuthCredential(new Error("network failed")), false);
 });
 
+test("rejected Samsara API access tokens are distinguished from provider failures", () => {
+  assert.equal(isRejectedSamsaraApiCredential(new SamsaraApiError("invalid token", { status: 401 })), true);
+  assert.equal(isRejectedSamsaraApiCredential(new SamsaraApiError("invalid token")), true);
+  assert.equal(isRejectedSamsaraApiCredential(new SamsaraApiError("rate limited", { status: 429 })), false);
+  assert.equal(isRejectedSamsaraApiCredential(new SamsaraApiError("missing scope", { status: 403 })), false);
+});
+
 test("OAuth refresh falls back to the configured API token and clears rejected credentials", async () => {
   const source = await readFile(new URL("./samsara.oauth.service.js", import.meta.url), "utf8");
   assert.match(
@@ -19,6 +27,16 @@ test("OAuth refresh falls back to the configured API token and clears rejected c
   );
   assert.match(source, /tokenEnvKey: "SAMSARA_API_TOKEN"/);
   assert.match(source, /return fallback;/);
+});
+
+test("rejected unexpired OAuth access tokens retry through the shared API-token client", async () => {
+  const source = await readFile(new URL("./samsara.oauth.service.js", import.meta.url), "utf8");
+  assert.match(source, /export async function withSamsaraClient/);
+  assert.match(
+    source,
+    /auth\.source !== "oauth" \|\| !fallback \|\| !isRejectedSamsaraApiCredential\(error\)/,
+  );
+  assert.match(source, /clearIntegrationOAuthCredentials[\s\S]*?operation\(new SamsaraClient/);
 });
 
 test("credential cleanup removes legacy and encrypted OAuth secrets transactionally", async () => {

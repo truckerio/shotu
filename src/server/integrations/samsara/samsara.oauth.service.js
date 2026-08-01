@@ -10,6 +10,7 @@ import {
   saveOAuthTokens,
 } from "../../db/repositories/integrations.repo.js";
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
+import { isRejectedSamsaraApiCredential, SamsaraClient } from "./samsara.client.js";
 
 const PROVIDER = "samsara";
 const TOKEN_REFRESH_SKEW_MS = 90_000;
@@ -154,4 +155,33 @@ export async function getSamsaraAccessToken({
   const fallback = apiTokenFallback(allowApiTokenFallback, companyId);
   if (fallback) return fallback;
   throw new Error("Connect Samsara with OAuth before syncing vehicles.");
+}
+
+export async function withSamsaraClient(
+  operation,
+  {
+    allowApiTokenFallback = true,
+    companyId = DEFAULT_COMPANY_ID,
+  } = {},
+) {
+  let auth = await getSamsaraAccessToken({ allowApiTokenFallback, companyId });
+  try {
+    return {
+      auth,
+      result: await operation(new SamsaraClient({ token: auth.token })),
+    };
+  } catch (error) {
+    const fallback = apiTokenFallback(allowApiTokenFallback, companyId);
+    if (auth.source !== "oauth" || !fallback || !isRejectedSamsaraApiCredential(error)) throw error;
+
+    await clearIntegrationOAuthCredentials(PROVIDER, companyId, {
+      status: "configured",
+      tokenEnvKey: "SAMSARA_API_TOKEN",
+    });
+    auth = fallback;
+    return {
+      auth,
+      result: await operation(new SamsaraClient({ token: auth.token })),
+    };
+  }
 }

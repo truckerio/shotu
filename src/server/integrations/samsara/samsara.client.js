@@ -1,5 +1,22 @@
 import { env, requireSamsaraToken } from "../../config/env.js";
 
+export class SamsaraApiError extends Error {
+  constructor(message, { code = "", status = 0 } = {}) {
+    super(message);
+    this.name = "SamsaraApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export function isRejectedSamsaraApiCredential(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return Number(error?.status) === 401
+    || ["invalid_token", "unauthorized"].includes(code)
+    || message === "invalid token";
+}
+
 export class SamsaraClient {
   constructor({ token = requireSamsaraToken(), baseUrl = env.samsaraApiBaseUrl } = {}) {
     this.token = token;
@@ -18,9 +35,20 @@ export class SamsaraClient {
       },
     });
     const text = await response.text();
-    const body = text ? JSON.parse(text) : {};
+    let body = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { message: text };
+    }
     if (!response.ok) {
-      throw new Error(body.message || body.error || `Samsara request failed with ${response.status}`);
+      throw new SamsaraApiError(
+        body.message || body.error_description || body.error || `Samsara request failed with ${response.status}`,
+        {
+          code: body.errorCode || body.error_code || body.code || body.error || "",
+          status: response.status,
+        },
+      );
     }
     return body;
   }

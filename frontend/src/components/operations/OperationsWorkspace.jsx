@@ -83,6 +83,8 @@ function OperationsFilters({
 function OperationRow({ item, onOpenWorkorder }) {
   const attentionReasons = Array.isArray(item.attentionReasons) ? item.attentionReasons : [];
   const overdue = attentionReasons.includes("overdue");
+  const attentionTone = ["overdue", "revision_requested", "parts", "office_help", "missing_info"]
+    .find((reason) => attentionReasons.includes(reason)) || "";
   const activity = formatActivity(item.lastActivityAt || item.createdAt);
   const created = formatActivity(item.createdAt);
   const unit = item.asset?.unitNo || item.asset?.name || "No unit";
@@ -110,7 +112,7 @@ function OperationRow({ item, onOpenWorkorder }) {
 
   return (
     <div
-      className={`operations-row${item.unread ? " is-unread" : ""}${overdue ? " is-overdue" : ""}${interactive ? " is-interactive" : ""}`}
+      className={`operations-row lifecycle-tone-${item.lifecycle || "unknown"}${item.unread ? " is-unread" : ""}${overdue ? " is-overdue" : ""}${attentionTone ? ` has-attention attention-tone-${attentionTone}` : ""}${interactive ? " is-interactive" : ""}`}
       role="row"
       tabIndex={interactive ? 0 : undefined}
       onClick={open}
