@@ -1,4 +1,4 @@
-# Workorder Generator
+# Owl Workorders
 
 Multi-user workorder application for office, mechanic, surveillance, and admin workflows, with modular external integrations and a physical batch-print generator.
 
@@ -14,7 +14,9 @@ server.js       HTTP server plus legacy print/workorder routes
 templates/      Workorder background assets
 ```
 
-See `docs/ARCHITECTURE.md` and `src/server/db/README.md` before adding new tables or route families.
+Start with `docs/PROJECT_REPORT.md`, `docs/ARCHITECTURE.md`,
+`docs/FRONTEND_OWNERSHIP.md`, and `src/server/db/README.md` before adding new
+features, tables, or route families.
 
 ## Integrations
 
@@ -132,11 +134,21 @@ npm run verify
 
 `verify` checks architectural boundaries, runs the unit suites, validates server syntax, and builds the frontend.
 
+Shared route/layout releases also run:
+
+```bash
+node scripts/visual/css-ownership-viewport.js
+npm run test:role-workflow
+```
+
+The role workflow is destructive and must run only against disposable local or
+staging data configured through `docs/QA_ACCOUNTS.md`.
+
 ## Samsara Flow
 
-1. Office/admin clicks `Sync Samsara` in the Vehicle section.
+1. An Admin connects Samsara and runs or reviews sync from **Settings > Integrations**.
 2. Backend fetches trucks and trailers from Samsara and stores normalized asset records in Postgres.
-3. Mechanic types a unit, truck name, VIN, or plate.
+3. A workorder creator types a unit, truck name, VIN, or plate.
 4. App searches Postgres and shows matching assets.
 5. Selecting an asset fills unit, type, company/owner, license, mileage, model, VIN, and location when Samsara has it.
 

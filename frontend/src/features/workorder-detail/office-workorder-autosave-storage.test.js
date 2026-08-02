@@ -9,6 +9,11 @@ import {
 } from "./office-workorder-autosave-storage.js";
 
 const roleRouter = readFileSync(new URL("../../app/routes/RoleRouter.jsx", import.meta.url), "utf8");
+const formController = readFileSync(new URL("../../app/routes/useRoleRouterFormController.js", import.meta.url), "utf8");
+const lifecycleEffects = readFileSync(new URL("../../app/routes/useRoleRouterLifecycleEffects.js", import.meta.url), "utf8");
+const officeActions = readFileSync(new URL("../office/useOfficeWorkorderActions.js", import.meta.url), "utf8");
+const createLocationController = readFileSync(new URL("../create-workorder/useCreateLocationController.js", import.meta.url), "utf8");
+const createLocationModel = readFileSync(new URL("../create-workorder/create-location-controller-model.js", import.meta.url), "utf8");
 
 function memoryStorage() {
   const values = new Map();
@@ -41,22 +46,22 @@ test("confirmed saves clear only the scoped backup", () => {
 });
 
 test("Office parts autosave uses the narrow persistence endpoint and reloads server truth", () => {
-  assert.match(roleRouter, /\/api\/office\/workorders\/\$\{workorderId\}\/used-parts/);
-  assert.match(roleRouter, /body: JSON\.stringify\(\{ parts \}\)/);
-  assert.match(roleRouter, /const detail = await api\(`\/api\/office\/workorders\/\$\{result\.workorder\.id\}`\)/);
-  assert.match(roleRouter, /savedParts = detail\.workorder\.formData\?\.parts \|\| \[\]/);
-  assert.doesNotMatch(roleRouter, /formData:\s*\{\s*\.\.\.\(activeWorkorder\.workorder\.formData \|\| \{\}\),\s*parts,/s);
+  assert.match(officeActions, /workorderPath\(workorderId, "\/used-parts"\)/);
+  assert.match(officeActions, /body: JSON\.stringify\(\{ parts \}\)/);
+  assert.match(officeActions, /reloadOfficeWorkorder\(result\.workorder\.id/);
+  assert.match(officeActions, /savedParts = detail\.workorder\.formData\?\.parts \|\| \[\]/);
+  assert.doesNotMatch(officeActions, /formData:\s*\{\s*\.\.\.\(activeWorkorder\.workorder\.formData \|\| \{\}\),\s*parts,/s);
+  assert.match(roleRouter, /useOfficeWorkorderActions/);
 });
 
 test("detail location and template changes enter the shared autosave queue", () => {
-  assert.match(
-    roleRouter,
-    /function selectOfficeLocation[\s\S]*const locationPatch = \{[\s\S]*locationId: selected\.location\.id[\s\S]*templateFieldsForCreateLocation[\s\S]*stageOfficeWorkorderAutosave\(locationPatch\)/,
-  );
+  assert.match(createLocationModel, /function createLocationSelectionPatch[\s\S]*locationId: selectedLocation\.location\.id[\s\S]*templateFieldsForCreateLocation/);
+  assert.match(createLocationController, /onSelectionPatch\(patch\)/);
+  assert.match(roleRouter, /onSelectionPatch: stageOfficeWorkorderAutosave/);
 });
 
 test("real-time refresh cannot overwrite debounced part edits", () => {
-  assert.match(roleRouter, /function updateActiveUsedParts\(parts\) \{\s*setUsedPartsDirty\(true\)/);
-  assert.match(roleRouter, /paused: usedPartsDirty \|\| \(/);
-  assert.match(roleRouter, /setUsedPartsDirty\(false\);\s*\}/);
+  assert.match(formController, /function updateActiveUsedParts\(parts\) \{\s*setUsedPartsDirty\(true\)/);
+  assert.match(lifecycleEffects, /paused: usedPartsDirty \|\| \(/);
+  assert.match(formController, /setUsedPartsDirty\(false\);\s*\}/);
 });

@@ -354,3 +354,19 @@
     display: flex !important;
   }
 }
+.mechanic-home {
+  align-content: start;
+  gap: 18px;
+  padding: 28px max(24px, calc((100vw - var(--workspace-max-width)) / 2));
+}
+
+@media (max-width: 700px) {
+  .mechanic-home {
+    gap: 12px;
+    max-width: 100%;
+    overflow-x: clip;
+    overscroll-behavior-x: none;
+    padding: 16px 12px 28px;
+    touch-action: pan-y;
+  }
+}

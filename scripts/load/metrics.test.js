@@ -23,5 +23,23 @@ test("metrics compute percentiles, throughput, and threshold failures", () => {
     p99Ms: 200,
     errorRate: 0.1,
     minRequestsPerSecond: 2,
-  }).length, 2);
+    endpointP95Ms: { "GET dashboard": 50 },
+  }).length, 3);
+});
+
+test("route budgets are evaluated independently from aggregate thresholds", () => {
+  const metrics = new Metrics();
+  metrics.record({ role: "admin", label: "GET operations page", durationMs: 40, ok: true, status: 200 });
+  metrics.record({ role: "surveillance", label: "GET surveillance dashboard", durationMs: 220, ok: true, status: 200 });
+  const failures = evaluateThresholds(metrics.summarize(1000), {
+    p95Ms: 500,
+    p99Ms: 500,
+    errorRate: 0,
+    minRequestsPerSecond: 0,
+    endpointP95Ms: {
+      "GET operations page": 100,
+      "GET surveillance dashboard": 200,
+    },
+  });
+  assert.deepEqual(failures, ["surveillance GET surveillance dashboard p95 220ms exceeded 200ms."]);
 });

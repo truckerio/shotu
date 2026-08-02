@@ -6,9 +6,11 @@ import { api } from "../../../lib/api.js";
 import { integrationProvider } from "./provider-registry.js";
 import { SamsaraIntegrationCard } from "./SamsaraIntegrationCard.jsx";
 import { IntegrationClientsCard } from "./IntegrationClientsCard.jsx";
+import { OdooIntegrationCard } from "./OdooIntegrationCard.jsx";
 import "./integrations.css";
 
 const samsaraProvider = integrationProvider("samsara");
+const odooProvider = integrationProvider("odoo");
 
 function callbackResult() {
   const params = new URLSearchParams(window.location.search);
@@ -27,6 +29,7 @@ function callbackResult() {
 
 export function IntegrationsSettings() {
   const [status, setStatus] = useState(null);
+  const [odooStatus, setOdooStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState("");
   const [notice, setNotice] = useState(() => callbackResult() || { message: "", error: "", target: "" });
@@ -37,11 +40,13 @@ export function IntegrationsSettings() {
   const loadStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const [result, clientResult] = await Promise.all([
+      const [result, odooResult, clientResult] = await Promise.all([
         api("/api/integrations/samsara/status"),
+        api("/api/integrations/odoo/status"),
         api("/api/integrations/clients"),
       ]);
       setStatus(result);
+      setOdooStatus(odooResult);
       setClients(clientResult.clients || []);
     } catch (error) {
       setNotice({ message: "", error: error.message, target: "samsara" });
@@ -159,6 +164,11 @@ export function IntegrationsSettings() {
             onTest={() => runAction("test", "/api/integrations/samsara/test", "Samsara connection verified.")}
             onSync={() => runAction("sync", "/api/integrations/samsara/sync", "Samsara sync completed.")}
             onDisconnect={() => setConfirmDisconnect(true)}
+          />
+          <OdooIntegrationCard
+            provider={odooProvider}
+            status={odooStatus}
+            onStatusChange={setOdooStatus}
           />
           <IntegrationClientsCard
             clients={clients}

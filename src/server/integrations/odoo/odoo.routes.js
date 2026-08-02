@@ -10,7 +10,11 @@ import {
   listOdooWorkorders,
   recordOdooResultAtomic,
 } from "./odoo.repo.js";
-import { odooListSchema, odooResultSchema } from "./odoo.schemas.js";
+import {
+  odooListSchema,
+  odooResultSchema,
+  odooWorkorderIdSchema,
+} from "./odoo.schemas.js";
 
 const BASE = "/api/integrations/odoo/v1";
 
@@ -51,7 +55,7 @@ export async function handleOdooIntegrationApi(req, res, url, helpers) {
     requireIntegrationScope(integrationContext, INTEGRATION_SCOPES.WORKORDERS_READ);
     sendJson(res, 200, await getOdooWorkorder({
       companyId: integrationContext.companyId,
-      workorderId: detailId,
+      workorderId: parseWithSchema(odooWorkorderIdSchema, detailId),
     }));
     return true;
   }
@@ -70,7 +74,7 @@ export async function handleOdooIntegrationApi(req, res, url, helpers) {
     const result = await recordOdooResultAtomic({
       companyId: integrationContext.companyId,
       integrationClientId: integrationContext.integrationClient.id,
-      workorderId: resultId,
+      workorderId: parseWithSchema(odooWorkorderIdSchema, resultId),
       input,
       idempotencyKey,
       requestId: req.requestId,

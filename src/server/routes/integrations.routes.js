@@ -7,8 +7,31 @@ import {
   createCompanyIntegrationClient,
   revokeCompanyIntegrationClient,
 } from "../integrations/core/integration-clients.service.js";
+import {
+  configureOdoo,
+  discoverOdooLocations,
+  listOdooLocationMappings,
+  odooAdminStatus,
+  setOdooLocationMapping,
+  syncOdooPartsAndInventory,
+  testOdoo,
+} from "../integrations/odoo/odoo.admin.service.js";
+import {
+  odooConfigurationSchema,
+  odooLocationMappingSchema,
+} from "../integrations/odoo/odoo.admin.schemas.js";
 
 const samsara = getIntegrationProvider("samsara");
+
+function validated(schema, value) {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const error = new Error(result.error.issues[0]?.message || "Invalid integration settings.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return result.data;
+}
 
 function selectedCompanyId(url, requestContext) {
   const companyId = url.searchParams.get("companyId") || [...(requestContext.companyIds || [])][0];
@@ -65,6 +88,55 @@ export async function handleIntegrationsApi(req, res, url, helpers) {
   if (req.method === "DELETE" && url.pathname === "/api/integrations/samsara") {
     const companyId = selectedCompanyId(url, requestContext);
     sendJson(res, 200, await samsara.disconnect(companyId));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/odoo/status") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await odooAdminStatus(companyId));
+    return true;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/integrations/odoo/configuration") {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooConfigurationSchema, await helpers.readBody(req));
+    sendJson(res, 200, await configureOdoo(companyId, input));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/integrations/odoo/test") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await testOdoo(companyId));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/integrations/odoo/discover-locations") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await discoverOdooLocations(companyId));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/odoo/locations") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await listOdooLocationMappings(companyId));
+    return true;
+  }
+
+  const odooLocationMatch = /^\/api\/integrations\/odoo\/locations\/([^/]+)\/mapping$/.exec(url.pathname);
+  if (req.method === "PUT" && odooLocationMatch) {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooLocationMappingSchema, await helpers.readBody(req));
+    sendJson(res, 200, await setOdooLocationMapping(
+      companyId,
+      decodeURIComponent(odooLocationMatch[1]),
+      input,
+    ));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/integrations/odoo/sync") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await syncOdooPartsAndInventory(companyId));
     return true;
   }
 

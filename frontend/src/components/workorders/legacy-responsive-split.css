@@ -1,0 +1,96 @@
+/* Tablet and compact-desktop split-layout behavior. */
+
+@media (max-width: 1180px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .split-layout.generator-layout,
+  .split-layout.generator-layout.has-preview,
+  .split-layout.generator-layout:not(.has-preview) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generator-layout .control-panel,
+  .generator-layout .preview-panel {
+    grid-column: 1;
+  }
+
+  .generator-layout .preview-panel {
+    max-height: 1800px;
+    transition:
+      max-height var(--motion-surface) var(--motion-ease-standard),
+      opacity var(--motion-control) var(--motion-ease-standard),
+      padding var(--motion-surface) var(--motion-ease-standard),
+      border-color var(--motion-control) var(--motion-ease-standard),
+      visibility 0s var(--motion-surface);
+  }
+
+  .generator-layout:not(.has-preview) .preview-panel {
+    border-width: 0;
+    max-height: 0;
+    min-height: 0;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+
+  .split-layout.workorder-detail-layout,
+  .split-layout.workorder-detail-layout.has-preview {
+    display: grid;
+    height: 100%;
+    grid-template-columns: minmax(0, 620px);
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workorder-detail-layout .control-panel,
+  .workorder-detail-layout.has-preview .control-panel {
+    grid-template-columns: minmax(0, 1fr);
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .workorder-detail-layout .preview-panel,
+  .workorder-detail-layout.has-preview .preview-panel {
+    display: none;
+  }
+
+  .detail-pane-resizer {
+    display: none;
+  }
+
+  .control-panel {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    position: static;
+  }
+
+  .preview-panel {
+    max-height: none;
+    min-height: 0;
+    position: static;
+  }
+
+  .preview-grid {
+    max-height: none;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1050px) {
+  .prototype {
+    padding: 22px;
+  }
+
+  .split-layout {
+    gap: 20px;
+  }
+
+  .control-panel {
+    grid-template-columns: 1fr;
+  }
+
+}

@@ -1,0 +1,18 @@
+/* Phone detail action and compact field layout. */
+
+@media (max-width: 700px) {
+  .detail-context-actions {
+    gap: 5px !important;
+  }
+
+  .mobile-preview-pane-toggle {
+    border: 0;
+    height: 44px;
+    width: 100%;
+  }
+
+  .two-col,
+  .part-row {
+    grid-template-columns: 1fr;
+  }
+}

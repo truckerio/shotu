@@ -1,0 +1,130 @@
+.print-command-menu {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgb(10 13 18 / 16%);
+  display: grid;
+  left: 0;
+  margin-top: 6px;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+}
+
+.print-command-menu button {
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf0f3;
+  color: #181d27;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.print-command-menu button:last-child {
+  border-bottom: 0;
+}
+
+.print-command-menu button:hover,
+.print-command-menu button:focus {
+  background: #f5f8ff;
+  outline: none;
+}
+
+.print-command-menu .print-command-run {
+  background: #f8fafc;
+  border-bottom-color: #d5d7da;
+}
+
+.print-command-menu .print-command-run span {
+  color: #175cd3;
+}
+
+.print-batch-settings {
+  background: #fff;
+  border-bottom: 1px solid #edf0f3;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 10px 12px 12px;
+}
+
+.print-batch-settings > div {
+  display: grid;
+  gap: 2px;
+  grid-column: 1 / -1;
+}
+
+.print-batch-settings label {
+  color: #535862;
+  display: grid;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  gap: 4px;
+}
+
+.print-batch-settings input {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 6px;
+  color: #181d27;
+  font: inherit;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-medium);
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.print-batch-settings input:focus {
+  border-color: #84caff;
+  box-shadow: 0 0 0 3px rgb(46 144 250 / 12%);
+  outline: 0;
+}
+
+.print-command-menu span {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.print-command-menu small {
+  color: #535862;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-medium);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.range-card {
+  background: rgb(255 255 255 / 86%);
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(10 13 18 / 4%);
+  color: #181d27;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.range-card span {
+  color: #535862;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+}
+
+.range-card strong {
+  font-size: var(--text-heading);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.range-card p {
+  color: #535862;
+  font-size: var(--text-secondary);
+}

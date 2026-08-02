@@ -1,23 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { HttpResponseError } from "./http-client.js";
 import { Metrics } from "./metrics.js";
-
-const READ_ROUTES = {
-  admin: [
-    { label: "GET /api/me", path: "/api/me" },
-    { label: "GET operations summary", path: "/api/admin/operations/summary" },
-    { label: "GET operations page", path: "/api/admin/operations/workorders?page=1&pageSize=25" },
-    { label: "GET locations", path: "/api/admin/locations" },
-  ],
-  office: [
-    { label: "GET /api/me", path: "/api/me" },
-    { label: "GET office dashboard", path: "/api/office/dashboard" },
-  ],
-  mechanic: [
-    { label: "GET /api/me", path: "/api/me" },
-    { label: "GET mechanic dashboard", path: "/api/mechanic/dashboard" },
-  ],
-};
+import { READ_ROUTES } from "./route-catalog.js";
 
 function errorStatus(error) {
   return error instanceof HttpResponseError ? error.status : 0;

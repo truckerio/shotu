@@ -4,7 +4,11 @@ This repository is a modular monolith: one deployable Node service, one React ap
 
 Frontend feature ownership and extension rules are defined in
 [`FRONTEND_OWNERSHIP.md`](./FRONTEND_OWNERSHIP.md). Controlled role-test account
-provisioning is documented in [`QA_ACCOUNTS.md`](./QA_ACCOUNTS.md).
+provisioning is documented in [`QA_ACCOUNTS.md`](./QA_ACCOUNTS.md). Cleanup
+progress and remaining structural controls are tracked in
+[`ENGINEERING_RISK_REGISTER.md`](./ENGINEERING_RISK_REGISTER.md). Repeatable
+Chino-scale release measurements are defined in
+[`PERFORMANCE_BASELINE.md`](./PERFORMANCE_BASELINE.md).
 
 ## Request Flow
 
@@ -182,8 +186,23 @@ workorder-detail layout primitives so create and detail screens do not drift:
 - `CreateWorkorderShell.jsx` owns the create header, summary strip, section
   navigation, draft indicator, preview toggle, and mobile dock.
 - `CreateWorkorderForm.jsx` remains the shared operational form content.
-- `RoleRouter.jsx` supplies authenticated actor scope, location/template data,
-  draft persistence, submit handlers, and role capabilities.
+- `useCreateLocationController.js` owns location/template loading, retry state,
+  selected-location reconciliation, and the location-scoped mechanic list.
+- `useWorkorderDraftLifecycle.js` owns draft persistence and restoration;
+  `useVehicleLookupController.js` owns asset lookup and location refresh.
+- `useWorkorderPrintController.js` owns browser printing, archived PDF state,
+  and print-status feedback.
+- `RoleRouter.jsx` supplies authenticated actor scope and coordinates the
+  extracted route controllers. `RoleWorkspaceOutlet.jsx` owns page composition;
+  command, form, detail-route, view-model, and lifecycle modules own their
+  respective behavior.
+
+`RoleRouter.jsx` is a coordinator, not a feature owner. Keep it below 500 lines.
+Route navigation, role capabilities, detail loading, create commands, form
+commands, lifecycle effects, and workspace composition each have the dedicated
+owners listed in [`FRONTEND_OWNERSHIP.md`](./FRONTEND_OWNERSHIP.md). A new route
+behavior belongs in one of those owners rather than another conditional block
+in the coordinator.
 
 Role differences must stay capability-driven: Admin and Manager can assign
 mechanics and use the draft lifecycle; Mechanic create omits Assignment,
@@ -274,8 +293,8 @@ The frontend reflects the same ownership:
 - `features/create-workorder/` owns the shared create page; it does not own
   operational workorder truth after submit.
 - `features/mechanic/progress/` owns assigned-work autosave and local recovery.
-- `app/routes/RoleRouter.jsx` composes these features and owns role/URL
-  transitions only.
+- `app/routes/RoleRouter.jsx` composes these features and coordinates the
+  dedicated role/URL navigation owner.
 
 ## Adding A Feature
 
@@ -286,6 +305,35 @@ The frontend reflects the same ownership:
 5. Add feature-local UI and focused tests, then run `npm run verify`.
 
 Do not create a second workorder, user, location, template, or asset table for a new screen. Extend the current owner unless the data has a genuinely different lifecycle.
+
+## Release Verification
+
+The release gates intentionally cover different failure classes:
+
+```sh
+npm run verify
+node scripts/visual/css-ownership-viewport.js
+npm run test:role-workflow
+npm run performance:baseline:db
+npm run performance:baseline:http
+npm run performance:baseline:mobile
+```
+
+- `npm run verify` owns structure, focused contracts, server syntax, and the
+  production frontend build.
+- The viewport harness owns layout containment at phone, tablet, 1080px, and
+  1920 x 1080. It is required after changing shared layout or CSS ownership.
+- The role workflow owns runtime composition and authorization across Admin,
+  Office, Mechanic, and Surveillance. It signs roles in sequentially so a test
+  does not manufacture login-rate-limit failures through simultaneous password
+  attempts.
+- Performance gates own local/staging evidence at Chino-scale volume. They are
+  not substitutes for production latency, pool, CPU, memory, and error-rate
+  telemetry.
+
+A successful build cannot detect every missing runtime identifier in a lazily
+executed route. Shared route extraction therefore requires both focused tests
+and the complete browser workflow before release.
 
 Blank print batches and operational workorder creation both reserve serials through
 `repositories/serial-counters.repo.js`. Browser input and the local print ledger

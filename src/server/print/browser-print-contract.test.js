@@ -113,17 +113,19 @@ test("ten serial batch keeps ten workorders while counting continuation pages in
 
 test("frontend browser print contract does not depend on enumerating printers", async () => {
   const routeSource = await readFile(new URL("../../../frontend/src/app/routes/RoleRouter.jsx", import.meta.url), "utf8");
+  const printControllerSource = await readFile(new URL("../../../frontend/src/features/create-workorder/useWorkorderPrintController.js", import.meta.url), "utf8");
   const createSource = await readFile(new URL("../../../frontend/src/features/create-workorder/CreateWorkorderPage.jsx", import.meta.url), "utf8");
   const detailSource = await readFile(new URL("../../../frontend/src/features/workorder-detail/WorkorderDetailPage.jsx", import.meta.url), "utf8");
   const previewSource = await readFile(new URL("../../../frontend/src/components/preview/PreviewPane.jsx", import.meta.url), "utf8");
 
-  assert.match(routeSource, /window\.print\(\)/);
+  assert.match(routeSource, /useWorkorderPrintController/);
+  assert.match(printControllerSource, /printBrowser = \(\) => window\.print\(\)/);
   assert.match(`${createSource}\n${detailSource}`, /BrowserPrintDocument/);
   assert.ok(
-    routeSource.indexOf("await openBrowserPrintDialog") < routeSource.indexOf('await api("/api/print"'),
+    printControllerSource.indexOf("await openPrintDialog") < printControllerSource.indexOf('await request("/api/print"'),
     "the browser print dialog must open before the slower archived PDF request",
   );
-  assert.doesNotMatch(`${routeSource}\n${createSource}\n${detailSource}`, /\/api\/printers|printerName|refreshPrinters/);
+  assert.doesNotMatch(`${routeSource}\n${printControllerSource}\n${createSource}\n${detailSource}`, /\/api\/printers|printerName|refreshPrinters/);
   assert.doesNotMatch(previewSource, /Use printer|Save PDF only|onSelectPrintDestination/);
   assert.match(previewSource, /Each workorder gets a unique serial/);
 });

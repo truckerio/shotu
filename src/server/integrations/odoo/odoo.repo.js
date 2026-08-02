@@ -40,6 +40,18 @@ function odooStatusCondition(status) {
   return "wo.status = 'odoo_entered' and oe.status = 'entered'";
 }
 
+export function odooPartsFromForm(form = {}) {
+  if (!Array.isArray(form.parts)) return [];
+  return form.parts
+    .filter((part) => part && (part.partNo || part.qty || part.repairOrder))
+    .map((part) => ({
+      partNo: String(part.partNo || ""),
+      qty: String(part.qty || ""),
+      uomCode: String(part.uomCode || ""),
+      repairOrder: String(part.repairOrder || ""),
+    }));
+}
+
 export async function listOdooWorkorders({ companyId, status, limit, cursor }) {
   const tenantId = requireCompanyId(companyId);
   const decoded = decodeOdooCursor(cursor);
@@ -165,14 +177,7 @@ export async function getOdooWorkorder({ companyId, workorderId }) {
     location: row.location,
     asset: row.asset,
     mechanics: row.mechanics || [],
-    parts: Array.isArray(form.parts)
-      ? form.parts.map((part) => ({
-        partNo: String(part.partNo || ""),
-        qty: String(part.qty || ""),
-        uomCode: String(part.uomCode || ""),
-        repairOrder: String(part.repairOrder || ""),
-      }))
-      : [],
+    parts: odooPartsFromForm(form),
     closedAt: row.closed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

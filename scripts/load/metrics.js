@@ -83,5 +83,12 @@ export function evaluateThresholds(summary, thresholds) {
       `throughput ${round(overall.requestsPerSecond)} req/s was below ${thresholds.minRequestsPerSecond} req/s.`,
     );
   }
+  for (const route of summary.routes) {
+    const label = route.name.replace(/^[^ ]+ /, "");
+    const budget = thresholds.endpointP95Ms?.[label];
+    if (budget !== undefined && route.p95Ms > budget) {
+      failures.push(`${route.name} p95 ${round(route.p95Ms)}ms exceeded ${budget}ms.`);
+    }
+  }
   return failures;
 }

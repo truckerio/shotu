@@ -6,12 +6,16 @@ records.
 
 ## What it covers
 
-- Authenticates one cookie session for each selected `admin`, `office`, and
-  `mechanic` account.
+- Authenticates one cookie session for each selected `admin`, `office`,
+  `mechanic`, and `surveillance` account.
 - Exercises only safe role-scoped reads during the sustained load phase:
   `/api/me`, role dashboards, admin operations, and admin locations.
+- Exercises admin pagination, lifecycle/attention filters, search, and deep-page
+  reads in addition to every role dashboard.
 - Reports total and per-route throughput, p50, p95, p99, maximum latency, and
-  unexpected error rate.
+  unexpected error rate to `.tmp/performance/http-baseline.json` by default.
+- Enforces a separate p95 latency budget for every route in
+  `route-catalog.js`, not only one aggregate budget.
 - Exits non-zero when a configured production threshold fails.
 - Optionally verifies disposable draft writes, independent concurrent updates,
   and optimistic locking. The probe expects exactly one update winner and
@@ -42,6 +46,8 @@ export LOAD_OFFICE_IDENTIFIER='office'
 export LOAD_OFFICE_PASSWORD='...'
 export LOAD_MECHANIC_IDENTIFIER='mechanic1'
 export LOAD_MECHANIC_PASSWORD='...'
+export LOAD_SURVEILLANCE_IDENTIFIER='surveillance'
+export LOAD_SURVEILLANCE_PASSWORD='...'
 ```
 
 Optional read-load settings:
@@ -56,6 +62,8 @@ Optional read-load settings:
 | `LOAD_MAX_P99_MS` | `1500` | Maximum aggregate p99 |
 | `LOAD_MAX_ERROR_RATE` | `0.01` | Maximum unexpected error fraction |
 | `LOAD_MIN_REQUESTS_PER_SECOND` | `1` | Minimum aggregate throughput |
+| `LOAD_ENDPOINT_BUDGET_SCALE` | `1` | Multiplier for every committed endpoint p95 budget |
+| `LOAD_REPORT_PATH` | `.tmp/performance/http-baseline.json` | Ignored sanitized JSON report |
 
 ## Validate without network traffic
 
@@ -72,6 +80,9 @@ node --test scripts/load/*.test.js
 ```sh
 node scripts/load/run.js
 ```
+
+The complete Chino-scale procedure, PostgreSQL plan capture, and mobile browser
+probe are documented in `docs/PERFORMANCE_BASELINE.md`.
 
 Start conservatively against production, then increase
 `LOAD_CONCURRENCY_PER_ROLE` in deliberate steps while watching application and

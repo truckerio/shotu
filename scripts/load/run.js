@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import process from "node:process";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { parseLoadConfig, publicConfig } from "./config.js";
 import { authenticateRole, LoadHttpClient } from "./http-client.js";
 import { displaySummary, evaluateThresholds } from "./metrics.js";
@@ -15,6 +17,13 @@ Usage:
 
 The runner reads configuration and credentials from environment variables.
 See scripts/load/README.md for the complete contract.`);
+}
+
+async function writeReport(path, report) {
+  const absolute = resolve(path);
+  await mkdir(dirname(absolute), { recursive: true });
+  await writeFile(absolute, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+  return absolute;
 }
 
 async function main() {
@@ -78,6 +87,17 @@ async function main() {
     const readSummary = readResult.metrics.summarize(readResult.durationMs);
     displaySummary(readSummary);
     const failures = evaluateThresholds(readSummary, config.thresholds);
+    const report = {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      targetOrigin: config.baseUrl.origin,
+      roles: config.roles,
+      durationMs: Math.round(readResult.durationMs),
+      concurrencyPerRole: config.concurrencyPerRole,
+      thresholds: config.thresholds,
+      summary: readSummary,
+      failures,
+    };
 
     if (config.draft.enabled && !controller.signal.aborted) {
       console.log(
@@ -101,6 +121,9 @@ async function main() {
     }
 
     if (controller.signal.aborted || interrupted) failures.push("Run was interrupted.");
+    report.failures = failures;
+    const reportPath = await writeReport(config.reportPath, report);
+    console.log(`Sanitized report written to ${reportPath}.`);
     if (failures.length) {
       console.error("PRODUCTION GATE FAILED");
       for (const failure of failures) console.error(`- ${failure}`);

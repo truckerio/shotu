@@ -29,6 +29,19 @@ export class CookieJar {
     return [...this.#cookies].map(([name, value]) => `${name}=${value}`).join("; ");
   }
 
+  browserCookies(baseUrl) {
+    const url = new URL(baseUrl);
+    return [...this.#cookies].map(([name, value]) => ({
+      name,
+      value,
+      domain: url.hostname,
+      path: "/",
+      httpOnly: true,
+      secure: url.protocol === "https:",
+      sameSite: "Lax",
+    }));
+  }
+
   get size() {
     return this.#cookies.size;
   }

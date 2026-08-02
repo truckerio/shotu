@@ -33,7 +33,7 @@ change with the application.
 
 | Integration | Direction | Primary purpose | Contract status |
 | --- | --- | --- | --- |
-| Odoo | Outbound workorders, inbound results | Create or reconcile service orders after office approval | Versioned external API documented here |
+| Odoo | Bidirectional | Create or reconcile service orders; import parts master and mapped-location inventory | External service API plus Admin-managed Odoo.sh adapter |
 | Samsara | Inbound assets | Synchronize trucks and trailers into PostgreSQL for local search | Admin-managed provider integration |
 | NHTSA vPIC | On-demand lookup | Decode VIN data | Internal provider adapter |
 
@@ -62,3 +62,17 @@ machine-readable request and response contract. When behavior changes, update
 the implementation, tests, Markdown, OpenAPI, and formatted handoff together.
 Never document an internal route as supported merely because it currently
 exists.
+
+## Odoo.sh location ownership
+
+Odoo stock-location names are not treated as application identity. An Admin
+connects Odoo.sh in **Settings > Integrations**, refreshes Odoo internal
+locations, and explicitly maps each immutable Odoo location ID to an active app
+location. New Odoo locations remain **Unmatched** until reviewed; irrelevant
+locations can be marked **Ignored**. Parts master data may be refreshed
+company-wide, but location inventory is imported only for confirmed mappings.
+
+The Admin connection and mapping routes are first-party browser contracts and
+are intentionally excluded from the external Odoo OpenAPI document. The
+versioned `/api/integrations/odoo/v1` API remains the supported contract for an
+external Odoo connector that reads completed workorders and writes results.

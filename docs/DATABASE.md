@@ -37,6 +37,8 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Attention | `workorder_attention_state`, `workorder_attention_events` | `repositories/workorder-attention.repo.js` |
 | Parts and stock | catalog, inventory, request, allocation, and UoM tables | `repositories/part-requests.repo.js` |
 | Odoo handoff | `odoo_entry_status` | workorder repository and surveillance service |
+| Odoo stock-location identity | `odoo_inventory_locations` | `integrations/odoo/odoo.admin.repo.js` |
+| Odoo product identity | `odoo_product_mappings` | `integrations/odoo/odoo.admin.repo.js` |
 | Provider connection | `integration_accounts` | `repositories/integrations.repo.js` |
 | Provider sync history | `integration_sync_runs` | integration repository |
 | Machine identity | `integration_clients` | `integrations/core/integration-clients.repo.js` |
@@ -165,6 +167,11 @@ imports that bypass application schemas.
 - Provider jobs use PostgreSQL leases, attempts, retry scheduling, and dead-letter state.
 - Incoming mutations use persistent idempotency records.
 - External identities use `integration_mappings`; display labels are not durable identifiers.
+- Odoo inventory locations use immutable external IDs and remain `unmatched`
+  until an Admin maps them to an application location or explicitly ignores
+  them. A display name never creates a location mapping.
+- Odoo product identity is stored independently in `odoo_product_mappings` so
+  mutable SKU or barcode text cannot create duplicate catalog memory.
 - Domain changes and provider delivery are decoupled through `integration_outbox_events`.
 - Webhook receipts are deduplicated before processing.
 - Environment Samsara token fallback is limited to the initial default company.
@@ -205,6 +212,8 @@ erDiagram
     COMPANIES ||--o{ INTEGRATION_JOBS : queues
     COMPANIES ||--o{ INTEGRATION_MAPPINGS : maps
     COMPANIES ||--o{ INTEGRATION_OUTBOX_EVENTS : publishes
+    COMPANIES ||--o{ ODOO_INVENTORY_LOCATIONS : discovers
+    COMPANIES ||--o{ ODOO_PRODUCT_MAPPINGS : maps
     COMPANIES ||--o{ PROOFREADING_DICTIONARY_TERMS : scopes
     COMPANIES ||--o{ PROOFREADING_DICTIONARY_EVENTS : audits
 
@@ -217,6 +226,7 @@ erDiagram
     LOCATIONS ||--o{ USER_INVITATIONS : receives
 
     LOCATIONS ||--o{ OPERATIONAL_WORKORDERS : services
+    LOCATIONS o|--o{ ODOO_INVENTORY_LOCATIONS : maps
     ASSETS o|--o{ OPERATIONAL_WORKORDERS : identifies
     OPERATIONAL_WORKORDERS ||--o{ WORKORDER_MECHANIC_ASSIGNMENTS : staffs
     USER_PROFILES ||--o{ WORKORDER_MECHANIC_ASSIGNMENTS : works
@@ -232,6 +242,7 @@ erDiagram
 
     CHAT_MESSAGES ||--o| CHAT_MESSAGE_ATTACHMENTS : attaches
     PARTS_CATALOG o|--o{ INVENTORY_ITEMS : identifies
+    PARTS_CATALOG ||--o{ ODOO_PRODUCT_MAPPINGS : maps
     PARTS_CATALOG o|--o{ WORKORDER_PART_REQUESTS : identifies
     PARTS_CATALOG ||--o{ PART_UOM_CONVERSIONS : converts
     UNITS_OF_MEASURE ||--o{ PART_UOM_CONVERSIONS : maps

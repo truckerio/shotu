@@ -12,6 +12,7 @@ function matchesMedia(query) {
 export function useWorkorderPreviewController({
   activeWorkorder,
   actorRole,
+  closePrintMenu = () => {},
   detailSection,
   detailStatus,
   effectiveCopies,
@@ -27,7 +28,6 @@ export function useWorkorderPreviewController({
   const [isPhone, setIsPhone] = useState(() => matchesMedia(PHONE_QUERY));
   const [isCompact, setIsCompact] = useState(() => matchesMedia(COMPACT_QUERY));
   const [supportingView, setSupportingView] = useState("preview");
-  const [printMenuOpen, setPrintMenuOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -85,12 +85,12 @@ export function useWorkorderPreviewController({
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         setPreviewPanelOpen(false);
-        setPrintMenuOpen(false);
+        closePrintMenu();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewPanelOpen]);
+  }, [closePrintMenu, previewPanelOpen]);
 
   const jumpToPreview = useCallback(() => {
     if (isWorkorderDetail && isCompact) {
@@ -105,10 +105,10 @@ export function useWorkorderPreviewController({
       return;
     }
     setPreviewPanelOpen((open) => {
-      if (open) setPrintMenuOpen(false);
+      if (open) closePrintMenu();
       return !open;
     });
-  }, [isCompact, isPhone, isWorkorderDetail, previewPanelOpen, supportingView]);
+  }, [closePrintMenu, isCompact, isPhone, isWorkorderDetail, previewPanelOpen, supportingView]);
 
   const toggleWorkorderTools = useCallback(() => {
     if (isCompact) {
@@ -116,8 +116,8 @@ export function useWorkorderPreviewController({
       return;
     }
     setPreviewPanelOpen((open) => !open);
-    setPrintMenuOpen(false);
-  }, [isCompact, jumpToPreview]);
+    closePrintMenu();
+  }, [closePrintMenu, isCompact, jumpToPreview]);
 
   const selectDetailSection = useCallback((section) => {
     const workorderId = activeWorkorder?.workorder?.id;
@@ -149,11 +149,11 @@ export function useWorkorderPreviewController({
   ]);
 
   const openFullscreenPreview = useCallback(() => {
-    setPrintMenuOpen(false);
+    closePrintMenu();
     setFullscreenPageIndex(0);
     setFullscreenZoom(isPhone ? 0 : 1);
     setPreviewFullscreen(true);
-  }, [isPhone]);
+  }, [closePrintMenu, isPhone]);
 
   return {
     fullscreenPageIndex,
@@ -163,13 +163,11 @@ export function useWorkorderPreviewController({
     openFullscreenPreview,
     previewFullscreen,
     previewPanelOpen,
-    printMenuOpen,
     selectDetailSection,
     setFullscreenPageIndex,
     setFullscreenZoom,
     setPreviewFullscreen,
     setPreviewPanelOpen,
-    setPrintMenuOpen,
     setSupportingView,
     supportingView,
     toggleWorkorderTools,

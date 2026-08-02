@@ -6,15 +6,20 @@
 
 **API version:** v1
 
-**Document version:** 2.0
+**Document version:** 3.1
 
-**Last verified:** July 29, 2026
+**Last verified:** August 2, 2026
 
-**Status:** Implemented and locally acceptance-tested
+**Status:** Workorder API implemented and acceptance-tested. Odoo.sh master-data adapter implemented and contract-tested; live Odoo acceptance pending production credentials.
 
 ## 1. Purpose
 
-This API allows a trusted Odoo server or integration worker to:
+This integration has two independent directions:
+
+1. **Workorder handoff:** a trusted Odoo server or integration worker reads approved workorders from the versioned product API and reports the Odoo result.
+2. **Master-data import:** Workorder Generator connects to Odoo.sh and reads products, internal stock locations, and inventory balances. An Admin explicitly maps Odoo locations to application locations.
+
+The workorder API allows a trusted Odoo server or integration worker to:
 
 1. list office-approved workorders waiting for Odoo;
 2. read one integration-safe workorder payload;
@@ -272,6 +277,8 @@ GET /workorders/{workorderId}
 
 The payload intentionally excludes chat, internal email addresses, authentication identity, session data, raw provider payloads, and unrelated timeline events.
 
+Asset master-data fields may be `null` when the upstream vehicle record does not provide them. The `parts` array contains recorded part rows only; empty editor placeholders are omitted.
+
 ## 7. Record an integration result
 
 ```http
@@ -383,7 +390,7 @@ The Odoo client must accept both envelope shapes throughout API v1.
 
 | HTTP status | Meaning |
 | --- | --- |
-| `400` | Invalid cursor, JSON, query parameter, idempotency key, or result body. |
+| `400` | Invalid cursor, workorder UUID, JSON, query parameter, idempotency key, or result body. |
 | `401` | Missing, malformed, expired, revoked, or incorrect machine token. |
 | `403` | Token does not include the required scope. |
 | `404` | Workorder is absent, outside the token's company, or not eligible for exposure. |
@@ -473,7 +480,7 @@ Before creating an Odoo order, look up the product workorder UUID in Odoo. This 
 
 ## 14. Verified implementation behavior
 
-The local acceptance run verified:
+The July 29, 2026 local acceptance run verified:
 
 - unauthenticated requests return `401`;
 - a valid client lists its own pending workorders;
@@ -487,4 +494,479 @@ The local acceptance run verified:
 - audit, outbox, mapping, and idempotency records are written; and
 - revoking the machine client immediately causes subsequent requests to return `401`.
 
+The August 2, 2026 contract regression suite additionally verifies that malformed workorder UUIDs return structured `400` responses and empty part-editor rows are omitted from integration payloads.
+
 The machine-readable contract is `ODOO_INTEGRATION_TARGET.openapi.yaml`.
+
+---
+
+# Part II - Odoo.sh parts master and inventory import
+
+## 15. Architecture and ownership
+
+The master-data flow runs in the opposite direction from the workorder API:
+
+```text
+Odoo.sh
+  product.product      stock.location       stock.quant
+         |                    |                   |
+         +--------------------+-------------------+
+                              |
+                              | HTTPS + Odoo API key
+                              v
+                 Workorder Generator Odoo adapter
+                              |
+                +-------------+-------------+
+                |                           |
+                v                           v
+          parts_catalog             inventory_items
+                                     mapped locations only
+```
+
+Ownership rules:
+
+- Odoo owns product master data and provider inventory snapshots.
+- Workorder Generator owns application locations, workorder allocations, and local reservation state.
+- Odoo record IDs are immutable integration identity.
+- Names, SKUs, barcodes, and location labels are mutable display or matching data.
+- Location names are never used for automatic assignment.
+- New Odoo locations enter an Admin review queue as `unmatched`.
+
+This adapter is application-owned. Odoo engineering does not call a new public product endpoint for master data; the application reads Odoo through its external API.
+
+## 16. Odoo.sh prerequisites
+
+Create a dedicated Odoo integration user. Do not use a personal Admin account.
+
+Required connection values:
+
+| Value | Example | Source |
+| --- | --- | --- |
+| Odoo.sh URL | `https://fleet-example.odoo.com` | Production instance URL |
+| Database | `fleet-example` | Odoo instance/database name; confirm from Odoo.sh production environment |
+| Username | `workorders-integration@example.com` | Dedicated Odoo user login |
+| API key | Secret value | Generated from the dedicated user's account security settings |
+
+Required read access:
+
+- product variants and product categories;
+- units of measure;
+- internal stock locations; and
+- stock quantities and reservations.
+
+Use least privilege. The integration currently performs read operations only. Validate Odoo record rules against every warehouse that should be visible.
+
+Odoo external API availability depends on the Odoo plan. Odoo documents external API access for Custom plans. See:
+
+```text
+https://www.odoo.com/documentation/19.0/developer/reference/external_rpc_api.html
+```
+
+## 17. Odoo connection contract
+
+Current transport:
+
+```text
+POST https://<odoo-host>/jsonrpc
+Content-Type: application/json
+```
+
+Authentication uses Odoo's `common.authenticate` service with:
+
+```text
+database, username, API key
+```
+
+Model reads use `object.execute_kw` and `search_read` with bounded pagination:
+
+- page size: 500 records;
+- maximum per model per run: 25,000 records;
+- deterministic order: Odoo `id asc`; and
+- request timeout: 20 seconds per RPC request.
+
+Non-local Odoo URLs must use HTTPS. Connection errors must never include the API key.
+
+### Version note
+
+The current adapter uses Odoo JSON-RPC for broad Odoo.sh compatibility. Odoo 19 documents JSON-2 as the replacement and schedules `/jsonrpc` removal in Odoo 22. Before an Odoo 22 upgrade, implement and acceptance-test a JSON-2 transport behind the existing client boundary.
+
+JSON-2 reference:
+
+```text
+https://www.odoo.com/documentation/19.0/developer/reference/external_api.html
+```
+
+## 18. Odoo read contract
+
+### Internal locations
+
+Model: `stock.location`
+
+Domain:
+
+```json
+[["usage", "=", "internal"]]
+```
+
+Fields:
+
+| Field | Required use |
+| --- | --- |
+| `id` | Immutable external location identity |
+| `name` | Short display label |
+| `complete_name` | Hierarchical Admin review label |
+| `display_name` | Fallback display label |
+| `active` | Active/inactive state |
+| `write_date` | Provider update timestamp |
+
+### Product master
+
+Model: `product.product`
+
+Domain:
+
+```json
+[["active", "=", true]]
+```
+
+Fields:
+
+| Field | Required use |
+| --- | --- |
+| `id` | Immutable Odoo product-variant identity |
+| `default_code` | Preferred SKU/part number |
+| `barcode` | Alternate durable lookup value |
+| `name` | Product description |
+| `categ_id` | Category label |
+| `uom_id` | Inventory unit of measure |
+| `write_date` | Provider update timestamp |
+
+Part-number fallback when both `default_code` and `barcode` are empty:
+
+```text
+ODOO-<product.product id>
+```
+
+### Inventory balances
+
+Model: `stock.quant`
+
+Domain:
+
+```json
+[["location_id.usage", "=", "internal"]]
+```
+
+Fields:
+
+| Field | Required use |
+| --- | --- |
+| `id` | Source quant record identity |
+| `product_id` | Odoo product variant |
+| `location_id` | Odoo internal stock location |
+| `quantity` | Physical quantity |
+| `reserved_quantity` | Quantity reserved inside Odoo |
+| `write_date` | Provider update timestamp |
+
+Available provider quantity is calculated as:
+
+```text
+max(quantity - reserved_quantity, 0)
+```
+
+Multiple quants for the same product and location are summed before persistence. This covers lot, package, or owner-separated quants without creating duplicate application inventory rows.
+
+## 19. Admin location-mapping workflow
+
+Admin path:
+
+```text
+Settings -> Integrations -> Odoo.sh
+```
+
+Workflow:
+
+1. Enter URL, database, dedicated username, and API key.
+2. Select **Verify and save**. Credentials are stored encrypted server-side.
+3. Select **Refresh locations**.
+4. For each Odoo internal location, choose an active application location, leave it `Unmatched`, or select `Ignore this location`.
+5. Select **Sync parts & inventory**.
+
+Mapping states:
+
+| State | Meaning | Inventory behavior |
+| --- | --- | --- |
+| `unmatched` | New or unresolved Odoo location | Inventory skipped and counted |
+| `mapped` | Admin confirmed application location | Inventory imported |
+| `ignored` | Intentionally excluded Odoo location | Inventory skipped |
+
+Every location refresh and full sync re-discovers Odoo locations. Existing mappings survive label changes because the mapping key is `(company_id, Odoo location id)`.
+
+Do not implement fuzzy, case-insensitive, or exact-name auto-mapping. The UI may present a future suggestion, but an Admin must confirm it before inventory is imported.
+
+## 20. Persistence and reconciliation rules
+
+### Product identity
+
+`odoo_product_mappings` maps:
+
+```text
+(company_id, Odoo product.product id) -> parts_catalog id
+```
+
+This mapping remains stable if an SKU, barcode, category, or product name changes.
+
+### Catalog projection
+
+- Preferred part number: `default_code`, then `barcode`, then `ODOO-<id>`.
+- Part numbers are normalized through the application's canonical part-number normalizer.
+- Existing company catalog rows with the same normalized part number are updated rather than duplicated.
+- Odoo category and description refresh company catalog memory.
+- Odoo UoM labels map through `units_of_measure.odoo_name`; unknown units fall back to `ea` and must be reviewed before production acceptance.
+
+### Inventory projection
+
+Inventory identity is:
+
+```text
+company + mapped app location + normalized part number + canonical UoM
+```
+
+Provider identity is:
+
+```text
+Odoo product id + Odoo stock location id
+```
+
+Application reservations are not deleted by an Odoo refresh. If fresh Odoo availability is below an active application reservation, persisted on-hand quantity is clamped to the reservation so database invariants remain valid and application availability becomes zero.
+
+### Unmatched inventory
+
+Master products still import when no locations are mapped. Quants for unmatched or ignored locations are skipped. The sync response reports `skippedUnmappedCount` so operators can distinguish a successful catalog refresh from complete location inventory coverage.
+
+## 21. Internal Admin route inventory
+
+These routes support the first-party Admin UI. They require an authenticated Admin with `integration:admin`, same-origin mutation protection, and company access. They are not part of the public versioned Odoo API and must not be called by an Odoo module.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/integrations/odoo/status` | Connection and mapping counts |
+| `PUT` | `/api/integrations/odoo/configuration` | Verify and encrypt Odoo configuration |
+| `POST` | `/api/integrations/odoo/test` | Test saved credentials |
+| `POST` | `/api/integrations/odoo/discover-locations` | Refresh internal Odoo locations |
+| `GET` | `/api/integrations/odoo/locations` | List Odoo mappings and active app locations |
+| `PUT` | `/api/integrations/odoo/locations/{externalId}/mapping` | Map, unmap, or ignore one Odoo location |
+| `POST` | `/api/integrations/odoo/sync` | Discover locations, import products, then import mapped inventory |
+
+Configuration request body:
+
+```json
+{
+  "baseUrl": "https://fleet-example.odoo.com",
+  "database": "fleet-example",
+  "username": "workorders-integration@example.com",
+  "apiKey": "<secret>"
+}
+```
+
+Mapping request bodies:
+
+```json
+{ "status": "mapped", "locationId": "<application-location-uuid>" }
+```
+
+```json
+{ "status": "unmatched" }
+```
+
+```json
+{ "status": "ignored" }
+```
+
+The API key is write-only from the browser's perspective. Status responses return non-secret metadata only.
+
+## 22. Failure handling and operations
+
+| Failure | Expected behavior | Operator action |
+| --- | --- | --- |
+| Authentication rejected | Configuration is not saved | Check database, username, API key, and user state |
+| Access denied on a model or field | Sync stops with Odoo error | Correct Odoo ACLs/record rules |
+| Odoo timeout | Request fails without partial credential exposure | Retry after Odoo health recovers |
+| New Odoo location | Stored as `unmatched`; quant skipped | Admin maps or ignores it |
+| Unknown UoM | Product falls back to `ea` | Add/confirm canonical UoM mapping |
+| More than 25,000 model records | Sync stops at safety limit | Add incremental sync or approved higher bound |
+| Product/location rename | Existing immutable-ID mapping retained | No action unless business mapping changed |
+
+Current implementation runs a full bounded pull. Production hardening for larger datasets should add provider `write_date` cursors, background jobs, sync-run audit records, and retry scheduling without changing the location-mapping contract.
+
+## 23. Production connection and first-sync runbook
+
+Use this runbook to connect Odoo master data without hard-coding location names or identifiers.
+
+### Step 1 - Prepare Odoo.sh
+
+Create a dedicated integration user, for example:
+
+```text
+workorders-integration@yourcompany.com
+```
+
+Grant the minimum read access required for:
+
+- Inventory;
+- products and product variants;
+- warehouses and internal stock locations; and
+- on-hand and reserved quantities.
+
+Generate an API key from the integration user's **Preferences / My Profile -> Account Security** page. Copy it immediately and store it securely because Odoo displays it only once. The API key has the same data access as its user, so do not use a personal administrator's key.
+
+Odoo 19 documents external API access as available on Custom pricing plans and unavailable on One App Free or Standard plans. Confirm the target subscription and Odoo version before deployment. Official reference:
+
+```text
+https://www.odoo.com/documentation/19.0/developer/reference/external_rpc_api.html
+```
+
+Collect these values from the target production database:
+
+| Value | Example / source |
+| --- | --- |
+| Odoo.sh URL | `https://yourcompany.odoo.com` |
+| Production database name | Exact database identifier from Odoo.sh |
+| Integration-user login | `workorders-integration@yourcompany.com` |
+| API key | Generated for the dedicated user; transfer as a secret |
+
+### Step 2 - Connect from this application
+
+As an application Admin:
+
+1. Open **Settings -> Integrations**.
+2. Find **Odoo.sh - Parts and inventory**.
+3. Enter the Odoo.sh URL, database name, integration-user login, and API key.
+4. Select **Verify and save**.
+
+The application verifies the credentials before saving them. The API key is encrypted in the application database and is never returned to the browser after submission.
+
+### Step 3 - Match inventory locations
+
+Select **Refresh locations**. The application reads `stock.location` records whose `usage` is `internal` and displays each Odoo location in the mapping list.
+
+For every row, choose one of these outcomes:
+
+- select the corresponding application location;
+- leave it `Unmatched` when the correct destination is unknown; or
+- select `Ignore this location` for virtual, temporary, or irrelevant storage.
+
+Example decisions:
+
+| Odoo location | Application location |
+| --- | --- |
+| `WH/Stock/Chino Parts` | Chino Yard |
+| `WH2/Stock` | Fontana Shop |
+| `Virtual Locations/Inventory adjustment` | Ignore |
+
+Mappings use Odoo's immutable location ID, scoped to the application company. Renaming an Odoo location or application location does not break the mapping.
+
+### Step 4 - Import master data
+
+Select **Sync parts & inventory**. The connector reads:
+
+| Odoo model | Imported use |
+| --- | --- |
+| `product.product` | SKU, barcode, description, category, and unit |
+| `stock.location` | Inventory-location identity |
+| `stock.quant` | Physical and reserved inventory |
+
+Products become company-wide parts-catalog records. Inventory is imported only into mapped application locations. Inventory from unmatched or ignored locations is skipped and counted in the sync result.
+
+### Step 5 - Handle future locations
+
+Every location refresh and full inventory sync discovers Odoo locations again. When a new warehouse or internal location is added in Odoo:
+
+- it appears as `Unmatched`;
+- existing mappings remain unchanged;
+- its inventory is not assigned automatically; and
+- an Admin reviews it once, then maps or ignores it.
+
+### Before production use
+
+- [ ] Confirm the target Odoo plan and version support the selected external API.
+- [ ] Complete the flow against a staging Odoo database first.
+- [ ] Confirm the dedicated user can read only the required models, fields, companies, warehouses, and locations.
+- [ ] Record the exact production database name; do not infer it only from the URL.
+- [ ] Verify mapped, unmatched, and ignored locations with real naming differences.
+- [ ] Reconcile a sample of products, physical quantity, reserved quantity, and calculated availability with Odoo.
+- [ ] Confirm application reservations survive an Odoo refresh.
+- [ ] Verify sync error reporting, skipped-location counts, timeout handling, and audit logs.
+- [ ] Rotate the integration API key and prove the revoked key no longer works.
+- [ ] Approve the initial full-sync duration and the 25,000-record safety limit for production volume.
+
+## 24. Deployment and acceptance checklist
+
+### Application deployment
+
+- [ ] Apply migrations `042_odoo_inventory_sync.sql` and `043_odoo_product_identity.sql`.
+- [ ] Configure `INTEGRATION_ENCRYPTION_KEY` in the application secret store.
+- [ ] Confirm only Admin users have `integration:admin`.
+- [ ] Deploy the frontend containing the Odoo.sh integration card.
+- [ ] Confirm HTTPS and same-origin protections in the target environment.
+
+### Odoo preparation
+
+- [ ] Confirm Odoo major version and external API availability.
+- [ ] Create a dedicated integration user.
+- [ ] Generate and securely transfer an API key.
+- [ ] Verify read access to `product.product`, `stock.location`, and `stock.quant`.
+- [ ] Confirm record rules expose every required internal location.
+- [ ] Record production URL and exact database name.
+
+### Staging acceptance
+
+- [ ] Verify connection with a staging Odoo database and staging application company.
+- [ ] Discover at least two internal locations with different names from the app locations.
+- [ ] Map one location, ignore one location, and leave one unmatched.
+- [ ] Confirm all active products import into company catalog memory.
+- [ ] Confirm only mapped-location inventory imports.
+- [ ] Confirm unmatched count and skipped quant count are accurate.
+- [ ] Rename one Odoo product and one Odoo location; verify immutable mappings remain.
+- [ ] Confirm Odoo reserved quantities reduce imported availability.
+- [ ] Confirm application reservations survive a refresh.
+- [ ] Rotate the API key and verify the old key stops working.
+
+## 25. Verification status
+
+Implemented and locally verified:
+
+- encrypted Odoo configuration storage;
+- HTTPS enforcement outside localhost;
+- API-key authentication contract;
+- bounded and paginated Odoo reads;
+- immutable location and product identity;
+- explicit `unmatched`, `mapped`, and `ignored` states;
+- product, UoM, quant aggregation, and mapped inventory projections;
+- Admin-only browser routes;
+- focused Odoo and Integration UI contract tests; and
+- database migrations applied to the configured local database.
+
+### Live Odoo acceptance pending
+
+Not yet verified against a live Odoo.sh production or staging instance:
+
+- actual credentials and production database name;
+- database-specific ACL and record-rule coverage;
+- database-specific customizations to models or fields;
+- record volumes and full-sync duration; and
+- end-to-end product and inventory reconciliation.
+
+### Production gate
+
+Do not mark the master-data integration production-ready until the staging acceptance checklist passes with the target Odoo.sh database.
+
+## 26. Engineering references
+
+- External workorder contract: `ODOO_INTEGRATION_TARGET.openapi.yaml`
+- Odoo master-data implementation: `src/server/integrations/odoo/odoo.admin.service.js`
+- Odoo transport: `src/server/integrations/odoo/odoo.client.js`
+- Admin route owner: `src/server/routes/integrations.routes.js`
+- Location and product identity migrations: `042_odoo_inventory_sync.sql`, `043_odoo_product_identity.sql`
+- Odoo 19 external RPC API: `https://www.odoo.com/documentation/19.0/developer/reference/external_rpc_api.html`
+- Odoo 19 JSON-2 API: `https://www.odoo.com/documentation/19.0/developer/reference/external_api.html`

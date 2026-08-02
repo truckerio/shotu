@@ -5,13 +5,15 @@ import { parseLoadConfig, publicConfig } from "./config.js";
 function baseEnv(overrides = {}) {
   return {
     LOAD_BASE_URL: "http://localhost:4173",
-    LOAD_ROLES: "admin,office,mechanic",
+    LOAD_ROLES: "admin,office,mechanic,surveillance",
     LOAD_ADMIN_IDENTIFIER: "admin-user",
     LOAD_ADMIN_PASSWORD: "admin-secret",
     LOAD_OFFICE_IDENTIFIER: "office-user",
     LOAD_OFFICE_PASSWORD: "office-secret",
     LOAD_MECHANIC_IDENTIFIER: "mechanic-user",
     LOAD_MECHANIC_PASSWORD: "mechanic-secret",
+    LOAD_SURVEILLANCE_IDENTIFIER: "surveillance-user",
+    LOAD_SURVEILLANCE_PASSWORD: "surveillance-secret",
     ...overrides,
   };
 }
@@ -21,7 +23,14 @@ test("validation mode builds a secret-free public configuration", () => {
   const visible = JSON.stringify(publicConfig(config));
   assert.equal(config.validateOnly, true);
   assert.match(visible, /credentialsConfigured/);
-  assert.doesNotMatch(visible, /admin-secret|office-secret|mechanic-secret/);
+  assert.doesNotMatch(visible, /admin-secret|office-secret|mechanic-secret|surveillance-secret/);
+});
+
+test("all operational roles and endpoint budgets are enabled by default", () => {
+  const config = parseLoadConfig(baseEnv({ LOAD_ROLES: undefined }), ["--validate"]);
+  assert.deepEqual(config.roles, ["admin", "office", "mechanic", "surveillance"]);
+  assert.ok(config.thresholds.endpointP95Ms["GET surveillance dashboard"] > 0);
+  assert.ok(config.thresholds.endpointP95Ms["GET operations deep page"] > 0);
 });
 
 test("draft writes require explicit opt-in", () => {

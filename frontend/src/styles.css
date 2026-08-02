@@ -1,6 +1,11 @@
 @import "./styles/foundation.css";
+@import "./components/workorders/legacy-workorder-layout.css";
 @import "./styles/legacy-workspaces.css";
+@import "./components/workorders/part-requests/legacy-part-requests.css";
+@import "./components/preview/legacy-preview-controls.css";
 @import "./styles/responsive-overlays.css";
+@import "./components/workorders/workorder-dialogs.css";
+@import "./components/preview/legacy-responsive-preview.css";
 @import "./styles/mechanic-detail.css";
 @import "./styles/create-workorder.css";
 @import "./styles/workorder-detail.css";

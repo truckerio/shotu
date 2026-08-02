@@ -86,3 +86,14 @@ node --test scripts/qa/*.test.js
 After provisioning staging, sign in once as every role, verify `/api/me`, and
 run the role smoke test matrix. Use `reset` before a test cycle when credentials
 must be known, then `cleanup` when the environment is no longer needed.
+
+The automated complete role workflow is documented in
+`scripts/qa/e2e/README.md`. It uses these same deterministic accounts, exercises
+the full workorder lifecycle through public APIs, verifies critical browser
+surfaces with Playwright, and rejects production targets.
+
+The browser pass signs in as Admin, Office, Mechanic, and Surveillance
+sequentially. Do not parallelize password sign-ins: that tests the authentication
+rate limiter rather than the product workflow and can create false failures.
+The workflow is destructive by design and belongs only on disposable local or
+staging data.

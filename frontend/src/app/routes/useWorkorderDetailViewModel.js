@@ -1,0 +1,104 @@
+import { useMemo } from "react";
+
+import {
+  assignedMechanicIdsFromDetail,
+  conversationMessagesFromDetail,
+  pendingPartRequestCount,
+} from "./workorder-detail-view-model.js";
+import { getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
+import { buildWorkorderDetailSections } from "../../features/workorder-detail/workorder-detail-sections.js";
+import { formatLifecycleLabel } from "../../lib/workorder-presentation.js";
+
+const ATTENTION_STATUS_LABELS = {
+  waiting_office: "Needs office",
+  parts_requested: "Parts requested",
+};
+
+export function useWorkorderDetailViewModel({
+  activeWorkorder,
+  detailStatus,
+  form,
+  interfaceLocale,
+  isCompact,
+  isMechanicDetail,
+  isOfficeDetail,
+  officeAssignment,
+  previewPanelOpen,
+  selectedOfficeLocation,
+  selectedVehicle,
+}) {
+  const assignedMechanicIds = assignedMechanicIdsFromDetail(activeWorkorder);
+  const conversationMessages = useMemo(
+    () => conversationMessagesFromDetail(activeWorkorder),
+    [activeWorkorder],
+  );
+  const filledPartCount = form.parts.filter((part) => part.partNo || part.qty || part.repairOrder).length;
+  const mechanicAsset = activeWorkorder?.workorder?.asset || {};
+  const mechanicUnitType = form.unitType || mechanicAsset.unitType || "Vehicle";
+  const mechanicVehicleLabel = [mechanicAsset.year, mechanicAsset.make, mechanicAsset.model]
+    .filter(Boolean)
+    .join(" ") || form.model || "Not listed";
+  const mechanicMapVehicle = selectedVehicle || mechanicAsset;
+  const mechanicMapLocation = getVehicleLocation(mechanicMapVehicle);
+  const pendingPartCount = pendingPartRequestCount(activeWorkorder);
+  const visibleTimeline = useMemo(
+    () => (activeWorkorder?.timeline || []).filter((event) => event.type !== "access"),
+    [activeWorkorder?.timeline],
+  );
+  const detailSections = useMemo(() => buildWorkorderDetailSections({
+    activeWorkorder,
+    assignedMechanicCount: assignedMechanicIds.length,
+    conversationCount: conversationMessages.length,
+    detailStatus,
+    filledPartCount,
+    isCompact,
+    isMechanicDetail,
+    isOfficeDetail,
+    pendingPartCount,
+    timelineCount: visibleTimeline.length,
+    unitType: form.unitType,
+    locale: interfaceLocale,
+  }), [
+    activeWorkorder,
+    assignedMechanicIds.length,
+    conversationMessages.length,
+    detailStatus,
+    filledPartCount,
+    form.unitType,
+    interfaceLocale,
+    isCompact,
+    isMechanicDetail,
+    isOfficeDetail,
+    pendingPartCount,
+    visibleTimeline.length,
+  ]);
+  const assignedMechanicKey = [...assignedMechanicIds].sort().join(",");
+  const officeAssignmentKey = [...officeAssignment.mechanicUserIds].sort().join(",");
+
+  return {
+    assignedMechanicIds,
+    conversationMessages,
+    currentStatusLabel: ATTENTION_STATUS_LABELS[detailStatus]
+      || formatLifecycleLabel(detailStatus, { fallback: "Open" }),
+    detailLocationName: activeWorkorder?.workorder?.location?.name
+      || selectedOfficeLocation?.location?.name
+      || "",
+    detailMechanicNames: activeWorkorder?.workorder?.mechanics
+      ?.map((mechanic) => mechanic.name)
+      .filter(Boolean)
+      .join(", ")
+      || activeWorkorder?.workorder?.mechanic?.name
+      || form.mechanicName,
+    detailSections,
+    filledPartCount,
+    mechanicAsset,
+    mechanicMapLocation,
+    mechanicMapVehicle,
+    mechanicUnitType,
+    mechanicVehicleLabel,
+    officeAssignmentChanged: officeAssignmentKey !== assignedMechanicKey,
+    pendingPartCount,
+    showEmbeddedPreview: previewPanelOpen && (!activeWorkorder || !isCompact),
+    visibleTimeline,
+  };
+}

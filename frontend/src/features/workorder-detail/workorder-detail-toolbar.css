@@ -1,0 +1,210 @@
+.detail-context-bar {
+  align-items: center;
+  background: rgb(255 255 255 / 84%);
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  padding: 8px;
+}
+
+.detail-context-actions {
+  align-items: center;
+  display: inline-flex !important;
+  gap: 7px !important;
+  overflow: visible !important;
+}
+
+.detail-save-button,
+.detail-create-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #b2ccff;
+  border-radius: 7px;
+  color: #175cd3;
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  width: 32px;
+}
+
+.detail-create-button {
+  background: #1570ef;
+  border-color: #1570ef;
+  color: #fff;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  padding: 0 12px;
+  width: auto;
+}
+
+.detail-context-bar .detail-create-button span {
+  color: #fff;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.detail-save-button:hover,
+.detail-save-button:focus-visible,
+.detail-create-button:hover,
+.detail-create-button:focus-visible {
+  background: #175cd3;
+  border-color: #175cd3;
+  color: #fff;
+  outline: 0;
+}
+
+.detail-save-button:disabled,
+.detail-create-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.detail-save-button svg,
+.detail-create-button svg {
+  height: 16px;
+  width: 16px;
+}
+
+.preview-pane-toggle {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 7px;
+  color: #414651;
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  width: 32px;
+}
+
+.preview-pane-toggle:hover,
+.preview-pane-toggle:focus-visible {
+  background: #f5f8ff;
+  border-color: #84caff;
+  color: #175cd3;
+  outline: 0;
+}
+
+.preview-pane-toggle svg {
+  height: 16px;
+  width: 16px;
+}
+
+.preview-pane-toggle.is-open svg {
+  animation: preview-toggle-open 300ms var(--motion-ease-standard) forwards;
+}
+
+.preview-pane-toggle.is-closed svg {
+  animation: preview-toggle-close 300ms var(--motion-ease-standard) forwards;
+}
+
+@keyframes preview-toggle-open {
+  from { transform: rotate(0deg) scale(0.88); }
+  to { transform: rotate(180deg) scale(1); }
+}
+
+@keyframes preview-toggle-close {
+  from { transform: rotate(180deg) scale(0.88); }
+  to { transform: rotate(0deg) scale(1); }
+}
+
+.icon-tooltip {
+  position: relative;
+}
+
+.icon-tooltip::after {
+  background: #181d27;
+  border-radius: 5px;
+  color: #fff;
+  content: attr(data-tooltip);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  left: 50%;
+  opacity: 0;
+  padding: 5px 7px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 7px);
+  transform: translate(-50%, -3px);
+  transition:
+    opacity var(--motion-fast) var(--motion-ease-standard) 100ms,
+    transform var(--motion-fast) var(--motion-ease-standard) 100ms;
+  white-space: nowrap;
+  z-index: 30;
+}
+
+.icon-tooltip:hover::after,
+.icon-tooltip:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.icon-tooltip[data-tooltip=""]::after {
+  display: none;
+}
+
+.detail-context-bar > button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #414651;
+  cursor: pointer;
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
+}
+
+.detail-context-bar > button:hover,
+.detail-context-bar > button:focus-visible {
+  background: #eaecf0;
+  outline: 0;
+}
+
+.detail-context-bar svg {
+  height: 18px;
+  width: 18px;
+}
+
+.detail-context-bar > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.detail-context-bar strong,
+.detail-context-bar span:not(.ops-status) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-context-bar strong {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.detail-context-bar > div span {
+  color: #717680;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+}
+
+.office-create-nav .draft-save-status {
+  margin-top: 0;
+}
+
+.mechanic-action-message {
+  color: #344054;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}

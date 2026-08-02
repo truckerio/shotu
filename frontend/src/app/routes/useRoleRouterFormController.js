@@ -1,0 +1,111 @@
+import { writeOfficeWorkorderEditBackup } from "../../features/workorder-detail/office-workorder-autosave-storage.js";
+import { api } from "../../lib/api.js";
+import { emptyPart } from "../../../../shared/workorder-template.js";
+
+export function normalizeSavedUsedParts(parts) {
+  return parts.map((part) => ({
+    partNo: part.partNo,
+    qty: part.qty,
+    uomCode: part.uomCode,
+    repairOrder: part.repairOrder,
+  }));
+}
+
+export function useRoleRouterFormController({
+  activeWorkorder,
+  actorId,
+  form,
+  isOfficeDetail,
+  officeActionsRef,
+  setActiveWorkorder,
+  setCreateErrors,
+  setForm,
+  setUsedPartsDirty,
+}) {
+  function clearCreateErrors(...fields) {
+    setCreateErrors((current) => {
+      if (!fields.some((field) => current[field])) return current;
+      const next = { ...current };
+      fields.forEach((field) => delete next[field]);
+      return next;
+    });
+  }
+
+  function stageOfficeAutosave(patch) {
+    const workorderId = activeWorkorder?.workorder?.id;
+    if (!isOfficeDetail || !activeWorkorder?.allowedActions?.update || !workorderId) return;
+    writeOfficeWorkorderEditBackup(actorId, workorderId, patch);
+    officeActionsRef.current?.queueOfficeWorkorderAutosave();
+  }
+
+  function updateField(field, value) {
+    clearCreateErrors(field);
+    setForm((current) => ({ ...current, [field]: value }));
+    stageOfficeAutosave({ [field]: value });
+  }
+
+  function updateStartDate(value) {
+    const workEndDate = !form.workEndDate || form.workEndDate < value ? value : form.workEndDate;
+    setForm((current) => ({ ...current, workDate: value, workStartDate: value, workEndDate }));
+    stageOfficeAutosave({ workDate: value, workStartDate: value, workEndDate });
+  }
+
+  function updatePart(index, field, value) {
+    setForm((current) => ({
+      ...current,
+      parts: current.parts.map((part, partIndex) => (partIndex === index ? { ...part, [field]: value } : part)),
+    }));
+  }
+
+  function addPartRow() {
+    setForm((current) => ({ ...current, parts: [...current.parts, emptyPart()] }));
+  }
+
+  function removePartRow(index) {
+    setForm((current) => ({
+      ...current,
+      parts: current.parts.length <= 1 ? current.parts : current.parts.filter((_, partIndex) => partIndex !== index),
+    }));
+  }
+
+  function updateActiveUsedParts(parts) {
+    setUsedPartsDirty(true);
+    setForm((current) => ({ ...current, parts }));
+  }
+
+  async function saveActiveUsedParts(parts) {
+    const workorderId = activeWorkorder?.workorder?.id;
+    if (!workorderId) throw new Error("Open a workorder before saving parts.");
+    if (isOfficeDetail) {
+      await officeActionsRef.current?.saveActiveUsedParts(parts);
+      return;
+    }
+
+    const savedParts = normalizeSavedUsedParts(parts);
+    await api(`/api/mechanic/workorders/${workorderId}/used-parts`, {
+      method: "PATCH",
+      body: JSON.stringify({ parts: savedParts }),
+    });
+    setForm((current) => ({ ...current, parts: savedParts }));
+    setActiveWorkorder((current) => current ? {
+      ...current,
+      workorder: {
+        ...current.workorder,
+        formData: { ...(current.workorder.formData || {}), parts: savedParts },
+      },
+    } : current);
+    setUsedPartsDirty(false);
+  }
+
+  return {
+    addPartRow,
+    clearCreateErrors,
+    removePartRow,
+    saveActiveUsedParts,
+    stageOfficeAutosave,
+    updateActiveUsedParts,
+    updateField,
+    updatePart,
+    updateStartDate,
+  };
+}

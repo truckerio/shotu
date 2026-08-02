@@ -1,0 +1,20 @@
+/* Phone-specific asset map expansion limits. */
+
+@media (max-width: 700px) {
+  .asset-location-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .asset-location-actions {
+    display: inline-flex;
+    justify-content: flex-end;
+  }
+
+  .asset-map-hover {
+    max-height: 0;
+  }
+
+  .asset-location-card.is-map-visible .asset-map-hover {
+    max-height: 320px;
+  }
+}

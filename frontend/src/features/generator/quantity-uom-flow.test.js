@@ -7,14 +7,14 @@ import {
 } from "../../../../shared/workorder-template.js";
 
 const createForm = readFileSync(new URL("./CreateWorkorderForm.jsx", import.meta.url), "utf8");
-const roleRouter = readFileSync(new URL("../../app/routes/RoleRouter.jsx", import.meta.url), "utf8");
+const formController = readFileSync(new URL("../../app/routes/useRoleRouterFormController.js", import.meta.url), "utf8");
 const surveillance = readFileSync(new URL("../surveillance/workspace/SurveillanceDetailPage.jsx", import.meta.url), "utf8");
 const usedPartsEditor = readFileSync(new URL("../../components/workorders/UsedPartsEditor.jsx", import.meta.url), "utf8");
 
 test("create and mechanic save paths serialize uomCode", () => {
   assert.match(createForm, /<QuantityUnitInput/);
   assert.match(createForm, /onPartChange\(index,\s*"uomCode",\s*value\)/);
-  assert.match(roleRouter, /qty:\s*part\.qty,\s*\n\s*uomCode:\s*part\.uomCode,/);
+  assert.match(formController, /qty:\s*part\.qty,\s*\n\s*uomCode:\s*part\.uomCode,/);
 });
 
 test("preview prints quantity with the selected symbol and piece fallback", () => {

@@ -1,0 +1,121 @@
+.done-action {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  color: #414651;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 8px;
+}
+
+.done-action svg {
+  height: 18px;
+  width: 18px;
+}
+
+.done-action {
+  background: #079455;
+  border-color: #079455;
+  color: #fff;
+  gap: 7px;
+  width: 100%;
+}
+
+.done-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+input,
+select,
+textarea {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  color: #181d27;
+  font-size: var(--text-body);
+  min-height: 42px;
+  padding: 9px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #717680 50%),
+    linear-gradient(135deg, #717680 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 18px,
+    calc(100% - 13px) 18px;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+  padding-right: 34px;
+}
+
+.control-panel input,
+.control-panel select,
+.control-panel textarea {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #84caff;
+  box-shadow: 0 0 0 3px #eff8ff;
+  outline: none;
+}
+
+.button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  color: #414651;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.download-link {
+  width: 100%;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.button svg {
+  height: 18px;
+  width: 18px;
+}
+
+.button.primary {
+  background: #1570ef;
+  border-color: #1570ef;
+  color: #fff;
+  min-height: 46px;
+}
+
+.button:hover {
+  background: #f5f5f5;
+}
+
+.button.primary:hover {
+  background: #175cd3;
+}

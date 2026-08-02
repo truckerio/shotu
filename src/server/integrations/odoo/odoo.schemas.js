@@ -6,6 +6,8 @@ export const odooListSchema = z.object({
   cursor: z.string().trim().max(2000).optional(),
 });
 
+export const odooWorkorderIdSchema = z.string().uuid("Workorder ID must be a valid UUID.");
+
 const enteredResultSchema = z.object({
   status: z.literal("entered"),
   serviceOrderNo: z.string().trim().min(1).max(120),

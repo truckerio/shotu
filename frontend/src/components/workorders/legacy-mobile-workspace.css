@@ -1,0 +1,52 @@
+/* Phone workspace shell and jump navigation. */
+
+@media (max-width: 700px) {
+  body {
+    min-width: 0;
+    touch-action: pan-y;
+  }
+
+  .prototype {
+    gap: 16px;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      12px
+      calc(76px + env(safe-area-inset-bottom));
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .mobile-jumpbar {
+    background: #eaecf0;
+    border: 1px solid #d5d7da;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgb(31 43 58 / 18%);
+    display: grid;
+    gap: 4px;
+    grid-template-columns: 1fr 1fr;
+    left: 16px;
+    padding: 4px;
+    position: fixed;
+    right: 16px;
+    bottom: 14px;
+    z-index: 18;
+  }
+
+  .mobile-jumpbar button {
+    background: #fff;
+    border: 0;
+    border-radius: 6px;
+    color: #181d27;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+    min-height: 44px;
+  }
+
+  .detail-context-bar {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+}

@@ -18,6 +18,10 @@ const roleRouter = readFileSync(
   new URL("../../app/routes/RoleRouter.jsx", import.meta.url),
   "utf8",
 );
+const vehicleLookupController = readFileSync(
+  new URL("../../features/create-workorder/useVehicleLookupController.js", import.meta.url),
+  "utf8",
+);
 
 test("shared asset map stays open on desktop while mobile keeps its reveal controller", () => {
   assert.match(component, /const DESKTOP_MAP_QUERY = "\(min-width: 701px\)"/);
@@ -73,22 +77,22 @@ test("detail pages place the shared asset map in Review and mechanic Work", () =
 
 test("shared workorder details refresh live asset location on open and every minute", () => {
   assert.match(
-    roleRouter,
-    /if \(!isWorkorderDetail \|\| !activeWorkorder\?\.workorder\?\.id \|\| !mechanicMapVehicle\?\.id\) \{[\s\S]*?detailLocationRefreshRef\.current = "";[\s\S]*?return;/,
+    vehicleLookupController,
+    /if \(!activeWorkorderId \|\| !selectedVehicle\?\.id\) \{[\s\S]*?detailLocationRefreshRef\.current = "";[\s\S]*?return;/,
   );
   assert.match(
-    roleRouter,
-    /const refreshKey = `\$\{activeWorkorder\.workorder\.id\}:\$\{mechanicMapVehicle\.id\}`;/,
+    vehicleLookupController,
+    /const refreshKey = `\$\{activeWorkorderId\}:\$\{selectedVehicle\.id\}`;/,
   );
   assert.match(
-    roleRouter,
+    vehicleLookupController,
     /api\(`\/api\/vehicles\/\$\{encodeURIComponent\(vehicle\.id\)\}\/live-location`, \{ method: "POST" \}\)/,
   );
   assert.match(
     roleRouter,
-    /enabled: Boolean\(mechanicMapVehicle\?\.id\) && \(workspace === "generator" \|\| isWorkorderDetail\)/,
+    /enabled: workspace === "generator" \|\| Boolean\(activeWorkorder\)/,
   );
-  assert.match(roleRouter, /intervalMs: 60_000/);
-  assert.match(roleRouter, /locationRequestRef\.current\.promise === request/);
-  assert.doesNotMatch(roleRouter, /if \(!isMechanicDetail \|\| !activeWorkorder\?\.workorder\?\.id/);
+  assert.match(vehicleLookupController, /intervalMs: 60_000/);
+  assert.match(vehicleLookupController, /locationRequestRef\.current\.promise === request/);
+  assert.doesNotMatch(vehicleLookupController, /isMechanicDetail/);
 });

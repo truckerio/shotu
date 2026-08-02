@@ -45,3 +45,140 @@
     padding: 10px 12px;
   }
 }
+.office-home {
+  grid-template-columns: 1fr;
+}
+
+.office-layout {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.office-layout.is-drafts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.office-mechanic-panel {
+  background: rgb(255 255 255 / 78%);
+  border: 1px solid rgb(159 172 189 / 28%);
+  border-radius: 10px;
+  display: grid;
+  overflow: hidden;
+}
+
+.office-panel-head,
+.office-mechanic-panel button {
+  align-items: center;
+  border-bottom: 1px solid #edf0f3;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 52px;
+  padding: 10px 12px;
+}
+
+.office-panel-head {
+  color: #181d27;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.office-panel-head span,
+.office-mechanic-panel button strong {
+  background: #eaecf0;
+  border-radius: 999px;
+  color: #414651;
+  font-size: var(--text-caption);
+  padding: 3px 7px;
+}
+
+.office-mechanic-panel button {
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  color: #414651;
+  cursor: pointer;
+  text-align: left;
+}
+
+.office-mechanic-panel button.active,
+.office-mechanic-panel button:hover,
+.office-mechanic-panel button:focus-visible {
+  background: #f5f8ff;
+  outline: 0;
+}
+
+.office-mechanic-panel button span,
+.office-mechanic-panel button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.office-mechanic-panel button span {
+  color: #181d27;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.office-mechanic-panel button small {
+  color: #717680;
+  font-size: var(--text-caption);
+  grid-column: 1;
+}
+
+.office-table-shell {
+  min-height: 560px;
+}
+
+.office-toolbar {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.office-filter-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.office-filter-row .mechanic-search {
+  flex: 1 1 auto;
+  margin-left: 0;
+  max-width: none;
+  min-width: 420px;
+}
+
+.office-filter-row select {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 8px;
+  color: #414651;
+  flex: 0 0 220px;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+@media (min-width: 1800px) {
+  .office-layout {
+    gap: 18px;
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .office-layout.is-drafts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .office-layout {
+    grid-template-columns: 1fr;
+  }
+}

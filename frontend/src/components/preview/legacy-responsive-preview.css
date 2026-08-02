@@ -1,0 +1,137 @@
+@media (max-width: 700px) {
+  .preview-grid.single,
+  .preview-grid {
+    gap: 12px;
+    grid-template-columns: 1fr;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 10px;
+    width: 100%;
+  }
+
+  .preview-page-card {
+    min-width: 560px;
+    width: 560px;
+  }
+
+  .workorder-preview-shell {
+    border-radius: 4px;
+  }
+
+  .preview-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preview-header-actions {
+    align-items: stretch;
+    justify-content: space-between;
+    position: relative;
+  }
+
+  .preview-header-actions .preview-print-command {
+    position: static;
+  }
+
+  .preview-header-actions .preview-print-command .print-command-menu {
+    left: 0;
+    min-width: 0;
+    right: 0;
+  }
+
+  .preview-summary {
+    align-items: start;
+    justify-items: start;
+  }
+
+  .preview-summary strong {
+    max-width: 100%;
+  }
+
+  .preview-tool-button {
+    height: 44px;
+    width: 44px;
+  }
+
+  .preview-fullscreen-toolbar {
+    align-items: stretch;
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .fullscreen-toolbox {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 40px minmax(42px, auto) 40px 40px 40px 40px 40px;
+  }
+
+  .fullscreen-toolbox button {
+    height: 40px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .fullscreen-toolbox .fullscreen-print {
+    min-width: 40px;
+    width: 40px;
+  }
+
+  .fullscreen-stage {
+    padding: 12px 10px 18px;
+  }
+
+  .fullscreen-page-meta {
+    justify-content: flex-start;
+    padding: 0 2px;
+  }
+
+  .fullscreen-page-meta small {
+    display: none;
+  }
+
+  .fullscreen-stage.zoom-0 .fullscreen-page-wrap {
+    width: calc(100vw - 20px);
+  }
+
+  .fullscreen-stage.zoom-0 .wo-title {
+    font-size: 9px;
+  }
+
+  .fullscreen-stage.zoom-0 .wo-label,
+  .fullscreen-stage.zoom-0 .wo-value,
+  .fullscreen-stage.zoom-0 .wo-part-row > div,
+  .fullscreen-stage.zoom-0 .wo-footer > div {
+    font-size: 7px;
+  }
+
+  .fullscreen-stage.zoom-0 .wo-brand {
+    gap: 4px;
+  }
+
+  .fullscreen-stage.zoom-0 .wo-brand strong {
+    font-size: 20px;
+  }
+
+  .fullscreen-stage.zoom-0 .wo-disclaimer strong {
+    font-size: 7px;
+  }
+
+  .fullscreen-stage.zoom-0 .wo-disclaimer span {
+    font-size: 5px;
+  }
+
+  .fullscreen-page-wrap {
+    width: 620px;
+  }
+
+  .fullscreen-stage.zoom-2 .fullscreen-page-wrap {
+    width: 760px;
+  }
+
+  .print-summary {
+    grid-template-columns: 1fr;
+  }
+}

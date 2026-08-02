@@ -1,8 +1,9 @@
-# Workorder Organizer - Project Report
+# Owl - Engineering Project Report
 
 ## What This Project Is
 
-Workorder Organizer is a multi-user shop workflow app for creating, assigning, repairing, reviewing, printing, and closing truck/trailer workorders.
+Owl is a multi-user shop workflow app for creating, assigning, repairing,
+reviewing, printing, integrating, and closing truck/trailer workorders.
 
 The app is built for four roles:
 
@@ -11,8 +12,7 @@ The app is built for four roles:
 - Mechanic: sees assigned/open/active jobs, joins work, creates workorders, records repair progress, requests parts, chats with office, and finishes work.
 - Surveillance: reviews completed/closed workorders and tracks Odoo entry/backlog.
 
-GitHub:
-https://github.com/truckerio/shotu
+GitHub: [truckerio/shotu](https://github.com/truckerio/shotu)
 
 ## How It Works
 
@@ -134,6 +134,9 @@ Use `.env.example` as the starter template. Do not commit real secrets.
 Frontend:
 
 - `frontend/src/app/routes` - role routing and URL state.
+- `frontend/src/app/routes/RoleRouter.jsx` - route coordinator only; feature
+  controllers, detail loading, capabilities, navigation, and workspace
+  composition have separate owners in the same folder.
 - `frontend/src/features/auth` - login/session gate.
 - `frontend/src/features/create-workorder` - shared Admin, Manager, and Mechanic create workorder page shell.
 - `frontend/src/features/generator` - shared create form content and print/preview primitives.
@@ -155,6 +158,8 @@ Backend:
 - `src/server/db/migrations` - schema changes.
 - `src/server/auth` - session actor, permissions, authorization.
 - `src/server/integrations` - external providers like Samsara and VIN.
+- `src/server/integrations/odoo` - Odoo machine API, Admin-managed Odoo.sh
+  connection, location mapping, product identity, and inventory synchronization.
 - `src/server/services` - cross-domain services.
 - `src/server/print` - print/PDF behavior.
 - `src/server/security` - origin/rate-limit/security checks.
@@ -205,6 +210,8 @@ Attention signals are separate from lifecycle:
 
 - Login/session with role-based access.
 - Admin locations, users, templates, settings, and Samsara integration UI.
+- Admin-managed Odoo connection, immutable location mapping, parts-master
+  refresh, and mapped-location inventory synchronization.
 - Office operational queue with filters.
 - Create workorder with preview/template.
 - Draft saving for office/admin create flow.
@@ -226,6 +233,10 @@ Attention signals are separate from lifecycle:
 - `README.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DATABASE.md`
+- `docs/FRONTEND_OWNERSHIP.md`
+- `docs/ENGINEERING_RISK_REGISTER.md`
+- `docs/PERFORMANCE_BASELINE.md`
+- `docs/QA_ACCOUNTS.md`
 - `server.js`
 - `frontend/src/app/routes/RoleRouter.jsx`
 - `frontend/src/features/workorder-detail/WorkorderDetailPage.jsx`
@@ -233,3 +244,12 @@ Attention signals are separate from lifecycle:
 - `src/server/routes/office.routes.js`
 - `src/server/routes/admin.routes.js`
 - `src/server/db/repositories/operational-workorders.repo.js`
+
+## Current Verification Baseline
+
+As of 2026-08-02, the combined checkout passed `npm run verify` with 609
+focused tests, the four-viewport CSS ownership harness, the complete Admin to
+Surveillance role workflow with authorization boundaries, and all three
+Chino-scale performance gates. Exact measurements and the distinction between
+local evidence and production telemetry are documented in
+`docs/PERFORMANCE_BASELINE.md`.

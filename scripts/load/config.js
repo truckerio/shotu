@@ -1,6 +1,7 @@
 import process from "node:process";
+import { endpointBudgets } from "./route-catalog.js";
 
-const ROLE_NAMES = ["admin", "office", "mechanic"];
+const ROLE_NAMES = ["admin", "office", "mechanic", "surveillance"];
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function integer(value, fallback, name, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
@@ -24,7 +25,7 @@ function boolean(value, fallback = false) {
   return TRUE_VALUES.has(String(value).trim().toLowerCase());
 }
 
-function roles(value = "admin,office,mechanic") {
+function roles(value = "admin,office,mechanic,surveillance") {
   const selected = [...new Set(value.split(",").map((role) => role.trim().toLowerCase()).filter(Boolean))];
   if (!selected.length) throw new Error("LOAD_ROLES must select at least one role.");
   const invalid = selected.filter((role) => !ROLE_NAMES.includes(role));
@@ -112,7 +113,14 @@ export function parseLoadConfig(env = process.env, argv = process.argv.slice(2))
         "LOAD_MIN_REQUESTS_PER_SECOND",
         { min: 0 },
       ),
+      endpointP95Ms: endpointBudgets(number(
+        env.LOAD_ENDPOINT_BUDGET_SCALE,
+        1,
+        "LOAD_ENDPOINT_BUDGET_SCALE",
+        { min: 0.1, max: 10 },
+      )),
     },
+    reportPath: String(env.LOAD_REPORT_PATH || ".tmp/performance/http-baseline.json").trim(),
     draft: {
       enabled: draftEnabled,
       role: draftRole,
@@ -147,6 +155,7 @@ export function publicConfig(config) {
     totalReadConcurrency: config.concurrencyPerRole * config.roles.length,
     requestTimeoutMs: config.requestTimeoutMs,
     thresholds: config.thresholds,
+    reportPath: config.reportPath,
     draftScenario: {
       enabled: config.draft.enabled,
       role: config.draft.role,

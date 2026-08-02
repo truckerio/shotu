@@ -18,6 +18,15 @@ function fail(file, message) {
   violations.push(`${relative(root, file)}: ${message}`);
 }
 
+async function enforceLineBudget(relativePath, maximumLines, owner) {
+  const file = join(root, relativePath);
+  const source = await readFile(file, "utf8");
+  const lineCount = source.split("\n").length;
+  if (lineCount > maximumLines) {
+    fail(file, `${owner} exceeds its ${maximumLines}-line transition budget (${lineCount} lines)`);
+  }
+}
+
 const frontendFiles = (await filesUnder(join(root, "frontend", "src")))
   .filter((file) => [".js", ".jsx"].includes(extname(file)));
 
@@ -30,6 +39,12 @@ for (const file of frontendFiles) {
     fail(file, "unit definitions belong in shared/units-of-measure.js");
   }
 }
+
+await enforceLineBudget(
+  "frontend/src/app/routes/RoleRouter.jsx",
+  499,
+  "route coordinator",
+);
 
 const routeFiles = (await filesUnder(join(root, "src", "server", "routes")))
   .filter((file) => extname(file) === ".js");
@@ -59,7 +74,7 @@ const serverFiles = (await filesUnder(join(root, "src", "server")))
 
 for (const file of serverFiles) {
   const source = await readFile(file, "utf8");
-  if (source.includes("admin.repo.js")) {
+  if (/from\s+["'][^"']*(?:^|\/)admin\.repo\.js["']/.test(source)) {
     fail(file, "use the repository that owns the table instead of admin.repo.js");
   }
   if (/\b(?:UNITS_OF_MEASURE|UOM_DEFINITIONS)\s*=\s*(?:Object\.freeze\()?\s*\[/.test(source)) {

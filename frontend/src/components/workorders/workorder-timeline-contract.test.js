@@ -4,7 +4,7 @@ import test from "node:test";
 
 const component = readFileSync(new URL("./WorkorderTimeline.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./workorder-timeline.css", import.meta.url), "utf8");
-const surveillance = readFileSync(new URL("../../features/surveillance/SurveillanceWorkspace.jsx", import.meta.url), "utf8");
+const surveillanceDetail = readFileSync(new URL("../../features/surveillance/workspace/SurveillanceDetailPage.jsx", import.meta.url), "utf8");
 
 test("shared activity surface has one hierarchy and retains actor, time, status, and mechanic context", () => {
   assert.doesNotMatch(component, /<h[1-6][^>]*>\s*Timeline/i);
@@ -16,8 +16,8 @@ test("shared activity surface has one hierarchy and retains actor, time, status,
   assert.match(css, /\.workorder-timeline-date\s*\{[^}]*display:\s*inline-flex;[^}]*white-space:\s*nowrap;/s);
   assert.doesNotMatch(component, /workorder-timeline-status/);
   assert.doesNotMatch(component, /timelineEventStatus/);
-  assert.doesNotMatch(surveillance, /detail\.timeline\?\.length/);
-  assert.match(surveillance, /activityCount = timelineEventCount\(detail\.timeline\)/);
+  assert.doesNotMatch(surveillanceDetail, /detail\.timeline\?\.length/);
+  assert.match(surveillanceDetail, /activityCount = timelineEventCount\(detail\.timeline\)/);
 });
 
 test("390px and 430px activity rail stays in a min-width-zero single content column", () => {

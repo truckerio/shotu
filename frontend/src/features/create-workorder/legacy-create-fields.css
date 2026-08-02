@@ -1,0 +1,104 @@
+/* Vehicle lookup and field-help controls used by the create/detail form. */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.unit-field-wrap {
+  min-width: 0;
+  position: relative;
+}
+
+.field-label-row {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.help-dot {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #a4a7ae;
+  border-radius: 999px;
+  color: #535862;
+  cursor: help;
+  display: inline-flex;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-bold);
+  height: 17px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 17px;
+}
+
+.help-dot:hover,
+.help-dot:focus {
+  background: #f5f8ff;
+  border-color: #1570ef;
+  color: #175cd3;
+  outline: none;
+}
+
+.vehicle-inline-status {
+  color: #535862;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-medium);
+  margin-top: 6px;
+}
+
+.vehicle-results {
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgb(10 13 18 / 14%);
+  display: grid;
+  left: 0;
+  margin-top: 5px;
+  max-height: 220px;
+  overflow: hidden;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 15;
+}
+
+.vehicle-results button {
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf0f3;
+  color: #181d27;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.vehicle-results button:last-child {
+  border-bottom: 0;
+}
+
+.vehicle-results button:hover,
+.vehicle-results button:focus {
+  background: #f5f8ff;
+  outline: none;
+}
+
+.vehicle-results strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehicle-results span {
+  color: #535862;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

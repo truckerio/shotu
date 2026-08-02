@@ -1,0 +1,322 @@
+/* Printable workorder page and template overlay presentation. */
+
+.preview-page {
+  aspect-ratio: 11 / 8.5;
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 6px;
+  color: #111;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.structured-page {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto auto;
+}
+
+.template-page img {
+  display: block;
+  height: 100%;
+  object-fit: fill;
+  width: 100%;
+}
+
+.preview-kicker {
+  background: #181d27;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  left: 12px;
+  padding: 4px 8px;
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+}
+
+.template-text {
+  color: #111;
+  font-size: clamp(6px, 0.82vw, 10px);
+  font-weight: 900;
+  letter-spacing: 0;
+  position: absolute;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.serial-overlay {
+  left: 81.4%;
+  top: 20.2%;
+  transform: translate(-50%, -50%);
+}
+
+.form-title {
+  border-bottom: 1px solid #111;
+  font-size: 9px;
+  font-weight: 900;
+  min-height: 16px;
+  padding: 2px 8px 1px;
+  text-align: center;
+}
+
+.form-top-grid {
+  display: grid;
+  grid-template-columns: 34% 25% 41%;
+  min-height: 75px;
+}
+
+.concern-box,
+.brand-box,
+.details-box {
+  border-bottom: 1px solid #111;
+  border-right: 1px solid #111;
+}
+
+.concern-box {
+  display: grid;
+  gap: 4px;
+  grid-template-rows: auto 1fr;
+  padding: 4px;
+}
+
+.concern-box span,
+.mechanic-row span,
+.details-box span {
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.concern-box strong,
+.details-box strong {
+  font-size: 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-box {
+  align-content: center;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.brand-box strong {
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details-box {
+  border-right: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.details-box div {
+  align-items: end;
+  border-bottom: 1px solid #111;
+  border-right: 1px solid #111;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px;
+  min-height: 11px;
+  padding: 2px 4px;
+}
+
+.details-box div:nth-child(even),
+.details-box .wide-detail {
+  border-right: 0;
+}
+
+.details-box .wide-detail {
+  grid-column: 1 / -1;
+}
+
+.mechanic-row {
+  display: grid;
+  grid-template-columns: 58% 21% 21%;
+  min-height: 12px;
+}
+
+.mechanic-row div {
+  border-bottom: 1px solid #111;
+  border-right: 1px solid #111;
+  display: flex;
+  gap: 4px;
+  padding: 3px 4px;
+}
+
+.mechanic-row div:last-child {
+  border-right: 0;
+}
+
+.parts-grid {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.parts-grid th,
+.parts-grid td {
+  border-bottom: 1px solid #111;
+  border-right: 1px solid #111;
+  font-size: 7px;
+  height: 11px;
+  padding: 1px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parts-grid th {
+  font-weight: 900;
+}
+
+.parts-grid th:first-child,
+.parts-grid td:first-child {
+  text-align: center;
+  width: 44px;
+}
+
+.parts-grid th:nth-child(2) {
+  width: 24%;
+}
+
+.parts-grid th:nth-child(3) {
+  width: 8%;
+}
+
+.parts-grid th:last-child,
+.parts-grid td:last-child {
+  border-right: 0;
+}
+
+.form-footer {
+  display: grid;
+  grid-template-columns: 34% 25% 20% 21%;
+  min-height: 30px;
+}
+
+.form-footer > div {
+  border-right: 1px solid #111;
+  font-size: 7px;
+  font-weight: 900;
+  padding: 4px;
+}
+
+.form-footer strong,
+.mechanic-row strong {
+  font-size: 7px;
+  font-weight: 700;
+  margin-left: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-footer > div:last-child {
+  border-right: 0;
+}
+
+.form-footer > div:nth-child(3) {
+  display: grid;
+  padding: 0;
+}
+
+.form-footer > div:nth-child(3) span {
+  border-bottom: 1px solid #111;
+  padding: 3px 4px;
+}
+
+.form-footer > div:nth-child(3) span:last-child {
+  border-bottom: 0;
+}
+
+.disclaimer-block {
+  border-top: 1px solid #111;
+  display: grid;
+  gap: 2px;
+  padding: 3px 6px;
+  text-align: center;
+}
+
+.disclaimer-block strong {
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.disclaimer-block span {
+  color: #111;
+  display: block;
+  font-size: 5px;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-overlay {
+  left: 86.0%;
+  top: 11.4%;
+  transform: translate(-50%, -50%);
+}
+
+.company-overlay {
+  left: 65.8%;
+  top: 27.2%;
+  max-width: 28%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unit-overlay,
+.license-overlay,
+.mileage-overlay,
+.model-overlay {
+  left: 57.0%;
+  max-width: 20%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unit-overlay {
+  top: 11.4%;
+}
+
+.license-overlay {
+  top: 14.8%;
+}
+
+.mileage-overlay {
+  top: 18.1%;
+}
+
+.model-overlay {
+  top: 20.6%;
+}
+
+.vin-overlay {
+  left: 57.0%;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  top: 23.8%;
+}
+
+.concern-overlay {
+  font-size: clamp(6px, 0.72vw, 9px);
+  left: 13.0%;
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  top: 11.7%;
+}
