@@ -30,7 +30,7 @@ import {
 import { invalidRequest } from "../auth/errors.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
 import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
-import { getLocationTemplates } from "../db/repositories/templates.repo.js";
+import { loadOfficeLocationTemplates } from "../modules/office/office-template-scope.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
 import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
 import { acknowledgeChatReceipts } from "../modules/chat/chat-receipts.service.js";
@@ -75,7 +75,7 @@ export async function handleOfficeApi(req, res, url, helpers) {
   const officeUserId = requestContext.actor.id;
 
   if (req.method === "GET" && url.pathname === "/api/office/template") {
-    const rows = await getLocationTemplates(requestContext.actor.locationIds || []);
+    const rows = await loadOfficeLocationTemplates(requestContext);
     const locations = rows.map((row) => ({
       location: {
         id: row.location_id,

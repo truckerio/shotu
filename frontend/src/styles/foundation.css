@@ -1,0 +1,93 @@
+:root {
+  color: #181d27;
+  background: #eef2f6;
+  --workspace-max-width: 2400px;
+  --motion-fast: 180ms;
+  --motion-control: 200ms;
+  --motion-surface: 320ms;
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@property --preview-pane-width {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@property --detail-resizer-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #eef2f6;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+html,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.prototype {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 76%) 0%, rgb(244 247 251 / 72%) 100%),
+    repeating-linear-gradient(90deg, rgb(61 87 117 / 7%) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(0deg, rgb(61 87 117 / 6%) 0 1px, transparent 1px 32px),
+    #eef2f6;
+  display: grid;
+  gap: 20px;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.prototype.workorder-detail-page {
+  grid-template-rows: minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--text-page-title);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0;
+  line-height: var(--leading-tight);
+}
+
+h2 {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+p,
+small {
+  color: #535862;
+  font-size: var(--text-secondary);
+  line-height: var(--leading-body);
+}

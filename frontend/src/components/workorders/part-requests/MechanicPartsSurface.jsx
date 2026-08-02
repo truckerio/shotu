@@ -1,0 +1,91 @@
+import { useEffect, useState } from "react";
+import { interfaceText } from "../../../i18n/index.js";
+import { MechanicPartRequestForm } from "../MechanicPartRequestForm.jsx";
+import { mechanicPartsActionState } from "../mechanic-part-request-model.js";
+import { usedPartHasValue } from "../used-parts-model.js";
+import { MechanicRequestCard } from "./MechanicRequestCard.jsx";
+import { UsedPartsSection } from "./UsedPartsSection.jsx";
+
+export function MechanicPartsSurface({
+  actorId,
+  detail,
+  parts,
+  onPartsChange,
+  onSaveParts,
+  onChanged,
+  locale,
+  usedPartsAccess,
+}) {
+  const mechanicActions = mechanicPartsActionState(detail.allowedActions || {});
+  const [activeAction, setActiveAction] = useState("");
+  const requests = detail.partRequests || [];
+  const hasRecordedUsedParts = Array.isArray(parts) && parts.some(usedPartHasValue);
+  const showUsedParts = mechanicActions.canRecordUsedPart || hasRecordedUsedParts;
+  const usedPartsPanelId = `used-parts-${detail.workorder.id}`;
+  const requestPartPanelId = `request-part-${detail.workorder.id}`;
+  const t = (key) => interfaceText(locale, key);
+
+  useEffect(() => {
+    setActiveAction("");
+  }, [detail.workorder.id]);
+
+  return (
+    <>
+      {mechanicActions.available.length ? (
+        <div className="mechanic-part-choices" role="group" aria-label={t("parts.chooseAction")}>
+          {mechanicActions.canRecordUsedPart ? (
+            <button
+              type="button"
+              className={activeAction === "used" ? "is-selected" : ""}
+              aria-pressed={activeAction === "used"}
+              aria-controls={usedPartsPanelId}
+              onClick={() => setActiveAction("used")}
+            >
+              {t("parts.usedPartAction")}
+            </button>
+          ) : null}
+          {mechanicActions.canRequestPart ? (
+            <button
+              type="button"
+              className={activeAction === "request" ? "is-selected" : ""}
+              aria-pressed={activeAction === "request"}
+              aria-controls={requestPartPanelId}
+              onClick={() => setActiveAction("request")}
+            >
+              {t("parts.needPartAction")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mechanicActions.canRequestPart ? (
+        <div id={requestPartPanelId} hidden={activeAction !== "request"}>
+          <MechanicPartRequestForm workorderId={detail.workorder.id} onChanged={onChanged} />
+        </div>
+      ) : null}
+
+      {showUsedParts ? (
+        <UsedPartsSection
+          actorId={actorId}
+          detail={detail}
+          parts={parts}
+          onPartsChange={onPartsChange}
+          onSaveParts={onSaveParts}
+          editable={usedPartsAccess.editable}
+          readonlyMessage={usedPartsAccess.message}
+          suggestionsEnabled={false}
+          id={usedPartsPanelId}
+          hidden={mechanicActions.canRecordUsedPart && activeAction !== "used"}
+        />
+      ) : null}
+
+      {requests.length ? (
+        <div className="part-request-list">
+          {requests.map((request) => (
+            <MechanicRequestCard request={request} detail={detail} onChanged={onChanged} key={request.id} />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}

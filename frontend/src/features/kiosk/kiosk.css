@@ -10,7 +10,6 @@
   display: grid;
   justify-items: center;
   min-height: 100dvh;
-  overflow-x: hidden;
   padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
   width: 100%;
 }
@@ -21,8 +20,9 @@
   border-radius: 12px;
   box-shadow: 0 18px 48px rgb(16 24 40 / 10%);
   box-sizing: border-box;
-  max-width: 760px;
-  padding: 28px;
+  max-width: 1120px;
+  min-width: 0;
+  padding: 32px;
   width: 100%;
 }
 
@@ -35,6 +35,45 @@
   align-items: center;
   display: flex;
   gap: 14px;
+}
+
+.kiosk-topline {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.kiosk-language {
+  color: #475467;
+  display: grid;
+  flex: 0 0 auto;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  gap: 5px;
+  min-width: 150px;
+}
+
+.kiosk-language select {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  color: #182230;
+  font: inherit;
+  min-height: 44px;
+  padding: 8px 34px 8px 12px;
+}
+
+.kiosk-language select:focus-visible {
+  border-color: #1570ef;
+  box-shadow: 0 0 0 3px rgb(46 144 250 / 16%);
+  outline: none;
+}
+
+.kiosk-heading > div,
+.kiosk-selected-mechanic > div {
+  min-width: 0;
 }
 
 .kiosk-heading p,
@@ -50,6 +89,7 @@
   color: #182230;
   font-size: var(--text-page-title);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .kiosk-heading-icon,
@@ -66,6 +106,36 @@
   width: 52px;
 }
 
+.kiosk-mechanic-initials.tone-1 {
+  background: #eaf2ff;
+  color: #175cd3;
+}
+
+.kiosk-mechanic-initials.tone-2 {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.kiosk-mechanic-initials.tone-3 {
+  background: #f9f5ff;
+  color: #6941c6;
+}
+
+.kiosk-mechanic-initials.tone-4 {
+  background: #fff6ed;
+  color: #c4320a;
+}
+
+.kiosk-mechanic-initials.tone-5 {
+  background: #fefbe8;
+  color: #854a0e;
+}
+
+.kiosk-mechanic-initials.tone-6 {
+  background: #fdf2fa;
+  color: #c11574;
+}
+
 .kiosk-heading-icon svg {
   height: 24px;
   width: 24px;
@@ -74,7 +144,7 @@
 .kiosk-roster {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 24px;
 }
 
@@ -87,7 +157,7 @@
   cursor: pointer;
   display: flex;
   gap: 14px;
-  min-height: 76px;
+  min-height: 88px;
   min-width: 0;
   padding: 11px 14px;
   text-align: left;
@@ -108,7 +178,7 @@
   outline-offset: 2px;
 }
 
-.kiosk-mechanic > span:last-child {
+.kiosk-mechanic-name {
   display: grid;
   min-width: 0;
 }
@@ -271,6 +341,16 @@
   z-index: 10;
 }
 
+@media (max-width: 860px) {
+  .kiosk-panel {
+    padding: 28px;
+  }
+
+  .kiosk-roster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 560px) {
   .kiosk-shell {
     align-items: start;
@@ -280,6 +360,16 @@
   .kiosk-panel {
     border-radius: 10px;
     padding: 20px 16px;
+  }
+
+  .kiosk-topline {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .kiosk-language {
+    width: 100%;
   }
 
   .kiosk-roster {

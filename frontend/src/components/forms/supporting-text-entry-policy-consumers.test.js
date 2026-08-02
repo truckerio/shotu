@@ -11,8 +11,11 @@ function policyCount(contents, kind) {
 }
 
 test("supporting workorder prose uses the shared suggestion field while identifiers stay conservative", () => {
-  const parts = source("../workorders/PartRequestsPanel.jsx");
-  const surveillance = source("../../features/surveillance/SurveillanceWorkspace.jsx");
+  const parts = [
+    "../workorders/part-requests/OfficePartComposer.jsx",
+    "../workorders/part-requests/OfficeRequestCard.jsx",
+  ].map(source).join("\n");
+  const surveillance = source("../../features/surveillance/workspace/SurveillanceOdooPanel.jsx");
 
   assert.equal((parts.match(/<NarrativeField/g) || []).length, 4);
   assert.equal(policyCount(parts, "identifier"), 4);
@@ -24,7 +27,7 @@ test("supporting workspaces opt every text search out of correction", () => {
   const workspaceSearches = [
     ["../../features/office/OfficeWorkspace.jsx", 2],
     ["../../features/mechanic/MechanicWorkspace.jsx", 2],
-    ["../../features/surveillance/SurveillanceWorkspace.jsx", 2],
+    ["../../features/surveillance/workspace/SurveillanceQueueView.jsx", 2],
     ["../../features/workorder-drafts/WorkorderDraftQueue.jsx", 1],
     ["../operations/OperationsWorkspace.jsx", 1],
   ];

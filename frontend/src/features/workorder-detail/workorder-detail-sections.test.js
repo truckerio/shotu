@@ -25,8 +25,11 @@ test("workorder detail sections keep shared tab contract across roles", () => {
 
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false }).map((section) => section.id),
-    ["work", "parts", "unit", "activity"],
+    ["work", "chat", "parts", "unit", "activity"],
   );
+  const mechanic = buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false });
+  assert.equal(mechanic.find(({ id }) => id === "chat").label, "Help");
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["unit", "activity"]);
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: false, isOfficeDetail: true }).map((section) => section.id),
     ["work", "parts", "unit", "team", "activity"],
@@ -47,7 +50,7 @@ test("workorder detail tabs render as page panels", () => {
 test("compact phone detail keeps role actions visible and moves supporting sections into More", () => {
   const sections = [
     { id: "work", label: "Review" },
-    { id: "chat", label: "Chat" },
+    { id: "chat", label: "Help" },
     { id: "parts", label: "Parts" },
     { id: "unit", label: "Truck" },
     { id: "team", label: "Team" },

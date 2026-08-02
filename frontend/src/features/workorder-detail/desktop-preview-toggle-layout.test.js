@@ -3,6 +3,8 @@ import fs from "node:fs";
 import test from "node:test";
 
 const styles = fs.readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+const detailPage = fs.readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta.url), "utf8");
+const previewController = fs.readFileSync(new URL("./useWorkorderPreviewController.js", import.meta.url), "utf8");
 
 test("closed desktop workorder tools collapse without relying on a transition", () => {
   assert.match(
@@ -24,4 +26,13 @@ test("desktop workorder tools tooltip stays beside the header control", () => {
     styles,
     /\.workorder-detail-page \.detail-context-actions \.preview-pane-toggle::after\s*\{[\s\S]*right:\s*calc\(100% \+ 8px\);[\s\S]*top:\s*50%;[\s\S]*translate\(3px, -50%\)/,
   );
+});
+
+test("desktop preview remains a supporting view and never replaces the main detail section", () => {
+  assert.match(previewController, /detailSection !== "preview"/);
+  assert.match(previewController, /setDetailSection\(defaultDetailSection\(actorRole, detailStatus, false\)\)/);
+  assert.doesNotMatch(previewController, /section === "preview" && !isCompact[\s\S]{0,220}setDetailSection\("preview"\)/);
+  assert.match(detailPage, /if \(isCompact\) return buildCompactPhoneDetailSections/);
+  assert.match(detailPage, /\{isCompact && detailSection === "preview" \? \(/);
+  assert.match(detailPage, /supportingPane=\{!isCompact \? \([\s\S]*?<PreviewPane/);
 });

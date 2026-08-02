@@ -5,6 +5,7 @@ export { FormErrorSummary } from "./FormErrorSummary.jsx";
 export { FormField } from "./FormField.jsx";
 export { FormSection } from "./FormSection.jsx";
 export { MechanicMultiSelect } from "./MechanicMultiSelect.jsx";
+export { AnchoredSelect } from "./AnchoredSelect.jsx";
 export { NarrativeField } from "./NarrativeField.jsx";
 export { OperationalForm } from "./OperationalForm.jsx";
 export { OptionalSection } from "./OptionalSection.jsx";

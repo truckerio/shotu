@@ -20,6 +20,37 @@
   width: 100%;
 }
 
+.chat-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-quick-actions button {
+  background: #f2f4f7;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  color: #344054;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.chat-quick-actions button:hover,
+.chat-quick-actions button:focus-visible {
+  background: #eaf2ff;
+  border-color: #84adff;
+  color: #175cd3;
+  outline: 0;
+}
+
+.chat-quick-actions button:focus-visible {
+  box-shadow: 0 0 0 3px rgb(46 144 250 / 18%);
+}
+
 .chat-prompt-composer .chat-composer-label {
   border: 0;
   clip: rect(0 0 0 0);

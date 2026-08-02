@@ -44,6 +44,12 @@
 .admin-users-table { border: 1px solid #eaecf0; border-radius: 6px; margin-top: 20px; overflow: hidden; }
 .admin-users-head, .admin-user-row { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(220px, 1fr) 110px 90px 110px 206px; min-height: 56px; padding: 0 16px; }
 .admin-users-head { background: #f9fafb; color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); min-height: 40px; }
+.admin-user-group + .admin-user-group { border-top: 1px solid #d0d5dd; }
+.admin-user-group-header { align-items: center; background: #fcfcfd; border-top: 1px solid #eaecf0; display: flex; gap: 16px; justify-content: space-between; min-height: 48px; padding: 7px 16px; }
+.admin-user-group-header > span:first-child { display: grid; gap: 2px; }
+.admin-user-group-header strong { color: #344054; font-size: var(--text-secondary); }
+.admin-user-group-header small { color: #667085; font-size: var(--text-caption); }
+.admin-user-group-count { align-items: center; background: #f2f4f7; border-radius: 10px; color: #475467; display: inline-flex; font-size: var(--text-caption); font-weight: var(--weight-semibold); justify-content: center; min-width: 24px; padding: 2px 7px; }
 .admin-user-row { border-top: 1px solid #eaecf0; }
 .admin-role { text-transform: capitalize; }
 .admin-user-status { border-radius: 999px; display: inline-flex; font-size: var(--text-caption); font-weight: var(--weight-semibold); line-height: 22px; padding: 0 9px; }
@@ -274,6 +280,9 @@
   .admin-panel-header .button { justify-content: center; min-height: 44px; width: 100%; }
   .admin-users-table { border: 0; display: grid; gap: 10px; overflow: visible; }
   .admin-users-head { display: none; }
+  .admin-user-group { display: grid; gap: 10px; }
+  .admin-user-group + .admin-user-group { border-top: 0; margin-top: 4px; }
+  .admin-user-group-header { border: 0; border-bottom: 1px solid #eaecf0; min-height: 0; padding: 4px 0 10px; }
   .admin-user-row {
     background: #fff;
     border: 1px solid #e4e7ec;

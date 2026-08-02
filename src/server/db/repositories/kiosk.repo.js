@@ -193,7 +193,7 @@ export async function getRegisteredKioskContext(tokenHash) {
       [device.id],
     );
     const mechanics = await client.query(
-      `select profile.id, profile.display_name as name,
+      `select profile.id, profile.display_name as name, preferences.locale,
               coalesce(credential.requires_change, true) as requires_change
          from user_location_memberships location_membership
          join user_company_memberships company_membership
@@ -209,6 +209,8 @@ export async function getRegisteredKioskContext(tokenHash) {
          left join mechanic_kiosk_credentials credential
            on credential.user_id = profile.id
           and credential.company_id = company_membership.company_id
+         left join user_workorder_preferences preferences
+           on preferences.user_id = profile.id
         where location_membership.company_id = $1
           and location_membership.location_id = $2
           and location_membership.active
@@ -222,6 +224,7 @@ export async function getRegisteredKioskContext(tokenHash) {
         id: mechanic.id,
         name: mechanic.name,
         initials: initials(mechanic.name),
+        locale: mechanic.locale || null,
         requiresPinChange: mechanic.requires_change,
       })),
     };

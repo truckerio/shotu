@@ -84,12 +84,13 @@ try {
     description: "Engine oil filter",
     category: "engine_oil_filter",
     quantity: 2,
+    uomCode: "ea",
     repairOrder: "Replace engine oil filter and inspect for leaks.",
     fitmentStatus: "possible",
     fitmentNotes: "Office verification required.",
   });
   assert.equal(request.approvalStatus, "submitted");
-  assert.equal((await getOperationalWorkorderById(workorderId)).status, "accepted");
+  assert.equal((await getOperationalWorkorderById(workorderId)).status, "in_progress");
   const pendingAttention = await queryOperationalWorkorders({ companyIds: [companyId], attentionReason: "parts" });
   assert.equal(pendingAttention.items.some((item) => item.id === workorderId), true);
   assert.deepEqual((await getOperationalWorkorderById(workorderId)).formData.parts, []);
@@ -151,6 +152,7 @@ try {
     description: "Engine oil filter",
     category: "engine_oil_filter",
     quantity: 2,
+    uomCode: "ea",
     repairOrder: "Replace engine oil filter and inspect for leaks.",
     fitmentStatus: "confirmed",
     fitmentNotes: "Verified by office.",
@@ -159,6 +161,7 @@ try {
       sourceType: "inventory",
       status: "reserved",
       quantity: 2,
+      uomCode: "ea",
       locationId,
       inventoryItemId: inventory.rows[0].id,
       vendor: "",
@@ -178,7 +181,7 @@ try {
   assert.deepEqual(learnedCatalogPart.rows[0].aliases, ["Need LF14000NN oil filters"]);
 
   const afterApproval = await getOperationalWorkorderById(workorderId);
-  assert.equal(afterApproval.status, "accepted");
+  assert.equal(afterApproval.status, "in_progress");
   const resolvedAttention = await queryOperationalWorkorders({ companyIds: [companyId], attentionReason: "parts" });
   assert.equal(resolvedAttention.items.some((item) => item.id === workorderId), false);
   assert.deepEqual(afterApproval.formData.parts, []);

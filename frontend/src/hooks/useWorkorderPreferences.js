@@ -6,11 +6,13 @@ const EMPTY_PREFERENCES = {
   defaultView: "all",
   pageSize: 50,
   savedFilters: {},
+  locale: "en",
 };
 
 export function useWorkorderPreferences(scope) {
   const [preferences, setPreferences] = useState(EMPTY_PREFERENCES);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
   const saveTimer = useRef(null);
   const latest = useRef(EMPTY_PREFERENCES);
 
@@ -53,10 +55,36 @@ export function useWorkorderPreferences(scope) {
     }, 350);
   }, [ready, scope]);
 
+  const saveLocale = useCallback(async (locale) => {
+    if (!ready) return false;
+    const previous = latest.current;
+    const next = { ...previous, locale };
+    latest.current = next;
+    setPreferences(next);
+    setError("");
+    try {
+      const result = await api("/api/workorder-preferences", {
+        method: "PUT",
+        body: JSON.stringify({ locale }),
+      });
+      const confirmed = { ...next, ...result.preferences };
+      latest.current = confirmed;
+      setPreferences(confirmed);
+      return true;
+    } catch (saveError) {
+      latest.current = previous;
+      setPreferences(previous);
+      setError(saveError.message || "Language preference was not saved.");
+      return false;
+    }
+  }, [ready]);
+
   return {
     ready,
+    error,
     filters: preferences.savedFilters?.[scope] || {},
     preferences,
     save,
+    saveLocale,
   };
 }

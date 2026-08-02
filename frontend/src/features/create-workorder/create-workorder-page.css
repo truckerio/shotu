@@ -35,7 +35,24 @@
   justify-self: start;
 }
 
+.create-location-load-error {
+  align-items: center;
+  color: #b42318;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.create-location-load-error .button {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 700px) {
+  .create-location-load-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .create-workorder-page .operational-form select,
   .create-workorder-page .operational-form input[type="date"] {
     block-size: 44px;

@@ -6,17 +6,20 @@ import {
   mechanicActionLabel,
 } from "./mechanicWorkspaceConfig.js";
 
-test("phone mechanic queues expose three primary buckets", () => {
+test("mechanic queues keep assigned and available as primary buckets", () => {
   assert.deepEqual(MECHANIC_PRIMARY_TABS.map(({ key, label }) => ({ key, label })), [
     { key: "myWork", label: "My work" },
     { key: "openWork", label: "Available" },
-    { key: "done", label: "Work done" },
   ]);
-  assert.deepEqual(MECHANIC_SECONDARY_TABS.map(({ key }) => key), ["waiting", "activeWork"]);
+  assert.deepEqual(MECHANIC_SECONDARY_TABS.map(({ key, label }) => ({ key, label })), [
+    { key: "waiting", label: "Waiting" },
+    { key: "done", label: "History" },
+    { key: "activeWork", label: "All active" },
+  ]);
 });
 
 test("mechanic queue action language matches next task", () => {
-  assert.equal(mechanicActionLabel("myWork"), "Finish / open");
+  assert.equal(mechanicActionLabel("myWork"), "Open");
   assert.equal(mechanicActionLabel("openWork"), "Accept");
   assert.equal(mechanicActionLabel("activeWork"), "Join");
   assert.equal(mechanicActionLabel("done"), "Open");

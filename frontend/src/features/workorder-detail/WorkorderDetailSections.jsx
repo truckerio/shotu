@@ -7,12 +7,13 @@ import { ProgressiveWorkorderSection } from "../../components/workorders/Workord
 import { WorkorderTimelinePanel } from "../../components/workorders/WorkorderTimeline.jsx";
 import { MechanicProgressStatus } from "../mechanic/progress/MechanicProgressStatus.jsx";
 import { Field } from "../generator/GeneratorUi.jsx";
-import { workDateRangeLabel } from "../../../../shared/workorder-template.js";
+import { formatUiDateRange } from "../../lib/workorder-presentation.js";
 import {
   workorderDetailSectionMode,
   workorderNeedsChatAttention,
 } from "./workorder-detail-sections.js";
 import { workorderHandoffFacts } from "./workorder-handoff.js";
+import { interfaceText } from "../../i18n/index.js";
 
 function WorkorderHandoffFacts({ workorder }) {
   return (
@@ -40,6 +41,7 @@ export function WorkorderDetailSections({
   isCompact,
   isMechanicDetail,
   isOfficeDetail,
+  locale = "en",
   mapsConfig,
   mechanicAction,
   mechanicMapLocation,
@@ -59,7 +61,6 @@ export function WorkorderDetailSections({
   applyVehicle,
   reloadActiveWorkorder,
   saveActiveUsedParts,
-  saveMechanicWorkNotes,
   saveOfficeWorkorder,
   openOfficeCancel,
   openOfficeReturn,
@@ -74,6 +75,7 @@ export function WorkorderDetailSections({
   vehicleMileage,
   vehicleModelText,
 }) {
+  const t = (key) => interfaceText(locale, key);
   const detailMapVehicle = selectedVehicle || mechanicMapVehicle;
   const detailMapLocation = getVehicleLocation(selectedVehicle) || mechanicMapLocation;
   const missingInfoAttention = (activeWorkorder?.activeAttention || [])
@@ -84,10 +86,10 @@ export function WorkorderDetailSections({
 
   return (
     <div className="accordion-stack workorder-progressive-stack">
-      {activeWorkorder && isCompact ? (
+      {activeWorkorder && (isCompact || isMechanicDetail) ? (
         <ProgressiveWorkorderSection
           id="chat"
-          title="Chat"
+          title={isMechanicDetail ? t("detail.help") : "Chat"}
           summary={`${conversationMessages.length} ${conversationMessages.length === 1 ? "message" : "messages"}`}
           activeSection={detailSection}
           onSelect={setDetailSection}
@@ -102,7 +104,7 @@ export function WorkorderDetailSections({
       {isMechanicDetail ? (
         <ProgressiveWorkorderSection
           id="work"
-          title="Work performed"
+          title={t("detail.work")}
           summary={form.workPerformed ? "Repair details added" : "Diagnosis and repair details"}
           activeSection={detailSection}
           onSelect={setDetailSection}
@@ -115,18 +117,14 @@ export function WorkorderDetailSections({
             mapsConfig={mapsConfig}
             showVehicleLabel={false}
           />
-          <WorkorderHandoffFacts workorder={activeWorkorder.workorder} />
           <div className="operational-form detail-workflow-fields">
-            <OperationalFormField id="mechanic-diagnosis" label="Diagnosis" hint="What did you inspect or find?">
+            <OperationalFormField id="mechanic-diagnosis" label={t("detail.diagnosis")} hint="What did you inspect or find?">
               <NarrativeField rows="3" value={form.diagnosis} onChange={(event) => updateField("diagnosis", event.target.value)} />
             </OperationalFormField>
-            <OperationalFormField id="mechanic-work-performed" label="Repair completed" hint="Write what was repaired, replaced, adjusted, or checked.">
-              <NarrativeField rows="4" value={form.workPerformed} onChange={(event) => updateField("workPerformed", event.target.value)} />
+            <OperationalFormField id="mechanic-work-performed" label={t("detail.repairCompleted")} hint="Write what was repaired, replaced, adjusted, or checked.">
+              <NarrativeField id="mechanic-work-performed" rows="4" value={form.workPerformed} onChange={(event) => updateField("workPerformed", event.target.value)} />
             </OperationalFormField>
             <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} />
-            <Button type="button" variant="secondary" onClick={saveMechanicWorkNotes} disabled={Boolean(mechanicAction.busy)}>
-              {mechanicAction.busy === "notes" ? "Saving..." : "Save progress"}
-            </Button>
           </div>
         </ProgressiveWorkorderSection>
       ) : null}
@@ -202,6 +200,7 @@ export function WorkorderDetailSections({
             onPartsChange={updateActiveUsedParts}
             onSaveParts={saveActiveUsedParts}
             onChanged={reloadActiveWorkorder}
+            locale={locale}
           />
         </div>
       </ProgressiveWorkorderSection>
@@ -404,7 +403,7 @@ export function WorkorderDetailSections({
             <div><dt>VIN</dt><dd>{form.vinNo || "Not listed"}</dd></div>
             <div><dt>License</dt><dd>{form.licenseNo || "Not listed"}</dd></div>
             <div><dt>Customer</dt><dd>{form.customerCompanyName || "Not listed"}</dd></div>
-            <div><dt>Work dates</dt><dd>{workDateRangeLabel(form) || "Not listed"}</dd></div>
+            <div><dt>Work dates</dt><dd>{formatUiDateRange(form.workStartDate, form.workEndDate, { locale }) || "Not listed"}</dd></div>
             <div><dt>Workorder</dt><dd>{activeWorkorder.workorder.serial}</dd></div>
           </dl>
         </ProgressiveWorkorderSection>
@@ -420,6 +419,7 @@ export function WorkorderDetailSections({
           className="is-detail-end-timeline"
           displayMode={workorderDetailSectionMode()}
         >
+          {isMechanicDetail ? <WorkorderHandoffFacts workorder={activeWorkorder.workorder} /> : null}
           <WorkorderTimelinePanel
             timeline={visibleTimeline}
             participants={activeWorkorder.participants || []}

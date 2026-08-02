@@ -28,13 +28,15 @@ export function buildWorkorderDetailSections({
   pendingPartCount,
   timelineCount,
   unitType,
+  locale = "en",
 }) {
   if (!activeWorkorder) return [];
-  const sections = [{ id: "work", label: isMechanicDetail ? "Work" : "Review" }];
-  if (isCompact) {
+  const mechanicLabel = (key) => interfaceText(locale, key);
+  const sections = [{ id: "work", label: isMechanicDetail ? mechanicLabel("detail.work") : "Review" }];
+  if (isCompact || isMechanicDetail) {
     sections.push({
       id: "chat",
-      label: "Chat",
+      label: isMechanicDetail ? mechanicLabel("detail.help") : "Chat",
       count: conversationCount || undefined,
       attention: ATTENTION_STATUSES.has(detailStatus),
     });
@@ -42,11 +44,11 @@ export function buildWorkorderDetailSections({
   sections.push(
     {
       id: "parts",
-      label: "Parts",
+      label: isMechanicDetail ? mechanicLabel("detail.parts") : "Parts",
       count: pendingPartCount || filledPartCount || undefined,
       attention: pendingPartCount > 0,
     },
-    { id: "unit", label: unitType || "Unit" },
+    { id: "unit", label: unitType || (isMechanicDetail ? mechanicLabel("detail.unit") : "Unit"), overflow: isMechanicDetail || undefined },
   );
   if (isOfficeDetail) {
     sections.push({
@@ -56,7 +58,7 @@ export function buildWorkorderDetailSections({
       attention: !assignedMechanicCount,
     });
   }
-  sections.push({ id: "activity", label: "Activity", count: timelineCount || undefined });
+  sections.push({ id: "activity", label: isMechanicDetail ? mechanicLabel("detail.activity") : "Activity", count: timelineCount || undefined, overflow: isMechanicDetail || undefined });
   return sections;
 }
 
@@ -98,3 +100,4 @@ export function workorderPreviewState(activeWorkorder, form, error = "") {
   if (!form) return { status: "empty", message: "Workorder preview is unavailable." };
   return { status: "ready", message: "" };
 }
+import { interfaceText } from "../../i18n/index.js";

@@ -2,25 +2,26 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const workspace = readFileSync(new URL("./SurveillanceWorkspace.jsx", import.meta.url), "utf8");
+const detailPage = readFileSync(new URL("./workspace/SurveillanceDetailPage.jsx", import.meta.url), "utf8");
+const odooPanel = readFileSync(new URL("./workspace/SurveillanceOdooPanel.jsx", import.meta.url), "utf8");
 
 test("Surveillance keeps Odoo mutation controls behind Manager approval", () => {
-  assert.match(workspace, /const canProcessOdoo = \["closed", "odoo_entered"\]\.includes\(workorder\.status\)/);
-  assert.match(workspace, /\{canProcessOdoo \? \([\s\S]*?<form className="surveillance-odoo-form"[\s\S]*?: \([\s\S]*?Awaiting office approval/);
+  assert.match(detailPage, /const canProcessOdoo = \["closed", "odoo_entered"\]\.includes\(workorder\.status\)/);
+  assert.match(odooPanel, /\{canProcessOdoo \? \([\s\S]*?<form className="surveillance-odoo-form"[\s\S]*?: \([\s\S]*?Awaiting office approval/);
 });
 
 test("Surveillance uses explicit request and correction handoff language", () => {
-  assert.match(workspace, />Information requested</);
-  assert.match(workspace, />Manager update received</);
-  assert.match(workspace, />Waiting for a Manager correction or addendum\.</);
-  assert.match(workspace, />Request information</);
-  assert.doesNotMatch(workspace, />Send back for information</);
+  assert.match(odooPanel, />Information requested</);
+  assert.match(odooPanel, />Manager update received</);
+  assert.match(odooPanel, />Waiting for a Manager correction or addendum\.</);
+  assert.match(odooPanel, />Request information</);
+  assert.doesNotMatch(odooPanel, />Send back for information</);
 });
 
 test("Surveillance Preview overlays stale saved headings with the current location", () => {
-  assert.match(workspace, /import \{ canonicalDetailPreviewTemplate \}/);
+  assert.match(detailPage, /import \{ canonicalDetailPreviewTemplate \}/);
   assert.match(
-    workspace,
+    detailPage,
     /\.\.\.formData,\s*\.\.\.canonicalDetailPreviewTemplate\(workorder\),/,
   );
 });

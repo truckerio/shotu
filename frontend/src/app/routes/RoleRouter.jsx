@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw01 } from "@untitledui/icons";
 import {
   useDraftForm,
@@ -14,10 +14,25 @@ import {
   routeStartsLoading,
   workorderDetailSearch,
 } from "./route-state.js";
+import {
+  createWorkorderDraft,
+  discardWorkorderDraft,
+  updateMechanicProgress,
+  updateWorkorderDraft,
+} from "./role-router-api.js";
+import {
+  createDraftBaselineFromForm,
+  createInitialDraftBaseline,
+  createInitialWorkorderForm,
+  resetWorkorderFormForCreate,
+  vehicleMileage,
+  vehicleModelText,
+  workorderDraftOwnerId,
+  workorderFormValues,
+} from "./role-router-model.js";
 import { getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
 import { MechanicWorkspace } from "../../features/mechanic/MechanicWorkspace.jsx";
 import { useMechanicProgress } from "../../features/mechanic/progress/useMechanicProgress.js";
-import { resolveMechanicProgressFields } from "../../features/mechanic/progress/mechanic-progress-fields.js";
 import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceWorkspace.jsx";
@@ -29,8 +44,8 @@ import {
   defaultSupportingView,
 } from "../../features/workorder-detail/workorder-detail-sections.js";
 import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
-import { canonicalApprovalName, canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
-import { canonicalDetailPreviewTemplate } from "../../features/workorder-detail/workorder-preview-template.js";
+import { useWorkorderPreviewController } from "../../features/workorder-detail/useWorkorderPreviewController.js";
+import { canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
 import {
   clearOfficeWorkorderEditBackup,
   readOfficeWorkorderEditBackup,
@@ -40,7 +55,6 @@ import { validateCreateWorkorder } from "../../features/generator/create-workord
 import {
   createLocationDefaultPatch,
   createLocationTemplatePatch,
-  splitSerial,
   templateFieldsForCreateLocation,
   todayIso,
   uniqueExactVehicleMatch,
@@ -55,78 +69,14 @@ import {
   selectedVehicleFromWorkorderDraft,
 } from "../../features/generator/workorder-draft.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
+import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { normalizeLocale } from "../../i18n/index.js";
 import { api } from "../../lib/api.js";
+import { formatLifecycleLabel } from "../../lib/workorder-presentation.js";
 import { visibleConversationMessages } from "../../components/workorders/chat-messages.js";
-import { normalizeUsedParts } from "../../components/workorders/used-parts-model.js";
 import { emptyPart, workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx").then((module) => ({ default: module.AdminWorkspace })));
-
-async function createWorkorderDraft(payload) {
-  const result = await api("/api/workorder-drafts", {
-    method: "POST",
-    body: JSON.stringify({
-      type: "workorder",
-      locationId: payload.locationId || null,
-      payload,
-    }),
-  });
-  return result.draft;
-}
-
-async function updateWorkorderDraft(draftId, { version, payload }) {
-  const result = await api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      version,
-      locationId: payload.locationId || null,
-      payload,
-    }),
-  });
-  return result.draft;
-}
-
-async function discardWorkorderDraft(draftId) {
-  return api(`/api/workorder-drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" });
-}
-
-function workorderDraftOwnerId(draft) {
-  return draft?.owner?.id || draft?.ownerId || draft?.createdBy?.id || draft?.creator?.id || "";
-}
-
-function createDraftBaselineFromForm(form) {
-  return {
-    locationId: form.locationId || "",
-    workStartDate: form.workStartDate,
-    workEndDate: form.workEndDate,
-    formData: {
-      headerTitle: form.headerTitle,
-      brandTop: form.brandTop,
-      brandBottom: form.brandBottom,
-      warrantyText: form.warrantyText,
-      responsibilityText: form.responsibilityText,
-      authorizationText: form.authorizationText,
-    },
-  };
-}
-
-async function updateMechanicProgress({
-  workorderId,
-  diagnosis,
-  workPerformed,
-  expectedVersion,
-  recordActivity,
-}) {
-  return api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}/progress`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      diagnosis,
-      workPerformed,
-      expectedVersion,
-      recordActivity,
-    }),
-  });
-}
 
 export function RoleRouter({ actor }) {
   const formRef = useRef(null);
@@ -151,19 +101,7 @@ export function RoleRouter({ actor }) {
   const [officeCancel, setOfficeCancel] = useState({ open: false, reason: "", message: "" });
   const [officeAssignment, setOfficeAssignment] = useState({ mechanicUserIds: [], reason: "" });
   const [createAssignment, setCreateAssignment] = useState({ mechanicUserIds: [], mechanics: [], loading: false });
-  const [previewPanelOpen, setPreviewPanelOpen] = useState(true);
-  const [previewFullscreen, setPreviewFullscreen] = useState(false);
-  const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
-  const [fullscreenZoom, setFullscreenZoom] = useState(1);
-  const [isPhone, setIsPhone] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 700px)").matches));
-  const [isCompact, setIsCompact] = useState(() => (
-    typeof window === "undefined"
-      ? false
-      : window.matchMedia("(max-width: 1180px)").matches
-  ));
   const [detailSection, setDetailSection] = useState("work");
-  const [supportingView, setSupportingView] = useState("preview");
-  const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [printState, setPrintState] = useState({ open: false, stage: "idle", message: "" });
   const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
   const [officeCreateState, setOfficeCreateState] = useState({ busy: false, message: "" });
@@ -178,64 +116,20 @@ export function RoleRouter({ actor }) {
   });
   const [draftLeaveOpen, setDraftLeaveOpen] = useState(false);
   const [draftLeaveBusy, setDraftLeaveBusy] = useState(false);
-  const createInitialDatesRef = useRef({
-    locationId: actor.locationIds?.[0] || "",
-    workStartDate: todayIso(),
-    workEndDate: todayIso(),
-    formData: {
-      headerTitle: "CHINO YARD WORKORDER",
-      brandTop: "PRO TEC",
-      brandBottom: "REPAIR",
-      warrantyText: "NO WARRANTY ON PARTS SUPPLIED BY CUSTOMER",
-      responsibilityText: "Not responsible for loss or damage to vehicle in case of fire, theft or any other cause beyond our control.",
-      authorizationText: "I authorize the above repair to be completed along with necessary material(s). I grant you and/or your employees permission to operate the vehicle described herein on street, highways, or elsewhere for the purpose of testing and/or inspection. An express mechanic's lien is hereby acknowledged on above vehicle to secure the amount of repairs thereto.",
-    },
-  });
+  const interfacePreferences = useWorkorderPreferences("mechanic-interface");
+  const interfaceLocale = normalizeLocale(interfacePreferences.preferences.locale);
+  const createInitialDatesRef = useRef(createInitialDraftBaseline(actor));
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [officeAutosaveRevision, setOfficeAutosaveRevision] = useState(0);
   const [usedPartsDirty, setUsedPartsDirty] = useState(false);
   const [vehicleLookup, setVehicleLookup] = useState({ loading: false, status: "", results: [] });
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [officeLocations, setOfficeLocations] = useState([]);
+  const [officeLocationsState, setOfficeLocationsState] = useState({ loading: true, error: "" });
   const [mapsConfig, setMapsConfig] = useState({});
   const [detailStatus, setDetailStatus] = useState("open");
   const [detailSource, setDetailSource] = useState(null);
-  const [form, setForm] = useState({
-    companyName: "",
-    customerCompanyName: "",
-    locationId: actor.locationIds?.[0] || "",
-    locationName: "",
-    headerTitle: "CHINO YARD WORKORDER",
-    brandTop: "PRO TEC",
-    brandBottom: "REPAIR",
-    warrantyText: "NO WARRANTY ON PARTS SUPPLIED BY CUSTOMER",
-    responsibilityText: "Not responsible for loss or damage to vehicle in case of fire, theft or any other cause beyond our control.",
-    authorizationText: "I authorize the above repair to be completed along with necessary material(s). I grant you and/or your employees permission to operate the vehicle described herein on street, highways, or elsewhere for the purpose of testing and/or inspection. An express mechanic's lien is hereby acknowledged on above vehicle to secure the amount of repairs thereto.",
-    prefix: "WO-",
-    nextNumber: 1,
-    digits: 6,
-    copies: 1,
-    workDate: todayIso(),
-    workStartDate: todayIso(),
-    workEndDate: todayIso(),
-    unitNo: "",
-    unitType: "",
-    licenseNo: "",
-    mileage: "",
-    model: "",
-    vinNo: "",
-    mechanicConcern: "",
-    diagnosis: "",
-    workPerformed: "",
-    mechanicName: actor.role === "mechanic" ? actor.name || "" : "",
-    startTime: "",
-    endTime: "",
-    managerName: "",
-    officeNotes: "",
-    customerSignature: "",
-    authorizedBy: "",
-    parts: [emptyPart(), emptyPart(), emptyPart()],
-  });
+  const [form, setForm] = useState(() => createInitialWorkorderForm(actor));
   const createMechanicUserIds = useMemo(() => (
     actor.role === "mechanic"
       ? [actor.id].filter(Boolean)
@@ -291,21 +185,45 @@ export function RoleRouter({ actor }) {
   const lastPhysicalPageIndex = workorderPhysicalPageCount(form) - 1;
   const primaryActionLabel = "Print workorder";
   const canPrint = actor.role === "office" || actor.role === "admin";
-  const statusOptions = [
-    { value: "open", label: "Open" },
-    { value: "accepted", label: "Accepted" },
-    { value: "in_progress", label: "Working" },
-    { value: "waiting_office", label: "Need office" },
-    { value: "parts_requested", label: "Parts requested" },
-    { value: "mechanic_done", label: "Work done" },
-    { value: "closed", label: "Closed" },
-    { value: "odoo_entered", label: "Odoo entered" },
-    { value: "cancelled", label: "Cancelled" },
-  ];
-  const currentStatusLabel = statusOptions.find((option) => option.value === detailStatus)?.label || "Open";
+  const attentionStatusLabels = {
+    waiting_office: "Needs office",
+    parts_requested: "Parts requested",
+  };
+  const currentStatusLabel = attentionStatusLabels[detailStatus]
+    || formatLifecycleLabel(detailStatus, { fallback: "Open" });
   const isMechanicDetail = detailSource === "mechanic" && Boolean(activeWorkorder);
   const isOfficeDetail = detailSource === "office" && Boolean(activeWorkorder);
   const isWorkorderDetail = Boolean(activeWorkorder);
+  const {
+    fullscreenPageIndex,
+    fullscreenZoom,
+    isCompact,
+    isPhone,
+    jumpToPreview,
+    openFullscreenPreview,
+    previewFullscreen,
+    previewPanelOpen,
+    printMenuOpen,
+    selectDetailSection,
+    setFullscreenPageIndex,
+    setFullscreenZoom,
+    setPreviewFullscreen,
+    setPreviewPanelOpen,
+    setPrintMenuOpen,
+    setSupportingView,
+    supportingView,
+    toggleWorkorderTools,
+  } = useWorkorderPreviewController({
+    activeWorkorder,
+    actorRole: actor.role,
+    detailSection,
+    detailStatus,
+    effectiveCopies,
+    isMechanicDetail,
+    isWorkorderDetail,
+    previewSerialCount: previewSerials.length,
+    setDetailSection,
+  });
   const showEmbeddedPreview = previewPanelOpen && (!isWorkorderDetail || !isCompact);
   const conversationMessages = useMemo(() => {
     if (!activeWorkorder) return [];
@@ -400,6 +318,7 @@ export function RoleRouter({ actor }) {
       pendingPartCount,
       timelineCount: visibleTimeline.length,
       unitType: form.unitType,
+      locale: interfaceLocale,
     });
   }, [
     activeWorkorder,
@@ -411,16 +330,12 @@ export function RoleRouter({ actor }) {
     isCompact,
     isMechanicDetail,
     isOfficeDetail,
+    interfaceLocale,
     pendingPartCount,
     visibleTimeline.length,
   ]);
   const officeAssignmentChanged = [...officeAssignment.mechanicUserIds].sort().join(",")
     !== [...assignedMechanicIds].sort().join(",");
-  const expectedMechanicName = activeWorkorder?.user?.name || actor.name || "";
-  const mechanicFinishNameMatches = (
-    mechanicFinish.name.trim().replace(/\s+/g, " ").toLowerCase()
-    === expectedMechanicName.trim().replace(/\s+/g, " ").toLowerCase()
-  );
 
   useEffect(() => {
     const workorder = activeWorkorder?.workorder;
@@ -467,33 +382,44 @@ export function RoleRouter({ actor }) {
     },
   );
 
-  useEffect(() => {
+  const loadCreateLocations = useCallback(async () => {
     if (!["office", "admin", "mechanic"].includes(actor.role)) return;
     const rolePath = actor.role === "mechanic" ? "mechanic" : "office";
-    api(`/api/${rolePath}/template`)
-      .then(({ location, template, locations }) => {
-        const availableLocations = locations || [];
-        const defaultLocationEntry = location
-          ? { location, template }
-          : availableLocations[0];
-        setOfficeLocations(availableLocations);
-        if (!defaultLocationEntry?.location) return;
-        setForm((current) => {
-          const patch = createLocationDefaultPatch({
-            currentLocationId: current.locationId,
-            defaultLocation: defaultLocationEntry.location,
-            locations: availableLocations,
-            template: defaultLocationEntry.template,
-          });
-          const next = { ...current, ...patch };
-          if (!current.locationId || !resolveCreateLocation(availableLocations, current.locationId)) {
-            createInitialDatesRef.current = createDraftBaselineFromForm(next);
-          }
-          return next;
+    setOfficeLocationsState({ loading: true, error: "" });
+    try {
+      const { location, template, locations } = await api(`/api/${rolePath}/template`);
+      const availableLocations = locations || [];
+      const defaultLocationEntry = location
+        ? { location, template }
+        : availableLocations[0];
+      setOfficeLocations(availableLocations);
+      setOfficeLocationsState({ loading: false, error: "" });
+      if (!defaultLocationEntry?.location) return;
+      setForm((current) => {
+        const patch = createLocationDefaultPatch({
+          currentLocationId: current.locationId,
+          defaultLocation: defaultLocationEntry.location,
+          locations: availableLocations,
+          template: defaultLocationEntry.template,
         });
-      })
-      .catch(() => {});
+        const next = { ...current, ...patch };
+        if (!current.locationId || !resolveCreateLocation(availableLocations, current.locationId)) {
+          createInitialDatesRef.current = createDraftBaselineFromForm(next);
+        }
+        return next;
+      });
+    } catch (error) {
+      setOfficeLocations([]);
+      setOfficeLocationsState({
+        loading: false,
+        error: error.message || "Locations could not be loaded.",
+      });
+    }
   }, [actor.role]);
+
+  useEffect(() => {
+    loadCreateLocations();
+  }, [loadCreateLocations]);
 
   async function loadDraftWorkspace() {
     if (!["office", "admin"].includes(actor.role)) return;
@@ -619,7 +545,7 @@ export function RoleRouter({ actor }) {
         setDetailStatus(detail.workorder.status);
         setDetailSection(defaultDetailSection(actor.role, detail.workorder.status, isCompact));
         setSupportingView(defaultSupportingView(actor.role, detail.workorder.status));
-        setForm((current) => ({ ...workorderFormValues(detail, current), ...(editBackup || {}) }));
+        setForm((current) => ({ ...workorderFormValues({ detail, current, officeLocations }), ...(editBackup || {}) }));
         if (editBackup) {
           officeAutosaveRevisionRef.current += 1;
           setOfficeAutosaveRevision((current) => current + 1);
@@ -646,60 +572,6 @@ export function RoleRouter({ actor }) {
     if (params.get("draft") === draftId) return;
     replaceRouteSearch(createWorkorderSearch(draftId));
   }, [activeWorkorder, workorderDraft.draft?.id, workspace]);
-
-  useEffect(() => {
-    const phoneQuery = window.matchMedia("(max-width: 700px)");
-    const compactQuery = window.matchMedia("(max-width: 1180px)");
-    const syncPhone = () => setIsPhone(phoneQuery.matches);
-    const syncCompact = () => setIsCompact(compactQuery.matches);
-    syncPhone();
-    syncCompact();
-    phoneQuery.addEventListener("change", syncPhone);
-    compactQuery.addEventListener("change", syncCompact);
-    return () => {
-      phoneQuery.removeEventListener("change", syncPhone);
-      compactQuery.removeEventListener("change", syncCompact);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!activeWorkorder || isCompact || detailSection !== "chat") return;
-    setSupportingView("chat");
-    setDetailSection(defaultDetailSection(actor.role, detailStatus, false));
-  }, [activeWorkorder, actor.role, detailSection, detailStatus, isCompact]);
-
-  useEffect(() => {
-    setFullscreenPageIndex((current) => Math.min(current, Math.max(0, effectiveCopies - 1)));
-  }, [effectiveCopies]);
-
-  useEffect(() => {
-    if (!previewFullscreen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") setPreviewFullscreen(false);
-      if (event.key === "ArrowLeft") setFullscreenPageIndex((current) => Math.max(0, current - 1));
-      if (event.key === "ArrowRight") setFullscreenPageIndex((current) => Math.min(previewSerials.length - 1, current + 1));
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [previewFullscreen, previewSerials.length]);
-
-  useEffect(() => {
-    if (!previewPanelOpen) return undefined;
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setPreviewPanelOpen(false);
-        setPrintMenuOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewPanelOpen]);
-
 
   useEffect(() => {
     let cancelled = false;
@@ -846,25 +718,6 @@ export function RoleRouter({ actor }) {
       } : current);
     }
     setUsedPartsDirty(false);
-  }
-
-  function vehicleMileage(vehicle) {
-    if (vehicle.last_odometer_miles) return String(Math.round(Number(vehicle.last_odometer_miles)));
-    if (vehicle.last_odometer_meters) return String(Math.round(Number(vehicle.last_odometer_meters) / 1609.344));
-    return "";
-  }
-
-  function vehicleModelText(vehicle) {
-    const seen = new Set();
-    return [vehicle.year, vehicle.make, vehicle.model]
-      .filter(Boolean)
-      .filter((value) => {
-        const key = String(value).trim().toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .join(" ");
   }
 
   function applyVehicle(vehicle) {
@@ -1080,46 +933,6 @@ export function RoleRouter({ actor }) {
     }
   }
 
-  function workorderFormValues(detail, current = form) {
-    const workorder = detail.workorder;
-    const asset = workorder.asset || {};
-    const savedForm = workorder.formData || {};
-    const serial = splitSerial(workorder.serial);
-    const model = [asset.year, asset.make, asset.model].filter(Boolean).join(" ");
-    const savedParts = normalizeUsedParts(savedForm.parts);
-    const assignedMechanicName = workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
-      || workorder.mechanic?.name
-      || (detail.user?.role === "mechanic" ? detail.user.name : "");
-    const approvalName = canonicalApprovalName(workorder);
-    const mechanicProgressFields = resolveMechanicProgressFields(workorder, savedForm);
-    const canonicalPreviewTemplate = canonicalDetailPreviewTemplate(workorder, officeLocations);
-
-    return {
-      ...current,
-      ...savedForm,
-      ...canonicalPreviewTemplate,
-      ...serial,
-      copies: 1,
-      locationId: workorder.locationId || workorder.location?.id || current.locationId,
-      companyName: savedForm.customerCompanyName || savedForm.companyName || asset.ownerName || asset.owner_name || "",
-      customerCompanyName: savedForm.customerCompanyName || savedForm.companyName || asset.ownerName || asset.owner_name || "",
-      unitNo: savedForm.unitNo || asset.unitNo || asset.name || "",
-      unitType: savedForm.unitType || asset.unitType || "",
-      licenseNo: savedForm.licenseNo || asset.licensePlate || "",
-      mileage: savedForm.mileage || (asset.lastOdometerMiles ? String(Math.round(Number(asset.lastOdometerMiles))) : ""),
-      model: savedForm.model || model,
-      vinNo: savedForm.vinNo || asset.vin || "",
-      mechanicConcern: savedForm.mechanicConcern || workorder.concern || "",
-      ...mechanicProgressFields,
-      mechanicName: assignedMechanicName || savedForm.mechanicName,
-      officeNotes: workorder.officeNotes || savedForm.officeNotes || "",
-      managerName: approvalName || savedForm.managerName || "",
-      authorizedBy: approvalName || savedForm.authorizedBy || "",
-      ...canonicalPreviewTimes(workorder),
-      parts: savedParts,
-    };
-  }
-
   function openOperationalWorkorder(detail) {
     const workorder = detail.workorder;
     const requestedSection = currentRouteParams().get("section");
@@ -1134,9 +947,9 @@ export function RoleRouter({ actor }) {
     setDetailStatus(workorder.status);
     setSelectedVehicle(workorder.asset || null);
     setMechanicAction({ busy: "", message: "" });
-    setDetailSection(nextSection === "chat" && !isCompact ? "work" : nextSection);
+    setDetailSection(nextSection);
     setSupportingView(nextSection === "chat" ? "chat" : defaultSupportingView("mechanic", workorder.status));
-    setForm((current) => workorderFormValues(detail, current));
+    setForm((current) => workorderFormValues({ detail, current, officeLocations }));
     setWorkspace("generator");
     replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection));
   }
@@ -1164,7 +977,7 @@ export function RoleRouter({ actor }) {
       setDetailStatus(workorder.status);
       setDetailSection(defaultDetailSection(actor.role, workorder.status, isCompact));
       setSupportingView(defaultSupportingView(actor.role, workorder.status));
-      setForm((current) => ({ ...workorderFormValues(detail, current), ...(editBackup || {}) }));
+      setForm((current) => ({ ...workorderFormValues({ detail, current, officeLocations }), ...(editBackup || {}) }));
       setWorkspace("generator");
       if (editBackup) {
         officeAutosaveRevisionRef.current += 1;
@@ -1238,7 +1051,7 @@ export function RoleRouter({ actor }) {
       const detail = await api(`/api/office/workorders/${result.workorder.id}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      if (!automatic) setForm((current) => workorderFormValues(detail, current));
+      if (!automatic) setForm((current) => workorderFormValues({ detail, current, officeLocations }));
       if (officeAutosaveRevisionRef.current === savingRevision) {
         clearOfficeWorkorderEditBackup(actor.id, detail.workorder.id);
       }
@@ -1269,7 +1082,7 @@ export function RoleRouter({ actor }) {
       const detail = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => workorderFormValues({ detail, current, officeLocations }));
       setOfficeCloseOpen(false);
       setOfficeCloseNote("");
       setOfficeDetailState({ busy: false, message: "Workorder approved and sent to surveillance." });
@@ -1304,7 +1117,7 @@ export function RoleRouter({ actor }) {
       const detail = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => workorderFormValues({ detail, current, officeLocations }));
       setOfficeReturn({ open: false, reason: "", categories: [], message: "" });
       setOfficeDetailState({ busy: false, message: "Returned to the mechanic with your requested changes." });
     } catch (error) {
@@ -1329,7 +1142,7 @@ export function RoleRouter({ actor }) {
       const detail = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => workorderFormValues({ detail, current, officeLocations }));
       setOfficeCancel({ open: false, reason: "", message: "" });
       setOfficeDetailState({ busy: false, message: "Workorder cancelled. The reason remains in Activity." });
     } catch (error) {
@@ -1357,7 +1170,7 @@ export function RoleRouter({ actor }) {
       const detail = await api(`/api/office/workorders/${activeWorkorder.workorder.id}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => workorderFormValues({ detail, current, officeLocations }));
       const team = detail.workorder.mechanics || [];
       setOfficeAssignment({ mechanicUserIds: team.map((mechanic) => mechanic.id), reason: "" });
       setOfficeDetailState({
@@ -1380,30 +1193,7 @@ export function RoleRouter({ actor }) {
     setSelectedVehicle(null);
     setVehicleLookup({ loading: false, status: "", results: [] });
     setForm((current) => {
-      const next = {
-        ...current,
-        customerCompanyName: "",
-        unitNo: "",
-        unitType: "",
-        licenseNo: "",
-        mileage: "",
-        model: "",
-        vinNo: "",
-        mechanicConcern: "",
-        diagnosis: "",
-        workPerformed: "",
-        mechanicName: actor.role === "mechanic" ? actor.name || "" : "",
-        startTime: "",
-        endTime: "",
-        managerName: "",
-        officeNotes: "",
-        customerSignature: "",
-        authorizedBy: "",
-        workDate: createDate,
-        workStartDate: createDate,
-        workEndDate: createDate,
-        parts: [emptyPart(), emptyPart(), emptyPart()],
-      };
+      const next = resetWorkorderFormForCreate(current, actor, createDate);
       createInitialDatesRef.current = createDraftBaselineFromForm(next);
       return next;
     });
@@ -1629,7 +1419,7 @@ export function RoleRouter({ actor }) {
     setActiveWorkorder(detail);
     setDetailStatus(detail.workorder.status);
     if (!options.preserveForm) {
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => workorderFormValues({ detail, current, officeLocations }));
     }
   }
 
@@ -1643,17 +1433,6 @@ export function RoleRouter({ actor }) {
     onRefresh: () => reloadActiveWorkorder({ preserveForm: shouldPreserveActiveWorkorderForm() }),
   });
 
-  async function saveMechanicWorkNotes() {
-    if (!activeWorkorder?.workorder?.id || !isMechanicDetail) return;
-    setMechanicAction({ busy: "notes", message: "" });
-    try {
-      await mechanicProgress.flush({ recordActivity: true });
-      setMechanicAction({ busy: "", message: "Work details saved." });
-    } catch (error) {
-      setMechanicAction({ busy: "", message: error.message });
-    }
-  }
-
   async function acceptOpenedMechanicWorkorder() {
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId || !isMechanicDetail) return false;
@@ -1666,7 +1445,7 @@ export function RoleRouter({ actor }) {
       const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}`);
       setActiveWorkorder(detail);
       setDetailStatus(detail.workorder.status);
-      setForm((current) => workorderFormValues(detail, current));
+      setForm((current) => workorderFormValues({ detail, current, officeLocations }));
       mechanicProgress.reset({
         id: detail.workorder.id,
         progress: detail.workorder,
@@ -1680,7 +1459,7 @@ export function RoleRouter({ actor }) {
     }
   }
 
-  async function markMechanicWorkDone(confirmationName) {
+  async function markMechanicWorkDone() {
     try {
       await mechanicProgress.flush({ recordActivity: true });
     } catch (error) {
@@ -1694,7 +1473,6 @@ export function RoleRouter({ actor }) {
         body: JSON.stringify({
           diagnosis: form.diagnosis,
           workPerformed: form.workPerformed,
-          confirmationName,
         }),
       }),
       "Work sent to office for review.",
@@ -1704,70 +1482,14 @@ export function RoleRouter({ actor }) {
   async function submitMechanicFinish(event) {
     event.preventDefault();
     if (!form.workPerformed.trim()) {
-      setMechanicFinish((current) => ({
-        ...current,
-        message: "Add the work performed before marking the work as done.",
-      }));
+      setMechanicFinish({ open: false, name: "", message: "" });
+      setDetailSection("work");
+      setMechanicAction({ busy: "", message: "Add the repair completed before marking Work done." });
+      requestAnimationFrame(() => document.getElementById("mechanic-work-performed")?.focus());
       return;
     }
-    if (!mechanicFinishNameMatches) {
-      setMechanicFinish((current) => ({
-        ...current,
-        message: `Write ${expectedMechanicName} to confirm the work is done.`,
-      }));
-      return;
-    }
-    const finished = await markMechanicWorkDone(mechanicFinish.name);
+    const finished = await markMechanicWorkDone();
     if (finished) setMechanicFinish({ open: false, name: "", message: "" });
-  }
-
-  function jumpToPreview() {
-    if (isWorkorderDetail && isCompact) {
-      setFullscreenPageIndex(0);
-      setFullscreenZoom(isPhone ? 0 : 1);
-      setPreviewFullscreen(true);
-      return;
-    }
-    if (supportingView !== "preview" || !previewPanelOpen) {
-      setSupportingView("preview");
-      setPreviewPanelOpen(true);
-      return;
-    }
-    setPreviewPanelOpen((open) => {
-      if (open) setPrintMenuOpen(false);
-      return !open;
-    });
-  }
-
-  function toggleWorkorderTools() {
-    if (isCompact) {
-      jumpToPreview();
-      return;
-    }
-    setPreviewPanelOpen((open) => !open);
-    setPrintMenuOpen(false);
-  }
-
-  function selectDetailSection(section) {
-    if (section === "chat" && !isCompact) {
-      setSupportingView("chat");
-      setPreviewPanelOpen(true);
-      if (activeWorkorder?.workorder?.id) {
-        replaceRouteSearch(workorderDetailSearch(activeWorkorder.workorder.id, "chat"));
-      }
-      return;
-    }
-    setDetailSection(section);
-    if (activeWorkorder?.workorder?.id) {
-      replaceRouteSearch(workorderDetailSearch(activeWorkorder.workorder.id, section));
-    }
-  }
-
-  function openFullscreenPreview() {
-    setPrintMenuOpen(false);
-    setFullscreenPageIndex(0);
-    setFullscreenZoom(isPhone ? 0 : 1);
-    setPreviewFullscreen(true);
   }
 
   if (routeLoading) {
@@ -1782,7 +1504,16 @@ export function RoleRouter({ actor }) {
   }
 
   if (workspace === "mechanic") {
-    return <MechanicWorkspace actor={actor} onCreateWorkorder={openOfficeGenerator} onOpenWorkorder={openOperationalWorkorder} />;
+    return (
+      <MechanicWorkspace
+        actor={actor}
+        locale={interfaceLocale}
+        localeError={interfacePreferences.error}
+        onLocaleChange={interfacePreferences.saveLocale}
+        onCreateWorkorder={openOfficeGenerator}
+        onOpenWorkorder={openOperationalWorkorder}
+      />
+    );
   }
 
   if (workspace === "admin") {
@@ -1843,7 +1574,6 @@ export function RoleRouter({ actor }) {
         detailSections={detailSections}
         detailStatus={detailStatus}
         effectiveCopies={effectiveCopies}
-        expectedMechanicName={expectedMechanicName}
         filledPartCount={filledPartCount}
         firstSerial={firstSerial}
         form={form}
@@ -1854,13 +1584,14 @@ export function RoleRouter({ actor }) {
         isMechanicDetail={isMechanicDetail}
         isOfficeDetail={isOfficeDetail}
         isPhone={isPhone}
+        locale={interfaceLocale}
+        localeError={interfacePreferences.error}
         lastPhysicalPageIndex={lastPhysicalPageIndex}
         lastSerial={lastSerial}
         mapsConfig={mapsConfig}
         mechanicAction={mechanicAction}
         mechanicAsset={mechanicAsset}
         mechanicFinish={mechanicFinish}
-        mechanicFinishNameMatches={mechanicFinishNameMatches}
         mechanicMapLocation={mechanicMapLocation}
         mechanicMapVehicle={mechanicMapVehicle}
         mechanicProgress={mechanicProgress}
@@ -1899,10 +1630,10 @@ export function RoleRouter({ actor }) {
         printWorkorders={printWorkorders}
         openOfficeCancel={openOfficeCancel}
         openOfficeReturn={openOfficeReturn}
+        onLocaleChange={interfacePreferences.saveLocale}
         reloadActiveWorkorder={reloadActiveWorkorder}
         returnToRoleWorkspace={returnToRoleWorkspace}
         saveActiveUsedParts={saveActiveUsedParts}
-        saveMechanicWorkNotes={saveMechanicWorkNotes}
         saveOfficeWorkorder={saveOfficeWorkorder}
         selectDetailSection={selectDetailSection}
         selectOfficeLocation={selectOfficeLocation}
@@ -1954,6 +1685,7 @@ export function RoleRouter({ actor }) {
       officeCreateErrors={officeCreateErrors}
       officeCreateState={officeCreateState}
       officeLocations={officeLocations}
+      officeLocationsState={officeLocationsState}
       previewFullscreen={previewFullscreen}
       previewGridRef={previewGridRef}
       previewRef={previewRef}
@@ -1975,6 +1707,7 @@ export function RoleRouter({ actor }) {
       jumpToPreview={jumpToPreview}
       openOfficeWorkspace={openOfficeWorkspace}
       openFullscreenPreview={openFullscreenPreview}
+      reloadOfficeLocations={loadCreateLocations}
       removePartRow={removePartRow}
       saveDraftAndLeave={saveDraftAndLeave}
       setCreateAssignment={setCreateAssignment}

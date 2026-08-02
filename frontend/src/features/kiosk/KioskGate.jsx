@@ -2,25 +2,41 @@ import { useState } from "react";
 import { ArrowLeft, LogIn01, RefreshCw01, User01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
+import { interfaceText, normalizeLocale } from "../../i18n/index.js";
 import {
   isCompleteKioskPin,
+  kioskMechanicIdentity,
+  kioskMechanicsInDisplayOrder,
   kioskPinValue,
+  kioskStoredLocale,
   kioskUnlockError,
+  saveKioskLocale,
 } from "./kiosk-utils.js";
 import "./kiosk.css";
 
-function KioskMechanicButton({ mechanic, onSelect }) {
+const KIOSK_LANGUAGE_OPTIONS = Object.freeze([
+  { value: "en", label: "English" },
+  { value: "pa", label: "ਪੰਜਾਬੀ" },
+  { value: "es", label: "Español" },
+]);
+
+function KioskMechanicButton({ locale, mechanic, onSelect }) {
+  const identity = kioskMechanicIdentity(mechanic);
+  const text = (key) => interfaceText(locale, key);
+
   return (
     <button
       className="kiosk-mechanic"
       type="button"
       onClick={() => onSelect(mechanic)}
-      aria-label={`Unlock as ${mechanic.name}`}
+      aria-label={`${text("kiosk.unlockAs")} ${mechanic.name}`}
     >
-      <span className="kiosk-mechanic-initials" aria-hidden="true">{mechanic.initials}</span>
-      <span>
+      <span className={`kiosk-mechanic-initials ${identity.tone}`} aria-hidden="true">
+        {identity.marker}
+      </span>
+      <span className="kiosk-mechanic-name">
         <strong>{mechanic.name}</strong>
-        <small>Mechanic</small>
+        <small>{text("kiosk.mechanic")}</small>
       </span>
     </button>
   );
@@ -33,6 +49,13 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
   const [confirmPin, setConfirmPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [deviceLocale, setDeviceLocale] = useState(kioskStoredLocale);
+  const activeLocale = normalizeLocale(mechanic?.locale || deviceLocale);
+  const text = (key) => interfaceText(activeLocale, key);
+
+  function changeDeviceLocale(event) {
+    setDeviceLocale(saveKioskLocale(event.target.value));
+  }
 
   function selectMechanic(nextMechanic) {
     setMechanic(nextMechanic);
@@ -60,12 +83,13 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
       });
       window.location.replace("/");
     } catch (unlockError) {
-      setError(kioskUnlockError(unlockError.status));
+      setError(kioskUnlockError(unlockError.status, activeLocale));
       setSubmitting(false);
     }
   }
 
   if (mechanic) {
+    const identity = kioskMechanicIdentity(mechanic);
     const pinChangeInvalid = mechanic.requiresPinChange
       && (!isCompleteKioskPin(newPin) || newPin !== confirmPin);
     return (
@@ -73,10 +97,12 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
         <section className="kiosk-panel kiosk-unlock-panel" aria-labelledby="kiosk-unlock-title">
           <button className="kiosk-back" type="button" onClick={() => selectMechanic(null)}>
             <ArrowLeft />
-            <span>All mechanics</span>
+            <span>{text("kiosk.allMechanics")}</span>
           </button>
           <div className="kiosk-selected-mechanic">
-            <span className="kiosk-mechanic-initials" aria-hidden="true">{mechanic.initials}</span>
+            <span className={`kiosk-mechanic-initials ${identity.tone}`} aria-hidden="true">
+              {identity.marker}
+            </span>
             <div>
               <p>{context.device.locationName}</p>
               <h1 id="kiosk-unlock-title">{mechanic.name}</h1>
@@ -84,7 +110,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
           </div>
           <form className="kiosk-pin-form" onSubmit={unlock}>
             <label htmlFor="kiosk-pin">
-              <span>{mechanic.requiresPinChange ? "Temporary PIN" : "PIN"}</span>
+              <span>{text(mechanic.requiresPinChange ? "kiosk.temporaryPin" : "kiosk.pin")}</span>
               <input
                 {...textEntryProps("identifier")}
                 id="kiosk-pin"
@@ -104,9 +130,9 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
             </label>
             {mechanic.requiresPinChange ? (
               <div className="kiosk-pin-change">
-                <p>Choose a new private PIN with at least four digits before continuing.</p>
+                <p>{text("kiosk.choosePrivatePin")}</p>
                 <label htmlFor="kiosk-new-pin">
-                  <span>New PIN</span>
+                  <span>{text("kiosk.newPin")}</span>
                   <input
                     {...textEntryProps("identifier")}
                     id="kiosk-new-pin"
@@ -124,7 +150,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
                   />
                 </label>
                 <label htmlFor="kiosk-confirm-pin">
-                  <span>Confirm new PIN</span>
+                  <span>{text("kiosk.confirmNewPin")}</span>
                   <input
                     {...textEntryProps("identifier")}
                     id="kiosk-confirm-pin"
@@ -149,12 +175,12 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
               type="submit"
               disabled={submitting || !isCompleteKioskPin(pin) || pinChangeInvalid}
             >
-              {submitting ? "Unlocking..." : "Unlock workorders"}
+              {text(submitting ? "kiosk.unlocking" : "kiosk.unlockWorkorders")}
             </button>
           </form>
           <button className="kiosk-standard-login" type="button" onClick={onStandardLogin}>
             <LogIn01 />
-            <span>Use standard login</span>
+            <span>{text("kiosk.useStandardLogin")}</span>
           </button>
         </section>
       </main>
@@ -164,33 +190,48 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
   return (
     <main className="kiosk-shell">
       <section className="kiosk-panel" aria-labelledby="kiosk-title">
-        <header className="kiosk-heading">
-          <span className="kiosk-heading-icon" aria-hidden="true"><User01 /></span>
-          <div>
-            <p>{context.device.locationName}</p>
-            <h1 id="kiosk-title">Choose your name</h1>
-          </div>
-        </header>
+        <div className="kiosk-topline">
+          <header className="kiosk-heading">
+            <span className="kiosk-heading-icon" aria-hidden="true"><User01 /></span>
+            <div>
+              <p>{context.device.locationName}</p>
+              <h1 id="kiosk-title">{text("kiosk.chooseName")}</h1>
+            </div>
+          </header>
+          <label className="kiosk-language" htmlFor="kiosk-language">
+            <span>{text("kiosk.language")}</span>
+            <select id="kiosk-language" value={deviceLocale} onChange={changeDeviceLocale}>
+              {KIOSK_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         {context.mechanics.length ? (
-          <div className="kiosk-roster" aria-label="Mechanics">
-            {context.mechanics.map((entry) => (
-              <KioskMechanicButton key={entry.id} mechanic={entry} onSelect={selectMechanic} />
+          <div className="kiosk-roster" aria-label={text("kiosk.mechanics")}>
+            {kioskMechanicsInDisplayOrder(context.mechanics).map((entry) => (
+              <KioskMechanicButton
+                key={entry.id}
+                locale={deviceLocale}
+                mechanic={entry}
+                onSelect={selectMechanic}
+              />
             ))}
           </div>
         ) : (
           <div className="kiosk-empty" role="status">
-            <strong>No mechanics available</strong>
-            <p>Ask an administrator to check this kiosk location.</p>
+            <strong>{text("kiosk.noMechanics")}</strong>
+            <p>{text("kiosk.askAdministrator")}</p>
           </div>
         )}
         <div className="kiosk-footer-actions">
           <button type="button" onClick={onRefresh}>
             <RefreshCw01 />
-            <span>Refresh</span>
+            <span>{text("kiosk.refresh")}</span>
           </button>
           <button type="button" onClick={onStandardLogin}>
             <LogIn01 />
-            <span>Standard login</span>
+            <span>{text("kiosk.standardLogin")}</span>
           </button>
         </div>
       </section>
@@ -199,10 +240,11 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
 }
 
 export function KioskStandardLogin({ onReturnToKiosk }) {
+  const locale = kioskStoredLocale();
   return (
     <button className="kiosk-return-button" type="button" onClick={onReturnToKiosk}>
       <User01 />
-      <span>Return to kiosk</span>
+      <span>{interfaceText(locale, "kiosk.return")}</span>
     </button>
   );
 }

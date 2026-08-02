@@ -30,6 +30,7 @@ export function ChatComposer({
   sendLabel = "Send message",
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
   compact = false,
+  quickActions = [],
 }) {
   const inputId = useId();
   const fileInputId = useId();
@@ -113,6 +114,17 @@ export function ChatComposer({
     event.target.style.height = `${Math.min(event.target.scrollHeight, 120)}px`;
   }
 
+  function useQuickAction(action) {
+    if (busy) return;
+    if (action.kind === "photo") {
+      fileInputRef.current?.click();
+      return;
+    }
+    pendingClientMessageIdRef.current = "";
+    setBody(action.prompt || "");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   return (
     <form className={`chat-composer chat-prompt-composer ${compact ? "is-compact" : ""}`} onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
       <label className="chat-composer-label" htmlFor={inputId}>{textareaLabel}</label>
@@ -135,6 +147,16 @@ export function ChatComposer({
       ) : null}
 
       {error ? <p className="chat-composer-error" role="alert">{error}</p> : null}
+
+      {quickActions.length ? (
+        <div className="chat-quick-actions" aria-label="Help actions">
+          {quickActions.map((action) => (
+            <button key={action.id} type="button" onClick={() => useQuickAction(action)} disabled={busy}>
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="chat-prompt-surface">
         <input

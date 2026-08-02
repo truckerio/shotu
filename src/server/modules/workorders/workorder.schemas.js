@@ -112,8 +112,8 @@ export const updateMechanicUsedPartsSchema = z.object({
 
 export const markDoneSchema = z.object({
   diagnosis: z.string().trim().max(5000).default(""),
-  workPerformed: z.string().trim().max(5000).default(""),
-  confirmationName: z.string().trim().min(1, "Write your name to confirm Work done.").max(200),
+  workPerformed: z.string().trim().min(1, "Add the repair completed before marking Work done.").max(5000),
+  confirmationName: z.string().trim().max(200).optional(),
 });
 
 const chatAttachmentSchema = z.object({

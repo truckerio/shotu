@@ -79,7 +79,7 @@ export async function listActiveWorkorderAttention(workorderId) {
 
 export async function getWorkorderPreferences(userId) {
   const result = await query(
-    `select user_id, default_location_id, default_view, page_size, saved_filters, updated_at
+    `select user_id, default_location_id, default_view, page_size, saved_filters, locale, updated_at
      from user_workorder_preferences where user_id = $1`,
     [userId],
   );
@@ -87,17 +87,31 @@ export async function getWorkorderPreferences(userId) {
 }
 
 export async function saveWorkorderPreferences(userId, input) {
+  const hasOwn = (key) => Object.prototype.hasOwnProperty.call(input, key);
   const result = await query(
-    `insert into user_workorder_preferences (user_id, default_location_id, default_view, page_size, saved_filters, updated_at)
-     values ($1, $2, $3, $4, $5::jsonb, now())
+    `insert into user_workorder_preferences (user_id, default_location_id, default_view, page_size, saved_filters, locale, updated_at)
+     values ($1, $2, $3, $4, $5::jsonb, $6, now())
      on conflict (user_id) do update
-     set default_location_id = excluded.default_location_id,
-         default_view = excluded.default_view,
-         page_size = excluded.page_size,
-         saved_filters = excluded.saved_filters,
+     set default_location_id = case when $7 then excluded.default_location_id else user_workorder_preferences.default_location_id end,
+         default_view = case when $8 then excluded.default_view else user_workorder_preferences.default_view end,
+         page_size = case when $9 then excluded.page_size else user_workorder_preferences.page_size end,
+         saved_filters = case when $10 then excluded.saved_filters else user_workorder_preferences.saved_filters end,
+         locale = case when $11 then excluded.locale else user_workorder_preferences.locale end,
          updated_at = now()
      returning *`,
-    [userId, input.defaultLocationId || null, input.defaultView || "all", input.pageSize || 50, JSON.stringify(input.savedFilters || {})],
+    [
+      userId,
+      input.defaultLocationId ?? null,
+      input.defaultView ?? "all",
+      input.pageSize ?? 50,
+      JSON.stringify(input.savedFilters ?? {}),
+      input.locale ?? "en",
+      hasOwn("defaultLocationId"),
+      hasOwn("defaultView"),
+      hasOwn("pageSize"),
+      hasOwn("savedFilters"),
+      hasOwn("locale"),
+    ],
   );
   return result.rows[0];
 }

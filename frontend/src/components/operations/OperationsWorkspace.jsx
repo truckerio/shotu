@@ -35,6 +35,24 @@ const emptyCounts = {
 
 const ADMIN_PRIMARY_CATEGORY_IDS = new Set(["needs_attention", "active", "ready_review"]);
 
+export function buildMobileQueuePresentation(
+  categories,
+  activeCategoryId,
+  primaryCategoryIds = ADMIN_PRIMARY_CATEGORY_IDS,
+) {
+  const defaultPrimary = categories.filter((category) => primaryCategoryIds.has(category.key));
+  const activeCategory = categories.find((category) => category.key === activeCategoryId);
+  const primary = activeCategory && !primaryCategoryIds.has(activeCategory.key)
+    ? [...defaultPrimary.slice(0, -1), activeCategory]
+    : defaultPrimary;
+  const primaryKeys = new Set(primary.map((category) => category.key));
+
+  return {
+    primary,
+    secondary: categories.filter((category) => !primaryKeys.has(category.key)),
+  };
+}
+
 function OperationsFilters({
   filters,
   fixedLocationId,
@@ -311,8 +329,9 @@ export function OperationsWorkspace({
     label: category.label,
     count: categoryCounts[category.countKey],
   }));
-  const mobilePrimaryCategories = mobileCategories.filter((category) => ADMIN_PRIMARY_CATEGORY_IDS.has(category.key));
-  const mobileSecondaryCategories = mobileCategories.filter((category) => !ADMIN_PRIMARY_CATEGORY_IDS.has(category.key));
+  const mobileQueuePresentation = buildMobileQueuePresentation(mobileCategories, filters.category);
+  const mobilePrimaryCategories = mobileQueuePresentation.primary;
+  const mobileSecondaryCategories = mobileQueuePresentation.secondary;
   const mobileFiltersActive = Boolean(
     filters.search
     || filters.locationId

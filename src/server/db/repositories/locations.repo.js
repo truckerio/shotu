@@ -44,11 +44,19 @@ export async function getLocationById(locationId, companyIds = null) {
 
 export async function listLocationsWithAdminCounts(companyIds) {
   const result = await query(`
-    with user_counts as (
-      select location_id, count(*)::integer as user_count
-      from user_location_memberships
-      where active
-      group by location_id
+    with assigned_active_user_counts as (
+      select location_membership.location_id, count(*)::integer as assigned_active_user_count
+      from user_location_memberships location_membership
+      join user_company_memberships company_membership
+        on company_membership.user_id = location_membership.user_id
+       and company_membership.company_id = location_membership.company_id
+       and company_membership.active
+      join user_profiles profile
+        on profile.id = location_membership.user_id
+       and profile.active
+       and profile.deleted_at is null
+      where location_membership.active
+      group by location_membership.location_id
     ),
     workorder_counts as (
       select location_id, count(*)::integer as open_workorder_count
@@ -76,12 +84,13 @@ export async function listLocationsWithAdminCounts(companyIds) {
       location.address,
       location.active,
       location.created_at,
-      coalesce(user_counts.user_count, 0) as user_count,
+      coalesce(assigned_active_user_counts.assigned_active_user_count, 0) as assigned_active_user_count,
+      coalesce(assigned_active_user_counts.assigned_active_user_count, 0) as user_count,
       coalesce(workorder_counts.open_workorder_count, 0) as open_workorder_count,
       coalesce(invitation_counts.pending_invite_count, 0) as pending_invite_count,
       (template_locations.location_id is not null) as has_template
     from locations location
-    left join user_counts on user_counts.location_id = location.id
+    left join assigned_active_user_counts on assigned_active_user_counts.location_id = location.id
     left join workorder_counts on workorder_counts.location_id = location.id
     left join invitation_counts on invitation_counts.location_id = location.id
     left join template_locations on template_locations.location_id = location.id

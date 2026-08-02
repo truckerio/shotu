@@ -3,7 +3,7 @@ import { DraftSaveStatus } from "../../components/drafts/index.js";
 import { KeyboardAwareDock } from "../../components/layout/KeyboardAwareDock.jsx";
 import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
-import { workDateRangeLabel } from "../../../../shared/workorder-template.js";
+import { formatUiDateRange } from "../../lib/workorder-presentation.js";
 import { CREATE_WORKORDER_FORM_ID } from "../generator/CreateWorkorderForm.jsx";
 import { resolveCreateLocation } from "./create-workorder-utils.js";
 
@@ -46,7 +46,7 @@ export function CreateWorkorderShell({
 }) {
   const unit = createSummaryValue(form.unitNo, "No unit selected");
   const concern = createSummaryValue(form.mechanicConcern, "Create workorder");
-  const dates = workDateRangeLabel(form);
+  const dates = formatUiDateRange(form.workStartDate, form.workEndDate);
 
   return (
     <>

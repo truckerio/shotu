@@ -1,3 +1,9 @@
+import {
+  WORKORDER_LIFECYCLES,
+  formatLifecycleLabel,
+  formatUiDateTime,
+} from "../../lib/workorder-presentation.js";
+
 export const OPERATION_CATEGORIES = [
   { id: "needs_attention", label: "Needs attention", countKey: "needsAttention" },
   { id: "unassigned", label: "Unassigned", countKey: "unassigned" },
@@ -11,13 +17,7 @@ export const OPERATION_CATEGORIES = [
 
 export const LIFECYCLE_OPTIONS = [
   ["", "All lifecycle states"],
-  ["open", "Open"],
-  ["accepted", "Accepted"],
-  ["in_progress", "In progress"],
-  ["mechanic_done", "Work done"],
-  ["closed", "Closed"],
-  ["odoo_entered", "Entered in Odoo"],
-  ["cancelled", "Cancelled"],
+  ...WORKORDER_LIFECYCLES.map((lifecycle) => [lifecycle, formatLifecycleLabel(lifecycle)]),
 ];
 
 export const ATTENTION_OPTIONS = [
@@ -37,10 +37,10 @@ export const SORT_OPTIONS = [
   ["age:desc", "Oldest created"],
 ];
 
-const labelLookup = Object.fromEntries([...LIFECYCLE_OPTIONS, ...ATTENTION_OPTIONS]);
+const attentionLabelLookup = Object.fromEntries(ATTENTION_OPTIONS);
 
 export function operationLabel(value, fallback = "Unknown") {
-  return labelLookup[value] || fallback;
+  return attentionLabelLookup[value] || formatLifecycleLabel(value, { fallback });
 }
 
 export function formatDuration(seconds) {
@@ -61,13 +61,7 @@ export function formatActivity(value) {
   const elapsed = Math.max(0, (Date.now() - date.getTime()) / 1000);
   return {
     relative: `${formatDuration(elapsed)} ago`,
-    absolute: new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(date),
+    absolute: formatUiDateTime(date),
   };
 }
 

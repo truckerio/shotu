@@ -27,6 +27,7 @@ export function CreateWorkorderForm({
   errorFocusKey,
   errorFocusReady = true,
   form,
+  locationLoadState,
   locations,
   mapsConfig,
   message,
@@ -37,6 +38,7 @@ export function CreateWorkorderForm({
   onAssignmentChange,
   onFieldChange,
   onLocationChange,
+  onReloadLocations,
   onPartChange,
   onRemovePart,
   onSubmit,
@@ -87,15 +89,31 @@ export function CreateWorkorderForm({
         keepMounted
       >
         <FormSection title="Work context">
-          {locationOptions.length ? (
-            <FormField id="workorder-location" label="Location" error={errors?.locationId} required>
-              <select value={form.locationId} onChange={(event) => onLocationChange(event.target.value)}>
-                <option value="">Select location</option>
-                {locationOptions.map((entry) => (
-                  <option key={entry.location.id} value={entry.location.id}>{entry.location.name}</option>
-                ))}
-              </select>
-            </FormField>
+          <FormField id="workorder-location" label="Location" error={errors?.locationId} required>
+            <select
+              value={form.locationId}
+              onChange={(event) => onLocationChange(event.target.value)}
+              disabled={locationLoadState?.loading || Boolean(locationLoadState?.error) || !locationOptions.length}
+            >
+              <option value="">
+                {locationLoadState?.loading
+                  ? "Loading locations..."
+                  : locationLoadState?.error
+                    ? "Locations unavailable"
+                    : locationOptions.length
+                      ? "Select location"
+                      : "No available locations"}
+              </option>
+              {locationOptions.map((entry) => (
+                <option key={entry.location.id} value={entry.location.id}>{entry.location.name}</option>
+              ))}
+            </select>
+          </FormField>
+          {locationLoadState?.error ? (
+            <div className="create-location-load-error" role="alert">
+              <span>Locations could not be loaded. Try again before creating this workorder.</span>
+              <Button type="button" variant="secondary" onClick={onReloadLocations}>Try again</Button>
+            </div>
           ) : null}
           <div className="operational-form-grid two">
             <FormField id="workorder-start-date" label="Start date" required>

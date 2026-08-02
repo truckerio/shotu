@@ -1,0 +1,127 @@
+/* Shared operational form composition */
+.create-workorder-form {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 720px;
+  padding: 20px 24px 28px;
+}
+
+.create-workorder-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-workorder-column {
+  display: contents;
+}
+
+.create-workorder-columns > .create-workorder-column > .operational-form-card {
+  margin-top: 0;
+}
+
+.create-workorder-card {
+  order: 1;
+}
+
+.create-unit-card {
+  order: 2;
+}
+
+.create-assignment-card {
+  order: 3;
+}
+
+.create-parts-card {
+  order: 4;
+}
+
+@media (min-width: 1800px) {
+  .create-workorder-form {
+    max-width: 1320px;
+  }
+
+  .create-workorder-columns {
+    align-items: start;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .create-workorder-column {
+    align-content: start;
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  .create-workorder-columns .operational-form-card {
+    order: initial;
+  }
+}
+
+.create-workorder-form-message {
+  color: #475467;
+  margin: 0;
+}
+
+.workorder-detail-page .accordion-stack {
+  background: #f2f4f7;
+  gap: 8px;
+}
+
+.workorder-detail-page .editor-section {
+  background: #fff;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workorder-detail-page .editor-section.is-open {
+  box-shadow: none;
+}
+
+.workorder-detail-page .editor-summary {
+  background: #f9fafb;
+  border-bottom: 1px solid #e4e7ec;
+  cursor: default;
+  min-height: 48px;
+  padding: 14px 12px;
+}
+
+.workorder-detail-page .editor-summary span {
+  font-weight: var(--weight-bold);
+}
+
+.workorder-detail-page .chat-section {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 6%);
+  margin: 12px;
+}
+
+.workorder-detail-page .chat-section.is-open {
+  overflow: hidden;
+}
+
+.workorder-detail-page .chat-section .editor-summary {
+  background: #fff;
+}
+
+.workorder-detail-page .editor-summary::before {
+  display: none;
+}
+
+.workorder-detail-page .editor-section .section-content {
+  padding: 4px 12px 20px;
+}
+
+.detail-workflow-fields {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-workflow-fields .button {
+  justify-self: start;
+}

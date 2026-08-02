@@ -1,21 +1,23 @@
 import { useMemo } from "react";
-import { ArrowLeft, CheckCircle, Save01, XClose } from "@untitledui/icons";
+import { CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { ChatComposer } from "../../components/workorders/ChatComposer.jsx";
+import { localizedMechanicHelpActions } from "../../components/workorders/mechanic-help-prompts.js";
 import { ChatThread } from "../../components/workorders/ChatThread.jsx";
 import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
-import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
-import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
+import { WorkorderDetailSurface } from "../../components/workorders/WorkorderDetailSurface.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
+import { formatUiDateRange } from "../../lib/workorder-presentation.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
-import { workDateRangeLabel, workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
-import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
+import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
+import { interfaceText } from "../../i18n/index.js";
 import {
   buildCompactPhoneDetailSections,
   workorderNeedsChatAttention,
@@ -37,7 +39,6 @@ export function WorkorderDetailPage({
   detailSections,
   detailStatus,
   effectiveCopies,
-  expectedMechanicName,
   filledPartCount,
   firstSerial,
   form,
@@ -48,13 +49,14 @@ export function WorkorderDetailPage({
   isMechanicDetail,
   isOfficeDetail,
   isPhone,
+  locale = "en",
+  localeError = "",
   lastPhysicalPageIndex,
   lastSerial,
   mapsConfig,
   mechanicAction,
   mechanicAsset,
   mechanicFinish,
-  mechanicFinishNameMatches,
   mechanicMapLocation,
   mechanicMapVehicle,
   mechanicProgress,
@@ -93,10 +95,10 @@ export function WorkorderDetailPage({
   printWorkorders,
   openOfficeCancel,
   openOfficeReturn,
+  onLocaleChange,
   reloadActiveWorkorder,
   returnToRoleWorkspace,
   saveActiveUsedParts,
-  saveMechanicWorkNotes,
   saveOfficeWorkorder,
   selectDetailSection,
   selectOfficeLocation,
@@ -127,11 +129,13 @@ export function WorkorderDetailPage({
   vehicleModelText,
 }) {
   const viewport = useVisualViewport();
+  const t = (key) => interfaceText(locale, key);
   const visibleDetailSections = useMemo(
-    () => (isPhone
-      ? buildCompactPhoneDetailSections(detailSections, isMechanicDetail ? "mechanic" : "office")
-      : detailSections),
-    [detailSections, isMechanicDetail, isPhone],
+    () => {
+      if (isCompact) return buildCompactPhoneDetailSections(detailSections, isMechanicDetail ? "mechanic" : "office");
+      return detailSections;
+    },
+    [detailSections, isCompact, isMechanicDetail, locale],
   );
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
   useChatReceipts({
@@ -159,6 +163,7 @@ export function WorkorderDetailPage({
         cameraLabel={isOfficeDetail ? "Take or add photo" : "Take photo"}
         sendLabel="Send"
         compact={isMechanicDetail}
+        quickActions={isMechanicDetail ? localizedMechanicHelpActions(locale) : []}
       />
       {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
     </div>
@@ -176,23 +181,20 @@ export function WorkorderDetailPage({
     >
       <style>{workorderTemplateStyles}</style>
       <BrowserPrintDocument payload={browserPrintPayload} />
-      <WorkorderDetailLayout detail previewOpen={!isPhone && showEmbeddedPreview}>
-        <aside className="control-panel" ref={formRef}>
-          <div className="detail-context-bar">
-            <button
-              type="button"
-              onClick={returnToRoleWorkspace}
-              aria-label={actor.role === "admin" ? "Back to Operations" : isOfficeDetail ? "Back to Office" : "Back to My Work"}
-              title={actor.role === "admin" ? "Back to Operations" : isOfficeDetail ? "Back to Office" : "Back to My Work"}
-            >
-              <ArrowLeft />
-            </button>
-            <div>
-              <strong>{activeWorkorder.workorder.asset?.unitNo || activeWorkorder.workorder.asset?.name || "Workorder"}</strong>
-              <span>{activeWorkorder.workorder.serial}</span>
-            </div>
-            <div className="detail-context-actions">
-              <WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />
+      <WorkorderDetailSurface
+        previewOpen={!isPhone && showEmbeddedPreview}
+        controlRef={formRef}
+        context={{
+          onBack: returnToRoleWorkspace,
+          backLabel: actor.role === "admin" ? "Back to Operations" : isOfficeDetail ? "Back to Office" : "Back to My Work",
+          title: activeWorkorder.workorder.asset?.unitNo || activeWorkorder.workorder.asset?.name || "Workorder",
+          subtitle: activeWorkorder.workorder.serial,
+          status: <WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />,
+          actions: (
+            <>
+              {isMechanicDetail ? (
+                <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} compact />
+              ) : null}
               {isOfficeDetail && activeWorkorder.allowedActions?.update ? (
                 <button
                   className="detail-save-button"
@@ -242,18 +244,18 @@ export function WorkorderDetailPage({
                   closeLabel="Close workorder tools"
                 />
               ) : null}
-            </div>
-          </div>
-
-          <WorkorderObjectSummary
-            concern={form.mechanicConcern}
-            customer={form.customerCompanyName}
-            dates={workDateRangeLabel(form)}
-            location={detailLocationName}
-            mechanics={detailMechanicNames}
-            unit={form.unitNo || mechanicAsset.unitNo || mechanicAsset.name}
-            unitType={form.unitType || mechanicAsset.unitType || "Unit"}
-            actions={isMechanicDetail && !isCompact ? (
+            </>
+          ),
+        }}
+        summary={{
+          concern: form.mechanicConcern,
+          customer: form.customerCompanyName,
+          dates: formatUiDateRange(form.workStartDate, form.workEndDate, { locale }),
+          location: detailLocationName,
+          mechanics: detailMechanicNames,
+          unit: form.unitNo || mechanicAsset.unitNo || mechanicAsset.name,
+          unitType: form.unitType || mechanicAsset.unitType || "Unit",
+          actions: isMechanicDetail && !isCompact ? (
               <button
                 className="finish-work-button"
                 type="button"
@@ -263,8 +265,9 @@ export function WorkorderDetailPage({
                 <CheckCircle />
                 <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>
               </button>
-            ) : null}
-          >
+            ) : null,
+          children: (
+            <>
             {isMechanicDetail ? (
               <div className="workorder-object-inline-detail">
                 <span>{mechanicUnitType} details</span>
@@ -274,8 +277,48 @@ export function WorkorderDetailPage({
               </div>
             ) : null}
             {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
-          </WorkorderObjectSummary>
-          <WorkorderSectionNav sections={visibleDetailSections} activeSection={detailSection} onSelect={selectDetailSection} />
+            </>
+          ),
+        }}
+        sections={{
+          items: visibleDetailSections,
+          activeId: detailSection,
+          onSelect: selectDetailSection,
+        }}
+        supportingPane={!isCompact ? (
+          <PreviewPane
+            id="workorder-preview-panel"
+            open={showEmbeddedPreview}
+            variant="dock"
+            panelRef={previewRef}
+            status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
+            countLabel={workorderCountLabel}
+            range={range}
+            printMenuOpen={printMenuOpen}
+            onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
+            onPrint={canPrint ? () => {
+              setPrintMenuOpen(false);
+              printWorkorders();
+            } : undefined}
+            primaryActionLabel={primaryActionLabel}
+            onFullscreen={openFullscreenPreview}
+            onOpenPreview={openFullscreenPreview}
+            supportingContent={!isMechanicDetail ? workorderChatContent : undefined}
+            supportingLabel={isOfficeDetail ? "Chat with mechanic" : "Help from office"}
+            supportingCount={conversationMessages.length || undefined}
+            supportingAttention={workorderNeedsChatAttention(detailStatus)}
+            activeView={supportingView}
+            onViewChange={setSupportingView}
+          >
+            <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
+              <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+              {effectiveCopies > 1 || lastPhysicalPageIndex > 0
+                ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                : null}
+            </div>
+          </PreviewPane>
+        ) : null}
+      >
           {isMechanicDetail && isCompact && detailSection === "work" ? (
             <div className="mechanic-compact-primary-action">
               <button
@@ -318,11 +361,11 @@ export function WorkorderDetailPage({
             selectedVehicle={selectedVehicle}
             vehicleLookup={vehicleLookup}
             visibleTimeline={visibleTimeline}
+            locale={locale}
             workorderChatContent={workorderChatContent}
             applyVehicle={applyVehicle}
             reloadActiveWorkorder={reloadActiveWorkorder}
             saveActiveUsedParts={saveActiveUsedParts}
-            saveMechanicWorkNotes={saveMechanicWorkNotes}
             saveOfficeWorkorder={saveOfficeWorkorder}
             openOfficeCancel={openOfficeCancel}
             openOfficeReturn={openOfficeReturn}
@@ -337,7 +380,7 @@ export function WorkorderDetailPage({
             vehicleMileage={vehicleMileage}
             vehicleModelText={vehicleModelText}
           />
-          {isPhone && detailSection === "preview" ? (
+          {isCompact && detailSection === "preview" ? (
             <CompactWorkorderPreview
               panelRef={previewRef}
               status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
@@ -361,40 +404,7 @@ export function WorkorderDetailPage({
               </div>
             </CompactWorkorderPreview>
           ) : null}
-        </aside>
-
-        {!isPhone ? <PreviewPane
-          id="workorder-preview-panel"
-          open={showEmbeddedPreview}
-          variant="dock"
-          panelRef={previewRef}
-          status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
-          countLabel={workorderCountLabel}
-          range={range}
-          printMenuOpen={printMenuOpen}
-          onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-          onPrint={canPrint ? () => {
-            setPrintMenuOpen(false);
-            printWorkorders();
-          } : undefined}
-          primaryActionLabel={primaryActionLabel}
-          onFullscreen={openFullscreenPreview}
-          onOpenPreview={openFullscreenPreview}
-          supportingContent={!isCompact ? workorderChatContent : undefined}
-          supportingLabel={isOfficeDetail ? "Chat with mechanic" : "Chat with office"}
-          supportingCount={conversationMessages.length || undefined}
-          supportingAttention={workorderNeedsChatAttention(detailStatus)}
-          activeView={supportingView}
-          onViewChange={setSupportingView}
-        >
-          <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-            <WorkorderPreview label="First page" serial={firstSerial} form={form} />
-            {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-              ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
-              : null}
-          </div>
-        </PreviewPane> : null}
-      </WorkorderDetailLayout>
+      </WorkorderDetailSurface>
 
       <PreviewFullscreen
         open={previewFullscreen}
@@ -435,19 +445,8 @@ export function WorkorderDetailPage({
             >
               <XClose />
             </button>
-            <h2>Mark work as done?</h2>
-            <p>This sends the workorder to office for review. Write your name to confirm.</p>
-            <Field label={`Write "${expectedMechanicName}"`}>
-              <input
-                {...textEntryProps("name")}
-                type="text"
-                value={mechanicFinish.name}
-                onChange={(event) => setMechanicFinish({ open: true, name: event.target.value, message: "" })}
-                placeholder={expectedMechanicName}
-                autoComplete="off"
-                autoFocus
-              />
-            </Field>
+            <h2>{t("completion.workDone")}?</h2>
+            <p>{t("completion.confirm")}</p>
             {mechanicFinish.message ? <p className="mechanic-completion-message" role="alert">{mechanicFinish.message}</p> : null}
             <div className="mechanic-completion-actions">
               <Button
@@ -456,10 +455,10 @@ export function WorkorderDetailPage({
                 onClick={() => setMechanicFinish({ open: false, name: "", message: "" })}
                 disabled={Boolean(mechanicAction.busy)}
               >
-                Cancel
+                {t("completion.keepWorking")}
               </Button>
-              <Button variant="primary" type="submit" disabled={!mechanicFinishNameMatches || Boolean(mechanicAction.busy)}>
-                {mechanicAction.busy === "done" ? "Submitting..." : "Confirm work done"}
+              <Button variant="primary" type="submit" disabled={Boolean(mechanicAction.busy)} autoFocus>
+                {mechanicAction.busy === "done" ? "Submitting..." : t("completion.yes")}
               </Button>
             </div>
           </form>

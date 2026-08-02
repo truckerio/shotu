@@ -100,10 +100,15 @@ test("repository enforces five-attempt lockout and companion session audit", asy
 
 test("public kiosk context exposes only device identity and minimal mechanic roster", async () => {
   const source = await readFile(routeUrl, "utf8");
+  const repository = await readFile(repositoryUrl, "utf8");
   assert.match(source, /registered:\s*false/);
   assert.match(source, /locationName:\s*context\.device\.locationName/);
   assert.match(source, /mechanics:\s*context\.mechanics/);
   assert.doesNotMatch(source, /contactEmail|username|phone|permissions/);
+  assert.match(repository, /left join user_workorder_preferences preferences/);
+  assert.match(repository, /preferences\.locale/);
+  assert.match(repository, /locale:\s*mechanic\.locale/);
+  assert.doesNotMatch(source, /savedFilters|defaultView|pageSize/);
 });
 
 test("admin routes expose exact scoped registration, revocation, and PIN contracts", async () => {

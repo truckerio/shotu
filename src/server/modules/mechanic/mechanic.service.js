@@ -218,11 +218,7 @@ export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts) 
 }
 
 export async function markMechanicDone(workorderId, mechanicUserId, input) {
-  const mechanic = await requireMechanic(mechanicUserId);
-  const normalizeName = (value) => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
-  if (normalizeName(input.confirmationName) !== normalizeName(mechanic.name)) {
-    throw new Error(`Write ${mechanic.name} to confirm Work done.`);
-  }
+  await requireMechanic(mechanicUserId);
   try {
     return await markOperationalWorkorderDone(workorderId, mechanicUserId, input);
   } catch (error) {

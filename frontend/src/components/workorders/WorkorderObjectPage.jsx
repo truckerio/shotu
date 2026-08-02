@@ -100,7 +100,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
   return (
     <>
       <nav className="workorder-section-nav workorder-section-nav-desktop" aria-label="Workorder sections">
-        {sections.map((section) => (
+        {primarySections.map((section) => (
           <button
             className={`${activeSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
@@ -111,6 +111,38 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             <SectionContent section={section} />
           </button>
         ))}
+        {overflowSections.length ? (
+          <MenuTrigger>
+            <Button
+              className={`${activeOverflowSection ? "is-active" : ""} ${activeOverflowSection?.attention ? "has-attention" : ""}`.trim()}
+              aria-label={activeOverflowSection ? `More sections, ${activeOverflowSection.label} selected` : "More workorder sections"}
+            >
+              <DotsHorizontal aria-hidden="true" />
+              <span>{activeOverflowSection?.label || "More"}</span>
+              <ChevronDown aria-hidden="true" />
+            </Button>
+            <Popover className="workorder-section-more-popover" placement="bottom end">
+              <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
+                {overflowSections.map((section) => {
+                  const Icon = SECTION_ICONS[section.id] || Tool02;
+                  return (
+                    <MenuItem
+                      className={`${activeSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
+                      key={section.id}
+                      id={section.id}
+                      textValue={section.label}
+                      onAction={() => onSelect(section.id)}
+                    >
+                      <Icon aria-hidden="true" />
+                      <span>{section.label}</span>
+                      {section.count !== undefined ? <small>{section.count}</small> : null}
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+            </Popover>
+          </MenuTrigger>
+        ) : null}
       </nav>
 
       <nav className="workorder-section-nav-mobile" aria-label="Workorder sections">

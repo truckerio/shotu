@@ -1,41 +1,47 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
-import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
-import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
+import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
+import { interfaceText } from "../../i18n/index.js";
 import {
   MECHANIC_PRIMARY_TABS,
   MECHANIC_SECONDARY_TABS,
   mechanicActionLabel,
 } from "./mechanicWorkspaceConfig.js";
+import {
+  buildMechanicHomeView,
+  compareMechanicJobs,
+  mechanicJobActionKey,
+} from "./mechanic-workspace-model.js";
+import "./mechanic-workspace.css";
 import "../role-workspaces.css";
 
-function workRank(workorder) {
-  const reasons = workorder.attentionReasons || [];
-  if (reasons.includes("overdue")) return 0;
-  if (reasons.includes("parts") || reasons.includes("office_help")) return 2;
-  if (workorder.lifecycle === "in_progress" || workorder.status === "in_progress") return 1;
-  return 3;
+function jobUnit(workorder) {
+  return workorder.assetUnitNo || workorder.assetLabel || workorder.asset?.unitNo || workorder.asset?.name || "Unit not set";
 }
 
-export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder }) {
+function jobLocation(workorder) {
+  return workorder.locationName || workorder.location?.name || "Location not set";
+}
+
+export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLocaleChange, onCreateWorkorder, onOpenWorkorder }) {
+  const t = (key) => interfaceText(locale, key);
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("myWork");
   const [search, setSearch] = useState("");
   const [acceptingId, setAcceptingId] = useState("");
+  const [openingId, setOpeningId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(() => navigator.onLine);
-  const preferenceHydrated = useRef(false);
-  const queuePreferences = useWorkorderPreferences("mechanic");
 
   async function loadDashboard() {
     setError("");
@@ -56,18 +62,6 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
   );
 
   useEffect(() => {
-    if (!queuePreferences.ready || preferenceHydrated.current) return;
-    const savedTab = queuePreferences.filters.activeTab;
-    if (["activeWork", "myWork", "openWork", "waiting", "done"].includes(savedTab)) setActiveTab(savedTab);
-    preferenceHydrated.current = true;
-  }, [queuePreferences.ready]);
-
-  useEffect(() => {
-    if (!preferenceHydrated.current) return;
-    queuePreferences.save({ activeTab }, { defaultView: activeTab });
-  }, [activeTab]);
-
-  useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
       loadDashboard().catch((err) => setError(err.message));
@@ -82,6 +76,7 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
   }, []);
 
   async function openWorkorder(id) {
+    setOpeningId(id);
     setError("");
     try {
       await api(`/api/mechanic/workorders/${id}/opened`, { method: "POST", body: JSON.stringify({}) });
@@ -89,6 +84,9 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
       onOpenWorkorder(detail);
     } catch (err) {
       setError(err.message);
+      await loadDashboard().catch(() => {});
+    } finally {
+      setOpeningId("");
     }
   }
 
@@ -108,93 +106,143 @@ export function MechanicWorkspace({ actor, onCreateWorkorder, onOpenWorkorder })
     }
   }
 
-  const tabs = [
-    { key: "myWork", label: "My jobs", count: dashboard?.counts.mine || 0, icon: Briefcase02 },
-    { key: "openWork", label: "New jobs", count: dashboard?.counts.open || 0, icon: Inbox01 },
-    { key: "waiting", label: "Waiting", count: dashboard?.counts.waiting || 0, icon: Clock },
-    { key: "done", label: "Work done", count: dashboard?.counts.done || 0, icon: FileCheck02 },
-    { key: "activeWork", label: "All active", count: dashboard?.counts.active || 0, icon: Users01 },
-  ];
-  const mobilePrimaryTabs = MECHANIC_PRIMARY_TABS.map((tab) => ({
+  const homeView = useMemo(() => buildMechanicHomeView(dashboard), [dashboard]);
+  const primaryTabs = MECHANIC_PRIMARY_TABS.map((tab) => ({
     ...tab,
+    label: t(tab.key === "myWork" ? "mechanic.myWork" : "mechanic.availableJobs"),
     count: dashboard?.counts[tab.countKey] || 0,
+    icon: tab.key === "myWork" ? Briefcase02 : Inbox01,
   }));
-  const mobileSecondaryTabs = MECHANIC_SECONDARY_TABS.map((tab) => ({
+  const secondaryIcons = { waiting: Clock, done: FileCheck02, activeWork: Users01 };
+  const secondaryTabs = MECHANIC_SECONDARY_TABS.map((tab) => ({
     ...tab,
+    label: t(tab.key === "waiting" ? "mechanic.waiting" : tab.key === "done" ? "mechanic.history" : "mechanic.allActive"),
     count: dashboard?.counts[tab.countKey] || 0,
+    icon: secondaryIcons[tab.key],
   }));
-  const rows = useMemo(() => (dashboard?.[activeTab] || [])
+  const nextJob = activeTab === "myWork" ? homeView.nextJob : null;
+  const activeRows = activeTab === "myWork"
+    ? homeView.assignedJobs
+    : activeTab === "openWork"
+      ? homeView.availableJobs
+      : activeTab === "waiting"
+        ? homeView.waitingJobs
+        : activeTab === "done"
+          ? homeView.historyJobs
+          : dashboard?.activeWork || [];
+  const rows = useMemo(() => activeRows
     .filter((workorder) => workorderMatchesSearch(workorder, search))
-    .sort((left, right) => workRank(left) - workRank(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt)), [dashboard, activeTab, search]);
+    .sort(compareMechanicJobs), [activeRows, search]);
+
+  const emptyAssigned = !loading && activeTab === "myWork" && !nextJob;
 
   return (
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} className="role-home-account-header" />
-      <PageHeader
-        title="Workorders"
-        actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={onCreateWorkorder} />}
-      />
+      <div className="mechanic-home-content">
+        <PageHeader title={t("mechanic.workorders")} />
 
-      {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
-      <section className="mechanic-queue-shell">
-        <div className="queue-toolbar role-queue-toolbar">
-          <div className="role-desktop-queues">
-            <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+        {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
+        <section className="mechanic-queue-shell" aria-label="Mechanic work">
+          <div className="mechanic-primary-queues">
+            <WorkorderQueueTabs tabs={primaryTabs} activeTab={activeTab} onChange={setActiveTab} />
           </div>
-          <MobileQueueToolbar
-            className="role-mobile-primary-queues"
-            tabs={mobilePrimaryTabs}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-            label="Open mechanic queue search and filters"
-            title="Queue search and filters"
-            filtersActive={Boolean(search)}
-            onClearFilters={() => setSearch("")}
-          >
-            <div className="role-mobile-secondary-queues">
-              <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
-            </div>
-            <label className="mechanic-search">
-              <SearchMd />
-              <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
-            </label>
-          </MobileQueueToolbar>
-          <label className="mechanic-search role-desktop-search">
-            <SearchMd />
-            <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" aria-label="Search workorders" />
-          </label>
-        </div>
 
-        {error ? <p className="ops-error" role="alert">{error}</p> : null}
-        <WorkorderTableHeader variant="mechanic" />
-        <div className={`mechanic-work-list role-task-list role-task-list-${activeTab}`} aria-live="polite" data-mobile-action={mechanicActionLabel(activeTab)}>
+          {error ? <p className="ops-error" role="alert">{error}</p> : null}
+
           {loading ? (
             <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
-          ) : rows.length ? (
-            <ProgressiveQueue
-              items={rows}
-              resetKey={progressiveQueueResetKey([activeTab, search])}
-              renderItem={(workorder, index) => (
-                <WorkorderRow
-                  workorder={workorder}
-                  featured={activeTab === "myWork" && index === 0}
-                  available={activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
-                  busy={acceptingId === workorder.id}
-                  acceptLabel={activeTab === "activeWork" ? "Join work" : "Accept work"}
-                  busyLabel={activeTab === "activeWork" ? "Joining..." : "Accepting..."}
-                  onOpen={() => openWorkorder(workorder.id)}
-                  onAccept={() => acceptFromCard(workorder.id)}
-                />
-              )}
-            />
-          ) : (
-            <div className="mechanic-empty-state">
-              <strong>{search ? "No matching jobs" : "No jobs here"}</strong>
-              {search ? <button type="button" onClick={() => setSearch("")}>Clear search</button> : null}
+          ) : nextJob ? (
+            <section className="mechanic-next-job" aria-label={t("mechanic.nextJob")}>
+              <div className="mechanic-next-job-copy">
+                <span className="mechanic-next-job-eyebrow">{t("mechanic.upNext")}</span>
+                <h2>{t("mechanic.nextJob")}</h2>
+                <strong className="mechanic-next-job-unit">{jobUnit(nextJob)}</strong>
+                <p>{nextJob.concern || "Problem not recorded"}</p>
+                <span>{jobLocation(nextJob)}{nextJob.serial ? ` · ${nextJob.serial}` : ""}</span>
+              </div>
+              <button
+                className="button primary mechanic-next-job-action"
+                type="button"
+                disabled={openingId === nextJob.id}
+                onClick={() => openWorkorder(nextJob.id)}
+              >
+                {openingId === nextJob.id
+                  ? "Opening…"
+                  : t(`mechanic.${mechanicJobActionKey(nextJob)}`)}
+              </button>
+            </section>
+          ) : null}
+
+          {emptyAssigned ? (
+            <div className="mechanic-empty-state mechanic-assigned-empty">
+              <strong>{t("mechanic.noAssignedJobs")}</strong>
+              <span>{t("mechanic.readyForJob")}</span>
+              {homeView.availableJobs.length ? <button type="button" onClick={() => setActiveTab("openWork")}>{t("mechanic.viewAvailable")}</button> : null}
             </div>
-          )}
-        </div>
-      </section>
+          ) : null}
+
+          {!loading && (activeTab !== "myWork" || rows.length) ? (
+            <section className="mechanic-assigned-list" aria-label={activeTab === "myWork" ? "Other assigned jobs" : "Workorders"}>
+              <div className="mechanic-list-title">
+                <h2>{activeTab === "myWork" ? t("mechanic.otherAssigned") : primaryTabs.concat(secondaryTabs).find((tab) => tab.key === activeTab)?.label}</h2>
+                <span>{rows.length}</span>
+              </div>
+              <WorkorderTableHeader variant="mechanic" />
+              <div className={`mechanic-work-list role-task-list role-task-list-${activeTab}`} aria-live="polite" data-mobile-action={mechanicActionLabel(activeTab)}>
+                {rows.length ? (
+                  <ProgressiveQueue
+                    items={rows}
+                    resetKey={progressiveQueueResetKey([activeTab, search])}
+                    renderItem={(workorder) => (
+                      <WorkorderRow
+                        workorder={workorder}
+                        available={activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
+                        busy={acceptingId === workorder.id}
+                        acceptLabel={activeTab === "activeWork" ? "Join work" : "Accept work"}
+                        busyLabel={activeTab === "activeWork" ? "Joining..." : "Accepting..."}
+                        onOpen={() => openWorkorder(workorder.id)}
+                        onAccept={() => acceptFromCard(workorder.id)}
+                      />
+                    )}
+                  />
+                ) : (
+                  <div className="mechanic-empty-state">
+                    <strong>{search ? "No matching jobs" : "No jobs here"}</strong>
+                    {search ? <button type="button" onClick={() => setSearch("")}>Clear search</button> : null}
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : null}
+
+          <details className="mechanic-home-more">
+            <summary><span>{t("detail.more")}</span><small>{t("mechanic.moreSummary")}</small></summary>
+            <div className="mechanic-home-more-body">
+              <div className="mechanic-secondary-queues">
+                <WorkorderQueueTabs tabs={secondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+              </div>
+              <section className="mechanic-secondary-tools" aria-label="Search and filters">
+                <div>
+                  <strong>{t("mechanic.searchAndFilters")}</strong>
+                  <label className="mechanic-search mechanic-secondary-search-desktop">
+                    <SearchMd aria-hidden="true" />
+                    <input aria-label="Search workorders" {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" />
+                  </label>
+                  <label className="mechanic-search mechanic-secondary-search-mobile">
+                    <SearchMd aria-hidden="true" />
+                    <input aria-label="Search workorders" {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" />
+                  </label>
+                </div>
+                <div className="mechanic-secondary-actions">
+                  <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
+                  <WorkspaceCreateActions actor={actor} onCreateWorkorder={onCreateWorkorder} createLabel={t("mechanic.createWorkorder")} />
+                </div>
+              </section>
+            </div>
+          </details>
+        </section>
+      </div>
     </main>
   );
 }

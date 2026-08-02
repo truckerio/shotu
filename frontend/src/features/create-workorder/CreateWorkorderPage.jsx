@@ -34,6 +34,7 @@ export function CreateWorkorderPage({
   officeCreateErrors,
   officeCreateState,
   officeLocations,
+  officeLocationsState,
   previewFullscreen,
   previewGridRef,
   previewRef,
@@ -55,6 +56,7 @@ export function CreateWorkorderPage({
   jumpToPreview,
   openOfficeWorkspace,
   openFullscreenPreview,
+  reloadOfficeLocations,
   removePartRow,
   saveDraftAndLeave,
   setCreateAssignment,
@@ -170,12 +172,14 @@ export function CreateWorkorderPage({
               errorFocusKey={officeCreateAttempt}
               errorFocusReady={errorFocusReady}
               form={form}
+              locationLoadState={officeLocationsState}
               locations={officeLocations}
               message={officeCreateState.message}
               onAddPart={addPartRow}
               onAssignmentChange={(mechanicUserIds) => setCreateAssignment((current) => ({ ...current, mechanicUserIds }))}
               onFieldChange={updateField}
               onLocationChange={selectOfficeLocation}
+              onReloadLocations={reloadOfficeLocations}
               onPartChange={updatePart}
               onRemovePart={removePartRow}
               onSubmit={createOfficeWorkorder}

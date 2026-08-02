@@ -1,0 +1,356 @@
+.mechanic-home {
+  --mechanic-home-max-width: 1440px;
+}
+
+.mechanic-home-content {
+  margin-inline: auto;
+  max-width: var(--mechanic-home-max-width);
+  min-width: 0;
+  width: 100%;
+}
+
+.mechanic-home-content > .page-header {
+  margin-top: -2px;
+}
+
+.mechanic-home .mechanic-queue-shell {
+  overflow: hidden;
+}
+
+.mechanic-primary-queues {
+  border-bottom: 1px solid #e4e7ec;
+  padding: 8px 20px 0;
+}
+
+.mechanic-primary-queues .mechanic-queue-tabs {
+  gap: 8px;
+}
+
+.mechanic-primary-queues .mechanic-queue-tabs button,
+.mechanic-secondary-queues .mechanic-queue-tabs button,
+.mechanic-home-more summary,
+.mechanic-next-job-action,
+.mechanic-assigned-empty button {
+  min-height: 44px;
+}
+
+.mechanic-next-job {
+  align-items: center;
+  background: linear-gradient(135deg, #f5f9ff 0%, #eef4ff 100%);
+  border: 1px solid #b2ccff;
+  border-radius: 12px;
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 24px;
+  overflow-wrap: anywhere;
+  padding: 28px 32px;
+}
+
+.mechanic-next-job-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mechanic-next-job-copy h2,
+.mechanic-next-job-copy p {
+  margin: 0;
+}
+
+.mechanic-next-job-copy h2 {
+  color: #344054;
+  font-size: 16px;
+}
+
+.mechanic-next-job-eyebrow {
+  color: #175cd3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mechanic-next-job-unit {
+  color: #101828;
+  font-size: clamp(28px, 2.25vw, 38px);
+  line-height: 1.1;
+}
+
+.mechanic-next-job-copy p {
+  color: #344054;
+  font-size: 18px;
+  line-height: 1.45;
+  max-width: 72ch;
+}
+
+.mechanic-next-job-copy > span:last-child {
+  color: #667085;
+  font-size: 14px;
+}
+
+.mechanic-next-job-action {
+  min-width: 180px;
+  padding-inline: 24px;
+}
+
+.mechanic-list-title {
+  align-items: center;
+  border-top: 1px solid #e4e7ec;
+  display: flex;
+  justify-content: space-between;
+  padding: 18px 24px 12px;
+}
+
+.mechanic-list-title h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.mechanic-list-title span {
+  background: #f2f4f7;
+  border-radius: 999px;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 9px;
+}
+
+.mechanic-assigned-empty {
+  gap: 8px;
+  min-height: 280px;
+}
+
+.mechanic-assigned-empty span {
+  color: #667085;
+}
+
+.mechanic-assigned-empty button {
+  margin-top: 8px;
+}
+
+.mechanic-home-more {
+  border-top: 1px solid #e4e7ec;
+}
+
+.mechanic-home-more summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  list-style: none;
+  padding: 14px 24px;
+}
+
+.mechanic-home-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.mechanic-home-more summary::after {
+  color: #667085;
+  content: "+";
+  font-size: 22px;
+  margin-left: auto;
+}
+
+.mechanic-home-more[open] summary::after {
+  content: "−";
+}
+
+.mechanic-home-more summary span {
+  color: #344054;
+  font-weight: 700;
+}
+
+.mechanic-home-more summary small {
+  color: #667085;
+}
+
+.mechanic-home-more-body {
+  background: #f9fafb;
+  border-top: 1px solid #eaecf0;
+  display: grid;
+  gap: 16px;
+  padding: 16px 24px 24px;
+}
+
+.mechanic-secondary-queues {
+  min-width: 0;
+}
+
+.mechanic-secondary-queues .mechanic-queue-tabs {
+  overflow-x: auto;
+}
+
+.mechanic-secondary-tools {
+  align-items: end;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(280px, 1fr) auto;
+}
+
+.mechanic-secondary-tools > div:first-child {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mechanic-secondary-tools .mechanic-search {
+  margin: 0;
+  max-width: 680px;
+  min-width: 0;
+  width: 100%;
+}
+
+.mechanic-secondary-search-mobile {
+  display: none !important;
+}
+
+.mechanic-secondary-tools .button,
+.mechanic-secondary-tools button {
+  min-height: 44px;
+}
+
+.mechanic-secondary-actions {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.locale-selector {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.locale-selector label {
+  display: grid;
+  gap: 5px;
+}
+
+.locale-selector label > span {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.locale-selector select {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  color: #344054;
+  font: inherit;
+  min-height: 44px;
+  min-width: 140px;
+  padding: 8px 30px 8px 10px;
+}
+
+.locale-selector select:focus-visible {
+  border-color: #84adff;
+  box-shadow: 0 0 0 3px rgb(46 144 250 / 18%);
+  outline: 0;
+}
+
+.locale-selector > small {
+  color: #b42318;
+  max-width: 32ch;
+}
+
+.detail-context-actions .locale-selector.is-compact label > span {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.detail-context-actions .locale-selector.is-compact select {
+  min-width: 112px;
+}
+
+@media (max-width: 1366px) {
+  .mechanic-next-job {
+    margin: 18px;
+    padding: 22px 24px;
+  }
+
+  .mechanic-home-more-body {
+    padding-inline: 18px;
+  }
+}
+
+@media (max-width: 700px) {
+  .mechanic-next-job {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 12px 10px;
+    padding: 18px;
+  }
+
+  .mechanic-secondary-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mechanic-next-job-action {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .mechanic-list-title {
+    padding-inline: 12px;
+  }
+
+  .mechanic-primary-queues {
+    padding-inline: 10px;
+  }
+
+  .mechanic-primary-queues .mechanic-queue-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .mechanic-primary-queues .mechanic-queue-tabs button {
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .mechanic-home-more summary {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-inline: 16px;
+    position: relative;
+  }
+
+  .mechanic-home-more summary::after {
+    position: absolute;
+    right: 16px;
+    top: 10px;
+  }
+
+  .mechanic-home-more-body,
+  .mechanic-secondary-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mechanic-home-more-body {
+    padding-inline: 16px;
+  }
+
+  .mechanic-secondary-search-desktop {
+    display: none !important;
+  }
+
+  .mechanic-secondary-search-mobile {
+    display: flex !important;
+  }
+}

@@ -77,3 +77,37 @@ export async function getLocationTemplates(locationIds) {
   );
   return result.rows;
 }
+
+export async function getAuthorizedLocationTemplates({ companyIds, locationIds }, execute = query) {
+  if (!companyIds?.length) return [];
+  if (Array.isArray(locationIds) && !locationIds.length) return [];
+
+  const result = await execute(
+    `select
+       location.id as location_id,
+       location.company_id,
+       location.name as location_name,
+       location.type as location_type,
+       location.address as location_address,
+       template.id,
+       template.location_id as template_location_id,
+       template.header_title,
+       template.brand_top,
+       template.brand_bottom,
+       template.warranty_text,
+       template.responsibility_text,
+       template.authorization_text,
+       template.active,
+       template.version,
+       template.updated_at
+     from locations location
+     left join location_workorder_templates template
+       on template.location_id = location.id and template.active = true
+     where location.company_id = any($1::uuid[])
+       and ($2::uuid[] is null or location.id = any($2::uuid[]))
+       and location.active = true
+     order by location.name`,
+    [companyIds, locationIds ?? null],
+  );
+  return result.rows;
+}

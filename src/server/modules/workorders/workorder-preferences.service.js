@@ -6,19 +6,20 @@ import {
   saveWorkorderPreferences,
 } from "../../db/repositories/workorder-attention.repo.js";
 
-function present(row) {
+export function presentWorkorderPreferences(row) {
   return {
     defaultLocationId: row?.default_location_id || null,
     defaultView: row?.default_view || "all",
     pageSize: row?.page_size || 50,
     savedFilters: row?.saved_filters || {},
+    locale: row?.locale || "en",
     updatedAt: row?.updated_at || null,
   };
 }
 
 export async function loadWorkorderPreferences(context) {
   const actor = requireActor(context);
-  return present(await getWorkorderPreferences(actor.id));
+  return presentWorkorderPreferences(await getWorkorderPreferences(actor.id));
 }
 
 export async function updateWorkorderPreferences(context, input) {
@@ -30,5 +31,5 @@ export async function updateWorkorderPreferences(context, input) {
     requireCompanyAccess(context, location.company_id);
     requireLocationAccess(context, location.id);
   }
-  return present(await saveWorkorderPreferences(actor.id, input));
+  return presentWorkorderPreferences(await saveWorkorderPreferences(actor.id, input));
 }

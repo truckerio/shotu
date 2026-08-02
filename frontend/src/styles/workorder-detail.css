@@ -1,0 +1,966 @@
+/* Shared workorder object workspace */
+.workorder-detail-page .workorder-detail-layout {
+  background: #fff;
+}
+
+.workorder-detail-page {
+  --detail-body-size: 12px;
+  --detail-meta-size: 11px;
+}
+
+.workorder-detail-page .button,
+.workorder-detail-page .field,
+.workorder-detail-page .chat-bubble p {
+  font-size: var(--detail-body-size);
+}
+
+.workorder-detail-page .chat-message-meta,
+.workorder-detail-page .chat-request-label {
+  font-size: var(--detail-meta-size);
+}
+
+.workorder-detail-page .control-panel {
+  background: #fff;
+  container-name: workorder-control;
+  container-type: inline-size;
+  gap: 0;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+  padding: 0;
+}
+
+.workorder-detail-layout:not(.has-preview) .control-panel {
+  border-left: 1px solid #eaecf0;
+  border-right: 1px solid #eaecf0;
+  margin: 0 auto;
+  max-width: 1280px;
+  width: 100%;
+}
+
+.workorder-detail-page .detail-context-bar {
+  background: rgb(255 255 255 / 96%);
+  border: 0;
+  border-bottom: 1px solid #e4e7ec;
+  border-radius: 0;
+  min-height: 62px;
+  overflow: clip;
+  padding: 10px 18px;
+  position: sticky;
+  top: 0;
+  z-index: 12;
+}
+
+.workorder-detail-page .detail-context-actions {
+  min-width: 0;
+}
+
+.workorder-detail-page .detail-context-actions .icon-tooltip::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-3px);
+}
+
+.workorder-detail-page .detail-context-actions .icon-tooltip:hover::after,
+.workorder-detail-page .detail-context-actions .icon-tooltip:focus-visible::after {
+  transform: translateY(0);
+}
+
+.workorder-detail-page .detail-context-actions .preview-pane-toggle::after {
+  left: auto;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translate(3px, -50%);
+}
+
+.workorder-detail-page .detail-context-actions .preview-pane-toggle:hover::after,
+.workorder-detail-page .detail-context-actions .preview-pane-toggle:focus-visible::after {
+  transform: translate(0, -50%);
+}
+
+.workorder-object-summary {
+  background: #fff;
+  border-bottom: 1px solid #e4e7ec;
+  display: grid;
+  gap: 18px;
+  padding: 22px 32px;
+}
+
+.workorder-object-primary {
+  display: grid;
+  gap: 5px;
+}
+
+.workorder-object-primary > span {
+  color: #667085;
+  font-size: var(--detail-meta-size);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.workorder-object-primary h1 {
+  color: #181d27;
+  font-size: 18px;
+  line-height: 1.35;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+
+.workorder-object-facts {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+}
+
+.workorder-object-facts > div {
+  border-right: 1px solid #e4e7ec;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 14px;
+}
+
+.workorder-object-facts > div:first-child {
+  padding-left: 0;
+}
+
+.workorder-object-facts > div:last-child {
+  border-right: 0;
+  padding-right: 0;
+}
+
+.workorder-object-facts dt,
+.workorder-object-inline-detail span {
+  color: #717680;
+  font-size: var(--detail-meta-size);
+  font-weight: var(--weight-semibold);
+}
+
+.workorder-object-facts dd {
+  color: #181d27;
+  font-size: var(--detail-body-size);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorder-object-inline-detail {
+  align-items: baseline;
+  border-top: 1px solid #f0f1f3;
+  display: grid;
+  gap: 6px 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(80px, auto);
+  padding-top: 14px;
+}
+
+.workorder-object-inline-detail strong {
+  color: #344054;
+  font-size: var(--detail-body-size);
+  overflow-wrap: anywhere;
+}
+
+.workorder-object-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workorder-object-actions button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 7px;
+  color: #344054;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--detail-body-size);
+  font-weight: var(--weight-semibold);
+  gap: 7px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 11px;
+}
+
+.workorder-object-actions button:hover,
+.workorder-object-actions button:focus-visible {
+  background: #f5f8ff;
+  border-color: #84caff;
+  color: #175cd3;
+  outline: 0;
+}
+
+.workorder-object-actions button svg {
+  height: 17px;
+  width: 17px;
+}
+
+.workorder-object-actions .finish-work-button {
+  background: #067647;
+  border-color: #067647;
+  color: #fff;
+  margin-left: auto;
+}
+
+.workorder-object-actions .finish-work-button:hover,
+.workorder-object-actions .finish-work-button:focus-visible {
+  background: #085d3a;
+  border-color: #085d3a;
+  color: #fff;
+}
+
+.workorder-object-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.workorder-section-nav {
+  background: #fff;
+  border-bottom: 1px solid #d5d7da;
+  display: flex;
+  min-height: 48px;
+  overflow-x: auto;
+  padding: 0 20px;
+  scrollbar-width: none;
+}
+
+.workorder-section-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.workorder-section-nav button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #535862;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: var(--detail-body-size);
+  font-weight: var(--weight-semibold);
+  gap: 7px;
+  min-height: 48px;
+  padding: 0 12px;
+}
+
+.workorder-section-nav button:hover,
+.workorder-section-nav button:focus-visible {
+  color: #175cd3;
+  outline: 0;
+}
+
+.workorder-section-nav button.is-active {
+  border-bottom-color: #1570ef;
+  color: #175cd3;
+}
+
+.workorder-section-nav button.has-attention {
+  color: #b54708;
+}
+
+.workorder-section-nav small,
+.supporting-pane-tabs small {
+  align-items: center;
+  background: #f2f4f7;
+  border-radius: 999px;
+  color: #535862;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  height: 20px;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 6px;
+}
+
+.workorder-detail-page .workorder-progressive-stack {
+  background: #fff;
+  gap: 0;
+  padding: 18px 32px 48px;
+}
+
+.workorder-progressive-section {
+  background: #fff;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.workorder-progressive-section.has-attention {
+  border-left: 0;
+  box-shadow: inset 3px 0 #f79009;
+}
+
+.workorder-progressive-section:not(.chat-section):first-of-type,
+.chat-section + .workorder-progressive-section {
+  border-top: 1px solid #e4e7ec;
+}
+
+.workorder-progressive-section.is-open:not(.chat-section) {
+  background: #fcfcfd;
+}
+
+.workorder-progressive-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #181d27;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr) 20px;
+  min-height: 56px;
+  padding: 13px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.workorder-progressive-trigger:hover,
+.workorder-progressive-trigger:focus-visible {
+  color: #175cd3;
+  outline: 0;
+}
+
+.workorder-progressive-label {
+  font-size: var(--detail-body-size);
+  font-weight: var(--weight-bold);
+}
+
+.workorder-progressive-trigger small {
+  font-size: var(--detail-body-size);
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workorder-progressive-trigger svg {
+  color: #667085;
+  height: 18px;
+  transition: transform 140ms var(--motion-ease-enter);
+  width: 18px;
+}
+
+.workorder-progressive-section.is-open .workorder-progressive-trigger svg {
+  transform: rotate(180deg);
+}
+
+.workorder-progressive-content {
+  animation: workorder-section-enter 140ms var(--motion-ease-enter);
+  padding: 2px 16px 22px;
+}
+
+.workorder-section-panel {
+  animation: workorder-section-enter 140ms var(--motion-ease-enter);
+  background: #fff;
+  min-width: 0;
+}
+
+.workorder-section-panel.is-hidden {
+  display: none;
+}
+
+.workorder-section-panel.has-attention {
+  box-shadow: inset 3px 0 #f79009;
+}
+
+.workorder-section-panel-heading {
+  align-items: flex-start;
+  border-bottom: 1px solid #e4e7ec;
+  display: flex;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+}
+
+.workorder-section-panel-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.workorder-section-panel-heading h2 {
+  color: #181d27;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.workorder-section-panel-heading p {
+  font-size: var(--detail-meta-size);
+}
+
+.workorder-section-panel-content {
+  min-width: 0;
+  padding: 20px;
+}
+
+.mechanic-compact-primary-action {
+  display: none;
+}
+
+.workorder-detail-page .workorder-progressive-stack > .chat-section {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 5%);
+  margin: 0 0 18px;
+}
+
+.workorder-detail-page .workorder-progressive-stack > .chat-section .workorder-progressive-trigger {
+  min-height: 58px;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.workorder-detail-page .workorder-progressive-stack > .chat-section .workorder-progressive-content {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+@keyframes workorder-section-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workorder-review-content,
+.workorder-unit-content,
+.workorder-team-content {
+  display: grid;
+  gap: 16px;
+}
+
+fieldset.workorder-unit-content {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.workorder-correction-callout {
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 7px;
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+}
+
+.workorder-correction-callout strong {
+  color: #93370d;
+  font-size: var(--detail-body-size);
+}
+
+.workorder-correction-callout p,
+.workorder-correction-callout span {
+  color: #7a2e0e;
+  font-size: var(--detail-meta-size);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workorder-review-content > .button {
+  justify-self: end;
+  min-width: 140px;
+  width: auto;
+}
+
+.office-handoff-actions {
+  border-top: 1px solid #e4e7ec;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+.workorder-handoff-facts {
+  background: #f9fafb;
+  border: 1px solid #e4e7ec;
+  border-radius: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+}
+
+.workorder-handoff-facts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.workorder-handoff-facts > div:nth-child(odd) {
+  border-right: 1px solid #e4e7ec;
+}
+
+.workorder-handoff-facts > div:nth-child(-n + 2) {
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.workorder-handoff-facts dt,
+.workorder-assigned-mechanics dt {
+  color: #667085;
+  font-size: var(--detail-meta-size);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.workorder-handoff-facts dd,
+.workorder-assigned-mechanics dd {
+  color: #181d27;
+  font-size: var(--detail-body-size);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workorder-handoff-facts dd small {
+  color: #667085;
+  display: block;
+  font-size: var(--detail-meta-size);
+  margin-top: 2px;
+}
+
+.workorder-assigned-mechanics {
+  margin: 0;
+}
+
+.workorder-assigned-mechanics > div {
+  display: grid;
+  gap: 5px;
+}
+
+.workorder-authorization {
+  border-top: 1px solid #e4e7ec;
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.workorder-authorization h3 {
+  color: #181d27;
+  font-size: var(--detail-body-size);
+  margin: 0;
+}
+
+.workorder-authorization-value {
+  align-items: center;
+  background: #f9fafb;
+  border: 1px solid #d5d9e0;
+  border-radius: 7px;
+  color: #667085;
+  display: flex;
+  font-weight: var(--weight-regular);
+  min-height: 44px;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.workorder-authorization-value.is-recorded {
+  background: #ecfdf3;
+  border-color: #abefc6;
+  color: #067647;
+  font-weight: var(--weight-semibold);
+}
+
+.workorder-review-copy {
+  background: #f9fafb;
+  border: 1px solid #e4e7ec;
+  border-radius: 7px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.workorder-review-copy > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.workorder-review-copy span {
+  color: #667085;
+  font-size: var(--detail-meta-size);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.workorder-review-copy p {
+  color: #344054;
+  font-size: var(--detail-body-size);
+  overflow-wrap: anywhere;
+}
+
+.workorder-readonly-details {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.workorder-readonly-details > div {
+  border-bottom: 1px solid #eaecf0;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(90px, 0.36fr) minmax(0, 1fr);
+  padding: 11px 0;
+}
+
+.workorder-readonly-details > div:nth-child(odd) {
+  margin-right: 16px;
+}
+
+.workorder-readonly-details dt {
+  color: #717680;
+  font-size: var(--detail-meta-size);
+  font-weight: var(--weight-semibold);
+}
+
+.workorder-readonly-details dd {
+  color: #181d27;
+  font-size: var(--detail-body-size);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workorder-detail-page .is-detail-end-timeline {
+  border-top: 0;
+  padding: 0;
+}
+
+.workorder-progressive-content .workorder-timeline-panel {
+  border: 0;
+  padding: 0;
+}
+
+.supporting-pane-tabs {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.supporting-pane-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #667085;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--detail-body-size);
+  font-weight: var(--weight-semibold);
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 8px;
+}
+
+.supporting-pane-tabs button:hover,
+.supporting-pane-tabs button:focus-visible {
+  color: #175cd3;
+  outline: 0;
+}
+
+.supporting-pane-tabs button.is-active {
+  border-bottom-color: #1570ef;
+  color: #175cd3;
+}
+
+.supporting-pane-tabs button.has-attention:not(.is-active) {
+  color: #b54708;
+}
+
+.supporting-pane-tabs svg {
+  height: 17px;
+  width: 17px;
+}
+
+.supporting-pane-status {
+  align-items: center;
+  display: flex;
+}
+
+.preview-panel.is-dock.has-supporting-view {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.supporting-pane-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.supporting-pane-content .chat-content {
+  display: grid;
+  gap: 12px;
+  grid-template-rows: minmax(120px, 1fr) auto auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.supporting-pane-content .chat-thread {
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.supporting-pane-content .chat-composer {
+  background: #fff;
+  border-top: 1px solid #e4e7ec;
+  padding-top: 12px;
+}
+
+@container workorder-control (max-width: 760px) {
+  .workorder-object-facts {
+    gap: 12px 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workorder-object-facts > div:nth-child(3) {
+    border-right: 0;
+  }
+
+  .workorder-object-facts > div:nth-child(4) {
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 1180px) {
+  .split-layout.workorder-detail-layout,
+  .split-layout.workorder-detail-layout.has-preview {
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .workorder-detail-page .control-panel {
+    margin: 0 auto;
+    max-width: 960px;
+    width: 100%;
+  }
+
+  .workorder-progressive-stack {
+    padding-bottom: 48px;
+  }
+}
+
+@media (max-width: 1023px), (max-width: 1180px) and (orientation: portrait) {
+  .mechanic-detail-page .workorder-section-nav {
+    background: rgb(255 255 255 / 96%);
+    padding: 0 10px;
+    position: sticky;
+    top: 62px;
+    z-index: 11;
+  }
+
+  .mechanic-detail-page .workorder-progressive-stack {
+    padding-bottom: 112px;
+  }
+
+  .mechanic-compact-primary-action {
+    background: rgb(255 255 255 / 96%);
+    border-top: 1px solid #d5d7da;
+    bottom: 0;
+    display: block;
+    left: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    position: fixed;
+    right: 0;
+    z-index: 30;
+  }
+
+  .mechanic-compact-primary-action .finish-work-button {
+    align-items: center;
+    background: #067647;
+    border: 1px solid #067647;
+    border-radius: 7px;
+    color: #fff;
+    display: flex;
+    font-size: var(--detail-body-size);
+    font-weight: var(--weight-semibold);
+    gap: 7px;
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .mechanic-compact-primary-action .finish-work-button svg {
+    height: 17px;
+    width: 17px;
+  }
+
+  .mechanic-compact-primary-action .finish-work-button:disabled {
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 640px) {
+  .workorder-section-nav.workorder-section-nav-desktop {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .create-workorder-form {
+    gap: 12px;
+    padding: 12px 4px 96px;
+  }
+
+  .create-workorder-columns {
+    gap: 12px;
+  }
+
+  .workorder-detail-page .editor-summary,
+  .workorder-detail-page .editor-section .section-content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .workorder-detail-page .is-detail-end-timeline {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .workorder-detail-page .chat-section,
+  .workorder-detail-page.mechanic-detail-page .chat-section {
+    border-left: 1px solid #d0d5dd;
+    border-radius: 8px;
+    border-right: 1px solid #d0d5dd;
+    margin: 8px 0;
+  }
+
+  .workorder-detail-page .detail-context-bar {
+    gap: 6px;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    margin: 0;
+    min-height: 60px;
+    padding: 7px 8px;
+  }
+
+  .workorder-detail-page .detail-context-bar > button,
+  .workorder-detail-page .detail-save-button,
+  .workorder-detail-page .preview-pane-toggle {
+    height: 44px;
+    width: 44px;
+  }
+
+  .workorder-detail-page .detail-close-workorder-button {
+    min-height: 44px;
+  }
+
+  .workorder-detail-page .detail-context-actions {
+    gap: 4px !important;
+  }
+
+  .workorder-detail-page .detail-context-actions:has(.detail-close-workorder-button) .ops-status {
+    display: none;
+  }
+
+  .workorder-object-summary {
+    gap: 12px;
+    padding: 14px 12px;
+  }
+
+  .workorder-object-primary h1 {
+    font-size: 17px;
+  }
+
+  .workorder-object-facts {
+    gap: 10px 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workorder-object-facts > div,
+  .workorder-object-facts > div:first-child,
+  .workorder-object-facts > div:last-child {
+    border: 0;
+    padding: 0;
+  }
+
+  .workorder-object-facts > div:nth-child(n + 4) {
+    display: none;
+  }
+
+  .workorder-object-facts dd {
+    font-size: 13px;
+    line-height: 1.3;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .workorder-object-inline-detail {
+    display: none;
+  }
+
+  .workorder-section-nav {
+    background: rgb(255 255 255 / 96%);
+    padding: 0 6px;
+    position: sticky;
+    top: 62px;
+    z-index: 11;
+  }
+
+  .workorder-detail-page .workorder-progressive-stack {
+    padding: 10px 12px 112px;
+  }
+
+  .workorder-progressive-trigger {
+    gap: 8px;
+    grid-template-columns: minmax(96px, auto) minmax(0, 1fr) 20px;
+    min-height: 56px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .workorder-progressive-content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .workorder-section-panel-heading {
+    padding: 16px 12px 12px;
+  }
+
+  .workorder-section-panel-content {
+    padding: 16px 12px;
+  }
+
+  .workorder-detail-page .workorder-progressive-stack > .chat-section {
+    margin-bottom: 12px;
+  }
+
+  .workorder-review-copy,
+  .workorder-readonly-details,
+  .workorder-handoff-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .workorder-handoff-facts > div,
+  .workorder-handoff-facts > div:nth-child(odd),
+  .workorder-handoff-facts > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #e4e7ec;
+    border-right: 0;
+  }
+
+  .workorder-handoff-facts > div:last-child {
+    border-bottom: 0;
+  }
+
+  .office-handoff-actions,
+  .office-handoff-actions .button {
+    width: 100%;
+  }
+
+  .workorder-review-content > .button {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .workorder-readonly-details > div:nth-child(odd) {
+    margin-right: 0;
+  }
+
+}

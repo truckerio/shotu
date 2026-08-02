@@ -2,10 +2,10 @@ import { DraftSaveStatus } from "../../../components/drafts/DraftSaveStatus.jsx"
 
 const LABELS = {
   pristine: "No changes",
-  dirty: "Saving changes",
-  saving: "Saving progress",
-  saved: "Progress saved",
-  error: "Progress not saved",
+  dirty: "Saving…",
+  saving: "Saving…",
+  saved: "Saved",
+  error: "Not saved",
 };
 
 export function MechanicProgressStatus({ status, error }) {

@@ -27,7 +27,7 @@ test("shared workorder names and technical values use conservative keyboard poli
   assert.match(customerCompanyField, /textEntryProps\("name"\)/);
   assert.match(detailSections, /textEntryProps\("name"\)[\s\S]*form\.customerCompanyName/);
   assert.match(detailSections, /textEntryProps\("name"\)[\s\S]*form\.customerSignature/);
-  assert.match(detailPage, /textEntryProps\("name"\)[\s\S]*mechanicFinish\.name/);
+  assert.doesNotMatch(detailPage, /mechanicFinish\.name|expectedMechanicName/);
   assert.match(createForm, /textEntryProps\("search"\)[\s\S]*role="combobox"/);
   assert.match(detailSections, /textEntryProps\("search"\)[\s\S]*aria-label="Unit no\."/);
   assert.match(createForm, /textEntryProps\("identifier"\)[\s\S]*part\.partNo/);

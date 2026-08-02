@@ -1,0 +1,17 @@
+.browser-print-document {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .prototype > :not(.browser-print-document):not(style) {
+    display: none !important;
+  }
+
+  .prototype > .browser-print-document {
+    display: block !important;
+  }
+}

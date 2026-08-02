@@ -2,6 +2,10 @@
 
 This repository is a modular monolith: one deployable Node service, one React application, and one PostgreSQL database. Keep boundaries obvious and avoid adding infrastructure until the workload requires it.
 
+Frontend feature ownership and extension rules are defined in
+[`FRONTEND_OWNERSHIP.md`](./FRONTEND_OWNERSHIP.md). Controlled role-test account
+provisioning is documented in [`QA_ACCOUNTS.md`](./QA_ACCOUNTS.md).
+
 ## Request Flow
 
 ```text
@@ -84,6 +88,39 @@ server.js               Composition root plus contained legacy print/share endpo
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### Shared Workorder Detail Surface
+
+`components/workorders/WorkorderDetailSurface.jsx` is the only owner of the
+workorder-detail frame. It composes `WorkorderDetailLayout`,
+`WorkorderObjectSummary`, and `WorkorderSectionNav`, and provides the one
+supporting-pane slot used by responsive preview and chat docks. Office,
+mechanic, and surveillance detail pages render that surface instead of
+recreating the header, summary, navigation, or two-pane frame. Shared frame
+changes therefore ship to every role together.
+
+Role features extend the surface through explicit content and action slots:
+
+- `WorkorderDetailPage.jsx` owns the office/mechanic chat, editable work forms,
+  parts workflow, completion controls, and its shared section definitions.
+- `features/surveillance/workspace/SurveillanceDetailPage.jsx` owns the
+  surveillance detail composition, while `SurveillanceOdooPanel.jsx` owns Odoo
+  entry and missing-information requests. `SurveillanceWorkspace.jsx` remains
+  a small queue/detail switch.
+- Slots receive already-authorized commands and rendered role content. The
+  surface must not infer permissions or contain Odoo, mechanic, or office
+  workflow rules.
+- A role may add a section through the surface's section/content inputs. It may
+  not directly import or compose `WorkorderDetailLayout`,
+  `WorkorderObjectSummary`, or `WorkorderSectionNav`.
+
+Preview and activity also have one implementation each. Role content passed to
+the surface uses
+`components/preview/PreviewPane.jsx`,
+`components/workorders/CompactWorkorderPreview.jsx`, and
+`components/workorders/WorkorderTimeline.jsx`; role folders must not create
+alternate preview panes or timeline renderers. Source-contract tests under
+`features/workorder-detail/` enforce these ownership boundaries.
 
 ### Proofreading Boundary
 

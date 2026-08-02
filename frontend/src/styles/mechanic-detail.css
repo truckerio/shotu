@@ -1,0 +1,364 @@
+/* Mechanic detail uses the existing workorder route with a reduced, task-first surface. */
+.mechanic-detail-page {
+  background: #f6f7f9;
+}
+
+.mechanic-detail-page .workorder-detail-layout {
+  background: transparent;
+  border: 0;
+}
+
+.mechanic-detail-page .control-panel {
+  gap: 12px;
+  padding: 18px 20px 32px;
+}
+
+.mechanic-detail-page .mechanic-secondary-admin-section {
+  display: none;
+}
+
+.mechanic-detail-page .detail-context-bar {
+  background: #fff;
+  min-height: 56px;
+  padding: 10px 12px;
+}
+
+.mechanic-detail-page .detail-context-bar > button {
+  height: 42px;
+  width: 42px;
+}
+
+.mechanic-job-overview {
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.mechanic-job-heading {
+  display: grid;
+  gap: 5px;
+}
+
+.mechanic-job-heading > span {
+  color: #535862;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.mechanic-job-heading h1 {
+  color: #181d27;
+  font-size: var(--text-title);
+  line-height: 1.35;
+}
+
+.mechanic-job-facts {
+  border-block: 1px solid #e9eaeb;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 12px 0;
+}
+
+.mechanic-job-facts > div {
+  border-right: 1px solid #e9eaeb;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 14px;
+}
+
+.mechanic-job-facts > div:first-child {
+  padding-left: 0;
+}
+
+.mechanic-job-facts > div:last-child {
+  border-right: 0;
+  padding-right: 0;
+}
+
+.mechanic-job-facts span,
+.mechanic-truck-details dt {
+  color: #717680;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.mechanic-job-facts strong {
+  color: #181d27;
+  font-size: var(--text-body);
+  overflow-wrap: anywhere;
+}
+
+.mechanic-truck-details {
+  border-bottom: 1px solid #e9eaeb;
+  padding-bottom: 12px;
+}
+
+.mechanic-truck-details summary {
+  color: #414651;
+  cursor: pointer;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  min-height: 44px;
+  padding: 11px 0;
+}
+
+.mechanic-truck-details dl {
+  display: grid;
+  gap: 10px 18px;
+  grid-template-columns: 1fr 1fr;
+  margin: 4px 0 0;
+}
+
+.mechanic-truck-details dl > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mechanic-truck-details dd {
+  color: #181d27;
+  font-size: var(--text-secondary);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.mechanic-truck-details .asset-location-card {
+  margin-top: 12px;
+}
+
+.mechanic-job-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mechanic-job-actions button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #b2ccff;
+  border-radius: 8px;
+  color: #175cd3;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  gap: 8px;
+  justify-content: center;
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+.mechanic-job-actions button:hover,
+.mechanic-job-actions button:focus-visible {
+  background: #eff8ff;
+  border-color: #84caff;
+  outline: 0;
+}
+
+.mechanic-job-actions button svg {
+  flex: 0 0 auto;
+  height: 19px;
+  width: 19px;
+}
+
+.mechanic-job-actions .finish-work-button {
+  background: #067647;
+  border-color: #067647;
+  color: #fff;
+}
+
+.mechanic-job-actions .finish-work-button:hover,
+.mechanic-job-actions .finish-work-button:focus-visible {
+  background: #085d3a;
+  border-color: #085d3a;
+}
+
+.mechanic-job-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mechanic-detail-page .accordion-stack {
+  gap: 8px;
+}
+
+.mechanic-detail-page .mechanic-primary-section .editor-summary {
+  min-height: 52px;
+  padding: 12px 14px;
+}
+
+.mechanic-detail-page .mechanic-primary-section .section-content {
+  padding: 14px;
+}
+
+.mechanic-detail-page .chat-thread {
+  max-height: 280px;
+}
+
+.chat-composer.is-compact textarea {
+  max-height: 120px;
+  min-height: 48px;
+  resize: none;
+}
+
+.chat-composer.is-compact .chat-composer-actions button,
+.chat-composer.is-compact .chat-composer-actions .chat-camera-button {
+  flex-basis: 44px;
+  height: 44px;
+  min-height: 44px;
+  width: 44px;
+}
+
+.mechanic-detail-page .used-parts-editor .button {
+  min-height: 46px;
+}
+
+.mechanic-detail-page .used-parts-feedback {
+  min-height: 18px;
+}
+
+@media (max-width: 700px) {
+  .mechanic-detail-page {
+    padding: 0;
+  }
+
+  .mechanic-detail-page .split-layout.workorder-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .mechanic-detail-page .control-panel {
+    gap: 10px;
+    padding: 10px 12px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .mechanic-detail-page .detail-context-bar {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+
+  .mechanic-job-overview {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+    margin-inline: -12px;
+    padding: 16px 12px;
+  }
+
+  .mechanic-job-heading h1 {
+    font-size: 19px;
+  }
+
+  .mechanic-job-facts {
+    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mechanic-job-facts > div,
+  .mechanic-job-facts > div:first-child,
+  .mechanic-job-facts > div:last-child {
+    border: 0;
+    padding: 0;
+  }
+
+  .mechanic-job-facts > div:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .mechanic-truck-details dl {
+    grid-template-columns: 1fr;
+  }
+
+  .mechanic-job-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .mechanic-job-actions button {
+    justify-content: flex-start;
+    min-height: 52px;
+    padding-inline: 16px;
+  }
+
+  .mechanic-detail-page .editor-section {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+    margin-inline: -12px;
+  }
+
+  .mechanic-detail-page .chat-thread {
+    max-height: 240px;
+    min-height: 88px;
+  }
+
+  .chat-composer.is-compact .chat-composer-actions {
+    display: flex;
+  }
+
+  .mechanic-detail-page .part-row {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .mechanic-detail-page .part-row > strong::before {
+    content: "Part ";
+  }
+
+  .mechanic-detail-page .used-part-field {
+    display: grid;
+    gap: 5px;
+  }
+
+  .mechanic-detail-page .used-part-field > span {
+    color: #414651;
+    display: block;
+    font-size: var(--text-secondary);
+    font-weight: var(--weight-semibold);
+  }
+
+  .mechanic-detail-page .part-row input {
+    min-height: 46px;
+  }
+
+  .mechanic-detail-page .remove-row {
+    border: 1px solid #d5d7da;
+    border-radius: 8px;
+    color: #b42318;
+    font-size: var(--text-body);
+    height: 44px;
+    width: 100%;
+  }
+
+}
+
+@media (min-width: 701px) and (max-width: 1180px) {
+  .mechanic-detail-page .part-row input {
+    min-height: 44px;
+  }
+
+  .mechanic-detail-page .used-part-number-control button,
+  .mechanic-detail-page .remove-row {
+    height: 44px;
+    min-height: 44px;
+    width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}

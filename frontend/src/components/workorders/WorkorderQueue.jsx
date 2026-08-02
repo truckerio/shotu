@@ -1,5 +1,10 @@
 import { ChevronRight } from "@untitledui/icons";
-import { ageLabel, durationLabel, formatCreatedAt } from "../../lib/dates.js";
+import { ageLabel, durationLabel } from "../../lib/dates.js";
+import {
+  formatLifecycleLabel,
+  formatUiDate,
+  formatUiDateTime,
+} from "../../lib/workorder-presentation.js";
 import { workorderMobileMeta, workorderOpenLabel } from "../responsive/workorder-queue-config.js";
 import { WorkorderStatusPill } from "./WorkorderStatusPill.jsx";
 import "./workorder-queue.css";
@@ -9,16 +14,6 @@ const ATTENTION_LABELS = Object.freeze({
   office_help: "Needs office",
   missing_info: "Missing info",
   overdue: "Overdue",
-});
-
-const LIFECYCLE_LABELS = Object.freeze({
-  open: "Unassigned",
-  accepted: "Accepted",
-  in_progress: "In progress",
-  mechanic_done: "Ready for review",
-  closed: "Closed",
-  odoo_entered: "Odoo entered",
-  cancelled: "Cancelled",
 });
 
 function normalizedLifecycle(workorder) {
@@ -57,8 +52,8 @@ export function workorderMatchesSearch(workorder, search) {
     workorder.mechanic?.name,
     workorder.statusLabel,
     workorder.lastMessage,
-    createdDate ? formatCreatedAt(workorder.createdAt) : "",
-    createdDate ? createdDate.toLocaleDateString() : "",
+    createdDate ? formatUiDateTime(workorder.createdAt) : "",
+    createdDate ? formatUiDate(workorder.createdAt) : "",
     createdDate ? createdDate.toISOString().slice(0, 10) : "",
   ]
     .filter(Boolean)
@@ -123,7 +118,10 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
     || "Unassigned";
   const lastActivity = workorder.lastActivityAt || workorder.updatedAt || workorder.createdAt;
   const waiting = durationLabel(workorder.timeInStatusSeconds) || ageLabel(lastActivity);
-  const statusLabel = LIFECYCLE_LABELS[lifecycle] || workorder.statusLabel || lifecycle;
+  const statusLabel = formatLifecycleLabel(lifecycle, {
+    openAsUnassigned: available,
+    fallback: workorder.statusLabel || lifecycle,
+  });
   const isSurveillance = variant === "surveillance";
   const hasOdooStage = ["closed", "odoo_entered"].includes(lifecycle);
   const rowStatus = isSurveillance && hasOdooStage
@@ -147,7 +145,7 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
             <span className="work-row-mechanic">{mechanic}</span>
             {mobileMeta ? <span className="work-row-mobile-meta" aria-hidden="true">{mobileMeta}</span> : null}
             <span className="work-row-age queue-wide-only">{waiting || "Now"}</span>
-            <span className="work-row-created">{formatCreatedAt(lastActivity)}</span>
+            <span className="work-row-created">{formatUiDateTime(lastActivity)}</span>
           </>
         ) : (
           <>
@@ -158,7 +156,7 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
             {variant === "office" ? <span className="work-row-mechanic">{mechanic}</span> : null}
             {mobileMeta ? <span className="work-row-mobile-meta" aria-hidden="true">{mobileMeta}</span> : null}
             <WorkorderAttention reasons={attention} />
-            {variant === "office" ? <span className="work-row-age">{waiting || "Now"}</span> : <span className="work-row-created">{formatCreatedAt(workorder.createdAt)}</span>}
+            {variant === "office" ? <span className="work-row-age">{waiting || "Now"}</span> : <span className="work-row-created">{formatUiDateTime(workorder.createdAt)}</span>}
           </>
         )}
         <WorkorderStatusPill status={rowStatus} label={rowStatusLabel} />

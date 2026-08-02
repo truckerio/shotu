@@ -20,9 +20,14 @@ test("kiosk unlock uses approved endpoint and minimal mechanic roster fields", a
   assert.match(source, /api\("\/api\/auth\/kiosk\/unlock"/);
   assert.match(source, /mechanicId: mechanic\.id/);
   assert.match(source, /requiresPinChange \? \{ newPin \} : \{\}/);
-  assert.match(source, /context\.mechanics\.map/);
-  assert.match(source, /Use standard login/);
-  assert.match(source, /aria-label=\{`Unlock as \$\{mechanic\.name\}`\}/);
+  assert.match(source, /kioskMechanicsInDisplayOrder\(context\.mechanics\)\.map/);
+  assert.match(source, /kioskMechanicIdentity\(mechanic\)/);
+  assert.match(source, /interfaceText\(activeLocale,/);
+  assert.match(source, /kioskStoredLocale/);
+  assert.match(source, /saveKioskLocale/);
+  assert.match(source, /mechanic\?\.locale \|\| deviceLocale/);
+  assert.match(source, /<strong>\{mechanic\.name\}<\/strong>/);
+  assert.doesNotMatch(source, /interfaceText\([^\n]*mechanic\.name/);
   assert.match(source, /minLength="4"/);
   assert.match(source, /pattern="\[0-9\]\{4,\}"/);
   assert.doesNotMatch(source, /type="password"/);
@@ -41,10 +46,16 @@ test("kiosk session uses server mode, audits exit, signs out, and locks on inact
   assert.match(source, /visibilitychange/);
 });
 
-test("kiosk phone surface prevents horizontal overflow and keeps touch controls large", async () => {
+test("kiosk desktop roster is contained, scannable, and keeps controls large", async () => {
   const css = await readFile(new URL("./kiosk.css", featureRoot), "utf8");
 
-  assert.match(css, /\.kiosk-shell\s*\{[^}]*overflow-x:\s*hidden;/s);
+  assert.doesNotMatch(css, /\.kiosk-shell\s*\{[^}]*overflow-x:\s*hidden;/s);
+  assert.match(css, /\.kiosk-panel\s*\{[^}]*max-width:\s*1120px;/s);
+  assert.match(css, /\.kiosk-roster\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s);
+  assert.match(css, /\.kiosk-mechanic\s*\{[^}]*min-height:\s*88px;/s);
+  assert.match(css, /\.kiosk-mechanic strong\s*\{[^}]*overflow-wrap:\s*anywhere;/s);
+  assert.match(css, /@media \(max-width:\s*860px\)/);
+  assert.match(css, /\.kiosk-language select\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(css, /\.kiosk-primary-action\s*\{[^}]*min-height:\s*56px;/s);
   assert.match(css, /\.kiosk-footer-actions button,[\s\S]*min-height:\s*44px;/);
   assert.match(css, /@media \(max-width:\s*560px\)/);
