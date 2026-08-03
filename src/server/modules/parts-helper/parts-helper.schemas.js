@@ -13,6 +13,13 @@ export const catalogSearchInputSchema = z.object({
   limit: z.coerce.number().int().min(1).max(12).optional().default(8),
 });
 
+export const repairSuggestionsInputSchema = z.object({
+  workorderId: z.string().uuid(),
+  catalogPartId: z.string().uuid().optional(),
+  partNumber: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(5).optional().default(3),
+});
+
 export const vehicleInputSchema = z.object({
   assetId: optionalText,
   unitNo: optionalText,

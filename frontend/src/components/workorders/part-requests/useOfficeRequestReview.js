@@ -102,7 +102,6 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
         category: result.part.category || current.category,
         quantity: result.part.suggestedQuantity || current.quantity,
         uomCode: suggestedUomCode,
-        repairOrder: result.part.repairOrder || current.repairOrder,
         fitmentStatus: result.part.fitmentStatus || "unknown",
         fitmentNotes: result.part.evidenceSummary || current.fitmentNotes,
       }));

@@ -3,6 +3,8 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { OdooClient } from "./odoo.client.js";
 import { odooConfigurationSchema, odooLocationMappingSchema } from "./odoo.admin.schemas.js";
+import { repairTextFromOdooLine } from "./odoo.admin.repo.js";
+import { readOdooServiceHistory } from "./odoo.admin.service.js";
 
 test("Odoo configuration requires a complete connection without accepting extra secrets", () => {
   assert.equal(odooConfigurationSchema.parse({
@@ -58,4 +60,119 @@ test("Odoo migration preserves explicit unmatched mapping state and immutable ex
   assert.match(sql, /inventory_items_provider_external_uidx/i);
   assert.match(productIdentitySql, /unique \(company_id, external_id\)/i);
   assert.match(productIdentitySql, /references parts_catalog\(company_id, id\)/i);
+});
+
+test("Odoo repair text keeps work performed and does not treat generic labor product names as repairs", () => {
+  assert.equal(repairTextFromOdooLine({
+    name: "[PTR001] LABOR HOURS\nPUT NEW HUB SEAL, ADJUST BRAKES",
+    product_id: [71, "[PTR001] LABOR HOURS"],
+  }, { name: "LABOR HOURS" }), "PUT NEW HUB SEAL, ADJUST BRAKES");
+  assert.equal(repairTextFromOdooLine({ name: "LABOR HOURS" }, { name: "LABOR HOURS" }), "");
+  assert.equal(repairTextFromOdooLine({ name: "Inspect and repair air leak" }, { name: "Labor" }), "Inspect and repair air leak");
+  assert.equal(repairTextFromOdooLine({ name: "Replace leaking trailer seal" }, { name: "Shop Service" }), "Replace leaking trailer seal");
+});
+
+test("Odoo service-history read is confirmed-order only, introspected, ordered, and bounded", async () => {
+  const calls = [];
+  const allFields = {
+    id: {}, name: {}, state: {}, date_order: {}, effective_date: {}, commitment_date: {}, write_date: {},
+    order_id: {}, sequence: {}, display_type: {}, product_id: {}, product_uom_qty: {}, product_uom: {},
+    default_code: {}, barcode: {}, type: {}, detailed_type: {},
+  };
+  const client = {
+    async execute(model, method, args, kwargs) {
+      calls.push({ model, method, args, kwargs });
+      if (method === "fields_get") return allFields;
+      if (model === "sale.order") return [{ id: 10, name: "S001", state: "sale", write_date: "2026-08-01T00:00:00Z" }];
+      if (model === "sale.order.line") return [
+        { id: 102, order_id: [10, "S001"], sequence: 20, product_id: [2, "Seal"] },
+        { id: 101, order_id: [10, "S001"], sequence: 10, product_id: [1, "Labor"] },
+      ];
+      return [
+        { id: 1, name: "Labor", detailed_type: "service" },
+        { id: 2, name: "Seal", detailed_type: "product", default_code: "46305" },
+      ];
+    },
+  };
+  const result = await readOdooServiceHistory(client, { updatedSince: "2026-07-31T00:00:00Z" });
+  assert.equal(result.orders.length, 1);
+  assert.equal(result.lines.length, 2);
+  assert.equal(result.products.length, 2);
+  assert.equal(result.activeOrderIds, null);
+  const orderReads = calls.filter((call) => call.model === "sale.order" && call.method === "search_read");
+  assert.equal(orderReads.length, 2);
+  assert.equal(orderReads[0].args[0][0][0], "write_date");
+  assert.match(orderReads[0].args[0][0][2], /^2026-07-30 23:55:00$/);
+  assert.deepEqual(orderReads[1].args[0][0], ["id", "in", [10]]);
+  assert.deepEqual(orderReads[1].args[0][1], ["state", "in", ["sale", "done"]]);
+  assert.equal(orderReads[0].kwargs.order, "id asc");
+  assert.equal(orderReads[0].kwargs.limit, 500);
+  assert.ok(calls.filter((call) => call.method === "search_read").every((call) => call.args[0].some((term) => term[0] === "id" && term[1] === ">")));
+});
+
+test("incremental Odoo history reloads an order when only a line write date changes", async () => {
+  const calls = [];
+  const fields = {
+    id: {}, name: {}, state: {}, write_date: {}, order_id: {}, sequence: {},
+    product_id: {}, display_type: {}, product_uom_qty: {}, product_uom: {}, detailed_type: {}, default_code: {},
+  };
+  const client = {
+    async execute(model, method, args, kwargs) {
+      calls.push({ model, method, args, kwargs });
+      if (method === "fields_get") return fields;
+      const domain = args[0] || [];
+      if (model === "sale.order") {
+        if (domain.some((term) => term[0] === "write_date")) return [];
+        return [{ id: 10, name: "S001", state: "sale", write_date: "2026-08-01 00:00:00" }];
+      }
+      if (model === "sale.order.line") {
+        if (domain.some((term) => term[0] === "write_date")) {
+          return [{ id: 102, order_id: [10, "S001"], write_date: "2026-08-03 10:00:00" }];
+        }
+        return [{ id: 102, order_id: [10, "S001"], sequence: 20, product_id: [2, "Seal"] }];
+      }
+      return [{ id: 2, name: "Seal", detailed_type: "product", default_code: "46305" }];
+    },
+  };
+  const result = await readOdooServiceHistory(client, { updatedSince: "2026-08-03T09:00:00Z" });
+  assert.deepEqual(result.orders.map((order) => order.id), [10]);
+  assert.deepEqual(result.lines.map((line) => line.id), [102]);
+  assert.equal(result.activeOrderIds, null);
+  assert.ok(calls.some((call) => call.model === "sale.order.line" && call.method === "search_read"
+    && call.args[0].some((term) => term[0] === "write_date")));
+});
+
+test("periodic Odoo reconciliation reloads all active orders and returns their complete identity set", async () => {
+  const fields = { id: {}, name: {}, state: {}, write_date: {}, order_id: {} };
+  const client = {
+    async execute(model, method) {
+      if (method === "fields_get") return fields;
+      if (model === "sale.order") return [{ id: 10, name: "S001", state: "sale" }];
+      if (model === "sale.order.line") return [];
+      return [];
+    },
+  };
+  const result = await readOdooServiceHistory(client, {
+    updatedSince: "2026-08-03T09:00:00Z",
+    reconcile: true,
+  });
+  assert.deepEqual(result.orders.map((order) => order.id), [10]);
+  assert.deepEqual(result.activeOrderIds, ["10"]);
+});
+
+test("inventory sync isolates optional service-history permission failures", async () => {
+  const source = await readFile(new URL("./odoo.admin.service.js", import.meta.url), "utf8");
+  assert.match(source, /const inventoryResult = await importOdooInventory[\s\S]*try \{[\s\S]*readOdooServiceHistory/);
+  assert.match(source, /catch \{[\s\S]*\.\.\.inventoryResult[\s\S]*historyWarning:/);
+  assert.match(source, /markServiceHistorySyncSucceeded[\s\S]*providerWatermark: syncStartedAt/);
+  assert.match(source, /HISTORY_RECONCILE_INTERVAL_MS/);
+});
+
+test("Odoo history schema preserves all lines while materialized relationships remain context only", async () => {
+  const migration = await readFile(new URL("../../db/migrations/045_service_repair_history.sql", import.meta.url), "utf8");
+  const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
+  assert.match(migration, /service_history_lines_order_sequence_idx/i);
+  assert.match(repository, /relationship:\s*"same_order_context"/i);
+  assert.match(repository, /'context'/i);
+  assert.doesNotMatch(repository, /lineDistance[^\n]+confirmed/i);
 });

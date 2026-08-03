@@ -3,6 +3,7 @@ import { partsHelperConfig } from "./parts-helper.config.js";
 import {
   findLivePartPrices,
   identifyPart,
+  getPartRepairSuggestions,
   resolveOfficePartRequest,
   searchPartCatalog,
 } from "./parts-helper.service.js";
@@ -39,6 +40,20 @@ export async function handlePartsHelperApi(req, res, url, helpers) {
         limit: url.searchParams.get("limit") || undefined,
       };
       sendJson(res, 200, await searchPartCatalog(
+        input,
+        helpers.requestContext,
+        helpers.partsHelperDependencies,
+      ));
+      return true;
+    }
+    if (req.method === "GET" && url.pathname === "/api/parts-helper/repair-suggestions") {
+      const input = {
+        workorderId: url.searchParams.get("workorderId"),
+        catalogPartId: url.searchParams.get("catalogPartId") || undefined,
+        partNumber: url.searchParams.get("partNumber"),
+        limit: url.searchParams.get("limit") || undefined,
+      };
+      sendJson(res, 200, await getPartRepairSuggestions(
         input,
         helpers.requestContext,
         helpers.partsHelperDependencies,

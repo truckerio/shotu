@@ -3,11 +3,16 @@ import {
   identifyPartInputSchema,
   livePriceInputSchema,
   officePartRequestInputSchema,
+  repairSuggestionsInputSchema,
 } from "./parts-helper.schemas.js";
 import { requireSupportedTruck } from "./supported-trucks.js";
 import { findHuggingFaceTruckContext } from "./providers/huggingface.provider.js";
 import { findLivePricesWithOpenAI, identifyOfficePartRequestWithOpenAI, identifyPartWithOpenAI } from "./providers/openai.provider.js";
-import { findCompanyCatalogPart, searchCompanyCatalogParts } from "../../db/repositories/parts-catalog.repo.js";
+import {
+  findCompanyCatalogPart,
+  searchCompanyCatalogParts,
+} from "../../db/repositories/parts-catalog.repo.js";
+import { suggestCompanyPartRepairs } from "../../db/repositories/service-history.repo.js";
 import { normalizePartNumber } from "../parts/part.constants.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
 
@@ -71,6 +76,52 @@ export async function searchPartCatalog(input, requestContext, dependencies = {}
     query: parsed.q,
     catalogAvailable: Boolean(result?.catalogAvailable),
     items: Array.isArray(result?.items) ? result.items : [],
+  };
+}
+
+const boundedText = (value, maxLength) => String(value ?? "").trim().slice(0, maxLength);
+
+function isoDateOrNull(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function publicRepairSuggestion(suggestion) {
+  const text = boundedText(suggestion?.text, 2000);
+  if (!text) return null;
+  const source = ["local", "odoo", "mixed"].includes(suggestion?.source) ? suggestion.source : "local";
+  return {
+    text,
+    usageCount: Math.min(1_000_000, Math.max(0, Math.trunc(Number(suggestion?.usageCount) || 0))),
+    latestUsedAt: isoDateOrNull(suggestion?.latestUsedAt),
+    confidence: suggestion?.confidence === "confirmed" ? "confirmed" : "context",
+    source,
+    sameAsset: Boolean(suggestion?.sameAsset),
+    examples: (Array.isArray(suggestion?.examples) ? suggestion.examples : []).slice(0, 3).map((example) => ({
+      usedAt: isoDateOrNull(example?.usedAt),
+    })),
+  };
+}
+
+export async function getPartRepairSuggestions(input, requestContext, dependencies = {}) {
+  const parsed = repairSuggestionsInputSchema.parse(input);
+  const requireAccess = dependencies.requireWorkorderAccess || requireWorkorderAccess;
+  const suggestRepairs = dependencies.suggestCompanyPartRepairs || suggestCompanyPartRepairs;
+  const workorder = await requireAccess(requestContext, parsed.workorderId);
+  const suggestions = await suggestRepairs(workorder.companyId, {
+    catalogPartId: parsed.catalogPartId || null,
+    partNumber: parsed.partNumber,
+    assetId: workorder.assetId || workorder.asset?.id || null,
+    limit: parsed.limit,
+  });
+
+  return {
+    partNumber: parsed.partNumber,
+    suggestions: (Array.isArray(suggestions) ? suggestions : [])
+      .slice(0, parsed.limit)
+      .map(publicRepairSuggestion)
+      .filter(Boolean),
   };
 }
 

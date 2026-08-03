@@ -68,6 +68,16 @@
   padding: 6px 8px;
 }
 
+.used-parts-editor .used-part-repair > label {
+  display: grid;
+  gap: 5px;
+}
+
+.used-parts-editor .used-part-history {
+  grid-column: 2 / 5;
+  min-width: 0;
+}
+
 @media (max-width: 640px) {
   .used-parts-editor .part-row.part-row-head {
     display: none;
@@ -95,6 +105,10 @@
   }
 
   .used-parts-editor .used-part-repair {
+    grid-column: 1 / -1;
+  }
+
+  .used-parts-editor .used-part-history {
     grid-column: 1 / -1;
   }
 

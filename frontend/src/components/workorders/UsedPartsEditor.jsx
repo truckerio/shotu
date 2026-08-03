@@ -18,6 +18,7 @@ import {
 } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import "./used-parts-editor.css";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
+import { RepairHistorySuggestions } from "./part-requests/RepairHistorySuggestions.jsx";
 import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
 
 function vehicleInput(detail) {
@@ -75,6 +76,7 @@ export function UsedPartsEditor({
   const [findingRow, setFindingRow] = useState(-1);
   const [saveState, setSaveState] = useState("");
   const [message, setMessage] = useState("");
+  const [selectedCatalogParts, setSelectedCatalogParts] = useState([]);
 
   useEffect(() => {
     saveRef.current = onSave;
@@ -87,6 +89,7 @@ export function UsedPartsEditor({
     persistedRef.current = JSON.stringify(currentRows);
     setSaveState("");
     setMessage("");
+    setSelectedCatalogParts([]);
 
     hydratedRef.current = true;
     removeLegacyMechanicWorkStorage();
@@ -141,7 +144,16 @@ export function UsedPartsEditor({
   function removeRow(index) {
     const normalized = removeUsedPart(rows, index, minimum);
     setVisibleRowCount(normalized.length);
+    setSelectedCatalogParts((current) => current.filter((_, rowIndex) => rowIndex !== index));
     onChange(normalized);
+  }
+
+  function setSelectedCatalogPart(index, part) {
+    setSelectedCatalogParts((current) => {
+      const next = [...current];
+      next[index] = part;
+      return next;
+    });
   }
 
   async function suggestRepair(index) {
@@ -164,10 +176,9 @@ export function UsedPartsEditor({
         partNo: result.part.normalizedPartNumber || row.partNo,
         qty: result.part.suggestedQuantity || row.qty,
         uomCode: result.part.uomCode || row.uomCode,
-        repairOrder: result.part.repairOrder || row.repairOrder,
       };
       onChange(next);
-      setMessage("Repair order suggested. Review it before completing the workorder.");
+      setMessage("Part details found. Choose a service-history suggestion or enter the repair order manually.");
     } catch (error) {
       setMessage(`${error.message} Manual entry is still available.`);
     } finally {
@@ -221,12 +232,15 @@ export function UsedPartsEditor({
                 <PartCatalogCombobox
                   workorderId={detail.workorder.id}
                   value={part.partNo}
-                  onChange={(value) => update(index, "partNo", value)}
+                  onChange={(value) => {
+                    setSelectedCatalogPart(index, null);
+                    update(index, "partNo", value);
+                  }}
                   onSelect={(catalogPart) => {
+                    setSelectedCatalogPart(index, catalogPart);
                     updateFields(index, {
                       partNo: catalogPart.partNumber,
                       uomCode: catalogPart.uomCode || part.uomCode,
-                      repairOrder: catalogPart.repairOrder || part.repairOrder,
                     });
                     setMessage(catalogInventoryText(catalogPart));
                   }}
@@ -237,7 +251,7 @@ export function UsedPartsEditor({
                   disabled={disabled}
                 />
                 {suggestionsEnabled ? (
-                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Suggest repair order from part number" aria-label={`Suggest repair order for row ${index + 1}`}>
+                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Find part details" aria-label={`Find details for part in row ${index + 1}`}>
                     <SearchMd />
                   </button>
                 ) : null}
@@ -255,18 +269,30 @@ export function UsedPartsEditor({
                 compact
               />
             </div>
-            <label className="used-part-field used-part-repair">
-              <span className="used-part-label">Repair order</span>
-              <NarrativeField
-                singleLine
-                value={part.repairOrder}
-                onChange={(event) => update(index, "repairOrder", event.target.value)}
-                aria-label={`Repair order ${index + 1}`}
-                placeholder="Describe repair for this part"
+            <div className="used-part-field used-part-repair">
+              <label>
+                <span className="used-part-label">Repair order</span>
+                <NarrativeField
+                  singleLine
+                  value={part.repairOrder}
+                  onChange={(event) => update(index, "repairOrder", event.target.value)}
+                  aria-label={`Repair order ${index + 1}`}
+                  placeholder="Describe repair for this part"
+                  disabled={disabled}
+                />
+              </label>
+            </div>
+            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
+            {selectedCatalogParts[index]?.id ? <div className="used-part-history">
+              <RepairHistorySuggestions
+                workorderId={detail.workorder.id}
+                catalogPartId={selectedCatalogParts[index]?.id}
+                partNumber={selectedCatalogParts[index]?.partNumber}
+                assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                onApply={(text) => update(index, "repairOrder", text)}
                 disabled={disabled}
               />
-            </label>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
+            </div> : null}
           </div>
         ))}
       </div>

@@ -9,6 +9,10 @@ test("Odoo settings exposes explicit admin location matching without name-based 
   assert.match(source, /Ignore this location/);
   assert.match(source, /<option value="">Unmatched<\/option>/);
   assert.match(source, /encodeURIComponent\(item\.externalId\)/);
+  assert.match(source, /Sync parts, inventory & history/);
+  assert.match(source, /historyOrderCount/);
+  assert.match(source, /historyWarning/);
+  assert.match(source, /Products, Inventory, and Sales service orders/);
 });
 
 test("Odoo provider is shared through the integration settings registry", async () => {

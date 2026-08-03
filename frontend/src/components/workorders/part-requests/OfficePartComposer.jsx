@@ -13,6 +13,7 @@ import {
   vehicleInput,
 } from "./part-request-model.js";
 import { PartCatalogCombobox } from "./PartCatalogCombobox.jsx";
+import { RepairHistorySuggestions } from "./RepairHistorySuggestions.jsx";
 import { catalogInventoryText } from "./catalog-parts-model.js";
 
 export function OfficePartComposer({ detail, onChanged }) {
@@ -48,7 +49,6 @@ export function OfficePartComposer({ detail, onChanged }) {
         category: result.part.category,
         quantity: result.part.suggestedQuantity || 1,
         uomCode: normalizeUomCode(result.part.uomCode || current.uomCode),
-        repairOrder: result.part.repairOrder,
         fitmentStatus: result.part.fitmentStatus,
         fitmentNotes: result.part.evidenceSummary,
       }));
@@ -130,7 +130,6 @@ export function OfficePartComposer({ detail, onChanged }) {
               category: part.category,
               quantity: current.quantity || 1,
               uomCode: normalizeUomCode(part.uomCode || current.uomCode),
-              repairOrder: part.repairOrder || current.repairOrder,
             }));
             setSourceType(part.inventory.available > 0 && part.inventory.itemId ? "inventory" : "unknown");
             setMessage(catalogInventoryText(part));
@@ -162,6 +161,16 @@ export function OfficePartComposer({ detail, onChanged }) {
         />
         <label className="part-field-wide">Description<NarrativeField singleLine value={draft.description} onChange={(event) => update("description", event.target.value)} /></label>
         <label className="part-field-wide">Repair order<input {...textEntryProps("identifier")} value={draft.repairOrder} onChange={(event) => update("repairOrder", event.target.value)} /></label>
+        <div className="part-field-wide">
+          <RepairHistorySuggestions
+            workorderId={detail.workorder.id}
+            catalogPartId={selectedPart?.id}
+            partNumber={selectedPart?.partNumber}
+            assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+            onApply={(text) => update("repairOrder", text)}
+            disabled={Boolean(busy)}
+          />
+        </div>
         <label>Fitment
           <select value={draft.fitmentStatus} onChange={(event) => update("fitmentStatus", event.target.value)}>
             <option value="unknown">Not verified</option>

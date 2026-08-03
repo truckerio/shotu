@@ -1,6 +1,7 @@
 import { createOdooClient } from "./odoo.client.js";
 import {
   importOdooInventory,
+  importOdooServiceHistory,
   listOdooLocationMappings,
   odooAdminStatus,
   readOdooConfiguration,
@@ -8,6 +9,137 @@ import {
   setOdooLocationMapping,
   upsertDiscoveredOdooLocations,
 } from "./odoo.admin.repo.js";
+import {
+  markServiceHistorySyncSucceeded,
+  readServiceHistorySyncState,
+} from "../../db/repositories/service-history.repo.js";
+
+const HISTORY_PAGE_SIZE = 500;
+const ORDER_ID_BATCH_SIZE = 200;
+const PRODUCT_ID_BATCH_SIZE = 500;
+const MAX_HISTORY_ORDERS = 100_000;
+const MAX_HISTORY_LINES = 500_000;
+const MAX_HISTORY_PRODUCTS = 100_000;
+const ELIGIBLE_HISTORY_STATES = new Set(["sale", "done"]);
+const HISTORY_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1_000;
+
+async function supportedFields(client, model, candidates) {
+  const definitions = await client.execute(model, "fields_get", [], { attributes: ["type", "relation"] });
+  return candidates.filter((field) => Object.hasOwn(definitions || {}, field));
+}
+
+function odooDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "";
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
+function batches(values, size) {
+  const result = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
+}
+
+async function pagedSearchRead(client, model, domain, fields, maxRecords) {
+  const records = [];
+  let lastId = 0;
+  while (true) {
+    const remaining = maxRecords + 1 - records.length;
+    const page = await client.execute(model, "search_read", [[...domain, ["id", ">", lastId]]], {
+      fields,
+      limit: Math.max(1, Math.min(HISTORY_PAGE_SIZE, remaining)),
+      order: "id asc",
+    });
+    records.push(...page);
+    if (records.length > maxRecords) {
+      throw new Error(`Odoo ${model} history sync exceeded the ${maxRecords}-record safety limit.`);
+    }
+    if (page.length < HISTORY_PAGE_SIZE) return records;
+    const nextId = Number(page.at(-1)?.id);
+    if (!Number.isFinite(nextId) || nextId <= lastId) {
+      throw new Error(`Odoo ${model} history pagination did not advance.`);
+    }
+    lastId = nextId;
+  }
+}
+
+export async function readOdooServiceHistory(client, { updatedSince = null, reconcile = false } = {}) {
+  const orderFields = await supportedFields(client, "sale.order", [
+    "id", "name", "state", "date_order", "effective_date", "commitment_date", "write_date",
+  ]);
+  const lineFields = await supportedFields(client, "sale.order.line", [
+    "id", "order_id", "sequence", "display_type", "product_id", "name",
+    "product_uom_qty", "product_uom", "write_date",
+  ]);
+  const fullHistoryRead = !updatedSince || reconcile;
+  let orders;
+  if (fullHistoryRead) {
+    orders = await pagedSearchRead(
+      client,
+      "sale.order",
+      [["state", "in", [...ELIGIBLE_HISTORY_STATES]]],
+      orderFields,
+      MAX_HISTORY_ORDERS,
+    );
+  } else {
+    const overlap = odooDateTime(new Date(new Date(updatedSince).valueOf() - 5 * 60_000));
+    const changedOrders = overlap && orderFields.includes("write_date")
+      ? await pagedSearchRead(client, "sale.order", [["write_date", ">=", overlap]], orderFields, MAX_HISTORY_ORDERS)
+      : [];
+    const changedLines = overlap && lineFields.includes("write_date")
+      ? await pagedSearchRead(
+        client,
+        "sale.order.line",
+        [["write_date", ">=", overlap]],
+        ["id", "order_id", "write_date"],
+        MAX_HISTORY_LINES,
+      )
+      : [];
+    const affectedOrderIds = [...new Set([
+      ...changedOrders.map((order) => order.id),
+      ...changedLines.map((line) => Array.isArray(line.order_id) ? line.order_id[0] : line.order_id),
+    ].filter(Boolean))];
+    orders = [];
+    for (const orderIds of batches(affectedOrderIds, ORDER_ID_BATCH_SIZE)) {
+      orders.push(...await pagedSearchRead(
+        client,
+        "sale.order",
+        [["id", "in", orderIds], ["state", "in", [...ELIGIBLE_HISTORY_STATES]]],
+        orderFields,
+        MAX_HISTORY_ORDERS - orders.length,
+      ));
+    }
+  }
+  const activeOrderIds = fullHistoryRead ? orders.map((order) => String(order.id)) : null;
+  if (!orders.length) return { orders: [], lines: [], products: [], activeOrderIds };
+
+  const lines = [];
+  for (const orderIds of batches(orders.map((order) => order.id), ORDER_ID_BATCH_SIZE)) {
+    lines.push(...await pagedSearchRead(
+      client,
+      "sale.order.line",
+      [["order_id", "in", orderIds]],
+      lineFields,
+      MAX_HISTORY_LINES - lines.length,
+    ));
+  }
+  const productIds = [...new Set(lines.map((line) => Array.isArray(line.product_id) ? line.product_id[0] : line.product_id).filter(Boolean))];
+  if (!productIds.length) return { orders, lines, products: [], activeOrderIds };
+  const productFields = await supportedFields(client, "product.product", [
+    "id", "default_code", "barcode", "name", "type", "detailed_type",
+  ]);
+  const products = [];
+  for (const productIdBatch of batches(productIds, PRODUCT_ID_BATCH_SIZE)) {
+    products.push(...await pagedSearchRead(
+      client,
+      "product.product",
+      [["id", "in", productIdBatch]],
+      productFields,
+      MAX_HISTORY_PRODUCTS - products.length,
+    ));
+  }
+  return { orders, lines, products, activeOrderIds };
+}
 
 async function configuredClient(companyId) {
   const configuration = await readOdooConfiguration(companyId);
@@ -48,7 +180,34 @@ export async function syncOdooPartsAndInventory(companyId) {
       "id", "product_id", "location_id", "quantity", "reserved_quantity", "write_date",
     ]),
   ]);
-  return importOdooInventory(companyId, { products, quants });
+  const inventoryResult = await importOdooInventory(companyId, { products, quants });
+  try {
+    const syncStartedAt = new Date();
+    const syncState = await readServiceHistorySyncState(companyId, "odoo");
+    const lastReconciledAt = syncState.lastReconciledAt ? new Date(syncState.lastReconciledAt) : null;
+    const reconcile = !lastReconciledAt
+      || Number.isNaN(lastReconciledAt.valueOf())
+      || syncStartedAt.valueOf() - lastReconciledAt.valueOf() >= HISTORY_RECONCILE_INTERVAL_MS;
+    const history = await readOdooServiceHistory(client, {
+      updatedSince: syncState.providerWatermark,
+      reconcile,
+    });
+    const historyResult = await importOdooServiceHistory(companyId, history);
+    await markServiceHistorySyncSucceeded(companyId, "odoo", {
+      providerWatermark: syncStartedAt,
+      reconciled: reconcile,
+    });
+    return { ...inventoryResult, ...historyResult, historyWarning: "" };
+  } catch {
+    return {
+      ...inventoryResult,
+      historyOrderCount: 0,
+      historyLineCount: 0,
+      historyContextCount: 0,
+      historyRemovedCount: 0,
+      historyWarning: "Parts and inventory synced, but service history could not be read. Verify read-only Sales permissions in Odoo.",
+    };
+  }
 }
 
 export { listOdooLocationMappings, odooAdminStatus, setOdooLocationMapping };

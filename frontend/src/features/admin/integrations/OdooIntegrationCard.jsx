@@ -63,7 +63,10 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
         setMappingData(result);
         setNotice({ error: "", message: "Odoo locations refreshed. New locations are waiting for a match." });
       } else if (name === "sync") {
-        setNotice({ error: "", message: `Imported ${result.changedCount} catalog and inventory records. ${result.skippedUnmappedCount} inventory rows were skipped because their locations are not mapped.` });
+        const historySummary = result.historyWarning
+          ? result.historyWarning
+          : `Imported ${result.historyOrderCount || 0} service orders and ${result.historyLineCount || 0} ordered history lines.`;
+        setNotice({ error: "", message: `Imported ${result.changedCount} catalog and inventory records. ${historySummary} ${result.skippedUnmappedCount} inventory rows were skipped because their locations are not mapped.` });
       } else {
         setNotice({ error: "", message: "Odoo.sh connection verified." });
       }
@@ -123,7 +126,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
           <label>Database<input required autoComplete="off" value={configuration.database} onChange={(event) => updateConfiguration("database", event.target.value)} /></label>
           <label>Integration user<input required autoComplete="username" value={configuration.username} onChange={(event) => updateConfiguration("username", event.target.value)} /></label>
           <label>API key<input type="password" required minLength={8} autoComplete="new-password" value={configuration.apiKey} onChange={(event) => updateConfiguration("apiKey", event.target.value)} /></label>
-          <p>The API key is encrypted. Use a dedicated read-only Odoo user with access to Products and Inventory.</p>
+          <p>The API key is encrypted. Use a dedicated read-only Odoo user with access to Products, Inventory, and Sales service orders.</p>
           <div className="integration-card-actions">
             {connected ? <Button type="button" onClick={() => setEditing(false)}>Cancel</Button> : null}
             <Button type="submit" variant="primary" disabled={Boolean(busy)}>{busy === "configure" ? "Verifying" : "Verify and save"}</Button>
@@ -139,7 +142,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
           <div className="integration-card-actions">
             <Button icon={Settings01} onClick={() => setEditing(true)} disabled={Boolean(busy)}>Connection</Button>
             <Button icon={RefreshCw01} onClick={() => runAction("discover", "/api/integrations/odoo/discover-locations")} disabled={Boolean(busy)}>{busy === "discover" ? "Refreshing" : "Refresh locations"}</Button>
-            <Button variant="primary" onClick={() => runAction("sync", "/api/integrations/odoo/sync")} disabled={Boolean(busy)}>{busy === "sync" ? "Syncing" : "Sync parts & inventory"}</Button>
+            <Button variant="primary" onClick={() => runAction("sync", "/api/integrations/odoo/sync")} disabled={Boolean(busy)}>{busy === "sync" ? "Syncing" : "Sync parts, inventory & history"}</Button>
           </div>
         </>
       )}

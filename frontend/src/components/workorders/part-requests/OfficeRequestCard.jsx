@@ -12,6 +12,7 @@ import {
   SOURCE_LABELS,
 } from "./part-request-model.js";
 import { RequestSummary } from "./RequestSummary.jsx";
+import { RepairHistorySuggestions } from "./RepairHistorySuggestions.jsx";
 import { useOfficeRequestReview } from "./useOfficeRequestReview.js";
 
 export function OfficeRequestCard({ request, detail, onChanged }) {
@@ -49,6 +50,16 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
             />
             <label className="part-field-wide">Description<NarrativeField singleLine value={review.form.description} onChange={(event) => review.update("description", event.target.value)} /></label>
             <label className="part-field-wide">Repair order<input {...textEntryProps("identifier")} value={review.form.repairOrder} onChange={(event) => review.update("repairOrder", event.target.value)} /></label>
+            {request.catalogPartId ? <div className="part-field-wide">
+              <RepairHistorySuggestions
+                workorderId={detail.workorder.id}
+                catalogPartId={request.catalogPartId}
+                partNumber={review.form.partNumber}
+                assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                onApply={(text) => review.update("repairOrder", text)}
+                disabled={Boolean(review.busy)}
+              />
+            </div> : null}
             <div className="part-fitment-fields part-field-wide">
               <AnchoredSelect
                 label="Fitment"

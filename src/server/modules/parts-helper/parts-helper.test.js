@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findLivePartPrices, identifyPart, resolveOfficePartRequest, searchPartCatalog } from "./parts-helper.service.js";
-import { catalogSearchInputSchema, identifyPartResultSchema } from "./parts-helper.schemas.js";
+import {
+  findLivePartPrices,
+  getPartRepairSuggestions,
+  identifyPart,
+  resolveOfficePartRequest,
+  searchPartCatalog,
+} from "./parts-helper.service.js";
+import {
+  catalogSearchInputSchema,
+  identifyPartResultSchema,
+  repairSuggestionsInputSchema,
+} from "./parts-helper.schemas.js";
 import { handlePartsHelperApi } from "./parts-helper.routes.js";
 import { requireSupportedTruck, supportedTruckFamily, UnsupportedTruckError } from "./supported-trucks.js";
 import { identifyPartWithOpenAI, PartsHelperProviderError } from "./providers/openai.provider.js";
@@ -164,6 +174,214 @@ test("catalog route returns validation failures without searching", async () => 
   assert.equal(response.status, 400);
   assert.equal(response.body.error, "Invalid parts-helper request.");
   assert.equal(searched, false);
+});
+
+test("repair suggestion input requires workorder scope and a bounded result count", () => {
+  const workorderId = "11111111-1111-4111-8111-111111111111";
+  const catalogPartId = "22222222-2222-4222-8222-222222222222";
+  assert.deepEqual(repairSuggestionsInputSchema.parse({
+    workorderId,
+    catalogPartId,
+    partNumber: "  46305  ",
+  }), {
+    workorderId,
+    catalogPartId,
+    partNumber: "46305",
+    limit: 3,
+  });
+  assert.equal(repairSuggestionsInputSchema.safeParse({ workorderId, partNumber: "" }).success, false);
+  assert.equal(repairSuggestionsInputSchema.safeParse({ workorderId, partNumber: "46305", limit: 6 }).success, false);
+  assert.equal(repairSuggestionsInputSchema.safeParse({ workorderId: "bad", partNumber: "46305" }).success, false);
+});
+
+test("repair suggestions derive tenant and asset scope from the authorized workorder", async () => {
+  const calls = [];
+  const requestContext = { actor: { id: "office-1", role: "office" } };
+  const result = await getPartRepairSuggestions({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    catalogPartId: "22222222-2222-4222-8222-222222222222",
+    partNumber: " 46305 ",
+    limit: "4",
+    companyId: "attacker-company",
+    assetId: "attacker-asset",
+  }, requestContext, {
+    requireWorkorderAccess: async (context, workorderId) => {
+      calls.push({ type: "access", context, workorderId });
+      return { companyId: "company-1", assetId: "asset-1" };
+    },
+    suggestCompanyPartRepairs: async (companyId, options) => {
+      calls.push({ type: "suggest", companyId, options });
+      return [{
+        text: "Put new hub seal, adjust brakes",
+        usageCount: 8,
+        latestUsedAt: "2026-07-10T12:00:00.000Z",
+        confidence: "confirmed",
+        source: "odoo",
+        sameAsset: true,
+        examples: [{
+          workorderId: null,
+          serviceOrderId: "service-order-1",
+          reference: "SO-1042",
+          assetId: "asset-1",
+          usedAt: "2026-07-10T12:00:00.000Z",
+        }],
+      }];
+    },
+  });
+
+  assert.deepEqual(calls[0], {
+    type: "access",
+    context: requestContext,
+    workorderId: "11111111-1111-4111-8111-111111111111",
+  });
+  assert.deepEqual(calls[1], {
+    type: "suggest",
+    companyId: "company-1",
+    options: {
+      catalogPartId: "22222222-2222-4222-8222-222222222222",
+      partNumber: "46305",
+      assetId: "asset-1",
+      limit: 4,
+    },
+  });
+  assert.deepEqual(result, {
+    partNumber: "46305",
+    suggestions: [{
+      text: "Put new hub seal, adjust brakes",
+      usageCount: 8,
+      latestUsedAt: "2026-07-10T12:00:00.000Z",
+      confidence: "confirmed",
+      source: "odoo",
+      sameAsset: true,
+      examples: [{
+        usedAt: "2026-07-10T12:00:00.000Z",
+      }],
+    }],
+  });
+});
+
+test("repair suggestions stop before history lookup when workorder access fails", async () => {
+  const denied = Object.assign(new Error("Workorder not found."), { statusCode: 404 });
+  let searched = false;
+  await assert.rejects(
+    () => getPartRepairSuggestions({
+      workorderId: "11111111-1111-4111-8111-111111111111",
+      partNumber: "46305",
+    }, { actor: { id: "office-1", role: "office" } }, {
+      requireWorkorderAccess: async () => { throw denied; },
+      suggestCompanyPartRepairs: async () => {
+        searched = true;
+        return [];
+      },
+    }),
+    (error) => error === denied,
+  );
+  assert.equal(searched, false);
+});
+
+test("repair suggestions return a stable empty response", async () => {
+  const result = await getPartRepairSuggestions({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    partNumber: "46305",
+  }, {}, {
+    requireWorkorderAccess: async () => ({ companyId: "company-1", assetId: null }),
+    suggestCompanyPartRepairs: async () => null,
+  });
+  assert.deepEqual(result, { partNumber: "46305", suggestions: [] });
+});
+
+test("repair suggestions bound repository strings, examples, and result count", async () => {
+  const longText = "x".repeat(2200);
+  const suggestion = {
+    text: longText,
+    usageCount: 2_000_000,
+    latestUsedAt: "not-a-date",
+    confidence: "unexpected",
+    source: "mixed",
+    examples: Array.from({ length: 4 }, (_, index) => ({
+      workorderId: `workorder-${index}`,
+      serviceOrderId: `service-${index}`,
+      reference: "r".repeat(250),
+      assetId: `asset-${index}`,
+      usedAt: null,
+    })),
+  };
+  const result = await getPartRepairSuggestions({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    partNumber: "46305",
+    limit: 2,
+  }, {}, {
+    requireWorkorderAccess: async () => ({ companyId: "company-1", assetId: null }),
+    suggestCompanyPartRepairs: async () => [suggestion, suggestion, suggestion],
+  });
+
+  assert.equal(result.suggestions.length, 2);
+  assert.equal(result.suggestions[0].text.length, 2000);
+  assert.equal(result.suggestions[0].usageCount, 1_000_000);
+  assert.equal(result.suggestions[0].latestUsedAt, null);
+  assert.equal(result.suggestions[0].confidence, "context");
+  assert.equal(result.suggestions[0].source, "mixed");
+  assert.equal(result.suggestions[0].sameAsset, false);
+  assert.equal(result.suggestions[0].examples.length, 3);
+  assert.deepEqual(result.suggestions[0].examples[0], { usedAt: null });
+});
+
+test("repair suggestions route forwards only supported query fields", async () => {
+  const calls = [];
+  const response = {};
+  await handlePartsHelperApi(
+    { method: "GET" },
+    response,
+    new URL("http://localhost/api/parts-helper/repair-suggestions?workorderId=11111111-1111-4111-8111-111111111111&catalogPartId=22222222-2222-4222-8222-222222222222&partNumber=46305&limit=5&companyId=other&assetId=other"),
+    {
+      requestContext: { actor: { id: "office-1", role: "office" } },
+      sendJson: (res, status, body) => Object.assign(res, { status, body }),
+      readBody: async () => ({}),
+      partsHelperDependencies: {
+        requireWorkorderAccess: async () => ({ companyId: "company-1", assetId: "asset-1" }),
+        suggestCompanyPartRepairs: async (companyId, options) => {
+          calls.push({ companyId, options });
+          return [];
+        },
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { partNumber: "46305", suggestions: [] });
+  assert.deepEqual(calls, [{
+    companyId: "company-1",
+    options: {
+      catalogPartId: "22222222-2222-4222-8222-222222222222",
+      partNumber: "46305",
+      assetId: "asset-1",
+      limit: 5,
+    },
+  }]);
+});
+
+test("repair suggestions route rejects invalid input before resolving access", async () => {
+  let accessed = false;
+  const response = {};
+  await handlePartsHelperApi(
+    { method: "GET" },
+    response,
+    new URL("http://localhost/api/parts-helper/repair-suggestions?workorderId=bad&partNumber=&limit=6"),
+    {
+      requestContext: { actor: { id: "office-1", role: "office" } },
+      sendJson: (res, status, body) => Object.assign(res, { status, body }),
+      readBody: async () => ({}),
+      partsHelperDependencies: {
+        requireWorkorderAccess: async () => {
+          accessed = true;
+          return { companyId: "company-1" };
+        },
+      },
+    },
+  );
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error, "Invalid parts-helper request.");
+  assert.equal(accessed, false);
 });
 
 test("supported truck scope stays narrow", () => {

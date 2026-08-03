@@ -167,6 +167,256 @@ function relationName(value) {
   return Array.isArray(value) ? String(value[1] || "") : "";
 }
 
+function odooLineKind(line, product, mapping) {
+  if (line.display_type === "line_section") return "section";
+  if (line.display_type === "line_note") return "note";
+  const type = String(product?.detailed_type || product?.type || "").toLowerCase();
+  if (type === "service") return "service";
+  if (["product", "consu", "consumable", "goods"].includes(type)) return "goods";
+  const productName = String(product?.name || relationName(line.product_id) || "");
+  if (/\b(?:labor|labour|service)(?:\s+hours?)?\b/i.test(productName)) return "service";
+  if (mapping?.catalog_part_id) return "goods";
+  return product ? "other" : "other";
+}
+
+export function repairTextFromOdooLine(line, product = {}) {
+  const description = String(line?.name || "").replace(/\r/g, "").trim();
+  if (!description) return "";
+  const segments = description.split("\n").map((value) => value.trim()).filter(Boolean);
+  const productName = String(product.name || relationName(line.product_id) || "").trim();
+  const first = segments[0].replace(/^\[[^\]]+\]\s*/, "").trim();
+  const bareProductName = productName.replace(/^\[[^\]]+\]\s*/, "").trim();
+  const productHeader = /^(labor(?: hours?)?|service)$/i.test(first)
+    || (bareProductName && first.localeCompare(bareProductName, undefined, { sensitivity: "accent" }) === 0);
+  if (segments.length > 1) {
+    const repairSegments = productHeader ? segments.slice(1) : segments;
+    return repairSegments.join(" ").replace(/\s+/g, " ").trim();
+  }
+  const generic = first;
+  if (!generic || /^(labor(?: hours?)?|service)$/i.test(generic)) return "";
+  return generic;
+}
+
+export async function importOdooServiceHistory(companyId, {
+  orders,
+  lines,
+  products = [],
+  activeOrderIds = null,
+}) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  const productById = new Map(products.map((product) => [String(product.id), product]));
+  let importedLineCount = 0;
+  let contextCount = 0;
+  try {
+    await client.query("begin");
+    const mappingResult = await client.query(
+      `select mapping.external_id, mapping.catalog_part_id,
+              catalog.part_number, catalog.normalized_part_number
+       from odoo_product_mappings mapping
+       join parts_catalog catalog
+         on catalog.company_id = mapping.company_id and catalog.id = mapping.catalog_part_id
+       where mapping.company_id = $1`,
+      [tenantId],
+    );
+    const mappings = new Map(mappingResult.rows.map((row) => [row.external_id, row]));
+    const historyOrderIds = new Map();
+    let removedCount = 0;
+    if (Array.isArray(activeOrderIds)) {
+      const removed = await client.query(
+        `delete from service_history_orders
+         where company_id = $1 and source_provider = 'odoo'
+           and not (external_id = any($2::text[]))`,
+        [tenantId, activeOrderIds.map(String)],
+      );
+      removedCount = removed.rowCount;
+    }
+    if (!orders.length) {
+      await client.query("commit");
+      return {
+        historyOrderCount: 0,
+        historyLineCount: 0,
+        historyContextCount: 0,
+        historyRemovedCount: removedCount,
+      };
+    }
+    const orderRows = orders.map((order) => ({
+      external_id: String(order.id),
+      reference: order.name || `Odoo ${order.id}`,
+      status: order.state || "",
+      ordered_at: order.date_order || null,
+      completed_at: order.effective_date || order.commitment_date || null,
+      source_updated_at: order.write_date || null,
+      raw_metadata: order,
+    }));
+    const savedOrders = await client.query(
+      `insert into service_history_orders (
+         company_id, source_provider, external_id, reference, status,
+         ordered_at, completed_at, source_updated_at, raw_metadata,
+         last_seen_at, updated_at
+       )
+       select $1, 'odoo', source.external_id, source.reference, source.status,
+              source.ordered_at, source.completed_at, source.source_updated_at,
+              source.raw_metadata, now(), now()
+       from jsonb_to_recordset($2::jsonb) as source(
+         external_id text, reference text, status text, ordered_at timestamptz,
+         completed_at timestamptz, source_updated_at timestamptz, raw_metadata jsonb
+       )
+       on conflict (company_id, source_provider, external_id) do update
+       set reference = excluded.reference,
+           status = excluded.status,
+           ordered_at = excluded.ordered_at,
+           completed_at = excluded.completed_at,
+           source_updated_at = excluded.source_updated_at,
+           raw_metadata = excluded.raw_metadata,
+           last_seen_at = now(),
+           updated_at = now()
+       returning external_id, id`,
+      [tenantId, JSON.stringify(orderRows)],
+    );
+    for (const row of savedOrders.rows) historyOrderIds.set(row.external_id, row.id);
+
+    const groupedLines = new Map();
+    for (const line of lines) {
+      const orderExternalId = relationId(line.order_id);
+      if (!historyOrderIds.has(orderExternalId)) continue;
+      const current = groupedLines.get(orderExternalId) || [];
+      current.push(line);
+      groupedLines.set(orderExternalId, current);
+    }
+
+    for (const order of orders) {
+      const orderExternalId = String(order.id);
+      const serviceOrderId = historyOrderIds.get(orderExternalId);
+      const orderLines = (groupedLines.get(orderExternalId) || [])
+        .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0) || Number(left.id) - Number(right.id));
+      await client.query(
+        `delete from service_history_lines where company_id = $1 and service_order_id = $2`,
+        [tenantId, serviceOrderId],
+      );
+      await client.query(
+        `delete from part_repair_history
+         where company_id = $1 and service_order_id = $2 and source_provider = 'odoo'`,
+        [tenantId, serviceOrderId],
+      );
+
+      const imported = [];
+      const lineRows = [];
+      for (let index = 0; index < orderLines.length; index += 1) {
+        const line = orderLines[index];
+        const productExternalId = relationId(line.product_id);
+        const product = productById.get(productExternalId);
+        const mapping = mappings.get(productExternalId);
+        const kind = odooLineKind(line, product, mapping);
+        const partNumber = mapping?.part_number || product?.default_code || product?.barcode || "";
+        lineRows.push({
+          external_id: String(line.id),
+          sequence: Number(line.sequence || 0),
+          line_index: index,
+          line_kind: kind,
+          product_external_id: productExternalId,
+          catalog_part_id: mapping?.catalog_part_id || null,
+          part_number: partNumber,
+          normalized_part_number: mapping?.normalized_part_number || normalizePartNumber(partNumber),
+          product_name: product?.name || relationName(line.product_id),
+          description: line.name || "",
+          quantity: line.product_uom_qty ?? null,
+          uom: relationName(line.product_uom),
+          source_updated_at: line.write_date || null,
+          raw_payload: line,
+        });
+        imported.push({ line, index, kind, product, mapping, partNumber });
+        importedLineCount += 1;
+      }
+      if (lineRows.length) {
+        await client.query(
+          `insert into service_history_lines (
+             company_id, service_order_id, external_id, sequence, line_index,
+             line_kind, product_external_id, catalog_part_id, part_number,
+             normalized_part_number, product_name, description, quantity, uom,
+             source_updated_at, raw_payload
+           )
+           select $1, $2, source.external_id, source.sequence, source.line_index,
+                  source.line_kind, source.product_external_id, source.catalog_part_id,
+                  source.part_number, source.normalized_part_number, source.product_name,
+                  source.description, source.quantity, source.uom,
+                  source.source_updated_at, source.raw_payload
+           from jsonb_to_recordset($3::jsonb) as source(
+             external_id text, sequence numeric, line_index integer, line_kind text,
+             product_external_id text, catalog_part_id uuid, part_number text,
+             normalized_part_number text, product_name text, description text,
+             quantity numeric, uom text, source_updated_at timestamptz, raw_payload jsonb
+           )`,
+          [tenantId, serviceOrderId, JSON.stringify(lineRows)],
+        );
+      }
+
+      const repairCandidates = imported
+        .filter((entry) => entry.kind === "service")
+        .map((entry) => ({ ...entry, repairText: repairTextFromOdooLine(entry.line, entry.product) }))
+        .filter((entry) => entry.repairText);
+      const partLines = imported.filter((entry) => entry.kind === "goods"
+        && (entry.mapping?.catalog_part_id || normalizePartNumber(entry.partNumber)));
+      const contextRows = [];
+      for (const partLine of partLines) {
+        const nearestRepairCandidates = [...repairCandidates]
+          .sort((left, right) => Math.abs(partLine.index - left.index) - Math.abs(partLine.index - right.index))
+          .slice(0, 25);
+        for (const repairLine of nearestRepairCandidates) {
+          const distance = Math.abs(partLine.index - repairLine.index);
+          const proximityScore = 1 / (1 + distance);
+          const occurrenceKey = `${orderExternalId}:${partLine.line.id}:${repairLine.line.id}`;
+          contextRows.push({
+            occurrence_key: occurrenceKey,
+            catalog_part_id: partLine.mapping?.catalog_part_id || null,
+            normalized_part_number: partLine.mapping?.normalized_part_number || normalizePartNumber(partLine.partNumber),
+            repair_text: repairLine.repairText,
+            used_at: order.effective_date || order.commitment_date || order.date_order || order.write_date || null,
+            evidence: {
+              partLineExternalId: String(partLine.line.id),
+              repairLineExternalId: String(repairLine.line.id),
+              lineDistance: distance,
+              proximityScore,
+              relationship: "same_order_context",
+            },
+          });
+          contextCount += 1;
+        }
+      }
+      if (contextRows.length) {
+        await client.query(
+          `insert into part_repair_history (
+             company_id, service_order_id, source_provider, occurrence_key,
+             catalog_part_id, normalized_part_number, repair_text, confidence,
+             used_at, evidence
+           )
+           select $1, $2, 'odoo', source.occurrence_key, source.catalog_part_id,
+                  source.normalized_part_number, source.repair_text, 'context',
+                  source.used_at, source.evidence
+           from jsonb_to_recordset($3::jsonb) as source(
+             occurrence_key text, catalog_part_id uuid, normalized_part_number text,
+             repair_text text, used_at timestamptz, evidence jsonb
+           )`,
+          [tenantId, serviceOrderId, JSON.stringify(contextRows)],
+        );
+      }
+    }
+
+    await client.query("commit");
+    return {
+      historyOrderCount: orders.length,
+      historyLineCount: importedLineCount,
+      historyContextCount: contextCount,
+      historyRemovedCount: removedCount,
+    };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function importOdooInventory(companyId, { products, quants }) {
   const tenantId = requireCompanyId(companyId);
   const client = await getPool().connect();
