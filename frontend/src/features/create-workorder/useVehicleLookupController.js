@@ -23,10 +23,15 @@ export function useVehicleLookupController({
   const locationRequestRef = useRef({ vehicleId: "", promise: null });
   const locationBackoffUntilRef = useRef(0);
   const detailLocationRefreshRef = useRef("");
+  const formRef = useRef(form);
+  const selectedVehicleRef = useRef(null);
+  const applyVehicleRef = useRef(null);
   const [vehicleLookup, setVehicleLookup] = useState(EMPTY_LOOKUP);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  formRef.current = form;
+  selectedVehicleRef.current = selectedVehicle;
 
-  const refreshVehicleLocation = useCallback(async (vehicle = selectedVehicle) => {
+  const refreshVehicleLocation = useCallback(async (vehicle = selectedVehicleRef.current) => {
     if (!vehicle?.id) return null;
     if (Date.now() < locationBackoffUntilRef.current) return null;
     const requestedVehicleId = vehicle.id;
@@ -54,19 +59,20 @@ export function useVehicleLookupController({
     })();
     locationRequestRef.current = { vehicleId: requestedVehicleId, promise: request };
     return request;
-  }, [selectedVehicle]);
+  }, []);
 
   const applyVehicle = useCallback((vehicle) => {
+    const currentForm = formRef.current;
     const modelText = vehicleModelText(vehicle);
     clearCreateErrors("unitNo", ...(vehicle.owner_name ? ["customerCompanyName"] : []));
     const vehiclePatch = {
-      customerCompanyName: vehicle.owner_name || form.customerCompanyName,
-      unitNo: vehicle.unit_no || vehicle.name || form.unitNo,
-      unitType: vehicle.unit_type || form.unitType,
-      licenseNo: vehicle.license_plate || form.licenseNo,
-      mileage: vehicleMileage(vehicle) || form.mileage,
-      model: modelText || form.model,
-      vinNo: vehicle.vin || form.vinNo,
+      customerCompanyName: vehicle.owner_name || currentForm.customerCompanyName,
+      unitNo: vehicle.unit_no || vehicle.name || currentForm.unitNo,
+      unitType: vehicle.unit_type || currentForm.unitType,
+      licenseNo: vehicle.license_plate || currentForm.licenseNo,
+      mileage: vehicleMileage(vehicle) || currentForm.mileage,
+      model: modelText || currentForm.model,
+      vinNo: vehicle.vin || currentForm.vinNo,
     };
     setForm((current) => ({ ...current, ...vehiclePatch }));
     stageAutosave(vehiclePatch);
@@ -77,7 +83,8 @@ export function useVehicleLookupController({
     });
     setSelectedVehicle(vehicle);
     refreshVehicleLocation(vehicle);
-  }, [clearCreateErrors, form, refreshVehicleLocation, setForm, stageAutosave]);
+  }, [clearCreateErrors, refreshVehicleLocation, setForm, stageAutosave]);
+  applyVehicleRef.current = applyVehicle;
 
   useEffect(() => {
     let cancelled = false;
@@ -93,13 +100,13 @@ export function useVehicleLookupController({
 
     setVehicleLookup((current) => ({ ...current, loading: true, results: [] }));
     const timer = window.setTimeout(() => {
-      api(`/api/vehicles/search?q=${encodeURIComponent(query)}&limit=8`)
+      api(`/api/vehicles/search?q=${encodeURIComponent(query)}&limit=8`, { timeoutMs: 10_000 })
         .then((result) => {
           if (cancelled) return;
           const vehicles = result.vehicles || [];
           const exactMatch = uniqueExactVehicleMatch(vehicles, query);
           if (exactMatch) {
-            applyVehicle(exactMatch);
+            applyVehicleRef.current(exactMatch);
             return;
           }
           setVehicleLookup({
@@ -116,7 +123,7 @@ export function useVehicleLookupController({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [applyVehicle, form.unitNo, selectedVehicle]);
+  }, [form.unitNo, selectedVehicle]);
 
   useEffect(() => {
     if (!activeWorkorderId || !selectedVehicle?.id) {

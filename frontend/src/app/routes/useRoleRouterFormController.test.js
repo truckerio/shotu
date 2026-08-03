@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  createRoleRouterFormController,
   normalizeSavedUsedParts,
-  useRoleRouterFormController,
 } from "./useRoleRouterFormController.js";
+
+const source = readFileSync(new URL("./useRoleRouterFormController.js", import.meta.url), "utf8");
 
 test("used-parts persistence strips transient UI fields", () => {
   assert.deepEqual(normalizeSavedUsedParts([{
@@ -24,7 +27,7 @@ test("used-parts persistence strips transient UI fields", () => {
 test("start-date changes keep the state updater pure and autosave the derived end date once", () => {
   const autosavePatches = [];
   let update;
-  const controller = useRoleRouterFormController({
+  const controller = createRoleRouterFormController({
     activeWorkorder: {
       allowedActions: { update: true },
       workorder: { id: "workorder-1" },
@@ -48,4 +51,10 @@ test("start-date changes keep the state updater pure and autosave the derived en
     concern: "Inspect",
   });
   assert.deepEqual(autosavePatches, ["queued"]);
+});
+
+test("shared form callbacks remain stable across unrelated router renders", () => {
+  assert.match(source, /return useMemo\(\(\) => createRoleRouterFormController/);
+  assert.match(source, /form: \{ workEndDate: form\.workEndDate \}/);
+  assert.doesNotMatch(source, /\[form,/);
 });

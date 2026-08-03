@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { writeOfficeWorkorderEditBackup } from "../../features/workorder-detail/office-workorder-autosave-storage.js";
 import { api } from "../../lib/api.js";
 import { emptyPart } from "../../../../shared/workorder-template.js";
@@ -11,7 +13,7 @@ export function normalizeSavedUsedParts(parts) {
   }));
 }
 
-export function useRoleRouterFormController({
+export function createRoleRouterFormController({
   activeWorkorder,
   actorId,
   form,
@@ -108,4 +110,44 @@ export function useRoleRouterFormController({
     updatePart,
     updateStartDate,
   };
+}
+
+export function useRoleRouterFormController(options) {
+  const {
+    activeWorkorder,
+    actorId,
+    form,
+    isOfficeDetail,
+    officeActionsRef,
+    setActiveWorkorder,
+    setCreateErrors,
+    setForm,
+    setUsedPartsDirty,
+  } = options;
+
+  return useMemo(() => createRoleRouterFormController({
+    activeWorkorder: activeWorkorder ? {
+      allowedActions: { update: activeWorkorder.allowedActions?.update },
+      workorder: { id: activeWorkorder.workorder?.id },
+    } : null,
+    actorId,
+    form: { workEndDate: form.workEndDate },
+    isOfficeDetail,
+    officeActionsRef,
+    setActiveWorkorder,
+    setCreateErrors,
+    setForm,
+    setUsedPartsDirty,
+  }), [
+    activeWorkorder?.allowedActions?.update,
+    activeWorkorder?.workorder?.id,
+    actorId,
+    form.workEndDate,
+    isOfficeDetail,
+    officeActionsRef,
+    setActiveWorkorder,
+    setCreateErrors,
+    setForm,
+    setUsedPartsDirty,
+  ]);
 }
