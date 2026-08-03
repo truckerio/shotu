@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./PartCatalogCombobox.jsx", import.meta.url), "utf8");
+const styles = readFileSync(new URL("./part-catalog-combobox.css", import.meta.url), "utf8");
 
 test("catalog lookup stays deterministic, bounded, debounced, and cancellable", () => {
   assert.match(source, /SEARCH_DELAY_MS = 250/);
@@ -31,4 +32,12 @@ test("manual entry remains available for empty, unmatched, and failed lookup", (
   assert.match(source, /No catalog match\. Continue manually\./);
   assert.match(source, /Parts lookup unavailable\. Manual entry still works\./);
   assert.match(source, /onChange\(event\.target\.value\)/);
+});
+
+test("catalog popup stays readable beyond the narrow input column", () => {
+  assert.match(styles, /\.part-catalog-popup\s*\{[\s\S]*?right:\s*auto;/);
+  assert.match(styles, /\.part-catalog-popup\s*\{[\s\S]*?width:\s*480px;/);
+  assert.match(styles, /max-width:\s*calc\(100vw - 32px\);/);
+  assert.match(styles, /overflow-wrap:\s*anywhere;/);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?max-width:\s*calc\(100vw - 24px\);/);
 });
