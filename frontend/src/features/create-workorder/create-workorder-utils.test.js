@@ -3,13 +3,36 @@ import test from "node:test";
 import {
   createLocationDefaultPatch,
   createLocationTemplatePatch,
+  createWorkorderPreviewForm,
   normalizeVehicleLookupValue,
   resolveCreateLocation,
+  selectedCreateMechanicNames,
   splitSerial,
   templateFieldsForCreateLocation,
   uniqueExactVehicleMatch,
   vehicleLookupValues,
 } from "./create-workorder-utils.js";
+
+test("create preview projects the selected mechanic names from assignment truth", () => {
+  const assignment = {
+    mechanicUserIds: ["mechanic-2", "mechanic-1"],
+    mechanics: [
+      { id: "mechanic-1", displayName: "abhay" },
+      { id: "mechanic-2", name: "Anmol" },
+      { id: "mechanic-3", name: "Armando" },
+    ],
+  };
+
+  assert.equal(selectedCreateMechanicNames(assignment), "abhay, Anmol");
+  assert.deepEqual(
+    createWorkorderPreviewForm({ unitNo: "G2202", mechanicName: "Stale name" }, assignment),
+    { unitNo: "G2202", mechanicName: "abhay, Anmol" },
+  );
+  assert.equal(
+    createWorkorderPreviewForm({ mechanicName: "Stale name" }, { ...assignment, mechanicUserIds: [] }).mechanicName,
+    "",
+  );
+});
 
 test("serial parser keeps prefix, number, and padding width", () => {
   assert.deepEqual(splitSerial("WO-000009"), { prefix: "WO-", nextNumber: 9, digits: 6 });

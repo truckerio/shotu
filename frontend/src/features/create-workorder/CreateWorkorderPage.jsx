@@ -14,6 +14,7 @@ import {
   createSectionForErrors,
   isCreateErrorSectionReady,
 } from "./create-workorder-sections.js";
+import { createWorkorderPreviewForm } from "./create-workorder-utils.js";
 import "./create-workorder-page.css";
 
 export function CreateWorkorderPage({
@@ -82,6 +83,10 @@ export function CreateWorkorderPage({
   const createSections = useMemo(
     () => buildCreateWorkorderSections({ canAssign, includePreview: isPhone }),
     [canAssign, isPhone],
+  );
+  const previewForm = useMemo(
+    () => createWorkorderPreviewForm(form, assignment),
+    [assignment, form],
   );
 
   const ensureFocusedFieldVisible = useFocusedFieldVisibility({
@@ -205,9 +210,9 @@ export function CreateWorkorderPage({
               onFullscreen={openFullscreenPreview}
             >
               <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-                <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+                <WorkorderPreview label="First page" serial={firstSerial} form={previewForm} />
                 {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                  ? <WorkorderPreview label="Last page" serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
                   : null}
               </div>
             </CompactWorkorderPreview>
@@ -228,9 +233,9 @@ export function CreateWorkorderPage({
           onFullscreen={openFullscreenPreview}
         >
           <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-            <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+            <WorkorderPreview label="First page" serial={firstSerial} form={previewForm} />
             {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-              ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+              ? <WorkorderPreview label="Last page" serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
               : null}
           </div>
         </PreviewPane> : null}
@@ -238,7 +243,7 @@ export function CreateWorkorderPage({
 
       <PreviewFullscreen
         open={previewFullscreen}
-        form={form}
+        form={previewForm}
         serials={previewSerials}
         pageIndex={fullscreenPageIndex}
         zoom={fullscreenZoom}

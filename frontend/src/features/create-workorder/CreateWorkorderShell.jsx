@@ -5,7 +5,7 @@ import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
 import { CREATE_WORKORDER_FORM_ID } from "../generator/CreateWorkorderForm.jsx";
-import { resolveCreateLocation } from "./create-workorder-utils.js";
+import { resolveCreateLocation, selectedCreateMechanicNames } from "./create-workorder-utils.js";
 
 function createSummaryValue(value, fallback = "") {
   const text = String(value || "").trim();
@@ -14,16 +14,6 @@ function createSummaryValue(value, fallback = "") {
 
 function locationName(locations = [], locationId = "") {
   return resolveCreateLocation(locations, locationId)?.location?.name || "";
-}
-
-function mechanicNames(assignment = {}) {
-  const selected = new Set(assignment.mechanicUserIds || []);
-  if (!selected.size) return "";
-  return (assignment.mechanics || [])
-    .filter((mechanic) => selected.has(mechanic.id))
-    .map((mechanic) => mechanic.displayName || mechanic.display_name || mechanic.name || mechanic.username)
-    .filter(Boolean)
-    .join(", ");
 }
 
 export function CreateWorkorderShell({
@@ -98,7 +88,7 @@ export function CreateWorkorderShell({
         customer={form.customerCompanyName}
         dates={dates}
         location={form.locationName || locationName(locations, form.locationId)}
-        mechanics={mechanicNames(assignment)}
+        mechanics={selectedCreateMechanicNames(assignment)}
         unit={unit}
         unitType={form.unitType || "Unit"}
       />

@@ -38,6 +38,24 @@ export function resolveCreateLocation(locations = [], value = "") {
   }) || null;
 }
 
+export function selectedCreateMechanicNames(assignment = {}) {
+  const selectedIds = new Set(assignment.mechanicUserIds || []);
+  if (!selectedIds.size) return "";
+
+  return (assignment.mechanics || [])
+    .filter((mechanic) => selectedIds.has(mechanic.id))
+    .map((mechanic) => mechanic.displayName || mechanic.display_name || mechanic.name || mechanic.username)
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function createWorkorderPreviewForm(form = {}, assignment = {}) {
+  return {
+    ...form,
+    mechanicName: selectedCreateMechanicNames(assignment),
+  };
+}
+
 const DEFAULT_TEMPLATE_FIELDS = Object.freeze({
   brandTop: "PRO TEC",
   brandBottom: "REPAIR",
