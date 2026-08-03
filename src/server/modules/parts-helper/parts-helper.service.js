@@ -1,9 +1,15 @@
-import { identifyPartInputSchema, livePriceInputSchema, officePartRequestInputSchema } from "./parts-helper.schemas.js";
+import {
+  catalogSearchInputSchema,
+  identifyPartInputSchema,
+  livePriceInputSchema,
+  officePartRequestInputSchema,
+} from "./parts-helper.schemas.js";
 import { requireSupportedTruck } from "./supported-trucks.js";
 import { findHuggingFaceTruckContext } from "./providers/huggingface.provider.js";
 import { findLivePricesWithOpenAI, identifyOfficePartRequestWithOpenAI, identifyPartWithOpenAI } from "./providers/openai.provider.js";
-import { findCompanyCatalogPart } from "../../db/repositories/parts-catalog.repo.js";
+import { findCompanyCatalogPart, searchCompanyCatalogParts } from "../../db/repositories/parts-catalog.repo.js";
 import { normalizePartNumber } from "../parts/part.constants.js";
+import { requireWorkorderAccess } from "../../auth/resource-access.js";
 
 const normalizedUrl = (value) => {
   try {
@@ -48,6 +54,24 @@ export function summarizeListings(listings, valueField = "totalPrice") {
     };
   }
   return groups;
+}
+
+export async function searchPartCatalog(input, requestContext, dependencies = {}) {
+  const parsed = catalogSearchInputSchema.parse(input);
+  const requireAccess = dependencies.requireWorkorderAccess || requireWorkorderAccess;
+  const searchCatalog = dependencies.searchCatalogParts || searchCompanyCatalogParts;
+  const workorder = await requireAccess(requestContext, parsed.workorderId);
+  const result = await searchCatalog(workorder.companyId, {
+    text: parsed.q,
+    locationId: workorder.locationId || null,
+    limit: parsed.limit,
+  });
+
+  return {
+    query: parsed.q,
+    catalogAvailable: Boolean(result?.catalogAvailable),
+    items: Array.isArray(result?.items) ? result.items : [],
+  };
 }
 
 export async function identifyPart(input, dependencies = {}) {

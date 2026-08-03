@@ -12,16 +12,24 @@ import {
   SOURCE_LABELS,
   vehicleInput,
 } from "./part-request-model.js";
+import { PartCatalogCombobox } from "./PartCatalogCombobox.jsx";
+import { catalogInventoryText } from "./catalog-parts-model.js";
 
 export function OfficePartComposer({ detail, onChanged }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(createEmptyPartDraft);
-  const [sourceType, setSourceType] = useState("inventory");
+  const [sourceType, setSourceType] = useState("unknown");
+  const [selectedPart, setSelectedPart] = useState(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function clearCatalogSelection() {
+    setSelectedPart(null);
+    if (sourceType === "inventory") setSourceType("unknown");
   }
 
   async function identify() {
@@ -44,6 +52,7 @@ export function OfficePartComposer({ detail, onChanged }) {
         fitmentStatus: result.part.fitmentStatus,
         fitmentNotes: result.part.evidenceSummary,
       }));
+      clearCatalogSelection();
       setMessage(result.resolutionSource === "company_catalog"
         ? "Company-approved part filled. Verify fitment for this unit."
         : result.part.status === "ambiguous"
@@ -61,19 +70,28 @@ export function OfficePartComposer({ detail, onChanged }) {
     setBusy("submit");
     setMessage("");
     try {
+      const inventory = selectedPart?.inventory;
+      const usesSelectedInventory = sourceType === "inventory" && inventory?.itemId;
       await api(`/api/office/workorders/${detail.workorder.id}/parts`, {
         method: "POST",
         body: JSON.stringify({
           ...draft,
+          ...(selectedPart?.id ? { catalogPartId: selectedPart.id } : {}),
           allocations: [{
             sourceType,
             status: sourceType === "inventory" ? "reserved" : "proposed",
             quantity: draft.quantity,
             uomCode: draft.uomCode,
+            ...(usesSelectedInventory ? {
+              inventoryItemId: inventory.itemId,
+              locationId: inventory.locationId,
+            } : {}),
           }],
         }),
       });
       setDraft(createEmptyPartDraft());
+      setSelectedPart(null);
+      setSourceType("unknown");
       setOpen(false);
       await onChanged();
     } catch (error) {
@@ -93,21 +111,52 @@ export function OfficePartComposer({ detail, onChanged }) {
         <strong>Add approved part</strong>
         <button type="button" onClick={() => setOpen(false)}>Cancel</button>
       </div>
-      <label>
-        Part number or description
-        <div className="part-search-control">
-          <input {...textEntryProps("search")} value={draft.query} onChange={(event) => update("query", event.target.value)} placeholder="Part number or description" />
+      <div className="part-search-control">
+        <PartCatalogCombobox
+          workorderId={detail.workorder.id}
+          value={draft.query}
+          onChange={(value) => {
+            update("query", value);
+            clearCatalogSelection();
+          }}
+          onSelect={(part) => {
+            setSelectedPart(part);
+            setDraft((current) => ({
+              ...current,
+              query: part.partNumber,
+              partNumber: part.partNumber,
+              manufacturer: part.manufacturer,
+              description: part.description,
+              category: part.category,
+              quantity: current.quantity || 1,
+              uomCode: normalizeUomCode(part.uomCode || current.uomCode),
+              repairOrder: part.repairOrder || current.repairOrder,
+            }));
+            setSourceType(part.inventory.available > 0 && part.inventory.itemId ? "inventory" : "unknown");
+            setMessage(catalogInventoryText(part));
+          }}
+          disabled={Boolean(busy)}
+          allowAiFallback
+        />
+        <div className="part-search-ai-action">
           <button type="button" onClick={identify} disabled={draft.query.trim().length < 2 || Boolean(busy)}><SearchMd /> {busy === "identify" ? "Finding" : "Find"}</button>
+          <small>AI fallback</small>
         </div>
-      </label>
+      </div>
       <div className="part-suggestion-fields">
-        <label>Part number<input {...textEntryProps("identifier")} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} /></label>
+        <label>Part number<input {...textEntryProps("identifier")} value={draft.partNumber} onChange={(event) => {
+          update("partNumber", event.target.value);
+          clearCatalogSelection();
+        }} /></label>
         <QuantityUnitInput
           id="office-part-quantity"
           quantity={draft.quantity}
           uomCode={draft.uomCode}
           onQuantityChange={(value) => update("quantity", value)}
-          onUomCodeChange={(value) => update("uomCode", value)}
+          onUomCodeChange={(value) => {
+            update("uomCode", value);
+            clearCatalogSelection();
+          }}
           quantityLabel="Quantity"
           unitLabel="Unit"
         />

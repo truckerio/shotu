@@ -4,6 +4,8 @@ import { api } from "../../lib/api.js";
 import { NarrativeField } from "../forms/NarrativeField.jsx";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { Button } from "../ui/Button.jsx";
+import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
+import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
 import {
   createMechanicPartRequestDraft,
   mechanicPartRequestErrorFields,
@@ -17,6 +19,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("error");
+  const [catalogQuery, setCatalogQuery] = useState("");
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -49,6 +52,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
       });
       await onChanged();
       setDraft(createMechanicPartRequestDraft());
+      setCatalogQuery("");
       setMessageTone("success");
       setMessage("Part request sent to office.");
     } catch (error) {
@@ -74,8 +78,32 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
         <strong>Request a part</strong>
         <span>Tell the office what you need for this job.</span>
       </div>
+      <PartCatalogCombobox
+        workorderId={workorderId}
+        value={catalogQuery}
+        onChange={(value) => {
+          setCatalogQuery(value);
+          setDraft((current) => ({ ...current, catalogPartId: "", partNumber: "" }));
+        }}
+        onSelect={(part) => {
+          setCatalogQuery(part.partNumber);
+          setDraft((current) => ({
+            ...current,
+            catalogPartId: part.id,
+            partNumber: part.partNumber,
+            query: part.description || part.partNumber,
+            uomCode: part.uomCode || current.uomCode,
+          }));
+          setErrors({});
+          setMessageTone("success");
+          setMessage(catalogInventoryText(part));
+        }}
+        label="Search company parts (optional)"
+        placeholder="Part number or description"
+        disabled={busy}
+      />
       <label className="mechanic-part-description" htmlFor="mechanic-part-query">
-        <span>What part do you need?</span>
+        <span>Part description</span>
         <NarrativeField
           id="mechanic-part-query"
           ref={descriptionRef}
@@ -99,7 +127,10 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
           quantity={draft.quantity}
           uomCode={draft.uomCode}
           onQuantityChange={(value) => update("quantity", value)}
-          onUomCodeChange={(value) => update("uomCode", value)}
+          onUomCodeChange={(value) => {
+            update("uomCode", value);
+            setDraft((current) => ({ ...current, catalogPartId: "", partNumber: "" }));
+          }}
           quantityLabel="Quantity"
           unitLabel="Unit"
           disabled={busy}

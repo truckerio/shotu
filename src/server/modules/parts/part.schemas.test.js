@@ -80,6 +80,23 @@ test("part quantities support measured decimals and default legacy payloads to p
   }).success, false);
 });
 
+test("catalog selections retain immutable company catalog identity", () => {
+  const catalogPartId = "11111111-1111-4111-8111-111111111111";
+  const parsed = createPartRequestSchema.parse({
+    catalogPartId,
+    query: "LF9009",
+    partNumber: "LF9009",
+    quantity: 1,
+  });
+
+  assert.equal(parsed.catalogPartId, catalogPartId);
+  assert.equal(createPartRequestSchema.safeParse({
+    catalogPartId: "not-a-uuid",
+    query: "LF9009",
+    quantity: 1,
+  }).success, false);
+});
+
 test("approved allocations use the same unit as the request", () => {
   const result = decidePartRequestSchema.safeParse(decision({
     quantity: 2.5,

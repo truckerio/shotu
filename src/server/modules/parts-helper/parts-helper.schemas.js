@@ -7,6 +7,12 @@ import {
 
 const optionalText = z.string().trim().max(500).optional().default("");
 
+export const catalogSearchInputSchema = z.object({
+  workorderId: z.string().uuid(),
+  q: z.string().trim().min(2).max(120),
+  limit: z.coerce.number().int().min(1).max(12).optional().default(8),
+});
+
 export const vehicleInputSchema = z.object({
   assetId: optionalText,
   unitNo: optionalText,

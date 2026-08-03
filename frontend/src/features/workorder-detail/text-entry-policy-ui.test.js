@@ -9,6 +9,7 @@ const detailPage = readSource("./WorkorderDetailPage.jsx");
 const detailSections = readSource("./WorkorderDetailSections.jsx");
 const chatComposer = readSource("../../components/workorders/ChatComposer.jsx");
 const usedPartsEditor = readSource("../../components/workorders/UsedPartsEditor.jsx");
+const partCatalogCombobox = readSource("../../components/workorders/part-requests/PartCatalogCombobox.jsx");
 const customerCompanyField = readSource("../../components/forms/CustomerCompanyField.jsx");
 const unitSummary = readSource("../../components/forms/UnitSummary.jsx");
 
@@ -31,6 +32,7 @@ test("shared workorder names and technical values use conservative keyboard poli
   assert.match(createForm, /textEntryProps\("search"\)[\s\S]*role="combobox"/);
   assert.match(detailSections, /textEntryProps\("search"\)[\s\S]*aria-label="Unit no\."/);
   assert.match(createForm, /textEntryProps\("identifier"\)[\s\S]*part\.partNo/);
-  assert.match(usedPartsEditor, /textEntryProps\("identifier"\)[\s\S]*part\.partNo/);
+  assert.match(usedPartsEditor, /value=\{part\.partNo\}[\s\S]*inputPolicy="identifier"/);
+  assert.match(partCatalogCombobox, /textEntryProps\(inputPolicy\)/);
   assert.match(unitSummary, /textEntryProps\("identifier"\)/);
 });

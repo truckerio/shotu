@@ -1,5 +1,6 @@
 import { officeQueueText } from "./part-request-model.js";
 import { OfficeRequestCard } from "./OfficeRequestCard.jsx";
+import { OfficePartComposer } from "./OfficePartComposer.jsx";
 import { UsedPartsSection } from "./UsedPartsSection.jsx";
 
 export function OfficePartsSurface({
@@ -15,6 +16,9 @@ export function OfficePartsSurface({
 
   return (
     <>
+      {detail.allowedActions?.addApprovedParts ? (
+        <OfficePartComposer detail={detail} onChanged={onChanged} />
+      ) : null}
       <UsedPartsSection
         actorId={actorId}
         detail={detail}

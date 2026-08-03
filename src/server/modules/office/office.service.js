@@ -46,6 +46,7 @@ export function officeAllowedActions(status, activeAttention = []) {
     update: canUpdate,
     updateAdministrative: canUpdate,
     recordUsedParts: canUpdate,
+    addApprovedParts: active,
     approve: review,
     returnToMechanic: review,
     cancel: active || review,

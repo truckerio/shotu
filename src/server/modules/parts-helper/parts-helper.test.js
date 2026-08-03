@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findLivePartPrices, identifyPart, resolveOfficePartRequest } from "./parts-helper.service.js";
-import { identifyPartResultSchema } from "./parts-helper.schemas.js";
+import { findLivePartPrices, identifyPart, resolveOfficePartRequest, searchPartCatalog } from "./parts-helper.service.js";
+import { catalogSearchInputSchema, identifyPartResultSchema } from "./parts-helper.schemas.js";
+import { handlePartsHelperApi } from "./parts-helper.routes.js";
 import { requireSupportedTruck, supportedTruckFamily, UnsupportedTruckError } from "./supported-trucks.js";
 import { identifyPartWithOpenAI, PartsHelperProviderError } from "./providers/openai.provider.js";
 
@@ -30,6 +31,139 @@ test("AI quantity suggestions respect the selected unit", () => {
     suggestedQuantity: 1.5,
     uomCode: "gal",
   }).success, true);
+});
+
+test("catalog search input requires a workorder and bounded query", () => {
+  const workorderId = "11111111-1111-4111-8111-111111111111";
+  assert.deepEqual(catalogSearchInputSchema.parse({ workorderId, q: "  LF9  " }), {
+    workorderId,
+    q: "LF9",
+    limit: 8,
+  });
+  assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "x" }).success, false);
+  assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "filter", limit: 13 }).success, false);
+});
+
+test("catalog search derives company and location from authorized workorder", async () => {
+  const calls = [];
+  const requestContext = { actor: { id: "office-1", role: "office" } };
+  const result = await searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    q: "  LF90 ",
+    limit: "6",
+    companyId: "attacker-company",
+    locationId: "attacker-location",
+  }, requestContext, {
+    requireWorkorderAccess: async (context, workorderId) => {
+      calls.push({ type: "access", context, workorderId });
+      return { companyId: "company-1", locationId: "location-1" };
+    },
+    searchCatalogParts: async (companyId, options) => {
+      calls.push({ type: "search", companyId, options });
+      return { catalogAvailable: true, items: [{ id: "part-1" }] };
+    },
+  });
+
+  assert.deepEqual(calls[0], {
+    type: "access",
+    context: requestContext,
+    workorderId: "11111111-1111-4111-8111-111111111111",
+  });
+  assert.deepEqual(calls[1], {
+    type: "search",
+    companyId: "company-1",
+    options: { text: "LF90", locationId: "location-1", limit: 6 },
+  });
+  assert.deepEqual(result, {
+    query: "LF90",
+    catalogAvailable: true,
+    items: [{ id: "part-1" }],
+  });
+});
+
+test("catalog search stops before repository lookup when workorder access fails", async () => {
+  const denied = Object.assign(new Error("Workorder not found."), { statusCode: 404 });
+  let searched = false;
+
+  await assert.rejects(
+    () => searchPartCatalog({
+      workorderId: "11111111-1111-4111-8111-111111111111",
+      q: "LF90",
+    }, { actor: { id: "office-1", role: "office" } }, {
+      requireWorkorderAccess: async () => {
+        throw denied;
+      },
+      searchCatalogParts: async () => {
+        searched = true;
+        return { catalogAvailable: true, items: [] };
+      },
+    }),
+    (error) => error === denied,
+  );
+  assert.equal(searched, false);
+});
+
+test("catalog route forwards only URL search fields and request context", async () => {
+  const requestContext = { actor: { id: "mechanic-1", role: "mechanic" } };
+  const calls = [];
+  const response = {};
+  const handled = await handlePartsHelperApi(
+    { method: "GET" },
+    response,
+    new URL("http://localhost/api/parts-helper/catalog?workorderId=11111111-1111-4111-8111-111111111111&q=oil%20filter&limit=4&companyId=other"),
+    {
+      requestContext,
+      sendJson: (res, status, body) => Object.assign(res, { status, body }),
+      readBody: async () => ({}),
+      partsHelperDependencies: {
+        requireWorkorderAccess: async (context, workorderId) => {
+          calls.push({ type: "access", context, workorderId });
+          return { companyId: "company-1", locationId: "location-1" };
+        },
+        searchCatalogParts: async (companyId, options) => {
+          calls.push({ type: "search", companyId, options });
+          return { catalogAvailable: false, items: [] };
+        },
+      },
+    },
+  );
+
+  assert.equal(handled, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { query: "oil filter", catalogAvailable: false, items: [] });
+  assert.deepEqual(calls[1], {
+    type: "search",
+    companyId: "company-1",
+    options: { text: "oil filter", locationId: "location-1", limit: 4 },
+  });
+});
+
+test("catalog route returns validation failures without searching", async () => {
+  let searched = false;
+  const response = {};
+  await handlePartsHelperApi(
+    { method: "GET" },
+    response,
+    new URL("http://localhost/api/parts-helper/catalog?workorderId=bad&q=x&companyId=other&locationId=other"),
+    {
+      requestContext: { actor: { id: "office-1", role: "office" } },
+      sendJson: (res, status, body) => Object.assign(res, { status, body }),
+      readBody: async () => ({}),
+      partsHelperDependencies: {
+        requireWorkorderAccess: async () => {
+          throw new Error("must not resolve access for invalid input");
+        },
+        searchCatalogParts: async () => {
+          searched = true;
+          return { catalogAvailable: true, items: [] };
+        },
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error, "Invalid parts-helper request.");
+  assert.equal(searched, false);
 });
 
 test("supported truck scope stays narrow", () => {

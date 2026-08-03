@@ -85,10 +85,12 @@ export function requestUomCode(request) {
   return normalizeUomCode(request?.uomCode);
 }
 
-export function createOfficeReviewState(request) {
+export function createOfficeReviewState(request, workorderLocationId = null) {
   const uomCode = requestUomCode(request);
   const firstInventory = request.inventory.find(
-    (item) => item.uomCode === uomCode && item.quantityAvailable > 0,
+    (item) => item.uomCode === uomCode
+      && item.quantityAvailable > 0
+      && (!workorderLocationId || item.locationId === workorderLocationId),
   );
 
   return {

@@ -104,3 +104,8 @@ test("preview and activity use the existing shared implementations", () => {
   assert.doesNotMatch(surveillance, implementationPattern);
   assert.doesNotMatch(surface, implementationPattern);
 });
+
+test("parts workspace remounts when the selected workorder changes", () => {
+  const detailSections = source("./WorkorderDetailSections.jsx");
+  assert.match(detailSections, /<PartRequestsPanel\s+key=\{activeWorkorder\.workorder\.id\}/);
+});

@@ -50,6 +50,7 @@ function publicRequest(row) {
   return {
     id: row.id,
     workorderId: row.workorder_id,
+    catalogPartId: row.catalog_part_id,
     requestedByUserId: row.requested_by_user_id,
     requestedByName: row.requested_by_name || "",
     rawQuery: row.raw_query,
@@ -133,6 +134,32 @@ async function addSystemMessage(client, workorderId, body) {
   );
 }
 
+async function requireSelectedCatalogPart(client, companyId, catalogPartId, partNumber, uomCode, { strict = true } = {}) {
+  if (!catalogPartId) return null;
+  const result = await client.query(
+    `select id, normalized_part_number, uom_code
+     from parts_catalog
+     where id = $1 and company_id = $2
+     limit 1`,
+    [catalogPartId, companyId],
+  );
+  const selected = result.rows[0];
+  if (!selected) {
+    if (!strict) return null;
+    throw new Error("Selected catalog part was not found for this company.");
+  }
+  const normalized = normalizePartNumber(partNumber);
+  if (!normalized || normalized !== selected.normalized_part_number) {
+    if (!strict) return null;
+    throw new Error("Selected catalog part does not match the entered part number.");
+  }
+  if ((uomCode || DEFAULT_UOM_CODE) !== (selected.uom_code || DEFAULT_UOM_CODE)) {
+    if (!strict) return null;
+    throw new Error("Selected catalog part does not match the entered unit.");
+  }
+  return selected;
+}
+
 async function setWorkorderStatus(client, { workorderId, fromStatus, toStatus, actorUserId, note }) {
   if (!toStatus || fromStatus === toStatus) return;
   await client.query("update operational_workorders set status = $2, updated_at = now() where id = $1", [workorderId, toStatus]);
@@ -171,20 +198,28 @@ export async function createPartRequest(workorderId, input) {
     }
 
     const partNumber = input.partNumber || "";
+    const selectedCatalogPart = await requireSelectedCatalogPart(
+      client,
+      workorder.company_id,
+      input.catalogPartId,
+      partNumber,
+      input.uomCode,
+    );
     const inserted = await client.query(
       `
         insert into workorder_part_requests (
-          workorder_id, requested_by_user_id, raw_query, part_number, normalized_part_number,
+          workorder_id, requested_by_user_id, catalog_part_id, raw_query, part_number, normalized_part_number,
           manufacturer, description, category, quantity, uom_code, repair_order, fitment_status,
           fitment_notes, resume_workorder_status, source_chat_message_id,
           source_attachment_id, raw_context
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb)
         returning id
       `,
       [
         workorderId,
         input.mechanicUserId,
+        selectedCatalogPart?.id || null,
         input.query,
         partNumber,
         normalizePartNumber(partNumber),
@@ -246,7 +281,15 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       uomCode: input.uomCode || DEFAULT_UOM_CODE,
       repairOrder: input.repairOrder || "",
     };
-    const catalogPartId = await upsertCatalogPart(client, workorder.company_id, values, input.query);
+    const selectedCatalogPart = await requireSelectedCatalogPart(
+      client,
+      workorder.company_id,
+      input.catalogPartId,
+      values.partNumber,
+      values.uomCode,
+    );
+    const catalogPartId = selectedCatalogPart?.id
+      || await upsertCatalogPart(client, workorder.company_id, values, input.query);
     const inserted = await client.query(
       `
         insert into workorder_part_requests (
@@ -287,6 +330,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
         workorder,
         actorUserId,
         allocation,
+        catalogPartId,
         normalizedPartNumber: normalizePartNumber(values.partNumber),
       });
     }
@@ -357,14 +401,37 @@ async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
       values.uomCode || DEFAULT_UOM_CODE,
     ]
   );
-  return result.rows[0].id;
+  const catalogPartId = result.rows[0].id;
+  await client.query(
+    `update inventory_items
+     set catalog_part_id = $1, updated_at = now()
+     where company_id = $2
+       and catalog_part_id is null
+       and normalized_part_number = $3
+       and uom_code = $4`,
+    [catalogPartId, companyId, normalized, values.uomCode || DEFAULT_UOM_CODE],
+  );
+  return catalogPartId;
 }
 
-async function createAllocation(client, { requestId, workorder, actorUserId, allocation, normalizedPartNumber }) {
+async function createAllocation(client, {
+  requestId,
+  workorder,
+  actorUserId,
+  allocation,
+  catalogPartId,
+  normalizedPartNumber,
+}) {
   let inventoryItemId = null;
-  let allocationLocationId = allocation.locationId || workorder.location_id || null;
+  const workorderLocationId = workorder.location_id || null;
+  if (allocation.locationId && allocation.locationId !== workorderLocationId) {
+    throw new Error("Selected supply location does not match this workorder.");
+  }
+  let allocationLocationId = workorderLocationId;
   if (allocation.sourceType === "inventory") {
-    const requestedLocationId = allocation.locationId || null;
+    if (!workorderLocationId || !catalogPartId) {
+      throw new Error("Inventory requires a workorder location and company catalog part.");
+    }
     const match = allocation.inventoryItemId
       ? await client.query(
         `select id, location_id
@@ -373,14 +440,16 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
            and company_id = $2
            and normalized_part_number = $3
            and uom_code = $4
-           and ($5::uuid is null or location_id = $5)
+           and location_id = $5
+           and catalog_part_id = $6
          for update`,
         [
           allocation.inventoryItemId,
           workorder.company_id,
           normalizedPartNumber,
           allocation.uomCode || DEFAULT_UOM_CODE,
-          requestedLocationId,
+          workorderLocationId,
+          catalogPartId,
         ],
       )
       : await client.query(
@@ -389,14 +458,16 @@ async function createAllocation(client, { requestId, workorder, actorUserId, all
          where company_id = $1
            and normalized_part_number = $2
            and uom_code = $4
-           and ($3::uuid is null or location_id = $3)
-         order by case when location_id = $3 then 0 else 1 end, updated_at desc
+           and location_id = $3
+           and catalog_part_id = $5
+         order by updated_at desc
          limit 1 for update`,
         [
           workorder.company_id,
           normalizedPartNumber,
-          allocation.locationId || workorder.location_id,
+          workorderLocationId,
           allocation.uomCode || DEFAULT_UOM_CODE,
+          catalogPartId,
         ],
       );
     if (!match.rows[0]) {
@@ -513,7 +584,14 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       repairOrder: input.repairOrder || request.repair_order,
     };
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
-      ? await upsertCatalogPart(client, request.company_id, values, request.raw_query)
+      ? (await requireSelectedCatalogPart(
+        client,
+        request.company_id,
+        request.catalog_part_id,
+        values.partNumber,
+        values.uomCode,
+        { strict: false },
+      ))?.id || await upsertCatalogPart(client, request.company_id, values, request.raw_query)
       : request.catalog_part_id;
     await client.query(
       `
@@ -567,6 +645,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
           workorder: { company_id: request.company_id, location_id: request.location_id },
           actorUserId,
           allocation,
+          catalogPartId,
           normalizedPartNumber: normalizePartNumber(values.partNumber),
         });
       }

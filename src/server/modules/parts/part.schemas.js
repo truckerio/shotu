@@ -9,6 +9,7 @@ import {
 const optionalText = (max = 2000) => z.string().trim().max(max).optional().default("");
 
 const partRequestShape = {
+  catalogPartId: z.string().uuid().optional().nullable(),
   query: z.string().trim().min(2).max(500),
   partNumber: optionalText(200),
   manufacturer: optionalText(200),

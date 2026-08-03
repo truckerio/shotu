@@ -3,7 +3,6 @@ import { Plus, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { NarrativeField } from "../forms/NarrativeField.jsx";
-import { textEntryProps } from "../forms/text-entry-policy.js";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import {
@@ -18,6 +17,8 @@ import {
   removeLegacyMechanicWorkStorage,
 } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import "./used-parts-editor.css";
+import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
+import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
 
 function vehicleInput(detail) {
   const asset = detail.workorder.asset || {};
@@ -214,17 +215,34 @@ export function UsedPartsEditor({
         {rows.map((part, index) => (
           <div className="part-row" key={index}>
             <strong>{index + 1}</strong>
-            <label className="used-part-field">
+            <div className="used-part-field">
               <span className="used-part-label">Part number</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
-                <input {...textEntryProps("identifier")} value={part.partNo} onChange={(event) => update(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" disabled={disabled} />
+                <PartCatalogCombobox
+                  workorderId={detail.workorder.id}
+                  value={part.partNo}
+                  onChange={(value) => update(index, "partNo", value)}
+                  onSelect={(catalogPart) => {
+                    updateFields(index, {
+                      partNo: catalogPart.partNumber,
+                      uomCode: catalogPart.uomCode || part.uomCode,
+                      repairOrder: catalogPart.repairOrder || part.repairOrder,
+                    });
+                    setMessage(catalogInventoryText(catalogPart));
+                  }}
+                  label={`Part number ${index + 1}`}
+                  inputAriaLabel={`Part number ${index + 1}`}
+                  inputPolicy="identifier"
+                  placeholder="Part number"
+                  disabled={disabled}
+                />
                 {suggestionsEnabled ? (
                   <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Suggest repair order from part number" aria-label={`Suggest repair order for row ${index + 1}`}>
                     <SearchMd />
                   </button>
                 ) : null}
               </div>
-            </label>
+            </div>
             <div className="used-part-field used-part-quantity">
               <QuantityUnitInput
                 id={`used-part-quantity-${index}`}

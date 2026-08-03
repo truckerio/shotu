@@ -20,6 +20,8 @@ export function mechanicPartsActionState(allowedActions = {}) {
 export function createMechanicPartRequestDraft() {
   return {
     query: "",
+    catalogPartId: "",
+    partNumber: "",
     quantity: "1",
     uomCode: DEFAULT_UOM_CODE,
   };
@@ -46,8 +48,10 @@ export function validateMechanicPartRequest(draft) {
   return {
     errors,
     payload: Object.keys(errors).length ? null : {
+      ...(draft?.catalogPartId ? { catalogPartId: draft.catalogPartId } : {}),
       query,
       description: query,
+      ...(draft?.partNumber ? { partNumber: String(draft.partNumber).trim() } : {}),
       quantity: Number(normalizedQuantity),
       uomCode,
     },

@@ -62,6 +62,29 @@ test("office review falls back to an undecided allocation", () => {
   assert.equal(state.allocations[0].uomCode, "gal");
 });
 
+test("office review never auto-reserves inventory from another workorder location", () => {
+  const state = createOfficeReviewState({
+    partNumber: "LF9009",
+    manufacturer: "Fleetguard",
+    description: "Oil filter",
+    category: "filter",
+    quantity: 1,
+    uomCode: "pc",
+    repairOrder: "Replace filter",
+    fitmentStatus: "confirmed",
+    fitmentNotes: "",
+    inventory: [{
+      id: "remote-stock",
+      locationId: "remote-yard",
+      quantityAvailable: 4,
+      uomCode: "pc",
+    }],
+  }, "workorder-yard");
+
+  assert.equal(state.allocations[0].sourceType, "unknown");
+  assert.equal(state.allocations[0].inventoryItemId, undefined);
+});
+
 test("office queue summary distinguishes review and mechanic clarification", () => {
   assert.equal(officeQueueText([]), "No pending part requests");
   assert.equal(officeQueueText([

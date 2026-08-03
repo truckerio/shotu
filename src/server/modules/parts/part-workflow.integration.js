@@ -21,6 +21,7 @@ const suffix = Date.now().toString(36);
 const companyKey = `parts-test-${suffix}`;
 let companyId;
 let locationId;
+let remoteLocationId;
 let workorderId;
 
 try {
@@ -180,6 +181,44 @@ try {
   );
   assert.deepEqual(learnedCatalogPart.rows[0].aliases, ["Need LF14000NN oil filters"]);
 
+  const remoteLocation = await query(
+    `insert into locations (company_id, name, type)
+     values ($1, $2, 'yard') returning id`,
+    [companyId, `Remote Parts Yard ${suffix}`],
+  );
+  remoteLocationId = remoteLocation.rows[0].id;
+  const remoteInventory = await query(
+    `insert into inventory_items (
+       company_id, location_id, catalog_part_id, normalized_part_number, part_number,
+       description, quantity_on_hand, quantity_reserved, uom_code
+     ) values ($1, $2, $3, $4, $5, 'Engine oil filter', 4, 0, 'ea') returning id`,
+    [companyId, remoteLocationId, approved.catalogPartId, normalizePartNumber("LF14000NN"), "LF14000NN"],
+  );
+  await assert.rejects(
+    createApprovedOfficePart(workorderId, {
+      catalogPartId: approved.catalogPartId,
+      query: "LF14000NN",
+      partNumber: "LF14000NN",
+      manufacturer: "Fleetguard",
+      description: "Engine oil filter",
+      category: "engine_oil_filter",
+      quantity: 1,
+      uomCode: "ea",
+      repairOrder: "Replace engine oil filter.",
+      fitmentStatus: "confirmed",
+      fitmentNotes: "",
+      allocations: [{
+        sourceType: "inventory",
+        status: "reserved",
+        quantity: 1,
+        uomCode: "ea",
+        locationId: remoteLocationId,
+        inventoryItemId: remoteInventory.rows[0].id,
+      }],
+    }, office.id),
+    /supply location does not match this workorder/,
+  );
+
   const afterApproval = await getOperationalWorkorderById(workorderId);
   assert.equal(afterApproval.status, "in_progress");
   const resolvedAttention = await queryOperationalWorkorders({ companyIds: [companyId], attentionReason: "parts" });
@@ -319,6 +358,7 @@ try {
     await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
   }
   if (locationId) await query("delete from locations where id = $1", [locationId]);
+  if (remoteLocationId) await query("delete from locations where id = $1", [remoteLocationId]);
   if (companyId) await query("delete from companies where id = $1", [companyId]);
   await closePool();
 }

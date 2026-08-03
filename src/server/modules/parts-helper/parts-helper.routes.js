@@ -1,6 +1,11 @@
 import { ZodError } from "zod";
 import { partsHelperConfig } from "./parts-helper.config.js";
-import { findLivePartPrices, identifyPart, resolveOfficePartRequest } from "./parts-helper.service.js";
+import {
+  findLivePartPrices,
+  identifyPart,
+  resolveOfficePartRequest,
+  searchPartCatalog,
+} from "./parts-helper.service.js";
 import { supportedTruckLabels } from "./supported-trucks.js";
 
 function sendError(sendJson, res, error) {
@@ -27,6 +32,19 @@ export async function handlePartsHelperApi(req, res, url, helpers) {
   }
 
   try {
+    if (req.method === "GET" && url.pathname === "/api/parts-helper/catalog") {
+      const input = {
+        workorderId: url.searchParams.get("workorderId"),
+        q: url.searchParams.get("q"),
+        limit: url.searchParams.get("limit") || undefined,
+      };
+      sendJson(res, 200, await searchPartCatalog(
+        input,
+        helpers.requestContext,
+        helpers.partsHelperDependencies,
+      ));
+      return true;
+    }
     if (req.method === "POST" && url.pathname === "/api/parts-helper/identify") {
       const companyId = [...(helpers.requestContext?.companyIds || [])][0] || null;
       sendJson(res, 200, await identifyPart(await readBody(req), { companyId }));

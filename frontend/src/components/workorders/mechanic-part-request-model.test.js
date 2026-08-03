@@ -10,7 +10,26 @@ import {
 test("mechanic part request starts with one piece", () => {
   assert.deepEqual(createMechanicPartRequestDraft(), {
     query: "",
+    catalogPartId: "",
+    partNumber: "",
     quantity: "1",
+    uomCode: "pc",
+  });
+});
+
+test("preserves explicitly selected company catalog identity", () => {
+  assert.deepEqual(validateMechanicPartRequest({
+    query: "Oil filter",
+    catalogPartId: "5ecb7756-fdb4-4f46-8de7-c0fb92812e42",
+    partNumber: "LF14000NN",
+    quantity: "1",
+    uomCode: "pc",
+  }).payload, {
+    catalogPartId: "5ecb7756-fdb4-4f46-8de7-c0fb92812e42",
+    query: "Oil filter",
+    description: "Oil filter",
+    partNumber: "LF14000NN",
+    quantity: 1,
     uomCode: "pc",
   });
 });

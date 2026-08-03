@@ -193,6 +193,7 @@ export function WorkorderDetailSections({
       >
         <div id={isMechanicDetail ? "mechanic-parts-section" : undefined}>
           <PartRequestsPanel
+            key={activeWorkorder.workorder.id}
             actorId={actorId}
             role={isOfficeDetail ? "office" : "mechanic"}
             detail={activeWorkorder}

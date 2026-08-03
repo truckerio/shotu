@@ -1,0 +1,80 @@
+.part-catalog-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  position: relative;
+}
+
+.part-catalog-field > label {
+  color: #414651;
+  font-size: var(--text-secondary, 14px);
+  font-weight: 600;
+}
+
+.part-catalog-popup {
+  background: #fff;
+  border: 1px solid var(--border-subtle, #d0d5dd);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgb(16 24 40 / 14%);
+  left: 0;
+  max-height: min(320px, 50vh);
+  overflow: auto;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+}
+
+.part-catalog-popup ul {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.part-catalog-popup [role="option"] {
+  border-radius: 6px;
+  color: #475467;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  min-height: 58px;
+  padding: 8px 10px;
+}
+
+.part-catalog-popup [role="option"].is-active {
+  background: #eff8ff;
+  color: #1849a9;
+}
+
+.part-catalog-option-heading {
+  align-items: center;
+  color: #181d27;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.part-catalog-popup small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.part-catalog-state {
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 12px;
+}
+
+@media (max-width: 640px) {
+  .part-catalog-field > input,
+  .part-catalog-popup [role="option"] {
+    min-height: 44px;
+  }
+
+  .part-catalog-popup {
+    max-height: min(300px, 46vh);
+  }
+}

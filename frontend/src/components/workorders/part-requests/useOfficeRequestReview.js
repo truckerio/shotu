@@ -11,7 +11,7 @@ import {
 } from "./part-request-model.js";
 
 export function useOfficeRequestReview({ request, detail, onChanged }) {
-  const initial = createOfficeReviewState(request);
+  const initial = createOfficeReviewState(request, detail.workorder.locationId);
   const [form, setForm] = useState(initial.form);
   const [allocations, setAllocations] = useState(initial.allocations);
   const [busy, setBusy] = useState("");
