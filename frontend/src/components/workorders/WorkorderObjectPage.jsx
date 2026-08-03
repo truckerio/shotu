@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   ChevronDown,
   ClockRewind,
@@ -11,10 +11,6 @@ import {
   Users01,
 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
-import {
-  isPrimarySectionPointer,
-  shouldHandleSectionClick,
-} from "./workorder-section-navigation.js";
 import "./workorder-object-page.css";
 
 const SECTION_ICONS = Object.freeze({
@@ -81,7 +77,7 @@ export function WorkorderObjectSummary({
 }
 
 export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
-  const handledPointerSectionRef = useRef("");
+  const [visualActiveSection, setVisualActiveSection] = useState(activeSection);
   const markedOverflowSections = sections.filter((section) => section.overflow);
   const primarySections = markedOverflowSections.length
     ? sections.filter((section) => !section.overflow)
@@ -89,7 +85,11 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
   const overflowSections = markedOverflowSections.length
     ? markedOverflowSections
     : sections.length > 5 ? sections.slice(4) : [];
-  const activeOverflowSection = overflowSections.find(({ id }) => id === activeSection);
+  const activeOverflowSection = overflowSections.find(({ id }) => id === visualActiveSection);
+
+  useEffect(() => {
+    setVisualActiveSection(activeSection);
+  }, [activeSection]);
 
   function SectionContent({ section, showIcon = false }) {
     const Icon = SECTION_ICONS[section.id] || Tool02;
@@ -102,25 +102,9 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
     );
   }
 
-  function sectionButtonHandlers(sectionId) {
-    return {
-      onClick: () => {
-        const shouldSelect = shouldHandleSectionClick({
-          handledPointerSection: handledPointerSectionRef.current,
-          sectionId,
-        });
-        handledPointerSectionRef.current = "";
-        if (shouldSelect) onSelect(sectionId);
-      },
-      onPointerDown: (event) => {
-        if (!isPrimarySectionPointer(event)) return;
-        handledPointerSectionRef.current = sectionId;
-        onSelect(sectionId);
-      },
-      onPointerCancel: () => {
-        handledPointerSectionRef.current = "";
-      },
-    };
+  function selectSection(sectionId) {
+    setVisualActiveSection(sectionId);
+    onSelect(sectionId);
   }
 
   return (
@@ -128,12 +112,12 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
       <nav className="workorder-section-nav workorder-section-nav-desktop" aria-label="Workorder sections">
         {primarySections.map((section) => (
           <button
-            className={`${activeSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
+            className={`${visualActiveSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
             key={section.id}
             data-section-id={section.id}
-            aria-current={activeSection === section.id ? "page" : undefined}
-            {...sectionButtonHandlers(section.id)}
+            aria-current={visualActiveSection === section.id ? "page" : undefined}
+            onClick={() => selectSection(section.id)}
           >
             <SectionContent section={section} />
           </button>
@@ -154,12 +138,12 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
                   const Icon = SECTION_ICONS[section.id] || Tool02;
                   return (
                     <MenuItem
-                      className={`${activeSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
+                      className={`${visualActiveSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
                       key={section.id}
                       id={section.id}
                       data-section-id={section.id}
                       textValue={section.label}
-                      onAction={() => onSelect(section.id)}
+                      onAction={() => selectSection(section.id)}
                     >
                       <Icon aria-hidden="true" />
                       <span>{section.label}</span>
@@ -176,12 +160,12 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
       <nav className="workorder-section-nav-mobile" aria-label="Workorder sections">
         {primarySections.map((section) => (
           <button
-            className={`${activeSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
+            className={`${visualActiveSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
             key={section.id}
             data-section-id={section.id}
-            aria-current={activeSection === section.id ? "page" : undefined}
-            {...sectionButtonHandlers(section.id)}
+            aria-current={visualActiveSection === section.id ? "page" : undefined}
+            onClick={() => selectSection(section.id)}
           >
             <SectionContent section={section} showIcon />
           </button>
@@ -202,12 +186,12 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
                   const Icon = SECTION_ICONS[section.id] || Tool02;
                   return (
                     <MenuItem
-                      className={`${activeSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
+                      className={`${visualActiveSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
                       key={section.id}
                       id={section.id}
                       data-section-id={section.id}
                       textValue={section.label}
-                      onAction={() => onSelect(section.id)}
+                      onAction={() => selectSection(section.id)}
                     >
                       <Icon aria-hidden="true" />
                       <span>{section.label}</span>

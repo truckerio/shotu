@@ -82,10 +82,15 @@
 }
 
 .profile-menu-list {
+  display: grid;
   outline: none;
 }
 
-.profile-menu-list [role="separator"] {
+.profile-menu-dialog {
+  outline: none;
+}
+
+.profile-menu-separator {
   height: 1px;
   margin: 4px -4px;
   background: #eaecf0;
@@ -123,11 +128,17 @@
 }
 
 .profile-menu-action {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #344054;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.profile-menu-action[data-focused],
-.profile-menu-action[data-hovered] {
+.profile-menu-action:hover,
+.profile-menu-action:focus-visible {
   background: #f2f4f7;
 }
 

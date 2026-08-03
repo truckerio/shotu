@@ -286,9 +286,9 @@ export async function upsertIntegrationStatus(provider, updates, companyId) {
       on conflict (company_id, provider)
       do update set
         status = excluded.status,
-        token_env_key = excluded.token_env_key,
-        last_sync_cursor = excluded.last_sync_cursor,
-        last_full_sync_at = excluded.last_full_sync_at,
+        token_env_key = case when $7 then excluded.token_env_key else integration_accounts.token_env_key end,
+        last_sync_cursor = case when $8 then excluded.last_sync_cursor else integration_accounts.last_sync_cursor end,
+        last_full_sync_at = case when $9 then excluded.last_full_sync_at else integration_accounts.last_full_sync_at end,
         updated_at = now()
       returning id, company_id, provider, status, token_env_key, last_sync_cursor, last_full_sync_at, updated_at
     `,
@@ -296,9 +296,12 @@ export async function upsertIntegrationStatus(provider, updates, companyId) {
       tenantId,
       provider,
       updates.status || "connected",
-      updates.tokenEnvKey || "SAMSARA_API_TOKEN",
-      updates.lastSyncCursor || null,
-      updates.lastFullSyncAt || null,
+      updates.tokenEnvKey || "",
+      updates.lastSyncCursor ?? null,
+      updates.lastFullSyncAt ?? null,
+      Object.hasOwn(updates, "tokenEnvKey"),
+      Object.hasOwn(updates, "lastSyncCursor"),
+      Object.hasOwn(updates, "lastFullSyncAt"),
     ]
   );
   return result.rows[0];

@@ -13,6 +13,7 @@ import { isRejectedSamsaraApiCredential } from "./samsara.client.js";
 import { mapSamsaraTrailer, mapSamsaraVehicle } from "./samsara.mapper.js";
 import { applyVinDecodes, decodeVinValuesBatch } from "../vin/vpic.client.js";
 import { withSamsaraClient } from "./samsara.oauth.service.js";
+import { recordSamsaraConnectionFailure } from "./samsara.connection-health.js";
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 
 const STAT_TYPES = ["obdOdometerMeters", "gpsOdometerMeters", "gps"];
@@ -75,14 +76,18 @@ export async function disconnectSamsara(companyId = DEFAULT_COMPANY_ID) {
 
 export async function testSamsaraConnection(companyId = DEFAULT_COMPANY_ID) {
   await migrate();
-  const { auth } = await withSamsaraClient(
-    (client) => client.listVehiclesPage({ limit: 1 }),
-    { companyId },
-  );
-  return upsertIntegrationStatus("samsara", {
-    status: "connected",
-    tokenEnvKey: auth.source === "oauth" ? "SAMSARA_OAUTH" : "SAMSARA_API_TOKEN",
-  }, companyId);
+  try {
+    const { auth } = await withSamsaraClient(
+      (client) => client.listVehiclesPage({ limit: 1 }),
+      { companyId },
+    );
+    return upsertIntegrationStatus("samsara", {
+      status: "connected",
+      tokenEnvKey: auth.source === "oauth" ? "SAMSARA_OAUTH" : "SAMSARA_API_TOKEN",
+    }, companyId);
+  } catch (error) {
+    throw await recordSamsaraConnectionFailure(companyId, error);
+  }
 }
 
 async function fetchSamsaraFleet(client) {

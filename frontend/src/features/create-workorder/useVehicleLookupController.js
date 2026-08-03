@@ -21,12 +21,14 @@ export function useVehicleLookupController({
   stageAutosave,
 }) {
   const locationRequestRef = useRef({ vehicleId: "", promise: null });
+  const locationBackoffUntilRef = useRef(0);
   const detailLocationRefreshRef = useRef("");
   const [vehicleLookup, setVehicleLookup] = useState(EMPTY_LOOKUP);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
 
   const refreshVehicleLocation = useCallback(async (vehicle = selectedVehicle) => {
     if (!vehicle?.id) return null;
+    if (Date.now() < locationBackoffUntilRef.current) return null;
     const requestedVehicleId = vehicle.id;
     if (
       locationRequestRef.current.vehicleId === requestedVehicleId
@@ -39,6 +41,9 @@ export function useVehicleLookupController({
         setSelectedVehicle((current) => current?.id === requestedVehicleId ? result.vehicle : current);
         return result.vehicle;
       } catch (error) {
+        if (error.code === "INTEGRATION_AUTHENTICATION_REQUIRED") {
+          locationBackoffUntilRef.current = Date.now() + 5 * 60_000;
+        }
         setVehicleLookup((current) => ({ ...current, status: error.message }));
         return null;
       } finally {

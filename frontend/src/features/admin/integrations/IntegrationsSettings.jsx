@@ -49,6 +49,9 @@ export function IntegrationsSettings() {
       setOdooStatus(odooResult);
       setClients(clientResult.clients || []);
     } catch (error) {
+      if (name === "test") {
+        setStatus((current) => current ? { ...current, status: "error" } : current);
+      }
       setNotice({ message: "", error: error.message, target: "samsara" });
     } finally {
       setLoading(false);

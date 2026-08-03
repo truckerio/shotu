@@ -15,12 +15,12 @@ import { loadWorkorderDetail } from "../../features/workorder-detail/workorder-d
 import { readOfficeWorkorderEditBackup } from "../../features/workorder-detail/office-workorder-autosave-storage.js";
 import { api } from "../../lib/api.js";
 
-const COMPACT_DETAIL_SECTIONS = ["work", "chat", "parts", "preview", "unit", "activity"];
+const ROUTABLE_DETAIL_SECTIONS = ["work", "chat", "parts", "preview", "unit", "team", "activity"];
 
-export function requestedMechanicSection({ requestedSection, status, isCompact }) {
-  return COMPACT_DETAIL_SECTIONS.includes(requestedSection)
+export function requestedDetailSection({ requestedSection, role, status, isCompact }) {
+  return ROUTABLE_DETAIL_SECTIONS.includes(requestedSection)
     ? requestedSection
-    : defaultDetailSection("mechanic", status, isCompact);
+    : defaultDetailSection(role, status, isCompact);
 }
 
 export function useWorkorderDetailRoute({
@@ -44,8 +44,9 @@ export function useWorkorderDetailRoute({
 }) {
   const hydrateOperationalWorkorder = useCallback((detail, { updateRoute = true } = {}) => {
     const workorder = detail.workorder;
-    const nextSection = requestedMechanicSection({
+    const nextSection = requestedDetailSection({
       requestedSection: currentRouteParams().get("section"),
+      role: "mechanic",
       status: workorder.status,
       isCompact,
     });
@@ -80,6 +81,12 @@ export function useWorkorderDetailRoute({
   const hydrateOfficeWorkorder = useCallback((detail, { updateRoute = true } = {}) => {
     const workorder = detail.workorder;
     const editBackup = readOfficeWorkorderEditBackup(actor.id, workorder.id);
+    const nextSection = requestedDetailSection({
+      requestedSection: currentRouteParams().get("section"),
+      role: actor.role,
+      status: workorder.status,
+      isCompact,
+    });
     setActiveWorkorder(detail);
     setSelectedVehicle(workorder.asset || null);
     setOfficeAssignment({
@@ -91,8 +98,8 @@ export function useWorkorderDetailRoute({
     setDetailSource("office");
     setMode("admin");
     setDetailStatus(workorder.status);
-    setDetailSection(defaultDetailSection(actor.role, workorder.status, isCompact));
-    setSupportingView(defaultSupportingView(actor.role, workorder.status));
+    setDetailSection(nextSection);
+    setSupportingView(nextSection === "chat" ? "chat" : defaultSupportingView(actor.role, workorder.status));
     setForm((current) => ({ ...workorderFormValues({ detail, current, officeLocations }), ...(editBackup || {}) }));
     setWorkspace("generator");
     if (editBackup) queueOfficeAutosave();
@@ -100,7 +107,7 @@ export function useWorkorderDetailRoute({
       busy: false,
       message: editBackup ? "Recovered unsaved changes. Saving automatically..." : "",
     });
-    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id));
+    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection));
   }, [
     actor.id,
     actor.role,

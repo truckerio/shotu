@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { RefreshCw01 } from "@untitledui/icons";
 
+import { AppLoadingFallback } from "../AppErrorBoundary.jsx";
 import { CreateWorkorderPage } from "../../features/create-workorder/CreateWorkorderPage.jsx";
 import { MechanicWorkspace } from "../../features/mechanic/MechanicWorkspace.jsx";
 import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
@@ -47,7 +48,7 @@ export function RoleWorkspaceOutlet({
 
   if (workspace === "admin") {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<AppLoadingFallback />}>
         <AdminWorkspace
           actor={actor}
           {...draftWorkspaceProps}

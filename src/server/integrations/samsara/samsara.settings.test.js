@@ -4,10 +4,23 @@ import test from "node:test";
 import { permissionForRequest } from "../../auth/policy.js";
 import { PERMISSION } from "../../auth/permissions.js";
 import { publicSamsaraStatus } from "./samsara.sync.service.js";
+import { samsaraConnectionError } from "./samsara.connection-health.js";
 
 const repositoryUrl = new URL("../../db/repositories/integrations.repo.js", import.meta.url);
 const credentialsRepositoryUrl = new URL("../core/integration-credentials.repo.js", import.meta.url);
 const routesUrl = new URL("../../routes/integrations.routes.js", import.meta.url);
+
+test("provider failures expose safe and actionable connection errors", () => {
+  const rejected = samsaraConnectionError({ status: 401, message: "invalid token" });
+  assert.equal(rejected.statusCode, 401);
+  assert.equal(rejected.code, "INTEGRATION_AUTHENTICATION_REQUIRED");
+  assert.match(rejected.message, /Reconnect Samsara/i);
+
+  const unavailable = samsaraConnectionError(new Error("private upstream detail"));
+  assert.equal(unavailable.statusCode, 502);
+  assert.equal(unavailable.code, "SAMSARA_UNAVAILABLE");
+  assert.doesNotMatch(unavailable.message, /private upstream detail/);
+});
 
 test("settings status exposes safe OAuth and latest sync metadata", () => {
   const status = publicSamsaraStatus({
@@ -99,6 +112,18 @@ test("disconnect clears OAuth credentials and state while appending a safe audit
   assert.match(disconnectBody, /await client\.query\("commit"\)/i);
   assert.doesNotMatch(disconnectBody, /returning[\s\S]*access_token/i);
   assert.doesNotMatch(disconnectBody, /returning[\s\S]*refresh_token/i);
+});
+
+test("status-only updates preserve credentials, cursors, and last successful sync", async () => {
+  const source = await readFile(repositoryUrl, "utf8");
+  const upsertBody = source.slice(
+    source.indexOf("export async function upsertIntegrationStatus"),
+    source.indexOf("export async function createSyncRun"),
+  );
+  assert.match(upsertBody, /case when \$7 then excluded\.token_env_key else integration_accounts\.token_env_key end/i);
+  assert.match(upsertBody, /case when \$8 then excluded\.last_sync_cursor else integration_accounts\.last_sync_cursor end/i);
+  assert.match(upsertBody, /case when \$9 then excluded\.last_full_sync_at else integration_accounts\.last_full_sync_at end/i);
+  assert.match(upsertBody, /Object\.hasOwn\(updates, "lastFullSyncAt"\)/);
 });
 
 test("disconnect route uses existing integration-admin policy and authorized company selector", async () => {

@@ -16,13 +16,43 @@ async function signIn(page, config, role) {
   await page.locator("main").first().waitFor({ state: "visible", timeout: 15_000 });
 }
 
+async function assertProfileMenu(page) {
+  const trigger = page.getByRole("button", { name: /Open (account|profile) menu/ }).first();
+  await trigger.click();
+  await page.getByRole("menu", { name: "Profile actions" }).waitFor({ state: "visible", timeout: 5_000 });
+  await page.getByRole("menuitem", { name: "Change password" }).waitFor({ state: "visible" });
+  await page.keyboard.press("Escape");
+  await page.locator("main").first().waitFor({ state: "visible" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  let mobileTrigger = page.locator(
+    'button[aria-label="Open profile menu"]:visible, button[aria-label="Open account menu"]:visible',
+  );
+  if (await mobileTrigger.count() === 0) {
+    const more = page.locator("details.mechanic-home-more > summary:visible");
+    if (await more.count()) await more.click();
+    mobileTrigger = page.locator(
+      'button[aria-label="Open profile menu"]:visible, button[aria-label="Open account menu"]:visible',
+    );
+  }
+  await mobileTrigger.first().click();
+  await page.getByRole("menu", { name: "Profile actions" }).waitFor({ state: "visible", timeout: 5_000 });
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1280, height: 800 });
+}
+
 async function assertRapidSectionNavigation(page) {
   const navigation = page.locator(".workorder-section-nav-desktop");
   await navigation.waitFor({ state: "visible", timeout: 15_000 });
 
   for (const sectionId of ["parts", "unit", "team", "activity", "work", "parts"]) {
     const sectionButton = navigation.locator(`[data-section-id="${sectionId}"]`);
+    const startedAt = Date.now();
     await sectionButton.click();
+    assert.ok(
+      Date.now() - startedAt < 1_500,
+      `Expected ${sectionId} navigation to respond within 1.5 seconds.`,
+    );
     assert.equal(
       await sectionButton.getAttribute("aria-current"),
       "page",
@@ -45,7 +75,12 @@ async function assertCreateSectionNavigation(page, baseUrl) {
 
   for (const sectionId of ["unit", "assignment", "parts", "work"]) {
     const sectionButton = navigation.locator(`[data-section-id="${sectionId}"]`);
+    const startedAt = Date.now();
     await sectionButton.click();
+    assert.ok(
+      Date.now() - startedAt < 1_500,
+      `Expected create ${sectionId} navigation to respond within 1.5 seconds.`,
+    );
     assert.equal(
       await sectionButton.getAttribute("aria-current"),
       "page",
@@ -66,6 +101,7 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
   const page = await context.newPage();
   try {
     await signIn(page, config, role);
+    await assertProfileMenu(page);
     const sectionByRole = {
       admin: "activity",
       office: "chat",

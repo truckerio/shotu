@@ -1,0 +1,72 @@
+.app-recovery {
+  align-items: center;
+  background: #f7f8fa;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px;
+}
+
+.app-recovery > section {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  max-width: 420px;
+  padding: 28px;
+  width: 100%;
+}
+
+.app-recovery h1 {
+  color: #101828;
+  font-size: 24px;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 4px 0 8px;
+}
+
+.app-recovery p {
+  color: #667085;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.app-recovery .app-recovery-eyebrow {
+  color: #175cd3;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-recovery button {
+  background: #1570ef;
+  border: 1px solid #1570ef;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  margin-top: 20px;
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.app-recovery-loading {
+  min-height: 100dvh;
+}
+
+.app-loading-indicator {
+  animation: app-loading-spin 800ms linear infinite;
+  border: 2px solid #d0d5dd;
+  border-radius: 50%;
+  border-top-color: #1570ef;
+  height: 24px;
+  width: 24px;
+}
+
+@keyframes app-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-loading-indicator { animation: none; }
+}
