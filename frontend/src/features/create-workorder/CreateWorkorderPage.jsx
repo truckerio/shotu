@@ -135,6 +135,7 @@ export function CreateWorkorderPage({
   return (
     <main
       className={`prototype workorder-detail-page create-workorder-page create-section-${activeSection}${keyboardOpen ? " is-keyboard-open" : ""}`}
+      data-detail-section={activeSection}
       data-keyboard-open={keyboardOpen ? "true" : "false"}
       style={{
         "--create-visual-viewport-height": viewport.viewportHeight ? `${viewport.viewportHeight}px` : "100dvh",

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useRef } from "react";
 import {
   ChevronDown,
   ClockRewind,
@@ -11,6 +11,10 @@ import {
   Users01,
 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import {
+  isPrimarySectionPointer,
+  shouldHandleSectionClick,
+} from "./workorder-section-navigation.js";
 import "./workorder-object-page.css";
 
 const SECTION_ICONS = Object.freeze({
@@ -77,6 +81,7 @@ export function WorkorderObjectSummary({
 }
 
 export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
+  const handledPointerSectionRef = useRef("");
   const markedOverflowSections = sections.filter((section) => section.overflow);
   const primarySections = markedOverflowSections.length
     ? sections.filter((section) => !section.overflow)
@@ -97,6 +102,27 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
     );
   }
 
+  function sectionButtonHandlers(sectionId) {
+    return {
+      onClick: () => {
+        const shouldSelect = shouldHandleSectionClick({
+          handledPointerSection: handledPointerSectionRef.current,
+          sectionId,
+        });
+        handledPointerSectionRef.current = "";
+        if (shouldSelect) onSelect(sectionId);
+      },
+      onPointerDown: (event) => {
+        if (!isPrimarySectionPointer(event)) return;
+        handledPointerSectionRef.current = sectionId;
+        onSelect(sectionId);
+      },
+      onPointerCancel: () => {
+        handledPointerSectionRef.current = "";
+      },
+    };
+  }
+
   return (
     <>
       <nav className="workorder-section-nav workorder-section-nav-desktop" aria-label="Workorder sections">
@@ -105,8 +131,9 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             className={`${activeSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
             key={section.id}
+            data-section-id={section.id}
             aria-current={activeSection === section.id ? "page" : undefined}
-            onClick={() => onSelect(section.id)}
+            {...sectionButtonHandlers(section.id)}
           >
             <SectionContent section={section} />
           </button>
@@ -130,6 +157,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
                       className={`${activeSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
                       key={section.id}
                       id={section.id}
+                      data-section-id={section.id}
                       textValue={section.label}
                       onAction={() => onSelect(section.id)}
                     >
@@ -151,8 +179,9 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             className={`${activeSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
             key={section.id}
+            data-section-id={section.id}
             aria-current={activeSection === section.id ? "page" : undefined}
-            onClick={() => onSelect(section.id)}
+            {...sectionButtonHandlers(section.id)}
           >
             <SectionContent section={section} showIcon />
           </button>
@@ -176,6 +205,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
                       className={`${activeSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
                       key={section.id}
                       id={section.id}
+                      data-section-id={section.id}
                       textValue={section.label}
                       onAction={() => onSelect(section.id)}
                     >

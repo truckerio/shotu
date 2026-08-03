@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { CheckCircle, ChevronLeft, ChevronRight, Printer, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import {
@@ -17,7 +18,7 @@ export function Field({ label, hint, children }) {
   );
 }
 
-export function WorkorderPreview({ serial, label, form, pageIndex = 0 }) {
+export const WorkorderPreview = memo(function WorkorderPreview({ serial, label, form, pageIndex = 0 }) {
   const pages = paginateWorkorderParts(form);
   const safePageIndex = Math.min(Math.max(pageIndex, 0), pages.length - 1);
   return (
@@ -33,7 +34,7 @@ export function WorkorderPreview({ serial, label, form, pageIndex = 0 }) {
       }} /></div>
     </div>
   );
-}
+});
 
 export function BrowserPrintDocument({ payload }) {
   if (!payload?.serials?.length) return null;

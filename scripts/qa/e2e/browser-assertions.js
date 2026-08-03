@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import assert from "node:assert/strict";
 
 async function visibleText(page, text) {
   await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 15_000 });
@@ -13,6 +14,49 @@ async function signIn(page, config, role) {
     page.getByRole("button", { name: "Sign in", exact: true }).click(),
   ]);
   await page.locator("main").first().waitFor({ state: "visible", timeout: 15_000 });
+}
+
+async function assertRapidSectionNavigation(page) {
+  const navigation = page.locator(".workorder-section-nav-desktop");
+  await navigation.waitFor({ state: "visible", timeout: 15_000 });
+
+  for (const sectionId of ["parts", "unit", "team", "activity", "work", "parts"]) {
+    const sectionButton = navigation.locator(`[data-section-id="${sectionId}"]`);
+    await sectionButton.click();
+    assert.equal(
+      await sectionButton.getAttribute("aria-current"),
+      "page",
+      `Expected ${sectionId} to become the active workorder section.`,
+    );
+    assert.equal(
+      await page.locator(".workorder-detail-page").getAttribute("data-detail-section"),
+      sectionId,
+      `Expected the workorder detail body to render ${sectionId}.`,
+    );
+  }
+}
+
+async function assertCreateSectionNavigation(page, baseUrl) {
+  await page.goto(new URL("/?view=create", baseUrl).href, { waitUntil: "domcontentloaded" });
+  const pageSurface = page.locator(".create-workorder-page");
+  await pageSurface.waitFor({ state: "visible", timeout: 15_000 });
+  const navigation = page.locator(".workorder-section-nav-desktop");
+  await navigation.waitFor({ state: "visible", timeout: 15_000 });
+
+  for (const sectionId of ["unit", "assignment", "parts", "work"]) {
+    const sectionButton = navigation.locator(`[data-section-id="${sectionId}"]`);
+    await sectionButton.click();
+    assert.equal(
+      await sectionButton.getAttribute("aria-current"),
+      "page",
+      `Expected create ${sectionId} to become the active workorder section.`,
+    );
+    assert.equal(
+      await pageSurface.getAttribute("data-detail-section"),
+      sectionId,
+      `Expected the create workorder body to render ${sectionId}.`,
+    );
+  }
 }
 
 async function assertRoleSurface({ browser, config, role, workflow }) {
@@ -38,6 +82,11 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
       );
     }
     await visibleText(page, workflow.concern);
+
+    if (role === "admin") {
+      await assertRapidSectionNavigation(page);
+      await assertCreateSectionNavigation(page, config.baseUrl);
+    }
 
     if (role === "office") {
       await page.getByRole("tab", { name: /Chat with mechanic/ }).click();
