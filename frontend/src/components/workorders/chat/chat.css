@@ -359,6 +359,11 @@
   box-shadow: 0 0 0 3px rgb(46 144 250 / 14%);
 }
 
+.chat-prompt-surface > .narrative-field {
+  align-self: center;
+  min-width: 0;
+}
+
 .chat-prompt-surface .chat-composer-input,
 .chat-prompt-composer.is-compact .chat-prompt-surface .chat-composer-input {
   align-self: center;
