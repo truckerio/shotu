@@ -29,8 +29,9 @@ test("shared parts editor uses one text remove action without duplicate icons", 
   assert.doesNotMatch(css, /\.remove-row::before/);
 });
 
-test("repair order is a visible, correctly named shared editor control", () => {
-  assert.match(editor, /<span className="used-part-label">Repair order<\/span>/);
+test("repair order uses one visible column heading and an accessible row control", () => {
+  assert.match(editor, /<span>Repair order<\/span>/);
+  assert.doesNotMatch(editor, /<span className="used-part-label">Repair order<\/span>/);
   assert.match(editor, /aria-label=\{`Repair order \$\{index \+ 1\}`\}/);
   assert.match(editor, /placeholder="Describe repair for this part"/);
   assert.doesNotMatch(editor, /aria-label=\{`Work performed \$\{index \+ 1\}`\}/);

@@ -270,17 +270,14 @@ export function UsedPartsEditor({
               />
             </div>
             <div className="used-part-field used-part-repair">
-              <label>
-                <span className="used-part-label">Repair order</span>
-                <NarrativeField
-                  singleLine
-                  value={part.repairOrder}
-                  onChange={(event) => update(index, "repairOrder", event.target.value)}
-                  aria-label={`Repair order ${index + 1}`}
-                  placeholder="Describe repair for this part"
-                  disabled={disabled}
-                />
-              </label>
+              <NarrativeField
+                singleLine
+                value={part.repairOrder}
+                onChange={(event) => update(index, "repairOrder", event.target.value)}
+                aria-label={`Repair order ${index + 1}`}
+                placeholder="Describe repair for this part"
+                disabled={disabled}
+              />
             </div>
             <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
             {selectedCatalogParts[index]?.id ? <div className="used-part-history">
