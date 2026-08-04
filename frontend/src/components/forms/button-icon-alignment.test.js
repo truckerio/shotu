@@ -17,8 +17,9 @@ test("shared buttons render icons beside text with stable flex geometry", () => 
   assert.match(controls, /\.button\s*>\s*span\s*\{[^}]*display:\s*block;[^}]*line-height:/s);
 });
 
-test("direct button icons do not reserve an inline text baseline", () => {
-  assert.match(foundation, /button\s*>\s*svg\s*\{[^}]*display:\s*block;[^}]*flex:\s*0 0 auto;/s);
+test("all direct button icons receive a low-specificity alignment fallback", () => {
+  assert.match(foundation, /:where\(button:has\(> svg\)\)\s*\{[^}]*align-items:\s*center;[^}]*display:\s*inline-flex;/s);
+  assert.match(foundation, /:where\(button\s*>\s*svg\)\s*\{[^}]*align-self:\s*center;[^}]*display:\s*block;[^}]*flex:\s*0 0 auto;/s);
 });
 
 test("office part action uses the shared icon slot instead of nesting SVG in text", () => {

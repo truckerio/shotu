@@ -47,9 +47,15 @@ textarea {
   font: inherit;
 }
 
-/* SVGs are replaced elements. Making direct button icons block-level removes
- * inline-baseline space and keeps icon/text pairs centered in flex buttons. */
-button > svg {
+/* Give every direct button icon a safe horizontal alignment fallback. The
+ * zero-specificity selector lets component-specific flex/grid layouts win. */
+:where(button:has(> svg)) {
+  align-items: center;
+  display: inline-flex;
+}
+
+:where(button > svg) {
+  align-self: center;
   display: block;
   flex: 0 0 auto;
 }
