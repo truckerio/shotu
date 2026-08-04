@@ -45,6 +45,7 @@ input,
 select,
 textarea {
   font: inherit;
+  font-weight: var(--weight-regular);
 }
 
 /* Give every direct button icon a safe horizontal alignment fallback. The

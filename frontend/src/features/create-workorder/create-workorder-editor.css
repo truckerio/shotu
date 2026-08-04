@@ -154,10 +154,11 @@
   color: #414651;
   display: grid;
   font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-regular);
   gap: 6px;
 }
 
 .field > span {
   color: #414651;
+  font-weight: var(--weight-semibold);
 }
