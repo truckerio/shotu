@@ -100,9 +100,17 @@ textarea:focus {
   opacity: 0.55;
 }
 
-.button svg {
+.button > svg {
+  align-self: center;
+  display: block;
+  flex: 0 0 auto;
   height: 18px;
   width: 18px;
+}
+
+.button > span {
+  display: block;
+  line-height: var(--leading-body);
 }
 
 .button.primary {

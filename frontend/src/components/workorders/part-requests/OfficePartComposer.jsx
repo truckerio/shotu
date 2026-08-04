@@ -102,7 +102,11 @@ export function OfficePartComposer({ detail, onChanged }) {
   }
 
   if (!open) {
-    return <Button onClick={() => setOpen(true)}><Plus /> Add office part</Button>;
+    return (
+      <Button icon={Plus} onClick={() => setOpen(true)}>
+        Add office part
+      </Button>
+    );
   }
 
   return (

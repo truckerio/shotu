@@ -47,6 +47,13 @@ textarea {
   font: inherit;
 }
 
+/* SVGs are replaced elements. Making direct button icons block-level removes
+ * inline-baseline space and keeps icon/text pairs centered in flex buttons. */
+button > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
 .prototype {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 76%) 0%, rgb(244 247 251 / 72%) 100%),
