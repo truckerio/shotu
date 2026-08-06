@@ -202,24 +202,31 @@ export async function getManagedUser(locationId, userId, companyIds) {
             company_membership.role,
             app_user.active,
             app_user.auth_user_id, app_user.deleted_at, auth_user.username,
-            membership.active as membership_active,
+            coalesce(membership.active, company_membership.active) as membership_active,
             location.company_id,
             coalesce((
-              select array_agg(company_membership.company_id order by company_membership.company_id)
-              from user_company_memberships company_membership
-              where company_membership.user_id = app_user.id
+              select array_agg(other_company.company_id order by other_company.company_id)
+              from user_company_memberships other_company
+              where other_company.user_id = app_user.id
             ), array[]::uuid[]) as company_ids
-       from user_location_memberships membership
-       join locations location on location.id = membership.location_id
+       from locations location
        join user_company_memberships company_membership
-         on company_membership.user_id = membership.user_id
-        and company_membership.company_id = membership.company_id
-       join user_profiles app_user on app_user.id = membership.user_id
+         on company_membership.company_id = location.company_id
+        and company_membership.user_id = $2
+       join user_profiles app_user on app_user.id = company_membership.user_id
+       left join user_location_memberships membership
+         on membership.user_id = company_membership.user_id
+        and membership.company_id = company_membership.company_id
+        and membership.location_id = location.id
        left join auth_user on auth_user.id = app_user.auth_user_id
-      where membership.location_id = $1
+      where location.id = $1
         and app_user.id = $2
         and location.company_id = any($3::uuid[])
         and app_user.deleted_at is null
+        and (
+          company_membership.role = 'admin'
+          or membership.user_id is not null
+        )
       limit 1`,
     [locationId, userId, companyIds],
   );

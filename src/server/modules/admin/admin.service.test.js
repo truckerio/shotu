@@ -286,6 +286,18 @@ test("location user lists include company-wide admins without location membershi
   assert.match(listBody, /left join user_location_memberships/i);
 });
 
+test("company-wide admins can be managed without explicit location memberships", async () => {
+  const repository = await readFile(new URL("../../db/repositories/users.repo.js", import.meta.url), "utf8");
+  const lookupBody = repository.slice(
+    repository.indexOf("export async function getManagedUser(locationId"),
+    repository.indexOf("export async function setManagedUserActive"),
+  );
+  assert.match(lookupBody, /from locations location/i);
+  assert.match(lookupBody, /left join user_location_memberships membership/i);
+  assert.match(lookupBody, /coalesce\(membership\.active, company_membership\.active\) as membership_active/i);
+  assert.match(lookupBody, /company_membership\.role = 'admin'\s+or membership\.user_id is not null/i);
+});
+
 test("location user lists expose safe kiosk PIN status without credential secrets", async () => {
   const repository = await readFile(new URL("../../db/repositories/users.repo.js", import.meta.url), "utf8");
   const listBody = repository.slice(
