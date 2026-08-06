@@ -18,7 +18,8 @@ test("admin directly sets mechanic passwords while other roles keep email recove
   assert.match(dialog, /admin-confirm-password/);
   assert.match(source, /`\$\{base\}\/password`/);
   assert.match(dialog, /Send password reset/);
-  assert.match(source, /password-reset-email/);
+  assert.match(source, /`\$\{base\}\/password-reset-email`/);
+  assert.doesNotMatch(source, /\/api\/admin\/users\/\$\{userAction\.user\.id\}\/password-reset-email/);
   assert.match(dialog, /Send reset email/);
   assert.match(dialog, /userAction\.user\.login_email \|\| userAction\.user\.email/);
 });

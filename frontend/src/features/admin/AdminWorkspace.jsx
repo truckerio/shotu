@@ -267,9 +267,8 @@ export function AdminWorkspace({
           body: JSON.stringify({ companyId: selectedCompanyId, locationIds: userLocationDraft }),
         });
       } else if (userAction.type === "password-reset-email") {
-        await api(`/api/admin/users/${userAction.user.id}/password-reset-email`, {
+        await api(`${base}/password-reset-email`, {
           method: "POST",
-          body: JSON.stringify({ companyId: selectedCompanyId }),
           timeoutMs: 15_000,
         });
       } else if (userAction.type === "password") {

@@ -298,6 +298,28 @@ export async function requestAdminUserPasswordReset(
   return { sent: true };
 }
 
+export async function requestAdminUserPasswordResetForLocation(
+  context,
+  actor,
+  locationId,
+  userId,
+  headers,
+  origin,
+  dependencies = {},
+) {
+  const authorizeLocation = dependencies.authorizeLocation || authorizedLocation;
+  const location = await authorizeLocation(context, locationId);
+  return requestAdminUserPasswordReset(
+    context,
+    actor,
+    userId,
+    { companyId: location.company_id },
+    headers,
+    origin,
+    dependencies,
+  );
+}
+
 export async function removeAdminUser(context, actor, locationId, userId) {
   if (actor.id === userId) {
     throw invalidRequest("You cannot delete your own account.");

@@ -18,6 +18,7 @@ import {
   resetAdminUserPassword,
   registerAdminKioskDevice,
   revokeAdminKioskDevice,
+  requestAdminUserPasswordResetForLocation,
   setAdminMechanicKioskPin,
   updateAdminUserLocations,
   saveAdminTemplate,
@@ -275,6 +276,22 @@ export async function handleAdminApi(req, res, url, helpers) {
         userPassword.userId,
         input,
         fromNodeHeaders(req.headers),
+      ),
+    });
+    return true;
+  }
+
+  const scopedUserPasswordResetEmail = managedUserPath(url.pathname, "/password-reset-email");
+  if (req.method === "POST" && scopedUserPasswordResetEmail) {
+    res.setHeader("cache-control", "no-store");
+    sendJson(res, 200, {
+      result: await requestAdminUserPasswordResetForLocation(
+        requestContext,
+        actor,
+        scopedUserPasswordResetEmail.locationId,
+        scopedUserPasswordResetEmail.userId,
+        fromNodeHeaders(req.headers),
+        invitationPublicOrigin(req),
       ),
     });
     return true;

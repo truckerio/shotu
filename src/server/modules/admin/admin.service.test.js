@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createInvitationAuthUser,
   requestAdminUserPasswordReset,
+  requestAdminUserPasswordResetForLocation,
   resetAdminUserPassword,
 } from "./admin.service.js";
 
@@ -108,6 +109,45 @@ test("admin password recovery sends the tenant-scoped user a Better Auth reset e
   assert.equal(event.targetUserId, "user-1");
   assert.equal(event.action, "password_reset_requested");
   assert.deepEqual(event.details, { delivery: "email" });
+});
+
+test("location-scoped password recovery derives the company server-side", async () => {
+  let request;
+  await requestAdminUserPasswordResetForLocation(
+    { actor: { id: "admin-1", role: "admin" }, companyIds: new Set([COMPANY_ID]) },
+    { id: "admin-1" },
+    "location-1",
+    "user-1",
+    new Headers(),
+    "https://workorders.example.com",
+    {
+      async authorizeLocation(_context, locationId) {
+        assert.equal(locationId, "location-1");
+        return { id: locationId, company_id: COMPANY_ID };
+      },
+      async getTargets() {
+        return [{
+          id: "user-1",
+          company_id: COMPANY_ID,
+          active: true,
+          company_membership_active: true,
+          auth_user_id: "auth-user-1",
+          auth_email: "admin@example.com",
+        }];
+      },
+      authApi: {
+        async requestPasswordReset(input) {
+          request = input;
+        },
+      },
+      async recordEvent() {},
+    },
+  );
+
+  assert.deepEqual(request.body, {
+    email: "admin@example.com",
+    redirectTo: "https://workorders.example.com/?resetPassword=1",
+  });
 });
 
 test("admin password recovery refuses inactive users before sending email", async () => {
