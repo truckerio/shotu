@@ -260,6 +260,8 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
 
   const connected = status?.configured;
   const showConfiguration = editing || !connected;
+  const inboundNeedsReview = mappingData.items.filter((item) => item.status === "unmatched").length;
+  const inboundMapped = mappingData.items.filter((item) => item.status === "mapped").length;
   return (
     <article className="integration-card odoo-integration-card">
       <header className="integration-card-header">
@@ -300,24 +302,6 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
           </div>
         </>
       )}
-
-      {connected && mappingData.items.length ? (
-        <section className="odoo-location-mappings" aria-labelledby="odoo-location-heading">
-          <div><h3 id="odoo-location-heading">Inbound inventory stock locations</h3><p>Map Odoo stock locations to the app locations that receive their inventory balances.</p></div>
-          <div className="odoo-location-list">
-            {mappingData.items.map((item) => (
-              <label key={item.externalId} className={item.status === "unmatched" ? "needs-review" : ""}>
-                <span><strong>{item.completeName || item.displayName}</strong><small>Odoo ID {item.externalId}</small></span>
-                <select aria-label={`App location for ${item.completeName || item.displayName}`} value={mappingValue(item)} disabled={busy === `mapping-${item.externalId}`} onChange={(event) => changeMapping(item, event.target.value)}>
-                  <option value="">Unmatched</option>
-                  {mappingData.appLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-                  <option value="__ignored">Ignore this location</option>
-                </select>
-              </label>
-            ))}
-          </div>
-        </section>
-      ) : connected ? <p className="integration-empty">Refresh locations to load Odoo inventory locations for matching.</p> : null}
 
       {connected ? (
         <section className="odoo-outbound-setup" aria-labelledby="odoo-outbound-heading">
@@ -374,6 +358,29 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
           </div>
         </section>
       ) : null}
+
+      {connected && mappingData.items.length ? (
+        <details className="odoo-location-mappings odoo-location-mappings--progressive">
+          <summary>
+            <span><strong>Inbound inventory stock locations</strong><small>{inboundMapped} mapped · {inboundNeedsReview} need review</small></span>
+          </summary>
+          <div className="odoo-location-mappings__body">
+            <p>Map Odoo stock locations to the app locations that receive their inventory balances.</p>
+            <div className="odoo-location-list">
+              {mappingData.items.map((item) => (
+                <label key={item.externalId} className={item.status === "unmatched" ? "needs-review" : ""}>
+                  <span><strong>{item.completeName || item.displayName}</strong><small>Odoo ID {item.externalId}</small></span>
+                  <select aria-label={`App location for ${item.completeName || item.displayName}`} value={mappingValue(item)} disabled={busy === `mapping-${item.externalId}`} onChange={(event) => changeMapping(item, event.target.value)}>
+                    <option value="">Unmatched</option>
+                    {mappingData.appLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                    <option value="__ignored">Ignore this location</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+          </div>
+        </details>
+      ) : connected ? <p className="integration-empty">Refresh locations to load Odoo inventory locations for matching.</p> : null}
     </article>
   );
 }

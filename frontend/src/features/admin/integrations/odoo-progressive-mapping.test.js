@@ -4,6 +4,7 @@ import test from "node:test";
 
 const workflowUrl = new URL("./OdooProgressiveMapping.jsx", import.meta.url);
 const stylesUrl = new URL("./odoo-progressive-mapping.css", import.meta.url);
+const integrationStylesUrl = new URL("./integrations.css", import.meta.url);
 
 async function readWorkflow() {
   return readFile(workflowUrl, "utf8");
@@ -42,4 +43,18 @@ test("collapsing Odoo mapping sections does not unmount drafts or their field co
   assert.doesNotMatch(source, /\{warehouseExpanded\s*&&/);
   assert.doesNotMatch(source, /\{activeStep\s*===\s*["']warehouses["']\s*&&/);
   assert.doesNotMatch(source, /\{activeStep\s*===\s*["']vehicles["']\s*&&/);
+});
+
+test("outbound trucks lead the page and inbound inventory locations stay progressively collapsed", async () => {
+  const [card, styles] = await Promise.all([
+    readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8"),
+    readFile(integrationStylesUrl, "utf8"),
+  ]);
+
+  assert.ok(card.indexOf("<OdooProgressiveMapping") < card.indexOf("<details className=\"odoo-location-mappings"));
+  assert.match(card, /<details className="odoo-location-mappings odoo-location-mappings--progressive">/);
+  assert.doesNotMatch(card, /<details className="odoo-location-mappings odoo-location-mappings--progressive" open/);
+  assert.match(card, /inboundMapped.*mapped.*inboundNeedsReview.*need review/);
+  assert.match(styles, /\.odoo-location-mappings--progressive \.odoo-location-list[\s\S]*max-block-size:/);
+  assert.match(styles, /\.odoo-location-mappings--progressive \.odoo-location-list[\s\S]*overflow-y:\s*auto/);
 });
