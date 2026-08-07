@@ -70,6 +70,9 @@ function workorderSelect() {
       wo.cancel_reason,
       wo.created_at,
       wo.updated_at,
+      coalesce(oes.status, 'not_entered') as odoo_status,
+      coalesce(oes.odoo_service_order_no, '') as odoo_service_order_no,
+      coalesce(oes.external_id, '') as odoo_external_id,
       ${publicAssetSelect("a")} as asset,
       jsonb_build_object('id', l.id, 'name', l.name, 'type', l.type, 'address', l.address) as location,
       team.primary_mechanic as mechanic,
@@ -80,6 +83,7 @@ function workorderSelect() {
     left join locations l on l.id = wo.location_id
     left join user_profiles approver on approver.id = wo.approved_by_user_id
     left join user_profiles canceller on canceller.id = wo.cancelled_by_user_id
+    left join odoo_entry_status oes on oes.workorder_id = wo.id
     left join lateral (
       select
         jsonb_agg(
@@ -151,6 +155,9 @@ export function publicWorkorderRow(row) {
     cancelReason: row.cancel_reason || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    odooStatus: row.odoo_status || "not_entered",
+    odooServiceOrderNo: row.odoo_service_order_no || "",
+    odooExternalId: row.odoo_external_id || "",
     asset,
     location: emptyObjectToNull(row.location),
     mechanic: emptyObjectToNull(row.mechanic),

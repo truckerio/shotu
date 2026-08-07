@@ -26,8 +26,8 @@ export function SurveillanceOdooPanel({
     setLaborHours,
     setOdooNote,
   } = controller;
-  const blockers = odooReadiness?.blockers || [];
   const createdOrderNo = odooDraftResult?.serviceOrderNo || workorder.odooServiceOrderNo || "";
+  const blockers = createdOrderNo ? [] : odooReadiness?.blockers || [];
   const canCreateDraft = Boolean(String(laborHours).trim() && !createdOrderNo);
   const readinessStatus = odooReadinessStatus({
     created: Boolean(createdOrderNo),

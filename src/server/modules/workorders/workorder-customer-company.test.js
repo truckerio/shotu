@@ -117,11 +117,25 @@ test("public workorder projection exposes asset owner and a canonical form snaps
     },
     mechanics: [],
     mechanic_ids: [],
+    odoo_status: "entered",
+    odoo_service_order_no: "S00016",
+    odoo_external_id: "13380",
   });
 
   assert.equal(workorder.asset.ownerName, "Acme Logistics");
   assert.equal(workorder.formData.customerCompanyName, "Acme Logistics");
   assert.notEqual(workorder.formData.customerCompanyName, workorder.location.name);
+  assert.equal(workorder.odooStatus, "entered");
+  assert.equal(workorder.odooServiceOrderNo, "S00016");
+  assert.equal(workorder.odooExternalId, "13380");
+});
+
+test("public workorder projection supplies safe Odoo tracking defaults", () => {
+  const workorder = publicWorkorderRow({ form_data: {}, mechanics: [], mechanic_ids: [] });
+
+  assert.equal(workorder.odooStatus, "not_entered");
+  assert.equal(workorder.odooServiceOrderNo, "");
+  assert.equal(workorder.odooExternalId, "");
 });
 
 test("print uses the canonical label and supports legacy workorders", () => {

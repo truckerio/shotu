@@ -31,6 +31,12 @@ test("Surveillance reports blocked draft attempts without flickering known readi
   assert.match(detailController, /setOdooDraftFeedback\(odooDraftBlockedMessage\(readiness\)\)/);
 });
 
+test("Surveillance treats a persisted Odoo order as created after reopening", () => {
+  assert.match(odooPanel, /const createdOrderNo = odooDraftResult\?\.serviceOrderNo \|\| workorder\.odooServiceOrderNo \|\| ""/);
+  assert.match(odooPanel, /const blockers = createdOrderNo \? \[\] : odooReadiness\?\.blockers \|\| \[\]/);
+  assert.match(odooPanel, /disabled=\{Boolean\(createdOrderNo\)\}/);
+});
+
 test("Surveillance Preview overlays stale saved headings with the current location", () => {
   assert.match(detailPage, /import \{ canonicalDetailPreviewTemplate \}/);
   assert.match(

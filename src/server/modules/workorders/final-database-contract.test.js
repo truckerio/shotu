@@ -36,6 +36,14 @@ test("mechanic assignment table is the only workorder mechanic truth", async () 
   assert.match(repository, /workorder_mechanic_assignments/i);
 });
 
+test("canonical workorder detail retains persisted Odoo entry tracking", async () => {
+  const repository = await readFile(new URL("operational-workorders.repo.js", repositories), "utf8");
+  assert.match(repository, /left join odoo_entry_status oes on oes\.workorder_id = wo\.id/i);
+  assert.match(repository, /coalesce\(oes\.odoo_service_order_no, ''\) as odoo_service_order_no/i);
+  assert.match(repository, /coalesce\(oes\.external_id, ''\) as odoo_external_id/i);
+  assert.match(repository, /odooServiceOrderNo: row\.odoo_service_order_no \|\| ""/);
+});
+
 test("runtime repositories use final tenant and profile names", async () => {
   const files = [
     "assets.repo.js",
