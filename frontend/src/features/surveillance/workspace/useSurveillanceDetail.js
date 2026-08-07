@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
 import { useWorkorderDetailRealtime } from "../../workorder-detail/useWorkorderDetailRealtime.js";
+import { odooDraftBlockedMessage } from "./surveillance-workspace-model.js";
 
 export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError }) {
   const [detail, setDetail] = useState(null);
@@ -11,6 +12,7 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [odooReadiness, setOdooReadiness] = useState(null);
   const [odooDraftResult, setOdooDraftResult] = useState(null);
+  const [odooDraftFeedback, setOdooDraftFeedback] = useState("");
   const [laborHours, setLaborHours] = useState("");
   const [odooNote, setOdooNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -23,6 +25,7 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     try {
       const readiness = await api(`/api/surveillance/workorders/${encodeURIComponent(workorderId)}/odoo-readiness`);
       setOdooReadiness(readiness);
+      if (readiness?.ready) setOdooDraftFeedback("");
       if (fillLaborHours && readiness?.labor?.hours) setLaborHours(String(readiness.labor.hours));
       return readiness;
     } finally {
@@ -39,6 +42,7 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
       setFullscreenPageIndex(0);
       setOdooReadiness(null);
       setOdooDraftResult(null);
+      setOdooDraftFeedback("");
       setLaborHours("");
       setOdooNote("");
       if (["closed", "odoo_entered"].includes(nextDetail?.workorder?.status)) {
@@ -90,6 +94,7 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
       else setDetail(null);
       setOdooReadiness(null);
       setOdooDraftResult(null);
+      setOdooDraftFeedback("");
       setLaborHours("");
       setOdooNote("");
     } catch (saveError) {
@@ -104,6 +109,7 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     if (!detail?.workorder?.id || !String(laborHours).trim()) return;
     setSaving(true);
     setError("");
+    setOdooDraftFeedback("");
     try {
       const id = detail.workorder.id;
       await api(`/api/surveillance/workorders/${encodeURIComponent(id)}/odoo-preparation`, {
@@ -111,7 +117,10 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
         body: JSON.stringify({ laborHours: String(laborHours).trim() }),
       });
       const readiness = await loadOdooReadiness(id);
-      if (!readiness?.ready) return;
+      if (!readiness?.ready) {
+        setOdooDraftFeedback(odooDraftBlockedMessage(readiness));
+        return;
+      }
       const result = await api(`/api/surveillance/workorders/${encodeURIComponent(id)}/odoo-draft`, {
         method: "POST",
         body: JSON.stringify({ expectedUpdatedAt: readiness.workorder?.updatedAt }),
@@ -144,6 +153,7 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     laborHours,
     markMissingInfo,
     odooDraftResult,
+    odooDraftFeedback,
     odooLoading,
     odooNote,
     odooReadiness,

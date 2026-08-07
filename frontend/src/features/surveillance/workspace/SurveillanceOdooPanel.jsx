@@ -1,5 +1,6 @@
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { odooReadinessStatus } from "./surveillance-workspace-model.js";
 
 function identityLabel(value) {
   return value?.displayName || value?.externalId || "-";
@@ -17,6 +18,7 @@ export function SurveillanceOdooPanel({
     laborHours,
     markMissingInfo,
     odooDraftResult,
+    odooDraftFeedback,
     odooLoading,
     odooNote,
     odooReadiness,
@@ -27,6 +29,7 @@ export function SurveillanceOdooPanel({
   const blockers = odooReadiness?.blockers || [];
   const createdOrderNo = odooDraftResult?.serviceOrderNo || workorder.odooServiceOrderNo || "";
   const canCreateDraft = Boolean(String(laborHours).trim() && !createdOrderNo);
+  const readinessStatus = odooReadinessStatus({ loading: odooLoading, readiness: odooReadiness });
 
   return (
     <div className="surveillance-work-panel">
@@ -68,7 +71,7 @@ export function SurveillanceOdooPanel({
           <section className="surveillance-odoo-readiness" aria-label="Odoo readiness">
             <div>
               <span>Status</span>
-              <strong>{odooLoading ? "Checking Odoo" : odooReadiness?.ready ? "Ready to create draft" : "Needs setup"}</strong>
+              <strong>{readinessStatus}</strong>
             </div>
             <div>
               <span>Customer</span>
@@ -90,6 +93,13 @@ export function SurveillanceOdooPanel({
               <ul>
                 {blockers.map((blocker) => <li key={`${blocker.code}-${blocker.field || ""}`}>{blocker.message}</li>)}
               </ul>
+            </div>
+          ) : null}
+
+          {odooDraftFeedback ? (
+            <div className="surveillance-odoo-attempt" role="alert">
+              <strong>Draft not created</strong>
+              <span>{odooDraftFeedback}</span>
             </div>
           ) : null}
 

@@ -7,6 +7,8 @@ import {
   datePresetRange,
   matchesDateFilter,
   missingFields,
+  odooDraftBlockedMessage,
+  odooReadinessStatus,
   progressTimestamp,
   surveillanceLocations,
 } from "./surveillance-workspace-model.js";
@@ -45,4 +47,23 @@ test("location, missing-information, and progress projections remain stable", ()
   }), ["Chino", "Texas"]);
   assert.deepEqual(missingFields({ concern: "Inspect", diagnosis: "Found", workPerformed: "Fixed", asset: { unitNo: "101" }, mechanics: [{ name: "M" }] }), []);
   assert.deepEqual(progressTimestamp({ status: "in_progress", startedAt: "start", acceptedAt: "accepted" }), { label: "Started", value: "start" });
+});
+
+test("Odoo readiness keeps its known status during background refresh", () => {
+  assert.equal(odooReadinessStatus({ loading: true, readiness: null }), "Checking Odoo");
+  assert.equal(odooReadinessStatus({ loading: true, readiness: { ready: false } }), "Needs setup");
+  assert.equal(odooReadinessStatus({ loading: true, readiness: { ready: true } }), "Ready to create draft");
+  assert.equal(odooReadinessStatus({ loading: false, readiness: null }), "Needs setup");
+});
+
+test("blocked Odoo attempts produce a clear operator result", () => {
+  assert.equal(odooDraftBlockedMessage({ ready: true, blockers: [] }), "");
+  assert.equal(
+    odooDraftBlockedMessage({ ready: false, blockers: [{ message: "Configure a unit conversion." }] }),
+    "Resolve this Odoo blocker and try again: Configure a unit conversion.",
+  );
+  assert.equal(
+    odooDraftBlockedMessage({ ready: false, blockers: [{ message: "One" }, { message: "Two" }] }),
+    "Resolve the 2 Odoo blockers shown above and try again.",
+  );
 });

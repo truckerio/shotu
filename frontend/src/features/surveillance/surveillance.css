@@ -152,7 +152,8 @@
 }
 
 .surveillance-odoo-blockers,
-.surveillance-odoo-result {
+.surveillance-odoo-result,
+.surveillance-odoo-attempt {
   border-radius: 6px;
   display: grid;
   font-size: var(--text-secondary);
@@ -186,6 +187,12 @@
 
 .surveillance-odoo-result small {
   color: #067647;
+}
+
+.surveillance-odoo-attempt {
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  color: #b42318;
 }
 
 .surveillance-missing, .surveillance-complete { border-radius: 6px; display: grid; font-size: var(--text-secondary); gap: 3px; margin: 0; padding: 10px 12px; }

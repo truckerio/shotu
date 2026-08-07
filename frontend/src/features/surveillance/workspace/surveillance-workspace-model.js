@@ -94,6 +94,23 @@ export function missingFields(workorder) {
   ].filter(Boolean);
 }
 
+export function odooReadinessStatus({ loading, readiness }) {
+  if (loading && !readiness) return "Checking Odoo";
+  return readiness?.ready ? "Ready to create draft" : "Needs setup";
+}
+
+export function odooDraftBlockedMessage(readiness) {
+  if (readiness?.ready !== false) return "";
+  const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
+  if (blockers.length === 1 && blockers[0]?.message) {
+    return `Resolve this Odoo blocker and try again: ${blockers[0].message}`;
+  }
+  if (blockers.length > 1) {
+    return `Resolve the ${blockers.length} Odoo blockers shown above and try again.`;
+  }
+  return "Odoo readiness could not be confirmed. Refresh the workorder and try again.";
+}
+
 export function progressTimestamp(workorder) {
   if (workorder.status === "accepted") return { label: "Accepted", value: workorder.acceptedAt };
   if (workorder.status === "in_progress") return { label: "Started", value: workorder.startedAt || workorder.acceptedAt };

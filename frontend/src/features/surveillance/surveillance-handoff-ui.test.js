@@ -4,6 +4,7 @@ import test from "node:test";
 
 const detailPage = readFileSync(new URL("./workspace/SurveillanceDetailPage.jsx", import.meta.url), "utf8");
 const odooPanel = readFileSync(new URL("./workspace/SurveillanceOdooPanel.jsx", import.meta.url), "utf8");
+const detailController = readFileSync(new URL("./workspace/useSurveillanceDetail.js", import.meta.url), "utf8");
 
 test("Surveillance keeps Odoo mutation controls behind Manager approval", () => {
   assert.match(detailPage, /const canProcessOdoo = \["closed", "odoo_entered"\]\.includes\(workorder\.status\)/);
@@ -21,6 +22,13 @@ test("Surveillance uses explicit request and correction handoff language", () =>
 test("Surveillance can save labor before readiness becomes ready", () => {
   assert.match(odooPanel, /const canCreateDraft = Boolean\(String\(laborHours\)\.trim\(\) && !createdOrderNo\)/);
   assert.doesNotMatch(odooPanel, /const canCreateDraft = Boolean\(odooReadiness\?\.ready/);
+});
+
+test("Surveillance reports blocked draft attempts without flickering known readiness", () => {
+  assert.match(odooPanel, /odooReadinessStatus\(\{ loading: odooLoading, readiness: odooReadiness \}\)/);
+  assert.match(odooPanel, /className="surveillance-odoo-attempt" role="alert"/);
+  assert.match(odooPanel, />Draft not created</);
+  assert.match(detailController, /setOdooDraftFeedback\(odooDraftBlockedMessage\(readiness\)\)/);
 });
 
 test("Surveillance Preview overlays stale saved headings with the current location", () => {
