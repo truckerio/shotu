@@ -94,7 +94,8 @@ export function missingFields(workorder) {
   ].filter(Boolean);
 }
 
-export function odooReadinessStatus({ loading, readiness }) {
+export function odooReadinessStatus({ created = false, loading, readiness }) {
+  if (created) return "Draft created";
   if (loading && !readiness) return "Checking Odoo";
   return readiness?.ready ? "Ready to create draft" : "Needs setup";
 }

@@ -25,7 +25,7 @@ test("Surveillance can save labor before readiness becomes ready", () => {
 });
 
 test("Surveillance reports blocked draft attempts without flickering known readiness", () => {
-  assert.match(odooPanel, /odooReadinessStatus\(\{ loading: odooLoading, readiness: odooReadiness \}\)/);
+  assert.match(odooPanel, /odooReadinessStatus\(\{[\s\S]*?created: Boolean\(createdOrderNo\),[\s\S]*?loading: odooLoading,[\s\S]*?readiness: odooReadiness/);
   assert.match(odooPanel, /className="surveillance-odoo-attempt" role="alert"/);
   assert.match(odooPanel, />Draft not created</);
   assert.match(detailController, /setOdooDraftFeedback\(odooDraftBlockedMessage\(readiness\)\)/);

@@ -50,6 +50,7 @@ test("location, missing-information, and progress projections remain stable", ()
 });
 
 test("Odoo readiness keeps its known status during background refresh", () => {
+  assert.equal(odooReadinessStatus({ created: true, loading: true, readiness: { ready: true } }), "Draft created");
   assert.equal(odooReadinessStatus({ loading: true, readiness: null }), "Checking Odoo");
   assert.equal(odooReadinessStatus({ loading: true, readiness: { ready: false } }), "Needs setup");
   assert.equal(odooReadinessStatus({ loading: true, readiness: { ready: true } }), "Ready to create draft");

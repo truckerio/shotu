@@ -29,7 +29,11 @@ export function SurveillanceOdooPanel({
   const blockers = odooReadiness?.blockers || [];
   const createdOrderNo = odooDraftResult?.serviceOrderNo || workorder.odooServiceOrderNo || "";
   const canCreateDraft = Boolean(String(laborHours).trim() && !createdOrderNo);
-  const readinessStatus = odooReadinessStatus({ loading: odooLoading, readiness: odooReadiness });
+  const readinessStatus = odooReadinessStatus({
+    created: Boolean(createdOrderNo),
+    loading: odooLoading,
+    readiness: odooReadiness,
+  });
 
   return (
     <div className="surveillance-work-panel">
