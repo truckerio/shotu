@@ -1,16 +1,36 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, RefreshCw01, Trash01, XClose } from "@untitledui/icons";
+import { AlertCircle, ArrowLeft, Key01, RefreshCw01, Trash01, XClose } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { api } from "../../../lib/api.js";
 import { integrationProvider } from "./provider-registry.js";
 import { SamsaraIntegrationCard } from "./SamsaraIntegrationCard.jsx";
 import { IntegrationClientsCard } from "./IntegrationClientsCard.jsx";
+import { IntegrationSummaryCard } from "./IntegrationSummaryCard.jsx";
 import { OdooIntegrationCard } from "./OdooIntegrationCard.jsx";
 import "./integrations.css";
 
 const samsaraProvider = integrationProvider("samsara");
 const odooProvider = integrationProvider("odoo");
+const INTEGRATION_DETAILS = new Set(["samsara", "odoo", "clients"]);
+
+function selectedIntegrationFromLocation() {
+  const selected = new URLSearchParams(window.location.search).get("integration");
+  return INTEGRATION_DETAILS.has(selected) ? selected : "";
+}
+
+function samsaraPresentation(status) {
+  const error = status?.error || status?.lastError || status?.latestSync?.error;
+  const connected = Boolean(status?.connected || status?.configured || status?.status === "connected");
+  if (error) return { label: "Needs attention", tone: "error" };
+  if (connected) return { label: "Connected", tone: "connected" };
+  return { label: "Not connected", tone: "disconnected" };
+}
+
+function dateLabel(value) {
+  if (!value) return "Not yet synced";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
+}
 
 function callbackResult() {
   const params = new URLSearchParams(window.location.search);
@@ -36,6 +56,7 @@ export function IntegrationsSettings() {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [clients, setClients] = useState([]);
   const [createdToken, setCreatedToken] = useState("");
+  const [selectedIntegration, setSelectedIntegration] = useState(selectedIntegrationFromLocation);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -61,6 +82,22 @@ export function IntegrationsSettings() {
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  useEffect(() => {
+    function syncDetailFromHistory() {
+      setSelectedIntegration(selectedIntegrationFromLocation());
+    }
+    window.addEventListener("popstate", syncDetailFromHistory);
+    return () => window.removeEventListener("popstate", syncDetailFromHistory);
+  }, []);
+
+  function showIntegration(integrationId) {
+    const params = new URLSearchParams(window.location.search);
+    if (integrationId) params.set("integration", integrationId);
+    else params.delete("integration");
+    window.history.pushState({}, "", `/?${params.toString()}`);
+    setSelectedIntegration(integrationId);
+  }
 
   function connect() {
     window.location.assign("/api/integrations/samsara/oauth/start");
@@ -134,53 +171,106 @@ export function IntegrationsSettings() {
     }
   }
 
+  const samsaraState = samsaraPresentation(status);
+  const activeClientCount = clients.filter((client) => client.active).length;
+  const detailTitle = selectedIntegration === "samsara"
+    ? samsaraProvider.name
+    : selectedIntegration === "odoo"
+      ? odooProvider.name
+      : selectedIntegration === "clients"
+        ? "Machine clients"
+        : "Settings";
+  const detailSubtitle = selectedIntegration === "samsara"
+    ? samsaraProvider.description
+    : selectedIntegration === "odoo"
+      ? odooProvider.description
+      : selectedIntegration === "clients"
+        ? "Manage company-scoped credentials for trusted external systems."
+        : "Company-level connections and configuration.";
+
   return (
     <section className="admin-content admin-settings-content">
       <PageHeader
-        title="Settings"
-        subtitle="Company-level connections and configuration."
+        title={detailTitle}
+        subtitle={detailSubtitle}
+        leading={selectedIntegration ? <button className="admin-back" type="button" onClick={() => showIntegration("")} aria-label="Back to integrations"><ArrowLeft /></button> : null}
       />
       <nav className="admin-settings-tabs" aria-label="Company settings">
         <button className="active" type="button">Integrations</button>
       </nav>
 
-      <div className="integration-page-heading">
-        <div>
-          <h2>Integrations</h2>
-          <p>Connect external systems once for every authorized company location.</p>
+      {!selectedIntegration ? (
+        <div className="integration-page-heading">
+          <div>
+            <h2>Integrations</h2>
+            <p>Connect external systems once for every authorized company location.</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {notice.error && notice.target !== "samsara" ? <p className="integration-notice error" role="alert"><AlertCircle /> <span>{notice.error}</span></p> : null}
       {notice.message ? <p className="integration-notice success" role="status">{notice.message}</p> : null}
 
       {loading && !status ? (
         <div className="integration-loading"><RefreshCw01 className="loading-icon" /><span>Loading integrations</span></div>
-      ) : (
+      ) : !selectedIntegration ? (
         <div className="integration-provider-grid">
-          <SamsaraIntegrationCard
-            action={action}
-            actionError={notice.target === "samsara" ? notice.error : ""}
-            provider={samsaraProvider}
-            status={status}
-            onConnect={connect}
-            onTest={() => runAction("test", "/api/integrations/samsara/test", "Samsara connection verified.")}
-            onSync={() => runAction("sync", "/api/integrations/samsara/sync", "Samsara sync completed.")}
-            onDisconnect={() => setConfirmDisconnect(true)}
+          <IntegrationSummaryCard
+            category={samsaraProvider.category}
+            description={samsaraProvider.description}
+            facts={[{ label: "Last successful sync", value: dateLabel(status?.lastSuccessfulSyncAt || status?.last_full_sync_at || status?.lastFullSyncAt) }]}
+            icon={samsaraProvider.icon}
+            onManage={() => showIntegration("samsara")}
+            statusLabel={samsaraState.label}
+            statusTone={samsaraState.tone}
+            title={samsaraProvider.name}
           />
-          <OdooIntegrationCard
-            provider={odooProvider}
-            status={odooStatus}
-            onStatusChange={setOdooStatus}
+          <IntegrationSummaryCard
+            category={odooProvider.category}
+            description={odooProvider.description}
+            facts={[{ label: "Location mappings", value: `${odooStatus?.mappedCount || 0} mapped · ${odooStatus?.unmatchedCount || 0} to review` }]}
+            icon={odooProvider.icon}
+            onManage={() => showIntegration("odoo")}
+            statusLabel={odooStatus?.configured ? "Configured" : "Not configured"}
+            statusTone={odooStatus?.configured ? "connected" : "disconnected"}
+            title={odooProvider.name}
           />
-          <IntegrationClientsCard
-            clients={clients}
-            busy={action.startsWith("create-client") || action.startsWith("revoke-")}
-            createdToken={createdToken}
-            onCreate={createClient}
-            onRevoke={revokeClient}
-            onDismissToken={() => setCreatedToken("")}
+          <IntegrationSummaryCard
+            category="External API access"
+            description="Issue company-scoped credentials for Odoo or another trusted server."
+            facts={[{ label: "Active clients", value: activeClientCount }]}
+            icon={Key01}
+            onManage={() => showIntegration("clients")}
+            statusLabel={activeClientCount ? "Active" : "Not configured"}
+            statusTone={activeClientCount ? "connected" : "disconnected"}
+            title="Machine clients"
           />
+        </div>
+      ) : (
+        <div className="integration-detail-view">
+          {selectedIntegration === "samsara" ? (
+            <SamsaraIntegrationCard
+              action={action}
+              actionError={notice.target === "samsara" ? notice.error : ""}
+              provider={samsaraProvider}
+              status={status}
+              onConnect={connect}
+              onTest={() => runAction("test", "/api/integrations/samsara/test", "Samsara connection verified.")}
+              onSync={() => runAction("sync", "/api/integrations/samsara/sync", "Samsara sync completed.")}
+              onDisconnect={() => setConfirmDisconnect(true)}
+            />
+          ) : null}
+          {selectedIntegration === "odoo" ? <OdooIntegrationCard provider={odooProvider} status={odooStatus} onStatusChange={setOdooStatus} /> : null}
+          {selectedIntegration === "clients" ? (
+            <IntegrationClientsCard
+              clients={clients}
+              busy={action.startsWith("create-client") || action.startsWith("revoke-")}
+              createdToken={createdToken}
+              onCreate={createClient}
+              onRevoke={revokeClient}
+              onDismissToken={() => setCreatedToken("")}
+            />
+          ) : null}
         </div>
       )}
 

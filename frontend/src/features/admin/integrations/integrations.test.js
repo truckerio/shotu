@@ -4,6 +4,7 @@ import test from "node:test";
 
 const settingsUrl = new URL("./IntegrationsSettings.jsx", import.meta.url);
 const clientCardUrl = new URL("./IntegrationClientsCard.jsx", import.meta.url);
+const summaryCardUrl = new URL("./IntegrationSummaryCard.jsx", import.meta.url);
 const stylesUrl = new URL("./integrations.css", import.meta.url);
 
 test("admin integration access shows the raw client token once and supports revocation", async () => {
@@ -48,4 +49,24 @@ test("Samsara action errors render once inside the provider card", async () => {
   assert.match(settings, /notice\.error && notice\.target !== "samsara"/);
   assert.doesNotMatch(settings, /setStatus\(\(current\) => \(\{[\s\S]*status: "error"/);
   assert.match(card, /const error = actionError \|\| status\?\.error/);
+});
+
+test("integration landing uses equal summary cards and mounts configuration only on detail pages", async () => {
+  const [settings, summaryCard, styles] = await Promise.all([
+    readFile(settingsUrl, "utf8"),
+    readFile(summaryCardUrl, "utf8"),
+    readFile(stylesUrl, "utf8"),
+  ]);
+
+  assert.match(settings, /selectedIntegrationFromLocation/);
+  assert.match(settings, /params\.set\("integration", integrationId\)/);
+  assert.match(settings, /window\.addEventListener\("popstate"/);
+  assert.equal((settings.match(/<IntegrationSummaryCard/g) || []).length, 3);
+  assert.match(settings, /!selectedIntegration \?/);
+  assert.match(settings, /selectedIntegration === "odoo" \? <OdooIntegrationCard/);
+  assert.match(settings, /selectedIntegration === "samsara"/);
+  assert.match(settings, /selectedIntegration === "clients"/);
+  assert.match(summaryCard, />Manage</);
+  assert.match(styles, /\.integration-summary-card[\s\S]*min-height:\s*260px/);
+  assert.match(styles, /\.integration-detail-view > \.integration-card[\s\S]*max-width:\s*none/);
 });

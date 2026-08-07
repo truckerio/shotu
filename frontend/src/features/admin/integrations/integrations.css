@@ -56,6 +56,57 @@
   width: 100%;
 }
 
+.integration-summary-card {
+  display: grid;
+  grid-template-rows: auto minmax(52px, 1fr) auto auto;
+  min-height: 260px;
+}
+
+.integration-summary-card .integration-description {
+  margin-bottom: 12px;
+}
+
+.integration-summary-facts {
+  border-top: 1px solid #eaecf0;
+  margin: 0;
+  padding-top: 12px;
+}
+
+.integration-summary-facts dt {
+  color: #667085;
+  font-size: var(--text-caption);
+}
+
+.integration-summary-facts dd {
+  color: #344054;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.integration-summary-card .integration-card-actions {
+  margin-top: 16px;
+}
+
+.integration-summary-card .integration-card-actions .button {
+  justify-content: center;
+  width: 100%;
+}
+
+.integration-detail-view {
+  margin-top: 18px;
+  min-width: 0;
+}
+
+.integration-detail-view > .integration-card {
+  max-width: none;
+}
+
+.integration-detail-view > .odoo-integration-card {
+  container-type: inline-size;
+}
+
 .odoo-integration-card {
   container-type: inline-size;
 }
