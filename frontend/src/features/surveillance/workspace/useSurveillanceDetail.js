@@ -9,19 +9,41 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
-  const [odooServiceOrderNo, setOdooServiceOrderNo] = useState("");
+  const [odooReadiness, setOdooReadiness] = useState(null);
+  const [odooDraftResult, setOdooDraftResult] = useState(null);
+  const [laborHours, setLaborHours] = useState("");
   const [odooNote, setOdooNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [odooLoading, setOdooLoading] = useState(false);
   const previewRef = useRef(null);
+
+  async function loadOdooReadiness(workorderId, { fillLaborHours = false } = {}) {
+    if (!workorderId) return null;
+    setOdooLoading(true);
+    try {
+      const readiness = await api(`/api/surveillance/workorders/${encodeURIComponent(workorderId)}/odoo-readiness`);
+      setOdooReadiness(readiness);
+      if (fillLaborHours && readiness?.labor?.hours) setLaborHours(String(readiness.labor.hours));
+      return readiness;
+    } finally {
+      setOdooLoading(false);
+    }
+  }
 
   async function openWorkorder(id) {
     setError("");
     try {
-      setDetail(await api(`/api/surveillance/workorders/${encodeURIComponent(id)}`));
+      const nextDetail = await api(`/api/surveillance/workorders/${encodeURIComponent(id)}`);
+      setDetail(nextDetail);
       setDetailSection("work");
       setFullscreenPageIndex(0);
-      setOdooServiceOrderNo("");
+      setOdooReadiness(null);
+      setOdooDraftResult(null);
+      setLaborHours("");
       setOdooNote("");
+      if (["closed", "odoo_entered"].includes(nextDetail?.workorder?.status)) {
+        await loadOdooReadiness(id, { fillLaborHours: true });
+      }
     } catch (openError) {
       setError(openError.message);
     }
@@ -34,6 +56,9 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     onRefresh: async () => {
       const refreshed = await api(`/api/surveillance/workorders/${encodeURIComponent(detail.workorder.id)}`);
       setDetail(refreshed);
+      if (["closed", "odoo_entered"].includes(refreshed?.workorder?.status)) {
+        await loadOdooReadiness(refreshed.workorder.id);
+      }
     },
   });
 
@@ -63,7 +88,9 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
       const next = nextRows[Math.min(currentIndex, Math.max(0, nextRows.length - 1))];
       if (next && next.id !== currentId) await openWorkorder(next.id);
       else setDetail(null);
-      setOdooServiceOrderNo("");
+      setOdooReadiness(null);
+      setOdooDraftResult(null);
+      setLaborHours("");
       setOdooNote("");
     } catch (saveError) {
       setError(saveError.message);
@@ -72,13 +99,31 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     }
   }
 
-  function markEntered(event) {
+  async function createOdooDraft(event) {
     event.preventDefault();
-    if (!detail?.workorder?.id || !odooServiceOrderNo.trim()) return;
-    finishAndAdvance((id) => api(`/api/surveillance/workorders/${encodeURIComponent(id)}/mark-odoo-entered`, {
-      method: "POST",
-      body: JSON.stringify({ odooServiceOrderNo: odooServiceOrderNo.trim(), note: odooNote.trim() }),
-    }));
+    if (!detail?.workorder?.id || !String(laborHours).trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const id = detail.workorder.id;
+      await api(`/api/surveillance/workorders/${encodeURIComponent(id)}/odoo-preparation`, {
+        method: "PUT",
+        body: JSON.stringify({ laborHours: String(laborHours).trim() }),
+      });
+      const readiness = await loadOdooReadiness(id);
+      if (!readiness?.ready) return;
+      const result = await api(`/api/surveillance/workorders/${encodeURIComponent(id)}/odoo-draft`, {
+        method: "POST",
+        body: JSON.stringify({ expectedUpdatedAt: readiness.workorder?.updatedAt }),
+      });
+      setOdooDraftResult(result);
+      await loadDashboard();
+      setDetail(await api(`/api/surveillance/workorders/${encodeURIComponent(id)}`));
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function markMissingInfo() {
@@ -95,10 +140,13 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     detailSection,
     fullscreenPageIndex,
     fullscreenZoom,
-    markEntered,
+    createOdooDraft,
+    laborHours,
     markMissingInfo,
+    odooDraftResult,
+    odooLoading,
     odooNote,
-    odooServiceOrderNo,
+    odooReadiness,
     openRelative,
     openWorkorder,
     previewFullscreen,
@@ -108,8 +156,8 @@ export function useSurveillanceDetail({ activeTab, loadDashboard, rows, setError
     setDetailSection,
     setFullscreenPageIndex,
     setFullscreenZoom,
+    setLaborHours,
     setOdooNote,
-    setOdooServiceOrderNo,
     setPreviewFullscreen,
     togglePreview,
   };

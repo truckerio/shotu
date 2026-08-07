@@ -1,6 +1,9 @@
-import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+
+function identityLabel(value) {
+  return value?.displayName || value?.externalId || "-";
+}
 
 export function SurveillanceOdooPanel({
   canProcessOdoo,
@@ -10,14 +13,20 @@ export function SurveillanceOdooPanel({
   workorder,
 }) {
   const {
-    markEntered,
+    createOdooDraft,
+    laborHours,
     markMissingInfo,
+    odooDraftResult,
+    odooLoading,
     odooNote,
-    odooServiceOrderNo,
+    odooReadiness,
     saving,
+    setLaborHours,
     setOdooNote,
-    setOdooServiceOrderNo,
   } = controller;
+  const blockers = odooReadiness?.blockers || [];
+  const createdOrderNo = odooDraftResult?.serviceOrderNo || workorder.odooServiceOrderNo || "";
+  const canCreateDraft = Boolean(String(laborHours).trim() && !createdOrderNo);
 
   return (
     <div className="surveillance-work-panel">
@@ -27,7 +36,7 @@ export function SurveillanceOdooPanel({
         <div><span>Work performed</span><p>{workorder.workPerformed || "-"}</p></div>
       </div>
       {canProcessOdoo ? (
-        <form className="surveillance-odoo-form" onSubmit={markEntered}>
+        <form className="surveillance-odoo-form" onSubmit={createOdooDraft}>
           {missingInfoHandoff ? (
             <section className="surveillance-handoff-summary" aria-label="Missing information handoff">
               <div>
@@ -47,16 +56,62 @@ export function SurveillanceOdooPanel({
           {missing.length ? (
             <div className="surveillance-missing"><strong>Missing information</strong><span>{missing.join(", ")}</span></div>
           ) : <p className="surveillance-complete">Workorder information complete</p>}
+
+          {createdOrderNo ? (
+            <section className="surveillance-odoo-result" aria-label="Odoo draft created">
+              <strong>Odoo draft created</strong>
+              <span>{createdOrderNo}</span>
+              {odooDraftResult?.replayed ? <small>Existing draft recovered by workorder marker.</small> : null}
+            </section>
+          ) : null}
+
+          <section className="surveillance-odoo-readiness" aria-label="Odoo readiness">
+            <div>
+              <span>Status</span>
+              <strong>{odooLoading ? "Checking Odoo" : odooReadiness?.ready ? "Ready to create draft" : "Needs setup"}</strong>
+            </div>
+            <div>
+              <span>Customer</span>
+              <strong>{identityLabel(odooReadiness?.customer)}</strong>
+            </div>
+            <div>
+              <span>Vehicle</span>
+              <strong>{identityLabel(odooReadiness?.vehicle)}</strong>
+            </div>
+            <div>
+              <span>Warehouse</span>
+              <strong>{identityLabel(odooReadiness?.warehouse)}</strong>
+            </div>
+          </section>
+
+          {blockers.length ? (
+            <div className="surveillance-odoo-blockers" role="status">
+              <strong>Odoo blockers</strong>
+              <ul>
+                {blockers.map((blocker) => <li key={`${blocker.code}-${blocker.field || ""}`}>{blocker.message}</li>)}
+              </ul>
+            </div>
+          ) : null}
+
           <label>
-            <span>Service order no.</span>
-            <input {...textEntryProps("identifier")} value={odooServiceOrderNo} onChange={(event) => setOdooServiceOrderNo(event.target.value)} />
+            <span>Labor hours</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              max="999.99"
+              step="0.01"
+              value={laborHours}
+              onChange={(event) => setLaborHours(event.target.value)}
+              disabled={Boolean(createdOrderNo)}
+            />
           </label>
           <label>
             <span>Note for Odoo or Manager</span>
             <NarrativeField value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" placeholder="Required when requesting information" />
           </label>
           <div className="surveillance-odoo-actions">
-            <Button variant="primary" type="submit" disabled={saving || !odooServiceOrderNo.trim()}>{saving ? "Saving..." : "Mark entered"}</Button>
+            <Button variant="primary" type="submit" disabled={saving || !canCreateDraft}>{saving ? "Creating..." : "Create Odoo draft"}</Button>
             <Button variant="secondary" type="button" onClick={markMissingInfo} disabled={saving || !odooNote.trim()}>Request information</Button>
           </div>
         </form>

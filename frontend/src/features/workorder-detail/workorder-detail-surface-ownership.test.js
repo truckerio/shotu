@@ -74,9 +74,9 @@ test("role actions remain outside the shared structural surface", () => {
   const surface = source("../../components/workorders/WorkorderDetailSurface.jsx");
 
   assert.match(surveillanceOdoo, /surveillance-odoo-form/);
-  assert.match(surveillanceOdoo, /markEntered/);
+  assert.match(surveillanceOdoo, /createOdooDraft/);
   assert.match(surveillanceOdoo, /markMissingInfo/);
-  assert.doesNotMatch(surface, /surveillance-odoo-form|markEntered|markMissingInfo|Service order no\./);
+  assert.doesNotMatch(surface, /surveillance-odoo-form|createOdooDraft|markMissingInfo|Create Odoo draft/);
 
   assertUsesComponent(detailPage, "ChatComposer", "WorkorderDetailPage");
   assertUsesComponent(detailPage, "WorkorderDetailSections", "WorkorderDetailPage");

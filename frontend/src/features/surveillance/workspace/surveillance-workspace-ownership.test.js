@@ -27,12 +27,15 @@ test("queue, detail, and Odoo behavior have focused owners", () => {
   assert.match(queueController, /\/api\/surveillance\/dashboard/);
   assert.match(queueView, /<MobileQueueToolbar/);
   assert.match(queueView, /<ProgressiveQueue/);
-  assert.match(detailController, /mark-odoo-entered/);
+  assert.match(detailController, /odoo-readiness/);
+  assert.match(detailController, /odoo-preparation/);
+  assert.match(detailController, /odoo-draft/);
   assert.match(detailController, /mark-missing-info/);
   assert.match(detailController, /useWorkorderDetailRealtime/);
   assert.match(detailPage, /<WorkorderDetailSurface/);
   assert.match(detailPage, /<SurveillanceOdooPanel/);
-  assert.match(odooPanel, /Service order no\./);
+  assert.match(odooPanel, /Create Odoo draft/);
+  assert.match(odooPanel, /Labor hours/);
   assert.doesNotMatch(detailPage, /mark-odoo-entered|mark-missing-info/);
 });
 

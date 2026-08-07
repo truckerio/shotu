@@ -18,6 +18,11 @@ test("Surveillance uses explicit request and correction handoff language", () =>
   assert.doesNotMatch(odooPanel, />Send back for information</);
 });
 
+test("Surveillance can save labor before readiness becomes ready", () => {
+  assert.match(odooPanel, /const canCreateDraft = Boolean\(String\(laborHours\)\.trim\(\) && !createdOrderNo\)/);
+  assert.doesNotMatch(odooPanel, /const canCreateDraft = Boolean\(odooReadiness\?\.ready/);
+});
+
 test("Surveillance Preview overlays stale saved headings with the current location", () => {
   assert.match(detailPage, /import \{ canonicalDetailPreviewTemplate \}/);
   assert.match(
