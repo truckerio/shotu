@@ -9,6 +9,7 @@ import {
 test("phone admin navigation keeps location-owned setup inside Locations", () => {
   assert.deepEqual(ADMIN_MOBILE_DESTINATIONS.map(({ key }) => key), [
     "locations",
+    "surveillance",
     "settings",
     "operations",
   ]);
@@ -17,7 +18,7 @@ test("phone admin navigation keeps location-owned setup inside Locations", () =>
 
 test("admin phone shell reserves a shared profile destination outside route state", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) => readFile(
-    new URL("./AdminWorkspace.jsx", import.meta.url),
+    new URL("./workspace/AdminWorkspaceShell.jsx", import.meta.url),
     "utf8",
   ));
   assert.match(source, /<ProfileMenu actor=\{actor\} mobileNav \/>/);
@@ -34,6 +35,7 @@ test("Locations stays active throughout location-owned users and template pages"
 test("admin opens location setup by default while explicit destinations remain linkable", () => {
   assert.equal(initialAdminView(""), "locations");
   assert.equal(initialAdminView("?adminView=locations"), "locations");
+  assert.equal(initialAdminView("?adminView=surveillance"), "surveillance");
   assert.equal(initialAdminView("?adminView=operations"), "operations");
   assert.equal(initialAdminView("?adminView=settings&settingsTab=integrations"), "settings");
   assert.equal(initialAdminView("?samsara=connected"), "settings");

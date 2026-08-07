@@ -24,7 +24,7 @@ function valueOrDash(value) {
   return value || "-";
 }
 
-export function SurveillanceDetailPage({ controller, error, isPhone, rows }) {
+export function SurveillanceDetailPage({ controller, embedded = false, error, isPhone, rows }) {
   const {
     closeDetail,
     detail,
@@ -98,8 +98,10 @@ export function SurveillanceDetailPage({ controller, error, isPhone, rows }) {
     </div>
   );
 
+  const Shell = embedded ? "div" : "main";
+
   return (
-    <main className="prototype workorder-detail-page surveillance-detail-page">
+    <Shell className={`prototype workorder-detail-page surveillance-detail-page${embedded ? " surveillance-detail-page-embedded" : ""}`}>
       <style>{workorderTemplateStyles}</style>
       <WorkorderDetailSurface
         previewOpen={!isPhone && previewOpen}
@@ -259,6 +261,6 @@ export function SurveillanceDetailPage({ controller, error, isPhone, rows }) {
         onPageChange={setFullscreenPageIndex}
         onZoomChange={setFullscreenZoom}
       />
-    </main>
+    </Shell>
   );
 }
