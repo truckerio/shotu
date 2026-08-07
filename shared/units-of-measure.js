@@ -8,6 +8,7 @@ export const UOM_CATEGORIES = Object.freeze({
   mass: { label: "Weight", decimalScale: 3 },
   gas_volume: { label: "Gas volume", decimalScale: 3 },
   length: { label: "Length", decimalScale: 3 },
+  time: { label: "Time", decimalScale: 2 },
 });
 
 function unit(code, label, symbol, category, options = {}) {
@@ -41,6 +42,12 @@ export const UNITS_OF_MEASURE = Object.freeze([
   unit("pail", "Pail", "pail", "packaging"),
   unit("drum", "Drum", "drum", "packaging"),
   unit("cylinder", "Cylinder", "cyl", "packaging"),
+
+  unit("hr", "Hour", "hr", "time", {
+    conversionFactor: 1,
+    referenceCode: "hr",
+    odooName: "Hours",
+  }),
 
   unit("fl_oz", "Fluid ounce", "fl oz", "liquid_volume", {
     conversionFactor: 29.5735295625,

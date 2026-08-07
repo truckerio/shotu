@@ -2,17 +2,25 @@ import { createOdooClient } from "./odoo.client.js";
 import {
   importOdooInventory,
   importOdooServiceHistory,
+  listOdooOutboundAdminReadiness,
+  listOdooOutboundProviderVehicles,
+  listOdooOutboundVehicleMappings,
   listOdooLocationMappings,
   odooAdminStatus,
   readOdooConfiguration,
   saveOdooConfiguration,
+  setOdooOutboundLaborProduct,
+  setOdooOutboundVehicleMapping,
+  setOdooOutboundWarehouseMapping,
   setOdooLocationMapping,
+  upsertOdooOutboundDiscovery,
   upsertDiscoveredOdooLocations,
 } from "./odoo.admin.repo.js";
 import {
   markServiceHistorySyncSucceeded,
   readServiceHistorySyncState,
 } from "../../db/repositories/service-history.repo.js";
+import { IntegrationHttpError } from "../core/integration-errors.js";
 
 const HISTORY_PAGE_SIZE = 500;
 const ORDER_ID_BATCH_SIZE = 200;
@@ -167,6 +175,87 @@ export async function discoverOdooLocations(companyId) {
   ]);
   await upsertDiscoveredOdooLocations(companyId, records);
   return listOdooLocationMappings(companyId);
+}
+
+export async function discoverOdooOutbound(companyId) {
+  const client = await configuredClient(companyId);
+  const [vehicleFields, warehouseFields, productFields, uomFields] = await Promise.all([
+    supportedFields(client, "fleet.vehicle", [
+      "id", "display_name", "name", "unit_number", "vin", "vin_sn",
+      "license_plate", "partner_id", "active", "write_date",
+    ]),
+    supportedFields(client, "stock.warehouse", [
+      "id", "display_name", "name", "code", "lot_stock_id", "active", "write_date",
+    ]),
+    supportedFields(client, "product.product", [
+      "id", "default_code", "display_name", "name", "type", "detailed_type",
+      "uom_id", "active", "write_date",
+    ]),
+    supportedFields(client, "uom.uom", ["id", "name", "category_id", "active", "write_date"]),
+  ]);
+  const requiredOrderFields = await supportedFields(client, "sale.order", [
+    "vehicle_id", "is_service_order", "warehouse_id", "client_order_ref", "order_line",
+  ]);
+  if (!["vehicle_id", "is_service_order", "warehouse_id", "client_order_ref", "order_line"]
+    .every((field) => requiredOrderFields.includes(field))) {
+    throw new IntegrationHttpError(
+      422,
+      "ODOO_MODEL_INCOMPATIBLE",
+      "Odoo sale orders do not expose the required service-order fields.",
+    );
+  }
+  const productTypeField = productFields.includes("detailed_type")
+    ? "detailed_type"
+    : productFields.includes("type") ? "type" : "";
+  if (!productTypeField) {
+    throw new IntegrationHttpError(
+      422,
+      "ODOO_MODEL_INCOMPATIBLE",
+      "Odoo products do not expose a supported service-product type field.",
+    );
+  }
+  const [vehicles, warehouses, serviceProducts] = await Promise.all([
+    client.searchReadAll("fleet.vehicle", [["active", "=", true]], vehicleFields),
+    client.searchReadAll("stock.warehouse", [], warehouseFields),
+    client.searchReadAll("product.product", [
+      ["active", "=", true],
+      [productTypeField, "=", "service"],
+    ], productFields),
+  ]);
+  const uomIds = [...new Set(serviceProducts.map((product) => Array.isArray(product.uom_id)
+    ? product.uom_id[0]
+    : product.uom_id).filter(Boolean))];
+  const uoms = uomIds.length
+    ? await client.searchReadAll("uom.uom", [["id", "in", uomIds]], uomFields)
+    : [];
+  await upsertOdooOutboundDiscovery(companyId, { vehicles, warehouses, serviceProducts, uoms });
+  return listOdooOutboundAdminReadiness(companyId);
+}
+
+export async function odooOutboundReadiness(companyId) {
+  return listOdooOutboundAdminReadiness(companyId);
+}
+
+export async function odooOutboundVehicles(companyId, input) {
+  return listOdooOutboundVehicleMappings(companyId, input);
+}
+
+export async function odooOutboundProviderVehicles(companyId, input) {
+  return listOdooOutboundProviderVehicles(companyId, input);
+}
+
+export async function configureOdooOutboundVehicle(companyId, assetId, input, actor) {
+  return setOdooOutboundVehicleMapping(companyId, assetId, input, actor);
+}
+
+export async function configureOdooOutboundWarehouse(companyId, locationId, input, actor) {
+  await setOdooOutboundWarehouseMapping(companyId, locationId, input, actor);
+  return listOdooOutboundAdminReadiness(companyId);
+}
+
+export async function configureOdooOutboundLaborProduct(companyId, input, actor) {
+  await setOdooOutboundLaborProduct(companyId, input.productExternalId, actor);
+  return listOdooOutboundAdminReadiness(companyId);
 }
 
 export async function syncOdooPartsAndInventory(companyId) {

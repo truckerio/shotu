@@ -44,7 +44,16 @@ export class OdooClient {
       }
       return payload.result;
     } catch (error) {
-      if (error?.name === "AbortError") throw new Error("Odoo did not respond before the connection timeout.");
+      if (error?.name === "AbortError") {
+        const timeoutError = new Error("Odoo did not respond before the connection timeout.");
+        timeoutError.code = "ODOO_CONNECTION_TIMEOUT";
+        throw timeoutError;
+      }
+      if (error instanceof TypeError) {
+        const transportError = new Error("The Odoo connection ended before a response was received.");
+        transportError.code = "ODOO_TRANSPORT_ERROR";
+        throw transportError;
+      }
       throw error;
     } finally {
       clearTimeout(timeout);

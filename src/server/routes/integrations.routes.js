@@ -9,9 +9,16 @@ import {
 } from "../integrations/core/integration-clients.service.js";
 import {
   configureOdoo,
+  configureOdooOutboundLaborProduct,
+  configureOdooOutboundVehicle,
+  configureOdooOutboundWarehouse,
+  discoverOdooOutbound,
   discoverOdooLocations,
   listOdooLocationMappings,
   odooAdminStatus,
+  odooOutboundReadiness,
+  odooOutboundProviderVehicles,
+  odooOutboundVehicles,
   setOdooLocationMapping,
   syncOdooPartsAndInventory,
   testOdoo,
@@ -19,7 +26,22 @@ import {
 import {
   odooConfigurationSchema,
   odooLocationMappingSchema,
+  odooOutboundLaborProductSchema,
+  odooOutboundInternalIdSchema,
+  odooOutboundProviderVehicleListSchema,
+  odooOutboundVehicleListSchema,
+  odooOutboundVehicleMappingSchema,
+  odooOutboundWarehouseMappingSchema,
 } from "../integrations/odoo/odoo.admin.schemas.js";
+import {
+  createOdooWorkorderDraft,
+  odooWorkorderReadiness,
+  prepareOdooWorkorder,
+} from "../integrations/odoo/odoo.outbound.service.js";
+import {
+  createOdooDraftSchema,
+  prepareOdooWorkorderSchema,
+} from "../integrations/odoo/odoo.outbound.schemas.js";
 
 const samsara = getIntegrationProvider("samsara");
 
@@ -138,6 +160,98 @@ export async function handleIntegrationsApi(req, res, url, helpers) {
     const companyId = selectedCompanyId(url, requestContext);
     sendJson(res, 200, await syncOdooPartsAndInventory(companyId));
     return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/integrations/odoo/outbound/discover") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await discoverOdooOutbound(companyId));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/odoo/outbound/readiness") {
+    const companyId = selectedCompanyId(url, requestContext);
+    sendJson(res, 200, await odooOutboundReadiness(companyId));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/odoo/outbound/vehicles") {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooOutboundVehicleListSchema, Object.fromEntries(url.searchParams));
+    sendJson(res, 200, await odooOutboundVehicles(companyId, input));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/integrations/odoo/outbound/odoo-vehicles") {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooOutboundProviderVehicleListSchema, Object.fromEntries(url.searchParams));
+    sendJson(res, 200, await odooOutboundProviderVehicles(companyId, input));
+    return true;
+  }
+
+  const outboundAssetMatch = /^\/api\/integrations\/odoo\/outbound\/assets\/([^/]+)\/mapping$/.exec(url.pathname);
+  if (req.method === "PUT" && outboundAssetMatch) {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooOutboundVehicleMappingSchema, await helpers.readBody(req));
+    sendJson(res, 200, await configureOdooOutboundVehicle(
+      companyId,
+      validated(odooOutboundInternalIdSchema, decodeURIComponent(outboundAssetMatch[1])),
+      input,
+      { userId: requestContext.actor.id, requestId: req.requestId },
+    ));
+    return true;
+  }
+
+  const outboundLocationMatch = /^\/api\/integrations\/odoo\/outbound\/locations\/([^/]+)\/warehouse$/.exec(url.pathname);
+  if (req.method === "PUT" && outboundLocationMatch) {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooOutboundWarehouseMappingSchema, await helpers.readBody(req));
+    sendJson(res, 200, await configureOdooOutboundWarehouse(
+      companyId,
+      validated(odooOutboundInternalIdSchema, decodeURIComponent(outboundLocationMatch[1])),
+      input,
+      { userId: requestContext.actor.id, requestId: req.requestId },
+    ));
+    return true;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/integrations/odoo/outbound/labor-product") {
+    const companyId = selectedCompanyId(url, requestContext);
+    const input = validated(odooOutboundLaborProductSchema, await helpers.readBody(req));
+    sendJson(res, 200, await configureOdooOutboundLaborProduct(
+      companyId,
+      input,
+      { userId: requestContext.actor.id, requestId: req.requestId },
+    ));
+    return true;
+  }
+
+  const outboundWorkorderMatch = /^\/api\/integrations\/odoo\/outbound\/workorders\/([^/]+)\/(preparation|readiness|draft)$/.exec(url.pathname);
+  if (outboundWorkorderMatch) {
+    const companyId = selectedCompanyId(url, requestContext);
+    const workorderId = decodeURIComponent(outboundWorkorderMatch[1]);
+    const action = outboundWorkorderMatch[2];
+    if (req.method === "PUT" && action === "preparation") {
+      const input = validated(prepareOdooWorkorderSchema, await helpers.readBody(req));
+      sendJson(res, 200, await prepareOdooWorkorder({
+        companyId, workorderId, userId: requestContext.actor.id, input,
+      }));
+      return true;
+    }
+    if (req.method === "GET" && action === "readiness") {
+      sendJson(res, 200, await odooWorkorderReadiness({ companyId, workorderId }));
+      return true;
+    }
+    if (req.method === "POST" && action === "draft") {
+      const input = validated(createOdooDraftSchema, await helpers.readBody(req));
+      sendJson(res, 201, await createOdooWorkorderDraft({
+        companyId,
+        workorderId,
+        userId: requestContext.actor.id,
+        requestId: req.requestId,
+        input,
+      }));
+      return true;
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/api/integrations/clients") {

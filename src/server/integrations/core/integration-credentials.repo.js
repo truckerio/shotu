@@ -82,6 +82,41 @@ export async function readIntegrationCredential({
   });
 }
 
+export async function readIntegrationCredentialForProvider({
+  companyId,
+  provider,
+  credentialKind,
+}) {
+  const tenantId = requireCompanyId(companyId);
+  const result = await query(
+    `select account.id as integration_account_id,
+            credential.ciphertext, credential.iv, credential.auth_tag,
+            credential.key_version, credential.metadata
+     from integration_accounts account
+     join integration_credentials credential
+       on credential.company_id = account.company_id
+      and credential.integration_account_id = account.id
+      and credential.provider = account.provider
+      and credential.credential_kind = $3
+     where account.company_id = $1 and account.provider = $2
+     limit 1`,
+    [tenantId, provider, credentialKind],
+  );
+  const encrypted = result.rows[0];
+  if (!encrypted) return null;
+  return decryptIntegrationSecret({
+    ciphertext: encrypted.ciphertext,
+    iv: encrypted.iv,
+    authTag: encrypted.auth_tag,
+    keyVersion: encrypted.key_version,
+  }, {
+    companyId: tenantId,
+    provider,
+    accountId: encrypted.integration_account_id,
+    credentialKind,
+  });
+}
+
 export async function deleteIntegrationCredentials({ companyId, integrationAccountId }) {
   const tenantId = requireCompanyId(companyId);
   await query(

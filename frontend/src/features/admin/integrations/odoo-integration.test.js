@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-test("Odoo settings exposes explicit admin location matching without name-based defaults", async () => {
+test("Odoo settings separates inbound stock locations from explicit outbound setup", async () => {
   const source = await readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8");
-  assert.match(source, /Location matching/);
+  assert.match(source, /Inbound inventory stock locations/);
   assert.match(source, /Unmatched/);
   assert.match(source, /Ignore this location/);
   assert.match(source, /<option value="">Unmatched<\/option>/);
@@ -12,7 +12,38 @@ test("Odoo settings exposes explicit admin location matching without name-based 
   assert.match(source, /Sync parts, inventory & history/);
   assert.match(source, /historyOrderCount/);
   assert.match(source, /historyWarning/);
-  assert.match(source, /Products, Inventory, and Sales service orders/);
+  assert.match(source, /least-privilege Odoo user/);
+  assert.match(source, /create\/write access to draft Sales service orders/);
+  assert.match(source, /Odoo outbound setup/);
+  assert.match(source, /App locations to Odoo warehouses/);
+  assert.match(source, /Vehicle mappings/);
+  assert.match(source, /Labor product/);
+  assert.match(source, /outbound\/readiness/);
+  assert.match(source, /outbound\/discover/);
+});
+
+test("outbound mappings require explicit confirmation and use bounded vehicle reads", async () => {
+  const source = await readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8");
+  assert.match(source, /limit: "25"/);
+  assert.match(source, /confirmVehicleMapping/);
+  assert.match(source, /confirmWarehouseMapping/);
+  assert.match(source, /confirmLaborProduct/);
+  assert.match(source, /status: "mapped", externalId/);
+  assert.match(source, /status: "unmatched"/);
+  assert.match(source, /status: "ignored"/);
+  assert.match(source, /Ignore this unit for Odoo outbound/);
+  assert.doesNotMatch(source, /onChange=\{\(event\) => confirmVehicleMapping/);
+  assert.doesNotMatch(source, /onChange=\{\(event\) => confirmWarehouseMapping/);
+  assert.match(source, /Suggestions are never confirmed automatically/);
+});
+
+test("outbound setup keeps mobile controls at least 44px and reports unsafe labor units", async () => {
+  const source = await readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("./integrations.css", import.meta.url), "utf8");
+  assert.match(source, /uom_warning/);
+  assert.match(source, /Outbound entry remains disabled/);
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.odoo-outbound-setup input,[\s\S]*min-height: 44px/);
+  assert.match(css, /\.odoo-outbound-row,[\s\S]*grid-template-columns: 1fr/);
 });
 
 test("Odoo provider is shared through the integration settings registry", async () => {

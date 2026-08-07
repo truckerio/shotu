@@ -2,11 +2,17 @@ import { getPool, query } from "../../db/pool.js";
 import { requireCompanyId } from "../../db/company.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
 import {
-  readIntegrationCredential,
+  readIntegrationCredentialForProvider,
   saveIntegrationCredential,
 } from "../core/integration-credentials.repo.js";
+import { appendIntegrationAudit } from "../core/integration-platform.repo.js";
+import { IntegrationHttpError } from "../core/integration-errors.js";
 
 const PROVIDER = "odoo";
+
+function outboundAdminError(code, message, statusCode = 400) {
+  return new IntegrationHttpError(statusCode, code, message);
+}
 
 export async function saveOdooConfiguration(companyId, configuration) {
   const tenantId = requireCompanyId(companyId);
@@ -35,15 +41,8 @@ export async function saveOdooConfiguration(companyId, configuration) {
 }
 
 export async function readOdooConfiguration(companyId) {
-  const tenantId = requireCompanyId(companyId);
-  const result = await query(
-    `select id from integration_accounts where company_id = $1 and provider = $2 limit 1`,
-    [tenantId, PROVIDER],
-  );
-  if (!result.rows[0]) return null;
-  return readIntegrationCredential({
-    companyId: tenantId,
-    integrationAccountId: result.rows[0].id,
+  return readIntegrationCredentialForProvider({
+    companyId,
     provider: PROVIDER,
     credentialKind: "api",
   });
@@ -157,6 +156,603 @@ export async function setOdooLocationMapping(companyId, externalId, input) {
   );
   if (!result.rows[0]) throw new Error("Odoo location or selected app location was not found.");
   return listOdooLocationMappings(tenantId);
+}
+
+function relationExternalId(value) {
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+function relationDisplayName(value) {
+  return Array.isArray(value) ? String(value[1] || "") : "";
+}
+
+export async function upsertOdooOutboundDiscovery(companyId, discovery) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  const vehicles = (discovery.vehicles || []).map((vehicle) => ({
+    external_id: String(vehicle.id),
+    display_name: String(vehicle.display_name || vehicle.name || ""),
+    unit_number: String(vehicle.unit_number || ""),
+    vin: String(vehicle.vin || vehicle.vin_sn || ""),
+    license_plate: String(vehicle.license_plate || ""),
+    customer_external_id: relationExternalId(vehicle.partner_id),
+    customer_display_name: relationDisplayName(vehicle.partner_id),
+    active: vehicle.active !== false,
+    provider_updated_at: vehicle.write_date || null,
+  }));
+  const warehouses = (discovery.warehouses || []).map((warehouse) => ({
+    external_id: String(warehouse.id),
+    display_name: String(warehouse.name || warehouse.display_name || ""),
+    code: String(warehouse.code || ""),
+    stock_location_external_id: relationExternalId(warehouse.lot_stock_id),
+    active: warehouse.active !== false,
+    provider_updated_at: warehouse.write_date || null,
+  }));
+  const uoms = new Map((discovery.uoms || []).map((uom) => [String(uom.id), uom]));
+  const serviceProducts = (discovery.serviceProducts || []).map((product) => {
+    const uomExternalId = relationExternalId(product.uom_id);
+    const uom = uoms.get(uomExternalId) || {};
+    return {
+      external_id: String(product.id),
+      default_code: String(product.default_code || ""),
+      display_name: String(product.name || product.display_name || ""),
+      product_type: String(product.detailed_type || product.type || "service"),
+      uom_external_id: uomExternalId,
+      uom_name: String(uom.name || relationDisplayName(product.uom_id)),
+      uom_category_external_id: relationExternalId(uom.category_id),
+      uom_category_name: relationDisplayName(uom.category_id),
+      active: product.active !== false,
+      provider_updated_at: product.write_date || null,
+    };
+  });
+  try {
+    await client.query("begin");
+    if (vehicles.length) {
+      await client.query(
+        `insert into odoo_vehicles (
+           company_id, external_id, display_name, unit_number, vin, license_plate,
+           customer_external_id, customer_display_name, active, provider_updated_at,
+           last_seen_at, updated_at
+         )
+         select $1, source.external_id, source.display_name, source.unit_number,
+                source.vin, source.license_plate, source.customer_external_id,
+                source.customer_display_name, source.active, source.provider_updated_at,
+                now(), now()
+         from jsonb_to_recordset($2::jsonb) as source(
+           external_id text, display_name text, unit_number text, vin text,
+           license_plate text, customer_external_id text, customer_display_name text,
+           active boolean, provider_updated_at timestamptz
+         )
+         on conflict (company_id, external_id) do update
+         set display_name = excluded.display_name,
+             unit_number = excluded.unit_number,
+             vin = excluded.vin,
+             license_plate = excluded.license_plate,
+             customer_external_id = excluded.customer_external_id,
+             customer_display_name = excluded.customer_display_name,
+             active = excluded.active,
+             provider_updated_at = excluded.provider_updated_at,
+             last_seen_at = now(), updated_at = now()`,
+        [tenantId, JSON.stringify(vehicles)],
+      );
+    }
+    await client.query(
+      `update odoo_vehicles set active = false, updated_at = now()
+       where company_id = $1 and not (external_id = any($2::text[]))`,
+      [tenantId, vehicles.map((item) => item.external_id)],
+    );
+    if (warehouses.length) {
+      await client.query(
+        `insert into odoo_warehouses (
+           company_id, external_id, display_name, code, stock_location_external_id,
+           active, provider_updated_at, last_seen_at, updated_at
+         )
+         select $1, source.external_id, source.display_name, source.code,
+                source.stock_location_external_id, source.active,
+                source.provider_updated_at, now(), now()
+         from jsonb_to_recordset($2::jsonb) as source(
+           external_id text, display_name text, code text, stock_location_external_id text,
+           active boolean, provider_updated_at timestamptz
+         )
+         on conflict (company_id, external_id) do update
+         set display_name = excluded.display_name, code = excluded.code,
+             stock_location_external_id = excluded.stock_location_external_id,
+             active = excluded.active, provider_updated_at = excluded.provider_updated_at,
+             last_seen_at = now(), updated_at = now()`,
+        [tenantId, JSON.stringify(warehouses)],
+      );
+    }
+    await client.query(
+      `update odoo_warehouses set active = false, updated_at = now()
+       where company_id = $1 and not (external_id = any($2::text[]))`,
+      [tenantId, warehouses.map((item) => item.external_id)],
+    );
+    if (serviceProducts.length) {
+      await client.query(
+        `insert into odoo_service_products (
+           company_id, external_id, default_code, display_name, product_type,
+           uom_external_id, uom_name, uom_category_external_id, uom_category_name,
+           active, provider_updated_at, last_seen_at, updated_at
+         )
+         select $1, source.external_id, source.default_code, source.display_name,
+                source.product_type, source.uom_external_id, source.uom_name,
+                source.uom_category_external_id, source.uom_category_name,
+                source.active, source.provider_updated_at, now(), now()
+         from jsonb_to_recordset($2::jsonb) as source(
+           external_id text, default_code text, display_name text, product_type text,
+           uom_external_id text, uom_name text, uom_category_external_id text,
+           uom_category_name text, active boolean, provider_updated_at timestamptz
+         )
+         on conflict (company_id, external_id) do update
+         set default_code = excluded.default_code, display_name = excluded.display_name,
+             product_type = excluded.product_type, uom_external_id = excluded.uom_external_id,
+             uom_name = excluded.uom_name,
+             uom_category_external_id = excluded.uom_category_external_id,
+             uom_category_name = excluded.uom_category_name, active = excluded.active,
+             provider_updated_at = excluded.provider_updated_at,
+             last_seen_at = now(), updated_at = now()`,
+        [tenantId, JSON.stringify(serviceProducts)],
+      );
+    }
+    await client.query(
+      `update odoo_service_products set active = false, updated_at = now()
+       where company_id = $1 and not (external_id = any($2::text[]))`,
+      [tenantId, serviceProducts.map((item) => item.external_id)],
+    );
+    await appendIntegrationAudit({
+      client,
+      companyId: tenantId,
+      provider: "odoo",
+      action: "outbound.discovery_refreshed",
+      actorType: "system",
+      targetType: "integration",
+      targetId: "odoo",
+      details: {
+        vehicleCount: vehicles.length,
+        warehouseCount: warehouses.length,
+        serviceProductCount: serviceProducts.length,
+      },
+    });
+    await client.query("commit");
+    return { vehicleCount: vehicles.length, warehouseCount: warehouses.length, serviceProductCount: serviceProducts.length };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listOdooOutboundAdminReadiness(companyId) {
+  const tenantId = requireCompanyId(companyId);
+  const [summary, mappingData, products] = await Promise.all([
+    query(
+      `select
+         (select count(*)::int from odoo_vehicles vehicle
+          where vehicle.company_id = $1 and vehicle.mapping_status = 'mapped' and vehicle.active) confirmed_vehicles,
+         (select count(*)::int from assets asset where asset.company_id = $1) total_assets,
+         (select count(*)::int from assets asset
+          where asset.company_id = $1 and exists (
+            select 1 from integration_mappings mapping
+            where mapping.company_id = asset.company_id and mapping.provider = 'odoo'
+              and mapping.entity_type = 'vehicle_exclusion'
+              and mapping.internal_id = asset.id::text and mapping.status = 'disabled'
+          )) ignored_assets,
+         setting.labor_product_external_id, setting.labor_uom_external_id,
+         setting.active, product.default_code, product.display_name,
+         product.product_type, product.uom_external_id, product.uom_name,
+         product.uom_category_name, product.active product_active
+       from (select 1) seed
+       left join odoo_service_order_settings setting on setting.company_id = $1
+       left join odoo_service_products product
+         on product.company_id = setting.company_id
+        and product.external_id = setting.labor_product_external_id`,
+      [tenantId],
+    ),
+    query(
+      `select
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+             'external_id', warehouse.external_id,
+             'display_name', warehouse.display_name,
+             'code', warehouse.code,
+             'active', warehouse.active,
+             'assigned', exists(
+               select 1 from odoo_location_warehouse_mappings mapping
+               where mapping.company_id = warehouse.company_id
+                 and mapping.warehouse_external_id = warehouse.external_id
+             )
+           ) order by warehouse.active desc, warehouse.display_name, warehouse.external_id)
+           from odoo_warehouses warehouse where warehouse.company_id = $1
+         ), '[]'::jsonb) warehouses,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+             'id', location.id, 'name', location.name, 'type', location.type,
+             'address', coalesce(location.address, ''),
+             'warehouse_external_id', mapping.warehouse_external_id,
+             'warehouse_name', warehouse.display_name,
+             'warehouse_code', warehouse.code,
+             'warehouse_active', warehouse.active
+           ) order by location.name, location.id)
+           from locations location
+           left join odoo_location_warehouse_mappings mapping
+             on mapping.company_id = location.company_id and mapping.location_id = location.id
+           left join odoo_warehouses warehouse
+             on warehouse.company_id = mapping.company_id
+            and warehouse.external_id = mapping.warehouse_external_id
+           where location.company_id = $1 and location.active = true
+         ), '[]'::jsonb) locations`,
+      [tenantId],
+    ),
+    query(
+      `select external_id, default_code, display_name, product_type, uom_external_id,
+              uom_name, uom_category_name, active
+       from odoo_service_products where company_id = $1 and active = true
+       order by (upper(default_code) = 'PTR001') desc, default_code, display_name, external_id
+       limit 200`,
+      [tenantId],
+    ),
+  ]);
+  const locationRows = mappingData.rows[0]?.locations || [];
+  const warehouseRows = mappingData.rows[0]?.warehouses || [];
+  const labor = summary.rows[0]?.labor_product_external_id ? summary.rows[0] : null;
+  const laborReady = Boolean(
+    labor?.active
+    && labor?.product_active
+    && String(labor.product_type).toLowerCase() === "service"
+    && String(labor.labor_uom_external_id) === String(labor.uom_external_id)
+    && /^hours?$/i.test(String(labor.uom_name || ""))
+    && /time/i.test(String(labor.uom_category_name || "")),
+  );
+  const confirmedVehicles = Number(summary.rows[0]?.confirmed_vehicles || 0);
+  const totalAssets = Number(summary.rows[0]?.total_assets || 0);
+  const ignoredAssets = Number(summary.rows[0]?.ignored_assets || 0);
+  const confirmedWarehouses = locationRows.filter((row) => row.warehouse_external_id && row.warehouse_active).length;
+  const readiness = {
+    state: confirmedVehicles + ignoredAssets === totalAssets
+      && confirmedWarehouses === locationRows.length
+      && laborReady ? "ready" : "needs_setup",
+    vehicles: {
+      confirmedCount: confirmedVehicles,
+      ignoredCount: ignoredAssets,
+      unresolvedCount: Math.max(0, totalAssets - confirmedVehicles - ignoredAssets),
+    },
+    warehouses: {
+      confirmedCount: confirmedWarehouses,
+      unresolvedCount: Math.max(0, locationRows.length - confirmedWarehouses),
+      available: warehouseRows.map((row) => ({
+        externalId: row.external_id,
+        name: row.display_name,
+        code: row.code,
+        active: row.active,
+        assigned: row.assigned,
+      })),
+      items: locationRows.map((row) => ({
+        location: { id: row.id, name: row.name, type: row.type, address: row.address || "" },
+        status: row.warehouse_external_id && row.warehouse_active ? "mapped" : "unmatched",
+        mapping: row.warehouse_external_id ? {
+          externalId: row.warehouse_external_id,
+          displayName: row.warehouse_name || "",
+        } : null,
+        candidates: warehouseRows.filter((warehouse) => warehouse.active).map((warehouse) => ({
+          externalId: warehouse.external_id,
+          name: warehouse.display_name,
+          code: warehouse.code,
+          assigned: warehouse.assigned,
+        })),
+      })),
+    },
+    labor: {
+      status: laborReady ? "ready" : labor ? "uom_warning" : "unresolved",
+      productExternalId: labor?.labor_product_external_id || "",
+      code: labor?.default_code || "",
+      name: labor?.display_name || "",
+      uomExternalId: labor?.labor_uom_external_id || "",
+      uomName: labor?.uom_name || "",
+      warning: labor && !laborReady ? "The labor product must be an active service product using a verified time UoM." : "",
+      products: products.rows.map((product) => ({
+        externalId: product.external_id,
+        code: product.default_code,
+        name: product.display_name,
+        type: product.product_type,
+        uomExternalId: product.uom_external_id,
+        uomName: product.uom_name,
+        uomCategoryName: product.uom_category_name,
+        active: product.active,
+      })),
+    },
+  };
+  return readiness;
+}
+
+export async function listOdooOutboundVehicleMappings(companyId, input) {
+  const tenantId = requireCompanyId(companyId);
+  const values = [tenantId, input.q || "", input.status, input.limit + 1, input.cursor];
+  const result = await query(
+    `with page as (
+       select asset.id, asset.unit_no, asset.name, asset.unit_type, asset.vin, asset.license_plate
+       from assets asset
+       left join odoo_vehicles mapped
+         on mapped.company_id = asset.company_id and mapped.app_asset_id = asset.id
+        and mapped.mapping_status = 'mapped'
+       left join integration_mappings exclusion
+         on exclusion.company_id = asset.company_id and exclusion.provider = 'odoo'
+        and exclusion.entity_type = 'vehicle_exclusion'
+        and exclusion.internal_id = asset.id::text and exclusion.status = 'disabled'
+       where asset.company_id = $1
+         and ($2 = '' or concat_ws(' ', asset.unit_no, asset.name, asset.vin, asset.license_plate) ilike '%' || $2 || '%')
+         and ($3 = 'all'
+           or ($3 = 'mapped' and mapped.id is not null)
+           or ($3 = 'ignored' and exclusion.id is not null)
+           or ($3 = 'unmatched' and mapped.id is null and exclusion.id is null))
+       order by coalesce(asset.unit_no, asset.name, ''), asset.id
+       limit $4 offset $5
+     )
+     select page.*,
+            mapped.external_id mapped_external_id, mapped.display_name mapped_display_name,
+            exclusion.id exclusion_id,
+            coalesce(candidates.items, '[]'::jsonb) candidates
+     from page
+     left join odoo_vehicles mapped
+       on mapped.company_id = $1 and mapped.app_asset_id = page.id and mapped.mapping_status = 'mapped'
+     left join integration_mappings exclusion
+       on exclusion.company_id = $1 and exclusion.provider = 'odoo'
+      and exclusion.entity_type = 'vehicle_exclusion'
+      and exclusion.internal_id = page.id::text and exclusion.status = 'disabled'
+     left join lateral (
+       select jsonb_agg(candidate.item order by candidate.display_name, candidate.external_id) items
+       from (
+         select vehicle.display_name, vehicle.external_id, jsonb_build_object(
+           'externalId', vehicle.external_id, 'name', vehicle.display_name,
+           'unitNumber', vehicle.unit_number, 'vin', vehicle.vin,
+           'licensePlate', vehicle.license_plate, 'suggestionBasis',
+           case
+             when btrim(page.vin) <> '' and upper(regexp_replace(vehicle.vin, '[^A-Za-z0-9]', '', 'g')) = upper(regexp_replace(page.vin, '[^A-Za-z0-9]', '', 'g')) then 'vin'
+             when btrim(page.license_plate) <> '' and upper(regexp_replace(vehicle.license_plate, '[^A-Za-z0-9]', '', 'g')) = upper(regexp_replace(page.license_plate, '[^A-Za-z0-9]', '', 'g')) then 'license_plate'
+             else 'unit_number'
+           end
+         ) item
+         from odoo_vehicles vehicle
+         where vehicle.company_id = $1 and vehicle.active
+           and vehicle.mapping_status <> 'ignored'
+           and (
+             (btrim(page.vin) <> '' and upper(regexp_replace(vehicle.vin, '[^A-Za-z0-9]', '', 'g')) = upper(regexp_replace(page.vin, '[^A-Za-z0-9]', '', 'g')))
+             or (btrim(page.license_plate) <> '' and upper(regexp_replace(vehicle.license_plate, '[^A-Za-z0-9]', '', 'g')) = upper(regexp_replace(page.license_plate, '[^A-Za-z0-9]', '', 'g')))
+             or (btrim(page.unit_no) <> '' and upper(regexp_replace(vehicle.unit_number, '[^A-Za-z0-9]', '', 'g')) = upper(regexp_replace(page.unit_no, '[^A-Za-z0-9]', '', 'g')))
+           )
+         order by vehicle.display_name, vehicle.external_id
+         limit 10
+       ) candidate
+     ) candidates on true
+     order by coalesce(page.unit_no, page.name, ''), page.id`,
+    values,
+  );
+  const hasMore = result.rows.length > input.limit;
+  const rows = result.rows.slice(0, input.limit);
+  return {
+    items: rows.map((row) => ({
+      asset: {
+        id: row.id,
+        unitNo: row.unit_no || "",
+        name: row.name || "",
+        unitType: row.unit_type || "",
+        vin: row.vin || "",
+        licensePlate: row.license_plate || "",
+      },
+      status: row.mapped_external_id ? "mapped" : row.exclusion_id ? "ignored" : "unmatched",
+      mapping: row.mapped_external_id ? {
+        externalId: row.mapped_external_id,
+        displayName: row.mapped_display_name || "",
+      } : null,
+      candidates: row.candidates || [],
+    })),
+    nextCursor: hasMore ? input.cursor + input.limit : null,
+  };
+}
+
+export async function listOdooOutboundProviderVehicles(companyId, input) {
+  const tenantId = requireCompanyId(companyId);
+  const result = await query(
+    `select vehicle.external_id, vehicle.display_name, vehicle.unit_number,
+            vehicle.vin, vehicle.license_plate,
+            vehicle.mapping_status = 'mapped' as assigned
+     from odoo_vehicles vehicle
+     where vehicle.company_id = $1 and vehicle.active
+       and vehicle.mapping_status <> 'ignored'
+       and ($2 = '' or concat_ws(
+         ' ', vehicle.external_id, vehicle.display_name, vehicle.unit_number,
+         vehicle.vin, vehicle.license_plate
+       ) ilike '%' || $2 || '%')
+     order by vehicle.mapping_status = 'mapped', vehicle.display_name, vehicle.external_id
+     limit $3`,
+    [tenantId, input.q || "", input.limit],
+  );
+  return {
+    items: result.rows.map((vehicle) => ({
+      externalId: vehicle.external_id,
+      name: vehicle.display_name || "",
+      unitNumber: vehicle.unit_number || "",
+      vin: vehicle.vin || "",
+      licensePlate: vehicle.license_plate || "",
+      assigned: vehicle.assigned,
+    })),
+  };
+}
+
+export async function setOdooOutboundVehicleMapping(companyId, assetId, input, actor) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const asset = await client.query(
+      `select id from assets where company_id = $1 and id = $2 for update`,
+      [tenantId, assetId],
+    );
+    if (!asset.rows[0]) throw new Error("Asset was not found for this company.");
+    const current = await client.query(
+      `select external_id from odoo_vehicles
+       where company_id = $1 and app_asset_id = $2 and mapping_status = 'mapped' for update`,
+      [tenantId, assetId],
+    );
+    await client.query(
+      `update odoo_vehicles
+       set app_asset_id = null, mapping_status = 'unmatched', confirmed_by_user_id = null,
+           confirmed_at = null, updated_at = now()
+       where company_id = $1 and app_asset_id = $2 and mapping_status = 'mapped'`,
+      [tenantId, assetId],
+    );
+    await client.query(
+      `delete from integration_mappings
+       where company_id = $1 and provider = 'odoo' and entity_type = 'vehicle_exclusion'
+         and internal_id = $2::text`,
+      [tenantId, assetId],
+    );
+    if (input.status === "ignored") {
+      await client.query(
+        `insert into integration_mappings (
+           company_id, provider, entity_type, internal_id, external_id, status, metadata, updated_at
+         ) values ($1, 'odoo', 'vehicle_exclusion', $2::text, $2::text, 'disabled', '{}'::jsonb, now())`,
+        [tenantId, assetId],
+      );
+    }
+    if (input.status === "mapped") {
+      const mapped = await client.query(
+        `update odoo_vehicles
+         set app_asset_id = $3, suggested_asset_id = null, suggestion_basis = '',
+             mapping_status = 'mapped', confirmed_by_user_id = $4,
+             confirmed_at = now(), updated_at = now()
+         where company_id = $1 and external_id = $2 and active = true
+           and (mapping_status <> 'mapped' or app_asset_id = $3)
+         returning external_id, display_name`,
+        [tenantId, input.externalId, assetId, actor.userId],
+      );
+      if (!mapped.rows[0]) {
+        throw outboundAdminError(
+          "ODOO_VEHICLE_MAPPING_CONFLICT",
+          "The Odoo vehicle is inactive, missing, or already confirmed for another unit.",
+          409,
+        );
+      }
+    }
+    await appendIntegrationAudit({
+      client, companyId: tenantId, provider: "odoo", action: "outbound.vehicle_mapping_changed",
+      actorType: "user", actorId: actor.userId, targetType: "asset", targetId: assetId,
+      requestId: actor.requestId || null,
+      details: { previousExternalId: current.rows[0]?.external_id || "", status: input.status, externalId: input.externalId || "" },
+    });
+    await client.query("commit");
+    return { assetId, status: input.status, externalId: input.externalId || "" };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    if (error?.code === "23505") {
+      throw outboundAdminError("ODOO_VEHICLE_MAPPING_CONFLICT", "That unit or Odoo vehicle is already mapped.", 409);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function setOdooOutboundWarehouseMapping(companyId, locationId, input, actor) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const location = await client.query(
+      `select id from locations where company_id = $1 and id = $2 and active = true for update`,
+      [tenantId, locationId],
+    );
+    if (!location.rows[0]) throw new Error("Location was not found for this company.");
+    const previous = await client.query(
+      `select warehouse_external_id from odoo_location_warehouse_mappings
+       where company_id = $1 and location_id = $2 for update`,
+      [tenantId, locationId],
+    );
+    await client.query(
+      `delete from odoo_location_warehouse_mappings where company_id = $1 and location_id = $2`,
+      [tenantId, locationId],
+    );
+    if (input.status === "mapped") {
+      const warehouse = await client.query(
+        `select external_id from odoo_warehouses
+         where company_id = $1 and external_id = $2 and active = true for update`,
+        [tenantId, input.externalId],
+      );
+      if (!warehouse.rows[0]) throw new Error("Active Odoo warehouse was not found.");
+      await client.query(
+        `insert into odoo_location_warehouse_mappings (
+           company_id, location_id, warehouse_external_id, confirmed_by_user_id
+         ) values ($1, $2, $3, $4)`,
+        [tenantId, locationId, input.externalId, actor.userId],
+      );
+    }
+    await appendIntegrationAudit({
+      client, companyId: tenantId, provider: "odoo", action: "outbound.warehouse_mapping_changed",
+      actorType: "user", actorId: actor.userId, targetType: "location", targetId: locationId,
+      requestId: actor.requestId || null,
+      details: { previousExternalId: previous.rows[0]?.warehouse_external_id || "", status: input.status, externalId: input.externalId || "" },
+    });
+    await client.query("commit");
+    return { locationId, status: input.status, externalId: input.externalId || "" };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    if (error?.code === "23505") {
+      throw outboundAdminError("ODOO_WAREHOUSE_MAPPING_CONFLICT", "That Odoo warehouse is already mapped.", 409);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function setOdooOutboundLaborProduct(companyId, productExternalId, actor) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const product = await client.query(
+      `select external_id, uom_external_id, display_name, uom_name, uom_category_name
+       from odoo_service_products
+       where company_id = $1 and external_id = $2 and active = true for update`,
+      [tenantId, productExternalId],
+    );
+    if (!product.rows[0]) throw new Error("Active Odoo service product was not found.");
+    const account = await client.query(
+      `select id from integration_accounts where company_id = $1 and provider = 'odoo' limit 1`,
+      [tenantId],
+    );
+    if (!account.rows[0]) throw new Error("Configure the Odoo connection first.");
+    await client.query(
+      `insert into odoo_service_order_settings (
+         company_id, integration_account_id, labor_product_external_id,
+         labor_uom_external_id, updated_at
+       ) values ($1, $2, $3, $4, now())
+       on conflict (company_id) do update
+       set integration_account_id = excluded.integration_account_id,
+           labor_product_external_id = excluded.labor_product_external_id,
+           labor_uom_external_id = excluded.labor_uom_external_id,
+           active = true, updated_at = now()`,
+      [tenantId, account.rows[0].id, product.rows[0].external_id, product.rows[0].uom_external_id],
+    );
+    await appendIntegrationAudit({
+      client, companyId: tenantId, provider: "odoo", action: "outbound.labor_product_changed",
+      actorType: "user", actorId: actor.userId, targetType: "integration", targetId: "odoo",
+      requestId: actor.requestId || null,
+      details: {
+        productExternalId: product.rows[0].external_id,
+        productName: product.rows[0].display_name,
+        uomName: product.rows[0].uom_name,
+        uomCategoryName: product.rows[0].uom_category_name,
+      },
+    });
+    await client.query("commit");
+    return { productExternalId: product.rows[0].external_id };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function relationId(value) {

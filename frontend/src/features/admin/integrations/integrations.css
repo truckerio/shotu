@@ -78,7 +78,9 @@
 }
 
 .odoo-configuration input,
-.odoo-location-mappings select {
+.odoo-location-mappings select,
+.odoo-outbound-setup input,
+.odoo-outbound-setup select {
   background: #fff;
   border: 1px solid #d0d5dd;
   border-radius: 6px;
@@ -144,6 +146,180 @@
 .odoo-location-list small {
   display: block;
   overflow-wrap: anywhere;
+}
+
+.odoo-outbound-setup {
+  border-top: 1px solid #eaecf0;
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.odoo-outbound-heading {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.odoo-outbound-heading h3,
+.odoo-outbound-group h4 {
+  color: #101828;
+  margin: 0;
+}
+
+.odoo-outbound-heading h3 {
+  font-size: var(--text-heading);
+}
+
+.odoo-outbound-group h4 {
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.odoo-outbound-heading p,
+.odoo-outbound-group > div:first-child > p {
+  color: #667085;
+  font-size: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.odoo-outbound-summary {
+  background: #f8f9fb;
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+}
+
+.odoo-outbound-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.odoo-outbound-summary > div + div {
+  border-left: 1px solid #eaecf0;
+}
+
+.odoo-outbound-summary dt {
+  color: #667085;
+  font-size: var(--text-caption);
+}
+
+.odoo-outbound-summary dd {
+  color: #344054;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.odoo-outbound-summary dd.is-ready {
+  color: #067647;
+}
+
+.odoo-outbound-summary dd.needs-review {
+  color: #b54708;
+}
+
+.odoo-outbound-group {
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.odoo-outbound-list {
+  display: grid;
+  gap: 8px;
+}
+
+.odoo-outbound-row {
+  align-items: center;
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.35fr) auto;
+  padding: 10px;
+}
+
+.odoo-outbound-row.needs-review,
+.odoo-labor-row.needs-review {
+  background: #fffcf5;
+  border-color: #fedf89;
+}
+
+.odoo-outbound-row strong,
+.odoo-outbound-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.odoo-vehicle-choice,
+.odoo-vehicle-choice input {
+  min-width: 0;
+  width: 100%;
+}
+
+.odoo-outbound-row small {
+  color: #667085;
+  font-size: var(--text-caption);
+  margin-top: 3px;
+}
+
+.odoo-outbound-search {
+  display: grid;
+  gap: 6px;
+  max-width: 560px;
+}
+
+.odoo-outbound-search > label {
+  color: #344054;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.odoo-outbound-search > div {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.odoo-labor-row {
+  align-items: center;
+  border: 1px solid #eaecf0;
+  border-radius: 7px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  padding: 10px;
+}
+
+.odoo-outbound-warning {
+  align-items: flex-start;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 7px;
+  color: #93370d;
+  display: flex;
+  font-size: var(--text-secondary);
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.odoo-outbound-warning svg {
+  flex: 0 0 auto;
+  height: 18px;
+  margin-top: 1px;
+  width: 18px;
 }
 
 .odoo-location-list small {
@@ -647,6 +823,40 @@
   }
 
   .odoo-location-mappings select {
+    min-height: 44px;
+  }
+
+  .odoo-outbound-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .odoo-outbound-heading .button,
+  .odoo-outbound-row .button,
+  .odoo-labor-row .button,
+  .odoo-outbound-search .button {
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .odoo-outbound-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .odoo-outbound-summary > div + div {
+    border-left: 0;
+    border-top: 1px solid #eaecf0;
+  }
+
+  .odoo-outbound-row,
+  .odoo-labor-row,
+  .odoo-outbound-search > div {
+    grid-template-columns: 1fr;
+  }
+
+  .odoo-outbound-setup input,
+  .odoo-outbound-setup select {
     min-height: 44px;
   }
 }

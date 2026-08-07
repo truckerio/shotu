@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { OdooClient } from "./odoo.client.js";
-import { odooConfigurationSchema, odooLocationMappingSchema } from "./odoo.admin.schemas.js";
+import {
+  odooConfigurationSchema,
+  odooLocationMappingSchema,
+  odooOutboundLaborProductSchema,
+  odooOutboundInternalIdSchema,
+  odooOutboundVehicleListSchema,
+  odooOutboundProviderVehicleListSchema,
+  odooOutboundVehicleMappingSchema,
+  odooOutboundWarehouseMappingSchema,
+} from "./odoo.admin.schemas.js";
 import { repairTextFromOdooLine } from "./odoo.admin.repo.js";
 import { readOdooServiceHistory } from "./odoo.admin.service.js";
 
@@ -28,6 +37,39 @@ test("Odoo location mapping requires an app location only for mapped state", () 
   assert.throws(() => odooLocationMappingSchema.parse({ status: "mapped" }));
 });
 
+test("Odoo outbound mapping schemas require explicit provider identities", () => {
+  assert.deepEqual(
+    odooOutboundVehicleMappingSchema.parse({ status: "mapped", externalId: "17968" }),
+    { status: "mapped", externalId: "17968" },
+  );
+  assert.deepEqual(
+    odooOutboundWarehouseMappingSchema.parse({ status: "mapped", externalId: "28" }),
+    { status: "mapped", externalId: "28" },
+  );
+  assert.deepEqual(odooOutboundVehicleMappingSchema.parse({ status: "unmatched" }), { status: "unmatched" });
+  assert.throws(() => odooOutboundVehicleMappingSchema.parse({ status: "mapped" }));
+  assert.throws(() => odooOutboundWarehouseMappingSchema.parse({ status: "ignored" }));
+  assert.equal(odooOutboundLaborProductSchema.parse({ productExternalId: "85226" }).productExternalId, "85226");
+});
+
+test("Odoo outbound vehicle query is bounded", () => {
+  assert.deepEqual(odooOutboundVehicleListSchema.parse({}), {
+    status: "all", q: "", limit: 50, cursor: 0,
+  });
+  assert.equal(odooOutboundVehicleListSchema.parse({ limit: "100" }).limit, 100);
+  assert.throws(() => odooOutboundVehicleListSchema.parse({ limit: "101" }));
+  assert.equal(odooOutboundProviderVehicleListSchema.parse({ q: "579", limit: "50" }).limit, 50);
+  assert.throws(() => odooOutboundProviderVehicleListSchema.parse({ limit: "51" }));
+});
+
+test("Odoo outbound mapping paths reject malformed internal IDs before database access", () => {
+  assert.equal(
+    odooOutboundInternalIdSchema.parse("2eb1dbef-94a4-4d6d-a6f1-d813cd45fa60"),
+    "2eb1dbef-94a4-4d6d-a6f1-d813cd45fa60",
+  );
+  assert.throws(() => odooOutboundInternalIdSchema.parse("not-a-uuid"));
+});
+
 test("Odoo client authenticates with an API key and paginates search_read", async () => {
   const calls = [];
   const fetchImpl = async (_url, options) => {
@@ -49,6 +91,22 @@ test("Odoo client authenticates with an API key and paginates search_read", asyn
   assert.equal(records.length, 501);
   assert.equal(calls.filter((call) => call.service === "common").length, 1);
   assert.equal(calls.at(-1).args[6].offset, 500);
+});
+
+test("Odoo client marks a response timeout as an unknown transport outcome", async () => {
+  const abortError = new Error("aborted");
+  abortError.name = "AbortError";
+  const client = new OdooClient({
+    baseUrl: "https://example.odoo.com",
+    database: "production",
+    username: "integration@example.com",
+    apiKey: "long-api-key",
+    fetchImpl: async () => { throw abortError; },
+  });
+  await assert.rejects(
+    () => client.authenticate(),
+    (error) => error.code === "ODOO_CONNECTION_TIMEOUT",
+  );
 });
 
 test("Odoo migration preserves explicit unmatched mapping state and immutable external identity", async () => {
