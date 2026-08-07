@@ -1,79 +1,98 @@
-.odoo-progressive-mapping {
+.odoo-settings-sections {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
-.odoo-progressive-mapping__section {
-  border: 1px solid #eaecf0;
+.odoo-settings-section {
+  background: #fff;
+  border: 1px solid #e4e7ec;
   border-radius: 8px;
   overflow: clip;
 }
 
-.odoo-progressive-mapping__section-header {
-  align-items: flex-start;
-  background: #fff;
-  display: flex;
+.odoo-settings-section > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
   gap: 16px;
-  justify-content: space-between;
-  padding: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  list-style: none;
+  min-height: 72px;
+  padding: 14px 16px;
 }
 
-.odoo-progressive-mapping__step {
-  color: #475467;
-  font-size: var(--text-caption);
-  font-weight: var(--weight-semibold);
-  margin: 0 0 3px;
-  text-transform: uppercase;
+.odoo-settings-section > summary::-webkit-details-marker {
+  display: none;
 }
 
-.odoo-progressive-mapping h4 {
+.odoo-settings-section > summary:hover {
+  background: #f9fafb;
+}
+
+.odoo-settings-section > summary:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: -2px;
+}
+
+.odoo-settings-section__identity strong,
+.odoo-settings-section__identity small {
+  display: block;
+}
+
+.odoo-settings-section__identity strong {
   color: #101828;
   font-size: var(--text-secondary);
   font-weight: var(--weight-semibold);
-  margin: 0;
 }
 
-.odoo-progressive-mapping__section-header p:not(.odoo-progressive-mapping__step),
-.odoo-progressive-mapping__section-header small {
+.odoo-settings-section__identity small {
   color: #667085;
-  display: block;
   font-size: var(--text-caption);
-  margin: 4px 0 0;
+  margin-top: 4px;
 }
 
-.odoo-progressive-mapping__toggle {
+.odoo-settings-section__status {
   align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  color: #344054;
-  cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  font: inherit;
+  display: flex;
+  gap: 8px;
+}
+
+.odoo-settings-section__status > span {
+  background: #f2f4f7;
+  border-radius: 999px;
+  color: #475467;
   font-size: var(--text-caption);
   font-weight: var(--weight-semibold);
-  gap: 5px;
-  min-height: 36px;
-  padding: 6px 8px;
+  padding: 4px 8px;
+  white-space: nowrap;
 }
 
-.odoo-progressive-mapping__toggle:hover,
-.odoo-progressive-mapping__toggle:focus-visible {
-  background: #f2f4f7;
-  outline: none;
+.odoo-settings-section__status > span.needs-review {
+  background: #fffaeb;
+  color: #b54708;
 }
 
-.odoo-progressive-mapping__toggle svg {
-  height: 16px;
-  width: 16px;
+.odoo-settings-section__status > span.is-ready {
+  background: #ecfdf3;
+  color: #027a48;
 }
 
-.odoo-progressive-mapping__panel {
+.odoo-settings-section__status svg {
+  color: #667085;
+  height: 18px;
+  transition: transform 160ms ease;
+  width: 18px;
+}
+
+.odoo-settings-section[open] .odoo-settings-section__status svg {
+  transform: rotate(180deg);
+}
+
+.odoo-settings-section__body {
   border-top: 1px solid #eaecf0;
   display: grid;
   gap: 12px;
-  padding: 14px;
+  padding: 14px 16px 16px;
 }
 
 .odoo-progressive-mapping__searches {
@@ -99,17 +118,16 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.odoo-progressive-mapping input,
-.odoo-progressive-mapping select {
+.odoo-settings-section input,
+.odoo-settings-section select {
   min-width: 0;
   width: 100%;
 }
 
-.odoo-progressive-mapping__list,
 .odoo-progressive-mapping-list {
   display: grid;
   gap: 8px;
-  max-block-size: min(50vh, 540px);
+  max-block-size: min(55vh, 600px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-inline-end: 2px;
@@ -144,13 +162,6 @@
   margin-top: 3px;
 }
 
-.odoo-progressive-mapping__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: space-between;
-}
-
 .odoo-progressive-mapping__empty {
   color: #667085;
   font-size: var(--text-secondary);
@@ -174,8 +185,17 @@
 }
 
 @media (max-width: 560px) {
-  .odoo-progressive-mapping__section-header {
-    gap: 8px;
+  .odoo-settings-section > summary {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .odoo-settings-section__status {
+    flex-wrap: wrap;
+  }
+
+  .odoo-settings-section__status svg {
+    margin-left: auto;
   }
 
   .odoo-progressive-mapping__searches form > div,
@@ -186,10 +206,5 @@
   .odoo-progressive-mapping__row > :nth-child(2) {
     grid-column: auto;
     grid-row: auto;
-  }
-
-  .odoo-progressive-mapping__actions {
-    align-items: stretch;
-    flex-direction: column;
   }
 }

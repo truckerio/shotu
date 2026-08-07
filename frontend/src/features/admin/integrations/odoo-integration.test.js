@@ -7,7 +7,7 @@ test("Odoo settings separates inbound stock locations from explicit outbound set
     readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8"),
     readFile(new URL("./OdooProgressiveMapping.jsx", import.meta.url), "utf8"),
   ]);
-  assert.match(source, /Inbound inventory stock locations/);
+  assert.match(source, /Inventory location mapping/);
   assert.match(source, /Unmatched/);
   assert.match(source, /Ignore this location/);
   assert.match(source, /<option value="">Unmatched<\/option>/);
@@ -19,8 +19,8 @@ test("Odoo settings separates inbound stock locations from explicit outbound set
   assert.match(source, /create\/write access to draft Sales service orders/);
   assert.match(source, /Odoo outbound setup/);
   assert.match(source, /OdooProgressiveMapping/);
-  assert.match(workflow, /Location to warehouse mappings/);
-  assert.match(workflow, /Truck mappings/);
+  assert.match(workflow, /Location mapping/);
+  assert.match(workflow, /Truck mapping/);
   assert.match(source, /Labor product/);
   assert.match(source, /outbound\/readiness/);
   assert.match(source, /outbound\/discover/);
@@ -53,6 +53,7 @@ test("outbound discovery communicates automatic vehicle matching results", async
   assert.match(source, /suggested for review/);
   assert.match(source, /autoMatchedCount/);
   assert.match(source, /vehicleSuggestedCount/);
+  assert.match(source, /const result = await api\("\/api\/integrations\/odoo\/outbound\/discover"/);
 });
 
 test("outbound setup keeps mobile controls at least 44px and reports unsafe labor units", async () => {

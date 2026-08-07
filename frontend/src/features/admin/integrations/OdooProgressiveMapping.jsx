@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import { ChevronDown, ChevronRight } from "@untitledui/icons";
+import { ChevronDown } from "@untitledui/icons";
 import { Button } from "../../../components/ui/Button.jsx";
 import "./odoo-progressive-mapping.css";
 
@@ -8,11 +7,9 @@ function vehicleLabel(asset = {}) {
 }
 
 function vehicleDetails(asset = {}) {
-  return [
-    asset.unitType,
-    asset.vin && `VIN ${asset.vin}`,
-    asset.licensePlate && `Plate ${asset.licensePlate}`,
-  ].filter(Boolean).join(" · ");
+  return [asset.unitType, asset.vin && `VIN ${asset.vin}`, asset.licensePlate && `Plate ${asset.licensePlate}`]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function warehouseLabel(warehouse = {}) {
@@ -33,24 +30,17 @@ function vehicleHelper(item, status, vehicleSuggestionLabel) {
   return "Search Odoo above, choose a result, or enter the exact Odoo vehicle ID.";
 }
 
-/**
- * Presentational workflow for outbound Odoo mapping.
- *
- * All drafts and persistence callbacks remain owned by the parent. Collapsed
- * panels use `hidden`, rather than conditional rendering, so field values are
- * never destroyed while an admin moves between mapping steps.
- */
 export function OdooProgressiveMapping({
   vehicles = [],
+  vehicleSummary = null,
   vehicleDrafts = {},
   odooVehicleOptions = [],
   vehicleQuery = "",
   odooVehicleQuery = "",
   warehouses = [],
+  warehouseSummary = null,
   warehouseOptions = [],
   warehouseDrafts = {},
-  vehicleSummary = "",
-  warehouseSummary = "",
   busyKey = "",
   vehicleNextCursor = null,
   onVehicleQueryChange,
@@ -64,46 +54,30 @@ export function OdooProgressiveMapping({
   onConfirmWarehouse,
   vehicleSuggestionLabel = (basis) => basis || "matching",
 }) {
-  const [activeStep, setActiveStep] = useState("vehicles");
-  const [vehiclesExpanded, setVehiclesExpanded] = useState(true);
-  const [warehouseExpanded, setWarehouseExpanded] = useState(false);
-  const warehouseHeadingRef = useRef(null);
-  const vehicleNeedsReview = vehicles.filter((item) => !["mapped", "ignored"].includes(item.mappingStatus || item.status)).length;
-  const warehouseNeedsReview = warehouses.filter((item) => (item.mappingStatus || item.status) !== "mapped").length;
-  const vehicleConfirmed = vehicles.filter((item) => (item.mappingStatus || item.status) === "mapped").length;
-  const warehouseConfirmed = warehouses.filter((item) => (item.mappingStatus || item.status) === "mapped").length;
-  const vehicleCountLabel = vehicleSummary || `${vehicleConfirmed} confirmed`;
-  const warehouseCountLabel = warehouseSummary || `${warehouseConfirmed} confirmed`;
-
-  function revealWarehouses() {
-    setActiveStep("warehouses");
-    setWarehouseExpanded(true);
-    requestAnimationFrame(() => warehouseHeadingRef.current?.focus());
-  }
+  const vehicleNeedsReview = vehicleSummary?.unresolvedCount
+    ?? vehicles.filter((item) => !["mapped", "ignored"].includes(item.mappingStatus || item.status)).length;
+  const warehouseNeedsReview = warehouseSummary?.unresolvedCount
+    ?? warehouses.filter((item) => (item.mappingStatus || item.status) !== "mapped").length;
+  const vehicleConfirmed = vehicleSummary?.confirmedCount
+    ?? vehicles.filter((item) => (item.mappingStatus || item.status) === "mapped").length;
+  const warehouseConfirmed = warehouseSummary?.confirmedCount
+    ?? warehouses.filter((item) => (item.mappingStatus || item.status) === "mapped").length;
 
   return (
-    <section className="odoo-progressive-mapping" aria-label="Outbound Odoo mappings">
-      <section className="odoo-progressive-mapping__section" aria-labelledby="odoo-progressive-vehicle-heading" data-active={activeStep === "vehicles"}>
-        <div className="odoo-progressive-mapping__section-header">
-          <div>
-            <p className="odoo-progressive-mapping__step">Step 1</p>
-            <h4 id="odoo-progressive-vehicle-heading">Truck mappings</h4>
-            <p>Confirm the exact Odoo vehicle for each app unit.</p>
-            <small>{vehicleCountLabel} · Needs review: {vehicleNeedsReview}</small>
-          </div>
-          <button
-            aria-controls="odoo-progressive-vehicle-panel"
-            aria-expanded={vehiclesExpanded}
-            className="odoo-progressive-mapping__toggle"
-            onClick={() => { setActiveStep("vehicles"); setVehiclesExpanded((expanded) => !expanded); }}
-            type="button"
-          >
-            {vehiclesExpanded ? "Collapse" : "Show trucks"}
-            {vehiclesExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-          </button>
-        </div>
-
-        <div className="odoo-progressive-mapping__panel" hidden={!vehiclesExpanded} id="odoo-progressive-vehicle-panel">
+    <div className="odoo-settings-sections" aria-label="Odoo mapping settings">
+      <details className="odoo-settings-section">
+        <summary>
+          <span className="odoo-settings-section__identity">
+            <strong>Truck mapping</strong>
+            <small>Match app units to their Odoo vehicles.</small>
+          </span>
+          <span className="odoo-settings-section__status">
+            <span>{vehicleConfirmed} mapped</span>
+            <span className={vehicleNeedsReview ? "needs-review" : "is-ready"}>{vehicleNeedsReview} need review</span>
+            <ChevronDown aria-hidden="true" />
+          </span>
+        </summary>
+        <div className="odoo-settings-section__body">
           <div className="odoo-progressive-mapping__searches">
             <form onSubmit={(event) => { event.preventDefault(); onVehicleSearch?.(); }}>
               <label htmlFor="odoo-progressive-vehicle-search">Find app unit</label>
@@ -121,7 +95,7 @@ export function OdooProgressiveMapping({
             </form>
           </div>
 
-          <div className="odoo-progressive-mapping__list odoo-progressive-mapping-list" aria-label="Truck mapping list">
+          <div className="odoo-progressive-mapping-list" aria-label="Truck mapping list">
             {vehicles.map((item) => {
               const asset = item.asset || item;
               const status = item.mappingStatus || item.status;
@@ -155,35 +129,24 @@ export function OdooProgressiveMapping({
             })}
             {!vehicles.length ? <p className="odoo-progressive-mapping__empty">No truck mappings match this view.</p> : null}
           </div>
-          <div className="odoo-progressive-mapping__actions">
-            {vehicleNextCursor ? <Button onClick={() => onLoadMoreVehicles?.()}>Load more trucks</Button> : null}
-            <Button onClick={revealWarehouses} variant="secondary">Continue to location mapping</Button>
-          </div>
+          {vehicleNextCursor ? <Button onClick={() => onLoadMoreVehicles?.()}>Load more trucks</Button> : null}
         </div>
-      </section>
+      </details>
 
-      <section className="odoo-progressive-mapping__section" aria-labelledby="odoo-progressive-warehouse-heading" data-active={activeStep === "warehouses"}>
-        <div className="odoo-progressive-mapping__section-header">
-          <div>
-            <p className="odoo-progressive-mapping__step">Step 2</p>
-            <h4 id="odoo-progressive-warehouse-heading" ref={warehouseHeadingRef} tabIndex="-1">Location to warehouse mappings</h4>
-            <p>Choose the Odoo warehouse for each app location. Each warehouse can be used once.</p>
-            <small>{warehouseCountLabel} · Needs review: {warehouseNeedsReview}</small>
-          </div>
-          <button
-            aria-controls="odoo-progressive-warehouse-panel"
-            aria-expanded={warehouseExpanded}
-            className="odoo-progressive-mapping__toggle"
-            onClick={() => { setActiveStep("warehouses"); setWarehouseExpanded((current) => !current); }}
-            type="button"
-          >
-            {warehouseExpanded ? "Collapse" : "Show locations"}
-            {warehouseExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-          </button>
-        </div>
-
-        <div className="odoo-progressive-mapping__panel" hidden={!warehouseExpanded} id="odoo-progressive-warehouse-panel">
-          <div className="odoo-progressive-mapping__list odoo-progressive-mapping-list" aria-label="Location to warehouse mapping list">
+      <details className="odoo-settings-section">
+        <summary>
+          <span className="odoo-settings-section__identity">
+            <strong>Location mapping</strong>
+            <small>Connect each app location to its Odoo warehouse.</small>
+          </span>
+          <span className="odoo-settings-section__status">
+            <span>{warehouseConfirmed} mapped</span>
+            <span className={warehouseNeedsReview ? "needs-review" : "is-ready"}>{warehouseNeedsReview} need review</span>
+            <ChevronDown aria-hidden="true" />
+          </span>
+        </summary>
+        <div className="odoo-settings-section__body">
+          <div className="odoo-progressive-mapping-list" aria-label="Location to warehouse mapping list">
             {warehouses.map((item) => {
               const location = item.location || item;
               const currentValue = warehouseDrafts[location.id] ?? item.mapping?.externalId ?? "";
@@ -199,10 +162,10 @@ export function OdooProgressiveMapping({
                 </div>
               );
             })}
-            {!warehouses.length ? <p className="odoo-progressive-mapping__empty">No app locations are available for outbound warehouse matching.</p> : null}
+            {!warehouses.length ? <p className="odoo-progressive-mapping__empty">No app locations are available for warehouse matching.</p> : null}
           </div>
         </div>
-      </section>
-    </section>
+      </details>
+    </div>
   );
 }

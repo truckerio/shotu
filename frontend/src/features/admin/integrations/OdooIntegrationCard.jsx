@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle, RefreshCw01, Settings01 } from "@untitledui/icons";
+import { AlertCircle, CheckCircle, ChevronDown, RefreshCw01, Settings01 } from "@untitledui/icons";
 import { Button } from "../../../components/ui/Button.jsx";
 import { api } from "../../../lib/api.js";
 import { OdooProgressiveMapping } from "./OdooProgressiveMapping.jsx";
@@ -164,7 +164,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
     setBusy("discover-outbound");
     setNotice({ error: "", message: "" });
     try {
-      await api("/api/integrations/odoo/outbound/discover", {
+      const result = await api("/api/integrations/odoo/outbound/discover", {
         method: "POST",
         body: "{}",
         timeoutMs: 120_000,
@@ -339,32 +339,53 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
             vehicleNextCursor={vehicleData.nextCursor}
             vehicleQuery={vehicleQuery}
             vehicleSuggestionLabel={vehicleSuggestionLabel}
+            vehicleSummary={outbound.vehicles}
             vehicles={vehicleData.items}
             warehouseDrafts={warehouseDrafts}
             warehouseOptions={outbound.warehouses?.available || []}
+            warehouseSummary={outbound.warehouses}
             warehouses={outbound.warehouses?.items || []}
           />
 
-          <div className="odoo-outbound-group" aria-labelledby="odoo-labor-heading">
-            <div><h4 id="odoo-labor-heading">Labor product</h4><p>Choose the service product that will carry the work-performed description.</p></div>
-            <div className={`odoo-labor-row ${outbound.labor?.status === "ready" ? "" : "needs-review"}`}>
-              <select aria-label="Odoo labor product" value={laborProductDraft} disabled={busy === "labor-product"} onChange={(event) => setLaborProductDraft(event.target.value)}>
-                <option value="">Not selected</option>
-                {(outbound.labor?.products || outbound.laborProducts || []).map((product) => <option key={product.externalId} value={product.externalId}>{product.code ? `[${product.code}] ` : ""}{product.name} · {product.uomName || "Unknown UoM"}</option>)}
-              </select>
-              <Button onClick={confirmLaborProduct} disabled={!laborProductDraft || busy === "labor-product"}>Confirm labor product</Button>
+          <details className="odoo-settings-section">
+            <summary>
+              <span className="odoo-settings-section__identity">
+                <strong>Labor product</strong>
+                <small>Choose the service product used for work performed.</small>
+              </span>
+              <span className="odoo-settings-section__status">
+                <span className={outbound.labor?.status === "ready" ? "is-ready" : "needs-review"}>{outbound.labor?.status === "ready" ? "Ready" : "Needs setup"}</span>
+                <ChevronDown aria-hidden="true" />
+              </span>
+            </summary>
+            <div className="odoo-settings-section__body">
+              <div className={`odoo-labor-row ${outbound.labor?.status === "ready" ? "" : "needs-review"}`}>
+                <select aria-label="Odoo labor product" value={laborProductDraft} disabled={busy === "labor-product"} onChange={(event) => setLaborProductDraft(event.target.value)}>
+                  <option value="">Not selected</option>
+                  {(outbound.labor?.products || outbound.laborProducts || []).map((product) => <option key={product.externalId} value={product.externalId}>{product.code ? `[${product.code}] ` : ""}{product.name} · {product.uomName || "Unknown UoM"}</option>)}
+                </select>
+                <Button onClick={confirmLaborProduct} disabled={!laborProductDraft || busy === "labor-product"}>Confirm labor product</Button>
+              </div>
+              {outbound.labor?.status === "uom_warning" ? <p className="odoo-outbound-warning" role="alert"><AlertCircle /> <span>{outbound.labor.warning || `The selected labor product uses ${outbound.labor.uomName || "an unknown unit"}, not a verified time UoM. Outbound entry remains disabled.`}</span></p> : null}
             </div>
-            {outbound.labor?.status === "uom_warning" ? <p className="odoo-outbound-warning" role="alert"><AlertCircle /> <span>{outbound.labor.warning || `The selected labor product uses ${outbound.labor.uomName || "an unknown unit"}, not a verified time UoM. Outbound entry remains disabled.`}</span></p> : null}
-          </div>
+          </details>
         </section>
       ) : null}
 
       {connected && mappingData.items.length ? (
-        <details className="odoo-location-mappings odoo-location-mappings--progressive">
+        <details className="odoo-settings-section odoo-settings-section--inventory">
           <summary>
-            <span><strong>Inbound inventory stock locations</strong><small>{inboundMapped} mapped · {inboundNeedsReview} need review</small></span>
+            <span className="odoo-settings-section__identity">
+              <strong>Inventory location mapping</strong>
+              <small>Connect Odoo stock locations to receiving app locations.</small>
+            </span>
+            <span className="odoo-settings-section__status">
+              <span>{inboundMapped} mapped</span>
+              <span className={inboundNeedsReview ? "needs-review" : "is-ready"}>{inboundNeedsReview} need review</span>
+              <ChevronDown aria-hidden="true" />
+            </span>
           </summary>
-          <div className="odoo-location-mappings__body">
+          <div className="odoo-settings-section__body">
             <p>Map Odoo stock locations to the app locations that receive their inventory balances.</p>
             <div className="odoo-location-list">
               {mappingData.items.map((item) => (

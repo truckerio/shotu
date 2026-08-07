@@ -110,49 +110,7 @@
   padding-top: 18px;
 }
 
-.odoo-location-mappings--progressive > summary {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  list-style: none;
-  min-height: 44px;
-  padding: 8px 2px;
-}
-
-.odoo-location-mappings--progressive > summary::-webkit-details-marker {
-  display: none;
-}
-
-.odoo-location-mappings--progressive > summary::after {
-  color: #344054;
-  content: "Show locations";
-  font-size: var(--text-caption);
-  font-weight: var(--weight-semibold);
-  margin-left: 16px;
-}
-
-.odoo-location-mappings--progressive[open] > summary::after {
-  content: "Hide locations";
-}
-
-.odoo-location-mappings--progressive > summary strong,
-.odoo-location-mappings--progressive > summary small {
-  display: block;
-}
-
-.odoo-location-mappings--progressive > summary strong {
-  color: #101828;
-  font-size: var(--text-heading);
-}
-
-.odoo-location-mappings--progressive > summary small {
-  color: #667085;
-  font-size: var(--text-caption);
-  margin-top: 3px;
-}
-
-.odoo-location-mappings--progressive .odoo-location-list {
+.odoo-settings-section--inventory .odoo-location-list {
   max-block-size: min(50vh, 540px);
   overflow-y: auto;
   overscroll-behavior: contain;
