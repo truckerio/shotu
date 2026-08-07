@@ -73,7 +73,7 @@ export function OdooProgressiveMapping({
           </span>
           <span className="odoo-settings-section__status">
             <span>{vehicleConfirmed} mapped</span>
-            <span className={vehicleNeedsReview ? "needs-review" : "is-ready"}>{vehicleNeedsReview} need review</span>
+            <span className={vehicleNeedsReview ? "needs-review" : "is-ready"}>{vehicleNeedsReview ? `${vehicleNeedsReview} to review` : "Ready"}</span>
             <ChevronDown aria-hidden="true" />
           </span>
         </summary>
@@ -141,7 +141,7 @@ export function OdooProgressiveMapping({
           </span>
           <span className="odoo-settings-section__status">
             <span>{warehouseConfirmed} mapped</span>
-            <span className={warehouseNeedsReview ? "needs-review" : "is-ready"}>{warehouseNeedsReview} need review</span>
+            <span className={warehouseNeedsReview ? "needs-review" : "is-ready"}>{warehouseNeedsReview ? `${warehouseNeedsReview} to review` : "Ready"}</span>
             <ChevronDown aria-hidden="true" />
           </span>
         </summary>

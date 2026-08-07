@@ -381,7 +381,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
             </span>
             <span className="odoo-settings-section__status">
               <span>{inboundMapped} mapped</span>
-              <span className={inboundNeedsReview ? "needs-review" : "is-ready"}>{inboundNeedsReview} need review</span>
+              <span className={inboundNeedsReview ? "needs-review" : "is-ready"}>{inboundNeedsReview ? `${inboundNeedsReview} to review` : "Ready"}</span>
               <ChevronDown aria-hidden="true" />
             </span>
           </summary>

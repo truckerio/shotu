@@ -24,7 +24,7 @@ test("Odoo mappings use independent settings sections instead of a sequential wo
 test("progressive Odoo mapping exposes review counts and a bounded mapping viewport", async () => {
   const [source, styles] = await Promise.all([readWorkflow(), readFile(stylesUrl, "utf8")]);
 
-  assert.match(source, /need review/);
+  assert.match(source, /to review/);
   assert.match(source, /mapped/);
   assert.match(source, /odoo-progressive-mapping-list/);
   assert.match(styles, /\.odoo-progressive-mapping-list[\s\S]*max-(?:block-)?size:/);
@@ -50,7 +50,16 @@ test("outbound trucks lead the page and inbound inventory locations stay progres
   assert.match(card, /<details className="odoo-settings-section odoo-settings-section--inventory">/);
   assert.doesNotMatch(card, /<details className="odoo-settings-section odoo-settings-section--inventory" open/);
   assert.match(card, /\{inboundMapped\} mapped/);
-  assert.match(card, /\{inboundNeedsReview\} need review/);
+  assert.match(card, /inboundNeedsReview.*to review/);
   assert.match(styles, /\.odoo-settings-section--inventory \.odoo-location-list[\s\S]*max-block-size:/);
   assert.match(styles, /\.odoo-settings-section--inventory \.odoo-location-list[\s\S]*overflow-y:\s*auto/);
+});
+
+test("mapping settings use the product's compact flat section treatment", async () => {
+  const styles = await readFile(stylesUrl, "utf8");
+
+  assert.match(styles, /\.odoo-settings-section > summary[\s\S]*min-height:\s*56px/);
+  assert.match(styles, /\.odoo-settings-section__status > span[\s\S]*color:\s*#667085/);
+  assert.match(styles, /\.odoo-progressive-mapping__row[\s\S]*border-bottom:\s*1px solid #eaecf0/);
+  assert.doesNotMatch(styles, /box-shadow/);
 });

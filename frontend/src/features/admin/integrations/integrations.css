@@ -111,10 +111,28 @@
 }
 
 .odoo-settings-section--inventory .odoo-location-list {
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  gap: 0;
   max-block-size: min(50vh, 540px);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-inline-end: 2px;
+}
+
+.odoo-settings-section--inventory {
+  margin-top: 8px;
+}
+
+.odoo-settings-section--inventory .odoo-location-list label {
+  border: 0;
+  border-bottom: 1px solid #eaecf0;
+  border-radius: 0;
+  padding: 9px 10px;
+}
+
+.odoo-settings-section--inventory .odoo-location-list label:last-child {
+  border-bottom: 0;
 }
 
 .odoo-location-mappings h3 {
