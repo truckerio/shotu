@@ -56,10 +56,28 @@ test("Odoo outbound vehicle query is bounded", () => {
   assert.deepEqual(odooOutboundVehicleListSchema.parse({}), {
     status: "all", q: "", limit: 50, cursor: 0,
   });
+  assert.equal(odooOutboundVehicleListSchema.parse({ status: "suggested" }).status, "suggested");
   assert.equal(odooOutboundVehicleListSchema.parse({ limit: "100" }).limit, 100);
   assert.throws(() => odooOutboundVehicleListSchema.parse({ limit: "101" }));
   assert.equal(odooOutboundProviderVehicleListSchema.parse({ q: "579", limit: "50" }).limit, 50);
   assert.throws(() => odooOutboundProviderVehicleListSchema.parse({ limit: "51" }));
+});
+
+test("Odoo outbound discovery auto-matches only deterministic vehicle identities", async () => {
+  const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
+  const service = await readFile(new URL("./odoo.admin.service.js", import.meta.url), "utf8");
+  const routes = await readFile(new URL("../../routes/integrations.routes.js", import.meta.url), "utf8");
+
+  assert.match(repository, /autoMatchOdooOutboundVehiclesInTransaction/);
+  assert.match(repository, /for \(const basis of \["vin", "license_plate"\]\)/);
+  assert.match(repository, /asset_match_count = 1 and vehicle_match_count = 1/);
+  assert.match(repository, /mapping_status = 'mapped'/);
+  assert.match(repository, /mapping_status = 'suggested'/);
+  assert.match(repository, /suggestion_basis = 'unit_number'/);
+  assert.match(repository, /suggestion_basis = 'license_plate_vin_conflict'/);
+  assert.match(repository, /outbound\.vehicle_auto_match_completed/);
+  assert.match(service, /upsertOdooOutboundDiscovery\(companyId, \{ vehicles, warehouses, serviceProducts, uoms, actor \}\)/);
+  assert.match(routes, /discoverOdooOutbound\(companyId, \{[\s\S]*userId: requestContext\.actor\.id/);
 });
 
 test("Odoo outbound mapping paths reject malformed internal IDs before database access", () => {

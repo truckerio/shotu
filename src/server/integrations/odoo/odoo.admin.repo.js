@@ -299,6 +299,7 @@ export async function upsertOdooOutboundDiscovery(companyId, discovery) {
        where company_id = $1 and not (external_id = any($2::text[]))`,
       [tenantId, serviceProducts.map((item) => item.external_id)],
     );
+    const autoMatch = await autoMatchOdooOutboundVehiclesInTransaction(client, tenantId, discovery.actor);
     await appendIntegrationAudit({
       client,
       companyId: tenantId,
@@ -311,16 +312,250 @@ export async function upsertOdooOutboundDiscovery(companyId, discovery) {
         vehicleCount: vehicles.length,
         warehouseCount: warehouses.length,
         serviceProductCount: serviceProducts.length,
+        vehicleAutoMatchedCount: autoMatch.matchedCount,
+        vehicleSuggestedCount: autoMatch.suggestedCount,
       },
     });
     await client.query("commit");
-    return { vehicleCount: vehicles.length, warehouseCount: warehouses.length, serviceProductCount: serviceProducts.length };
+    return {
+      vehicleCount: vehicles.length,
+      warehouseCount: warehouses.length,
+      serviceProductCount: serviceProducts.length,
+      vehicleAutoMatchedCount: autoMatch.matchedCount,
+      vehicleSuggestedCount: autoMatch.suggestedCount,
+    };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;
   } finally {
     client.release();
   }
+}
+
+async function autoMatchOdooOutboundVehiclesInTransaction(client, companyId, actor) {
+  const tenantId = requireCompanyId(companyId);
+  await client.query(
+    `update odoo_vehicles
+     set suggested_asset_id = null,
+         suggestion_basis = '',
+         mapping_status = 'unmatched',
+         updated_at = now()
+     where company_id = $1 and mapping_status = 'suggested'`,
+    [tenantId],
+  );
+
+  let matchedCount = 0;
+  const matchBasisCounts = {};
+  if (actor?.userId) {
+    for (const basis of ["vin", "license_plate"]) {
+      const result = await client.query(
+        `with asset_identity as (
+           select asset.id asset_id,
+                  upper(regexp_replace(coalesce(asset.vin, ''), '[^A-Za-z0-9]', '', 'g')) vin_key,
+                  upper(regexp_replace(coalesce(asset.license_plate, ''), '[^A-Za-z0-9]', '', 'g')) plate_key
+           from assets asset
+           where asset.company_id = $1
+             and not exists (
+               select 1 from odoo_vehicles mapped
+               where mapped.company_id = asset.company_id
+                 and mapped.app_asset_id = asset.id
+                 and mapped.mapping_status = 'mapped'
+             )
+             and not exists (
+               select 1 from integration_mappings exclusion
+               where exclusion.company_id = asset.company_id
+                 and exclusion.provider = 'odoo'
+                 and exclusion.entity_type = 'vehicle_exclusion'
+                 and exclusion.internal_id = asset.id::text
+                 and exclusion.status = 'disabled'
+             )
+         ),
+         vehicle_identity as (
+           select vehicle.external_id,
+                  upper(regexp_replace(coalesce(vehicle.vin, ''), '[^A-Za-z0-9]', '', 'g')) vin_key,
+                  upper(regexp_replace(coalesce(vehicle.license_plate, ''), '[^A-Za-z0-9]', '', 'g')) plate_key
+           from odoo_vehicles vehicle
+           where vehicle.company_id = $1
+             and vehicle.active
+             and vehicle.mapping_status in ('unmatched', 'suggested')
+         ),
+         candidates as (
+           select asset.asset_id, vehicle.external_id,
+                  count(*) over (partition by asset.asset_id) asset_match_count,
+                  count(*) over (partition by vehicle.external_id) vehicle_match_count
+           from asset_identity asset
+           join vehicle_identity vehicle
+             on case when $3 = 'vin'
+                  then asset.vin_key <> '' and asset.vin_key = vehicle.vin_key
+                  else asset.plate_key <> '' and asset.plate_key = vehicle.plate_key
+                    and (asset.vin_key = '' or vehicle.vin_key = '' or asset.vin_key = vehicle.vin_key)
+                end
+         ),
+         unique_candidates as (
+           select asset_id, external_id
+           from candidates
+           where asset_match_count = 1 and vehicle_match_count = 1
+         )
+         update odoo_vehicles vehicle
+         set app_asset_id = unique_candidates.asset_id,
+             suggested_asset_id = null,
+             suggestion_basis = '',
+             mapping_status = 'mapped',
+             confirmed_by_user_id = $2,
+             confirmed_at = now(),
+             updated_at = now()
+         from unique_candidates
+         where vehicle.company_id = $1
+           and vehicle.external_id = unique_candidates.external_id
+           and vehicle.mapping_status in ('unmatched', 'suggested')
+         returning vehicle.external_id`,
+        [tenantId, actor.userId, basis],
+      );
+      matchedCount += result.rowCount;
+      matchBasisCounts[basis] = result.rowCount;
+    }
+  }
+
+  const plateConflictSuggestions = await client.query(
+    `with asset_identity as (
+       select asset.id asset_id,
+              upper(regexp_replace(coalesce(asset.vin, ''), '[^A-Za-z0-9]', '', 'g')) vin_key,
+              upper(regexp_replace(coalesce(asset.license_plate, ''), '[^A-Za-z0-9]', '', 'g')) plate_key
+       from assets asset
+       where asset.company_id = $1
+         and not exists (
+           select 1 from odoo_vehicles mapped
+           where mapped.company_id = asset.company_id
+             and mapped.app_asset_id = asset.id
+             and mapped.mapping_status = 'mapped'
+         )
+         and not exists (
+           select 1 from integration_mappings exclusion
+           where exclusion.company_id = asset.company_id
+             and exclusion.provider = 'odoo'
+             and exclusion.entity_type = 'vehicle_exclusion'
+             and exclusion.internal_id = asset.id::text
+             and exclusion.status = 'disabled'
+         )
+     ),
+     vehicle_identity as (
+       select vehicle.external_id,
+              upper(regexp_replace(coalesce(vehicle.vin, ''), '[^A-Za-z0-9]', '', 'g')) vin_key,
+              upper(regexp_replace(coalesce(vehicle.license_plate, ''), '[^A-Za-z0-9]', '', 'g')) plate_key
+       from odoo_vehicles vehicle
+       where vehicle.company_id = $1
+         and vehicle.active
+         and vehicle.mapping_status = 'unmatched'
+     ),
+     candidates as (
+       select asset.asset_id, vehicle.external_id,
+              count(*) over (partition by asset.asset_id) asset_match_count,
+              count(*) over (partition by vehicle.external_id) vehicle_match_count
+       from asset_identity asset
+       join vehicle_identity vehicle
+         on asset.plate_key <> '' and asset.plate_key = vehicle.plate_key
+        and asset.vin_key <> '' and vehicle.vin_key <> '' and asset.vin_key <> vehicle.vin_key
+     ),
+     unique_candidates as (
+       select asset_id, external_id
+       from candidates
+       where asset_match_count = 1 and vehicle_match_count = 1
+     )
+     update odoo_vehicles vehicle
+     set suggested_asset_id = unique_candidates.asset_id,
+         suggestion_basis = 'license_plate_vin_conflict',
+         mapping_status = 'suggested',
+         updated_at = now()
+     from unique_candidates
+     where vehicle.company_id = $1
+       and vehicle.external_id = unique_candidates.external_id
+       and vehicle.mapping_status = 'unmatched'
+     returning vehicle.external_id`,
+    [tenantId],
+  );
+
+  const unitSuggestions = await client.query(
+    `with asset_identity as (
+       select asset.id asset_id,
+              upper(regexp_replace(coalesce(asset.unit_no, asset.name, ''), '[^A-Za-z0-9]', '', 'g')) unit_key,
+              upper(regexp_replace(coalesce(asset.vin, ''), '[^A-Za-z0-9]', '', 'g')) vin_key,
+              upper(regexp_replace(coalesce(asset.license_plate, ''), '[^A-Za-z0-9]', '', 'g')) plate_key
+       from assets asset
+       where asset.company_id = $1
+         and not exists (
+           select 1 from odoo_vehicles mapped
+           where mapped.company_id = asset.company_id
+             and mapped.app_asset_id = asset.id
+             and mapped.mapping_status = 'mapped'
+         )
+         and not exists (
+           select 1 from integration_mappings exclusion
+           where exclusion.company_id = asset.company_id
+             and exclusion.provider = 'odoo'
+             and exclusion.entity_type = 'vehicle_exclusion'
+             and exclusion.internal_id = asset.id::text
+             and exclusion.status = 'disabled'
+         )
+     ),
+     vehicle_identity as (
+       select vehicle.external_id,
+              upper(regexp_replace(coalesce(vehicle.unit_number, vehicle.display_name, ''), '[^A-Za-z0-9]', '', 'g')) unit_key,
+              upper(regexp_replace(coalesce(vehicle.vin, ''), '[^A-Za-z0-9]', '', 'g')) vin_key,
+              upper(regexp_replace(coalesce(vehicle.license_plate, ''), '[^A-Za-z0-9]', '', 'g')) plate_key
+       from odoo_vehicles vehicle
+       where vehicle.company_id = $1
+         and vehicle.active
+         and vehicle.mapping_status = 'unmatched'
+     ),
+     candidates as (
+       select asset.asset_id, vehicle.external_id,
+              count(*) over (partition by asset.asset_id) asset_match_count,
+              count(*) over (partition by vehicle.external_id) vehicle_match_count
+       from asset_identity asset
+       join vehicle_identity vehicle
+         on asset.unit_key <> '' and asset.unit_key = vehicle.unit_key
+        and (asset.vin_key = '' or vehicle.vin_key = '' or asset.vin_key = vehicle.vin_key)
+        and (asset.plate_key = '' or vehicle.plate_key = '' or asset.plate_key = vehicle.plate_key)
+     ),
+     unique_candidates as (
+       select asset_id, external_id
+       from candidates
+       where asset_match_count = 1 and vehicle_match_count = 1
+     )
+     update odoo_vehicles vehicle
+     set suggested_asset_id = unique_candidates.asset_id,
+         suggestion_basis = 'unit_number',
+         mapping_status = 'suggested',
+         updated_at = now()
+     from unique_candidates
+     where vehicle.company_id = $1
+       and vehicle.external_id = unique_candidates.external_id
+       and vehicle.mapping_status = 'unmatched'
+     returning vehicle.external_id`,
+    [tenantId],
+  );
+
+  const suggestedCount = plateConflictSuggestions.rowCount + unitSuggestions.rowCount;
+
+  if (matchedCount || suggestedCount) {
+    await appendIntegrationAudit({
+      client,
+      companyId: tenantId,
+      provider: "odoo",
+      action: "outbound.vehicle_auto_match_completed",
+      actorType: actor?.userId ? "user" : "system",
+      actorId: actor?.userId || null,
+      targetType: "integration",
+      targetId: "odoo",
+      requestId: actor?.requestId || null,
+      details: {
+        matchedCount,
+        suggestedCount,
+        matchBasisCounts,
+      },
+    });
+  }
+  return { matchedCount, suggestedCount, matchBasisCounts };
 }
 
 export async function listOdooOutboundAdminReadiness(companyId) {
@@ -330,6 +565,8 @@ export async function listOdooOutboundAdminReadiness(companyId) {
       `select
          (select count(*)::int from odoo_vehicles vehicle
           where vehicle.company_id = $1 and vehicle.mapping_status = 'mapped' and vehicle.active) confirmed_vehicles,
+         (select count(*)::int from odoo_vehicles vehicle
+          where vehicle.company_id = $1 and vehicle.mapping_status = 'suggested' and vehicle.active) suggested_vehicles,
          (select count(*)::int from assets asset where asset.company_id = $1) total_assets,
          (select count(*)::int from assets asset
           where asset.company_id = $1 and exists (
@@ -405,6 +642,7 @@ export async function listOdooOutboundAdminReadiness(companyId) {
     && /time/i.test(String(labor.uom_category_name || "")),
   );
   const confirmedVehicles = Number(summary.rows[0]?.confirmed_vehicles || 0);
+  const suggestedVehicles = Number(summary.rows[0]?.suggested_vehicles || 0);
   const totalAssets = Number(summary.rows[0]?.total_assets || 0);
   const ignoredAssets = Number(summary.rows[0]?.ignored_assets || 0);
   const confirmedWarehouses = locationRows.filter((row) => row.warehouse_external_id && row.warehouse_active).length;
@@ -414,6 +652,7 @@ export async function listOdooOutboundAdminReadiness(companyId) {
       && laborReady ? "ready" : "needs_setup",
     vehicles: {
       confirmedCount: confirmedVehicles,
+      suggestedCount: suggestedVehicles,
       ignoredCount: ignoredAssets,
       unresolvedCount: Math.max(0, totalAssets - confirmedVehicles - ignoredAssets),
     },
@@ -475,6 +714,9 @@ export async function listOdooOutboundVehicleMappings(companyId, input) {
        left join odoo_vehicles mapped
          on mapped.company_id = asset.company_id and mapped.app_asset_id = asset.id
         and mapped.mapping_status = 'mapped'
+       left join odoo_vehicles suggested
+         on suggested.company_id = asset.company_id and suggested.suggested_asset_id = asset.id
+        and suggested.mapping_status = 'suggested'
        left join integration_mappings exclusion
          on exclusion.company_id = asset.company_id and exclusion.provider = 'odoo'
         and exclusion.entity_type = 'vehicle_exclusion'
@@ -483,18 +725,24 @@ export async function listOdooOutboundVehicleMappings(companyId, input) {
          and ($2 = '' or concat_ws(' ', asset.unit_no, asset.name, asset.vin, asset.license_plate) ilike '%' || $2 || '%')
          and ($3 = 'all'
            or ($3 = 'mapped' and mapped.id is not null)
+           or ($3 = 'suggested' and suggested.id is not null)
            or ($3 = 'ignored' and exclusion.id is not null)
-           or ($3 = 'unmatched' and mapped.id is null and exclusion.id is null))
+           or ($3 = 'unmatched' and mapped.id is null and suggested.id is null and exclusion.id is null))
        order by coalesce(asset.unit_no, asset.name, ''), asset.id
        limit $4 offset $5
      )
      select page.*,
             mapped.external_id mapped_external_id, mapped.display_name mapped_display_name,
+            suggested.external_id suggested_external_id,
+            suggested.display_name suggested_display_name,
+            suggested.suggestion_basis,
             exclusion.id exclusion_id,
             coalesce(candidates.items, '[]'::jsonb) candidates
      from page
      left join odoo_vehicles mapped
        on mapped.company_id = $1 and mapped.app_asset_id = page.id and mapped.mapping_status = 'mapped'
+     left join odoo_vehicles suggested
+       on suggested.company_id = $1 and suggested.suggested_asset_id = page.id and suggested.mapping_status = 'suggested'
      left join integration_mappings exclusion
        on exclusion.company_id = $1 and exclusion.provider = 'odoo'
       and exclusion.entity_type = 'vehicle_exclusion'
@@ -539,10 +787,15 @@ export async function listOdooOutboundVehicleMappings(companyId, input) {
         vin: row.vin || "",
         licensePlate: row.license_plate || "",
       },
-      status: row.mapped_external_id ? "mapped" : row.exclusion_id ? "ignored" : "unmatched",
+      status: row.mapped_external_id ? "mapped" : row.exclusion_id ? "ignored" : row.suggested_external_id ? "suggested" : "unmatched",
       mapping: row.mapped_external_id ? {
         externalId: row.mapped_external_id,
         displayName: row.mapped_display_name || "",
+      } : null,
+      suggestion: row.suggested_external_id ? {
+        externalId: row.suggested_external_id,
+        displayName: row.suggested_display_name || "",
+        basis: row.suggestion_basis || "",
       } : null,
       candidates: row.candidates || [],
     })),

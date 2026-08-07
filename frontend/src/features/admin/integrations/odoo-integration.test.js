@@ -34,7 +34,20 @@ test("outbound mappings require explicit confirmation and use bounded vehicle re
   assert.match(source, /Ignore this unit for Odoo outbound/);
   assert.doesNotMatch(source, /onChange=\{\(event\) => confirmVehicleMapping/);
   assert.doesNotMatch(source, /onChange=\{\(event\) => confirmWarehouseMapping/);
-  assert.match(source, /Suggestions are never confirmed automatically/);
+  assert.match(source, /Exact unique VIN and plate matches are auto-confirmed/);
+  assert.match(source, /Unit-only matches are suggested here for Admin review/);
+  assert.match(source, /item\.suggestion\?\.externalId/);
+  assert.match(source, /Suggested by/);
+  assert.match(source, /license plate, but VIN differs/);
+});
+
+test("outbound discovery communicates automatic vehicle matching results", async () => {
+  const source = await readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8");
+  assert.match(source, /Sync and auto-match Odoo choices/);
+  assert.match(source, /auto-confirmed/);
+  assert.match(source, /suggested for review/);
+  assert.match(source, /autoMatchedCount/);
+  assert.match(source, /vehicleSuggestedCount/);
 });
 
 test("outbound setup keeps mobile controls at least 44px and reports unsafe labor units", async () => {

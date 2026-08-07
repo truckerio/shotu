@@ -177,7 +177,7 @@ export async function discoverOdooLocations(companyId) {
   return listOdooLocationMappings(companyId);
 }
 
-export async function discoverOdooOutbound(companyId) {
+export async function discoverOdooOutbound(companyId, actor = {}) {
   const client = await configuredClient(companyId);
   const [vehicleFields, warehouseFields, productFields, uomFields] = await Promise.all([
     supportedFields(client, "fleet.vehicle", [
@@ -228,8 +228,16 @@ export async function discoverOdooOutbound(companyId) {
   const uoms = uomIds.length
     ? await client.searchReadAll("uom.uom", [["id", "in", uomIds]], uomFields)
     : [];
-  await upsertOdooOutboundDiscovery(companyId, { vehicles, warehouses, serviceProducts, uoms });
-  return listOdooOutboundAdminReadiness(companyId);
+  const discoveryResult = await upsertOdooOutboundDiscovery(companyId, { vehicles, warehouses, serviceProducts, uoms, actor });
+  const readiness = await listOdooOutboundAdminReadiness(companyId);
+  return {
+    ...readiness,
+    discovery: discoveryResult,
+    vehicles: {
+      ...readiness.vehicles,
+      autoMatchedCount: discoveryResult.vehicleAutoMatchedCount || 0,
+    },
+  };
 }
 
 export async function odooOutboundReadiness(companyId) {

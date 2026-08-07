@@ -164,7 +164,10 @@ export async function handleIntegrationsApi(req, res, url, helpers) {
 
   if (req.method === "POST" && url.pathname === "/api/integrations/odoo/outbound/discover") {
     const companyId = selectedCompanyId(url, requestContext);
-    sendJson(res, 200, await discoverOdooOutbound(companyId));
+    sendJson(res, 200, await discoverOdooOutbound(companyId, {
+      userId: requestContext.actor.id,
+      requestId: req.requestId,
+    }));
     return true;
   }
 

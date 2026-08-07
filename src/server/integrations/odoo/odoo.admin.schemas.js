@@ -32,7 +32,7 @@ export const odooOutboundLaborProductSchema = z.object({
 }).strict();
 
 export const odooOutboundVehicleListSchema = z.object({
-  status: z.enum(["all", "mapped", "unmatched", "ignored"]).default("all"),
+  status: z.enum(["all", "mapped", "suggested", "unmatched", "ignored"]).default("all"),
   q: z.string().trim().max(200).default(""),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.coerce.number().int().nonnegative().default(0),

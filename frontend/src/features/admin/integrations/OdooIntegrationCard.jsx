@@ -17,6 +17,12 @@ function mappingValue(item) {
   return "";
 }
 
+function vehicleSuggestionLabel(basis = "") {
+  if (basis === "unit_number") return "unit number";
+  if (basis === "license_plate_vin_conflict") return "license plate, but VIN differs";
+  return basis || "matching";
+}
+
 export function OdooIntegrationCard({ provider, status, onStatusChange }) {
   const Icon = provider.icon;
   const [configuration, setConfiguration] = useState(EMPTY_CONFIGURATION);
@@ -167,7 +173,14 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
         loadVehicles({ query: vehicleQuery }),
         loadOdooVehicles(odooVehicleQuery),
       ]);
-      setNotice({ error: "", message: "Odoo vehicles, warehouses, and labor products refreshed." });
+      const matched = result?.vehicles?.autoMatchedCount ?? result?.discovery?.vehicleAutoMatchedCount ?? 0;
+      const suggested = result?.discovery?.vehicleSuggestedCount ?? 0;
+      setNotice({
+        error: "",
+        message: matched || suggested
+          ? `Odoo choices refreshed. ${matched} vehicle mappings auto-confirmed and ${suggested} vehicle matches suggested for review.`
+          : "Odoo vehicles, warehouses, and labor products refreshed.",
+      });
     } catch (error) {
       setNotice({ error: error.message, message: "" });
     } finally {
@@ -313,13 +326,13 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
               <p>Confirm the exact vehicle, warehouse, and labor product used when a workorder is sent to Odoo.</p>
             </div>
             <Button icon={RefreshCw01} onClick={discoverOutbound} disabled={Boolean(busy)}>
-              {busy === "discover-outbound" ? "Refreshing" : "Refresh Odoo choices"}
+              {busy === "discover-outbound" ? "Refreshing" : "Sync and auto-match Odoo choices"}
             </Button>
           </div>
 
           <dl className="odoo-outbound-summary">
             <div><dt>Outbound</dt><dd className={outbound.state === "ready" ? "is-ready" : "needs-review"}>{outbound.state === "ready" ? "Ready" : "Needs setup"}</dd></div>
-            <div><dt>Vehicles</dt><dd>{outbound.vehicles?.confirmedCount ?? outbound.vehicles?.mappedCount ?? 0} confirmed · {outbound.vehicles?.ignoredCount || 0} ignored · {outbound.vehicles?.unresolvedCount ?? outbound.vehicles?.unmatchedCount ?? 0} unresolved</dd></div>
+            <div><dt>Vehicles</dt><dd>{outbound.vehicles?.confirmedCount ?? outbound.vehicles?.mappedCount ?? 0} confirmed · {outbound.vehicles?.suggestedCount || 0} suggested · {outbound.vehicles?.ignoredCount || 0} ignored · {outbound.vehicles?.unresolvedCount ?? outbound.vehicles?.unmatchedCount ?? 0} unresolved</dd></div>
             <div><dt>Warehouses</dt><dd>{outbound.warehouses?.confirmedCount ?? outbound.warehouses?.mappedCount ?? 0} confirmed · {outbound.warehouses?.unresolvedCount ?? outbound.warehouses?.unmatchedCount ?? 0} unresolved</dd></div>
             <div><dt>Labor</dt><dd>{outbound.labor?.status === "ready" ? "Ready" : outbound.labor?.status === "uom_warning" ? "UoM warning" : "Needs setup"}</dd></div>
           </dl>
@@ -347,7 +360,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
           </div>
 
           <div className="odoo-outbound-group" aria-labelledby="odoo-vehicle-heading">
-            <div><h4 id="odoo-vehicle-heading">Vehicle mappings</h4><p>Suggestions are never confirmed automatically. Verify the Odoo ID, VIN, or plate before saving.</p></div>
+            <div><h4 id="odoo-vehicle-heading">Vehicle mappings</h4><p>Exact unique VIN and plate matches are auto-confirmed. Unit-only matches are suggested here for Admin review.</p></div>
             <form className="odoo-outbound-search" onSubmit={(event) => { event.preventDefault(); loadVehicles({ query: vehicleQuery }).catch((error) => setNotice({ error: error.message, message: "" })); }}>
               <label htmlFor="odoo-vehicle-search">Find app unit</label>
               <div><input id="odoo-vehicle-search" type="search" value={vehicleQuery} onChange={(event) => setVehicleQuery(event.target.value)} placeholder="Unit, VIN, or plate" /><Button type="submit">Search</Button></div>
@@ -362,8 +375,9 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
                 const mappingStatus = item.mappingStatus || item.status;
                 const currentValue = vehicleDrafts[asset.id]
                   ?? (mappingStatus === "ignored" ? "__ignored" : item.mapping?.externalId)
+                  ?? item.suggestion?.externalId
                   ?? "";
-                const choices = [...new Map([...(item.candidates || []), ...odooVehicleOptions]
+                const choices = [...new Map([...(item.suggestion ? [item.suggestion] : []), ...(item.candidates || []), ...odooVehicleOptions]
                   .map((candidate) => [candidate.externalId, candidate])).values()];
                 const helperId = `odoo-vehicle-helper-${asset.id}`;
                 return (
@@ -383,7 +397,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
                         {choices.map((candidate) => <option key={candidate.externalId} value={candidate.externalId}>{candidate.name || "Odoo vehicle"} · VIN {candidate.vin || "not recorded"} · Plate {candidate.licensePlate || "not recorded"}{candidate.assigned ? " · Already assigned" : ""}</option>)}
                         <option value="__ignored">Ignore this unit for Odoo outbound</option>
                       </datalist>
-                      <small id={helperId}>{mappingStatus === "ignored" ? "This unit is intentionally excluded." : "Search Odoo above, choose a result, or enter the exact Odoo vehicle ID."}</small>
+                      <small id={helperId}>{mappingStatus === "ignored" ? "This unit is intentionally excluded." : mappingStatus === "suggested" ? `Suggested by ${vehicleSuggestionLabel(item.suggestion?.basis)}; confirm only if the Odoo truck is correct.` : "Search Odoo above, choose a result, or enter the exact Odoo vehicle ID."}</small>
                     </div>
                     <Button aria-label={`Confirm Odoo vehicle for ${asset.unitNo || asset.name || "unit"}`} onClick={() => confirmVehicleMapping(item)} disabled={busy === `vehicle-${asset.id}`}>Confirm</Button>
                   </div>
