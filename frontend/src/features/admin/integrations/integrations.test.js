@@ -29,6 +29,15 @@ test("integration settings cards remain contained and actionable on phone widths
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.integration-client-form \.button[\s\S]*min-height:\s*44px/);
 });
 
+test("Odoo uses the same provider-card width and adapts its setup inside that card", async () => {
+  const styles = await readFile(stylesUrl, "utf8");
+
+  assert.match(styles, /\.odoo-integration-card\s*\{\s*container-type:\s*inline-size/);
+  assert.doesNotMatch(styles, /\.odoo-integration-card\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+  assert.doesNotMatch(styles, /\.odoo-integration-card\s*\{[^}]*max-width:\s*none/);
+  assert.match(styles, /@container \(max-width: 680px\)[\s\S]*\.odoo-outbound-summary[\s\S]*grid-template-columns:\s*repeat\(2/);
+});
+
 test("Samsara action errors render once inside the provider card", async () => {
   const [settings, card] = await Promise.all([
     readFile(settingsUrl, "utf8"),
