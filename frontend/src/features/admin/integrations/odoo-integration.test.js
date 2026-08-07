@@ -3,7 +3,10 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 test("Odoo settings separates inbound stock locations from explicit outbound setup", async () => {
-  const source = await readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8");
+  const [source, workflow] = await Promise.all([
+    readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./OdooProgressiveMapping.jsx", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /Inbound inventory stock locations/);
   assert.match(source, /Unmatched/);
   assert.match(source, /Ignore this location/);
@@ -15,15 +18,19 @@ test("Odoo settings separates inbound stock locations from explicit outbound set
   assert.match(source, /least-privilege Odoo user/);
   assert.match(source, /create\/write access to draft Sales service orders/);
   assert.match(source, /Odoo outbound setup/);
-  assert.match(source, /App locations to Odoo warehouses/);
-  assert.match(source, /Vehicle mappings/);
+  assert.match(source, /OdooProgressiveMapping/);
+  assert.match(workflow, /Location to warehouse mappings/);
+  assert.match(workflow, /Truck mappings/);
   assert.match(source, /Labor product/);
   assert.match(source, /outbound\/readiness/);
   assert.match(source, /outbound\/discover/);
 });
 
 test("outbound mappings require explicit confirmation and use bounded vehicle reads", async () => {
-  const source = await readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8");
+  const [source, workflow] = await Promise.all([
+    readFile(new URL("./OdooIntegrationCard.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./OdooProgressiveMapping.jsx", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /limit: "25"/);
   assert.match(source, /confirmVehicleMapping/);
   assert.match(source, /confirmWarehouseMapping/);
@@ -31,13 +38,11 @@ test("outbound mappings require explicit confirmation and use bounded vehicle re
   assert.match(source, /status: "mapped", externalId/);
   assert.match(source, /status: "unmatched"/);
   assert.match(source, /status: "ignored"/);
-  assert.match(source, /Ignore this unit for Odoo outbound/);
+  assert.match(workflow, /Ignore this unit for Odoo outbound/);
   assert.doesNotMatch(source, /onChange=\{\(event\) => confirmVehicleMapping/);
   assert.doesNotMatch(source, /onChange=\{\(event\) => confirmWarehouseMapping/);
-  assert.match(source, /Exact unique VIN and plate matches are auto-confirmed/);
-  assert.match(source, /Unit-only matches are suggested here for Admin review/);
-  assert.match(source, /item\.suggestion\?\.externalId/);
-  assert.match(source, /Suggested by/);
+  assert.match(workflow, /item\.suggestion\?\.externalId/);
+  assert.match(workflow, /Suggested by/);
   assert.match(source, /license plate, but VIN differs/);
 });
 

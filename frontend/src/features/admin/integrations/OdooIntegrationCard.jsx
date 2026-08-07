@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, RefreshCw01, Settings01 } from "@untitledui/icons";
 import { Button } from "../../../components/ui/Button.jsx";
 import { api } from "../../../lib/api.js";
+import { OdooProgressiveMapping } from "./OdooProgressiveMapping.jsx";
 
 const EMPTY_CONFIGURATION = { baseUrl: "", database: "", username: "", apiKey: "" };
 const EMPTY_OUTBOUND = {
@@ -337,76 +338,28 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
             <div><dt>Labor</dt><dd>{outbound.labor?.status === "ready" ? "Ready" : outbound.labor?.status === "uom_warning" ? "UoM warning" : "Needs setup"}</dd></div>
           </dl>
 
-          <div className="odoo-outbound-group" aria-labelledby="odoo-warehouse-heading">
-            <div><h4 id="odoo-warehouse-heading">App locations to Odoo warehouses</h4><p>Each app location and Odoo warehouse can be confirmed only once.</p></div>
-            <div className="odoo-outbound-list">
-              {(outbound.warehouses?.items || []).map((item) => {
-                const location = item.location || item;
-                const currentValue = warehouseDrafts[location.id] ?? item.mapping?.externalId ?? "";
-                const choices = item.candidates || outbound.warehouses?.available || [];
-                return (
-                  <div className={`odoo-outbound-row ${(item.mappingStatus || item.status) === "mapped" ? "" : "needs-review"}`} key={location.id}>
-                    <span><strong>{location.name}</strong><small>{[location.type, location.address].filter(Boolean).join(" · ") || "App location"}</small></span>
-                    <select aria-label={`Odoo warehouse for ${location.name}`} value={currentValue} disabled={busy === `warehouse-${location.id}`} onChange={(event) => setWarehouseDrafts((current) => ({ ...current, [location.id]: event.target.value }))}>
-                      <option value="">Not mapped</option>
-                      {choices.map((warehouse) => <option disabled={warehouse.assigned && warehouse.externalId !== item.mapping?.externalId} key={warehouse.externalId} value={warehouse.externalId}>{warehouse.code ? `${warehouse.code} · ` : ""}{warehouse.name}</option>)}
-                    </select>
-                    <Button aria-label={`Confirm Odoo warehouse for ${location.name}`} onClick={() => confirmWarehouseMapping(item)} disabled={busy === `warehouse-${location.id}`}>Confirm</Button>
-                  </div>
-                );
-              })}
-              {!outbound.warehouses?.items?.length ? <p className="integration-empty">No app locations are available for outbound warehouse matching.</p> : null}
-            </div>
-          </div>
-
-          <div className="odoo-outbound-group" aria-labelledby="odoo-vehicle-heading">
-            <div><h4 id="odoo-vehicle-heading">Vehicle mappings</h4><p>Exact unique VIN and plate matches are auto-confirmed. Unit-only matches are suggested here for Admin review.</p></div>
-            <form className="odoo-outbound-search" onSubmit={(event) => { event.preventDefault(); loadVehicles({ query: vehicleQuery }).catch((error) => setNotice({ error: error.message, message: "" })); }}>
-              <label htmlFor="odoo-vehicle-search">Find app unit</label>
-              <div><input id="odoo-vehicle-search" type="search" value={vehicleQuery} onChange={(event) => setVehicleQuery(event.target.value)} placeholder="Unit, VIN, or plate" /><Button type="submit">Search</Button></div>
-            </form>
-            <form className="odoo-outbound-search" onSubmit={(event) => { event.preventDefault(); loadOdooVehicles(odooVehicleQuery).catch((error) => setNotice({ error: error.message, message: "" })); }}>
-              <label htmlFor="odoo-provider-vehicle-search">Find Odoo vehicle</label>
-              <div><input id="odoo-provider-vehicle-search" type="search" value={odooVehicleQuery} onChange={(event) => setOdooVehicleQuery(event.target.value)} placeholder="Odoo name, ID, VIN, unit, or plate" /><Button type="submit">Search Odoo</Button></div>
-            </form>
-            <div className="odoo-outbound-list">
-              {vehicleData.items.map((item) => {
-                const asset = item.asset || item;
-                const mappingStatus = item.mappingStatus || item.status;
-                const currentValue = vehicleDrafts[asset.id]
-                  ?? (mappingStatus === "ignored" ? "__ignored" : item.mapping?.externalId)
-                  ?? item.suggestion?.externalId
-                  ?? "";
-                const choices = [...new Map([...(item.suggestion ? [item.suggestion] : []), ...(item.candidates || []), ...odooVehicleOptions]
-                  .map((candidate) => [candidate.externalId, candidate])).values()];
-                const helperId = `odoo-vehicle-helper-${asset.id}`;
-                return (
-                  <div className={`odoo-outbound-row ${mappingStatus === "mapped" ? "" : mappingStatus === "ignored" ? "is-ignored" : "needs-review"}`} key={asset.id}>
-                    <span><strong>{asset.unitNo || asset.name || "Unnamed unit"}</strong><small>{[asset.unitType, asset.vin && `VIN ${asset.vin}`, asset.licensePlate && `Plate ${asset.licensePlate}`].filter(Boolean).join(" · ")}</small></span>
-                    <div className="odoo-vehicle-choice">
-                      <input
-                        aria-label={`Odoo vehicle ID for ${asset.unitNo || asset.name}`}
-                        aria-describedby={helperId}
-                        list={`odoo-vehicle-candidates-${asset.id}`}
-                        value={currentValue}
-                        disabled={busy === `vehicle-${asset.id}`}
-                        onChange={(event) => setVehicleDrafts((current) => ({ ...current, [asset.id]: event.target.value }))}
-                        placeholder="Odoo vehicle ID"
-                      />
-                      <datalist id={`odoo-vehicle-candidates-${asset.id}`}>
-                        {choices.map((candidate) => <option key={candidate.externalId} value={candidate.externalId}>{candidate.name || "Odoo vehicle"} · VIN {candidate.vin || "not recorded"} · Plate {candidate.licensePlate || "not recorded"}{candidate.assigned ? " · Already assigned" : ""}</option>)}
-                        <option value="__ignored">Ignore this unit for Odoo outbound</option>
-                      </datalist>
-                      <small id={helperId}>{mappingStatus === "ignored" ? "This unit is intentionally excluded." : mappingStatus === "suggested" ? `Suggested by ${vehicleSuggestionLabel(item.suggestion?.basis)}; confirm only if the Odoo truck is correct.` : "Search Odoo above, choose a result, or enter the exact Odoo vehicle ID."}</small>
-                    </div>
-                    <Button aria-label={`Confirm Odoo vehicle for ${asset.unitNo || asset.name || "unit"}`} onClick={() => confirmVehicleMapping(item)} disabled={busy === `vehicle-${asset.id}`}>Confirm</Button>
-                  </div>
-                );
-              })}
-              {!vehicleData.items.length ? <p className="integration-empty">No vehicle mappings match this view.</p> : null}
-            </div>
-            {vehicleData.nextCursor ? <Button aria-label="Load more application units" onClick={() => loadVehicles({ query: vehicleQuery, cursor: vehicleData.nextCursor, append: true }).catch((error) => setNotice({ error: error.message, message: "" }))}>Load more vehicles</Button> : null}
-          </div>
+          <OdooProgressiveMapping
+            busyKey={busy}
+            odooVehicleOptions={odooVehicleOptions}
+            odooVehicleQuery={odooVehicleQuery}
+            onConfirmVehicle={confirmVehicleMapping}
+            onConfirmWarehouse={confirmWarehouseMapping}
+            onLoadMoreVehicles={() => loadVehicles({ query: vehicleQuery, cursor: vehicleData.nextCursor, append: true }).catch((error) => setNotice({ error: error.message, message: "" }))}
+            onOdooVehicleQueryChange={setOdooVehicleQuery}
+            onOdooVehicleSearch={() => loadOdooVehicles(odooVehicleQuery).catch((error) => setNotice({ error: error.message, message: "" }))}
+            onVehicleDraftChange={(assetId, value) => setVehicleDrafts((current) => ({ ...current, [assetId]: value }))}
+            onVehicleQueryChange={setVehicleQuery}
+            onVehicleSearch={() => loadVehicles({ query: vehicleQuery }).catch((error) => setNotice({ error: error.message, message: "" }))}
+            onWarehouseDraftChange={(locationId, value) => setWarehouseDrafts((current) => ({ ...current, [locationId]: value }))}
+            vehicleDrafts={vehicleDrafts}
+            vehicleNextCursor={vehicleData.nextCursor}
+            vehicleQuery={vehicleQuery}
+            vehicleSuggestionLabel={vehicleSuggestionLabel}
+            vehicles={vehicleData.items}
+            warehouseDrafts={warehouseDrafts}
+            warehouseOptions={outbound.warehouses?.available || []}
+            warehouses={outbound.warehouses?.items || []}
+          />
 
           <div className="odoo-outbound-group" aria-labelledby="odoo-labor-heading">
             <div><h4 id="odoo-labor-heading">Labor product</h4><p>Choose the service product that will carry the work-performed description.</p></div>
