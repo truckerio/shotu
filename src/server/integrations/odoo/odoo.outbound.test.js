@@ -85,7 +85,7 @@ function providerProducts() {
       id: 46305,
       display_name: "[46305] TRAILER SEAL",
       active: true,
-      uom_id: [1, "Units"],
+      uom_id: [1, "Each"],
       lst_price: 49.5,
       sale_delay: 1,
     }],
@@ -175,6 +175,41 @@ test("ready status validates the live Odoo service-order model", async () => {
   });
   assert.equal(readiness.ready, false);
   assert.equal(readiness.blockers[0].code, "ODOO_MODEL_INCOMPATIBLE");
+});
+
+test("readiness accepts equivalent Odoo count-unit labels", async () => {
+  const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
+    readReadiness: async () => readyData(),
+    readConfiguration: async () => ({ apiKey: "server-only" }),
+    createClient: () => ({
+      execute: async (model, method) => {
+        if (method === "fields_get") return requiredOrderFields();
+        if (model === "product.product" && method === "read") return [...providerProducts().values()];
+        throw new Error(`Unexpected ${model}.${method}`);
+      },
+    }),
+  });
+  assert.equal(readiness.ready, true);
+  assert.deepEqual(readiness.blockers, []);
+});
+
+test("readiness reports real live Odoo part-unit drift before creation", async () => {
+  const products = [...providerProducts().values()];
+  products[1] = { ...products[1], uom_id: [12, "Dozen"] };
+  const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
+    readReadiness: async () => readyData(),
+    readConfiguration: async () => ({ apiKey: "server-only" }),
+    createClient: () => ({
+      execute: async (model, method) => {
+        if (method === "fields_get") return requiredOrderFields();
+        if (model === "product.product" && method === "read") return products;
+        throw new Error(`Unexpected ${model}.${method}`);
+      },
+    }),
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.blockers[0].code, "ODOO_PART_UOM_INVALID");
+  assert.equal(readiness.blockers[0].field, "parts");
 });
 
 test("draft payload includes explicit required values and keeps labor before goods", () => {

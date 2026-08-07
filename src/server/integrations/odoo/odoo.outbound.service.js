@@ -180,13 +180,19 @@ export async function odooWorkorderReadiness({ companyId, workorderId }, depende
   if (readiness.ready) {
     const createClient = dependencies.createClient || createOdooClient;
     try {
-      await requireCompatibleSaleOrder(createClient(configuration), data.settings || {});
+      const client = createClient(configuration);
+      await requireCompatibleSaleOrder(client, data.settings || {});
+      const products = await readCurrentMappedProducts(client, data);
+      requireCurrentProductUoms(data, products);
     } catch (error) {
-      if (error?.code !== "ODOO_MODEL_INCOMPATIBLE") throw error;
+      if (!(error instanceof OdooOutboundError)) throw error;
+      const field = error.code === "ODOO_MODEL_INCOMPATIBLE"
+        ? "odooModel"
+        : error.code === "ODOO_LABOR_PRODUCT_INVALID" ? "laborProduct" : "parts";
       return {
         ...readiness,
         ready: false,
-        blockers: [blocker(error.code, error.message, "odooModel")],
+        blockers: [blocker(error.code, error.message, field)],
       };
     }
   }
@@ -221,6 +227,38 @@ function relationName(value) {
   return Array.isArray(value) ? String(value[1] || "").trim() : "";
 }
 
+const ODOO_COUNT_UOM_NAMES = new Set([
+  "each", "ea", "piece", "pieces", "pc", "unit", "units",
+]);
+
+function canonicalOdooUomName(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return ODOO_COUNT_UOM_NAMES.has(normalized) ? "count" : normalized;
+}
+
+function compatibleOdooUomNames(expected, actual) {
+  const expectedName = canonicalOdooUomName(expected);
+  return Boolean(expectedName && expectedName === canonicalOdooUomName(actual));
+}
+
+function mappedProductIds(data) {
+  return [...new Set([
+    data.labor.productExternalId,
+    ...(data.parts || []).map((part) => part.productExternalId),
+  ].map((value) => numericExternalId(value, "product")))];
+}
+
+async function readCurrentMappedProducts(client, data) {
+  const productIds = mappedProductIds(data);
+  const productRows = await client.execute("product.product", "read", [productIds], {
+    fields: ["id", "display_name", "name", "active", "uom_id", "lst_price", "list_price", "sale_delay"],
+  });
+  if (productRows.length !== productIds.length || productRows.some((product) => product.active === false)) {
+    throw new OdooOutboundError("ODOO_PART_UNMAPPED", "One or more mapped Odoo products are missing or inactive.");
+  }
+  return new Map(productRows.map((product) => [String(product.id), product]));
+}
+
 function requireCurrentProductUoms(data, products) {
   const labor = productDetail(products, data.labor.productExternalId);
   if (String(labor.uomId) !== String(data.labor.uomExternalId || "")) {
@@ -231,8 +269,7 @@ function requireCurrentProductUoms(data, products) {
   }
   for (const part of data.parts || []) {
     const product = products.get(String(part.productExternalId));
-    const expectedName = String(part.expectedOdooUomName || "").trim().toLowerCase();
-    if (!expectedName || relationName(product?.uom_id).toLowerCase() !== expectedName) {
+    if (!compatibleOdooUomNames(part.expectedOdooUomName, relationName(product?.uom_id))) {
       throw new OdooOutboundError(
         "ODOO_PART_UOM_INVALID",
         `The Odoo unit for part ${part.partNumber || part.lineIndex + 1} changed. Rediscover products and review the mapping.`,
@@ -417,20 +454,10 @@ export async function createOdooWorkorderDraft({
     const replayed = Boolean(order);
     if (!order) {
       const customerId = numericExternalId(data.preparation.customerExternalId || data.vehicle.customerExternalId, "customer");
-      const productIds = [...new Set([
-        data.labor.productExternalId,
-        ...(data.parts || []).map((part) => part.productExternalId),
-      ].map((value) => numericExternalId(value, "product")))];
-      const [addresses, productRows] = await Promise.all([
+      const [addresses, products] = await Promise.all([
         client.execute("res.partner", "address_get", [[customerId], ["invoice", "delivery"]]),
-        client.execute("product.product", "read", [productIds], {
-          fields: ["id", "display_name", "name", "active", "uom_id", "lst_price", "list_price", "sale_delay"],
-        }),
+        readCurrentMappedProducts(client, data),
       ]);
-      if (productRows.length !== productIds.length || productRows.some((product) => product.active === false)) {
-        throw new OdooOutboundError("ODOO_PART_UNMAPPED", "One or more mapped Odoo products are missing or inactive.");
-      }
-      const products = new Map(productRows.map((product) => [String(product.id), product]));
       requireCurrentProductUoms(data, products);
       const payload = buildOdooDraftPayload(data, marker, { products, addresses: addresses || {} });
       await updatePayload(companyId, parsedWorkorderId, payload);
