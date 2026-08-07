@@ -371,6 +371,22 @@ export async function claimOdooOutboundOrder({
   }
 }
 
+export async function readExportedOdooOutboundOrder(companyId, workorderId) {
+  const tenantId = requireCompanyId(companyId);
+  const result = await query(
+    `select external_id, external_number
+     from odoo_outbound_orders
+     where company_id = $1 and workorder_id = $2 and state = 'exported'
+     limit 1`,
+    [tenantId, workorderId],
+  );
+  const row = result.rows[0];
+  return row ? {
+    externalId: row.external_id,
+    serviceOrderNo: row.external_number,
+  } : null;
+}
+
 export async function updateOdooOutboundPayload(companyId, workorderId, payloadSnapshot) {
   const tenantId = requireCompanyId(companyId);
   const payloadHash = requestPayloadHash(payloadSnapshot || {});

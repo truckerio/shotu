@@ -238,6 +238,7 @@ test("draft creation writes one draft without calling confirmation or browser on
     requestId: "request-1",
     input: { expectedUpdatedAt: updatedAt },
   }, {
+    readExported: async () => null,
     readReadiness: async () => readyData(),
     readConfiguration: async () => ({ apiKey: "server-only" }),
     claimDraft: async (input) => {
@@ -274,6 +275,7 @@ test("retry recovers an existing marked draft without creating another", async (
   const calls = [];
   let recorded;
   const result = await createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+    readExported: async () => null,
     readReadiness: async () => readyData(),
     readConfiguration: async () => ({ apiKey: "server-only" }),
     claimDraft: async () => ({ claimed: true, replayed: false }),
@@ -294,6 +296,24 @@ test("retry recovers an existing marked draft without creating another", async (
   assert.equal(calls.some((call) => call.method === "create"), false);
 });
 
+test("already exported workorders replay before readiness or Odoo calls", async () => {
+  const result = await createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+    readExported: async () => ({ externalId: "901", serviceOrderNo: "S0901" }),
+    readReadiness: async () => assert.fail("exported replay must not need readiness"),
+    readConfiguration: async () => assert.fail("exported replay must not read credentials"),
+    claimDraft: async () => assert.fail("exported replay must not claim a new draft"),
+    createClient: () => assert.fail("exported replay must not call Odoo"),
+  });
+
+  assert.deepEqual(result, {
+    workorderId,
+    status: "draft",
+    externalId: "901",
+    serviceOrderNo: "S0901",
+    replayed: true,
+  });
+});
+
 test("readiness blockers prevent claiming or writing to Odoo", async () => {
   let claimed = false;
   let clientCreated = false;
@@ -301,6 +321,7 @@ test("readiness blockers prevent claiming or writing to Odoo", async () => {
   data.vehicle = null;
   await assert.rejects(
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+      readExported: async () => null,
       readReadiness: async () => data,
       readConfiguration: async () => ({ apiKey: "server-only" }),
       claimDraft: async () => { claimed = true; },
@@ -318,6 +339,7 @@ test("live Odoo UoM drift blocks creation before payload persistence", async () 
   products[0] = { ...products[0], uom_id: [99, "Days"] };
   await assert.rejects(
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+      readExported: async () => null,
       readReadiness: async () => readyData(),
       readConfiguration: async () => ({ apiKey: "server-only" }),
       claimDraft: async () => ({ claimed: true, replayed: false }),
@@ -342,6 +364,7 @@ test("multiple marked orders fail closed and record a conflict", async () => {
   const failures = [];
   await assert.rejects(
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+      readExported: async () => null,
       readReadiness: async () => readyData(),
       readConfiguration: async () => ({ apiKey: "server-only" }),
       claimDraft: async () => ({ claimed: true, replayed: false }),
@@ -369,6 +392,7 @@ test("an unknown Odoo create result enters manual reconciliation instead of retr
   timeout.code = "ODOO_CONNECTION_TIMEOUT";
   await assert.rejects(
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+      readExported: async () => null,
       readReadiness: async () => readyData(),
       readConfiguration: async () => ({ apiKey: "server-only" }),
       claimDraft: async () => ({ claimed: true, replayed: false }),

@@ -2,6 +2,7 @@ import { createOdooClient } from "./odoo.client.js";
 import { readOdooConfiguration } from "./odoo.admin.repo.js";
 import {
   claimOdooOutboundOrder,
+  readExportedOdooOutboundOrder,
   readOdooOutboundReadiness,
   recordOdooOutboundFailure,
   recordOdooOutboundSuccess,
@@ -356,6 +357,17 @@ export async function createOdooWorkorderDraft({
 }, dependencies = {}) {
   const parsedWorkorderId = odooOutboundWorkorderIdSchema.parse(workorderId);
   createOdooDraftSchema.parse(input);
+  const readExported = dependencies.readExported || readExportedOdooOutboundOrder;
+  const existingExport = await readExported(companyId, parsedWorkorderId);
+  if (existingExport?.externalId) {
+    return {
+      workorderId: parsedWorkorderId,
+      status: "draft",
+      externalId: String(existingExport.externalId),
+      serviceOrderNo: existingExport.serviceOrderNo || "",
+      replayed: true,
+    };
+  }
   const { data, configuration } = await readinessContext({ companyId, workorderId: parsedWorkorderId }, dependencies);
   const readiness = evaluateOdooOutboundReadiness(data, { configured: Boolean(configuration) });
   if (!readiness.ready) {
