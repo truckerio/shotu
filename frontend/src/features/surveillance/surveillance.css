@@ -180,9 +180,17 @@
   color: #067647;
 }
 
-.surveillance-odoo-result span {
+.surveillance-odoo-result span,
+.surveillance-odoo-result a {
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
+}
+
+.surveillance-odoo-result a {
+  color: #05603a;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  width: fit-content;
 }
 
 .surveillance-odoo-result small {

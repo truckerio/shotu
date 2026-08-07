@@ -73,6 +73,8 @@ function workorderSelect() {
       coalesce(oes.status, 'not_entered') as odoo_status,
       coalesce(oes.odoo_service_order_no, '') as odoo_service_order_no,
       coalesce(oes.external_id, '') as odoo_external_id,
+      coalesce(odoo_link.base_url, '') as odoo_base_url,
+      coalesce(odoo_link.target_model, 'sale.order') as odoo_target_model,
       ${publicAssetSelect("a")} as asset,
       jsonb_build_object('id', l.id, 'name', l.name, 'type', l.type, 'address', l.address) as location,
       team.primary_mechanic as mechanic,
@@ -84,6 +86,22 @@ function workorderSelect() {
     left join user_profiles approver on approver.id = wo.approved_by_user_id
     left join user_profiles canceller on canceller.id = wo.cancelled_by_user_id
     left join odoo_entry_status oes on oes.workorder_id = wo.id
+    left join lateral (
+      select
+        credential.metadata->>'baseUrl' as base_url,
+        outbound.target_model
+      from odoo_outbound_orders outbound
+      join integration_credentials credential
+        on credential.company_id = outbound.company_id
+       and credential.integration_account_id = outbound.integration_account_id
+       and credential.provider = 'odoo'
+       and credential.credential_kind = 'api'
+      where outbound.company_id = wo.company_id
+        and outbound.workorder_id = wo.id
+        and outbound.state = 'exported'
+      order by outbound.updated_at desc
+      limit 1
+    ) odoo_link on true
     left join lateral (
       select
         jsonb_agg(
@@ -122,6 +140,21 @@ function emptyObjectToNull(value) {
   return value;
 }
 
+function publicOdooRecordUrl({ baseUrl, externalId, model = "sale.order" } = {}) {
+  if (!baseUrl || !/^\d+$/.test(String(externalId || ""))) return "";
+  try {
+    const url = new URL(String(baseUrl));
+    const localHost = ["localhost", "127.0.0.1"].includes(url.hostname);
+    if (url.protocol !== "https:" && !localHost) return "";
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/web`;
+    url.search = "";
+    url.hash = `id=${externalId}&model=${encodeURIComponent(model || "sale.order")}&view_type=form`;
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 export function publicWorkorderRow(row) {
   if (!row) return null;
   const asset = emptyObjectToNull(row.asset);
@@ -158,6 +191,11 @@ export function publicWorkorderRow(row) {
     odooStatus: row.odoo_status || "not_entered",
     odooServiceOrderNo: row.odoo_service_order_no || "",
     odooExternalId: row.odoo_external_id || "",
+    odooUrl: publicOdooRecordUrl({
+      baseUrl: row.odoo_base_url,
+      externalId: row.odoo_external_id,
+      model: row.odoo_target_model,
+    }),
     asset,
     location: emptyObjectToNull(row.location),
     mechanic: emptyObjectToNull(row.mechanic),

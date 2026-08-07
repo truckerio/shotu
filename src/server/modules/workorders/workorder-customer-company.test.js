@@ -120,6 +120,8 @@ test("public workorder projection exposes asset owner and a canonical form snaps
     odoo_status: "entered",
     odoo_service_order_no: "S00016",
     odoo_external_id: "13380",
+    odoo_base_url: "https://protec.example.odoo.com",
+    odoo_target_model: "sale.order",
   });
 
   assert.equal(workorder.asset.ownerName, "Acme Logistics");
@@ -128,6 +130,10 @@ test("public workorder projection exposes asset owner and a canonical form snaps
   assert.equal(workorder.odooStatus, "entered");
   assert.equal(workorder.odooServiceOrderNo, "S00016");
   assert.equal(workorder.odooExternalId, "13380");
+  assert.equal(
+    workorder.odooUrl,
+    "https://protec.example.odoo.com/web#id=13380&model=sale.order&view_type=form",
+  );
 });
 
 test("public workorder projection supplies safe Odoo tracking defaults", () => {
@@ -136,6 +142,7 @@ test("public workorder projection supplies safe Odoo tracking defaults", () => {
   assert.equal(workorder.odooStatus, "not_entered");
   assert.equal(workorder.odooServiceOrderNo, "");
   assert.equal(workorder.odooExternalId, "");
+  assert.equal(workorder.odooUrl, "");
 });
 
 test("print uses the canonical label and supports legacy workorders", () => {

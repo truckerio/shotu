@@ -67,7 +67,11 @@ export function SurveillanceOdooPanel({
           {createdOrderNo ? (
             <section className="surveillance-odoo-result" aria-label="Odoo draft created">
               <strong>Odoo draft created</strong>
-              <span>{createdOrderNo}</span>
+              {workorder.odooUrl ? (
+                <a href={workorder.odooUrl} target="_blank" rel="noreferrer">{createdOrderNo}</a>
+              ) : (
+                <span>{createdOrderNo}</span>
+              )}
               {odooDraftResult?.replayed ? <small>Existing draft recovered by workorder marker.</small> : null}
             </section>
           ) : null}

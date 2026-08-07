@@ -41,6 +41,8 @@ test("canonical workorder detail retains persisted Odoo entry tracking", async (
   assert.match(repository, /left join odoo_entry_status oes on oes\.workorder_id = wo\.id/i);
   assert.match(repository, /coalesce\(oes\.odoo_service_order_no, ''\) as odoo_service_order_no/i);
   assert.match(repository, /coalesce\(oes\.external_id, ''\) as odoo_external_id/i);
+  assert.match(repository, /credential\.metadata->>'baseUrl' as base_url/i);
+  assert.match(repository, /odooUrl: publicOdooRecordUrl/);
   assert.match(repository, /odooServiceOrderNo: row\.odoo_service_order_no \|\| ""/);
 });
 
