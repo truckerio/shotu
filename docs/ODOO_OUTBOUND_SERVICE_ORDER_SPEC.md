@@ -186,8 +186,8 @@ interface PublicWorkorderOdooTracking {
 // GET  /api/workorders/:workorderId/modules/odoo/readiness
 // POST /api/workorders/:workorderId/modules/odoo/draft
 // POST /api/workorders/:workorderId/modules/odoo/missing-info
-// Legacy /api/surveillance/workorders/:workorderId/odoo-* routes delegate to
-// the same guarded service during the compatibility window.
+// Role-specific /api/surveillance/workorders/:workorderId/odoo-* aliases were
+// removed in V2.0; first-party callers use only the canonical module routes.
 ```
 
 Errors use `{ error: { code: string; message: string; details?: object } }` and stable codes such as `ODOO_VEHICLE_UNMAPPED`, `ODOO_WAREHOUSE_UNMAPPED`, `ODOO_CUSTOMER_MISSING`, `ODOO_LABOR_INVALID`, `ODOO_PART_UNMAPPED`, `ODOO_MODEL_INCOMPATIBLE`, and `ODOO_DRAFT_CONFLICT`.

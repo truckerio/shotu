@@ -809,7 +809,7 @@ These routes support the first-party shared Odoo workorder module for draft-only
 | `POST` | `/api/workorders/{workorderId}/modules/odoo/draft` | Explicitly create or recover a draft through the shared module boundary |
 | `POST` | `/api/workorders/{workorderId}/modules/odoo/missing-info` | Record a missing-information handoff through the shared module boundary |
 
-Legacy `/api/surveillance/workorders/{workorderId}/odoo-*` routes remain temporary compatibility aliases. They delegate to the same guarded workorder-module service and are not the canonical V2 contract.
+Role-specific `/api/surveillance/workorders/{workorderId}/odoo-*` routes were removed in V2.0. First-party callers use only the canonical workorder-module routes above.
 
 The draft creation route creates Odoo `sale.order` records only in `draft` state. It never confirms quotations, invoices, payments, stock pickings, or purchase orders. It writes a stable marker to Odoo's configured marker field, currently `client_order_ref`, in the form:
 

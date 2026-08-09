@@ -156,7 +156,7 @@ try {
     /Only an assigned mechanic/
   );
   await query("update user_profiles set active = false where id = $1", [mechanicId]);
-  await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /Mechanic user not found/);
+  await assert.rejects(saveMechanicUsedParts(workorderId, mechanicId, input.parts), /Active workorder user not found/);
   await query("update user_profiles set active = true where id = $1", [mechanicId]);
   await query("update operational_workorders set status = 'mechanic_done' where id = $1", [workorderId]);
   const reviewParts = [{ ...officeParts[0], repairOrder: "Office review correction" }];

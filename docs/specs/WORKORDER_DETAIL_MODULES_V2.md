@@ -31,7 +31,7 @@ Odoo remains available from the Surveillance queue and Admin Operations Odoo bac
 - NFR-1: Permission decisions MUST be enforced by existing server resource and role checks; UI visibility MUST NOT be treated as authorization.
 - NFR-2: The shared Odoo module MUST preserve keyboard semantics, form labels, status announcements, and disabled-state behavior.
 - NFR-3: Odoo readiness MUST load only when an eligible workorder exposes the Odoo module.
-- NFR-4: Existing Surveillance Odoo endpoints and response contracts MUST remain backward compatible while shared module endpoints become canonical.
+- NFR-4: Odoo detail actions MUST use only the canonical shared module endpoints.
 - NFR-5: Focused module, routing, and Odoo tests, the complete verification suite, and a production build MUST pass.
 
 ## 5. Acceptance criteria
@@ -64,7 +64,7 @@ POST /api/workorders/:id/modules/odoo/draft { expectedUpdatedAt: string }
 POST /api/workorders/:id/modules/odoo/missing-info { note: string }
 ```
 
-Each request MUST be protected by authenticated actor context, company/location workorder access, Odoo lifecycle eligibility, and resolved role/location/user module policy. Readiness accepts read or write access. Preparation, draft creation, and missing-information requests require write access. Existing `/api/surveillance/workorders/:id/*` Odoo routes remain compatibility aliases during migration.
+Each request MUST be protected by authenticated actor context, company/location workorder access, Odoo lifecycle eligibility, and resolved role/location/user module policy. Readiness accepts read or write access. Preparation, draft creation, and missing-information requests require write access. Role-specific Surveillance Odoo aliases are not part of the V2 contract.
 
 ## 8. Data models
 

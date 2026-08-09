@@ -99,10 +99,6 @@ const ACTIONS = Object.freeze({
     prepare: prepareOdooWorkorderSchema,
     createDraft: createOdooDraftSchema,
     markMissingInfo: z.object({ note: z.string().trim().min(1).max(1000) }).strict(),
-    markEntered: z.object({
-      odooServiceOrderNo: z.string().trim().max(120).default(""),
-      note: z.string().trim().max(1000).default(""),
-    }).strict(),
   }),
 });
 

@@ -23,7 +23,6 @@ import {
   sendOfficeMessage,
   updateOfficeWorkorder,
 } from "../office/office.service.js";
-import { markOdooEntered } from "../surveillance/surveillance.service.js";
 import { loadWorkorderDetail } from "./workorder-detail.service.js";
 import { createOperationalWorkorder } from "../../db/repositories/operational-workorders.repo.js";
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
@@ -182,7 +181,6 @@ export async function runWorkorderModuleAction(
     if (action === "prepare") return (dependencies.prepareOdoo || prepareWorkorderOdooModule)(context, workorderId, input);
     if (action === "createDraft") return (dependencies.createOdooDraft || createWorkorderOdooDraft)(context, workorderId, input);
     if (action === "markMissingInfo") return (dependencies.markMissingInfo || markWorkorderOdooMissingInfo)(context, workorderId, input);
-    if (action === "markEntered") return (dependencies.markEntered || markOdooEntered)(workorderId, { ...input, userId: actorId });
   }
 
   throw permissionDenied();

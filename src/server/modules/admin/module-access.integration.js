@@ -6,6 +6,8 @@ import {
   getCompanyWorkorderModulePolicy,
   getEffectiveWorkorderModulePolicy,
   getLocationWorkorderPolicy,
+  saveCompanyWorkorderModulePolicy,
+  saveLocationWorkorderPolicy,
 } from "../../db/repositories/workorder-policies.repo.js";
 import { resolveEffectiveWorkorderModuleAccess } from "../../../../shared/workorder-modules.js";
 import {
@@ -89,7 +91,7 @@ try {
   }), (error) => error.statusCode === 400);
   await query("delete from user_profiles where id = $1", [outsideUser.rows[0].id]);
 
-  const companyPolicy = await saveNormalizedModulePolicy({
+  const companyPolicy = await saveCompanyWorkorderModulePolicy({
     companyId,
     actorId,
     expectedVersion: 0,
@@ -116,7 +118,7 @@ try {
   assert.equal(persistedCompanyPolicy.version, 1);
 
   await assert.rejects(
-    saveNormalizedModulePolicy({
+    saveCompanyWorkorderModulePolicy({
       companyId,
       actorId,
       expectedVersion: 0,
@@ -126,7 +128,7 @@ try {
     (error) => error.statusCode === 409 && error.code === "WORKORDER_MODULE_POLICY_CONFLICT",
   );
 
-  const locationPolicy = await saveNormalizedModulePolicy({
+  const locationPolicy = await saveLocationWorkorderPolicy({
     locationId,
     companyId,
     actorId,
@@ -141,7 +143,7 @@ try {
     expectedVersion: 0,
   });
   assert.equal(locationPolicy.version, 1);
-  await assert.rejects(saveNormalizedModulePolicy({
+  await assert.rejects(saveLocationWorkorderPolicy({
     locationId,
     companyId,
     actorId,
@@ -154,13 +156,6 @@ try {
   const normalizedLocationPolicy = await getNormalizedModulePolicy({ companyId, locationId });
   assert.equal(normalizedLocationPolicy.moduleAccess.office.detail.odoo, "hidden");
   assert.equal(normalizedLocationPolicy.userModuleAccess[locationUserId].detail.odoo, "read");
-
-  await query("delete from user_profiles where id = $1", [companyUserId]);
-  const userRuleCleanup = await query(
-    "select count(*)::int as count from workorder_module_access_rules where user_id = $1",
-    [companyUserId],
-  );
-  assert.equal(userRuleCleanup.rows[0].count, 0);
 
   const persistedLocationPolicy = await getLocationWorkorderPolicy(locationId, [companyId]);
   assert.equal(persistedLocationPolicy.moduleAccessOverrides.office.detail.odoo, "hidden");
@@ -188,6 +183,21 @@ try {
     ...effective,
   }), { access: "read", source: "user" });
 
+  await query("delete from user_profiles where id = $1", [companyUserId]);
+  const userRuleCleanup = await query(
+    "select count(*)::int as count from workorder_module_access_rules where user_id = $1",
+    [companyUserId],
+  );
+  assert.equal(userRuleCleanup.rows[0].count, 0);
+  const effectiveAfterDelete = await getEffectiveWorkorderModulePolicy({ companyId, locationId });
+  assert.deepEqual(resolveEffectiveWorkorderModuleAccess({
+    role: "mechanic",
+    surface: "detail",
+    moduleKey: "odoo",
+    userId: companyUserId,
+    ...effectiveAfterDelete,
+  }), { access: "hidden", source: "location" });
+
   console.log(JSON.stringify({
     passed: true,
     companyRolePersistence: true,
@@ -196,7 +206,7 @@ try {
     locationPrecedence: true,
     locationOptimisticConflict: true,
     normalizedRulePersistence: true,
-    compatibilityProjection: true,
+    normalizedOnlyPersistence: true,
     userRuleCleanup: true,
     crossCompanyLocationRejected: true,
     crossCompanyUserRejected: true,

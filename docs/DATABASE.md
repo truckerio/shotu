@@ -184,21 +184,17 @@ imports that bypass application schemas.
 - Domain changes and provider delivery are decoupled through `integration_outbox_events`.
 - Webhook receipts are deduplicated before processing.
 - Environment Samsara token fallback is limited to the initial default company.
-- Workorder V2.0 company defaults are stored on
-  `company_workorder_module_policies`; location overrides remain on
-  `location_workorder_policies`. Both `module_access` and `user_module_access`
-  are sparse JSON objects so missing values continue through the inheritance
-  chain instead of copying defaults. Company policies use an optimistic
-  `version` to prevent concurrent Admin edits from overwriting each other.
-- Migration 049 adds sparse role and named-user access maps to the existing
-  location policy row. Migration 050 adds the company policy row and its
-  optimistic version. Migration 051 adds canonical normalized scope/rule rows,
-  migration 052 adds the matching location policy version, and migration 053
-  enforces role/user subject integrity. Company and location Admin saves both
-  use compare-and-swap conflict protection.
-- The Admin UI presents create-required separately from Off/View/Edit. For
-  compatibility, JSON projections may encode it as `required`; normalized rules
-  store `required` independently from hidden/read/write access.
+- Workorder V2.0 company and location policy versions are stored in
+  `workorder_module_policy_scopes`; sparse role and named-user decisions are
+  stored in `workorder_module_access_rules`. Missing rows continue through the
+  inheritance chain instead of copying defaults.
+- Migrations 049 and 050 introduced the temporary JSON projections. Migration
+  051 added canonical normalized scope/rule rows, migration 052 added location
+  compare-and-swap support, and migration 053 enforced subject integrity.
+  Migration 054 backfills the final projection values, drops the projection
+  columns/table, and makes normalized storage authoritative.
+- The Admin UI presents create-required separately from Off/View/Edit.
+  Normalized rules store `required` independently from hidden/read/write access.
 - Runtime workorder responses expose only the current actor's effective module
   decisions. Complete role matrices and other users' exceptions stay inside
   authenticated Admin policy endpoints.

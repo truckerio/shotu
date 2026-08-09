@@ -169,13 +169,12 @@ export const WORKORDER_MODULES = Object.freeze([
     description: "Odoo readiness, missing info, and entry state.",
     surfaces: Object.freeze(["detail"]),
     capabilities: Object.freeze(["read", "write"]),
-    actions: Object.freeze(["prepare", "createDraft", "markMissingInfo", "markEntered"]),
+    actions: Object.freeze(["prepare", "createDraft", "markMissingInfo"]),
     writeRolesBySurface: Object.freeze({ detail: Object.freeze(["mechanic", "office", "surveillance", "admin"]) }),
     actionRoles: Object.freeze({
       prepare: Object.freeze(["mechanic", "office", "surveillance", "admin"]),
       createDraft: Object.freeze(["mechanic", "office", "surveillance", "admin"]),
       markMissingInfo: Object.freeze(["mechanic", "office", "surveillance", "admin"]),
-      markEntered: Object.freeze(["surveillance", "admin"]),
     }),
   }),
 ]);

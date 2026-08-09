@@ -1,4 +1,5 @@
 import { query } from "../pool.js";
+import { getNormalizedLocationModulePolicies } from "./module-access-rules.repo.js";
 
 const templateColumns = `
   template.id,
@@ -68,9 +69,7 @@ export async function getLocationTemplates(locationIds) {
        template.active,
        template.version,
        template.updated_at,
-       coalesce(policy.mechanic_can_record_parts, false) as policy_mechanic_can_record_parts,
-       coalesce(policy.module_access, '{}'::jsonb) as policy_module_access,
-       coalesce(policy.user_module_access, '{}'::jsonb) as policy_user_module_access
+       coalesce(policy.mechanic_can_record_parts, false) as policy_mechanic_can_record_parts
      from locations location
      left join location_workorder_templates template
        on template.location_id = location.id and template.active = true
@@ -81,7 +80,7 @@ export async function getLocationTemplates(locationIds) {
      order by location.name`,
     [locationIds],
   );
-  return result.rows;
+  return attachNormalizedPolicies(result.rows, query);
 }
 
 export async function getAuthorizedLocationTemplates({ companyIds, locationIds }, execute = query) {
@@ -106,9 +105,7 @@ export async function getAuthorizedLocationTemplates({ companyIds, locationIds }
        template.active,
        template.version,
        template.updated_at,
-       coalesce(policy.mechanic_can_record_parts, false) as policy_mechanic_can_record_parts,
-       coalesce(policy.module_access, '{}'::jsonb) as policy_module_access,
-       coalesce(policy.user_module_access, '{}'::jsonb) as policy_user_module_access
+       coalesce(policy.mechanic_can_record_parts, false) as policy_mechanic_can_record_parts
      from locations location
      left join location_workorder_templates template
        on template.location_id = location.id and template.active = true
@@ -121,5 +118,21 @@ export async function getAuthorizedLocationTemplates({ companyIds, locationIds }
      order by location.name`,
     [companyIds, locationIds ?? null],
   );
-  return result.rows;
+  return attachNormalizedPolicies(result.rows, execute);
+}
+
+async function attachNormalizedPolicies(rows, execute) {
+  const policies = await getNormalizedLocationModulePolicies(
+    rows.map((row) => row.location_id),
+    { query: execute },
+  );
+  return rows.map((row) => {
+    const policy = policies.get(row.location_id);
+    return {
+      ...row,
+      policy_module_access: policy?.moduleAccess || {},
+      policy_user_module_access: policy?.userModuleAccess || {},
+      policy_version: policy?.version || 0,
+    };
+  });
 }

@@ -18,7 +18,7 @@ test("every registered module has one stable owner and explicit capabilities", (
 
   assert.equal(odoo.owner, "integrations.odoo");
   assert.deepEqual(odoo.capabilities, ["read", "write"]);
-  assert.deepEqual(odoo.actions, ["prepare", "createDraft", "markMissingInfo", "markEntered"]);
+  assert.deepEqual(odoo.actions, ["prepare", "createDraft", "markMissingInfo"]);
   assert.equal(getWorkorderModule("unknown"), null);
 });
 

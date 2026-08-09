@@ -117,16 +117,16 @@ PATCH accepts one normalized rule and its scope/version:
 These are the canonical adapters for external Admin clients changing one rule.
 The first-party Modules page keeps an explicit Save button and uses the bulk
 scope PATCH so several draft changes commit or conflict together. Both API
-shapes delegate to the same normalized policy owner and compatibility
-projection.
+shapes delegate to the same normalized policy owner and normalized transaction.
 
 ## Access values and reset behavior
 
 - `hidden`: Off.
 - `read`: View.
 - `write`: Edit, only for a server-declared write-capable module.
-- `required`: compatibility storage for the separate **Required to create**
-  setting; it is not an access-menu choice.
+- `required`: bulk API representation for the separate **Required to create**
+  setting; normalized storage keeps it as an independent boolean and it is not
+  an access-menu choice.
 - A missing sparse key means inherit. Removing a company key restores the
   system default; removing a location key restores the company setting;
   removing a user key restores the matching role setting.

@@ -176,8 +176,8 @@ connection, discover provider vehicles/warehouses/service products, confirm
 one-to-one vehicle and warehouse mappings, and select the labor product through
 authenticated Admin routes. Authorized Admin and Surveillance users then use
 the shared workorder Odoo module to create draft-only Odoo `sale.order` service
-orders through canonical module routes. Surveillance routes remain compatibility
-adapters. The
+orders through canonical module routes. Role-specific Surveillance Odoo aliases
+were removed in V2.0. The
 application records the Odoo ID, service-order number, stable workorder marker,
 audit events, and lifecycle transition; it does not confirm, invoice, or mutate
 inventory as part of draft creation.

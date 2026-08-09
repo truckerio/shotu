@@ -1,10 +1,9 @@
-import { query } from "../../db/pool.js";
 import { getOperationalWorkorderById, getWorkorderTimeline } from "../../db/repositories/operational-workorders.repo.js";
 import { listChatMessages } from "../../db/repositories/chat.repo.js";
 import { getUserById, listUsersByRole } from "../../db/repositories/users.repo.js";
 import { statusLabel } from "../workorders/workorder.presenter.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
-import { markWorkorderRead, setWorkorderAttention } from "../../db/repositories/workorder-attention.repo.js";
+import { markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
 import {
   MECHANIC_ACTIVE_LIFECYCLES,
   ODOO_ELIGIBLE_LIFECYCLES,
@@ -36,19 +35,6 @@ export function categorizeSurveillanceRows(rows) {
     missingInfo: approved.filter((row) => row.odooStatus === "missing_info"),
     entered: approved.filter((row) => row.odooStatus === "entered"),
   };
-}
-
-export function isOdooEligibleStatus(status) {
-  return lifecycleIn(status, ODOO_ELIGIBLE_LIFECYCLES);
-}
-
-async function requireOdooEligibleWorkorder(workorderId) {
-  const workorder = await getOperationalWorkorderById(workorderId);
-  if (!workorder) throw new Error("Workorder not found.");
-  if (!isOdooEligibleStatus(workorder.status)) {
-    throw new Error("Office approval is required before Odoo processing.");
-  }
-  return workorder;
 }
 
 export async function surveillanceDashboard(context) {
@@ -113,29 +99,4 @@ export async function surveillanceWorkorderDetail(workorderId, userId) {
     ? await getLocationWorkorderPolicy(workorder.locationId, [workorder.companyId])
     : null;
   return { workorder, messages, timeline, user, policy };
-}
-
-export async function markOdooEntered(workorderId, input) {
-  await requireSurveillance(input.userId);
-  await requireOdooEligibleWorkorder(workorderId);
-  const result = await query(
-    `
-      insert into odoo_entry_status (
-        workorder_id, status, odoo_service_order_no, entered_by_user_id, entered_at, note, updated_at
-      )
-      values ($1, 'entered', $2, $3, now(), $4, now())
-      on conflict (workorder_id) do update
-      set status = 'entered',
-          odoo_service_order_no = excluded.odoo_service_order_no,
-          entered_by_user_id = excluded.entered_by_user_id,
-          entered_at = now(),
-          note = excluded.note,
-          updated_at = now()
-      returning *
-    `,
-    [workorderId, input.odooServiceOrderNo || "", input.userId, input.note || ""]
-  );
-  await query("update operational_workorders set status = 'odoo_entered', updated_at = now() where id = $1", [workorderId]);
-  await setWorkorderAttention({ workorderId, reason: "missing_info", active: false, actorUserId: input.userId, details: { source: "odoo_entry" } });
-  return result.rows[0];
 }

@@ -30,7 +30,7 @@ There are three deliberately separate Odoo integration surfaces:
 - **First-party Odoo draft creation** uses the authenticated shared workorder
   Odoo module from Admin Operations or the Surveillance queue to create draft
   Odoo `sale.order` service orders from approved workorders. Canonical module
-  routes own authorization; Surveillance routes remain compatibility adapters.
+  routes own authorization; no role-specific Odoo mutation aliases remain.
   These routes are internal UI contracts and are documented in the outbound
   spec, not in the external OpenAPI file.
 

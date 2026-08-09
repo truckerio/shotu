@@ -3,8 +3,16 @@ import {
   normalizeModuleAccessOverrides,
   normalizeUserModuleAccessMap,
 } from "../../../../shared/workorder-modules.js";
-import { WorkorderModulePolicyConflictError } from "./workorder-policies.repo.js";
 import { invalidRequest } from "../../auth/errors.js";
+
+export class WorkorderModulePolicyConflictError extends Error {
+  constructor() {
+    super("Module access changed elsewhere. Reload and try again.");
+    this.name = "WorkorderModulePolicyConflictError";
+    this.statusCode = 409;
+    this.code = "WORKORDER_MODULE_POLICY_CONFLICT";
+  }
+}
 
 function mapsFromRows(rows) {
   const moduleAccess = {};
@@ -74,6 +82,36 @@ export async function getNormalizedModulePolicy({ companyId, locationId = null }
     mechanicCanRecordParts: result.rows[0].mechanic_can_record_parts === true,
     ...maps,
   };
+}
+
+export async function getNormalizedLocationModulePolicies(locationIds, dependencies = {}) {
+  if (!locationIds?.length) return new Map();
+  const runQuery = dependencies.query || ((text, params) => getPool().query(text, params));
+  const result = await runQuery(
+    `select scope.id, scope.company_id, scope.location_id, scope.version,
+            scope.updated_by_user_id, scope.updated_at,
+            rule.subject_type, coalesce(rule.role_key, rule.user_id::text, rule.subject_id) as subject_id,
+            rule.surface, rule.module_key, rule.access, rule.required
+     from workorder_module_policy_scopes scope
+     left join workorder_module_access_rules rule on rule.scope_id = scope.id
+     where scope.scope_type = 'location' and scope.location_id = any($1::uuid[])
+     order by scope.location_id, rule.subject_type, rule.subject_id, rule.surface, rule.module_key`,
+    [locationIds],
+  );
+  const grouped = new Map();
+  for (const row of result.rows) {
+    const entry = grouped.get(row.location_id) || { head: row, rows: [] };
+    if (row.subject_type) entry.rows.push(row);
+    grouped.set(row.location_id, entry);
+  }
+  return new Map([...grouped].map(([locationId, entry]) => [locationId, {
+    companyId: entry.head.company_id,
+    locationId,
+    version: Number(entry.head.version),
+    updatedByUserId: entry.head.updated_by_user_id || null,
+    updatedAt: entry.head.updated_at || null,
+    ...mapsFromRows(entry.rows),
+  }]));
 }
 
 export async function saveNormalizedModulePolicy({
@@ -147,29 +185,14 @@ export async function saveNormalizedModulePolicy({
     if (locationId) {
       await client.query(
         `insert into location_workorder_policies (
-           location_id, company_id, mechanic_can_record_parts, module_access, user_module_access, updated_by_user_id
-         ) values ($1, $2, $3, $4, $5, $6)
+           location_id, company_id, mechanic_can_record_parts, updated_by_user_id
+         ) values ($1, $2, $3, $4)
          on conflict (location_id) do update set
            mechanic_can_record_parts = excluded.mechanic_can_record_parts,
-           module_access = excluded.module_access,
-           user_module_access = excluded.user_module_access,
            updated_by_user_id = excluded.updated_by_user_id,
            updated_at = now()
          where location_workorder_policies.company_id = excluded.company_id`,
-        [locationId, companyId, mechanicCanRecordParts, normalizedRoles, normalizedUsers, actorId],
-      );
-    } else {
-      await client.query(
-        `insert into company_workorder_module_policies (
-           company_id, module_access, user_module_access, version, updated_by_user_id
-         ) values ($1, $2, $3, $4, $5)
-         on conflict (company_id) do update set
-           module_access = excluded.module_access,
-           user_module_access = excluded.user_module_access,
-           version = excluded.version,
-           updated_by_user_id = excluded.updated_by_user_id,
-           updated_at = now()`,
-        [companyId, normalizedRoles, normalizedUsers, scope.rows[0].version, actorId],
+        [locationId, companyId, mechanicCanRecordParts, actorId],
       );
     }
     await client.query("commit");

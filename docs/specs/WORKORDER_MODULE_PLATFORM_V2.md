@@ -105,7 +105,7 @@ Given an Admin needs to process Odoo work, when they open Operations, then the O
 - EC-4: A user or location is removed; associated rules are removed or disabled transactionally without broadening access.
 - EC-5: Policy data is missing or malformed; built-in safe defaults apply and invalid entries do not broaden access.
 - EC-6: No configurable modules are visible; the fixed workorder identity shell and an explicit no-access state remain usable.
-- EC-7: A role-specific compatibility route is called; it delegates to the same shared authorization service and returns the same result as the canonical module endpoint.
+- EC-7: A removed role-specific module route is called; it is not matched, and the client must use the canonical module endpoint.
 - EC-8: Background polling reads access state; it does not create administrative audit events.
 
 ## API Contracts
@@ -153,8 +153,9 @@ return `409` with `WORKORDER_MODULE_POLICY_CONFLICT` when stale. See
 `docs/api/WORKORDER_MODULE_ADMIN_API.md` for exact request and response shapes.
 
 The product presents create-required as a separate checkbox. Normalized rules
-store it separately; compatibility JSON projections may encode the same state
-as `"required"` while legacy clients migrate.
+store it separately from hidden/read/write access. Bulk Admin responses may
+represent the combined editable draft value as `"required"`, but it is not a
+durable JSON projection.
 
 Canonical runtime contracts:
 
@@ -164,25 +165,24 @@ PATCH /api/workorders/:id/modules/:moduleId
 POST  /api/workorders/:id/modules/:moduleId/actions/:action
 ```
 
-Every runtime route MUST use an explicit registry allowlist mapping the module/action to a schema and service handler. Compatibility routes MAY remain temporarily but MUST delegate to the same guarded service.
+Every runtime route MUST use an explicit registry allowlist mapping the module/action to a schema and service handler. Role-specific mutation aliases are not part of the V2 runtime contract.
 
 ## Data Models
 
 | Entity | Required fields | Constraints |
 | --- | --- | --- |
-| Company module policy | company id, sparse role access JSON, sparse user access JSON, version, updated by, timestamps | one row per company; optimistic version |
-| Location workorder policy | location id, company id, mechanic-parts rule, sparse role access JSON, sparse user access JSON, version, updated by, timestamps | one row per location; optimistic version |
 | Normalized module policy scope | scope type, company, optional location, version, updated by, timestamps | unique company scope and unique location scope |
 | Normalized module rule | scope, role/user subject, page, module, access, required | unique per scope, subject, page, and module; required stored separately |
+| Location workorder policy | location id, company id, mechanic-parts rule, updated by, timestamps | one row per location; module access is not stored here |
 | Resolved access | module id, page, access, actions, source | returned only for the current actor at runtime |
 | Audit event payload | actor, scope, target, module, page, before, after, request id, timestamp | emitted once after a successful policy mutation |
 
-Migrations 049 and 050 add the compatibility location/company sparse maps.
+Migrations 049 and 050 introduced temporary location/company sparse maps.
 Migration 051 adds normalized policy scopes and rules with a separate required
-flag. Migration 052 adds optimistic versioning to location compatibility
-policies, and migration 053 enforces normalized subject integrity. Canonical
-writes project to compatibility storage during the migration window; legacy
-columns are not removed before production verification.
+flag. Migration 052 adds optimistic versioning for the transition, migration
+053 enforces normalized subject integrity, and migration 054 backfills the last
+projection values before dropping the JSON columns and company projection
+table. Canonical writes now persist only normalized scopes and rules.
 
 ## Out of Scope
 
@@ -191,4 +191,4 @@ columns are not removed before production verification.
 - OS-3: Replacing kiosk, role queues, or role-specific home-screen navigation.
 - OS-4: Redesigning Odoo provider payloads, part inventory behavior, printing, or workorder lifecycle semantics.
 - OS-5: Implementing the auditing feature's event table, retention, export, or audit UI in this slice.
-- OS-6: Removing legacy compatibility storage or routes before migration parity and production verification.
+- OS-6: Reintroducing role-specific mutation routes or duplicate policy storage after canonical migration.

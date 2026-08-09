@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { categorizeSurveillanceRows, isOdooEligibleStatus } from "./surveillance.service.js";
+import { categorizeSurveillanceRows } from "./surveillance.service.js";
 
 test("surveillance queues active work separately from approved Odoo work", () => {
   const rows = [
@@ -28,12 +28,4 @@ test("active work never appears in Needs Odoo before office approval", () => {
 
   assert.equal(queues.active.length, 1);
   assert.equal(queues.pendingOdoo.length, 0);
-});
-
-test("only office-approved work can enter the Odoo workflow", () => {
-  assert.equal(isOdooEligibleStatus("accepted"), false);
-  assert.equal(isOdooEligibleStatus("in_progress"), false);
-  assert.equal(isOdooEligibleStatus("mechanic_done"), false);
-  assert.equal(isOdooEligibleStatus("closed"), true);
-  assert.equal(isOdooEligibleStatus("odoo_entered"), true);
 });
