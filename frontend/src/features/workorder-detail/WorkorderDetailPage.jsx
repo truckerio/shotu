@@ -326,12 +326,12 @@ export function WorkorderDetailPage({
           mechanics: assignmentPolicy.canRead ? detailMechanicNames : "",
           unit: unitPolicy.canRead ? form.unitNo || mechanicAsset.unitNo || mechanicAsset.name : "",
           unitType: unitPolicy.canRead ? form.unitType || mechanicAsset.unitType || "Unit" : "Workorder",
-          actions: isMechanicDetail && !isCompact && completionPolicy.canWrite ? (
+          actions: isMechanicDetail && !isCompact && completionPolicy.canWrite && activeWorkorder?.allowedActions.markDone ? (
               <button
                 className="finish-work-button"
                 type="button"
                 onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
+                disabled={Boolean(mechanicAction.busy)}
               >
                 <CheckCircle />
                 <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>
@@ -397,13 +397,13 @@ export function WorkorderDetailPage({
             </div>
           ) : null}
 
-          {isMechanicDetail && isCompact && renderedDetailSection === "completion" && completionPolicy.canWrite ? (
+          {isMechanicDetail && isCompact && renderedDetailSection === "completion" && completionPolicy.canWrite && activeWorkorder?.allowedActions.markDone ? (
             <div className="mechanic-compact-primary-action">
               <button
                 className="finish-work-button"
                 type="button"
                 onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                disabled={!activeWorkorder?.allowedActions.markDone || Boolean(mechanicAction.busy)}
+                disabled={Boolean(mechanicAction.busy)}
               >
                 <CheckCircle />
                 <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>

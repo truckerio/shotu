@@ -14,6 +14,7 @@
     "db:check": "node scripts/check-database.js",
     "db:create-admin": "node --env-file=.env src/server/db/seeds/first-admin.js",
     "db:seed-demo-users": "node --env-file=.env src/server/db/seeds/demo-users.js",
+    "db:seed-qa-roles": "node --env-file=.env src/server/db/seeds/qa-role-users.js",
     "db:seed-chino-volume": "node --env-file=.env src/server/db/seeds/chino-volume.js",
     "kiosk:pins:reset": "node scripts/kiosk/reset-mechanic-pins.js",
     "test:parts-helper": "node --test src/server/modules/parts-helper/parts-helper.test.js",

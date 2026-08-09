@@ -9,7 +9,7 @@ import { useRoleRouterLifecycleEffects } from "./useRoleRouterLifecycleEffects.j
 import { RoleWorkspaceOutlet } from "./RoleWorkspaceOutlet.jsx";
 import { useInitialRoleRouteHydration, useWorkorderDetailRoute } from "./useWorkorderDetailRoute.js";
 import { useWorkorderDetailViewModel } from "./useWorkorderDetailViewModel.js";
-import { updateMechanicProgress } from "./role-router-api.js";
+import { updateDetailDiagnosisRepair } from "./role-router-api.js";
 import {
   createDraftBaselineFromForm,
   createInitialDraftBaseline,
@@ -289,15 +289,15 @@ export function RoleRouter({ actor }) {
     selectedVehicle,
     userId: actor.id,
   });
+  const saveDiagnosisRepair = useCallback(
+    (payload) => updateDetailDiagnosisRepair({ ...payload, role: actor.role }), [actor.role]);
   const mechanicProgress = useMechanicProgress({
     actorId: actor.id,
-    workorderId: isMechanicDetail ? activeWorkorder?.workorder?.id : null,
-    value: {
-      diagnosis: form.diagnosis,
-      workPerformed: form.workPerformed,
-    },
+    workorderId: activeWorkorder?.allowedActions?.saveNotes
+      ? activeWorkorder?.workorder?.id : null,
+    value: { diagnosis: form.diagnosis, workPerformed: form.workPerformed },
     initialVersion: activeWorkorder?.workorder?.progressVersion || 1,
-    saveProgress: updateMechanicProgress,
+    saveProgress: saveDiagnosisRepair,
   });
   const officeActions = useOfficeWorkorderActions({
     activeWorkorder,

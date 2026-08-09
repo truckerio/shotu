@@ -23,3 +23,36 @@ export function updateMechanicProgress({
     }),
   });
 }
+
+export async function updateDetailDiagnosisRepair({
+  role,
+  workorderId,
+  diagnosis,
+  workPerformed,
+  expectedVersion,
+  recordActivity,
+}, request = api) {
+  if (role === "mechanic") {
+    return updateMechanicProgress({
+      workorderId,
+      diagnosis,
+      workPerformed,
+      expectedVersion,
+      recordActivity,
+    });
+  }
+
+  const response = await request(
+    `/api/workorders/${encodeURIComponent(workorderId)}/modules/diagnosisRepair`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        diagnosis,
+        workPerformed,
+        expectedVersion,
+        recordActivity,
+      }),
+    },
+  );
+  return response.result;
+}

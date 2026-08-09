@@ -53,6 +53,29 @@ test("start-date changes keep the state updater pure and autosave the derived en
   assert.deepEqual(autosavePatches, ["queued"]);
 });
 
+test("diagnosis module changes do not race the administrative autosave", () => {
+  const autosaveCalls = [];
+  const controller = createRoleRouterFormController({
+    activeWorkorder: {
+      allowedActions: { update: true },
+      workorder: { id: "workorder-1" },
+    },
+    actorId: "admin-1",
+    form: { workEndDate: "" },
+    isOfficeDetail: true,
+    officeActionsRef: { current: { queueOfficeWorkorderAutosave: () => autosaveCalls.push("queued") } },
+    setActiveWorkorder: () => {},
+    setCreateErrors: () => {},
+    setForm: () => {},
+    setUsedPartsDirty: () => {},
+  });
+
+  controller.updateField("diagnosis", "Found leak");
+  controller.updateField("workPerformed", "Replaced hose");
+
+  assert.deepEqual(autosaveCalls, []);
+});
+
 test("shared form callbacks remain stable across unrelated router renders", () => {
   assert.match(source, /return useMemo\(\(\) => createRoleRouterFormController/);
   assert.match(source, /form: \{ workEndDate: form\.workEndDate \}/);

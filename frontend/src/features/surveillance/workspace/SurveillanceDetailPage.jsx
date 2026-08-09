@@ -14,6 +14,10 @@ import {
 } from "../../workorder-detail/workorder-detail-sections.js";
 import { canonicalDetailPreviewTemplate } from "../../workorder-detail/workorder-preview-template.js";
 import {
+  canonicalApprovalName,
+  canonicalPreviewTimes,
+} from "../../workorder-detail/workorder-handoff.js";
+import {
   normalizeWorkorderFormData,
   workDateRangeLabel,
   workorderPhysicalPageCount,
@@ -88,6 +92,12 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     ...formData,
     ...canonicalDetailPreviewTemplate(workorder),
     mechanicConcern: formData.mechanicConcern || workorder.concern || "",
+    diagnosis: workorder.diagnosis || formData.diagnosis || "",
+    workPerformed: workorder.workPerformed || formData.workPerformed || "",
+    mechanicName: mechanicNames || formData.mechanicName || "",
+    managerName: canonicalApprovalName(workorder) || formData.managerName || "",
+    authorizedBy: canonicalApprovalName(workorder) || formData.authorizedBy || "",
+    ...canonicalPreviewTimes(workorder),
     customerCompanyName: customerName || "",
     unitNo: formData.unitNo || assetLabel || "",
     unitType: formData.unitType || unitType || "",

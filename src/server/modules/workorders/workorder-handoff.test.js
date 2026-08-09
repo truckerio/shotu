@@ -22,6 +22,7 @@ test("Manager actions reflect active, review, correction, and terminal lifecycle
     update: true,
     updateAdministrative: true,
     saveNotes: true,
+    sendMessage: true,
     recordUsedParts: true,
     addApprovedParts: true,
     approve: false,

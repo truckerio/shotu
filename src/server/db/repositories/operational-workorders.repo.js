@@ -554,6 +554,15 @@ export async function updateOperationalWorkorder(workorderId, input) {
     if (input.expectedUpdatedAt && new Date(input.expectedUpdatedAt).getTime() !== new Date(before.updated_at).getTime()) {
       throw lifecycleConflict("WORKORDER_STALE", "This workorder changed elsewhere. Reload before saving.");
     }
+    if (
+      Object.prototype.hasOwnProperty.call(input, "expectedVersion")
+      && before.progress_version !== input.expectedVersion
+    ) {
+      throw lifecycleConflict(
+        "WORKORDER_PROGRESS_VERSION_CONFLICT",
+        "This workorder changed elsewhere. Reload before saving.",
+      );
+    }
     let canCorrectClosed = false;
     if (before.status === WORKORDER_STATUS.CLOSED) {
       const attention = await client.query(
@@ -593,6 +602,9 @@ export async function updateOperationalWorkorder(workorderId, input) {
             concern = coalesce($6, concern),
             office_notes = coalesce($7, office_notes),
             form_data = coalesce($8::jsonb, form_data),
+            diagnosis = case when $9::boolean then $10 else diagnosis end,
+            work_performed = case when $11::boolean then $12 else work_performed end,
+            progress_version = progress_version + case when $9::boolean or $11::boolean then 1 else 0 end,
             updated_at = now()
         where id = $1
       `,
@@ -605,6 +617,10 @@ export async function updateOperationalWorkorder(workorderId, input) {
         input.concern ?? null,
         input.officeNotes ?? null,
         normalizedInput.formData === undefined ? null : JSON.stringify(normalizedInput.formData),
+        Object.prototype.hasOwnProperty.call(input, "diagnosis"),
+        input.diagnosis ?? "",
+        Object.prototype.hasOwnProperty.call(input, "workPerformed"),
+        input.workPerformed ?? "",
       ]
     );
     await addFieldEvents(client, { workorderId, changes, changedByUserId: input.changedByUserId });

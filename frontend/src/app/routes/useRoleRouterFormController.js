@@ -4,6 +4,8 @@ import { writeOfficeWorkorderEditBackup } from "../../features/workorder-detail/
 import { api } from "../../lib/api.js";
 import { emptyPart } from "../../../../shared/workorder-template.js";
 
+const MODULE_OWNED_AUTOSAVE_FIELDS = new Set(["diagnosis", "workPerformed"]);
+
 export function normalizeSavedUsedParts(parts) {
   return parts.map((part) => ({
     partNo: part.partNo,
@@ -43,7 +45,9 @@ export function createRoleRouterFormController({
   function updateField(field, value) {
     clearCreateErrors(field);
     setForm((current) => ({ ...current, [field]: value }));
-    stageOfficeAutosave({ [field]: value });
+    if (!MODULE_OWNED_AUTOSAVE_FIELDS.has(field)) {
+      stageOfficeAutosave({ [field]: value });
+    }
   }
 
   function updateStartDate(value) {

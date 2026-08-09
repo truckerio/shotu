@@ -42,6 +42,9 @@ test("Surveillance treats a persisted Odoo order as created after reopening", ()
 
 test("Surveillance Preview overlays stale saved headings with the current location", () => {
   assert.match(detailPage, /import \{ canonicalDetailPreviewTemplate \}/);
+  assert.match(detailPage, /canonicalPreviewTimes/);
+  assert.match(detailPage, /mechanicName: mechanicNames/);
+  assert.match(detailPage, /managerName: canonicalApprovalName\(workorder\)/);
   assert.match(
     detailPage,
     /\.\.\.formData,\s*\.\.\.canonicalDetailPreviewTemplate\(workorder\),/,
