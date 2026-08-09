@@ -9,6 +9,13 @@
 }
 
 .repair-history-heading {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.repair-history-heading > div {
   display: grid;
   gap: 2px;
 }
@@ -78,6 +85,49 @@
   opacity: .5;
 }
 
+.repair-history-suggestions .repair-history-dismiss {
+  border-color: transparent;
+  color: #535862;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  width: 36px;
+}
+
+.repair-history-suggestions .repair-history-dismiss:hover,
+.repair-history-suggestions .repair-history-dismiss:focus-visible {
+  background: #f2f4f7;
+  color: #181d27;
+}
+
+.repair-history-dismiss svg {
+  height: 18px;
+  width: 18px;
+}
+
+.repair-history-reopen {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #175cd3;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: var(--text-caption, 12px);
+  font-weight: 600;
+  justify-self: start;
+  margin-top: 6px;
+  min-height: 36px;
+  padding: 6px 2px;
+}
+
+.repair-history-reopen:hover,
+.repair-history-reopen:focus-visible {
+  color: #004eeb;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .repair-history-state {
   margin: 0;
 }
@@ -91,5 +141,11 @@
   .repair-history-suggestions button {
     min-height: 44px;
     width: 100%;
+  }
+
+  .repair-history-suggestions .repair-history-dismiss {
+    height: 44px;
+    min-height: 44px;
+    width: 44px;
   }
 }

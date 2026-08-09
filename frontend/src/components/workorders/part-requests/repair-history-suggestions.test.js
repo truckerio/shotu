@@ -19,6 +19,15 @@ test("history lookup is bounded, cancellable, stale-safe, and explicit apply onl
   assert.match(component, /Nothing is filled until you apply a suggestion/);
 });
 
+test("history suggestions can be dismissed and reopened without changing repair text", () => {
+  assert.match(component, /aria-label="Hide previous work suggestions"/);
+  assert.match(component, /onClick=\{\(\) => setExpanded\(false\)\}/);
+  assert.match(component, /Show previous work/);
+  assert.match(component, /onClick=\{\(\) => setExpanded\(true\)\}/);
+  assert.match(component, /useEffect\(\(\) => \{\s*setExpanded\(true\);\s*\}, \[catalogPartId, normalizedPartNumber\]\)/s);
+  assert.doesNotMatch(component, /setExpanded\(false\)[\s\S]{0,120}onApply/);
+});
+
 test("catalog selection does not automatically write repair order", () => {
   assert.doesNotMatch(office, /repairOrder: part\.repairOrder/);
   assert.doesNotMatch(office, /repairOrder: result\.part\.repairOrder/);

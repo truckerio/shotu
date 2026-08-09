@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { XClose } from "@untitledui/icons";
 import { api } from "../../../lib/api.js";
 import {
   normalizeRepairSuggestionsResponse,
@@ -16,10 +17,16 @@ export function RepairHistorySuggestions({
   onApply,
   disabled = false,
 }) {
+  const panelId = useId();
   const requestSequence = useRef(0);
+  const [expanded, setExpanded] = useState(true);
   const [state, setState] = useState("idle");
   const [suggestions, setSuggestions] = useState([]);
   const normalizedPartNumber = String(partNumber || "").trim();
+
+  useEffect(() => {
+    setExpanded(true);
+  }, [catalogPartId, normalizedPartNumber]);
 
   useEffect(() => {
     const sequence = ++requestSequence.current;
@@ -63,11 +70,37 @@ export function RepairHistorySuggestions({
 
   if (state === "idle") return null;
 
+  if (!expanded) {
+    return (
+      <button
+        className="repair-history-reopen"
+        type="button"
+        aria-controls={panelId}
+        aria-expanded="false"
+        onClick={() => setExpanded(true)}
+      >
+        Show previous work
+      </button>
+    );
+  }
+
   return (
-    <section className="repair-history-suggestions" aria-label="Repair order suggestions from service history">
+    <section id={panelId} className="repair-history-suggestions" aria-label="Repair order suggestions from service history">
       <div className="repair-history-heading">
-        <strong>Previous work with this part</strong>
-        <span>Nothing is filled until you apply a suggestion.</span>
+        <div>
+          <strong>Previous work with this part</strong>
+          <span>Nothing is filled until you apply a suggestion.</span>
+        </div>
+        <button
+          className="repair-history-dismiss"
+          type="button"
+          aria-label="Hide previous work suggestions"
+          aria-controls={panelId}
+          aria-expanded="true"
+          onClick={() => setExpanded(false)}
+        >
+          <XClose aria-hidden="true" />
+        </button>
       </div>
       {state === "results" ? (
         <ul>
