@@ -46,6 +46,12 @@ test("shared composer keeps camera capture, autosize, keyboard submit, and 44px 
   assert.match(css, /\.chat-send-button:disabled\s*\{[^}]*background:\s*#e4e7ec;[^}]*color:\s*#1570ef;/s);
 });
 
+test("shared composer gives the message field full width when attachments are unavailable", () => {
+  assert.match(composer, /chat-prompt-surface \$\{allowAttachments \? "has-attachments" : ""\}/);
+  assert.match(css, /\.chat-prompt-surface\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 44px;/s);
+  assert.match(css, /\.chat-prompt-surface\.has-attachments\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 44px;/s);
+});
+
 test("empty conversation uses shared thread without a bordered placeholder card", () => {
   assert.match(thread, /visibleMessages\.length \? "" : "is-empty"/);
   assert.match(mobileChatCss(), /\.chat-thread\.is-empty\s*\{[^}]*align-content:\s*center;[^}]*min-height:\s*0;/s);

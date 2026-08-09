@@ -160,7 +160,7 @@ export function ChatComposer({
         </div>
       ) : null}
 
-      <div className="chat-prompt-surface">
+      <div className={`chat-prompt-surface ${allowAttachments ? "has-attachments" : ""}`}>
         {allowAttachments ? (
           <>
             <input
