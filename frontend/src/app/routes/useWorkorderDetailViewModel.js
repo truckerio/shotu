@@ -23,9 +23,12 @@ export function useWorkorderDetailViewModel({
   isMechanicDetail,
   isOfficeDetail,
   officeAssignment,
+  policyOverrides = null,
   previewPanelOpen,
+  role,
   selectedOfficeLocation,
   selectedVehicle,
+  userId = "",
 }) {
   const assignedMechanicIds = assignedMechanicIdsFromDetail(activeWorkorder);
   const conversationMessages = useMemo(
@@ -55,8 +58,11 @@ export function useWorkorderDetailViewModel({
     isMechanicDetail,
     isOfficeDetail,
     pendingPartCount,
+    policyOverrides,
+    role: role || (isMechanicDetail ? "mechanic" : isOfficeDetail ? "office" : "surveillance"),
     timelineCount: visibleTimeline.length,
     unitType: form.unitType,
+    userId,
     locale: interfaceLocale,
   }), [
     activeWorkorder,
@@ -70,6 +76,9 @@ export function useWorkorderDetailViewModel({
     isMechanicDetail,
     isOfficeDetail,
     pendingPartCount,
+    policyOverrides,
+    role,
+    userId,
     visibleTimeline.length,
   ]);
   const assignedMechanicKey = [...assignedMechanicIds].sort().join(",");

@@ -14,3 +14,8 @@ test("section navigation responds on click without changing routes during pointe
   assert.doesNotMatch(source, /startTransition/);
   assert.match(source, /aria-current=\{visualActiveSection === section\.id \? "page" : undefined\}/);
 });
+
+test("section navigation resolves icons from module-owned manifests", () => {
+  assert.match(source, /workorderModuleDescriptor\(sectionId\)\?\.icon \|\| Tool02/);
+  assert.doesNotMatch(source, /SECTION_ICONS/);
+});

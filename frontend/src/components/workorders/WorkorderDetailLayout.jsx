@@ -3,7 +3,9 @@ import "./workorder-detail-layout.css";
 
 const DETAIL_LAYOUT = Object.freeze({
   defaultPreviewPercent: 40,
-  minControlWidth: 440,
+  // Keep the detail editor usable when users drag the split. Below this
+  // width assignment controls and summary facts become clipped.
+  minControlWidth: 560,
   minPreviewWidth: 680,
   storageKey: "workorder.detailPreviewPercent.v2",
 });

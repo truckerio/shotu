@@ -15,6 +15,7 @@ const detailServiceUrl = new URL("../workorders/workorder-detail.service.js", im
 const mechanicServiceUrl = new URL("../mechanic/mechanic.service.js", import.meta.url);
 const officeServiceUrl = new URL("../office/office.service.js", import.meta.url);
 const surveillanceServiceUrl = new URL("../surveillance/surveillance.service.js", import.meta.url);
+const moduleAccessServiceUrl = new URL("../workorders/workorder-module-access.service.js", import.meta.url);
 
 test("receipt migration owns normalized per-user state with integrity and lookup indexes", async () => {
   const sql = await readFile(migrationUrl, "utf8");
@@ -181,15 +182,14 @@ test("shared list projection aggregates multiple recipients without legacy read_
   assert.doesNotMatch(source, /cm\.read_by|read_by\s*=/i);
 });
 
-test("mechanic and office receipt routes authorize the workorder before using session actor", async () => {
+test("mechanic and office receipt routes require resource-scoped chat acknowledgement access", async () => {
   for (const routeUrl of [mechanicRoutesUrl, officeRoutesUrl]) {
     const source = await readFile(routeUrl, "utf8");
     assert.match(source, /workorderIdFrom\(url\.pathname, "\/message-receipts"\)/);
     assert.match(
       source,
-      /if \(req\.method === "POST" && receiptWorkorderId\) \{\s*await requireWorkorderAccess\(requestContext, receiptWorkorderId\)/,
+      /runAction\(requestContext, receiptWorkorderId, "chat", "acknowledge", input\)/,
     );
-    assert.match(source, /actorUserId: (mechanicUserId|officeUserId)/);
     assert.doesNotMatch(source, /actorUserId:\s*input\./);
   }
   const mechanicSource = await readFile(mechanicRoutesUrl, "utf8");
@@ -197,6 +197,12 @@ test("mechanic and office receipt routes authorize the workorder before using se
     /const receiptWorkorderId[\s\S]*?if \(req\.method === "POST" && receiptWorkorderId\) \{[\s\S]*?return true;\s*}/,
   )?.[0] || "";
   assert.doesNotMatch(receiptBlock, /allowAvailable|allowActiveAtLocation/);
+
+  const moduleAccessSource = await readFile(moduleAccessServiceUrl, "utf8");
+  assert.match(
+    moduleAccessSource,
+    /const workorder = await requireAccess\(context, workorderId, resourceAccess\);[\s\S]*const policies = await getEffectivePolicy/,
+  );
 });
 
 test("detail services pass viewer identity only for authenticated mechanic and office senders", async () => {

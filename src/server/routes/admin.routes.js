@@ -4,6 +4,7 @@ import {
   addAdminLocation,
   adminLocationDetail,
   adminLocationWorkorderPolicy,
+  adminCompanyWorkorderModulePolicy,
   adminKioskDevices,
   adminLocations,
   adminOperations,
@@ -23,6 +24,8 @@ import {
   updateAdminUserLocations,
   saveAdminTemplate,
   saveAdminLocationWorkorderPolicy,
+  saveAdminCompanyWorkorderModulePolicy,
+  adminWorkorderModuleCatalog,
 } from "../modules/admin/admin.service.js";
 import { invitationPublicOrigin } from "../modules/admin/invitation-link.js";
 import { parseWorkorderOperationsQuery } from "../modules/workorders/workorder-operations.schemas.js";
@@ -39,8 +42,19 @@ import {
   updateLocationSchema,
   updateLocationTemplateSchema,
   updateLocationWorkorderPolicySchema,
+  updateCompanyWorkorderModulePolicySchema,
 } from "../modules/admin/admin.schemas.js";
 import { kioskDeviceCookie } from "../modules/kiosk/kiosk-cookie.js";
+import {
+  patchCanonicalModuleAccess,
+  readCanonicalModuleAccess,
+  readCanonicalUserModuleAccess,
+} from "../modules/admin/module-access.service.js";
+import {
+  canonicalModuleRulePatchSchema,
+  moduleAccessRoleSchema,
+  moduleAccessScopeSchema,
+} from "../modules/admin/module-access.schemas.js";
 
 function locationPath(pathname, suffix = "") {
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -69,6 +83,12 @@ function companyManagedUserPath(pathname, suffix = "") {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function companyPath(pathname, suffix = "") {
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^/api/admin/companies/([^/]+)${escaped}$`).exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function locationInvitationPath(pathname, suffix = "") {
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = new RegExp(`^/api/admin/locations/([^/]+)/invitations/([^/]+)${escaped}$`).exec(pathname);
@@ -87,8 +107,8 @@ function locationKioskDevicePath(pathname, suffix = "") {
   } : null;
 }
 
-export async function handleAdminApi(req, res, url, helpers) {
-  const { sendJson, readBody, requestContext } = helpers;
+export async function handleAdminApi(req, res, url, helpers, dependencies = {}) {
+  const { sendJson, readBody, requestContext, emitAdministrativeAuditEvent } = helpers;
 
   const publicToken = invitationToken(url.pathname);
   if (req.method === "GET" && publicToken) {
@@ -111,6 +131,76 @@ export async function handleAdminApi(req, res, url, helpers) {
 
   if (!url.pathname.startsWith("/api/admin/")) return false;
   const actor = requestContext.actor;
+  const readModuleAccess = dependencies.readModuleAccess || readCanonicalModuleAccess;
+  const readUserModuleAccess = dependencies.readUserModuleAccess || readCanonicalUserModuleAccess;
+  const patchModuleAccess = dependencies.patchModuleAccess || patchCanonicalModuleAccess;
+
+  if (url.pathname === "/api/admin/module-access" && req.method === "GET") {
+    const scope = moduleAccessScopeSchema.parse({
+      companyId: url.searchParams.get("companyId"),
+      locationId: url.searchParams.get("locationId") || undefined,
+    });
+    sendJson(res, 200, { policy: await readModuleAccess(requestContext, scope) });
+    return true;
+  }
+  const canonicalUserMatch = /^\/api\/admin\/module-access\/users\/([^/]+)$/.exec(url.pathname);
+  if (canonicalUserMatch && req.method === "GET") {
+    const userId = moduleAccessScopeSchema.shape.companyId.parse(decodeURIComponent(canonicalUserMatch[1]));
+    const scope = moduleAccessScopeSchema.parse({
+      companyId: url.searchParams.get("companyId"),
+      locationId: url.searchParams.get("locationId") || undefined,
+    });
+    sendJson(res, 200, { policy: await readUserModuleAccess(requestContext, userId, scope) });
+    return true;
+  }
+  if (canonicalUserMatch && req.method === "PATCH") {
+    const userId = moduleAccessScopeSchema.shape.companyId.parse(decodeURIComponent(canonicalUserMatch[1]));
+    const input = canonicalModuleRulePatchSchema.parse(await readBody(req));
+    sendJson(res, 200, { policy: await patchModuleAccess(requestContext, "user", userId, input, {
+      emitAuditEvent: emitAdministrativeAuditEvent,
+      requestId: req.requestId || null,
+    }) });
+    return true;
+  }
+  const canonicalRoleMatch = /^\/api\/admin\/module-access\/roles\/([^/]+)$/.exec(url.pathname);
+  if (canonicalRoleMatch && req.method === "PATCH") {
+    const role = moduleAccessRoleSchema.parse(decodeURIComponent(canonicalRoleMatch[1]));
+    const input = canonicalModuleRulePatchSchema.parse(await readBody(req));
+    sendJson(res, 200, { policy: await patchModuleAccess(requestContext, "role", role, input, {
+      emitAuditEvent: emitAdministrativeAuditEvent,
+      requestId: req.requestId || null,
+    }) });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/module-catalog") {
+    sendJson(res, 200, { catalog: adminWorkorderModuleCatalog() });
+    return true;
+  }
+
+  const companyModulePolicyId = companyPath(url.pathname, "/module-policy");
+  if (req.method === "GET" && companyModulePolicyId) {
+    sendJson(res, 200, {
+      policy: await adminCompanyWorkorderModulePolicy(requestContext, companyModulePolicyId),
+    });
+    return true;
+  }
+  if (req.method === "PATCH" && companyModulePolicyId) {
+    const input = updateCompanyWorkorderModulePolicySchema.parse(await readBody(req));
+    sendJson(res, 200, {
+      policy: await saveAdminCompanyWorkorderModulePolicy(
+        requestContext,
+        companyModulePolicyId,
+        input,
+        actor.id,
+        {
+          emitAuditEvent: emitAdministrativeAuditEvent,
+          requestId: req.requestId || null,
+        },
+      ),
+    });
+    return true;
+  }
 
   if (req.method === "GET" && url.pathname === "/api/admin/operations/summary") {
     sendJson(res, 200, { counts: await adminOperationsSummary(requestContext, parseWorkorderOperationsQuery(url.searchParams)) });
@@ -195,6 +285,10 @@ export async function handleAdminApi(req, res, url, helpers) {
         policyId,
         input,
         actor.id,
+        {
+          emitAuditEvent: emitAdministrativeAuditEvent,
+          requestId: req.requestId || null,
+        },
       ),
     });
     return true;

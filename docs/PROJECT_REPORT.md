@@ -1,4 +1,4 @@
-# Owl - Engineering Project Report
+# Owl 2.0 - Engineering Project Report
 
 ## What This Project Is
 
@@ -26,7 +26,7 @@ Main flow:
 4. Mechanic accepts or joins work.
 5. Mechanic records diagnosis, repair, used parts, chat, and photos.
 6. Office reviews details, parts, and timeline.
-7. Completed work moves to surveillance/Odoo flow.
+7. Completed work moves to Surveillance/Odoo flow.
 8. Workorder preview/print uses the location template.
 
 Samsara integration:
@@ -145,6 +145,8 @@ Frontend:
 - `frontend/src/features/office` - office queue/home UI.
 - `frontend/src/features/admin` - admin locations/users/templates/settings/integrations.
 - `frontend/src/features/surveillance` - completed/Odoo review flow.
+- `frontend/src/features/workorder-modules` - V2.0 frontend module filtering
+  for create/detail/queue surfaces.
 - `frontend/src/components/workorders` - shared workorder UI components.
 - `frontend/src/components/forms` - shared operational form pieces.
 - `frontend/src/components/layout` - shared page/workspace headers.
@@ -159,7 +161,8 @@ Backend:
 - `src/server/auth` - session actor, permissions, authorization.
 - `src/server/integrations` - external providers like Samsara and VIN.
 - `src/server/integrations/odoo` - Odoo machine API, Admin-managed Odoo.sh
-  connection, location mapping, product identity, and inventory synchronization.
+  connection, product/service-history import, outbound vehicle/warehouse/labor
+  mapping, draft service-order creation, and inventory synchronization.
 - `src/server/services` - cross-domain services.
 - `src/server/print` - print/PDF behavior.
 - `src/server/security` - origin/rate-limit/security checks.
@@ -199,6 +202,11 @@ Attention signals are separate from lifecycle:
 - Office, mechanic, admin, and surveillance must read the same backend workorder record.
 - Shared workorder UI belongs in `features/workorder-detail` or `components/workorders`.
 - Shared create-workorder UI belongs in `features/create-workorder`; role differences should be passed as capabilities.
+- V2.0 module access starts from `shared/workorder-modules.js`. Effective access
+  resolves location user, company user, location role, company role, then the
+  built-in safe default. Each frontend module owns its manifest, renderer
+  adapter, controller adapter, and tests under `features/workorder-modules/`.
+  Do not create separate role pages for the same workorder task.
 - Role-only behavior belongs inside its role folder.
 - Do not call Samsara on every search keystroke; sync first, search Postgres.
 - Do not expose provider tokens to the browser.
@@ -210,8 +218,13 @@ Attention signals are separate from lifecycle:
 
 - Login/session with role-based access.
 - Admin locations, users, templates, settings, and Samsara integration UI.
-- Admin-managed Odoo connection, immutable location mapping, parts-master
-  refresh, and mapped-location inventory synchronization.
+- Admin-managed Odoo connection, immutable location mapping, parts-master and
+  service-history refresh, outbound vehicle/warehouse/labor setup, draft
+  service-order creation, created-order tracking/linking, and mapped-location
+  inventory synchronization.
+- Admin Operations includes the Odoo backlog; workorder Odoo entry uses the
+  same configurable detail module as Surveillance instead of a duplicate Admin
+  workspace.
 - Office operational queue with filters.
 - Create workorder with preview/template.
 - Draft saving for office/admin create flow.
@@ -226,7 +239,8 @@ Attention signals are separate from lifecycle:
 - Samsara asset lookup and autofill.
 - Satellite asset location card.
 - Print/preview workorder template.
-- Surveillance completed/Odoo backlog flow.
+- Surveillance completed/Odoo flow, including readiness blockers, explicit
+  draft Odoo service-order creation, and stored created-order tracking.
 
 ## Good First Files To Read
 

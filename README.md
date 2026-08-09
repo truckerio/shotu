@@ -2,6 +2,13 @@
 
 Multi-user workorder application for office, mechanic, surveillance, and admin workflows, with modular external integrations and a physical batch-print generator.
 
+Current application version: **2.0.0**. V2 uses registered workorder modules,
+company/location/named-user access policies, shared role surfaces, and
+server-enforced module actions. See
+[`docs/specs/WORKORDER_MODULE_PLATFORM_V2.md`](docs/specs/WORKORDER_MODULE_PLATFORM_V2.md)
+and its
+[`implementation ledger`](docs/specs/WORKORDER_MODULE_PLATFORM_V2_TRACEABILITY.md).
+
 PostgreSQL is the operational source of truth. Better Auth owns credentials and sessions; application tables own roles, company/location scope, workorders, and audit history.
 
 ## Structure

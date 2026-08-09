@@ -16,9 +16,12 @@ import {
 } from "../../db/repositories/locations.repo.js";
 import { getLocationTemplate, upsertLocationTemplate } from "../../db/repositories/templates.repo.js";
 import {
+  getCompanyWorkorderModulePolicy,
   getLocationWorkorderPolicy,
+  saveCompanyWorkorderModulePolicy,
   saveLocationWorkorderPolicy,
 } from "../../db/repositories/workorder-policies.repo.js";
+import { workorderModuleCatalog } from "../../../../shared/workorder-modules.js";
 import { findAuthUserByEmail, getAuthActorByAuthUserId } from "../../db/repositories/auth-users.repo.js";
 import {
   deleteManagedUser,
@@ -34,6 +37,7 @@ import { requireCompanyAccess } from "../../auth/authorize.js";
 import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import { sendInvitationEmail } from "../../email/invitation.js";
 import { buildInvitationUrl } from "./invitation-link.js";
+import { emitModulePolicyAudit } from "./module-policy-audit.js";
 import {
   issueMechanicKioskPin,
   kioskDevicesForLocation,
@@ -97,6 +101,53 @@ function requireLogin(target) {
 
 export async function adminLocations(context) {
   return listLocationsWithAdminCounts(authorizedCompanyIds(context));
+}
+
+export function adminWorkorderModuleCatalog() {
+  return workorderModuleCatalog();
+}
+
+export async function adminCompanyWorkorderModulePolicy(context, companyId, dependencies = {}) {
+  requireCompanyAccess(context, companyId);
+  const getPolicy = dependencies.getPolicy || getCompanyWorkorderModulePolicy;
+  return await getPolicy(companyId) || {
+    companyId,
+    moduleAccess: {},
+    userModuleAccess: {},
+    version: 0,
+    updatedByUserId: null,
+    updatedAt: null,
+  };
+}
+
+export async function saveAdminCompanyWorkorderModulePolicy(
+  context,
+  companyId,
+  input,
+  actorId,
+  dependencies = {},
+) {
+  requireCompanyAccess(context, companyId);
+  const getPolicy = dependencies.getPolicy || getCompanyWorkorderModulePolicy;
+  const savePolicy = dependencies.savePolicy || saveCompanyWorkorderModulePolicy;
+  const beforePolicy = typeof dependencies.emitAuditEvent === "function"
+    ? await getPolicy(companyId)
+    : null;
+  const savedPolicy = await savePolicy({
+    companyId,
+    moduleAccess: input.moduleAccess,
+    userModuleAccess: input.userModuleAccess,
+    expectedVersion: input.expectedVersion,
+    actorId,
+  });
+  await emitModulePolicyAudit(dependencies, {
+    actorId,
+    companyId,
+    beforePolicy,
+    afterPolicy: savedPolicy,
+    requestId: dependencies.requestId || null,
+  });
+  return savedPolicy;
 }
 
 export async function adminOperations(context, input) {
@@ -342,14 +393,31 @@ export async function adminLocationWorkorderPolicy(context, locationId) {
   return getLocationWorkorderPolicy(locationId, authorizedCompanyIds(context));
 }
 
-export async function saveAdminLocationWorkorderPolicy(context, locationId, input, actorId) {
+export async function saveAdminLocationWorkorderPolicy(context, locationId, input, actorId, dependencies = {}) {
   const location = await authorizedLocation(context, locationId);
-  return saveLocationWorkorderPolicy({
+  const getPolicy = dependencies.getPolicy || getLocationWorkorderPolicy;
+  const savePolicy = dependencies.savePolicy || saveLocationWorkorderPolicy;
+  const beforePolicy = typeof dependencies.emitAuditEvent === "function"
+    ? await getPolicy(locationId, authorizedCompanyIds(context))
+    : null;
+  const savedPolicy = await savePolicy({
     locationId,
     companyId: location.company_id,
     mechanicCanRecordParts: input.mechanicCanRecordParts,
+    moduleAccess: input.moduleAccess,
+    userModuleAccess: input.userModuleAccess,
+    expectedVersion: input.expectedVersion,
     actorId,
   });
+  await emitModulePolicyAudit(dependencies, {
+    actorId,
+    companyId: location.company_id,
+    locationId,
+    beforePolicy,
+    afterPolicy: savedPolicy,
+    requestId: dependencies.requestId || null,
+  });
+  return savedPolicy;
 }
 
 export async function updateAdminUserLocations(context, actor, userId, input) {

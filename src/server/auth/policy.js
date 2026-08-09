@@ -17,6 +17,8 @@ export function permissionForRequest(method, pathname) {
   if (pathname.startsWith("/api/office/")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/workorder-drafts")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/surveillance/")) return PERMISSION.WORKORDER_SURVEILLANCE;
+  if (pathname === "/api/workorders" && method === "POST") return PERMISSION.AUTHENTICATED;
+  if (pathname === "/api/workorders/create-context" && method === "GET") return PERMISSION.AUTHENTICATED;
   if (pathname === "/api/parts-helper/live-prices") return PERMISSION.PART_PRICE;
   if (pathname.startsWith("/api/parts-helper/")) return PERMISSION.PART_IDENTIFY;
   if (pathname.startsWith("/api/vehicles/")) return pathname.endsWith("/live-location")

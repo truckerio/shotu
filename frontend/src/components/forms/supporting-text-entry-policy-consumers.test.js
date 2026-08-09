@@ -15,7 +15,7 @@ test("supporting workorder prose uses the shared suggestion field while identifi
     "../workorders/part-requests/OfficePartComposer.jsx",
     "../workorders/part-requests/OfficeRequestCard.jsx",
   ].map(source).join("\n");
-  const surveillance = source("../../features/surveillance/workspace/SurveillanceOdooPanel.jsx");
+  const surveillance = source("../../features/workorder-modules/odoo/WorkorderOdooPanel.jsx");
 
   assert.equal((parts.match(/<NarrativeField/g) || []).length, 4);
   assert.equal(policyCount(parts, "identifier"), 4);

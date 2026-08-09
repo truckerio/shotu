@@ -33,6 +33,13 @@ export function defaultWorkspaceForRole(role) {
   return "office";
 }
 
+// Detail/create navigation has a stable landing view per role. Admins own
+// several workspace views; operations is the workorder queue and therefore
+// the only correct destination for the workorder back action.
+export function workspaceSearchForRole(role) {
+  return role === "admin" ? "?adminView=operations" : "";
+}
+
 export function readInitialWorkspace(actor) {
   const params = currentRouteParams();
   if ((actor.role === "office" || actor.role === "admin") && (params.has("workorder") || params.get("view") === "create")) return "generator";

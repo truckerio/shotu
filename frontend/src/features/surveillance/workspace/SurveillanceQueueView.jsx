@@ -15,7 +15,7 @@ import {
   isSurveillancePhonePrimaryTab,
 } from "../surveillanceQueue.js";
 
-export function SurveillanceQueueView({ actor, embedded = false, queue, onOpenWorkorder }) {
+export function SurveillanceQueueView({ actor, queue, onOpenWorkorder }) {
   const {
     activeDatePreset,
     activeTab,
@@ -44,12 +44,10 @@ export function SurveillanceQueueView({ actor, embedded = false, queue, onOpenWo
 
   const filtersActive = Boolean(search || effectiveLocationFilter || dateStartFilter || dateEndFilter);
 
-  const Shell = embedded ? "div" : "main";
-
   return (
-    <Shell className={`prototype mechanic-home surveillance-home workspace-operations${embedded ? " surveillance-home-embedded" : ""}`}>
-      {embedded ? null : <WorkspaceHeader actor={actor} />}
-      <PageHeader title={embedded ? "Odoo entry" : "Workorders"} />
+    <main className="prototype mechanic-home surveillance-home workspace-operations">
+      <WorkspaceHeader actor={actor} />
+      <PageHeader title="Workorders" />
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
           <div className="surveillance-desktop-queues">
@@ -150,6 +148,6 @@ export function SurveillanceQueueView({ actor, embedded = false, queue, onOpenWo
           )}
         </div>
       </section>
-    </Shell>
+    </main>
   );
 }

@@ -8,7 +8,6 @@ import {
   createAssignmentLoadedState,
   createAssignmentLoadingState,
   createLoadedLocationModel,
-  createLocationMechanicsEndpoint,
   createLocationSelectionPatch,
   createTemplateEndpoint,
   normalizeCreateLocationResponse,
@@ -26,17 +25,11 @@ const locations = [
 ];
 
 test("controller keeps the established template and mechanics API contracts", () => {
-  assert.equal(createTemplateEndpoint("admin"), "/api/admin/template");
-  assert.equal(createTemplateEndpoint("office"), "/api/office/template");
-  assert.equal(createTemplateEndpoint(""), "");
-  assert.equal(
-    createLocationMechanicsEndpoint("chino/yard"),
-    "/api/office/locations/chino%2Fyard/mechanics",
-  );
+  assert.equal(createTemplateEndpoint(), "/api/workorders/create-context");
 });
 
 test("location response prefers the explicit role default and normalizes missing arrays", () => {
-  assert.deepEqual(normalizeCreateLocationResponse({ locations }).defaultLocationEntry, locations[0]);
+  assert.deepEqual(normalizeCreateLocationResponse({ locations }).defaultLocationEntry, { ...locations[0], policy: null });
   assert.deepEqual(
     normalizeCreateLocationResponse({
       location: { id: "loc-chino", name: "Chino Yard" },
@@ -45,10 +38,25 @@ test("location response prefers the explicit role default and normalizes missing
     }).defaultLocationEntry,
     {
       location: { id: "loc-chino", name: "Chino Yard" },
+      mechanics: [],
+      policy: null,
       template: { header_title: "ROLE DEFAULT" },
     },
   );
   assert.deepEqual(normalizeCreateLocationResponse({ locations: null }).locations, []);
+});
+
+test("canonical create context normalizes module access and assignment choices per location", () => {
+  const [entry] = normalizeCreateLocationResponse({
+    locations: [{
+      location: { id: "loc-1", name: "Chino" },
+      mechanics: [{ id: "mech-1", name: "Mechanic 1" }],
+      moduleAccess: { moduleAccess: { surveillance: { create: { concern: "required" } } } },
+      template: { header_title: "CHINO" },
+    }],
+  }).locations;
+  assert.equal(entry.policy.moduleAccess.surveillance.create.concern, "required");
+  assert.deepEqual(entry.mechanics, [{ id: "mech-1", name: "Mechanic 1" }]);
 });
 
 test("loaded location model preserves a valid selection without resetting the draft baseline", () => {
@@ -95,10 +103,11 @@ test("selection patch changes location and template as one autosave-ready payloa
   assert.equal(createLocationSelectionPatch(locations, "missing"), null);
 });
 
-test("mechanics load only for admin or office creation with a selected location", () => {
+test("canonical create context exposes allowed assignment choices for any granted role", () => {
   assert.equal(canLoadCreateMechanics({ actorRole: "admin", selectedLocationId: "loc-1" }), true);
   assert.equal(canLoadCreateMechanics({ actorRole: "office", selectedLocationId: "loc-1" }), true);
-  assert.equal(canLoadCreateMechanics({ actorRole: "mechanic", selectedLocationId: "loc-1" }), false);
+  assert.equal(canLoadCreateMechanics({ actorRole: "mechanic", selectedLocationId: "loc-1" }), true);
+  assert.equal(canLoadCreateMechanics({ actorRole: "surveillance", selectedLocationId: "loc-1" }), true);
   assert.equal(canLoadCreateMechanics({ actorRole: "admin", selectedLocationId: "" }), false);
   assert.equal(canLoadCreateMechanics({ activeWorkorder: { id: "wo-1" }, actorRole: "admin", selectedLocationId: "loc-1" }), false);
 });

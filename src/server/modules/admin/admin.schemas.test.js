@@ -9,6 +9,7 @@ import {
   updateManagedUserLocationsSchema,
   updateLocationTemplateSchema,
   updateLocationWorkorderPolicySchema,
+  updateCompanyWorkorderModulePolicySchema,
 } from "./admin.schemas.js";
 
 test("location input keeps the admin model compact", () => {
@@ -86,11 +87,74 @@ test("admin user management validates account status and strong replacement pass
   assert.throws(() => resetManagedUserPasswordSchema.parse({ password: "short" }));
 });
 
-test("location workorder policy accepts only an explicit mechanic parts decision", () => {
+test("location workorder policy accepts mechanic parts and V2 module access decisions", () => {
   assert.deepEqual(
-    updateLocationWorkorderPolicySchema.parse({ mechanicCanRecordParts: true }),
-    { mechanicCanRecordParts: true },
+    updateLocationWorkorderPolicySchema.parse({
+      mechanicCanRecordParts: true,
+      moduleAccess: {
+        surveillance: {
+          create: {
+            unit: "write",
+            location: "required",
+            concern: "required",
+          },
+        },
+      },
+      userModuleAccess: {
+        "11111111-1111-4111-8111-111111111111": {
+          create: {
+            unit: "write",
+          },
+        },
+      },
+    }),
+    {
+      mechanicCanRecordParts: true,
+      moduleAccess: {
+        surveillance: {
+          create: {
+            unit: "write",
+            location: "required",
+            concern: "required",
+          },
+        },
+      },
+      userModuleAccess: {
+        "11111111-1111-4111-8111-111111111111": {
+          create: {
+            unit: "write",
+          },
+        },
+      },
+    },
   );
   assert.throws(() => updateLocationWorkorderPolicySchema.parse({}));
   assert.throws(() => updateLocationWorkorderPolicySchema.parse({ mechanicCanRecordParts: "true" }));
+  assert.throws(() => updateLocationWorkorderPolicySchema.parse({
+    mechanicCanRecordParts: true,
+    moduleAccess: { mechanic: { detail: { odoo: "super-admin" } } },
+  }));
+  assert.throws(() => updateLocationWorkorderPolicySchema.parse({
+    mechanicCanRecordParts: true,
+    userModuleAccess: { "not-a-user-id": { create: { unit: "write" } } },
+  }));
+});
+
+test("company module policy accepts sparse registered access decisions", () => {
+  assert.deepEqual(updateCompanyWorkorderModulePolicySchema.parse({
+    moduleAccess: {
+      office: { detail: { odoo: "read" } },
+    },
+  }), {
+    moduleAccess: {
+      office: { detail: { odoo: "read" } },
+    },
+    userModuleAccess: {},
+  });
+  assert.throws(() => updateCompanyWorkorderModulePolicySchema.parse({
+    moduleAccess: { office: { detail: { odoo: "owner" } } },
+  }));
+  assert.throws(() => updateCompanyWorkorderModulePolicySchema.parse({
+    moduleAccess: { office: { detail: { unknown: "write" } } },
+  }));
 });

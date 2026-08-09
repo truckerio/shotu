@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { userRoleSchema } from "../../auth/roles.js";
 import {
+  WORKORDER_ACCESS_MODES,
+  WORKORDER_MODULES,
+  WORKORDER_ROLES,
+  WORKORDER_SURFACES,
+} from "../../../../shared/workorder-modules.js";
+import {
   issueKioskPinSchema,
   registerKioskDeviceSchema,
 } from "../kiosk/kiosk.schemas.js";
@@ -25,9 +31,50 @@ export const updateLocationTemplateSchema = z.object({
   authorizationText: z.string().trim().max(4000),
 });
 
+const workorderAccessModeSchema = z.enum(Object.values(WORKORDER_ACCESS_MODES));
+
+function moduleSurfaceAccessSchema(surface) {
+  return z.object(Object.fromEntries(
+    WORKORDER_MODULES
+      .filter((module) => module.surfaces.includes(surface))
+      .map((module) => [module.key, workorderAccessModeSchema.optional()]),
+  )).strict();
+}
+
+const workorderModuleAccessSchema = z.object(
+  Object.fromEntries(WORKORDER_ROLES.map((role) => [
+    role,
+    z.object(
+      Object.fromEntries(Object.values(WORKORDER_SURFACES).map((surface) => [
+        surface,
+        moduleSurfaceAccessSchema(surface).optional(),
+      ])),
+    ).partial().strict().optional(),
+  ])),
+).partial().strict();
+
+const userWorkorderModuleAccessSchema = z.record(
+  z.string().uuid(),
+  z.object(
+    Object.fromEntries(Object.values(WORKORDER_SURFACES).map((surface) => [
+      surface,
+      moduleSurfaceAccessSchema(surface).optional(),
+    ])),
+  ).partial().strict(),
+).optional();
+
+export const updateCompanyWorkorderModulePolicySchema = z.object({
+  moduleAccess: workorderModuleAccessSchema,
+  userModuleAccess: userWorkorderModuleAccessSchema.default({}),
+  expectedVersion: z.number().int().nonnegative().optional(),
+}).strict();
+
 export const updateLocationWorkorderPolicySchema = z.object({
   mechanicCanRecordParts: z.boolean(),
-});
+  moduleAccess: workorderModuleAccessSchema.optional(),
+  userModuleAccess: userWorkorderModuleAccessSchema,
+  expectedVersion: z.number().int().nonnegative().optional(),
+}).strict();
 
 export const createInvitationSchema = z.object({
   name: z.string().trim().min(2).max(120),

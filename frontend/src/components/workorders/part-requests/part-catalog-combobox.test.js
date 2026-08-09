@@ -20,6 +20,7 @@ test("combobox exposes listbox semantics and complete keyboard selection", () =>
   assert.match(source, /role="listbox"/);
   assert.match(source, /role="option"/);
   assert.match(source, /event\.key === "Escape"/);
+  assert.match(source, /event\.stopPropagation\(\)/);
   assert.match(source, /event\.key === "Tab"/);
   assert.match(source, /"ArrowDown", "ArrowUp", "Enter"/);
   assert.match(source, /onClick=\{\(\) => select\(part\)\}/);

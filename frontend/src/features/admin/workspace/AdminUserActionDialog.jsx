@@ -10,6 +10,7 @@ function dialogTitle(userAction) {
   if (userAction.type === "password") return "Set mechanic password";
   if (userAction.type === "password-reset-email") return "Send password reset";
   if (userAction.type === "kiosk-pin") return `${userAction.user.kiosk_pin_set ? "Reset" : "Set"} kiosk PIN`;
+  if (userAction.type === "modules") return "Module access";
   if (userAction.type === "delete") return "Delete user";
   return `${userAction.type === "activate" ? "Activate" : "Deactivate"} user`;
 }

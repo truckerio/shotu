@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const detailPage = readFileSync(new URL("./workspace/SurveillanceDetailPage.jsx", import.meta.url), "utf8");
-const odooPanel = readFileSync(new URL("./workspace/SurveillanceOdooPanel.jsx", import.meta.url), "utf8");
-const detailController = readFileSync(new URL("./workspace/useSurveillanceDetail.js", import.meta.url), "utf8");
+const odooPanel = readFileSync(new URL("../workorder-modules/odoo/WorkorderOdooPanel.jsx", import.meta.url), "utf8");
+const detailController = readFileSync(new URL("../workorder-modules/odoo/useWorkorderOdooModule.js", import.meta.url), "utf8");
 
 test("Surveillance keeps Odoo mutation controls behind Manager approval", () => {
   assert.match(detailPage, /const canProcessOdoo = \["closed", "odoo_entered"\]\.includes\(workorder\.status\)/);
-  assert.match(odooPanel, /\{canProcessOdoo \? \([\s\S]*?<form className="surveillance-odoo-form"[\s\S]*?: \([\s\S]*?Awaiting office approval/);
+  assert.match(odooPanel, /\{!eligible \? \([\s\S]*?Awaiting office approval[\s\S]*?: \(/);
+  assert.match(odooPanel, /\{canWrite \? \([\s\S]*?<form onSubmit=\{createOdooDraft\}/);
 });
 
 test("Surveillance uses explicit request and correction handoff language", () => {

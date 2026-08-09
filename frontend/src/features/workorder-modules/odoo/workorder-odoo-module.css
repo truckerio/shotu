@@ -1,0 +1,125 @@
+.workorder-odoo-panel {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.workorder-odoo-panel .surveillance-copy-grid {
+  display: grid;
+  gap: 0;
+}
+
+.workorder-odoo-panel .surveillance-copy-grid > div {
+  border-bottom: 1px solid #e4e7ec;
+  display: grid;
+  gap: 6px;
+  padding: 16px 0;
+}
+
+.workorder-odoo-panel .surveillance-copy-grid > div:first-child { padding-top: 0; }
+.workorder-odoo-panel .surveillance-copy-grid span,
+.workorder-odoo-panel .surveillance-odoo-form label > span,
+.workorder-odoo-panel .surveillance-odoo-readiness span {
+  color: #667085;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.workorder-odoo-panel .surveillance-copy-grid p {
+  color: #344054;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  margin: 0;
+}
+
+.workorder-odoo-panel .surveillance-odoo-form,
+.workorder-odoo-panel .surveillance-odoo-form form {
+  display: grid;
+  gap: 16px;
+}
+
+.workorder-odoo-panel .surveillance-odoo-form {
+  background: #fcfcfd;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.workorder-odoo-panel .surveillance-progress-state {
+  background: #f8fafc;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 16px;
+}
+
+.workorder-odoo-panel .surveillance-progress-state h3 { margin: 0; font-size: var(--text-heading); font-weight: var(--weight-semibold); }
+.workorder-odoo-panel .surveillance-progress-state p { color: #475467; font-size: var(--text-body); line-height: var(--leading-body); margin: 0; }
+.workorder-odoo-panel .surveillance-odoo-form label { display: grid; gap: 6px; }
+.workorder-odoo-panel .surveillance-odoo-form input,
+.workorder-odoo-panel .surveillance-odoo-form textarea {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #101828;
+  font: inherit;
+  font-size: var(--text-body);
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.workorder-odoo-panel .surveillance-odoo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.workorder-odoo-panel .surveillance-odoo-actions .button { min-height: 44px; }
+.workorder-odoo-panel .surveillance-odoo-readiness { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workorder-odoo-panel .surveillance-odoo-readiness > div {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.workorder-odoo-panel .surveillance-odoo-readiness strong { color: #344054; font-size: var(--text-secondary); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+.workorder-odoo-panel .surveillance-odoo-blockers,
+.workorder-odoo-panel .surveillance-odoo-result,
+.workorder-odoo-panel .surveillance-odoo-attempt {
+  border-radius: 6px;
+  display: grid;
+  font-size: var(--text-secondary);
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.workorder-odoo-panel .surveillance-odoo-blockers { background: #fffaeb; border: 1px solid #fedf89; color: #7a2e0e; }
+.workorder-odoo-panel .surveillance-odoo-blockers ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; }
+.workorder-odoo-panel .surveillance-odoo-result { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; }
+.workorder-odoo-panel .surveillance-odoo-result span,
+.workorder-odoo-panel .surveillance-odoo-result a { font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.workorder-odoo-panel .surveillance-odoo-result a { color: #05603a; text-decoration: underline; text-underline-offset: 3px; width: fit-content; }
+.workorder-odoo-panel .surveillance-odoo-result small { color: #067647; }
+.workorder-odoo-panel .surveillance-odoo-attempt { background: #fef3f2; border: 1px solid #fecdca; color: #b42318; }
+.workorder-odoo-panel .surveillance-missing,
+.workorder-odoo-panel .surveillance-complete { border-radius: 6px; display: grid; font-size: var(--text-secondary); gap: 3px; margin: 0; padding: 10px 12px; }
+.workorder-odoo-panel .surveillance-missing { background: #fffaeb; border: 1px solid #fedf89; color: #7a2e0e; }
+.workorder-odoo-panel .surveillance-complete { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; }
+.workorder-odoo-panel .surveillance-handoff-summary { background: #fffaeb; border: 1px solid #fedf89; border-radius: 8px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
+.workorder-odoo-panel .surveillance-handoff-summary > div { display: grid; gap: 3px; min-width: 0; }
+.workorder-odoo-panel .surveillance-handoff-summary > div.has-manager-update { background: #ecfdf3; border: 1px solid #abefc6; border-radius: 6px; color: #067647; padding: 10px; }
+.workorder-odoo-panel .surveillance-handoff-summary strong,
+.workorder-odoo-panel .surveillance-handoff-summary span,
+.workorder-odoo-panel .surveillance-handoff-summary small,
+.workorder-odoo-panel .surveillance-handoff-summary p { overflow-wrap: anywhere; }
+.workorder-odoo-panel .surveillance-handoff-summary span,
+.workorder-odoo-panel .surveillance-handoff-summary p { font-size: var(--text-secondary); line-height: var(--leading-body); margin: 0; }
+.workorder-odoo-panel .surveillance-handoff-summary small { color: #667085; font-size: var(--text-caption); }
+
+@media (max-width: 760px) {
+  .workorder-odoo-panel .surveillance-odoo-readiness { grid-template-columns: 1fr; }
+  .workorder-odoo-panel .surveillance-odoo-actions { display: grid; }
+  .workorder-odoo-panel .surveillance-odoo-actions .button { min-height: 44px; width: 100%; }
+}

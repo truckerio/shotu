@@ -7,6 +7,11 @@ export function requestIdFor(req) {
   return REQUEST_ID_PATTERN.test(supplied) ? supplied : randomUUID();
 }
 
+export async function emitStructuredEvent(event, { logger = console } = {}) {
+  logger.log(JSON.stringify(event));
+  return event;
+}
+
 export function observeRequest(req, res, {
   logger = console,
   now = () => performance.now(),

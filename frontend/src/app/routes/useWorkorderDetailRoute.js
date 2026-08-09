@@ -8,19 +8,68 @@ import {
 } from "./route-state.js";
 import { workorderDraftOwnerId, workorderFormValues } from "./role-router-model.js";
 import {
+  allowedDetailSection,
+  buildWorkorderDetailSections,
   defaultDetailSection,
   defaultSupportingView,
 } from "../../features/workorder-detail/workorder-detail-sections.js";
 import { loadWorkorderDetail } from "../../features/workorder-detail/workorder-detail-loader.js";
 import { readOfficeWorkorderEditBackup } from "../../features/workorder-detail/office-workorder-autosave-storage.js";
+import {
+  workorderModuleRouteIds,
+  WORKORDER_SURFACES,
+} from "../../features/workorder-modules/workorder-module-registry.js";
 import { api } from "../../lib/api.js";
 
-const ROUTABLE_DETAIL_SECTIONS = ["work", "chat", "parts", "preview", "unit", "team", "activity"];
+const ROUTABLE_DETAIL_SECTIONS = workorderModuleRouteIds(WORKORDER_SURFACES.DETAIL);
 
 export function requestedDetailSection({ requestedSection, role, status, isCompact }) {
   return ROUTABLE_DETAIL_SECTIONS.includes(requestedSection)
     ? requestedSection
     : defaultDetailSection(role, status, isCompact);
+}
+
+function filledUsedPartCount(detail) {
+  return (detail?.workorder?.formData?.parts || [])
+    .filter((part) => part.partNo || part.qty || part.repairOrder)
+    .length;
+}
+
+function pendingPartRequestCount(detail) {
+  return (detail?.partRequests || [])
+    .filter((request) => request.status === "pending")
+    .length;
+}
+
+export function requestedAllowedDetailSection({
+  assignedMechanicCount = 0,
+  detail,
+  isCompact,
+  isMechanicDetail = false,
+  isOfficeDetail = false,
+  requestedSection,
+  role,
+  status,
+  userId = "",
+} = {}) {
+  const defaultSection = requestedDetailSection({ requestedSection, role, status, isCompact });
+  const sections = buildWorkorderDetailSections({
+    activeWorkorder: detail,
+    assignedMechanicCount,
+    conversationCount: detail?.messages?.length || 0,
+    detailStatus: status,
+    filledPartCount: filledUsedPartCount(detail),
+    isCompact,
+    isMechanicDetail,
+    isOfficeDetail,
+    policyOverrides: detail?.policy,
+    pendingPartCount: pendingPartRequestCount(detail),
+    role,
+    timelineCount: (detail?.timeline || []).filter((event) => event.type !== "access").length,
+    unitType: detail?.workorder?.formData?.unitType || detail?.workorder?.asset?.unitType || "",
+    userId,
+  });
+  return allowedDetailSection({ requestedSection: defaultSection, sections });
 }
 
 export function useWorkorderDetailRoute({
@@ -44,11 +93,16 @@ export function useWorkorderDetailRoute({
 }) {
   const hydrateOperationalWorkorder = useCallback((detail, { updateRoute = true } = {}) => {
     const workorder = detail.workorder;
-    const nextSection = requestedDetailSection({
+    const nextSection = requestedAllowedDetailSection({
+      assignedMechanicCount: workorder.mechanics?.length || (workorder.mechanic?.id ? 1 : 0),
+      detail,
+      isMechanicDetail: true,
+      isOfficeDetail: false,
       requestedSection: currentRouteParams().get("section"),
       role: "mechanic",
       status: workorder.status,
       isCompact,
+      userId: actor.id,
     });
     setActiveWorkorder(detail);
     setPreviewPanelOpen(true);
@@ -81,11 +135,16 @@ export function useWorkorderDetailRoute({
   const hydrateOfficeWorkorder = useCallback((detail, { updateRoute = true } = {}) => {
     const workorder = detail.workorder;
     const editBackup = readOfficeWorkorderEditBackup(actor.id, workorder.id);
-    const nextSection = requestedDetailSection({
+    const nextSection = requestedAllowedDetailSection({
+      assignedMechanicCount: workorder.mechanics?.length || (workorder.mechanic?.id ? 1 : 0),
+      detail,
+      isMechanicDetail: false,
+      isOfficeDetail: true,
       requestedSection: currentRouteParams().get("section"),
       role: actor.role,
       status: workorder.status,
       isCompact,
+      userId: actor.id,
     });
     setActiveWorkorder(detail);
     setSelectedVehicle(workorder.asset || null);

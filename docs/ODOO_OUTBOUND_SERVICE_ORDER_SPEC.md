@@ -1,21 +1,25 @@
-# Odoo Outbound Service Orders — Phase 2 Surveillance Creation
+# Odoo Outbound Service Orders — Shared Workorder Module
 
 ## Metadata
 
 - **Author:** Codex with repository and live Odoo discovery evidence
-- **Date:** 2026-08-07
-- **Status:** Approved — Phase 2 normal path implementation
+- **Date:** 2026-08-09
+- **Status:** Implemented — draft-only Admin/Surveillance creation and tracking
 - Reviewers: Product owner; implementation self-review
 
 ## Context
 
 The connected Odoo instance represents truck service records as `sale.order` rows with `is_service_order = true` and `vehicle_id` set to the Odoo `fleet.vehicle`. The truck's custom Services smart button reads exactly that relationship. The first normal line is the `[PTR001] LABOR HOURS` service product and its description contains the work performed; goods lines follow it.
 
-Outbound creation is unsafe until provider identities are explicit. Live discovery found unique matches for 1,166 of 1,580 application assets, 69 ambiguous matches, and 345 unmatched assets. The existing stock-location mapping is unsuitable for order warehouses because one application location can map to many Odoo stock locations. PTR001 is also currently projected as `ea`, because the canonical unit registry does not contain Hours.
+Outbound creation is unsafe until provider identities are explicit. Live discovery found unique matches for 1,166 of 1,580 application assets, 69 ambiguous matches, and 345 unmatched assets. The existing stock-location mapping is unsuitable for order warehouses because one application location can map to many Odoo stock locations. Labor now uses the canonical `hr` unit and the selected Odoo labor product must expose the Odoo UoM `Hours`; draft readiness blocks if that provider unit drifts.
 
 This phase establishes the durable, reviewable contracts required to create an idempotent Odoo draft. It reuses the existing encrypted credentials, company scope, integration audit, and mapping infrastructure. It does not automatically confirm or invoice an Odoo order.
 
 Read-only production discovery on 2026-08-07 found that Odoo already supports draft service orders: `sale.order` exposes `vehicle_id`, `is_service_order`, `warehouse_id`, and `client_order_ref`; 885 service orders were in `draft`, 10,246 were in `sale`, 19 were in `cancel`, and 1 was in `sent`. A sample draft used `[PTR001] LABOR HOURS` with UoM `Hours` as the first line. None of the existing Odoo drafts used the application marker prefix `WO:`, so new application-created drafts MUST write and reconcile that marker.
+
+Production application verification on 2026-08-07 created and persisted a draft service order for G2116 / `WO-000013` as Odoo `sale.order` ID `13380`, number `S00016`, through the configured Odoo.sh connection. That connection pointed at an Odoo staging database (`protechrepair-july16staging-34752423.dev.odoo.com`), so it proves the application flow and tracking path, not that the real Odoo production database is connected. Production application deployment and production Odoo database selection are separate operational controls.
+
+The Surveillance result panel now renders a created draft number as an external Odoo link when the application has both the stored Odoo external ID and the saved Odoo base URL. The current link is a browser convenience built from the configured base URL and the Odoo record identity; `odoo_entry_status` and `odoo_outbound_orders` remain the durable tracking truth.
 
 ## Functional Requirements
 
@@ -33,10 +37,11 @@ Read-only production discovery on 2026-08-07 found that Odoo already supports dr
 - FR-12: Every preparation change, creation attempt, failure, recovery, and successful draft creation MUST be recorded through durable outbound state and the shared integration audit.
 - FR-13: Successful creation MUST record the Odoo ID and service-order number and transition the workorder through the existing `odoo_entry_status` contract without requiring manual re-entry.
 - FR-14: Admin APIs MUST remain company-scoped and protected by the existing `integration:admin` permission.
-- FR-15: Surveillance users MUST create Odoo drafts through Surveillance workorder routes that derive company and location access from the selected workorder server-side.
-- FR-16: The Surveillance normal path MUST show readiness, blockers, labor hours, resolved customer, mapped vehicle, mapped warehouse, and draft result without exposing Odoo credentials.
-- FR-17: Surveillance draft creation MUST be an explicit user action and MUST NOT run automatically when Office closes a workorder.
+- FR-15: Authorized users MUST create Odoo drafts through the canonical workorder-module routes, which derive company, location, workorder, and effective module access from the authenticated actor server-side.
+- FR-16: The shared Admin/Surveillance Odoo module MUST show readiness, blockers, labor hours, resolved customer, mapped vehicle, mapped warehouse, and draft result without exposing Odoo credentials.
+- FR-17: Odoo draft creation MUST be an explicit user action and MUST NOT run automatically when Office closes a workorder.
 - FR-18: The old manual service-order-number entry MUST NOT be the normal entered path once draft creation is available.
+- FR-19: A persisted Odoo draft result SHOULD expose a non-secret browser link to the configured Odoo record when a valid Odoo base URL and numeric external ID are available. Missing or invalid URL data MUST fall back to displaying the service-order number without a link.
 
 ## Non-Functional Requirements
 
@@ -46,7 +51,7 @@ Read-only production discovery on 2026-08-07 found that Odoo already supports dr
 - **NFR-4 Scalability:** Vehicle and warehouse discovery MUST use bounded pagination and bulk persistence rather than one application transaction per remote record.
 - **NFR-5 Observability:** Failures MUST expose stable application error codes while storing a bounded, sanitized provider message.
 - **NFR-6 Accessibility:** New mapping controls MUST have programmatic labels, keyboard operation, visible status text, and a minimum 44px interactive height.
-- **NFR-7 Operator Speed:** A ready workorder SHOULD be creatable from the Surveillance detail panel with one labor-hours entry and one explicit create action.
+- **NFR-7 Operator Speed:** A ready workorder SHOULD be creatable from the shared Odoo detail module with one labor-hours entry and one explicit create action.
 
 ## Acceptance Criteria
 
@@ -82,21 +87,25 @@ Given Odoo rejects or times out, when the attempt ends, then retryable failure s
 
 Given Odoo returns a draft ID and name, when the result is recorded, then `odoo_entry_status` and the workorder lifecycle reference that same external identity.
 
+### AC-8a: Created draft links are non-secret (FR-13, FR-19, NFR-2)
+
+Given a reopened Odoo-entered workorder has a stored Odoo external ID and the configured Odoo base URL is available, when the shared Odoo module renders, then the service-order number is a link to that Odoo `sale.order` record. Given the URL cannot be safely built, then the number still renders as plain text and no credential or API key is exposed.
+
 ### AC-9: Admin UI is safe and accessible (NFR-2, NFR-6)
 
 Given an Admin uses the settings UI, when mapping data renders, then no secret is present and every control is labeled, keyboard operable, status-visible, and at least 44px high.
 
-### AC-10: Surveillance sees readiness before creation (FR-15, FR-16, NFR-2)
+### AC-10: Authorized users see readiness before creation (FR-15, FR-16, NFR-2)
 
-Given Surveillance opens an Odoo-eligible workorder, when the detail loads, then the app requests readiness through `/api/surveillance/workorders/:workorderId/odoo-readiness` and displays blockers or resolved Odoo identities without exposing credentials.
+Given an authorized Admin or Surveillance user opens an Odoo-eligible workorder, when the detail loads, then the app requests readiness through `/api/workorders/:workorderId/modules/odoo/readiness` and displays blockers or resolved Odoo identities without exposing credentials.
 
-### AC-11: Surveillance creates a draft explicitly (FR-10, FR-15, FR-17, NFR-7)
+### AC-11: An authorized user creates a draft explicitly (FR-10, FR-15, FR-17, NFR-7)
 
-Given readiness is passing and labor hours are saved, when Surveillance clicks Create Odoo draft, then the app calls `/api/surveillance/workorders/:workorderId/odoo-draft`, creates at most one Odoo draft, records the service-order number, and advances the workorder through the existing entered workflow.
+Given readiness is passing and labor hours are saved, when an authorized user clicks Create Odoo draft, then the app calls `/api/workorders/:workorderId/modules/odoo/draft`, creates at most one Odoo draft, records the service-order number, and advances the workorder through the existing entered workflow.
 
 ### AC-12: Manual service-order entry is no longer the normal path (FR-18)
 
-Given a workorder is Odoo-eligible, when the Surveillance panel renders, then it does not require typing a service order number before completion; manual missing-information handoff remains available.
+Given a workorder is Odoo-eligible, when the shared Odoo module renders, then it does not require typing a service order number before completion; manual missing-information handoff remains available.
 
 ## Edge Cases
 
@@ -112,6 +121,8 @@ Given a workorder is Odoo-eligible, when the Surveillance panel renders, then it
 - EC-10: A workorder is returned from closed status before creation; creation is blocked by lifecycle eligibility.
 - EC-11: A Surveillance user has company access but not location access to the workorder; readiness, preparation, and draft creation return not found.
 - EC-12: A draft was created in Odoo but the browser retry runs after a network interruption; the server marker search returns the existing draft instead of creating a duplicate.
+- EC-13: The configured application production environment points to an Odoo staging database; drafts are created and linked in that staging Odoo database until an Admin replaces the Odoo URL, database, user, and API key with production Odoo values.
+- EC-14: Odoo login or Odoo's web router drops the record target from a browser link; the application still stores the durable external ID and service-order number, and the operator can search the service-order number in Odoo.
 
 ## API Contracts
 
@@ -154,16 +165,29 @@ interface OdooDraftResult {
   replayed: boolean;
 }
 
-// POST /api/integrations/odoo/discover-outbound
-// GET  /api/integrations/odoo/outbound-mappings
-// PUT  /api/integrations/odoo/vehicles/:externalId/mapping
-// PUT  /api/integrations/odoo/locations/:locationId/warehouse
-// PUT  /api/integrations/odoo/workorders/:workorderId/preparation
-// GET  /api/integrations/odoo/workorders/:workorderId/readiness
-// POST /api/integrations/odoo/workorders/:workorderId/draft
-// PUT  /api/surveillance/workorders/:workorderId/odoo-preparation
-// GET  /api/surveillance/workorders/:workorderId/odoo-readiness
-// POST /api/surveillance/workorders/:workorderId/odoo-draft
+interface PublicWorkorderOdooTracking {
+  odooStatus: "not_entered" | "missing_info" | "entered";
+  odooServiceOrderNo: string;
+  odooExternalId: string;
+  odooUrl: string;
+}
+
+// POST /api/integrations/odoo/outbound/discover
+// GET  /api/integrations/odoo/outbound/readiness
+// GET  /api/integrations/odoo/outbound/vehicles
+// GET  /api/integrations/odoo/outbound/odoo-vehicles
+// PUT  /api/integrations/odoo/outbound/assets/:assetId/mapping
+// PUT  /api/integrations/odoo/outbound/locations/:locationId/warehouse
+// PUT  /api/integrations/odoo/outbound/labor-product
+// PUT  /api/integrations/odoo/outbound/workorders/:workorderId/preparation
+// GET  /api/integrations/odoo/outbound/workorders/:workorderId/readiness
+// POST /api/integrations/odoo/outbound/workorders/:workorderId/draft
+// PUT  /api/workorders/:workorderId/modules/odoo/preparation
+// GET  /api/workorders/:workorderId/modules/odoo/readiness
+// POST /api/workorders/:workorderId/modules/odoo/draft
+// POST /api/workorders/:workorderId/modules/odoo/missing-info
+// Legacy /api/surveillance/workorders/:workorderId/odoo-* routes delegate to
+// the same guarded service during the compatibility window.
 ```
 
 Errors use `{ error: { code: string; message: string; details?: object } }` and stable codes such as `ODOO_VEHICLE_UNMAPPED`, `ODOO_WAREHOUSE_UNMAPPED`, `ODOO_CUSTOMER_MISSING`, `ODOO_LABOR_INVALID`, `ODOO_PART_UNMAPPED`, `ODOO_MODEL_INCOMPATIBLE`, and `ODOO_DRAFT_CONFLICT`.
@@ -177,6 +201,8 @@ Errors use `{ error: { code: string; message: string; details?: object } }` and 
 | `odoo_location_warehouse_mappings` | company, app location, warehouse external ID, confirmed by/at | One warehouse per app location; one active app location per warehouse |
 | `odoo_workorder_preparation` | company, workorder, labor hours, optional customer override, updated by/at | One row per workorder; labor hours positive and at most two decimals |
 | `odoo_outbound_orders` | company, workorder, marker, state, attempt count, Odoo ID/name, last error, timestamps | One row per workorder; marker unique; external Odoo ID unique when present |
+| `odoo_entry_status` | workorder, status, Odoo service-order number, external ID, entered by/at, note | One row per workorder; shared manual and automated entered-state projection |
+| `integration_mappings` | provider, entity type, internal ID, external ID, metadata | Cross-provider reconciliation identity and audit support |
 | `units_of_measure` | `hr`, Hours, h, time, scale 2, Odoo name Hours | Canonical active unit |
 
 All provider tables MUST carry `company_id` and composite ownership foreign keys where the existing schema supports them.

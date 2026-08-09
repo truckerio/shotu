@@ -40,7 +40,7 @@ export function RoleWorkspaceOutlet({
         locale={interfacePreferences.locale}
         localeError={interfacePreferences.error}
         onLocaleChange={interfacePreferences.onLocaleChange}
-        onCreateWorkorder={navigation.openCreateWorkspace}
+        onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
         onOpenWorkorder={navigation.openOperationalWorkorder}
       />
     );
@@ -52,7 +52,7 @@ export function RoleWorkspaceOutlet({
         <AdminWorkspace
           actor={actor}
           {...draftWorkspaceProps}
-          onCreateWorkorder={navigation.openCreateWorkspace}
+          onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
           onOpenWorkorder={navigation.openOfficeWorkorder}
         />
       </Suspense>
@@ -64,7 +64,7 @@ export function RoleWorkspaceOutlet({
       <OfficeWorkspace
         actor={actor}
         {...draftWorkspaceProps}
-        onCreateWorkorder={navigation.openCreateWorkspace}
+        onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
         onOpenWorkorder={navigation.openOfficeWorkorder}
       />
     );
@@ -76,6 +76,17 @@ export function RoleWorkspaceOutlet({
 
   if (activeWorkorder) {
     return <WorkorderDetailPage {...detailPageProps} />;
+  }
+
+  if (!navigation.canOpenCreateWorkspace) {
+    return (
+      <main className="prototype mechanic-home">
+        <div className="mechanic-empty-state" role="status">
+          <strong>Create workorder is not available</strong>
+          <span>Your module access does not include create workorder entry for your assigned location.</span>
+        </div>
+      </main>
+    );
   }
 
   return <CreateWorkorderPage {...createPageProps} />;

@@ -4,6 +4,12 @@ import test from "node:test";
 
 const detailPage = readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta.url), "utf8");
 const detailSections = readFileSync(new URL("./WorkorderDetailSections.jsx", import.meta.url), "utf8");
+const concernModule = readFileSync(new URL("../workorder-modules/work/WorkorderConcernModule.jsx", import.meta.url), "utf8");
+const diagnosisRepairModule = readFileSync(new URL("../workorder-modules/diagnosis-repair/WorkorderDiagnosisRepairModule.jsx", import.meta.url), "utf8");
+const assignmentModule = readFileSync(new URL("../workorder-modules/assignment/WorkorderAssignmentModule.jsx", import.meta.url), "utf8");
+const completionModule = readFileSync(new URL("../workorder-modules/completion/WorkorderCompletionModule.jsx", import.meta.url), "utf8");
+const activityModule = readFileSync(new URL("../workorder-modules/activity/WorkorderActivityModule.jsx", import.meta.url), "utf8");
+const handoffFacts = readFileSync(new URL("../workorder-modules/WorkorderHandoffFacts.jsx", import.meta.url), "utf8");
 const roleRouter = readFileSync(new URL("../../app/routes/RoleRouter.jsx", import.meta.url), "utf8");
 const formController = readFileSync(new URL("../../app/routes/useRoleRouterFormController.js", import.meta.url), "utf8");
 const lifecycleEffects = readFileSync(new URL("../../app/routes/useRoleRouterLifecycleEffects.js", import.meta.url), "utf8");
@@ -26,19 +32,15 @@ test("existing mechanic completion flow uses Work done language", () => {
 });
 
 test("mechanic progress is automatic and timing stays outside the primary work form", () => {
-  const workSection = detailSections.slice(
-    detailSections.indexOf('id="work"'),
-    detailSections.indexOf('id="parts"'),
-  );
-  assert.doesNotMatch(workSection, /WorkorderHandoffFacts/);
-  assert.doesNotMatch(workSection, /Save progress/);
-  assert.match(detailSections, /id="activity"[\s\S]*WorkorderHandoffFacts/);
-  assert.match(detailSections, /MechanicProgressStatus/);
+  assert.doesNotMatch(diagnosisRepairModule, /WorkorderHandoffFacts/);
+  assert.doesNotMatch(diagnosisRepairModule, /Save progress/);
+  assert.match(activityModule, /id="activity"[\s\S]*WorkorderHandoffFacts/);
+  assert.match(diagnosisRepairModule, /MechanicProgressStatus/);
 });
 
 test("manager handoff actions use allowed actions and documented endpoints", () => {
-  assert.match(detailSections, /allowedActions\?\.returnToMechanic/);
-  assert.match(detailSections, /allowedActions\?\.cancel/);
+  assert.match(completionModule, /allowedActions\.returnToMechanic/);
+  assert.match(completionModule, /allowedActions\.cancel/);
   assert.match(officeActions, /action: "return"/);
   assert.match(officeActions, /action: "cancel"/);
   assert.match(officeActions, /expectedUpdatedAt: workorder\.updatedAt/);
@@ -49,20 +51,20 @@ test("manager handoff actions use allowed actions and documented endpoints", () 
 });
 
 test("shared detail shows canonical read-only timing and separates authorization", () => {
-  assert.match(detailSections, /aria-label="Workorder timing"/);
-  assert.match(detailSections, /Customer authorization/);
-  assert.doesNotMatch(detailSections, /<input type="time"/);
+  assert.match(handoffFacts, /aria-label="Workorder timing"/);
+  assert.match(completionModule, /Customer authorization/);
+  assert.doesNotMatch(`${concernModule}\n${assignmentModule}\n${completionModule}\n${activityModule}`, /<input type="time"/);
   assert.match(lifecycleEffects, /canonicalPreviewTimes\(workorder\)/);
   assert.match(roleRouterModel, /authorizedBy: approvalName \|\| savedForm\.authorizedBy \|\| ""/);
-  assert.match(detailSections, /Pending Manager approval/);
-  assert.match(detailSections, /Authorized by/);
-  assert.doesNotMatch(detailSections, /Authorization recorded by/);
+  assert.match(completionModule, /Pending Manager approval/);
+  assert.match(completionModule, /Authorized by/);
+  assert.doesNotMatch(completionModule, /Authorization recorded by/);
 });
 
 test("closed missing-information correction uses the server-authorized administrative seam", () => {
   assert.match(detailSections, /activeAttention/);
-  assert.match(detailSections, /Information requested by Surveillance/);
-  assert.match(detailSections, /disabled=\{!activeWorkorder\.allowedActions\?\.update\}/);
+  assert.match(concernModule, /Information requested by Surveillance/);
+  assert.match(concernModule, /canWrite = writable\(access\) && Boolean\(allowedActions\.update\)/);
 });
 
 test("Manager detail fields keep a scoped backup and autosave through the shared office endpoint", () => {

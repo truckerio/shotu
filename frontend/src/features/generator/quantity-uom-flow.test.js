@@ -7,13 +7,15 @@ import {
 } from "../../../../shared/workorder-template.js";
 
 const createForm = readFileSync(new URL("./CreateWorkorderForm.jsx", import.meta.url), "utf8");
+const createPartsModule = readFileSync(new URL("../workorder-modules/parts/CreatePartsModule.jsx", import.meta.url), "utf8");
 const formController = readFileSync(new URL("../../app/routes/useRoleRouterFormController.js", import.meta.url), "utf8");
-const surveillance = readFileSync(new URL("../surveillance/workspace/SurveillanceDetailPage.jsx", import.meta.url), "utf8");
+const readOnlyParts = readFileSync(new URL("../../components/workorders/part-requests/ReadOnlyPartsSurface.jsx", import.meta.url), "utf8");
 const usedPartsEditor = readFileSync(new URL("../../components/workorders/UsedPartsEditor.jsx", import.meta.url), "utf8");
 
 test("create and mechanic save paths serialize uomCode", () => {
-  assert.match(createForm, /<QuantityUnitInput/);
-  assert.match(createForm, /onPartChange\(index,\s*"uomCode",\s*value\)/);
+  assert.match(createForm, /WorkorderCreateModuleHost/);
+  assert.match(createPartsModule, /<QuantityUnitInput/);
+  assert.match(createPartsModule, /onChange\(index, "uomCode", value\)/);
   assert.match(formController, /qty:\s*part\.qty,\s*\n\s*uomCode:\s*part\.uomCode,/);
 });
 
@@ -31,8 +33,9 @@ test("preview prints quantity with the selected symbol and piece fallback", () =
 });
 
 test("surveillance read-only parts use the shared quantity formatter", () => {
-  assert.match(surveillance, /formatQuantity\(part\.qty,\s*part\.uomCode\) \|\| "Quantity not recorded"/);
-  assert.doesNotMatch(surveillance, /part\.qty \|\| 1/);
+  assert.match(readOnlyParts, /UsedPartsSection/);
+  assert.match(usedPartsEditor, /formatQuantityUnit\(part\.qty, part\.uomCode\)/);
+  assert.doesNotMatch(usedPartsEditor, /part\.qty \|\| 1/);
 });
 
 test("AI part suggestions retain quantity and unit in the shared used-parts row", () => {

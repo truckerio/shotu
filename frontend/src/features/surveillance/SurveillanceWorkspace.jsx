@@ -5,7 +5,7 @@ import { useSurveillanceDetail } from "./workspace/useSurveillanceDetail.js";
 import { useSurveillanceQueue } from "./workspace/useSurveillanceQueue.js";
 import "./surveillance.css";
 
-export function SurveillanceWorkspace({ actor, embedded = false }) {
+export function SurveillanceWorkspace({ actor }) {
   const isPhone = useMediaQuery("(max-width: 640px)");
   const queue = useSurveillanceQueue();
   const detail = useSurveillanceDetail({
@@ -18,8 +18,8 @@ export function SurveillanceWorkspace({ actor, embedded = false }) {
   if (detail.detail) {
     return (
       <SurveillanceDetailPage
+        actor={actor}
         controller={detail}
-        embedded={embedded}
         error={queue.error}
         isPhone={isPhone}
         rows={queue.rows}
@@ -30,7 +30,6 @@ export function SurveillanceWorkspace({ actor, embedded = false }) {
   return (
     <SurveillanceQueueView
       actor={actor}
-      embedded={embedded}
       queue={queue}
       onOpenWorkorder={detail.openWorkorder}
     />

@@ -21,6 +21,7 @@ test("Manager actions reflect active, review, correction, and terminal lifecycle
   assert.deepEqual(officeAllowedActions("in_progress"), {
     update: true,
     updateAdministrative: true,
+    saveNotes: true,
     recordUsedParts: true,
     addApprovedParts: true,
     approve: false,

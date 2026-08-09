@@ -3,10 +3,10 @@ import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { Button } from "../../../components/ui/Button.jsx";
 
-function Modal({ title, children, onClose }) {
+function Modal({ title, children, onClose, className = "" }) {
   return (
     <div className="admin-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="admin-modal" role="dialog" aria-modal="true" aria-label={title}>
+      <section className={`admin-modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
         <header><h2>{title}</h2><button type="button" onClick={onClose} aria-label="Close"><XClose /></button></header>
         {children}
       </section>

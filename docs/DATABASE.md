@@ -172,9 +172,36 @@ imports that bypass application schemas.
   them. A display name never creates a location mapping.
 - Odoo product identity is stored independently in `odoo_product_mappings` so
   mutable SKU or barcode text cannot create duplicate catalog memory.
+- Odoo outbound draft creation stores provider discovery in `odoo_vehicles`,
+  `odoo_warehouses`, `odoo_service_products`, and
+  `odoo_location_warehouse_mappings`. `odoo_workorder_preparation` stores
+  per-workorder labor/customer preparation before creation.
+- `odoo_outbound_orders` is the durable idempotency and reconciliation record
+  for first-party draft creation. Successful creation also updates
+  `odoo_entry_status`, `integration_mappings`, integration audit, and the
+  outbox. Browser links to Odoo are derived from the saved integration metadata
+  plus the stored Odoo external ID; the link is not the durable identity.
 - Domain changes and provider delivery are decoupled through `integration_outbox_events`.
 - Webhook receipts are deduplicated before processing.
 - Environment Samsara token fallback is limited to the initial default company.
+- Workorder V2.0 company defaults are stored on
+  `company_workorder_module_policies`; location overrides remain on
+  `location_workorder_policies`. Both `module_access` and `user_module_access`
+  are sparse JSON objects so missing values continue through the inheritance
+  chain instead of copying defaults. Company policies use an optimistic
+  `version` to prevent concurrent Admin edits from overwriting each other.
+- Migration 049 adds sparse role and named-user access maps to the existing
+  location policy row. Migration 050 adds the company policy row and its
+  optimistic version. Migration 051 adds canonical normalized scope/rule rows,
+  migration 052 adds the matching location policy version, and migration 053
+  enforces role/user subject integrity. Company and location Admin saves both
+  use compare-and-swap conflict protection.
+- The Admin UI presents create-required separately from Off/View/Edit. For
+  compatibility, JSON projections may encode it as `required`; normalized rules
+  store `required` independently from hidden/read/write access.
+- Runtime workorder responses expose only the current actor's effective module
+  decisions. Complete role matrices and other users' exceptions stay inside
+  authenticated Admin policy endpoints.
 - Tokens never enter browser responses, logs, support views, or screenshots.
 - Typed asset fields drive search and forms; raw payload JSON preserves provenance.
 

@@ -187,8 +187,15 @@ correction is attributable in Activity.
 ### AC-13: Surveillance completes Odoo entry (FR-21)
 
 Given an approved workorder has sufficient information
-When Surveillance records its service order number
-Then lifecycle becomes `odoo_entered` and missing-information attention clears.
+When Surveillance creates or recovers an Odoo draft through the configured
+Odoo.sh connection
+Then lifecycle becomes `odoo_entered`, missing-information attention clears, and
+the stored Odoo service-order number/external ID are shown on reopen.
+
+If the workorder was entered through the older manual or machine-result path,
+the same `odoo_entry_status` projection remains readable. The automated
+Surveillance path is the normal path once outbound readiness is satisfied; it
+does not require the user to type the service-order number.
 
 ### AC-14: Shared timing presentation (FR-22, FR-23, FR-24)
 

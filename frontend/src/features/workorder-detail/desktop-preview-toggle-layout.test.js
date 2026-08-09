@@ -33,6 +33,6 @@ test("desktop preview remains a supporting view and never replaces the main deta
   assert.match(previewController, /setDetailSection\(defaultDetailSection\(actorRole, detailStatus, false\)\)/);
   assert.doesNotMatch(previewController, /section === "preview" && !isCompact[\s\S]{0,220}setDetailSection\("preview"\)/);
   assert.match(detailPage, /if \(isCompact\) return buildCompactPhoneDetailSections/);
-  assert.match(detailPage, /\{isCompact && detailSection === "preview" \? \(/);
-  assert.match(detailPage, /supportingPane=\{!isCompact \? \([\s\S]*?<PreviewPane/);
+  assert.match(detailPage, /\{isCompact && renderedDetailSection === "preview" && previewPolicy\.canRead \? \(/);
+  assert.match(detailPage, /supportingPane=\{!isCompact && supportingPaneVisible \? \([\s\S]*?<PreviewPane/);
 });

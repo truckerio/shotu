@@ -50,7 +50,8 @@
     max-width: 100%;
   }
 
-  .preview-tool-button {
+  .preview-tool-button,
+  .preview-panel.is-dock .preview-tool-button {
     height: 44px;
     width: 44px;
   }

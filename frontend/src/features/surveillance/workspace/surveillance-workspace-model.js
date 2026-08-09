@@ -1,6 +1,13 @@
 import {
   SURVEILLANCE_PHONE_PRIMARY_TABS,
 } from "../surveillanceQueue.js";
+import {
+  missingOdooWorkorderFields,
+  odooDraftBlockedMessage,
+  odooReadinessStatus,
+} from "../../workorder-modules/odoo/workorder-odoo-model.js";
+
+export { odooDraftBlockedMessage, odooReadinessStatus };
 
 export const SURVEILLANCE_QUEUE_DEFINITIONS = [
   { key: "active", label: "Active", icon: "clock" },
@@ -85,31 +92,7 @@ export function surveillanceLocations(dashboard) {
 }
 
 export function missingFields(workorder) {
-  return [
-    !workorder.concern ? "Concern" : "",
-    !workorder.diagnosis ? "Diagnosis" : "",
-    !workorder.workPerformed ? "Work performed" : "",
-    !workorder.asset?.unitNo && !workorder.asset?.name ? "Unit" : "",
-    !(workorder.mechanics?.length || workorder.mechanic?.name) ? "Mechanic" : "",
-  ].filter(Boolean);
-}
-
-export function odooReadinessStatus({ created = false, loading, readiness }) {
-  if (created) return "Draft created";
-  if (loading && !readiness) return "Checking Odoo";
-  return readiness?.ready ? "Ready to create draft" : "Needs setup";
-}
-
-export function odooDraftBlockedMessage(readiness) {
-  if (readiness?.ready !== false) return "";
-  const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
-  if (blockers.length === 1 && blockers[0]?.message) {
-    return `Resolve this Odoo blocker and try again: ${blockers[0].message}`;
-  }
-  if (blockers.length > 1) {
-    return `Resolve the ${blockers.length} Odoo blockers shown above and try again.`;
-  }
-  return "Odoo readiness could not be confirmed. Refresh the workorder and try again.";
+  return missingOdooWorkorderFields(workorder);
 }
 
 export function progressTimestamp(workorder) {

@@ -37,17 +37,21 @@ export function useRoleRouterCommands({
     setCreateAttempt(0);
     setCreateState({ busy: true, message: "Creating workorder..." });
     try {
-      if (actor.role === "mechanic") {
-        const result = await api("/api/mechanic/workorders", {
+      if (!["admin", "office"].includes(actor.role)) {
+        const result = await api("/api/workorders", {
           method: "POST",
           body: JSON.stringify(workorderDraftPayload),
         });
         setCreateState({
           busy: false,
-          message: createdWorkorderMessage({ mechanic: true, serial: result.workorder.serial }),
+          message: createdWorkorderMessage({ mechanic: actor.role === "mechanic", serial: result.workorder.serial }),
         });
-        const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(result.workorder.id)}`);
-        openOperationalWorkorder(detail);
+        if (actor.role === "mechanic") {
+          const detail = await api(`/api/mechanic/workorders/${encodeURIComponent(result.workorder.id)}`);
+          openOperationalWorkorder(detail);
+        } else {
+          finishRoleWorkspace();
+        }
         return;
       }
       const savedDraft = await workorderDraft.flush();

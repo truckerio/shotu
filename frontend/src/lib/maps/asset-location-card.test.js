@@ -10,6 +10,14 @@ const detailSections = readFileSync(
   new URL("../../features/workorder-detail/WorkorderDetailSections.jsx", import.meta.url),
   "utf8",
 );
+const locationModule = readFileSync(
+  new URL("../../features/workorder-modules/location/WorkorderLocationModule.jsx", import.meta.url),
+  "utf8",
+);
+const unitModule = readFileSync(
+  new URL("../../features/workorder-modules/unit/WorkorderUnitModule.jsx", import.meta.url),
+  "utf8",
+);
 const componentCss = readFileSync(
   new URL("../../components/workorders/asset-location-card.css", import.meta.url),
   "utf8",
@@ -68,11 +76,12 @@ test("shared map uses a taller responsive viewport without overflowing phones", 
   );
 });
 
-test("detail pages place the shared asset map in Review and mechanic Work", () => {
+test("detail pages place the shared asset map in the owned Location module", () => {
   assert.match(detailSections, /const detailMapVehicle = selectedVehicle \|\| mechanicMapVehicle/);
   assert.match(detailSections, /const detailMapLocation = getVehicleLocation\(selectedVehicle\) \|\| mechanicMapLocation/);
-  assert.equal(detailSections.match(/<AssetLocationCard/g)?.length, 2);
-  assert.doesNotMatch(detailSections, /<dl className="workorder-readonly-details">[\s\S]*?<AssetLocationCard/);
+  assert.match(detailSections, /location:[\s\S]*vehicle: detailMapVehicle/);
+  assert.equal(locationModule.match(/<AssetLocationCard/g)?.length, 1);
+  assert.doesNotMatch(unitModule, /<dl className="workorder-readonly-details">[\s\S]*?<AssetLocationCard/);
 });
 
 test("shared workorder details refresh live asset location on open and every minute", () => {

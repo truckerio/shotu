@@ -4,6 +4,7 @@ import {
   Mail01,
   MarkerPin01,
   Passcode,
+  Shield03,
   Trash01,
   UserCheck01,
   UserX01,
@@ -40,6 +41,10 @@ function UserActionsMenu({ active, onManage, self, user }) {
           <MenuItem className="admin-user-menu-item" isDisabled={self} onAction={() => onManage(passwordAction, user)} textValue={passwordLabel}>
             {user.role === "mechanic" ? <Lock01 /> : <Mail01 />}
             <span>{passwordLabel}</span>
+          </MenuItem>
+          <MenuItem className="admin-user-menu-item" isDisabled={!active} onAction={() => onManage("modules", user)} textValue="Module access">
+            <Shield03 />
+            <span>Module access</span>
           </MenuItem>
           {user.role === "mechanic" ? (
             <MenuItem
@@ -89,6 +94,7 @@ function AdminUserRow({ actor, onManage, user }) {
       <span className="admin-user-actions admin-user-actions-desktop">
         <button type="button" title={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} aria-label={`${user.role === "admin" ? "View" : "Manage"} locations for ${user.name}`} onClick={() => onManage("locations", user)}><MarkerPin01 /></button>
         <button type="button" title={self ? "Use your profile to change your own password" : `${passwordLabel} for ${user.name}`} aria-label={`${passwordLabel} for ${user.name}`} disabled={self} onClick={() => onManage(passwordAction, user)}>{user.role === "mechanic" ? <Lock01 /> : <Mail01 />}</button>
+        <button type="button" title={!active ? "Activate this user before changing module access" : `Module access for ${user.name}`} aria-label={`Module access for ${user.name}`} disabled={!active} onClick={() => onManage("modules", user)}><Shield03 /></button>
         {user.role === "mechanic" ? (
           <button
             type="button"

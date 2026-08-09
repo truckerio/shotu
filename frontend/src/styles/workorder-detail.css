@@ -533,6 +533,16 @@ fieldset.workorder-unit-content {
   gap: 5px;
 }
 
+.workorder-chat-unavailable {
+  background: #f9fafb;
+  border-top: 1px solid #e4e7ec;
+  color: #667085;
+  font-size: var(--detail-meta-size);
+  margin: 0;
+  padding: 12px 14px;
+  text-align: center;
+}
+
 .workorder-authorization {
   border-top: 1px solid #e4e7ec;
   display: grid;

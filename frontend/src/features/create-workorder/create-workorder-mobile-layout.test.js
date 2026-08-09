@@ -7,6 +7,8 @@ const createPage = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta
 const createShell = readFileSync(new URL("./CreateWorkorderShell.jsx", import.meta.url), "utf8");
 const createSections = readFileSync(new URL("./create-workorder-sections.js", import.meta.url), "utf8");
 const createForm = readFileSync(new URL("../generator/CreateWorkorderForm.jsx", import.meta.url), "utf8");
+const createHost = readFileSync(new URL("../workorder-modules/WorkorderCreateModuleHost.jsx", import.meta.url), "utf8");
+const createUnit = readFileSync(new URL("../workorder-modules/unit/CreateUnitModule.jsx", import.meta.url), "utf8");
 const operationalFormCss = readFileSync(
   new URL("../../components/forms/operational-form.css", import.meta.url),
   "utf8",
@@ -69,16 +71,16 @@ test("phone keyboard hides Create dock while the active form remains scrollable"
 });
 
 test("Create fields provide keyboard intent without changing textarea behavior", () => {
-  assert.match(createForm, /aria-autocomplete="list"[\s\S]*enterKeyHint="search"/);
-  assert.match(createForm, /id="workorder-mileage"[\s\S]*inputMode="numeric"/);
-  assert.doesNotMatch(createForm, /<textarea[^>]*enterKeyHint=/);
+  assert.match(createUnit, /aria-autocomplete="list"[\s\S]*enterKeyHint="search"/);
+  assert.match(createUnit, /id="workorder-mileage"[\s\S]*inputMode="numeric"/);
+  assert.doesNotMatch(createUnit, /<textarea[^>]*enterKeyHint=/);
 });
 
 test("phone Create renders one form page and a contained compact Preview", () => {
-  assert.match(createForm, /<ProgressiveWorkorderSection[\s\S]*displayMode="panel"/);
-  assert.match(createForm, /keepMounted/);
+  assert.match(createHost, /sections\.map/);
+  assert.match(createUnit, /<ProgressiveWorkorderSection[\s\S]*displayMode="panel"[\s\S]*keepMounted/);
   assert.doesNotMatch(createForm, /<FormCard/);
-  assert.match(createPage, /<WorkorderDetailLayout detail previewOpen=\{showEmbeddedPreview\}>/);
+  assert.match(createPage, /<WorkorderDetailLayout previewOpen=\{previewPolicy\.canRead && showEmbeddedPreview\}>/);
   assert.match(
     createCss,
     /\.create-workorder-page\.create-section-preview\s+\.create-workorder-form\s*\{[^}]*display:\s*none;/s,
@@ -93,7 +95,7 @@ test("phone Create renders one form page and a contained compact Preview", () =>
   );
   assert.match(
     createPage,
-    /activeSection === "preview"[\s\S]*<CompactWorkorderPreview[\s\S]*<WorkorderPreview label="First page"/,
+    /activeSection === "preview" && previewPolicy\.canRead[\s\S]*<CompactWorkorderPreview[\s\S]*<WorkorderPreview label="First page"/,
   );
   assert.match(
     createCss,
@@ -110,7 +112,7 @@ test("Create shell owns shared summary and section navigation", () => {
 });
 
 test("mechanic Create omits assignment page while preserving assigned mechanic data", () => {
-  assert.match(createSections, /\.\.\.\(canAssign \? \[\{ id: "assignment", label: "Assignment" \}\] : \[\]\)/);
+  assert.match(createSections, /filter\(\(\{ id \}\) => canAssign \|\| id !== WORKORDER_MODULE_IDS\.ASSIGNMENT\)/);
   assert.doesNotMatch(createForm, /You are assigned to this workorder\./);
   assert.doesNotMatch(createCss, /\.create-self-assignment\s*\{/);
   assert.match(createPage, /canAssign=\{canAssign\}/);

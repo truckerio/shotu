@@ -6,18 +6,19 @@
 
 **API version:** v1
 
-**Document version:** 3.1
+**Document version:** 3.2
 
-**Last verified:** August 2, 2026
+**Last verified:** August 7, 2026
 
-**Status:** Workorder API implemented and acceptance-tested. Odoo.sh master-data adapter implemented and contract-tested; live Odoo acceptance pending production credentials.
+**Status:** Workorder API implemented and acceptance-tested. Odoo.sh master-data import, service-history import, outbound mapping, and draft-only `sale.order` creation are implemented and contract-tested. Live application verification created a draft in the configured Odoo staging database; production Odoo database cutover is still an operational configuration gate.
 
 ## 1. Purpose
 
-This integration has two independent directions:
+This integration has three independent directions:
 
-1. **Workorder handoff:** a trusted Odoo server or integration worker reads approved workorders from the versioned product API and reports the Odoo result.
+1. **External workorder handoff:** a trusted Odoo server or integration worker reads approved workorders from the versioned product API and reports the Odoo result.
 2. **Master-data import:** Workorder Generator connects to Odoo.sh and reads products, internal stock locations, and inventory balances. An Admin explicitly maps Odoo locations to application locations.
+3. **First-party outbound creation:** Surveillance users create draft Odoo service orders directly from the Workorder Generator UI after Admin-confirmed vehicle, warehouse, labor-product, customer, and part mappings are ready.
 
 The workorder API allows a trusted Odoo server or integration worker to:
 
@@ -35,6 +36,8 @@ https://<product-host>/api/integrations/odoo/v1
 > Do not use browser cookies or `/api/surveillance/*` routes. Those routes belong to the first-party user interface and are not an external integration contract.
 
 The machine credential is scoped to one company. A client can never list or read another company's workorders.
+
+The first-party outbound creation path is intentionally not part of the external OpenAPI contract. It uses authenticated Admin and Surveillance routes, encrypted Odoo credentials stored in the application, and the same integration audit/idempotency infrastructure. See `docs/ODOO_OUTBOUND_SERVICE_ORDER_SPEC.md` for that implementation contract.
 
 ## 2. Integration workflow
 
@@ -155,7 +158,7 @@ curl --fail-with-body \
   --data '{
     "status": "entered",
     "serviceOrderNo": "SO-10482",
-    "externalId": "odoo:maintenance.request:7812",
+    "externalId": "odoo:sale.order:7812",
     "note": "Created by Odoo integration"
   }' \
   "${WORKORDER_API_BASE_URL}/workorders/<workorder-uuid>/result"
@@ -294,7 +297,7 @@ Idempotency-Key: <16-to-200-character-stable-key>
 {
   "status": "entered",
   "serviceOrderNo": "SO-10482",
-  "externalId": "odoo:maintenance.request:7812",
+  "externalId": "odoo:sale.order:7812",
   "note": "Created by Odoo integration"
 }
 ```
@@ -324,7 +327,7 @@ Required fields:
   "workorderId": "2eb1dbef-94a4-4d6d-a6f1-d813cd45fa60",
   "status": "entered",
   "serviceOrderNo": "SO-10482",
-  "externalId": "odoo:maintenance.request:7812",
+  "externalId": "odoo:sale.order:7812",
   "note": "Created by Odoo integration",
   "updatedAt": "2026-07-29T18:20:00.000Z"
 }
@@ -547,14 +550,14 @@ Required connection values:
 | Username | `workorders-integration@example.com` | Dedicated Odoo user login |
 | API key | Secret value | Generated from the dedicated user's account security settings |
 
-Required read access:
+Required read access for synchronization:
 
 - product variants and product categories;
 - units of measure;
 - internal stock locations; and
 - stock quantities and reservations.
 
-Use least privilege. The integration currently performs read operations only. Validate Odoo record rules against every warehouse that should be visible.
+Required write access for first-party outbound creation is intentionally narrower: create/read/write draft `sale.order` rows and `sale.order.line` rows for service-order creation, plus read access to the related partner, vehicle, warehouse, product, and UoM records. Use least privilege and validate Odoo record rules against every warehouse and vehicle that should be visible.
 
 Odoo external API availability depends on the Odoo plan. Odoo documents external API access for Custom plans. See:
 
@@ -785,6 +788,39 @@ Mapping request bodies:
 
 The API key is write-only from the browser's perspective. Status responses return non-secret metadata only.
 
+## 21a. Internal outbound service-order routes
+
+These routes support the first-party shared Odoo workorder module for draft-only service-order creation. Admin reaches eligible work through Operations → Odoo backlog; Surveillance retains its role queue. They require authenticated browser sessions and server-side company/resource/module checks. They are internal product routes, not an external connector contract.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/integrations/odoo/outbound/discover` | Discover Odoo vehicles, warehouses, service products, and auto-match deterministic vehicle identities |
+| `GET` | `/api/integrations/odoo/outbound/readiness` | Summarize Admin outbound setup readiness |
+| `GET` | `/api/integrations/odoo/outbound/vehicles` | List app assets and Odoo mapping status with bounded search |
+| `GET` | `/api/integrations/odoo/outbound/odoo-vehicles` | Search provider vehicles for Admin mapping |
+| `PUT` | `/api/integrations/odoo/outbound/assets/{assetId}/mapping` | Confirm, clear, or ignore one app asset to Odoo vehicle mapping |
+| `PUT` | `/api/integrations/odoo/outbound/locations/{locationId}/warehouse` | Map one application location to one Odoo warehouse |
+| `PUT` | `/api/integrations/odoo/outbound/labor-product` | Select the Odoo service product used for labor lines |
+| `PUT` | `/api/integrations/odoo/outbound/workorders/{workorderId}/preparation` | Save labor hours and optional customer override for a closed workorder |
+| `GET` | `/api/integrations/odoo/outbound/workorders/{workorderId}/readiness` | Read workorder-specific draft readiness |
+| `POST` | `/api/integrations/odoo/outbound/workorders/{workorderId}/draft` | Create or recover one draft Odoo `sale.order` |
+| `PUT` | `/api/workorders/{workorderId}/modules/odoo/preparation` | Save preparation through the shared module authorization boundary |
+| `GET` | `/api/workorders/{workorderId}/modules/odoo/readiness` | Read readiness through the shared module authorization boundary |
+| `POST` | `/api/workorders/{workorderId}/modules/odoo/draft` | Explicitly create or recover a draft through the shared module boundary |
+| `POST` | `/api/workorders/{workorderId}/modules/odoo/missing-info` | Record a missing-information handoff through the shared module boundary |
+
+Legacy `/api/surveillance/workorders/{workorderId}/odoo-*` routes remain temporary compatibility aliases. They delegate to the same guarded workorder-module service and are not the canonical V2 contract.
+
+The draft creation route creates Odoo `sale.order` records only in `draft` state. It never confirms quotations, invoices, payments, stock pickings, or purchase orders. It writes a stable marker to Odoo's configured marker field, currently `client_order_ref`, in the form:
+
+```text
+WO:<company-id>:<workorder-id>
+```
+
+Successful creation records the Odoo external ID and service-order number in `odoo_outbound_orders`, `odoo_entry_status`, `integration_mappings`, integration audit, and the outbox. Reopening an entered workorder uses those stored values instead of asking the user to type the service-order number again.
+
+The shared Admin/Surveillance Odoo module displays a created service-order number as a link when the application can safely build one from the saved Odoo base URL and numeric Odoo external ID. The current browser link is a convenience for signed-in Odoo users; durable reconciliation remains the stored external ID and service-order number.
+
 ## 22. Failure handling and operations
 
 | Failure | Expected behavior | Operator action |
@@ -892,9 +928,12 @@ Every location refresh and full inventory sync discovers Odoo locations again. W
 - [ ] Confirm the target Odoo plan and version support the selected external API.
 - [ ] Complete the flow against a staging Odoo database first.
 - [ ] Confirm the dedicated user can read only the required models, fields, companies, warehouses, and locations.
+- [ ] Confirm whether the Workorder production environment is connected to Odoo staging or Odoo production. Do not infer this from the Workorder app hostname.
 - [ ] Record the exact production database name; do not infer it only from the URL.
 - [ ] Verify mapped, unmatched, and ignored locations with real naming differences.
 - [ ] Reconcile a sample of products, physical quantity, reserved quantity, and calculated availability with Odoo.
+- [ ] Create one draft-only service order from the shared Odoo module in staging and verify the `sale.order`, marker, vehicle, warehouse, labor line, goods lines, and stored application tracking.
+- [ ] Repeat the draft-only service-order test against production Odoo only after the production Odoo URL, database, user, API key, vehicle mappings, warehouse mappings, and labor product have been explicitly approved.
 - [ ] Confirm application reservations survive an Odoo refresh.
 - [ ] Verify sync error reporting, skipped-location counts, timeout handling, and audit logs.
 - [ ] Rotate the integration API key and prove the revoked key no longer works.
@@ -945,21 +984,31 @@ Implemented and locally verified:
 - product, UoM, quant aggregation, and mapped inventory projections;
 - Admin-only browser routes;
 - focused Odoo and Integration UI contract tests; and
-- database migrations applied to the configured local database.
+- database migrations applied to the configured local database;
+- outbound vehicle, warehouse, labor-product, and workorder readiness contracts;
+- draft-only `sale.order` creation and retry/recovery behavior;
+- equivalent count-unit handling for Odoo labels such as `Each`, `Unit`, and `ea`; and
+- persisted created-draft tracking and browser link projection.
 
-### Live Odoo acceptance pending
+### Live Odoo acceptance status
 
-Not yet verified against a live Odoo.sh production or staging instance:
+Verified against the configured Odoo staging database from the production Workorder app on August 7, 2026:
 
-- actual credentials and production database name;
+- one G2116 / `WO-000013` draft service order was recorded as Odoo `sale.order` ID `13380`, number `S00016`;
+- the Workorder app persisted `odoo_entered`, `odoo_entry_status`, and the created-draft UI result;
+- the Odoo browser link opened the configured staging Odoo host.
+
+Not yet verified against the real Odoo production database:
+
+- production Odoo URL, credentials, and exact production database name;
 - database-specific ACL and record-rule coverage;
 - database-specific customizations to models or fields;
 - record volumes and full-sync duration; and
-- end-to-end product and inventory reconciliation.
+- end-to-end product, inventory, service-history, and draft-order reconciliation.
 
 ### Production gate
 
-Do not mark the master-data integration production-ready until the staging acceptance checklist passes with the target Odoo.sh database.
+Do not mark the Odoo integration production-ready until the staging acceptance checklist passes and an Admin explicitly switches the Workorder production configuration from staging Odoo values to approved production Odoo values.
 
 ## 26. Engineering references
 

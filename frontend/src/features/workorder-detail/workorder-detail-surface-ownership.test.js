@@ -4,6 +4,8 @@ import test from "node:test";
 
 const featureUrl = new URL("./", import.meta.url);
 const surfaceUrl = new URL("../../components/workorders/WorkorderDetailSurface.jsx", featureUrl);
+const sharedOdooPanelUrl = new URL("../workorder-modules/odoo/WorkorderOdooPanel.jsx", featureUrl);
+const sharedOdooControllerUrl = new URL("../workorder-modules/odoo/useWorkorderOdooModule.js", featureUrl);
 
 function source(relativeUrl) {
   return readFileSync(new URL(relativeUrl, featureUrl), "utf8");
@@ -69,25 +71,61 @@ test("office/mechanic and surveillance details consume one structural surface", 
 test("role actions remain outside the shared structural surface", () => {
   const detailPage = source("./WorkorderDetailPage.jsx");
   const detailSections = source("./WorkorderDetailSections.jsx");
+  const concernModule = source("../workorder-modules/work/WorkorderConcernModule.jsx");
   const surveillance = source("../surveillance/workspace/SurveillanceDetailPage.jsx");
-  const surveillanceOdoo = source("../surveillance/workspace/SurveillanceOdooPanel.jsx");
+  const sharedOdoo = source("../workorder-modules/odoo/WorkorderOdooPanel.jsx");
   const surface = source("../../components/workorders/WorkorderDetailSurface.jsx");
 
-  assert.match(surveillanceOdoo, /surveillance-odoo-form/);
-  assert.match(surveillanceOdoo, /createOdooDraft/);
-  assert.match(surveillanceOdoo, /markMissingInfo/);
+  assert.match(sharedOdoo, /surveillance-odoo-form/);
+  assert.match(sharedOdoo, /createOdooDraft/);
+  assert.match(sharedOdoo, /markMissingInfo/);
   assert.doesNotMatch(surface, /surveillance-odoo-form|createOdooDraft|markMissingInfo|Create Odoo draft/);
 
   assertUsesComponent(detailPage, "ChatComposer", "WorkorderDetailPage");
   assertUsesComponent(detailPage, "WorkorderDetailSections", "WorkorderDetailPage");
-  assert.match(detailSections, /officeNotes|mechanicProgress|saveOfficeWorkorder|saveMechanicProgress/);
+  assert.match(detailSections, /WorkorderDetailModuleHost/);
+  assert.match(concernModule, /officeNotes|onSave/);
   assert.equal(importedComponentNames(surveillance).has("ChatComposer"), false);
   assert.equal(importedComponentNames(surveillance).has("WorkorderDetailSections"), false);
+});
+
+test("Admin and Surveillance reuse one policy-aware Odoo module owner", () => {
+  assert.equal(existsSync(sharedOdooPanelUrl), true, "WorkorderOdooPanel.jsx must own shared Odoo UI");
+  assert.equal(existsSync(sharedOdooControllerUrl), true, "useWorkorderOdooModule.js must own shared Odoo state and requests");
+
+  const detailSections = source("./WorkorderDetailSections.jsx");
+  const sharedOdooModule = source("../workorder-modules/odoo/WorkorderOdooModule.jsx");
+  const sharedOdooPanel = source("../workorder-modules/odoo/WorkorderOdooPanel.jsx");
+  const sharedOdooController = source("../workorder-modules/odoo/useWorkorderOdooModule.js");
+  const surveillanceDetail = source("../surveillance/workspace/SurveillanceDetailPage.jsx");
+  const surveillanceController = source("../surveillance/workspace/useSurveillanceDetail.js");
+
+  const detailHost = source("../workorder-modules/WorkorderDetailModuleHost.jsx");
+  assert.equal(importedComponentNames(detailHost).has("WorkorderOdooModule"), true);
+  assert.match(detailHost, /odoo: WorkorderOdooModule/);
+  assertUsesComponent(sharedOdooModule, "WorkorderOdooPanel", "WorkorderOdooModule");
+  assert.match(sharedOdooPanel, /Create Odoo draft/);
+  assert.match(sharedOdooPanel, /Odoo readiness/);
+  assert.match(sharedOdooPanel, /canWrite/);
+  assert.match(sharedOdooPanel, /canWrite\s*\?/);
+  assert.match(sharedOdooPanel, /disabled=\{Boolean\(createdOrderNo\)\}/);
+
+  assert.match(sharedOdooController, /modules\/odoo/);
+  assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "readiness"\)/);
+  assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "preparation"\)/);
+  assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "draft"\)/);
+  assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "missing-info"\)/);
+  assert.doesNotMatch(surveillanceController, /odoo-readiness|odoo-preparation|odoo-draft|mark-missing-info/);
+  assert.match(surveillanceController, /useWorkorderOdooModule/);
+
+  assert.match(surveillanceDetail, /WorkorderDetailModuleHost/);
+  assert.match(detailHost, /odoo: WorkorderOdooModule/);
 });
 
 test("preview and activity use the existing shared implementations", () => {
   const detailPage = source("./WorkorderDetailPage.jsx");
   const detailSections = source("./WorkorderDetailSections.jsx");
+  const activityModule = source("../workorder-modules/activity/WorkorderActivityModule.jsx");
   const surveillance = source("../surveillance/workspace/SurveillanceDetailPage.jsx");
   const surface = source("../../components/workorders/WorkorderDetailSurface.jsx");
 
@@ -95,8 +133,11 @@ test("preview and activity use the existing shared implementations", () => {
   assertUsesComponent(detailPage, "CompactWorkorderPreview", "WorkorderDetailPage");
   assertUsesComponent(surveillance, "PreviewPane", "SurveillanceDetailPage");
   assertUsesComponent(surveillance, "CompactWorkorderPreview", "SurveillanceDetailPage");
-  assertUsesComponent(detailSections, "WorkorderTimelinePanel", "WorkorderDetailSections");
-  assertUsesComponent(surveillance, "WorkorderTimelinePanel", "SurveillanceDetailPage");
+  const detailHost = source("../workorder-modules/WorkorderDetailModuleHost.jsx");
+  assert.equal(importedComponentNames(detailHost).has("WorkorderActivityModule"), true);
+  assert.match(detailHost, /activity: WorkorderActivityModule/);
+  assertUsesComponent(activityModule, "WorkorderTimelinePanel", "WorkorderActivityModule");
+  assert.match(surveillance, /WorkorderDetailModuleHost/);
 
   const implementationPattern = /(?:function|const)\s+(PreviewPane|CompactWorkorderPreview|WorkorderTimelinePanel)\b/;
   assert.doesNotMatch(detailPage, implementationPattern);
@@ -106,6 +147,31 @@ test("preview and activity use the existing shared implementations", () => {
 });
 
 test("parts workspace remounts when the selected workorder changes", () => {
+  const partsModule = source("../workorder-modules/parts/WorkorderPartsModule.jsx");
+  assert.match(partsModule, /<PartRequestsPanel\s+key=\{activeWorkorder\.workorder\.id\}/);
+});
+
+test("detail section coordinator delegates module bodies to owned components", () => {
   const detailSections = source("./WorkorderDetailSections.jsx");
-  assert.match(detailSections, /<PartRequestsPanel\s+key=\{activeWorkorder\.workorder\.id\}/);
+  const detailHost = source("../workorder-modules/WorkorderDetailModuleHost.jsx");
+  assertUsesComponent(detailSections, "WorkorderDetailModuleHost", "WorkorderDetailSections");
+  for (const componentName of [
+    "WorkorderConcernModule",
+    "WorkorderDiagnosisRepairModule",
+    "WorkorderChatModule",
+    "WorkorderPartsModule",
+    "WorkorderPhotosModule",
+    "WorkorderUnitModule",
+    "WorkorderLocationModule",
+    "WorkorderAssignmentModule",
+    "WorkorderScheduleModule",
+    "WorkorderActivityModule",
+    "WorkorderCompletionModule",
+    "WorkorderOdooModule",
+  ]) {
+    assert.equal(importedComponentNames(detailHost).has(componentName), true, `WorkorderDetailModuleHost must import ${componentName}`);
+    assert.match(detailHost, new RegExp(`: ${componentName}\\b`));
+  }
+  assert.ok(detailSections.split("\n").length <= 220, "WorkorderDetailSections must remain a thin coordinator");
+  assert.doesNotMatch(detailSections, /<ProgressiveWorkorderSection|<PartRequestsPanel|<WorkorderTimelinePanel/);
 });

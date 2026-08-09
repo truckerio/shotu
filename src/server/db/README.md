@@ -23,7 +23,7 @@ PostgreSQL is the source of truth for users, access scope, locations, templates,
 | Attention state/events, read state, user workorder preferences | `repositories/workorder-attention.repo.js` |
 | Chat messages and attachments | `repositories/chat.repo.js` |
 | Catalog, inventory, requests, allocations, request events | `repositories/part-requests.repo.js` and `modules/parts/` |
-| Odoo entry state | `modules/surveillance/` through the workorder repository |
+| Odoo entry state | `modules/workorders/workorder-odoo-module.service.js` through the workorder repository; Surveillance routes are compatibility adapters |
 
 Repositories are grouped by ownership, not by screen. Admin, office, and mechanic services compose the same repositories instead of maintaining role-specific copies of data.
 

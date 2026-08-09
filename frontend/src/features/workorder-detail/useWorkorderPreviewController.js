@@ -84,6 +84,15 @@ export function useWorkorderPreviewController({
     if (!previewPanelOpen) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
+        // Let nested menus/selects consume Escape first. The tools pane must
+        // stay open while an operator dismisses a child overlay.
+        const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+        const insideNestedOverlay = path.some((node) => {
+          if (!node || typeof node.getAttribute !== "function") return false;
+          const role = node.getAttribute("role");
+          return role === "menu" || role === "listbox" || role === "dialog" || node.dataset?.overlay === "true";
+        });
+        if (event.defaultPrevented || insideNestedOverlay) return;
         setPreviewPanelOpen(false);
         closePrintMenu();
       }

@@ -19,6 +19,7 @@ import {
   formatDuration,
   normalizeOperationsCategoryFilters,
   operationLabel,
+  operationsCategoryFromSearch,
 } from "./operations-format.js";
 import "./operations.css";
 
@@ -207,8 +208,12 @@ export function OperationsWorkspace({
   onRefreshDrafts,
   onOpenWorkorder,
 }) {
+  const routeCategory = useMemo(
+    () => operationsCategoryFromSearch(window.location.search),
+    [],
+  );
   const [filters, setFilters] = useState({
-    category: new URLSearchParams(window.location.search).get("view") === "drafts" ? "drafts" : "needs_attention",
+    category: routeCategory || "needs_attention",
     locationId: fixedLocationId,
     lifecycle: "",
     attentionReason: "",
@@ -221,10 +226,6 @@ export function OperationsWorkspace({
   const [summary, setSummary] = useState({ counts: emptyCounts, loading: true, loaded: false, error: "" });
   const [list, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, loaded: false, error: "" });
   const preferenceHydrated = useRef(false);
-  const legacyDraftRoute = useMemo(
-    () => new URLSearchParams(window.location.search).get("view") === "drafts",
-    [],
-  );
   const queuePreferences = useWorkorderPreferences("admin");
   useAutomaticRefresh(() => setRefreshKey((current) => current + 1));
 
@@ -232,7 +233,7 @@ export function OperationsWorkspace({
     if (fixedLocationId || !queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
     setFilters((current) => {
-      const category = !legacyDraftRoute && OPERATION_CATEGORIES.some((item) => item.id === saved.category)
+      const category = !routeCategory && OPERATION_CATEGORIES.some((item) => item.id === saved.category)
         ? saved.category
         : current.category;
       return normalizeOperationsCategoryFilters(category, {
@@ -244,7 +245,7 @@ export function OperationsWorkspace({
       });
     });
     preferenceHydrated.current = true;
-  }, [fixedLocationId, legacyDraftRoute, queuePreferences.ready]);
+  }, [fixedLocationId, queuePreferences.ready, routeCategory]);
 
   useEffect(() => {
     if (fixedLocationId || !preferenceHydrated.current) return;

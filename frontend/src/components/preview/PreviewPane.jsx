@@ -122,7 +122,16 @@ export function PreviewPane({
               <Printer />
             </button>
             {printMenuOpen ? (
-              <div className="print-command-menu" role="menu">
+              <div
+                className="print-command-menu"
+                role="menu"
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onTogglePrintMenu?.();
+                }}
+              >
                 <button className="print-command-run" type="button" role="menuitem" onClick={onPrint}>
                   <span>{primaryActionLabel}</span>
                   <small>Choose a printer or Save as PDF in your browser</small>

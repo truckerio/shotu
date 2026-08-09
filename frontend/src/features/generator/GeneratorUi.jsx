@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { CheckCircle, ChevronLeft, ChevronRight, Printer, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { normalizePreviewZoom, PREVIEW_ZOOM_MAX, PREVIEW_ZOOM_MIN } from "./preview-zoom.js";
 import {
   paginateWorkorderParts,
   renderWorkorderBatchPagesHtml,
@@ -49,6 +50,7 @@ export function BrowserPrintDocument({ payload }) {
 
 export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range, countLabel, actionLabel, onClose, onPageChange, onZoomChange, onPrint }) {
   if (!open) return null;
+  const normalizedZoom = normalizePreviewZoom(zoom);
   const physicalPages = serials.flatMap((serial) => {
     const pages = paginateWorkorderParts(form);
     return pages.map((rows, physicalPageIndex) => ({
@@ -73,13 +75,13 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
           <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex - 1)} disabled={!canGoBack} aria-label="Previous page" data-tooltip="Previous page"><ChevronLeft /></button>
           <span className="fullscreen-page-count">{safeIndex + 1} / {physicalPages.length}</span>
           <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex + 1)} disabled={!canGoForward} aria-label="Next page" data-tooltip="Next page"><ChevronRight /></button>
-          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(Math.max(0, zoom - 1))} disabled={zoom <= 0} aria-label="Zoom out" data-tooltip="Zoom out"><ZoomOut /></button>
-          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(Math.min(2, zoom + 1))} disabled={zoom >= 2} aria-label="Zoom in" data-tooltip="Zoom in"><ZoomIn /></button>
+          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(normalizedZoom - 1)} disabled={normalizedZoom <= PREVIEW_ZOOM_MIN} aria-label="Zoom out" data-tooltip="Zoom out"><ZoomOut /></button>
+          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(normalizedZoom + 1)} disabled={normalizedZoom >= PREVIEW_ZOOM_MAX} aria-label="Zoom in" data-tooltip="Zoom in"><ZoomIn /></button>
           {onPrint ? <button className="fullscreen-print icon-tooltip" type="button" onClick={onPrint} aria-label={actionLabel} data-tooltip={actionLabel}><Printer /></button> : null}
           <button className="icon-tooltip" type="button" onClick={onClose} aria-label="Close fullscreen preview" data-tooltip="Close"><XClose /></button>
         </div>
       </div>
-      <div className={`fullscreen-stage zoom-${zoom}`}>
+      <div className={`fullscreen-stage zoom-${normalizedZoom}`}>
         <div className="fullscreen-page-meta"><span>Page {safeIndex + 1}</span><strong>{serial}</strong></div>
         <div className="fullscreen-page-wrap"><div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{
           __html: renderWorkorderPageHtml(form, serial, physicalPage),

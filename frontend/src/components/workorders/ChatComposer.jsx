@@ -31,6 +31,7 @@ export function ChatComposer({
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
   compact = false,
   quickActions = [],
+  allowAttachments = true,
 }) {
   const inputId = useId();
   const fileInputId = useId();
@@ -117,6 +118,7 @@ export function ChatComposer({
   function useQuickAction(action) {
     if (busy) return;
     if (action.kind === "photo") {
+      if (!allowAttachments) return;
       fileInputRef.current?.click();
       return;
     }
@@ -129,7 +131,7 @@ export function ChatComposer({
     <form className={`chat-composer chat-prompt-composer ${compact ? "is-compact" : ""}`} onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
       <label className="chat-composer-label" htmlFor={inputId}>{textareaLabel}</label>
 
-      {attachment ? (
+      {allowAttachments && attachment ? (
         <figure className="chat-composer-preview">
           <img
             className="chat-composer-preview-image"
@@ -159,38 +161,42 @@ export function ChatComposer({
       ) : null}
 
       <div className="chat-prompt-surface">
-        <input
-          ref={fileInputRef}
-          id={fileInputId}
-          className="chat-composer-file-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={selectImage}
-          disabled={busy}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
-        <label
-          className={`chat-camera-button ${busy ? "is-disabled" : ""}`}
-          htmlFor={fileInputId}
-          role="button"
-          tabIndex={busy ? -1 : 0}
-          onClick={(event) => {
-            if (busy) event.preventDefault();
-          }}
-          onKeyDown={(event) => {
-            if (busy || !["Enter", " "].includes(event.key)) return;
-            event.preventDefault();
-            fileInputRef.current?.click();
-          }}
-          aria-disabled={busy || undefined}
-          aria-label={readingImage ? "Loading photo" : cameraLabel}
-          title={readingImage ? "Loading photo" : cameraLabel}
-        >
-          <Plus aria-hidden="true" />
-        </label>
+        {allowAttachments ? (
+          <>
+            <input
+              ref={fileInputRef}
+              id={fileInputId}
+              className="chat-composer-file-input"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={selectImage}
+              disabled={busy}
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <label
+              className={`chat-camera-button ${busy ? "is-disabled" : ""}`}
+              htmlFor={fileInputId}
+              role="button"
+              tabIndex={busy ? -1 : 0}
+              onClick={(event) => {
+                if (busy) event.preventDefault();
+              }}
+              onKeyDown={(event) => {
+                if (busy || !["Enter", " "].includes(event.key)) return;
+                event.preventDefault();
+                fileInputRef.current?.click();
+              }}
+              aria-disabled={busy || undefined}
+              aria-label={readingImage ? "Loading photo" : cameraLabel}
+              title={readingImage ? "Loading photo" : cameraLabel}
+            >
+              <Plus aria-hidden="true" />
+            </label>
+          </>
+        ) : null}
         <NarrativeField
           ref={textareaRef}
           id={inputId}

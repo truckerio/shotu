@@ -6,6 +6,7 @@ import {
   draftsSearch,
   readInitialWorkspace,
   routeStartsLoading,
+  workspaceSearchForRole,
   workorderDetailSearch,
 } from "./route-state.js";
 
@@ -38,4 +39,10 @@ test("fallback navigation returns every role to its own workspace", () => {
   assert.equal(defaultWorkspaceForRole("surveillance"), "surveillance");
   assert.equal(defaultWorkspaceForRole("mechanic"), "mechanic");
   assert.equal(defaultWorkspaceForRole("office"), "office");
+});
+
+test("workorder back navigation returns admins to Operations", () => {
+  assert.equal(workspaceSearchForRole("admin"), "?adminView=operations");
+  assert.equal(workspaceSearchForRole("office"), "");
+  assert.equal(workspaceSearchForRole("mechanic"), "");
 });

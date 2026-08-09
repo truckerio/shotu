@@ -29,7 +29,7 @@ import { AuthError, resourceNotFound } from "../../auth/errors.js";
 
 async function requireMechanic(userId) {
   const user = await getUserById(userId);
-  if (!user || user.role !== "mechanic" || !user.active) throw new Error("Mechanic user not found.");
+  if (!user || !user.active) throw new Error("Active workorder user not found.");
   return user;
 }
 
@@ -142,6 +142,7 @@ export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
   return {
     user: mechanic,
     ...detail,
+    policy,
     allowedActions: mechanicAllowedActions(workorder, mechanic.id, policy),
   };
 }

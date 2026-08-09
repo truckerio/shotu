@@ -1,15 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { readInitialWorkspace, replaceRouteSearch, routeStartsLoading } from "./route-state.js";
 import { roleCapabilities } from "./role-capabilities.js";
+import { activeWorkorderModulePolicy, canOpenCreateWorkspaceForActor } from "./role-router-module-access.js";
 import { useRoleRouteNavigation } from "./useRoleRouteNavigation.js";
 import { useRoleRouterFormController } from "./useRoleRouterFormController.js";
 import { useRoleRouterCommands } from "./useRoleRouterCommands.js";
 import { useRoleRouterLifecycleEffects } from "./useRoleRouterLifecycleEffects.js";
 import { RoleWorkspaceOutlet } from "./RoleWorkspaceOutlet.jsx";
-import {
-  useInitialRoleRouteHydration,
-  useWorkorderDetailRoute,
-} from "./useWorkorderDetailRoute.js";
+import { useInitialRoleRouteHydration, useWorkorderDetailRoute } from "./useWorkorderDetailRoute.js";
 import { useWorkorderDetailViewModel } from "./useWorkorderDetailViewModel.js";
 import { updateMechanicProgress } from "./role-router-api.js";
 import {
@@ -158,7 +156,6 @@ export function RoleRouter({ actor }) {
     actorRole: actor.role,
     currentForm: form,
     request: api,
-    templateApiRole: capabilities.templateApiRole,
     workspace,
     onClearLocationError: clearOfficeCreateErrors,
     onFormPatch: (patch, { resetDraftBaseline } = {}) => {
@@ -208,6 +205,11 @@ export function RoleRouter({ actor }) {
       }
       : createAssignment
   ), [actor.id, actor.name, actor.role, createAssignment, createMechanicUserIds]);
+  const activeWorkorderPolicy = activeWorkorderModulePolicy({ activeWorkorder, selectedOfficeLocation });
+  const canOpenCreateWorkspace = useMemo(
+    () => canOpenCreateWorkspaceForActor({ actor, locations: officeLocations }),
+    [actor, officeLocations],
+  );
   const {
     draft: workorderDraft,
     draftLeaveBusy,
@@ -280,9 +282,12 @@ export function RoleRouter({ actor }) {
     isMechanicDetail,
     isOfficeDetail,
     officeAssignment,
+    policyOverrides: activeWorkorderPolicy,
     previewPanelOpen,
+    role: actor.role,
     selectedOfficeLocation,
     selectedVehicle,
+    userId: actor.id,
   });
   const mechanicProgress = useMechanicProgress({
     actorId: actor.id,
@@ -420,20 +425,9 @@ export function RoleRouter({ actor }) {
     setWorkspace,
   });
   useRoleRouterLifecycleEffects({
-    activeWorkorder,
-    actor,
-    detailSource,
-    form,
-    isMechanicDetail,
-    mechanicProgress,
-    mechanicProgressBackupRestoredRef,
-    reloadActiveWorkorder,
-    setForm,
-    setMapsConfig,
-    setMechanicAction,
-    setUsedPartsDirty,
-    shouldPreserveActiveWorkorderForm,
-    usedPartsDirty,
+    activeWorkorder, actor, detailSource, form, isMechanicDetail, mechanicProgress,
+    mechanicProgressBackupRestoredRef, reloadActiveWorkorder, setForm, setMapsConfig,
+    setMechanicAction, setUsedPartsDirty, shouldPreserveActiveWorkorderForm, usedPartsDirty,
   });
 
   return (
@@ -447,7 +441,12 @@ export function RoleRouter({ actor }) {
         locale: interfaceLocale,
         onLocaleChange: interfacePreferences.saveLocale,
       }}
-      navigation={{ openCreateWorkspace: openOfficeGenerator, openOfficeWorkorder, openOperationalWorkorder }}
+      navigation={{
+        canOpenCreateWorkspace,
+        openCreateWorkspace: canOpenCreateWorkspace ? openOfficeGenerator : null,
+        openOfficeWorkorder,
+        openOperationalWorkorder,
+      }}
       draftWorkspaceProps={{
         drafts: draftWorkspaceState.drafts, draftLoading: draftWorkspaceState.loading,
         draftError: draftWorkspaceState.error, draftBusyId: draftWorkspaceState.busyId,
@@ -480,7 +479,8 @@ export function RoleRouter({ actor }) {
       createPageProps={{
         actor, assignment: createAssignmentForRole, browserPrintPayload, effectiveCopies,
         firstSerial, form, formRef, fullscreenPageIndex, fullscreenZoom, isPhone,
-        lastPhysicalPageIndex, lastSerial, mapsConfig, officeCreateAttempt,
+        lastPhysicalPageIndex, lastSerial, locationPolicy: selectedOfficeLocation?.policy || null,
+        mapsConfig, officeCreateAttempt,
         officeCreateErrors, officeCreateState, officeLocations, officeLocationsState,
         previewFullscreen, previewGridRef, previewRef, previewSerials, printMenuOpen,
         printState, primaryActionLabel, range, selectedVehicle,

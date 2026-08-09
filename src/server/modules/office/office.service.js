@@ -25,10 +25,11 @@ import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.se
 import { listActiveWorkorderAttention, markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 import { AuthError } from "../../auth/errors.js";
+import { getLocationWorkorderPolicy } from "../../db/repositories/workorder-policies.repo.js";
 
 async function requireOffice(userId) {
   const user = await getUserById(userId);
-  if (!user || !["office", "admin"].includes(user.role) || !user.active) throw new Error("Office user not found.");
+  if (!user || !user.active) throw new Error("Active workorder user not found.");
   return user;
 }
 
@@ -45,6 +46,7 @@ export function officeAllowedActions(status, activeAttention = []) {
   return {
     update: canUpdate,
     updateAdministrative: canUpdate,
+    saveNotes: canUpdate,
     recordUsedParts: canUpdate,
     addApprovedParts: active,
     approve: review,
@@ -134,11 +136,15 @@ export async function officeWorkorderDetail(workorderId, officeUserId) {
     lastSeenActivityAt: detail.workorder.updatedAt,
   });
   const activeAttention = await listActiveWorkorderAttention(workorderId);
+  const policy = detail.workorder.location?.id
+    ? await getLocationWorkorderPolicy(detail.workorder.location.id, [detail.workorder.companyId])
+    : null;
   return {
     ...detail,
     user,
     assignableMechanics,
     activeAttention,
+    policy,
     allowedActions: officeAllowedActions(detail.workorder.status, activeAttention),
   };
 }
@@ -206,7 +212,7 @@ export async function sendOfficeMessage(workorderId, input) {
     const message = await addChatMessage({
       workorderId,
       senderUserId: input.senderUserId,
-      senderRole: "office",
+      senderRole: input.senderRole || "office",
       messageType: "normal",
       body: input.body,
       attachment,

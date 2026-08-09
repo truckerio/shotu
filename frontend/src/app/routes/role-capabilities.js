@@ -1,3 +1,5 @@
+import { canCreateWorkorderForRole } from "../../../../shared/workorder-modules.js";
+
 const ROLE_CAPABILITIES = Object.freeze({
   admin: Object.freeze({
     canAssignCreateWorkorder: true,
@@ -6,7 +8,6 @@ const ROLE_CAPABILITIES = Object.freeze({
     createMode: "admin",
     defaultWorkspace: "admin",
     detailSource: "office",
-    templateApiRole: "office",
   }),
   office: Object.freeze({
     canAssignCreateWorkorder: true,
@@ -15,7 +16,6 @@ const ROLE_CAPABILITIES = Object.freeze({
     createMode: "admin",
     defaultWorkspace: "office",
     detailSource: "office",
-    templateApiRole: "office",
   }),
   mechanic: Object.freeze({
     canAssignCreateWorkorder: false,
@@ -24,7 +24,6 @@ const ROLE_CAPABILITIES = Object.freeze({
     createMode: "mechanic",
     defaultWorkspace: "mechanic",
     detailSource: "mechanic",
-    templateApiRole: "mechanic",
   }),
   surveillance: Object.freeze({
     canAssignCreateWorkorder: false,
@@ -33,7 +32,6 @@ const ROLE_CAPABILITIES = Object.freeze({
     createMode: "admin",
     defaultWorkspace: "surveillance",
     detailSource: "surveillance",
-    templateApiRole: null,
   }),
 });
 
@@ -45,8 +43,16 @@ export function roleCapabilities(role) {
     createMode: "admin",
     defaultWorkspace: "office",
     detailSource: null,
-    templateApiRole: null,
   });
+}
+
+export function roleCanCreateWorkorder(role, policy = null, userId = "") {
+  return canCreateWorkorderForRole(role, policy, userId);
+}
+
+export function roleCanCreateWorkorderForAnyLocation(role, locations = [], userId = "") {
+  if (!locations.length) return roleCanCreateWorkorder(role, null, userId);
+  return locations.some((entry) => roleCanCreateWorkorder(role, entry.policy, userId));
 }
 
 export function roleCanOpenOperationalDetail(role) {

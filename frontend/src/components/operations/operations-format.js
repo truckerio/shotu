@@ -37,6 +37,16 @@ export const SORT_OPTIONS = [
   ["age:desc", "Oldest created"],
 ];
 
+export function operationsCategoryFromSearch(search = "") {
+  const params = new URLSearchParams(search);
+  if (params.get("view") === "drafts") return "drafts";
+  if (params.get("adminView") === "surveillance") return "odoo_backlog";
+  const requestedCategory = params.get("category");
+  return OPERATION_CATEGORIES.some(({ id }) => id === requestedCategory)
+    ? requestedCategory
+    : null;
+}
+
 const attentionLabelLookup = Object.fromEntries(ATTENTION_OPTIONS);
 
 export function operationLabel(value, fallback = "Unknown") {

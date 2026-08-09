@@ -9,7 +9,6 @@ import {
   createAssignmentLoadedState,
   createAssignmentLoadingState,
   createLoadedLocationModel,
-  createLocationMechanicsEndpoint,
   createLocationSelectionPatch,
   createTemplateEndpoint,
 } from "./create-location-controller-model.js";
@@ -21,7 +20,6 @@ export function useCreateLocationController({
   actorRole = "",
   currentForm = {},
   request = api,
-  templateApiRole = "",
   workspace = "",
   onClearLocationError = EMPTY_CALLBACK,
   onFormPatch = EMPTY_CALLBACK,
@@ -35,7 +33,7 @@ export function useCreateLocationController({
   const [locations, setLocations] = useState([]);
   const [locationsState, setLocationsState] = useState({
     error: "",
-    loading: Boolean(templateApiRole),
+    loading: !activeWorkorder && workspace === "generator",
   });
   const [assignment, setAssignment] = useState(EMPTY_CREATE_ASSIGNMENT);
 
@@ -45,8 +43,7 @@ export function useCreateLocationController({
   );
 
   const reloadLocations = useCallback(async () => {
-    const endpoint = createTemplateEndpoint(templateApiRole);
-    if (!endpoint) {
+    if (activeWorkorder || workspace !== "generator") {
       setLocations([]);
       setLocationsState({ error: "", loading: false });
       return null;
@@ -54,7 +51,7 @@ export function useCreateLocationController({
 
     setLocationsState({ error: "", loading: true });
     try {
-      const payload = await request(endpoint);
+      const payload = await request(createTemplateEndpoint());
       const model = createLoadedLocationModel({
         currentLocationId: currentFormRef.current.locationId,
         payload,
@@ -74,7 +71,7 @@ export function useCreateLocationController({
       setLocationsState({ error: message, loading: false });
       return null;
     }
-  }, [request, templateApiRole]);
+  }, [activeWorkorder, request, workspace]);
 
   useEffect(() => {
     reloadLocations();
@@ -98,25 +95,10 @@ export function useCreateLocationController({
       return undefined;
     }
 
-    let cancelled = false;
-    setAssignment((current) => createAssignmentLoadingState(current));
-    request(createLocationMechanicsEndpoint(locationId))
-      .then(({ mechanics }) => {
-        if (!cancelled) setAssignment(createAssignmentLoadedState(mechanics));
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setAssignment(createAssignmentClearedState(
-            EMPTY_CREATE_ASSIGNMENT,
-            error?.message || "Mechanics could not be loaded.",
-          ));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeWorkorder, actorRole, request, selectedLocation?.location?.id]);
+    setAssignment(createAssignmentLoadingState());
+    setAssignment(createAssignmentLoadedState(selectedLocation?.mechanics));
+    return undefined;
+  }, [activeWorkorder, actorRole, selectedLocation]);
 
   const selectLocation = useCallback((locationId) => {
     const patch = createLocationSelectionPatch(locations, locationId);

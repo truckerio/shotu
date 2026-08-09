@@ -17,6 +17,7 @@ import { handleSurveillanceApi } from "./src/server/routes/surveillance.routes.j
 import { handleVehiclesApi } from "./src/server/routes/vehicles.routes.js";
 import { handleWorkorderDraftsApi } from "./src/server/routes/workorder-drafts.routes.js";
 import { handleWorkorderPreferencesApi } from "./src/server/routes/workorder-preferences.routes.js";
+import { handleWorkorderModulesApi } from "./src/server/routes/workorder-modules.routes.js";
 import { handleHealthRoute } from "./src/server/routes/health.routes.js";
 import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
 import { handleProofreadingApi } from "./src/server/routes/proofreading.routes.js";
@@ -35,7 +36,7 @@ import {
   stopSamsaraAutoSync,
 } from "./src/server/integrations/samsara/samsara.auto-sync.js";
 import { closePool } from "./src/server/db/pool.js";
-import { installGracefulShutdown, observeRequest } from "./src/server/operations/runtime.js";
+import { emitStructuredEvent, installGracefulShutdown, observeRequest } from "./src/server/operations/runtime.js";
 import {
   AuthError,
   handleAuthApi,
@@ -715,7 +716,12 @@ async function handleApi(req, res) {
     requirePermission(requestContext, requiredPermission);
   }
 
-  const helpers = { sendJson, readBody, requestContext };
+  const helpers = {
+    sendJson,
+    readBody,
+    requestContext,
+    emitAdministrativeAuditEvent: emitStructuredEvent,
+  };
 
   if (await handleAdminApi(req, res, url, helpers)) return;
   if (await handleKioskApi(req, res, url, helpers)) return;
@@ -725,6 +731,7 @@ async function handleApi(req, res) {
   if (await handleMechanicApi(req, res, url, helpers)) return;
   if (await handleOfficeApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
+  if (await handleWorkorderModulesApi(req, res, url, helpers)) return;
   if (await handlePartsHelperApi(req, res, url, helpers)) return;
   if (await handleProofreadingApi(req, res, url, helpers)) return;
   if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;

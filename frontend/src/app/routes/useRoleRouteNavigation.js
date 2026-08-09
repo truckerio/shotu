@@ -5,6 +5,7 @@ import {
   createWorkorderSearch,
   defaultWorkspaceForRole,
   replaceRouteSearch,
+  workspaceSearchForRole,
 } from "./route-state.js";
 import { todayIso } from "../../features/create-workorder/create-workorder-utils.js";
 
@@ -77,7 +78,7 @@ export function useRoleRouteNavigation({
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace(defaultWorkspaceForRole(actor.role));
-    replaceRouteSearch("");
+    replaceRouteSearch(workspaceSearchForRole(actor.role));
   }, [
     actor.role,
     resetVehicleLookup,

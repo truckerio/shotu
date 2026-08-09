@@ -4,11 +4,15 @@ import { OperationsWorkspace } from "../../../components/operations/OperationsWo
 import { Button } from "../../../components/ui/Button.jsx";
 
 export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, onCreateWorkorder }) {
+  const createAction = onCreateWorkorder
+    ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>Create workorder</Button>
+    : null;
+
   return (
     <section className="admin-content admin-operations-content">
       <PageHeader
         title="Operations"
-        actions={onCreateWorkorder ? <Button variant="primary" icon={Plus} onClick={onCreateWorkorder}>Create workorder</Button> : null}
+        actions={createAction}
       />
       <OperationsWorkspace actor={actor} locations={locations} {...draftQueue} onOpenWorkorder={onOpenWorkorder} />
     </section>

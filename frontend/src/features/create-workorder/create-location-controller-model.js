@@ -11,20 +11,24 @@ export const EMPTY_CREATE_ASSIGNMENT = Object.freeze({
   mechanics: [],
 });
 
-export function createTemplateEndpoint(templateApiRole) {
-  const role = String(templateApiRole || "").trim();
-  return role ? `/api/${encodeURIComponent(role)}/template` : "";
-}
-
-export function createLocationMechanicsEndpoint(locationId) {
-  const id = String(locationId || "").trim();
-  return id ? `/api/office/locations/${encodeURIComponent(id)}/mechanics` : "";
+export function createTemplateEndpoint() {
+  return "/api/workorders/create-context";
 }
 
 export function normalizeCreateLocationResponse(payload = {}) {
-  const locations = Array.isArray(payload.locations) ? payload.locations : [];
+  const locations = Array.isArray(payload.locations)
+    ? payload.locations.map((entry) => ({
+      ...entry,
+      policy: entry.policy || entry.moduleAccess || null,
+    }))
+    : [];
   const defaultLocationEntry = payload.location
-    ? { location: payload.location, template: payload.template || null }
+    ? {
+      location: payload.location,
+      mechanics: payload.mechanics || [],
+      policy: payload.policy || payload.moduleAccess || null,
+      template: payload.template || null,
+    }
     : locations[0] || null;
 
   return { defaultLocationEntry, locations };
@@ -63,7 +67,7 @@ export function createLocationSelectionPatch(locations = [], locationId = "") {
 
 export function canLoadCreateMechanics({ activeWorkorder, actorRole, selectedLocationId } = {}) {
   return !activeWorkorder
-    && ["admin", "office"].includes(actorRole)
+    && Boolean(actorRole)
     && Boolean(String(selectedLocationId || "").trim());
 }
 

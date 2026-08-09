@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import {
   ADMIN_MOBILE_DESTINATIONS,
   adminMobileDestinationState,
+  canonicalAdminSearch,
   initialAdminView,
 } from "./adminNavigation.js";
 
 test("phone admin navigation keeps location-owned setup inside Locations", () => {
   assert.deepEqual(ADMIN_MOBILE_DESTINATIONS.map(({ key }) => key), [
     "locations",
-    "surveillance",
+    "modules",
     "settings",
     "operations",
   ]);
@@ -35,8 +36,21 @@ test("Locations stays active throughout location-owned users and template pages"
 test("admin opens location setup by default while explicit destinations remain linkable", () => {
   assert.equal(initialAdminView(""), "locations");
   assert.equal(initialAdminView("?adminView=locations"), "locations");
-  assert.equal(initialAdminView("?adminView=surveillance"), "surveillance");
+  assert.equal(initialAdminView("?adminView=modules"), "modules");
+  assert.equal(initialAdminView("?adminView=surveillance"), "operations");
   assert.equal(initialAdminView("?adminView=operations"), "operations");
   assert.equal(initialAdminView("?adminView=settings&settingsTab=integrations"), "settings");
   assert.equal(initialAdminView("?samsara=connected"), "settings");
+});
+
+test("legacy Admin Odoo links redirect to the Operations Odoo backlog", () => {
+  assert.equal(
+    canonicalAdminSearch("?adminView=surveillance"),
+    "?adminView=operations&category=odoo_backlog",
+  );
+  assert.equal(
+    canonicalAdminSearch("?adminView=surveillance&company=company-1"),
+    "?adminView=operations&company=company-1&category=odoo_backlog",
+  );
+  assert.equal(canonicalAdminSearch("?adminView=modules"), "?adminView=modules");
 });

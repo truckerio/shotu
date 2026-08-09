@@ -1,28 +1,17 @@
 import { useEffect, useId, useState } from "react";
 import {
   ChevronDown,
-  ClockRewind,
   DotsHorizontal,
-  FileSearch01,
-  MessageChatCircle,
-  Package,
   Tool02,
-  Truck01,
-  Users01,
 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import { workorderModuleDescriptor } from "../../features/workorder-modules/workorder-module-registry.js";
+import { splitWorkorderSections } from "./workorder-section-navigation.js";
 import "./workorder-object-page.css";
 
-const SECTION_ICONS = Object.freeze({
-  activity: ClockRewind,
-  assignment: Users01,
-  chat: MessageChatCircle,
-  parts: Package,
-  preview: FileSearch01,
-  team: Users01,
-  unit: Truck01,
-  work: Tool02,
-});
+function sectionIcon(sectionId) {
+  return workorderModuleDescriptor(sectionId)?.icon || Tool02;
+}
 
 function compactValue(value, fallback = "Not listed") {
   const text = String(value || "").trim();
@@ -78,13 +67,7 @@ export function WorkorderObjectSummary({
 
 export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
   const [visualActiveSection, setVisualActiveSection] = useState(activeSection);
-  const markedOverflowSections = sections.filter((section) => section.overflow);
-  const primarySections = markedOverflowSections.length
-    ? sections.filter((section) => !section.overflow)
-    : sections.length > 5 ? sections.slice(0, 4) : sections;
-  const overflowSections = markedOverflowSections.length
-    ? markedOverflowSections
-    : sections.length > 5 ? sections.slice(4) : [];
+  const { primarySections, overflowSections } = splitWorkorderSections(sections);
   const activeOverflowSection = overflowSections.find(({ id }) => id === visualActiveSection);
 
   useEffect(() => {
@@ -92,7 +75,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
   }, [activeSection]);
 
   function SectionContent({ section, showIcon = false }) {
-    const Icon = SECTION_ICONS[section.id] || Tool02;
+    const Icon = sectionIcon(section.id);
     return (
       <>
         {showIcon ? <Icon aria-hidden="true" /> : null}
@@ -135,7 +118,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             <Popover className="workorder-section-more-popover" placement="bottom end">
               <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
                 {overflowSections.map((section) => {
-                  const Icon = SECTION_ICONS[section.id] || Tool02;
+                  const Icon = sectionIcon(section.id);
                   return (
                     <MenuItem
                       className={`${visualActiveSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
@@ -183,7 +166,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             <Popover className="workorder-section-more-popover" placement="top end">
               <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
                 {overflowSections.map((section) => {
-                  const Icon = SECTION_ICONS[section.id] || Tool02;
+                  const Icon = sectionIcon(section.id);
                   return (
                     <MenuItem
                       className={`${visualActiveSection === section.id ? "is-selected" : ""} ${section.attention ? "has-attention" : ""}`.trim()}

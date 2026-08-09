@@ -23,6 +23,6 @@ test("all direct button icons receive a low-specificity alignment fallback", () 
 });
 
 test("office part action uses the shared icon slot instead of nesting SVG in text", () => {
-  assert.match(officePartComposer, /<Button\s+icon=\{Plus\}[\s\S]*?Add office part\s*<\/Button>/);
-  assert.doesNotMatch(officePartComposer, /<Button[^>]*><Plus \/> Add office part<\/Button>/);
+  assert.match(officePartComposer, /<Button\s+icon=\{Plus\}[\s\S]*?Add approved part\s*<\/Button>/);
+  assert.doesNotMatch(officePartComposer, /<Button[^>]*><Plus \/> Add approved part<\/Button>/);
 });

@@ -9,20 +9,43 @@ import {
 test("create workorder phone sections follow the shared detail navigation shape", () => {
   assert.deepEqual(
     buildCreateWorkorderSections().map(({ id }) => id),
-    ["work", "unit", "assignment", "parts", "preview"],
+    ["location", "schedule", "concern", "unit", "assignment", "parts", "preview"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ canAssign: false }).map(({ id }) => id),
-    ["work", "unit", "parts", "preview"],
+    ["location", "schedule", "concern", "unit", "parts", "preview"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ canAssign: false }).map(({ label }) => label),
-    ["Work", "Unit", "Parts", "Preview"],
+    ["Location", "Schedule", "Concern", "Unit", "Parts", "Preview"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ includePreview: false }).map(({ id }) => id),
-    ["work", "unit", "assignment", "parts"],
+    ["location", "schedule", "concern", "unit", "assignment", "parts"],
   );
+});
+
+test("create workorder sections respect location module policy", () => {
+  const sections = buildCreateWorkorderSections({
+    canAssign: true,
+    includePreview: true,
+    policyOverrides: {
+      moduleAccess: {
+        office: {
+          create: {
+            assignment: "hidden",
+            concern: "required",
+            parts: "hidden",
+            preview: "hidden",
+            unit: "write",
+          },
+        },
+      },
+    },
+    role: "office",
+  });
+
+  assert.deepEqual(sections.map(({ id }) => id), ["location", "schedule", "concern", "unit"]);
 });
 
 test("create validation waits until the invalid phone section is active", () => {
@@ -33,9 +56,66 @@ test("create validation waits until the invalid phone section is active", () => 
 });
 
 test("create validation selects the page containing the first relevant error group", () => {
-  assert.equal(createSectionForErrors({ mechanicConcern: "Required", unitNo: "Required" }), "work");
+  assert.equal(createSectionForErrors({ mechanicConcern: "Required", unitNo: "Required" }), "concern");
+  assert.equal(createSectionForErrors({ locationId: "Required" }), "location");
+  assert.equal(createSectionForErrors({ workStartDate: "Required" }), "schedule");
   assert.equal(createSectionForErrors({ unitNo: "Required" }), "unit");
   assert.equal(createSectionForErrors({ parts: "Invalid quantity" }), "parts");
   assert.equal(createSectionForErrors({ mechanicUserIds: "Invalid mechanic" }), "assignment");
   assert.equal(createSectionForErrors({}), "");
+});
+
+test("create navigation filters modules by per-user location policy", () => {
+  const policy = {
+    userModuleAccess: {
+      "surv-1": {
+        create: {
+          unit: "write",
+          concern: "required",
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildCreateWorkorderSections({
+      canAssign: false,
+      policyOverrides: policy,
+      role: "surveillance",
+      userId: "surv-1",
+    }).map(({ id }) => id),
+    ["concern", "unit"],
+  );
+  assert.deepEqual(
+    buildCreateWorkorderSections({
+      canAssign: false,
+      policyOverrides: policy,
+      role: "surveillance",
+      userId: "surv-2",
+    }).map(({ id }) => id),
+    [],
+  );
+});
+
+test("read-only create modules never become editable form sections", () => {
+  const sections = buildCreateWorkorderSections({
+    policyOverrides: {
+      moduleAccess: {
+        office: {
+          create: {
+            assignment: "read",
+            concern: "read",
+            location: "read",
+            parts: "read",
+            schedule: "read",
+            unit: "read",
+          },
+        },
+      },
+    },
+    role: "office",
+  });
+
+  assert.deepEqual(sections.map(({ id }) => id), ["preview"]);
+  assert.equal(sections[0].modulePolicy.canWrite, false);
 });

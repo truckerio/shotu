@@ -211,7 +211,7 @@ export function UsedPartsEditor({
       {!rows.length ? (
         <div className="used-parts-empty-state">
           <p>No used parts recorded.</p>
-          <Button icon={Plus} onClick={addRow}>Add part</Button>
+          <Button icon={Plus} onClick={addRow}>Record used part</Button>
         </div>
       ) : null}
       {rows.length ? (

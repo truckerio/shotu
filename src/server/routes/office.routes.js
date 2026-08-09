@@ -1,19 +1,7 @@
 import {
-  addOfficePart,
-  assignOfficeWorkorderMechanics,
-  cancelOfficeWorkorder,
-  closeOfficeWorkorder,
-  createOfficeWorkorder,
   officeDashboard,
   officeLocationMechanics,
   officeWorkorderDetail,
-  reviewOfficePartRequest,
-  reassignOfficeWorkorder,
-  returnOfficeWorkorder,
-  saveOfficeUsedParts,
-  sendOfficeMessage,
-  changeOfficePartAllocation,
-  updateOfficeWorkorder,
 } from "../modules/office/office.service.js";
 import { createOfficePartSchema, decidePartRequestSchema, updatePartAllocationSchema } from "../modules/parts/part.schemas.js";
 import {
@@ -27,13 +15,19 @@ import {
   updateMechanicUsedPartsSchema,
   updateOfficeWorkorderSchema,
 } from "../modules/workorders/workorder.schemas.js";
-import { invalidRequest } from "../auth/errors.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
-import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
+import { requireLocationAccess } from "../auth/authorize.js";
 import { loadOfficeLocationTemplates } from "../modules/office/office-template-scope.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
 import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
-import { acknowledgeChatReceipts } from "../modules/chat/chat-receipts.service.js";
+import { normalizeModuleAccessMap, normalizeUserModuleAccessMap } from "../../../shared/workorder-modules.js";
+import { resolveWorkorderModuleDecisions } from "../modules/workorders/workorder-module-access.service.js";
+import { projectProtectedWorkorderDetail } from "../modules/workorders/workorder-module-projection.js";
+import {
+  createWorkorderRuntime,
+  patchWorkorderModules,
+  runWorkorderModuleAction,
+} from "../modules/workorders/workorder-module-runtime.service.js";
 
 function workorderIdFrom(pathname, suffix = "") {
   const escapedSuffix = suffix ? suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
@@ -70,9 +64,23 @@ function locationMechanicsPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export async function handleOfficeApi(req, res, url, helpers) {
+function locationWorkorderPolicy(row) {
+  return {
+    locationId: row.location_id,
+    companyId: row.company_id,
+    mechanicCanRecordParts: row.policy_mechanic_can_record_parts === true,
+    moduleAccess: normalizeModuleAccessMap(row.policy_module_access || {}),
+    userModuleAccess: normalizeUserModuleAccessMap(row.policy_user_module_access || {}),
+  };
+}
+
+export async function handleOfficeApi(req, res, url, helpers, dependencies = {}) {
   const { sendJson, readBody, requestContext } = helpers;
   const officeUserId = requestContext.actor.id;
+  const resolveModules = dependencies.resolveModules || resolveWorkorderModuleDecisions;
+  const createRuntime = dependencies.createRuntime || createWorkorderRuntime;
+  const patchModules = dependencies.patchModules || patchWorkorderModules;
+  const runAction = dependencies.runAction || runWorkorderModuleAction;
 
   if (req.method === "GET" && url.pathname === "/api/office/template") {
     const rows = await loadOfficeLocationTemplates(requestContext);
@@ -97,6 +105,7 @@ export async function handleOfficeApi(req, res, url, helpers) {
         version: row.version,
         updated_at: row.updated_at,
       } : null,
+      policy: locationWorkorderPolicy(row),
     }));
     sendJson(res, 200, { locations, ...(locations[0] || { location: null, template: null }) });
     return true;
@@ -117,17 +126,19 @@ export async function handleOfficeApi(req, res, url, helpers) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/office/workorders") {
-    const input = createWorkorderSchema.parse(await readBody(req));
-    requireCompanyAccess(requestContext, input.companyId);
-    requireLocationAccess(requestContext, input.locationId);
-    sendJson(res, 200, { workorder: await createOfficeWorkorder({ ...input, createdByUserId: officeUserId }) });
+    const rawInput = await readBody(req);
+    const input = createWorkorderSchema.parse(rawInput);
+    sendJson(res, 200, { workorder: await createRuntime(requestContext, input, rawInput) });
     return true;
   }
 
   const detailId = workorderIdFrom(url.pathname);
   if (req.method === "GET" && detailId) {
-    await requireWorkorderAccess(requestContext, detailId);
-    sendJson(res, 200, await officeWorkorderDetail(detailId, officeUserId));
+    const { decisions } = await resolveModules(requestContext, detailId);
+    sendJson(res, 200, projectProtectedWorkorderDetail(
+      await officeWorkorderDetail(detailId, officeUserId),
+      decisions,
+    ));
     return true;
   }
 
@@ -140,113 +151,119 @@ export async function handleOfficeApi(req, res, url, helpers) {
   }
 
   if (req.method === "PATCH" && detailId) {
-    await requireWorkorderAccess(requestContext, detailId);
-    const input = updateOfficeWorkorderSchema.parse(await readBody(req));
-    sendJson(res, 200, { workorder: await updateOfficeWorkorder(detailId, { ...input, officeUserId }) });
+    const rawInput = await readBody(req);
+    const input = updateOfficeWorkorderSchema.parse(rawInput);
+    const moduleKeys = [
+      ["unit", ["assetId", "customerCompanyName", "companyName", "unitNo", "unitType", "licenseNo", "mileage", "model", "vinNo"]],
+      ["location", ["locationId"]],
+      ["schedule", ["workStartDate", "workEndDate", "startTime", "endTime"]],
+      ["assignment", ["mechanicName", "customerSignature", "authorizedBy"]],
+      ["concern", ["concern", "officeNotes", "mechanicConcern"]],
+    ].filter(([, keys]) => keys.some((key) => Object.hasOwn(rawInput, key) || Object.hasOwn(rawInput.formData || {}, key)));
+    sendJson(res, 200, { workorder: await patchModules(
+      requestContext, detailId, moduleKeys.map(([moduleKey]) => moduleKey), input,
+    ) });
     return true;
   }
 
   const officeUsedPartsId = officeUsedPartsPath(url.pathname);
   if (req.method === "PATCH" && officeUsedPartsId) {
-    await requireWorkorderAccess(requestContext, officeUsedPartsId);
     const input = updateMechanicUsedPartsSchema.parse(await readBody(req));
     sendJson(res, 200, {
-      workorder: await saveOfficeUsedParts(officeUsedPartsId, { ...input, officeUserId }),
+      workorder: await runAction(requestContext, officeUsedPartsId, "parts", "record", {
+        operation: "usedParts", ...input,
+      }),
     });
     return true;
   }
 
   const officePartsId = officePartsPath(url.pathname);
   if (req.method === "POST" && officePartsId) {
-    await requireWorkorderAccess(requestContext, officePartsId);
     const input = createOfficePartSchema.parse(await readBody(req));
-    sendJson(res, 200, { partRequest: await addOfficePart(officePartsId, { ...input, officeUserId }) });
+    sendJson(res, 200, { partRequest: await runAction(requestContext, officePartsId, "parts", "record", {
+      operation: "officePart", ...input,
+    }) });
     return true;
   }
 
   const decisionRoute = partDecisionPath(url.pathname);
   if (req.method === "POST" && decisionRoute) {
-    await requireWorkorderAccess(requestContext, decisionRoute.workorderId);
     const input = decidePartRequestSchema.parse(await readBody(req));
-    sendJson(res, 200, { partRequest: await reviewOfficePartRequest(decisionRoute.workorderId, decisionRoute.requestId, { ...input, officeUserId }) });
+    const action = input.decision === "declined" ? "decline" : "approve";
+    sendJson(res, 200, { partRequest: await runAction(requestContext, decisionRoute.workorderId, "parts", action, {
+      ...input, requestId: decisionRoute.requestId,
+    }) });
     return true;
   }
 
   const allocationRoute = allocationPath(url.pathname);
   if (req.method === "PATCH" && allocationRoute) {
-    await requireWorkorderAccess(requestContext, allocationRoute.workorderId);
     const input = updatePartAllocationSchema.parse(await readBody(req));
-    sendJson(res, 200, { partRequest: await changeOfficePartAllocation(
-      allocationRoute.workorderId,
-      allocationRoute.requestId,
-      allocationRoute.allocationId,
-      { ...input, officeUserId },
-    ) });
+    sendJson(res, 200, { partRequest: await runAction(requestContext, allocationRoute.workorderId, "parts", "allocate", {
+      ...input, requestId: allocationRoute.requestId, allocationId: allocationRoute.allocationId,
+    }) });
     return true;
   }
 
   const messageId = workorderIdFrom(url.pathname, "/messages");
   if (req.method === "POST" && messageId) {
-    await requireWorkorderAccess(requestContext, messageId);
     const input = sendMessageSchema.parse({ ...(await readBody(req)), messageType: "normal" });
-    sendJson(res, 200, { message: await sendOfficeMessage(messageId, { ...input, senderUserId: officeUserId, senderRole: "office" }) });
+    sendJson(res, 200, { message: await runAction(
+      requestContext, messageId, "chat", input.attachment ? "attach" : "send", input,
+    ) });
     return true;
   }
 
   const receiptWorkorderId = workorderIdFrom(url.pathname, "/message-receipts");
   if (req.method === "POST" && receiptWorkorderId) {
-    await requireWorkorderAccess(requestContext, receiptWorkorderId);
     const input = acknowledgeChatReceiptsSchema.parse(await readBody(req));
     sendJson(res, 200, {
-      receipt: await acknowledgeChatReceipts({
-        workorderId: receiptWorkorderId,
-        actorUserId: officeUserId,
-        ...input,
-      }),
+      receipt: await runAction(requestContext, receiptWorkorderId, "chat", "acknowledge", input),
     });
     return true;
   }
 
   const closeId = workorderIdFrom(url.pathname, "/close");
   if (req.method === "POST" && closeId) {
-    await requireWorkorderAccess(requestContext, closeId);
     const input = closeWorkorderSchema.parse(await readBody(req));
-    sendJson(res, 200, { workorder: await closeOfficeWorkorder(closeId, { ...input, officeUserId }) });
+    sendJson(res, 200, { workorder: await runAction(requestContext, closeId, "completion", "close", input) });
     return true;
   }
 
   const returnId = workorderIdFrom(url.pathname, "/return");
   if (req.method === "POST" && returnId) {
-    await requireWorkorderAccess(requestContext, returnId);
     const parsed = returnWorkorderSchema.safeParse(await readBody(req));
-    if (!parsed.success) throw invalidRequest(parsed.error.issues[0]?.message || "Enter a valid return reason.");
-    sendJson(res, 200, { workorder: await returnOfficeWorkorder(returnId, { ...parsed.data, officeUserId }) });
+    if (!parsed.success) {
+      sendJson(res, 400, { error: parsed.error.issues[0]?.message || "Enter a valid return reason." });
+      return true;
+    }
+    sendJson(res, 200, { workorder: await runAction(requestContext, returnId, "completion", "requestChanges", parsed.data) });
     return true;
   }
 
   const cancelId = workorderIdFrom(url.pathname, "/cancel");
   if (req.method === "POST" && cancelId) {
-    await requireWorkorderAccess(requestContext, cancelId);
     const parsed = cancelWorkorderSchema.safeParse(await readBody(req));
-    if (!parsed.success) throw invalidRequest(parsed.error.issues[0]?.message || "Enter a valid cancellation reason.");
-    sendJson(res, 200, { workorder: await cancelOfficeWorkorder(cancelId, { ...parsed.data, officeUserId }) });
+    if (!parsed.success) {
+      sendJson(res, 400, { error: parsed.error.issues[0]?.message || "Enter a valid cancellation reason." });
+      return true;
+    }
+    sendJson(res, 200, { workorder: await runAction(requestContext, cancelId, "completion", "cancel", parsed.data) });
     return true;
   }
 
   const reassignId = workorderIdFrom(url.pathname, "/reassign");
   if (req.method === "POST" && reassignId) {
-    await requireWorkorderAccess(requestContext, reassignId);
     const input = reassignWorkorderSchema.parse(await readBody(req));
-    sendJson(res, 200, { workorder: await reassignOfficeWorkorder(reassignId, { ...input, officeUserId }) });
+    sendJson(res, 200, { workorder: await runAction(requestContext, reassignId, "assignment", "reassign", input) });
     return true;
   }
 
   const assignmentsId = workorderIdFrom(url.pathname, "/assignments");
   if (req.method === "POST" && assignmentsId) {
-    await requireWorkorderAccess(requestContext, assignmentsId);
     const input = assignMechanicsSchema.parse(await readBody(req));
     sendJson(res, 200, {
-      workorder: await assignOfficeWorkorderMechanics(assignmentsId, { ...input, officeUserId }),
+      workorder: await runAction(requestContext, assignmentsId, "assignment", "assign", input),
     });
     return true;
   }

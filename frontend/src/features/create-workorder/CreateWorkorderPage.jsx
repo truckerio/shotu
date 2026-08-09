@@ -15,6 +15,11 @@ import {
   isCreateErrorSectionReady,
 } from "./create-workorder-sections.js";
 import { createWorkorderPreviewForm } from "./create-workorder-utils.js";
+import {
+  resolveWorkorderModulePolicy,
+  WORKORDER_MODULE_IDS,
+  WORKORDER_SURFACES,
+} from "../workorder-modules/workorder-module-registry.js";
 import "./create-workorder-page.css";
 
 export function CreateWorkorderPage({
@@ -30,6 +35,7 @@ export function CreateWorkorderPage({
   isPhone,
   lastPhysicalPageIndex,
   lastSerial,
+  locationPolicy,
   mapsConfig,
   officeCreateAttempt,
   officeCreateErrors,
@@ -74,16 +80,43 @@ export function CreateWorkorderPage({
   applyVehicle,
 }) {
   const isMechanicCreate = actor.role === "mechanic";
-  const canAssign = !isMechanicCreate;
-  const backLabel = actor.role === "admin" ? "Back to Operations" : isMechanicCreate ? "Back to My Work" : "Back to Office";
-  const [activeSection, setActiveSection] = useState("work");
+  const assignmentPolicy = useMemo(() => resolveWorkorderModulePolicy({
+    moduleId: WORKORDER_MODULE_IDS.ASSIGNMENT,
+    overrides: locationPolicy,
+    role: actor.role,
+    surface: WORKORDER_SURFACES.CREATE,
+    userId: actor.id,
+  }), [actor.id, actor.role, locationPolicy]);
+  const canAssign = assignmentPolicy.canWrite;
+  const backLabel = actor.role === "admin"
+    ? "Back to Operations"
+    : actor.role === "surveillance"
+      ? "Back to Surveillance"
+      : isMechanicCreate
+        ? "Back to My Work"
+        : "Back to Office";
+  const [activeSection, setActiveSection] = useState("location");
   const mobileScrollRef = useRef(null);
   const viewport = useVisualViewport();
   const keyboardOpen = Boolean(isPhone && viewport.keyboardOpen);
   const createSections = useMemo(
-    () => buildCreateWorkorderSections({ canAssign, includePreview: isPhone }),
-    [canAssign, isPhone],
+    () => buildCreateWorkorderSections({
+      canAssign,
+      includePreview: isPhone,
+      policyOverrides: locationPolicy,
+      role: actor.role,
+      userId: actor.id,
+    }),
+    [actor.id, actor.role, canAssign, isPhone, locationPolicy],
   );
+  const previewPolicy = useMemo(() => resolveWorkorderModulePolicy({
+    moduleId: WORKORDER_MODULE_IDS.PREVIEW,
+    overrides: locationPolicy,
+    role: actor.role,
+    surface: WORKORDER_SURFACES.CREATE,
+    userId: actor.id,
+  }), [actor.id, actor.role, locationPolicy]);
+  const canCreate = createSections.some((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW && section.modulePolicy?.canWrite);
   const previewForm = useMemo(
     () => createWorkorderPreviewForm(form, assignment),
     [assignment, form],
@@ -111,7 +144,7 @@ export function CreateWorkorderPage({
 
   useEffect(() => {
     if (createSections.some((section) => section.id === activeSection)) return;
-    setActiveSection("work");
+    setActiveSection(createSections[0]?.id || "location");
   }, [activeSection, createSections]);
 
   function dismissKeyboard() {
@@ -151,14 +184,15 @@ export function CreateWorkorderPage({
       }}
     >
       <style>{workorderTemplateStyles}</style>
-      <BrowserPrintDocument payload={browserPrintPayload} />
-      <WorkorderDetailLayout detail previewOpen={showEmbeddedPreview}>
+      {previewPolicy.canRead ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
+      <WorkorderDetailLayout previewOpen={previewPolicy.canRead && showEmbeddedPreview}>
         <aside className="control-panel" ref={formRef}>
           <CreateWorkorderShell
             activeSection={activeSection}
             assignment={assignment}
             backLabel={backLabel}
-            canSaveDraft={!isMechanicCreate}
+            canCreate={canCreate}
+            canSaveDraft={["admin", "office"].includes(actor.role)}
             form={form}
             isPhone={isPhone}
             keyboardOpen={keyboardOpen}
@@ -168,9 +202,16 @@ export function CreateWorkorderPage({
             onSelectSection={selectMobileSection}
             onTogglePreview={jumpToPreview}
             previewActive={showEmbeddedPreview || previewFullscreen}
+            previewVisible={previewPolicy.canRead}
             sections={createSections}
             workorderDraft={workorderDraft}
           >
+            {!createSections.length ? (
+              <div className="mechanic-empty-state" role="status">
+                <strong>Create workorder is not available</strong>
+                <span>Your access does not include any writable create modules for this location.</span>
+              </div>
+            ) : null}
             <CreateWorkorderForm
               assignment={assignment}
               busy={officeCreateState.busy}
@@ -197,9 +238,10 @@ export function CreateWorkorderPage({
               mobileScrollRef={mobileScrollRef}
               onErrorFocusTarget={ensureFocusedFieldVisible}
               selectedVehicle={selectedVehicle}
+              sections={createSections.filter((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW)}
               vehicleLookup={vehicleLookup}
             />
-          {isPhone && activeSection === "preview" ? (
+          {isPhone && activeSection === "preview" && previewPolicy.canRead ? (
             <CompactWorkorderPreview
               panelRef={previewRef}
               countLabel={workorderCountLabel}
@@ -220,7 +262,7 @@ export function CreateWorkorderPage({
           </CreateWorkorderShell>
         </aside>
 
-        {!isPhone ? <PreviewPane
+        {!isPhone && previewPolicy.canRead ? <PreviewPane
           id="workorder-preview-panel"
           open={showEmbeddedPreview}
           variant="full"
@@ -241,7 +283,7 @@ export function CreateWorkorderPage({
         </PreviewPane> : null}
       </WorkorderDetailLayout>
 
-      <PreviewFullscreen
+      {previewPolicy.canRead ? <PreviewFullscreen
         open={previewFullscreen}
         form={previewForm}
         serials={previewSerials}
@@ -253,8 +295,8 @@ export function CreateWorkorderPage({
         onClose={() => setPreviewFullscreen(false)}
         onPageChange={setFullscreenPageIndex}
         onZoomChange={setFullscreenZoom}
-      />
-      <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} />
+      /> : null}
+      {previewPolicy.canRead ? <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
       {!isMechanicCreate ? (
         <DraftLeaveDialog
           open={draftLeaveOpen}

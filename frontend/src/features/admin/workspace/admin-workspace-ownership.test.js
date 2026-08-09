@@ -27,6 +27,8 @@ test("admin pages are owned outside the controller", () => {
   assert.doesNotMatch(controller, /renderWorkorderPageHtml/);
 
   assert.match(shell, /<OperationsPage/);
+  assert.doesNotMatch(shell, /SurveillanceWorkspace/);
+  assert.doesNotMatch(shell, /Odoo entry/);
   assert.match(shell, /<IntegrationsSettings/);
   assert.match(shell, /<LocationDetailPage/);
   assert.match(shell, /<LocationsPage/);

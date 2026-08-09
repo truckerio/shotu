@@ -107,10 +107,11 @@ Role features extend the surface through explicit content and action slots:
 
 - `WorkorderDetailPage.jsx` owns the office/mechanic chat, editable work forms,
   parts workflow, completion controls, and its shared section definitions.
-- `features/surveillance/workspace/SurveillanceDetailPage.jsx` owns the
-  surveillance detail composition, while `SurveillanceOdooPanel.jsx` owns Odoo
-  entry and missing-information requests. `SurveillanceWorkspace.jsx` remains
-  a small queue/detail switch.
+- `features/surveillance/workspace/SurveillanceDetailPage.jsx` owns
+  Surveillance queue-specific detail composition. The canonical Odoo renderer
+  and controller live under `features/workorder-modules/odoo/` and are shared
+  by Admin and Surveillance. `SurveillanceWorkspace.jsx` remains a small
+  queue/detail switch.
 - Slots receive already-authorized commands and rendered role content. The
   surface must not infer permissions or contain Odoo, mechanic, or office
   workflow rules.
@@ -170,10 +171,28 @@ administration creates and revokes company-scoped machine clients through
 `/api/integrations/clients`. External Odoo workers authenticate with those
 clients and call only `/api/integrations/odoo/v1/*`.
 
+Odoo also has a first-party outbound path. Admin users configure the Odoo.sh
+connection, discover provider vehicles/warehouses/service products, confirm
+one-to-one vehicle and warehouse mappings, and select the labor product through
+authenticated Admin routes. Authorized Admin and Surveillance users then use
+the shared workorder Odoo module to create draft-only Odoo `sale.order` service
+orders through canonical module routes. Surveillance routes remain compatibility
+adapters. The
+application records the Odoo ID, service-order number, stable workorder marker,
+audit events, and lifecycle transition; it does not confirm, invoice, or mutate
+inventory as part of draft creation.
+
+The configured Odoo base URL and database name are operational data, not implied
+by the Workorder deployment environment. A production Workorder deployment can
+be pointed at an Odoo staging database until an Admin replaces those values with
+approved production Odoo credentials.
+
 Start with [`docs/integrations/README.md`](integrations/README.md). The external
 Odoo contract is available as both the
 [`developer guide`](integrations/ODOO_INTEGRATION_API.md) and
 [`OpenAPI 3.1 specification`](integrations/ODOO_INTEGRATION_TARGET.openapi.yaml).
+The first-party outbound service-order contract is documented in
+[`docs/ODOO_OUTBOUND_SERVICE_ORDER_SPEC.md`](ODOO_OUTBOUND_SERVICE_ORDER_SPEC.md).
 
 ### Create Workorder
 
@@ -209,6 +228,42 @@ mechanics and use the draft lifecycle; Mechanic create omits Assignment,
 self-assigns the current mechanic on submit, and creates the real workorder
 directly. Location changes must update the create summary strip, template fields,
 draft payload, and assignment mechanic list from the same selected location.
+
+### Workorder V2.0 Module Access
+
+V2.0 keeps one workorder product and makes create/detail modules configurable
+instead of forking role-specific pages. The shared module catalog is
+`shared/workorder-modules.js`; frontend route filtering is owned by
+`frontend/src/features/workorder-modules/workorder-module-registry.js`.
+
+Each frontend module has an explicit owner under
+`frontend/src/features/workorder-modules/<module-id>/`. The shared catalog owns
+stable IDs, safe defaults, capabilities, and action allowlists; a module folder
+owns its renderer adapter, controller adapter, presentation manifest, semantic
+navigation icon, and
+focused tests. Role workspaces may own queue and navigation chrome, but they
+must not create a second renderer for the same module.
+
+Admin Odoo discovery belongs to Operations → Odoo backlog. Admin does not own a
+separate Odoo-entry workspace; legacy Admin links redirect to that queue. The
+shared Odoo detail module remains visible whenever effective policy grants
+access, while lifecycle eligibility controls readiness and mutations rather
+than navigation visibility.
+
+The default behavior must match the existing app:
+
+- Admin and Office can create workorders and edit operational detail blocks.
+- Mechanics can create self-assigned workorders, work assigned jobs, request
+  parts, use chat, and complete work.
+- Surveillance cannot create workorders by default; it can read completed work
+  and write the Odoo module.
+
+Effective access resolves from the most specific rule: location user, company
+user, location role, company role, then the built-in safe default. Missing keys
+inherit instead of copying full defaults. A module grant never bypasses company
+or location scope, workorder access, assignment rules, lifecycle transitions, or
+the module's server-side action allowlist. See
+`docs/specs/WORKORDER_MODULE_PLATFORM_V2.md` for the complete contract.
 
 ### Quantity And Inventory Units
 
@@ -297,6 +352,28 @@ The frontend reflects the same ownership:
   dedicated role/URL navigation owner.
 
 ## Adding A Feature
+
+### Workorder Module Platform V2
+
+`shared/workorder-modules.js` is the canonical registry and policy resolver.
+Each entry declares its owner, supported surfaces, capabilities, actions, and
+safe defaults. Frontend hosts and server authorization consume that registry;
+role workspaces do not maintain competing module allowlists.
+
+`frontend/src/features/admin/modules/` owns the compact Modules page and its
+Admin API controller. It edits sparse company defaults, location overrides,
+and named-user exceptions with progressive disclosure. Off/View/Edit choices
+come from server catalog capabilities, while Required to create is a separate
+control. The page displays effective access and source, and a stale company
+save reloads authoritative state rather than overwriting it.
+
+Implemented Admin endpoints are documented in
+`docs/api/WORKORDER_MODULE_ADMIN_API.md`. Policy services expose a single-event
+audit adapter after successful writes. The auditing feature owns the durable
+writer and presentation; the module platform does not add another audit table
+or timeline. Canonical rule adapters write normalized company/location scope
+and role/user rule rows; bulk Admin saves remain atomic and project through the
+same policy owner for the first-party Modules page.
 
 1. Add or change the PostgreSQL schema in a new ordered migration.
 2. Put SQL in the repository that owns the affected table.

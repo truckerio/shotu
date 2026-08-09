@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { observeRequest, requestIdFor } from "./runtime.js";
+import { emitStructuredEvent, observeRequest, requestIdFor } from "./runtime.js";
 
 test("request IDs accept safe proxy values and replace unsafe input", () => {
   assert.equal(requestIdFor({ headers: { "x-request-id": "railway-request-123" } }), "railway-request-123");
   assert.match(requestIdFor({ headers: { "x-request-id": "bad value\n" } }), /^[0-9a-f-]{36}$/);
+});
+
+test("structured event emitter writes exactly one JSON record", async () => {
+  const entries = [];
+  const event = { type: "policy.module_access.changed", requestId: "request-12345678", changes: [] };
+  const result = await emitStructuredEvent(event, {
+    logger: { log: (entry) => entries.push(JSON.parse(entry)) },
+  });
+  assert.equal(result, event);
+  assert.deepEqual(entries, [event]);
 });
 
 test("request observation logs only pathname and bounded request metadata", () => {

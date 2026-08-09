@@ -1,22 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { api } from "../../lib/api.js";
-import {
-  isCompleteKioskPin,
-} from "../kiosk/kiosk-utils.js";
+import { isCompleteKioskPin } from "../kiosk/kiosk-utils.js";
+import { normalizeModuleAccessMap, normalizeUserModuleAccessMap } from "../../../../shared/workorder-modules.js";
 import { kioskPinFieldError } from "./kiosk-admin-errors.js";
-import { initialAdminView } from "./adminNavigation.js";
+import { useAdminModulesController } from "./modules/useAdminModulesController.js";
+import { canonicalAdminSearch, initialAdminView } from "./adminNavigation.js";
 import { AdminLocationDialogs } from "./workspace/AdminLocationDialogs.jsx";
 import { AdminUserActionDialog } from "./workspace/AdminUserActionDialog.jsx";
 import { AdminWorkspaceShell } from "./workspace/AdminWorkspaceShell.jsx";
 import {
-  BLANK_INVITE,
-  BLANK_KIOSK_PIN,
-  BLANK_LOCATION,
-  BLANK_PASSWORD,
-  HIDDEN_PASSWORDS,
-  templateForm,
-  userLocationIds,
+  BLANK_INVITE, BLANK_KIOSK_PIN, BLANK_LOCATION, BLANK_PASSWORD,
+  HIDDEN_PASSWORDS, templateForm, userLocationIds,
 } from "./workspace/admin-workspace-model.js";
 import "./admin.css";
 
@@ -39,7 +34,11 @@ export function AdminWorkspace({
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("work");
   const [template, setTemplate] = useState(null);
-  const [policy, setPolicy] = useState({ mechanicCanRecordParts: false });
+  const [policy, setPolicy] = useState({
+    mechanicCanRecordParts: false,
+    moduleAccess: normalizeModuleAccessMap(),
+    userModuleAccess: normalizeUserModuleAccessMap(),
+  });
   const [modal, setModal] = useState("");
   const [locationDraft, setLocationDraft] = useState(BLANK_LOCATION);
   const [inviteDraft, setInviteDraft] = useState(BLANK_INVITE);
@@ -57,6 +56,7 @@ export function AdminWorkspace({
   const [kioskPinDraft, setKioskPinDraft] = useState(BLANK_KIOSK_PIN);
   const [kioskPinError, setKioskPinError] = useState("");
   const [state, setState] = useState({ loading: true, busy: false, error: "", message: "" });
+  const modulesController = useAdminModulesController({ setDetail, setSelectedId, setState, setView });
   const draftQueue = {
     drafts,
     draftLoading,
@@ -74,25 +74,35 @@ export function AdminWorkspace({
 
   async function loadLocations() {
     const result = await api("/api/admin/locations");
-    setLocations(result.locations || []);
+    const nextLocations = result.locations || [];
+    setLocations(nextLocations);
     setState((current) => ({ ...current, loading: false, error: "" }));
+    return nextLocations;
   }
-  async function openLocation(id, nextTab = "work") {
+  async function openLocation(id, nextTab = "work", nextView = "locations") {
     setState((current) => ({ ...current, loading: true, error: "" }));
     const result = await api(`/api/admin/locations/${id}`);
-    setView("locations");
+    setView(nextView);
     setSelectedId(id);
     setDetail(result);
     setTemplate(templateForm(result.template, result.location));
-    setPolicy(result.policy || { mechanicCanRecordParts: false });
+    setPolicy(result.policy || {
+      mechanicCanRecordParts: false,
+      moduleAccess: normalizeModuleAccessMap(),
+      userModuleAccess: normalizeUserModuleAccessMap(),
+    });
+    await modulesController.activateLocation(result.location, nextView);
     setTab(nextTab);
     setState((current) => ({ ...current, loading: false }));
-    window.history.replaceState({}, "", `/?adminLocation=${encodeURIComponent(id)}`);
+    const viewQuery = nextView === "modules" ? "adminView=modules&" : "";
+    window.history.replaceState({}, "", `/?${viewQuery}adminLocation=${encodeURIComponent(id)}`);
   }
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("adminLocation");
-    loadLocations()
-      .then(() => id ? openLocation(id) : null)
+    const originalSearch = window.location.search;
+    const canonicalSearch = canonicalAdminSearch(originalSearch);
+    if (canonicalSearch !== originalSearch) window.history.replaceState({}, "", `/${canonicalSearch}`);
+    const initialView = initialAdminView(canonicalSearch);
+    modulesController.initialize({ initialView, loadLocations, openLocation, search: canonicalSearch })
       .catch((error) => setState({ loading: false, busy: false, error: error.message, message: "" }));
   }, []);
   useAutomaticRefresh(
@@ -104,6 +114,7 @@ export function AdminWorkspace({
     setSelectedId(null);
     setDetail(null);
     setTab("work");
+    if (nextView === "modules") modulesController.setScopeType("");
     const query = nextView === "settings"
       ? "?adminView=settings&settingsTab=integrations"
       : `?adminView=${nextView}`;
@@ -203,6 +214,9 @@ export function AdminWorkspace({
         method: "PATCH",
         body: JSON.stringify({
           mechanicCanRecordParts: policy.mechanicCanRecordParts,
+          moduleAccess: policy.moduleAccess,
+          userModuleAccess: policy.userModuleAccess,
+          expectedVersion: policy.version,
         }),
       });
       setPolicy(result.policy);
@@ -213,11 +227,25 @@ export function AdminWorkspace({
         message: "Workorder rules saved.",
       }));
     } catch (error) {
+      if (error.status === 409 || error.code === "WORKORDER_MODULE_POLICY_CONFLICT") {
+        await openLocation(selectedId, "rules");
+        setState((current) => ({
+          ...current,
+          busy: false,
+          error: "Workorder rules changed elsewhere. The latest settings were loaded; review them and try again.",
+        }));
+        return;
+      }
       setState((current) => ({ ...current, busy: false, error: error.message }));
     }
   }
 
   function openUserAction(type, user) {
+    if (type === "modules") {
+      openLocation(selectedId, "work", "modules")
+        .catch((error) => setState((current) => ({ ...current, error: error.message })));
+      return;
+    }
     setPasswordDraft(BLANK_PASSWORD);
     setVisiblePasswords(HIDDEN_PASSWORDS);
     setKioskPinDraft(BLANK_KIOSK_PIN);
@@ -292,6 +320,8 @@ export function AdminWorkspace({
       }
       const message = userAction.type === "locations"
         ? `Location access updated for ${userAction.user.name}.`
+        : userAction.type === "modules"
+          ? `Module access saved for ${userAction.user.name}.`
         : userAction.type === "password-reset-email"
         ? `Password reset email sent to ${userAction.user.name}.`
         : userAction.type === "password"
@@ -352,9 +382,12 @@ export function AdminWorkspace({
     resendingInviteId,
     onSaveTemplate: saveTemplate,
     onSavePolicy: savePolicy,
+    onOpenModules: () => openLocation(selectedId, "work", "modules"),
     saving: state.busy,
     onOpenWorkorder,
   };
+
+  const modulePageProps = modulesController.pageProps({ detail, locations, openLocation, policy, saving: state.busy, selectedId, setPolicy });
 
   return (
     <>
@@ -372,6 +405,7 @@ export function AdminWorkspace({
         locationDetailProps={locationDetailProps}
         onCreateLocation={() => setModal("location")}
         onOpenLocation={(id) => openLocation(id).catch((error) => setState((currentState) => ({ ...currentState, error: error.message })))}
+        modulePageProps={modulePageProps}
       />
       <AdminLocationDialogs
         modal={modal}
@@ -404,12 +438,10 @@ export function AdminWorkspace({
         setUserLocationDraft={setUserLocationDraft}
         passwordDraft={passwordDraft}
         setPasswordDraft={setPasswordDraft}
-        visiblePasswords={visiblePasswords}
-        setVisiblePasswords={setVisiblePasswords}
+        visiblePasswords={visiblePasswords} setVisiblePasswords={setVisiblePasswords}
         kioskPinDraft={kioskPinDraft}
         setKioskPinDraft={setKioskPinDraft}
-        kioskPinError={kioskPinError}
-        setKioskPinError={setKioskPinError}
+        kioskPinError={kioskPinError} setKioskPinError={setKioskPinError}
         clearError={() => setState((currentState) => ({ ...currentState, error: "" }))}
       />
     </>

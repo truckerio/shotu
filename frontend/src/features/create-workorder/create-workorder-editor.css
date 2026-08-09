@@ -125,6 +125,25 @@
   white-space: nowrap;
 }
 
+@media (max-width: 1400px) {
+  .office-assignment-control {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .office-assignment-control .button {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .office-assignment-control .button {
+    justify-self: stretch;
+    min-height: 44px;
+    width: 100%;
+  }
+}
+
 .editor-section:not(.is-open) .section-content {
   display: none;
 }

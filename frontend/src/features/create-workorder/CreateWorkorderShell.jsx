@@ -19,6 +19,7 @@ function locationName(locations = [], locationId = "") {
 export function CreateWorkorderShell({
   activeSection,
   backLabel,
+  canCreate = true,
   canSaveDraft,
   form,
   isPhone,
@@ -29,6 +30,7 @@ export function CreateWorkorderShell({
   onSelectSection,
   onTogglePreview,
   previewActive,
+  previewVisible = true,
   sections,
   workorderDraft,
   assignment,
@@ -67,13 +69,13 @@ export function CreateWorkorderShell({
               className="detail-create-button"
               type="submit"
               form={CREATE_WORKORDER_FORM_ID}
-              disabled={officeCreateState.busy}
+              disabled={officeCreateState.busy || !canCreate}
             >
               <Plus />
               <span>{officeCreateState.busy ? "Creating..." : "Create"}</span>
             </button>
           ) : null}
-          {!isPhone ? (
+          {!isPhone && previewVisible ? (
             <PreviewToggle
               open={previewActive}
               onToggle={onTogglePreview}
@@ -111,7 +113,7 @@ export function CreateWorkorderShell({
             <button
               type="submit"
               form={CREATE_WORKORDER_FORM_ID}
-              disabled={officeCreateState.busy}
+              disabled={officeCreateState.busy || !canCreate}
             >
               <Plus aria-hidden="true" />
               <span>{officeCreateState.busy ? "Creating..." : "Create workorder"}</span>

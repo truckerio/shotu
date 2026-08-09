@@ -44,29 +44,43 @@ export function TemplatePage({ detail, value, onChange, onSave, saving }) {
   );
 }
 
-export function WorkorderRulesPage({ policy, onChange, onSave, saving }) {
+export function WorkorderRulesPage({ detail, policy, onChange, onOpenModules, onSave, saving }) {
+  function updateMechanicParts(checked) {
+    onChange((current) => ({ ...current, mechanicCanRecordParts: checked }));
+  }
+
   return (
-    <section className="admin-panel admin-rules-panel">
-      <div className="admin-panel-header">
-        <div>
-          <h2>Workorder rules</h2>
-          <p>Control what mechanics can enter for work completed at this location.</p>
+    <section className="admin-rules-layout">
+      <div className="admin-panel admin-rules-panel">
+        <div className="admin-panel-header">
+          <div>
+            <h2>Workorder rules</h2>
+            <p>Location-specific workflow behavior for {detail.location.name}.</p>
+          </div>
+          <Button variant="primary" onClick={onSave} disabled={saving}>
+            {saving ? "Saving" : "Save rules"}
+          </Button>
         </div>
-        <Button variant="primary" onClick={onSave} disabled={saving}>
-          {saving ? "Saving" : "Save rules"}
-        </Button>
+        <label className="admin-rule-row">
+          <span>
+            <strong>Mechanics can record parts used</strong>
+            <small>When off, mechanics can still request parts and message the office.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={policy.mechanicCanRecordParts}
+            onChange={(event) => updateMechanicParts(event.target.checked)}
+          />
+        </label>
       </div>
-      <label className="admin-rule-row">
+
+      <div className="admin-panel admin-module-access-shortcut">
         <span>
-          <strong>Mechanics can record parts used</strong>
-          <small>When off, mechanics can still request parts and message the office.</small>
+          <strong>Role and user module access</strong>
+          <small>Manage Off, View, Edit, inheritance, and user exceptions from the single Modules page.</small>
         </span>
-        <input
-          type="checkbox"
-          checked={policy.mechanicCanRecordParts}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-      </label>
+        <Button onClick={onOpenModules}>Open Modules</Button>
+      </div>
     </section>
   );
 }

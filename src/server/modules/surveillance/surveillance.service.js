@@ -6,16 +6,12 @@ import { statusLabel } from "../workorders/workorder.presenter.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { markWorkorderRead, setWorkorderAttention } from "../../db/repositories/workorder-attention.repo.js";
 import {
-  createOdooWorkorderDraft,
-  odooWorkorderReadiness,
-  prepareOdooWorkorder,
-} from "../../integrations/odoo/odoo.outbound.service.js";
-import {
   MECHANIC_ACTIVE_LIFECYCLES,
   ODOO_ELIGIBLE_LIFECYCLES,
   SURVEILLANCE_VISIBLE_LIFECYCLES,
   lifecycleIn,
 } from "../workorders/workorder-lifecycle-policy.js";
+import { getLocationWorkorderPolicy } from "../../db/repositories/workorder-policies.repo.js";
 
 async function requireSurveillance(userId) {
   const user = await getUserById(userId);
@@ -113,7 +109,10 @@ export async function surveillanceWorkorderDetail(workorderId, userId) {
   ]);
   if (!workorder) throw new Error("Workorder not found.");
   await markWorkorderRead({ workorderId, userId: user.id, lastSeenActivityAt: workorder.updatedAt });
-  return { workorder, messages, timeline, user };
+  const policy = workorder.locationId
+    ? await getLocationWorkorderPolicy(workorder.locationId, [workorder.companyId])
+    : null;
+  return { workorder, messages, timeline, user, policy };
 }
 
 export async function markOdooEntered(workorderId, input) {
@@ -139,68 +138,4 @@ export async function markOdooEntered(workorderId, input) {
   await query("update operational_workorders set status = 'odoo_entered', updated_at = now() where id = $1", [workorderId]);
   await setWorkorderAttention({ workorderId, reason: "missing_info", active: false, actorUserId: input.userId, details: { source: "odoo_entry" } });
   return result.rows[0];
-}
-
-export async function markOdooMissingInfo(workorderId, input) {
-  await requireSurveillance(input.userId);
-  await requireOdooEligibleWorkorder(workorderId);
-  const result = await query(
-    `insert into odoo_entry_status (workorder_id, status, note, updated_at)
-     values ($1, 'missing_info', $2, now())
-     on conflict (workorder_id) do update
-     set status = 'missing_info', note = excluded.note, updated_at = now()
-     returning *`,
-    [workorderId, input.note],
-  );
-  await setWorkorderAttention({
-    workorderId,
-    reason: "missing_info",
-    active: true,
-    actorUserId: input.userId,
-    details: { note: input.note, source: "surveillance" },
-  });
-  return result.rows[0];
-}
-
-async function requireSurveillanceOdooContext(workorderId, userId) {
-  await requireSurveillance(userId);
-  const workorder = await requireOdooEligibleWorkorder(workorderId);
-  return { companyId: workorder.companyId, workorderId };
-}
-
-export async function surveillanceOdooReadiness(workorderId, input, dependencies = {}) {
-  const context = await requireSurveillanceOdooContext(workorderId, input.userId);
-  const readReadiness = dependencies.readiness || odooWorkorderReadiness;
-  return readReadiness({
-    companyId: context.companyId,
-    workorderId: context.workorderId,
-  });
-}
-
-export async function prepareSurveillanceOdooWorkorder(workorderId, input, dependencies = {}) {
-  const context = await requireSurveillanceOdooContext(workorderId, input.userId);
-  const prepare = dependencies.prepare || prepareOdooWorkorder;
-  return prepare({
-    companyId: context.companyId,
-    workorderId: context.workorderId,
-    userId: input.userId,
-    input: {
-      laborHours: input.laborHours,
-      customerExternalId: input.customerExternalId ?? null,
-    },
-  });
-}
-
-export async function createSurveillanceOdooDraft(workorderId, input, dependencies = {}) {
-  const context = await requireSurveillanceOdooContext(workorderId, input.userId);
-  const createDraft = dependencies.createDraft || createOdooWorkorderDraft;
-  return createDraft({
-    companyId: context.companyId,
-    workorderId: context.workorderId,
-    userId: input.userId,
-    requestId: input.requestId || null,
-    input: {
-      expectedUpdatedAt: input.expectedUpdatedAt,
-    },
-  });
 }

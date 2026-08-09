@@ -67,10 +67,16 @@ export async function getLocationTemplates(locationIds) {
        template.authorization_text,
        template.active,
        template.version,
-       template.updated_at
+       template.updated_at,
+       coalesce(policy.mechanic_can_record_parts, false) as policy_mechanic_can_record_parts,
+       coalesce(policy.module_access, '{}'::jsonb) as policy_module_access,
+       coalesce(policy.user_module_access, '{}'::jsonb) as policy_user_module_access
      from locations location
      left join location_workorder_templates template
        on template.location_id = location.id and template.active = true
+     left join location_workorder_policies policy
+       on policy.location_id = location.id
+      and policy.company_id = location.company_id
      where location.id = any($1::uuid[]) and location.active = true
      order by location.name`,
     [locationIds],
@@ -99,10 +105,16 @@ export async function getAuthorizedLocationTemplates({ companyIds, locationIds }
        template.authorization_text,
        template.active,
        template.version,
-       template.updated_at
+       template.updated_at,
+       coalesce(policy.mechanic_can_record_parts, false) as policy_mechanic_can_record_parts,
+       coalesce(policy.module_access, '{}'::jsonb) as policy_module_access,
+       coalesce(policy.user_module_access, '{}'::jsonb) as policy_user_module_access
      from locations location
      left join location_workorder_templates template
        on template.location_id = location.id and template.active = true
+     left join location_workorder_policies policy
+       on policy.location_id = location.id
+      and policy.company_id = location.company_id
      where location.company_id = any($1::uuid[])
        and ($2::uuid[] is null or location.id = any($2::uuid[]))
        and location.active = true

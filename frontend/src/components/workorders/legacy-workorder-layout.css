@@ -58,7 +58,7 @@
   align-items: stretch;
   display: grid;
   height: 100%;
-  grid-template-columns: minmax(440px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
+  grid-template-columns: minmax(560px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
   min-height: 0;
   overflow: hidden;
   transition:

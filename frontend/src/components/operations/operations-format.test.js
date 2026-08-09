@@ -5,6 +5,7 @@ import {
   buildOperationsQuery,
   operationLabel,
   normalizeOperationsCategoryFilters,
+  operationsCategoryFromSearch,
 } from "./operations-format.js";
 
 test("Admin lifecycle filter exposes every canonical state", () => {
@@ -18,6 +19,14 @@ test("Admin lifecycle filter exposes every canonical state", () => {
     ["odoo_entered", "Entered in Odoo"],
     ["cancelled", "Cancelled"],
   ]);
+});
+
+test("Operations initializes only from valid queue routes", () => {
+  assert.equal(operationsCategoryFromSearch("?adminView=operations&category=odoo_backlog"), "odoo_backlog");
+  assert.equal(operationsCategoryFromSearch("?adminView=operations&category=unknown"), null);
+  assert.equal(operationsCategoryFromSearch("?view=drafts&category=active"), "drafts");
+  assert.equal(operationsCategoryFromSearch("?adminView=surveillance"), "odoo_backlog");
+  assert.equal(operationsCategoryFromSearch(""), null);
 });
 
 test("Admin operations labels delegate canonical lifecycle wording to the shared registry", () => {

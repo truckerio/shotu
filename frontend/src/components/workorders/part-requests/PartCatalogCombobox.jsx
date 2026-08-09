@@ -101,6 +101,10 @@ export function PartCatalogCombobox({
 
   function handleKeyDown(event) {
     if (event.key === "Escape") {
+      // The desktop tools pane also listens for Escape. Keep this nested
+      // combobox dismissal local so closing a dropdown never hides Chat or
+      // Preview behind it.
+      event.stopPropagation();
       setOpen(false);
       setActiveIndex(-1);
       return;

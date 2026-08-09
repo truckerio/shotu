@@ -56,6 +56,7 @@ export function LocationDetailPage({
   resendingInviteId,
   onSaveTemplate,
   onSavePolicy,
+  onOpenModules,
   saving,
   onOpenWorkorder,
 }) {
@@ -76,7 +77,7 @@ export function LocationDetailPage({
       {tab === "work" ? <div className="admin-location-work"><OperationsWorkspace actor={actor} locations={[detail.location]} fixedLocationId={detail.location.id} {...draftQueue} onOpenWorkorder={onOpenWorkorder} /></div> : null}
       {tab === "users" ? <UsersPage actor={actor} detail={detail} onInvite={onInvite} onManage={onManageUser} onResend={onResendInvite} resendingId={resendingInviteId} /> : null}
       {tab === "template" ? <TemplatePage detail={detail} value={template} onChange={(key, value) => setTemplate((current) => ({ ...current, [key]: value }))} onSave={onSaveTemplate} saving={saving} /> : null}
-      {tab === "rules" ? <WorkorderRulesPage policy={policy} onChange={(mechanicCanRecordParts) => setPolicy((current) => ({ ...current, mechanicCanRecordParts }))} onSave={onSavePolicy} saving={saving} /> : null}
+      {tab === "rules" ? <WorkorderRulesPage detail={detail} policy={policy} onChange={setPolicy} onOpenModules={onOpenModules} onSave={onSavePolicy} saving={saving} /> : null}
       {tab === "kiosk" ? <KioskSettingsPanel locationId={detail.location.id} /> : null}
     </section>
   );

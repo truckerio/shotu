@@ -81,5 +81,5 @@ test("used-parts activity formats quantity with its unit", () => {
       { partNo: "COOLANT", qty: "2.5", uomCode: "gal" },
       { partNo: "FILTER", qty: 1 },
     ]),
-  }), "Used parts: 2.5 gal × COOLANT, 1 ea × FILTER.");
+  }), "Used parts: 2.5 gal × COOLANT, 1 pc × FILTER.");
 });
