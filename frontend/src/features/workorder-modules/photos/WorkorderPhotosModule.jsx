@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import "./workorder-photos.css";
 
 function imageAttachments(messages = []) {
   return messages.flatMap((message) => {
@@ -16,18 +18,47 @@ function imageAttachments(messages = []) {
   });
 }
 
+function WorkorderPhoto({ photo }) {
+  const [unavailable, setUnavailable] = useState(false);
+
+  return (
+    <figure className="workorder-photo-card">
+      {unavailable ? (
+        <div className="workorder-photo-unavailable" role="img" aria-label={`${photo.name} is unavailable`}>
+          <span>Image unavailable</span>
+          <small>Upload this photo again to restore it.</small>
+        </div>
+      ) : (
+        <a
+          className="workorder-photo-link"
+          href={photo.source}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${photo.name}`}
+        >
+          <img
+            className="workorder-photo-image"
+            src={photo.source}
+            alt={photo.name}
+            loading="lazy"
+            onError={() => setUnavailable(true)}
+          />
+        </a>
+      )}
+      <figcaption className="workorder-photo-name" title={photo.name}>{photo.name}</figcaption>
+    </figure>
+  );
+}
+
 export function WorkorderPhotosModule({ access, activeSection, messages, onSelect }) {
   if (!access) return null;
   const photos = imageAttachments(messages);
   return (
     <ProgressiveWorkorderSection id="photos" title="Photos" summary={photos.length ? `${photos.length} attached` : "No photos"} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
       {photos.length ? (
-        <div className="chat-attachments" aria-label="Workorder photos">
+        <div className="workorder-photo-grid" aria-label="Workorder photos">
           {photos.map((photo) => (
-            <figure className="chat-image-attachment" key={photo.id}>
-              <a className="chat-image-link" href={photo.source} target="_blank" rel="noreferrer"><img className="chat-attachment-image" src={photo.source} alt={photo.name} loading="lazy" /></a>
-              <figcaption className="chat-attachment-name">{photo.name}</figcaption>
-            </figure>
+            <WorkorderPhoto photo={photo} key={photo.id} />
           ))}
         </div>
       ) : <p>No photos attached to this workorder.</p>}
