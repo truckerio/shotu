@@ -18,11 +18,15 @@ test("approved-part composer contains quantity, unit, and supply controls", () =
 test("approved-part composer responds to split-pane width", () => {
   assert.match(
     css,
-    /@container workorder-control \(max-width: 620px\)[\s\S]*\.office-add-part \.part-search-control,[\s\S]*\.office-add-part \.part-suggestion-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
+    /\.part-requests-panel\s*\{[^}]*container-name:\s*part-requests-panel;[^}]*container-type:\s*inline-size;/s,
   );
   assert.match(
     css,
-    /@container workorder-control \(max-width: 620px\)[\s\S]*\.office-add-part \.part-search-ai-action button\s*\{[^}]*width:\s*100%;/,
+    /@container part-requests-panel \(max-width: 620px\)[\s\S]*\.office-add-part \.part-search-control,[\s\S]*\.office-add-part \.part-suggestion-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
+  );
+  assert.match(
+    css,
+    /@container part-requests-panel \(max-width: 620px\)[\s\S]*\.office-add-part \.part-search-ai-action button\s*\{[^}]*width:\s*100%;/,
   );
 });
 
@@ -40,7 +44,7 @@ test("office part quantity and unit receive a track wide enough for the shared c
 test("office part fields collapse from split-pane width instead of viewport width", () => {
   assert.match(
     css,
-    /@container workorder-control \(max-width: 620px\)[\s\S]*\.office-part-request-card \.part-office-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
+    /@container part-requests-panel \(max-width: 620px\)[\s\S]*\.office-part-request-card \.part-office-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
   );
 });
 
@@ -51,6 +55,6 @@ test("fitment uses a compact track and collapses with its container", () => {
   );
   assert.match(
     css,
-    /@container workorder-control \(max-width: 620px\)[\s\S]*\.office-part-request-card \.part-fitment-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
+    /@container part-requests-panel \(max-width: 620px\)[\s\S]*\.office-part-request-card \.part-fitment-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
   );
 });
