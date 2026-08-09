@@ -12,9 +12,9 @@ test("hidden Preview does not mount printable or fullscreen detail data", () => 
   assert.match(detailPage, /renderedDetailSection === "preview" && previewPolicy\.canRead/);
 });
 
-test("read-only Chat has no composer and hidden Photos remove attachment data", () => {
+test("read-only Chat has no composer and visible Photos enable chat attachments", () => {
   assert.match(detailPage, /chatPolicy\.canWrite && activeWorkorder\.allowedActions\?\.sendMessage/);
-  assert.match(detailPage, /allowAttachments=\{photosPolicy\.canWrite\}/);
+  assert.match(detailPage, /allowAttachments=\{photosPolicy\.canRead\}/);
   assert.match(detailPage, /attachment: null, attachments: \[\]/);
 });
 

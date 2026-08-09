@@ -224,7 +224,7 @@ export function WorkorderDetailPage({
           sendLabel="Send"
           compact={isMechanicDetail}
           quickActions={isMechanicDetail ? localizedMechanicHelpActions(locale) : []}
-          allowAttachments={photosPolicy.canWrite}
+          allowAttachments={photosPolicy.canRead}
         />
       ) : null}
       {chatPolicy.canWrite && !activeWorkorder.allowedActions?.sendMessage ? (
