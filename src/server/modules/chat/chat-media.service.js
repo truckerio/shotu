@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { basename, extname, resolve, sep } from "node:path";
 
 export const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -83,15 +83,13 @@ export async function persistChatImageAttachment({ dataUrl, fileName }) {
   const { bytes, mimeType } = decodeChatImageDataUrl(dataUrl);
   const extension = MIME_EXTENSIONS[mimeType];
   const storageKey = `${randomUUID()}${extension}`;
-  const root = mediaRoot();
-  await mkdir(root, { recursive: true, mode: 0o700 });
-  await writeFile(safeStoragePath(storageKey), bytes, { flag: "wx", mode: 0o600 });
   return {
     storageKey,
     fileName: sanitizeAttachmentFileName(fileName, mimeType),
     mimeType,
     byteSize: bytes.length,
     sha256: createHash("sha256").update(bytes).digest("hex"),
+    content: bytes,
   };
 }
 
@@ -100,6 +98,20 @@ export async function removeStoredChatImage(storageKey) {
   await rm(safeStoragePath(storageKey), { force: true });
 }
 
-export async function readStoredChatImage(storageKey) {
-  return readFile(safeStoragePath(storageKey));
+export async function readStoredChatImage(attachmentOrStorageKey) {
+  const attachment = typeof attachmentOrStorageKey === "string"
+    ? { storageKey: attachmentOrStorageKey }
+    : attachmentOrStorageKey;
+  const bytes = attachment?.content
+    ? Buffer.from(attachment.content)
+    : await readFile(safeStoragePath(attachment?.storageKey));
+
+  if (attachment?.byteSize && bytes.length !== attachment.byteSize) {
+    throw new Error("Chat attachment failed size verification.");
+  }
+  if (attachment?.sha256) {
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (digest !== attachment.sha256) throw new Error("Chat attachment failed integrity verification.");
+  }
+  return bytes;
 }

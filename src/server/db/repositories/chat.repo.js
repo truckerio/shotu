@@ -218,8 +218,8 @@ export async function addChatMessage({ workorderId, senderUserId, senderRole, me
       const attachmentResult = await client.query(
         `
           insert into chat_message_attachments (
-            message_id, workorder_id, storage_key, original_file_name, mime_type, byte_size, sha256
-          ) values ($1, $2, $3, $4, $5, $6, $7)
+            message_id, workorder_id, storage_key, original_file_name, mime_type, byte_size, sha256, content
+          ) values ($1, $2, $3, $4, $5, $6, $7, $8)
           returning id, original_file_name, mime_type, byte_size, created_at
         `,
         [
@@ -230,6 +230,7 @@ export async function addChatMessage({ workorderId, senderUserId, senderRole, me
           attachment.mimeType,
           attachment.byteSize,
           attachment.sha256,
+          attachment.content,
         ]
       );
       insertedAttachment = attachmentResult.rows[0];
@@ -305,7 +306,7 @@ export async function addSystemChatMessageOnce({ workorderId, body, dedupeKey })
 export async function getChatAttachmentById(attachmentId) {
   const result = await query(
     `
-      select id, message_id, workorder_id, storage_key, original_file_name, mime_type, byte_size, sha256, created_at
+      select id, message_id, workorder_id, storage_key, original_file_name, mime_type, byte_size, sha256, content, created_at
       from chat_message_attachments
       where id = $1
       limit 1
@@ -323,6 +324,7 @@ export async function getChatAttachmentById(attachmentId) {
     mimeType: row.mime_type,
     byteSize: row.byte_size,
     sha256: row.sha256,
+    content: row.content,
     createdAt: row.created_at,
   };
 }

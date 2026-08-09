@@ -74,7 +74,7 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
     await requireWorkorderAccess(requestContext, attachment.workorderId);
     let body;
     try {
-      body = await readStoredChatImage(attachment.storageKey);
+      body = await readStoredChatImage(attachment);
     } catch (error) {
       if (error.code === "ENOENT") {
         sendJson(res, 404, { error: "Chat attachment file not found." });

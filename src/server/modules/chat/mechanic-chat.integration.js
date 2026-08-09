@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { closePool, query } from "../../db/pool.js";
 import { addSystemChatMessageOnce, getChatAttachmentById, listChatMessages } from "../../db/repositories/chat.repo.js";
 import { acceptOperationalWorkorder, createOperationalWorkorder } from "../../db/repositories/operational-workorders.repo.js";
@@ -15,8 +12,6 @@ const suffix = Date.now().toString(36);
 const companyKey = `chat-test-${suffix}`;
 let companyId;
 let locationId;
-const mediaDirectory = await mkdtemp(join(tmpdir(), "workorder-chat-integration-"));
-process.env.CHAT_MEDIA_DIR = mediaDirectory;
 let workorderId;
 let assetId;
 
@@ -117,9 +112,10 @@ try {
   assert.equal(pricingCalls, 0);
 
   const attachment = await getChatAttachmentById(response.message.attachment.id);
-  const storedBytes = await readStoredChatImage(attachment.storageKey);
+  const storedBytes = await readStoredChatImage(attachment);
   assert.equal(storedBytes.length, attachment.byteSize);
   assert.equal(attachment.mimeType, "image/png");
+  assert.ok(Buffer.isBuffer(attachment.content));
 
   const requests = await listWorkorderPartRequests(workorderId);
   assert.equal(requests.length, 1);
@@ -150,6 +146,5 @@ try {
   if (companyId) await query("delete from workorder_serial_counters where company_id = $1", [companyId]);
   if (locationId) await query("delete from locations where id = $1", [locationId]);
   if (companyId) await query("delete from companies where id = $1", [companyId]);
-  await rm(mediaDirectory, { recursive: true, force: true });
   await closePool();
 }
