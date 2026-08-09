@@ -20,6 +20,7 @@ import {
   WORKORDER_SURFACES,
 } from "../../features/workorder-modules/workorder-module-registry.js";
 import { api } from "../../lib/api.js";
+import { timelineEventCount } from "../../components/workorders/workorder-timeline-model.js";
 
 const ROUTABLE_DETAIL_SECTIONS = workorderModuleRouteIds(WORKORDER_SURFACES.DETAIL);
 
@@ -65,7 +66,7 @@ export function requestedAllowedDetailSection({
     policyOverrides: detail?.policy,
     pendingPartCount: pendingPartRequestCount(detail),
     role,
-    timelineCount: (detail?.timeline || []).filter((event) => event.type !== "access").length,
+    timelineCount: timelineEventCount(detail?.timeline),
     unitType: detail?.workorder?.formData?.unitType || detail?.workorder?.asset?.unitType || "",
     userId,
   });

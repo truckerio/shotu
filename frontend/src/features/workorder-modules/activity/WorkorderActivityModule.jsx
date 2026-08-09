@@ -1,5 +1,6 @@
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { WorkorderTimelinePanel } from "../../../components/workorders/WorkorderTimeline.jsx";
+import { timelineEventCount } from "../../../components/workorders/workorder-timeline-model.js";
 import { WorkorderHandoffFacts } from "../WorkorderHandoffFacts.jsx";
 
 export function WorkorderActivityModule({
@@ -11,11 +12,12 @@ export function WorkorderActivityModule({
   visibleTimeline,
 }) {
   if (!access || !activeWorkorder) return null;
+  const activityCount = timelineEventCount(visibleTimeline);
   return (
     <ProgressiveWorkorderSection
       id="activity"
       title="Activity"
-      summary={`${visibleTimeline.length} ${visibleTimeline.length === 1 ? "event" : "events"}`}
+      summary={`${activityCount} ${activityCount === 1 ? "event" : "events"}`}
       activeSection={detailSection}
       onSelect={onSelect}
       className="is-detail-end-timeline"

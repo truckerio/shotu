@@ -1200,7 +1200,7 @@ export async function getWorkorderTimeline(workorderId) {
         left join user_profiles u on u.id = access.user_id
         where access.workorder_id = $1
       ) timeline
-      order by created_at asc
+      order by created_at asc, id asc
     `,
     [workorderId]
   );

@@ -8,6 +8,7 @@ import {
 import { getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
 import { buildWorkorderDetailSections } from "../../features/workorder-detail/workorder-detail-sections.js";
 import { formatLifecycleLabel } from "../../lib/workorder-presentation.js";
+import { timelineEventCount } from "../../components/workorders/workorder-timeline-model.js";
 
 const ATTENTION_STATUS_LABELS = {
   waiting_office: "Needs office",
@@ -60,7 +61,7 @@ export function useWorkorderDetailViewModel({
     pendingPartCount,
     policyOverrides,
     role: role || (isMechanicDetail ? "mechanic" : isOfficeDetail ? "office" : "surveillance"),
-    timelineCount: visibleTimeline.length,
+    timelineCount: timelineEventCount(visibleTimeline),
     unitType: form.unitType,
     userId,
     locale: interfaceLocale,
