@@ -109,6 +109,24 @@
   align-self: end;
 }
 
+.office-add-part,
+.office-add-part .part-search-control,
+.office-add-part .part-suggestion-fields {
+  min-width: 0;
+}
+
+.office-add-part .part-suggestion-fields {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 240px);
+}
+
+.office-add-part .part-suggestion-fields > *,
+.office-add-part .part-suggestion-fields > .quantity-unit-input,
+.office-add-part .part-suggestion-fields select {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
 .office-part-request-card .part-office-fields {
   grid-template-columns: minmax(0, 1fr) minmax(144px, 180px);
   min-width: 0;
@@ -148,6 +166,27 @@
 }
 
 @container workorder-control (max-width: 620px) {
+  .office-add-part .part-search-control,
+  .office-add-part .part-suggestion-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .office-add-part .part-search-ai-action {
+    justify-items: stretch;
+  }
+
+  .office-add-part .part-search-ai-action button {
+    width: 100%;
+  }
+
+  .office-add-part .part-search-ai-action small {
+    text-align: center;
+  }
+
+  .office-add-part .part-field-wide {
+    grid-column: auto;
+  }
+
   .office-part-request-card .part-office-fields {
     grid-template-columns: minmax(0, 1fr);
   }

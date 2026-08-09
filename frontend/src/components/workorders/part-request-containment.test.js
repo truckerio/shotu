@@ -4,6 +4,28 @@ import test from "node:test";
 
 const css = readFileSync(new URL("./part-requests-panel.css", import.meta.url), "utf8");
 
+test("approved-part composer contains quantity, unit, and supply controls", () => {
+  assert.match(
+    css,
+    /\.office-add-part \.part-suggestion-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(200px, 240px\);/s,
+  );
+  assert.match(
+    css,
+    /\.office-add-part \.part-suggestion-fields > \*,[\s\S]*\.office-add-part \.part-suggestion-fields select\s*\{[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
+  );
+});
+
+test("approved-part composer responds to split-pane width", () => {
+  assert.match(
+    css,
+    /@container workorder-control \(max-width: 620px\)[\s\S]*\.office-add-part \.part-search-control,[\s\S]*\.office-add-part \.part-suggestion-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/,
+  );
+  assert.match(
+    css,
+    /@container workorder-control \(max-width: 620px\)[\s\S]*\.office-add-part \.part-search-ai-action button\s*\{[^}]*width:\s*100%;/,
+  );
+});
+
 test("office part quantity and unit receive a track wide enough for the shared control", () => {
   assert.match(
     css,
