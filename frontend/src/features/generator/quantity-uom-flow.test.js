@@ -39,6 +39,14 @@ test("surveillance read-only parts use the shared quantity formatter", () => {
 });
 
 test("AI part suggestions retain quantity and unit in the shared used-parts row", () => {
-  assert.match(usedPartsEditor, /qty:\s*result\.part\.suggestedQuantity \|\| row\.qty/);
+  assert.match(usedPartsEditor, /qty:\s*defaultUsedPartQuantity\(result\.part\.suggestedQuantity \|\| row\.qty\)/);
   assert.match(usedPartsEditor, /uomCode:\s*result\.part\.uomCode \|\| row\.uomCode/);
+});
+
+test("catalog selections default blank used-part quantities to one", () => {
+  assert.match(usedPartsEditor, /partNo:\s*catalogPart\.partNumber,[\s\S]*qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
+});
+
+test("typed part numbers default blank quantities before autosave", () => {
+  assert.match(usedPartsEditor, /partNo:\s*value,[\s\S]*qty:\s*usedPartQuantityAfterPartNumberChange\(part, value\)/);
 });

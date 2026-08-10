@@ -8,9 +8,11 @@ import { Button } from "../ui/Button.jsx";
 import {
   MAX_USED_PARTS,
   addUsedPart,
+  defaultUsedPartQuantity,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
+  usedPartQuantityAfterPartNumberChange,
 } from "./used-parts-model.js";
 import {
   mechanicWorkStorageKey,
@@ -174,7 +176,7 @@ export function UsedPartsEditor({
       next[index] = {
         ...row,
         partNo: result.part.normalizedPartNumber || row.partNo,
-        qty: result.part.suggestedQuantity || row.qty,
+        qty: defaultUsedPartQuantity(result.part.suggestedQuantity || row.qty),
         uomCode: result.part.uomCode || row.uomCode,
       };
       onChange(next);
@@ -234,12 +236,16 @@ export function UsedPartsEditor({
                   value={part.partNo}
                   onChange={(value) => {
                     setSelectedCatalogPart(index, null);
-                    update(index, "partNo", value);
+                    updateFields(index, {
+                      partNo: value,
+                      qty: usedPartQuantityAfterPartNumberChange(part, value),
+                    });
                   }}
                   onSelect={(catalogPart) => {
                     setSelectedCatalogPart(index, catalogPart);
                     updateFields(index, {
                       partNo: catalogPart.partNumber,
+                      qty: defaultUsedPartQuantity(part.qty),
                       uomCode: catalogPart.uomCode || part.uomCode,
                     });
                     setMessage(catalogInventoryText(catalogPart));

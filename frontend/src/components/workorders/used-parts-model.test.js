@@ -3,15 +3,31 @@ import test from "node:test";
 import {
   addUsedPart,
   canEditUsedParts,
+  defaultUsedPartQuantity,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
+  usedPartQuantityAfterPartNumberChange,
   usedPartsAccessState,
 } from "./used-parts-model.js";
 
 test("zero used parts stay empty until Add part", () => {
   assert.deepEqual(normalizeUsedParts([], 0), []);
   assert.deepEqual(addUsedPart([]), [{ partNo: "", qty: "", uomCode: "pc", repairOrder: "" }]);
+});
+
+test("selected used parts default an empty quantity to one", () => {
+  assert.equal(defaultUsedPartQuantity(""), "1");
+  assert.equal(defaultUsedPartQuantity(null), "1");
+  assert.equal(defaultUsedPartQuantity("2.5"), "2.5");
+});
+
+test("typed used-part identities default to one without turning blank rows into parts", () => {
+  const blank = { partNo: "", qty: "", repairOrder: "" };
+  assert.equal(usedPartQuantityAfterPartNumberChange(blank, "FILTER"), "1");
+  assert.equal(usedPartQuantityAfterPartNumberChange({ ...blank, qty: "3" }, "FILTER"), "3");
+  assert.equal(usedPartQuantityAfterPartNumberChange({ ...blank, qty: "1" }, ""), "");
+  assert.equal(usedPartQuantityAfterPartNumberChange({ ...blank, qty: "1", repairOrder: "Installed" }, ""), "1");
 });
 
 test("used part rows add and remove without changing serialization fields", () => {

@@ -17,6 +17,17 @@ export function emptyUsedPart() {
   return { partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" };
 }
 
+export function defaultUsedPartQuantity(quantity) {
+  const value = quantity === null || quantity === undefined ? "" : String(quantity).trim();
+  return value || "1";
+}
+
+export function usedPartQuantityAfterPartNumberChange(part, partNumber) {
+  const quantity = part?.qty === null || part?.qty === undefined ? "" : String(part.qty).trim();
+  if (String(partNumber || "").trim()) return defaultUsedPartQuantity(quantity);
+  return quantity === "1" && !String(part?.repairOrder || "").trim() ? "" : quantity;
+}
+
 export function usedPartHasValue(part) {
   return Boolean(part?.partNo || part?.qty || part?.repairOrder || part?.requestId);
 }
