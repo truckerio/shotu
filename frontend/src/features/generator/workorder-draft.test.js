@@ -26,6 +26,35 @@ test("workorder creation draft preserves required form and assignment data", () 
   assert.equal(isMeaningfulWorkorderDraft(payload), true);
 });
 
+test("mechanic creation leaves assignment ownership to the authenticated server", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: {
+      role: "mechanic",
+      companyIds: ["company-1"],
+      locationIds: ["location-1"],
+    },
+    form: {
+      locationId: "location-1",
+      customerCompanyName: "Long Haul",
+      mechanicConcern: "Inspection",
+      mechanicName: "Mechanic One",
+      customerSignature: "Customer Signer",
+      authorizedBy: "Fleet Manager",
+      unitNo: "G2026",
+      parts: [],
+    },
+    mechanicUserIds: ["mechanic-1"],
+    selectedVehicle: { id: "asset-1" },
+  });
+
+  assert.equal(Object.hasOwn(payload, "mechanicUserIds"), false);
+  assert.equal(Object.hasOwn(payload.formData, "mechanicName"), false);
+  assert.equal(Object.hasOwn(payload.formData, "customerSignature"), false);
+  assert.equal(Object.hasOwn(payload.formData, "authorizedBy"), false);
+  assert.equal(payload.formData.unitNo, "G2026");
+  assert.equal(payload.concern, "Inspection");
+});
+
 test("draft values restore into the controlled create form", () => {
   const restored = formValuesFromWorkorderDraft({
     locationId: "location-2",

@@ -26,13 +26,16 @@ export function buildWorkorderDraftPayload({
   mechanicUserIds = [],
   selectedVehicle,
 }) {
+  const isMechanicCreate = actor.role === "mechanic";
   return {
     companyId: actor.companyMemberships?.[0]?.companyId || actor.companyIds?.[0] || "",
     locationId: form.locationId || actor.locationIds?.[0] || null,
     assetId: selectedVehicle?.id || null,
     concern: text(form.mechanicConcern),
     officeNotes: text(form.officeNotes),
-    mechanicUserIds: [...new Set(mechanicUserIds.filter(Boolean))],
+    ...(!isMechanicCreate ? {
+      mechanicUserIds: [...new Set(mechanicUserIds.filter(Boolean))],
+    } : {}),
     formData: {
       companyName: text(form.customerCompanyName),
       customerCompanyName: text(form.customerCompanyName),
@@ -52,12 +55,14 @@ export function buildWorkorderDraftPayload({
       model: text(form.model),
       vinNo: text(form.vinNo),
       mechanicConcern: text(form.mechanicConcern),
-      mechanicName: text(form.mechanicName),
       startTime: text(form.startTime),
       endTime: text(form.endTime),
       managerName: text(form.managerName),
-      customerSignature: text(form.customerSignature),
-      authorizedBy: text(form.authorizedBy),
+      ...(!isMechanicCreate ? {
+        mechanicName: text(form.mechanicName),
+        customerSignature: text(form.customerSignature),
+        authorizedBy: text(form.authorizedBy),
+      } : {}),
       parts: filledParts(form.parts),
     },
   };
