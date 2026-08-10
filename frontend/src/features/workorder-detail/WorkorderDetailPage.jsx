@@ -34,6 +34,19 @@ import {
   WORKORDER_SURFACES,
 } from "../workorder-modules/workorder-module-registry.js";
 
+function MechanicActionMessage({ action, validationActive = false }) {
+  if (!action?.message || (action.validationField && !validationActive)) return null;
+  const validation = Boolean(action.validationField);
+  return (
+    <p
+      className={`mechanic-action-message ${validation ? "is-validation-warning" : ""}`.trim()}
+      role={validation ? "alert" : "status"}
+    >
+      {validation ? <strong>{action.message}</strong> : action.message}
+    </p>
+  );
+}
+
 export function WorkorderDetailPage({
   activeWorkorder,
   actor,
@@ -194,6 +207,8 @@ export function WorkorderDetailPage({
     [activeWorkorder.policy, actor.id, actor.role, detailSections, isCompact],
   );
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
+  const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
+    && !String(form.workPerformed || "").trim();
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
   useEffect(() => {
     if (!visibleDetailSections.length || renderedDetailSection === detailSection) return;
@@ -235,7 +250,7 @@ export function WorkorderDetailPage({
             : "Assign a mechanic to start the workorder chat."}
         </p>
       ) : null}
-      {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
+      <MechanicActionMessage action={mechanicAction} validationActive={mechanicValidationActive} />
     </div>
   );
 
@@ -345,7 +360,7 @@ export function WorkorderDetailPage({
                 <strong>{form.mileage ? `${form.mileage} mi` : "Not listed"}</strong>
               </div>
             ) : null}
-            {mechanicAction.message ? <p className="mechanic-action-message" role="status">{mechanicAction.message}</p> : null}
+            <MechanicActionMessage action={mechanicAction} validationActive={mechanicValidationActive} />
             </>
           ),
         }}
@@ -426,6 +441,7 @@ export function WorkorderDetailPage({
             mechanicMapLocation={mechanicMapLocation}
             mechanicMapVehicle={mechanicMapVehicle}
             mechanicProgress={mechanicProgress}
+            mechanicValidationField={mechanicValidationActive ? mechanicAction.validationField : ""}
             mechanicUnitType={mechanicUnitType}
             mechanicVehicleLabel={mechanicVehicleLabel}
             officeAssignment={officeAssignment}

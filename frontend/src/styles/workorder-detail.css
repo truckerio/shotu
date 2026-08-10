@@ -200,6 +200,31 @@
   margin-left: auto;
 }
 
+@keyframes mechanic-required-field-blink {
+  0%, 100% {
+    border-color: #d92d20;
+    box-shadow: 0 0 0 4px #fee4e2;
+  }
+
+  50% {
+    border-color: #fda29b;
+    box-shadow: 0 0 0 1px #fda29b;
+  }
+}
+
+.operational-form-field.is-completion-required :where(input, select, textarea) {
+  animation: mechanic-required-field-blink 0.85s ease-in-out infinite;
+  border-width: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operational-form-field.is-completion-required :where(input, select, textarea) {
+    animation: none;
+    border-color: #d92d20;
+    box-shadow: 0 0 0 4px #fee4e2;
+  }
+}
+
 .workorder-object-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.5;

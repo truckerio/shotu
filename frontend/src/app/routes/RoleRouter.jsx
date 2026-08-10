@@ -378,7 +378,7 @@ export function RoleRouter({ actor }) {
     officeLocations,
     replaceRoute: replaceRouteSearch,
     setActiveWorkorder,
-    setDetailSection,
+    selectDetailSection,
     setDetailSource,
     setDetailStatus,
     setForm,

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const detailPage = readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta.url), "utf8");
+const detailCss = readFileSync(new URL("../../styles/workorder-detail.css", import.meta.url), "utf8");
+const detailToolbarCss = readFileSync(new URL("./workorder-detail-toolbar.css", import.meta.url), "utf8");
 const workDoneButton = readFileSync(new URL("../../components/workorders/WorkDoneButton.jsx", import.meta.url), "utf8");
 const detailSections = readFileSync(new URL("./WorkorderDetailSections.jsx", import.meta.url), "utf8");
 const concernModule = readFileSync(new URL("../workorder-modules/work/WorkorderConcernModule.jsx", import.meta.url), "utf8");
@@ -30,6 +32,16 @@ test("existing mechanic completion flow uses Work done language", () => {
   assert.doesNotMatch(detailPage, /Write your name to confirm|expectedMechanicName|mechanicFinishNameMatches/);
   assert.doesNotMatch(detailPage, /Finish workorder|Finish work|Finishing/);
   assert.match(mechanicActions, /\/mark-done/);
+  assert.match(mechanicActions, /selectDetailSection\("diagnosisRepair"\)/);
+  assert.match(mechanicActions, /validationField: "workPerformed"/);
+  assert.match(detailPage, /is-validation-warning/);
+  assert.match(detailPage, /role=\{validation \? "alert" : "status"\}/);
+  assert.match(diagnosisRepairModule, /is-completion-required/);
+  assert.match(diagnosisRepairModule, /Required — add the repair completed/);
+  assert.match(detailToolbarCss, /\.mechanic-action-message\.is-validation-warning[\s\S]*#b42318/);
+  assert.match(detailCss, /@keyframes mechanic-required-field-blink/);
+  assert.match(detailCss, /\.operational-form-field\.is-completion-required/);
+  assert.match(detailCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(roleRouter, /useMechanicWorkorderActions/);
 });
 

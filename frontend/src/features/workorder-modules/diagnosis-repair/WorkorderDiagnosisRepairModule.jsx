@@ -16,10 +16,12 @@ export function WorkorderDiagnosisRepairModule({
   mechanicProgress,
   onChange,
   onSelect,
+  validationField = "",
   workPerformed,
 }) {
   if (!access) return null;
   const canWrite = writable(access) && Boolean(allowedActions.saveNotes);
+  const repairRequired = validationField === "workPerformed" && !String(workPerformed || "").trim();
 
   return (
     <ProgressiveWorkorderSection
@@ -36,7 +38,14 @@ export function WorkorderDiagnosisRepairModule({
           <FormField id="mechanic-diagnosis" label={localeText("detail.diagnosis")} hint="What did you inspect or find?">
             <NarrativeField rows="3" value={diagnosis || ""} onChange={(event) => onChange?.("diagnosis", event.target.value)} />
           </FormField>
-          <FormField id="mechanic-work-performed" label={localeText("detail.repairCompleted")} hint="Write what was repaired, replaced, adjusted, or checked.">
+          <FormField
+            id="mechanic-work-performed"
+            label={localeText("detail.repairCompleted")}
+            hint="Write what was repaired, replaced, adjusted, or checked."
+            required={repairRequired}
+            error={repairRequired ? "Required — add the repair completed before marking Work done." : ""}
+            className={repairRequired ? "is-completion-required" : ""}
+          >
             <NarrativeField id="mechanic-work-performed" rows="4" value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
           </FormField>
           {mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} /> : null}

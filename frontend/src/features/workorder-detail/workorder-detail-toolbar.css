@@ -208,3 +208,19 @@
   font-size: var(--text-secondary);
   font-weight: var(--weight-medium);
 }
+
+.mechanic-action-message.is-validation-warning {
+  background: #fef3f2;
+  border: 2px solid #d92d20;
+  border-radius: 8px;
+  color: #b42318;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: 1.45;
+  margin: 12px 0;
+  padding: 12px 14px;
+}
+
+.mechanic-action-message.is-validation-warning strong {
+  font-weight: var(--weight-bold);
+}

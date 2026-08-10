@@ -97,7 +97,9 @@ function browserRequestAnimationFrame(callback) {
 }
 
 function focusMechanicWorkPerformed() {
-  globalThis.document?.getElementById("mechanic-work-performed")?.focus();
+  const field = globalThis.document?.getElementById("mechanic-work-performed");
+  field?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  field?.focus?.({ preventScroll: true });
 }
 
 export function createMechanicWorkorderActions({
@@ -115,7 +117,7 @@ export function createMechanicWorkorderActions({
   replaceRoute,
   requestFrame = browserRequestAnimationFrame,
   setActiveWorkorder,
-  setDetailSection,
+  selectDetailSection,
   setDetailSource,
   setDetailStatus,
   setForm,
@@ -289,9 +291,13 @@ export function createMechanicWorkorderActions({
     const validationError = mechanicFinishError(form);
     if (validationError) {
       setMechanicFinish({ open: false, name: "", message: "" });
-      setDetailSection("work");
-      setMechanicAction({ busy: "", message: validationError });
-      requestFrame(focusWorkPerformed);
+      selectDetailSection("diagnosisRepair");
+      setMechanicAction({
+        busy: "",
+        message: validationError,
+        validationField: "workPerformed",
+      });
+      requestFrame(() => requestFrame(focusWorkPerformed));
       return false;
     }
 

@@ -47,7 +47,7 @@ function actionHarness(overrides = {}) {
     replaceRoute: (...args) => calls.push(["route", ...args]),
     requestFrame: (callback) => callback(),
     setActiveWorkorder: (...args) => calls.push(["active", ...args]),
-    setDetailSection: (...args) => calls.push(["section", ...args]),
+    selectDetailSection: (...args) => calls.push(["section", ...args]),
     setDetailSource: (...args) => calls.push(["source", ...args]),
     setDetailStatus: (...args) => calls.push(["status", ...args]),
     setForm: (...args) => calls.push(["form", ...args]),
@@ -226,7 +226,7 @@ test("mark done flushes progress before posting the preserved diagnosis and repa
   });
 });
 
-test("submit finish selects Work and schedules focus when repair details are missing", async () => {
+test("submit finish opens Diagnosis and repair and highlights the missing repair field", async () => {
   const { actions, calls } = actionHarness({
     form: { diagnosis: "Checked brakes", workPerformed: "" },
   });
@@ -234,9 +234,10 @@ test("submit finish selects Work and schedules focus when repair details are mis
   assert.equal(await actions.submitMechanicFinish({ preventDefault: () => { prevented = true; } }), false);
   assert.equal(prevented, true);
   assert.deepEqual(calls.find(([name]) => name === "focus"), ["focus"]);
-  assert.deepEqual(calls.find(([name]) => name === "section"), ["section", "work"]);
+  assert.deepEqual(calls.find(([name]) => name === "section"), ["section", "diagnosisRepair"]);
   assert.deepEqual(calls.find(([name]) => name === "action"), ["action", {
     busy: "",
     message: "Add the repair completed before marking Work done.",
+    validationField: "workPerformed",
   }]);
 });

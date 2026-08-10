@@ -17,6 +17,10 @@ test("shared buttons render icons beside text with stable flex geometry", () => 
   assert.match(controls, /\.button\s*>\s*span\s*\{[^}]*display:\s*block;[^}]*line-height:/s);
 });
 
+test("primary buttons keep visible content during hover and keyboard focus", () => {
+  assert.match(controls, /\.button\.primary:hover,\s*\.button\.primary:focus-visible\s*\{[^}]*background:\s*#175cd3;[^}]*border-color:\s*#175cd3;[^}]*color:\s*#fff;/s);
+});
+
 test("all direct button icons receive a low-specificity alignment fallback", () => {
   assert.match(foundation, /:where\(button:has\(> svg\)\)\s*\{[^}]*align-items:\s*center;[^}]*display:\s*inline-flex;/s);
   assert.match(foundation, /:where\(button\s*>\s*svg\)\s*\{[^}]*align-self:\s*center;[^}]*display:\s*block;[^}]*flex:\s*0 0 auto;/s);
