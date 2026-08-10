@@ -1,7 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import {
   ChevronDown,
-  DotsHorizontal,
   Tool02,
 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
@@ -111,7 +110,6 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
               className={`${activeOverflowSection ? "is-active" : ""} ${activeOverflowSection?.attention ? "has-attention" : ""}`.trim()}
               aria-label={activeOverflowSection ? `More sections, ${activeOverflowSection.label} selected` : "More workorder sections"}
             >
-              <DotsHorizontal aria-hidden="true" />
               <span>{activeOverflowSection?.label || "More"}</span>
               <ChevronDown aria-hidden="true" />
             </Button>
@@ -159,7 +157,6 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
               className={`${activeOverflowSection ? "is-active" : ""} ${activeOverflowSection?.attention ? "has-attention" : ""}`.trim()}
               aria-label={activeOverflowSection ? `More sections, ${activeOverflowSection.label} selected` : "More workorder sections"}
             >
-              <DotsHorizontal aria-hidden="true" />
               <span>{activeOverflowSection?.label || "More"}</span>
               {activeOverflowSection?.count !== undefined ? <small>{activeOverflowSection.count}</small> : null}
             </Button>

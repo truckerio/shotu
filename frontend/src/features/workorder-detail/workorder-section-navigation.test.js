@@ -19,3 +19,10 @@ test("section navigation resolves icons from module-owned manifests", () => {
   assert.match(source, /workorderModuleDescriptor\(sectionId\)\?\.icon \|\| Tool02/);
   assert.doesNotMatch(source, /SECTION_ICONS/);
 });
+
+test("More navigation uses its visible label without a redundant dots icon", () => {
+  assert.doesNotMatch(source, /DotsHorizontal/);
+  assert.equal((source.match(/activeOverflowSection\?\.label \|\| "More"/g) || []).length, 2);
+  assert.match(source, /ChevronDown aria-hidden="true"/);
+  assert.match(source, /aria-label=\{activeOverflowSection \? `More sections/);
+});
