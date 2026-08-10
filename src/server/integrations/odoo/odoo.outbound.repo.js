@@ -61,6 +61,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
     query(
       `select
          wo.id, wo.serial, wo.status, wo.work_performed, wo.updated_at,
+         wo.form_data->>'mileage' as mileage,
          jsonb_typeof(coalesce(wo.form_data->'parts', '[]'::jsonb)) = 'array' as parts_valid,
          preparation.id as preparation_id,
          preparation.labor_hours,
@@ -192,6 +193,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       serial: row.serial,
       status: row.status,
       workPerformed: row.work_performed || "",
+      mileage: row.mileage || "",
       updatedAt: row.updated_at,
       partsValid: row.parts_valid,
     },

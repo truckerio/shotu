@@ -6,6 +6,7 @@ import {
   buildOdooDraftPayload,
   createOdooWorkorderDraft,
   evaluateOdooOutboundReadiness,
+  normalizeOdooOdometer,
   odooWorkorderReadiness,
   prepareOdooWorkorder,
   stableOdooWorkorderMarker,
@@ -24,6 +25,7 @@ function readyData() {
       serial: "WO-1042",
       status: "closed",
       workPerformed: "PUT NEW HUB SEAL, ADJUST BRAKES",
+      mileage: "482150",
       updatedAt,
       partsValid: true,
     },
@@ -165,6 +167,19 @@ test("readiness blocks malformed stored parts data", () => {
   assert.ok(result.blockers.some((item) => item.code === "ODOO_PARTS_INVALID"));
 });
 
+test("workorder mileage normalizes for Odoo and invalid values fail before draft creation", () => {
+  assert.equal(normalizeOdooOdometer("482,150 mi"), 482150);
+  assert.equal(normalizeOdooOdometer(" 482150.5 "), 482150.5);
+  assert.equal(normalizeOdooOdometer(""), null);
+  assert.equal(normalizeOdooOdometer("unknown"), null);
+
+  const data = readyData();
+  data.workorder.mileage = "unknown";
+  const result = evaluateOdooOutboundReadiness(data, { configured: true });
+  assert.equal(result.ready, false);
+  assert.ok(result.blockers.some((item) => item.code === "ODOO_ODOMETER_INVALID" && item.field === "mileage"));
+});
+
 test("ready status validates the live Odoo service-order model", async () => {
   const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
     readReadiness: async () => readyData(),
@@ -191,6 +206,46 @@ test("readiness accepts equivalent Odoo count-unit labels", async () => {
   });
   assert.equal(readiness.ready, true);
   assert.deepEqual(readiness.blockers, []);
+  assert.equal(readiness.workorder.odometer, 482150);
+});
+
+test("older workorders without mileage do not require the optional Odoo odometer field", async () => {
+  const data = readyData();
+  data.workorder.mileage = "";
+  const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
+    readReadiness: async () => data,
+    readConfiguration: async () => ({ apiKey: "server-only" }),
+    createClient: () => ({
+      execute: async (model, method) => {
+        if (method === "fields_get") {
+          const fields = requiredOrderFields();
+          delete fields.odometer;
+          return fields;
+        }
+        if (model === "product.product" && method === "read") return [...providerProducts().values()];
+        throw new Error(`Unexpected ${model}.${method}`);
+      },
+    }),
+  });
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.workorder.odometer, null);
+});
+
+test("mileage blocks before creation when Odoo odometer is not writable numeric data", async () => {
+  const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
+    readReadiness: async () => readyData(),
+    readConfiguration: async () => ({ apiKey: "server-only" }),
+    createClient: () => ({
+      execute: async (_model, method) => {
+        if (method === "fields_get") {
+          return { ...requiredOrderFields(), odometer: { type: "char", readonly: true } };
+        }
+        throw new Error("Provider products must not load for an incompatible order model.");
+      },
+    }),
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.blockers[0].code, "ODOO_MODEL_INCOMPATIBLE");
 });
 
 test("readiness reports real live Odoo part-unit drift before creation", async () => {
@@ -226,6 +281,7 @@ test("draft payload includes explicit required values and keeps labor before goo
   assert.equal(payload.warehouse_id, 28);
   assert.equal(payload.is_service_order, true);
   assert.equal(payload.client_order_ref, marker);
+  assert.equal(payload.odometer, 482150);
   assert.equal(payload.order_line[0][2].sequence, 10);
   assert.equal(payload.order_line[0][2].product_id, 85226);
   assert.equal(payload.order_line[0][2].product_uom, 4);
@@ -241,10 +297,12 @@ test("draft payload includes explicit required values and keeps labor before goo
 });
 
 function requiredOrderFields() {
-  return Object.fromEntries([
+  const fields = Object.fromEntries([
     "partner_id", "partner_invoice_id", "partner_shipping_id", "origin", "order_line",
-    "warehouse_id", "vehicle_id", "is_service_order", "client_order_ref",
+    "warehouse_id", "vehicle_id", "is_service_order", "client_order_ref", "odometer",
   ].map((field) => [field, {}]));
+  fields.odometer = { type: "float", readonly: false };
+  return fields;
 }
 
 test("draft creation writes one draft without calling confirmation or browser onchange", async () => {
@@ -461,6 +519,7 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.match(repository, /ODOO_ATTEMPT_LEASE_EXPIRED/);
   assert.match(repository, /workorderUpdate\.rowCount !== 1/);
   assert.match(repository, /jsonb_typeof\(wo\.form_data->'parts'\) = 'array'/);
+  assert.match(repository, /wo\.form_data->>'mileage' as mileage/);
   assert.match(repository, /upsertIntegrationMapping/);
   assert.match(repository, /appendIntegrationAudit/);
   assert.doesNotMatch(service, /action_confirm|_create_invoices|action_post|payment/i);

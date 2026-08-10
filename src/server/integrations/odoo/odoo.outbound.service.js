@@ -36,6 +36,17 @@ function decimal(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+export function normalizeOdooOdometer(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim()
+    .replaceAll(",", "")
+    .replace(/\s*(?:mi|miles?)$/i, "")
+    .trim();
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
 function publicIdentity(value) {
   return value?.externalId ? {
     externalId: String(value.externalId),
@@ -57,6 +68,7 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
     ? preparation.customerDisplayName || ""
     : vehicle?.customerDisplayName || "";
   const customerSource = preparation?.customerExternalId ? "override" : "vehicle";
+  const odometer = normalizeOdooOdometer(workorder?.mileage);
 
   if (!configured) blockers.push(blocker("ODOO_CONNECTION_MISSING", "Configure the Odoo connection before creating a draft."));
   if (!workorder) blockers.push(blocker("ODOO_WORKORDER_NOT_FOUND", "Workorder was not found."));
@@ -65,6 +77,9 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
   }
   if (workorder && workorder.partsValid === false) {
     blockers.push(blocker("ODOO_PARTS_INVALID", "Workorder parts data is malformed and must be corrected before Odoo creation.", "parts"));
+  }
+  if (String(workorder?.mileage || "").trim() && odometer === null) {
+    blockers.push(blocker("ODOO_ODOMETER_INVALID", "Enter mileage as a valid non-negative number before creating the Odoo draft.", "mileage"));
   }
   if (!vehicle?.externalId || vehicle.mappingStatus !== "mapped" || vehicle.active === false) {
     blockers.push(blocker("ODOO_VEHICLE_UNMAPPED", "Map this unit to an active Odoo vehicle.", "vehicle"));
@@ -108,6 +123,7 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
       id: workorder.id,
       serial: workorder.serial || "",
       status: workorder.status,
+      odometer,
       updatedAt: workorder.updatedAt || null,
     } : null,
     vehicle: publicIdentity(vehicle),
@@ -181,7 +197,9 @@ export async function odooWorkorderReadiness({ companyId, workorderId }, depende
     const createClient = dependencies.createClient || createOdooClient;
     try {
       const client = createClient(configuration);
-      await requireCompatibleSaleOrder(client, data.settings || {});
+      await requireCompatibleSaleOrder(client, data.settings || {}, {
+        requireOdometer: normalizeOdooOdometer(data.workorder?.mileage) !== null,
+      });
       const products = await readCurrentMappedProducts(client, data);
       requireCurrentProductUoms(data, products);
     } catch (error) {
@@ -308,6 +326,7 @@ export function buildOdooDraftPayload(data, marker, { products = new Map(), addr
     name: part.productName || part.partNumber || "Part",
   }));
   const settings = data.settings || {};
+  const odometer = normalizeOdooOdometer(workorder.mileage);
   return {
     partner_id: customerId,
     partner_invoice_id: numericExternalId(addresses.invoice || customerId, "invoice customer"),
@@ -316,6 +335,7 @@ export function buildOdooDraftPayload(data, marker, { products = new Map(), addr
     [settings.vehicleField || "vehicle_id"]: numericExternalId(vehicle.externalId, "vehicle"),
     [settings.serviceFlagField || "is_service_order"]: true,
     [settings.stableMarkerField || "client_order_ref"]: marker,
+    ...(odometer !== null ? { [settings.odometerField || "odometer"]: odometer } : {}),
     origin: String(workorder.serial || "").slice(0, 200),
     order_line: [orderLine({
       sequence: 10,
@@ -326,23 +346,31 @@ export function buildOdooDraftPayload(data, marker, { products = new Map(), addr
   };
 }
 
-async function requireCompatibleSaleOrder(client, settings) {
+async function requireCompatibleSaleOrder(client, settings, { requireOdometer = false } = {}) {
   const model = settings.orderModel || "sale.order";
-  const fields = await client.execute(model, "fields_get", [], { attributes: ["type", "relation"] });
+  const fields = await client.execute(model, "fields_get", [], { attributes: ["type", "relation", "readonly"] });
+  const odometerField = settings.odometerField || "odometer";
   const required = [
     "partner_id", "partner_invoice_id", "partner_shipping_id", "origin", "order_line",
     settings.warehouseField || "warehouse_id",
     settings.vehicleField || "vehicle_id",
     settings.serviceFlagField || "is_service_order",
     settings.stableMarkerField || "client_order_ref",
+    ...(requireOdometer ? [odometerField] : []),
   ];
   const missing = required.filter((field) => !Object.hasOwn(fields || {}, field));
-  if (missing.length) {
+  const odometerDefinition = fields?.[odometerField];
+  const incompatibleOdometer = requireOdometer && odometerDefinition
+    && (!["float", "integer"].includes(odometerDefinition.type) || odometerDefinition.readonly === true);
+  if (missing.length || incompatibleOdometer) {
     throw new OdooOutboundError(
       "ODOO_MODEL_INCOMPATIBLE",
       "Odoo sale orders do not expose the required service-order fields.",
       422,
-      { missingFields: missing },
+      {
+        missingFields: missing,
+        ...(incompatibleOdometer ? { incompatibleFields: [odometerField] } : {}),
+      },
     );
   }
 }
@@ -449,7 +477,9 @@ export async function createOdooWorkorderDraft({
     const createClient = dependencies.createClient || createOdooClient;
     const client = createClient(configuration);
     const settings = data.settings || {};
-    await requireCompatibleSaleOrder(client, settings);
+    await requireCompatibleSaleOrder(client, settings, {
+      requireOdometer: normalizeOdooOdometer(data.workorder?.mileage) !== null,
+    });
     let order = await findDraftByMarker(client, marker, settings);
     const replayed = Boolean(order);
     if (!order) {
