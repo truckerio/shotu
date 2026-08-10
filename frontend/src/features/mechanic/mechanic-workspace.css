@@ -18,12 +18,23 @@
 }
 
 .mechanic-primary-queues {
+  align-items: center;
   border-bottom: 1px solid #e4e7ec;
+  display: flex;
+  gap: 12px;
   padding: 8px 20px 0;
 }
 
 .mechanic-primary-queues .mechanic-queue-tabs {
+  flex: 1 1 auto;
   gap: 8px;
+  min-width: 0;
+}
+
+.mechanic-primary-create {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+  white-space: nowrap;
 }
 
 .mechanic-primary-queues .mechanic-queue-tabs button,
@@ -310,6 +321,11 @@
   }
 
   .mechanic-primary-queues {
+    align-items: stretch;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 10px;
     padding-inline: 10px;
   }
 
@@ -322,6 +338,12 @@
   .mechanic-primary-queues .mechanic-queue-tabs button {
     justify-content: center;
     min-width: 0;
+  }
+
+  .mechanic-primary-create {
+    justify-content: center;
+    margin-bottom: 0;
+    width: 100%;
   }
 
   .mechanic-home-more summary {

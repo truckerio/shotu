@@ -11,7 +11,19 @@ test("desktop mechanic home exposes one next-job action and secondary tools", ()
   assert.match(workspace, /mechanicJobActionKey\(nextJob\)/);
   assert.match(workspace, /<summary>[\s\S]*detail\.more[\s\S]*<\/summary>/);
   assert.match(workspace, /mechanic\.searchAndFilters/);
-  assert.match(workspace, /WorkspaceCreateActions/);
+});
+
+test("create workorder stays visible with primary mechanic queues instead of More", () => {
+  const primaryStart = workspace.indexOf('className="mechanic-primary-queues"');
+  const createAction = workspace.indexOf('className="mechanic-primary-create"');
+  const moreStart = workspace.indexOf('className="mechanic-home-more"');
+
+  assert.ok(primaryStart >= 0);
+  assert.ok(createAction > primaryStart);
+  assert.ok(createAction < moreStart);
+  assert.equal(workspace.slice(moreStart).includes("mechanic.createWorkorder"), false);
+  assert.match(css, /\.mechanic-primary-create[\s\S]*white-space:\s*nowrap/);
+  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mechanic-primary-create[\s\S]*width:\s*100%/);
 });
 
 test("mechanic home keeps a readable desktop column and overflow-safe children", () => {

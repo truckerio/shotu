@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
-import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { Button } from "../../components/ui/Button.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
@@ -146,6 +146,11 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
         <section className="mechanic-queue-shell" aria-label="Mechanic work">
           <div className="mechanic-primary-queues">
             <WorkorderQueueTabs tabs={primaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+            {onCreateWorkorder ? (
+              <Button className="mechanic-primary-create" type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>
+                {t("mechanic.createWorkorder")}
+              </Button>
+            ) : null}
           </div>
 
           {error ? <p className="ops-error" role="alert">{error}</p> : null}
@@ -236,7 +241,6 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
                 </div>
                 <div className="mechanic-secondary-actions">
                   <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
-                  <WorkspaceCreateActions actor={actor} onCreateWorkorder={onCreateWorkorder} createLabel={t("mechanic.createWorkorder")} />
                 </div>
               </section>
             </div>
