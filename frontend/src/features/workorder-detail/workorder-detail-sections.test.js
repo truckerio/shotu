@@ -31,6 +31,7 @@ test("workorder detail sections keep shared tab contract across roles", () => {
   );
   const mechanic = buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false });
   assert.equal(mechanic.find(({ id }) => id === "chat").label, "Help");
+  assert.equal(mechanic.find(({ id }) => id === "completion").alwaysPrimary, true);
   assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), []);
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: false, isOfficeDetail: true }).map((section) => section.id),

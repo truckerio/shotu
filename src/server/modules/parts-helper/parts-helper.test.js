@@ -43,8 +43,9 @@ test("AI quantity suggestions respect the selected unit", () => {
   }).success, true);
 });
 
-test("catalog search input requires a workorder and bounded query", () => {
+test("catalog search input requires one authorized scope and a bounded query", () => {
   const workorderId = "11111111-1111-4111-8111-111111111111";
+  const locationId = "22222222-2222-4222-8222-222222222222";
   assert.deepEqual(catalogSearchInputSchema.parse({ workorderId, q: "  LF9  " }), {
     workorderId,
     q: "LF9",
@@ -52,6 +53,9 @@ test("catalog search input requires a workorder and bounded query", () => {
   });
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "x" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "filter", limit: 13 }).success, false);
+  assert.equal(catalogSearchInputSchema.parse({ locationId, q: "filter" }).locationId, locationId);
+  assert.equal(catalogSearchInputSchema.safeParse({ q: "filter" }).success, false);
+  assert.equal(catalogSearchInputSchema.safeParse({ workorderId, locationId, q: "filter" }).success, false);
 });
 
 test("catalog search derives company and location from authorized workorder", async () => {
@@ -62,7 +66,6 @@ test("catalog search derives company and location from authorized workorder", as
     q: "  LF90 ",
     limit: "6",
     companyId: "attacker-company",
-    locationId: "attacker-location",
   }, requestContext, {
     requireWorkorderAccess: async (context, workorderId) => {
       calls.push({ type: "access", context, workorderId });
@@ -89,6 +92,54 @@ test("catalog search derives company and location from authorized workorder", as
     catalogAvailable: true,
     items: [{ id: "part-1" }],
   });
+});
+
+test("catalog search derives company from an authorized create-workorder location", async () => {
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  const companyId = "33333333-3333-4333-8333-333333333333";
+  const calls = [];
+  const requestContext = {
+    actor: { id: "office-1", role: "office" },
+    companyIds: new Set([companyId]),
+    locationIds: new Set([locationId]),
+  };
+
+  const result = await searchPartCatalog({ locationId, q: " oil " }, requestContext, {
+    getLocationById: async (id, companyIds) => {
+      calls.push({ type: "location", id, companyIds });
+      return { id: locationId, company_id: companyId };
+    },
+    searchCatalogParts: async (scopedCompanyId, options) => {
+      calls.push({ type: "search", companyId: scopedCompanyId, options });
+      return { catalogAvailable: true, items: [{ id: "part-1" }] };
+    },
+  });
+
+  assert.deepEqual(calls, [
+    { type: "location", id: locationId, companyIds: [companyId] },
+    { type: "search", companyId, options: { text: "oil", locationId, limit: 8 } },
+  ]);
+  assert.equal(result.items[0].id, "part-1");
+});
+
+test("catalog search rejects a create-workorder location outside the actor scope", async () => {
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  let searched = false;
+  await assert.rejects(() => searchPartCatalog({ locationId, q: "oil" }, {
+    actor: { id: "office-1", role: "office" },
+    companyIds: new Set(["33333333-3333-4333-8333-333333333333"]),
+    locationIds: new Set(),
+  }, {
+    getLocationById: async () => ({
+      id: locationId,
+      company_id: "33333333-3333-4333-8333-333333333333",
+    }),
+    searchCatalogParts: async () => {
+      searched = true;
+      return { catalogAvailable: true, items: [] };
+    },
+  }), (error) => error.statusCode === 403);
+  assert.equal(searched, false);
 });
 
 test("catalog search stops before repository lookup when workorder access fails", async () => {
@@ -146,6 +197,32 @@ test("catalog route forwards only URL search fields and request context", async 
     companyId: "company-1",
     options: { text: "oil filter", locationId: "location-1", limit: 4 },
   });
+});
+
+test("catalog route supports authorized location scope before a workorder exists", async () => {
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  const companyId = "33333333-3333-4333-8333-333333333333";
+  const response = {};
+  await handlePartsHelperApi(
+    { method: "GET" },
+    response,
+    new URL(`http://localhost/api/parts-helper/catalog?locationId=${locationId}&q=oil`),
+    {
+      requestContext: {
+        actor: { id: "office-1", role: "office" },
+        companyIds: new Set([companyId]),
+        locationIds: new Set([locationId]),
+      },
+      sendJson: (res, status, body) => Object.assign(res, { status, body }),
+      readBody: async () => ({}),
+      partsHelperDependencies: {
+        getLocationById: async () => ({ id: locationId, company_id: companyId }),
+        searchCatalogParts: async () => ({ catalogAvailable: true, items: [] }),
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { query: "oil", catalogAvailable: true, items: [] });
 });
 
 test("catalog route returns validation failures without searching", async () => {

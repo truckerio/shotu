@@ -8,9 +8,18 @@ import {
 const optionalText = z.string().trim().max(500).optional().default("");
 
 export const catalogSearchInputSchema = z.object({
-  workorderId: z.string().uuid(),
+  workorderId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
   q: z.string().trim().min(2).max(120),
   limit: z.coerce.number().int().min(1).max(12).optional().default(8),
+}).superRefine((value, context) => {
+  if (Boolean(value.workorderId) === Boolean(value.locationId)) {
+    context.addIssue({
+      code: "custom",
+      path: ["workorderId"],
+      message: "Provide exactly one catalog scope: workorderId or locationId.",
+    });
+  }
 });
 
 export const repairSuggestionsInputSchema = z.object({

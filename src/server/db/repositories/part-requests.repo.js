@@ -587,10 +587,10 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       ? (await requireSelectedCatalogPart(
         client,
         request.company_id,
-        request.catalog_part_id,
+        input.catalogPartId || request.catalog_part_id,
         values.partNumber,
         values.uomCode,
-        { strict: false },
+        { strict: Boolean(input.catalogPartId) },
       ))?.id || await upsertCatalogPart(client, request.company_id, values, request.raw_query)
       : request.catalog_part_id;
     await client.query(

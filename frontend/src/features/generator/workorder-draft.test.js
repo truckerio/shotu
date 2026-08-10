@@ -43,14 +43,14 @@ test("draft quantity serialization preserves units and defaults legacy parts to 
     form: {
       locationId: "location-1",
       parts: [
-        { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
+        { catalogPartId: "11111111-1111-4111-8111-111111111111", partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
         { partNo: "FILTER", qty: "1", repairOrder: "Replace" },
       ],
     },
   });
 
   assert.deepEqual(payload.formData.parts, [
-    { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
+    { catalogPartId: "11111111-1111-4111-8111-111111111111", partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
     { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" },
   ]);
   assert.equal(formValuesFromWorkorderDraft({

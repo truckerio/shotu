@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createPartRequestSchema, decidePartRequestSchema } from "./part.schemas.js";
 
@@ -95,6 +96,14 @@ test("catalog selections retain immutable company catalog identity", () => {
     query: "LF9009",
     quantity: 1,
   }).success, false);
+  assert.equal(decidePartRequestSchema.parse(decision({ catalogPartId })).catalogPartId, catalogPartId);
+  assert.equal(decidePartRequestSchema.safeParse(decision({ catalogPartId: "not-a-uuid" })).success, false);
+});
+
+test("approval repository validates a newly selected catalog identity strictly", () => {
+  const repository = readFileSync(new URL("../../db/repositories/part-requests.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /input\.catalogPartId \|\| request\.catalog_part_id/);
+  assert.match(repository, /strict:\s*Boolean\(input\.catalogPartId\)/);
 });
 
 test("approved allocations use the same unit as the request", () => {

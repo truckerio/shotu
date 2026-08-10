@@ -50,3 +50,12 @@ test("catalog selections default blank used-part quantities to one", () => {
 test("typed part numbers default blank quantities before autosave", () => {
   assert.match(usedPartsEditor, /partNo:\s*value,[\s\S]*qty:\s*usedPartQuantityAfterPartNumberChange\(part, value\)/);
 });
+
+test("create workorder uses the location-scoped catalog selector and retains selected identity", () => {
+  assert.match(createForm, /locationId:\s*form\.locationId/);
+  assert.match(createPartsModule, /<PartCatalogCombobox/);
+  assert.match(createPartsModule, /locationId=\{locationId\}/);
+  assert.match(createPartsModule, /catalogPartId:\s*catalogPart\.id/);
+  assert.match(createPartsModule, /qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
+  assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
+});

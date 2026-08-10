@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
 import { formatQuantityUnit } from "../../forms/quantity-unit-model.js";
 import { normalizeUomCode } from "../../../../../shared/units-of-measure.js";
+import { catalogInventoryText } from "./catalog-parts-model.js";
 import {
   ALLOCATION_STATUS_LABELS,
   createOfficeReviewState,
@@ -27,6 +28,49 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
   function updateRequestUnit(value) {
     update("uomCode", value);
     setAllocations((current) => current.map((allocation) => ({ ...allocation, uomCode: value })));
+  }
+
+  function updatePartNumber(value) {
+    setForm((current) => ({ ...current, catalogPartId: null, partNumber: value }));
+    setAllocations([{
+      sourceType: "unknown",
+      status: "proposed",
+      quantity: form.quantity,
+      uomCode: form.uomCode,
+      vendor: "",
+    }]);
+  }
+
+  function selectCatalogPart(part) {
+    const uomCode = normalizeUomCode(part.uomCode || form.uomCode);
+    const quantity = Number(form.quantity) || 1;
+    setForm((current) => ({
+      ...current,
+      catalogPartId: part.id,
+      partNumber: part.partNumber,
+      manufacturer: part.manufacturer || current.manufacturer,
+      description: part.description || current.description,
+      category: part.category || current.category,
+      quantity: current.quantity || 1,
+      uomCode,
+    }));
+    setAllocations([part.inventory?.available > 0 && part.inventory?.itemId ? {
+      sourceType: "inventory",
+      status: "reserved",
+      quantity: Math.min(quantity, part.inventory.available),
+      uomCode,
+      inventoryItemId: part.inventory.itemId,
+      locationId: part.inventory.locationId || detail.workorder.locationId,
+      vendor: "",
+    } : {
+      sourceType: "unknown",
+      status: "proposed",
+      quantity,
+      uomCode,
+      vendor: "",
+    }]);
+    setMessageTone("success");
+    setMessage(catalogInventoryText(part));
   }
 
   function fail(messageText, focusResponse = false) {
@@ -96,6 +140,7 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
       const suggestedUomCode = normalizeUomCode(result.part.uomCode || form.uomCode);
       setForm((current) => ({
         ...current,
+        catalogPartId: null,
         partNumber: result.part.normalizedPartNumber || current.partNumber,
         manufacturer: result.part.manufacturer || current.manufacturer,
         description: result.part.description || current.description,
@@ -107,6 +152,11 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
       }));
       setAllocations((current) => current.map((allocation) => ({
         ...allocation,
+        inventoryItemId: null,
+        locationId: null,
+        sourceType: "unknown",
+        status: "proposed",
+        quantity: result.part.suggestedQuantity || form.quantity,
         uomCode: suggestedUomCode,
       })));
       setMessageTone("success");
@@ -173,8 +223,10 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
     pricing,
     responseRef,
     setAllocations,
+    selectCatalogPart,
     update,
     updateAllocation,
     updateRequestUnit,
+    updatePartNumber,
   };
 }

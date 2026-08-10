@@ -95,6 +95,7 @@ export function createOfficeReviewState(request, workorderLocationId = null) {
 
   return {
     form: {
+      catalogPartId: request.catalogPartId || null,
       partNumber: request.partNumber,
       manufacturer: request.manufacturer,
       description: request.description,

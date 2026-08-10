@@ -57,9 +57,10 @@ export function createRoleRouterFormController({
   }
 
   function updatePart(index, field, value) {
+    const patch = typeof field === "object" && field ? field : { [field]: value };
     setForm((current) => ({
       ...current,
-      parts: current.parts.map((part, partIndex) => (partIndex === index ? { ...part, [field]: value } : part)),
+      parts: current.parts.map((part, partIndex) => (partIndex === index ? { ...part, ...patch } : part)),
     }));
   }
 

@@ -56,6 +56,7 @@ export const createOfficePartSchema = z.object({
 
 export const decidePartRequestSchema = z.object({
   decision: z.enum(["approved", "rejected", "needs_info"]),
+  catalogPartId: z.string().uuid().nullable().optional(),
   partNumber: optionalText(200),
   manufacturer: optionalText(200),
   description: optionalText(1000),

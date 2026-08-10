@@ -16,6 +16,7 @@ test("request units normalize through the shared catalog", () => {
 
 test("office review defaults to matching available inventory", () => {
   const state = createOfficeReviewState({
+    catalogPartId: "catalog-part-1",
     partNumber: "FILTER-1",
     manufacturer: "Fleet",
     description: "Filter",
@@ -32,6 +33,7 @@ test("office review defaults to matching available inventory", () => {
   });
 
   assert.equal(state.form.uomCode, "pc");
+  assert.equal(state.form.catalogPartId, "catalog-part-1");
   assert.deepEqual(state.allocations, [{
     sourceType: "inventory",
     status: "reserved",

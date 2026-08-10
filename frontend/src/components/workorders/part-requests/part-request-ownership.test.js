@@ -26,6 +26,8 @@ test("role surfaces keep permissions and endpoints with their owners", () => {
   assert.match(officeReview, /\/api\/office\/workorders\/\$\{detail\.workorder\.id\}\/parts\/\$\{request\.id\}\/decision/);
   assert.match(officeReview, /\/api\/parts-helper\/identify/);
   assert.match(officeReview, /\/api\/parts-helper\/live-prices/);
+  assert.match(officeReview, /catalogPartId:\s*part\.id/);
+  assert.match(officeReview, /inventoryItemId:\s*part\.inventory\.itemId/);
 });
 
 test("quantity and supply controls remain shared implementations", () => {
@@ -36,6 +38,8 @@ test("quantity and supply controls remain shared implementations", () => {
   assert.match(allocation, /<AnchoredSelect/);
   assert.match(allocation, /<QuantityUnitInput/);
   assert.match(officeCard, /<QuantityUnitInput/);
+  assert.match(officeCard, /<PartCatalogCombobox/);
+  assert.match(officeCard, /onSelect=\{review\.selectCatalogPart\}/);
   assert.match(composer, /<QuantityUnitInput/);
   assert.doesNotMatch(allocation, /const\s+UNITS_OF_MEASURE/);
 });

@@ -13,8 +13,11 @@ import {
   searchCompanyCatalogParts,
 } from "../../db/repositories/parts-catalog.repo.js";
 import { suggestCompanyPartRepairs } from "../../db/repositories/service-history.repo.js";
+import { getLocationById } from "../../db/repositories/locations.repo.js";
 import { normalizePartNumber } from "../parts/part.constants.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
+import { requireActor, requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { resourceNotFound } from "../../auth/errors.js";
 
 const normalizedUrl = (value) => {
   try {
@@ -64,11 +67,23 @@ export function summarizeListings(listings, valueField = "totalPrice") {
 export async function searchPartCatalog(input, requestContext, dependencies = {}) {
   const parsed = catalogSearchInputSchema.parse(input);
   const requireAccess = dependencies.requireWorkorderAccess || requireWorkorderAccess;
+  const getLocation = dependencies.getLocationById || getLocationById;
   const searchCatalog = dependencies.searchCatalogParts || searchCompanyCatalogParts;
-  const workorder = await requireAccess(requestContext, parsed.workorderId);
-  const result = await searchCatalog(workorder.companyId, {
+  let scope;
+  if (parsed.workorderId) {
+    const workorder = await requireAccess(requestContext, parsed.workorderId);
+    scope = { companyId: workorder.companyId, locationId: workorder.locationId || null };
+  } else {
+    requireActor(requestContext);
+    const location = await getLocation(parsed.locationId, [...(requestContext.companyIds || [])]);
+    if (!location) throw resourceNotFound("Location");
+    requireCompanyAccess(requestContext, location.company_id);
+    requireLocationAccess(requestContext, location.id);
+    scope = { companyId: location.company_id, locationId: location.id };
+  }
+  const result = await searchCatalog(scope.companyId, {
     text: parsed.q,
-    locationId: workorder.locationId || null,
+    locationId: scope.locationId,
     limit: parsed.limit,
   });
 

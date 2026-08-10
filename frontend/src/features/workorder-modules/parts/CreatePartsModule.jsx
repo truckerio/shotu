@@ -1,9 +1,14 @@
 import { QuantityUnitInput } from "../../../components/forms/index.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
+import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
+import {
+  defaultUsedPartQuantity,
+  usedPartQuantityAfterPartNumberChange,
+} from "../../../components/workorders/used-parts-model.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 
-export function CreatePartsModule({ access, activeSection, errors, parts, onAdd, onChange, onRemove }) {
+export function CreatePartsModule({ access, activeSection, errors, locationId, parts, onAdd, onChange, onRemove }) {
   if (!access) return null;
   return (
     <ProgressiveWorkorderSection id="parts" className="create-parts-card" title="Parts" summary="Optional. Record parts already known before work begins." activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
@@ -12,7 +17,25 @@ export function CreatePartsModule({ access, activeSection, errors, parts, onAdd,
         <div className="operational-parts-editor">{parts.map((part, index) => (
           <div className="operational-part-row has-quantity-unit" key={index}>
             <strong>{index + 1}</strong>
-            <input {...textEntryProps("identifier")} value={part.partNo} onChange={(event) => onChange(index, "partNo", event.target.value)} aria-label={`Part number ${index + 1}`} placeholder="Part number" />
+            <PartCatalogCombobox
+              locationId={locationId}
+              value={part.partNo}
+              onChange={(value) => onChange(index, {
+                catalogPartId: null,
+                partNo: value,
+                qty: usedPartQuantityAfterPartNumberChange(part, value),
+              })}
+              onSelect={(catalogPart) => onChange(index, {
+                catalogPartId: catalogPart.id,
+                partNo: catalogPart.partNumber,
+                qty: defaultUsedPartQuantity(part.qty),
+                uomCode: catalogPart.uomCode || part.uomCode,
+              })}
+              label={`Part number ${index + 1}`}
+              inputAriaLabel={`Part number ${index + 1}`}
+              placeholder="Part number or description"
+              inputPolicy="identifier"
+            />
             <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, "qty", value)} onUomCodeChange={(value) => onChange(index, "uomCode", value)} quantityLabel={`Quantity ${index + 1}`} unitLabel={`Unit ${index + 1}`} compact />
             <input {...textEntryProps("identifier")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`Repair order ${index + 1}`} placeholder="Repair order" />
             <button type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1}>Remove</button>

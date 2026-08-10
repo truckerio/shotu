@@ -12,6 +12,7 @@ function filledParts(parts) {
   return (Array.isArray(parts) ? parts : [])
     .filter((part) => text(part?.partNo) || text(part?.qty) || text(part?.repairOrder))
     .map((part) => ({
+      ...(part?.catalogPartId ? { catalogPartId: part.catalogPartId } : {}),
       partNo: text(part.partNo),
       qty: text(part.qty),
       uomCode: normalizeUomCode(part.uomCode),

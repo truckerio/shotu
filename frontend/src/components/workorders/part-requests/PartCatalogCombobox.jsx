@@ -13,6 +13,7 @@ const SEARCH_DELAY_MS = 250;
 
 export function PartCatalogCombobox({
   workorderId,
+  locationId,
   value,
   onChange,
   onSelect,
@@ -55,7 +56,7 @@ export function PartCatalogCombobox({
     const controller = new AbortController();
     setActiveIndex(-1);
 
-    if (disabled || !workorderId || normalizedQuery.length < MIN_QUERY_LENGTH
+    if (disabled || (!workorderId && !locationId) || normalizedQuery.length < MIN_QUERY_LENGTH
       || selectedQueryRef.current === normalizedQuery) {
       setItems([]);
       setState("idle");
@@ -68,7 +69,7 @@ export function PartCatalogCombobox({
       setState("loading");
       try {
         const params = new URLSearchParams({
-          workorderId,
+          ...(workorderId ? { workorderId } : { locationId }),
           q: normalizedQuery,
           limit: "8",
         });
@@ -90,7 +91,7 @@ export function PartCatalogCombobox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [disabled, normalizedQuery, workorderId]);
+  }, [disabled, locationId, normalizedQuery, workorderId]);
 
   function select(part) {
     selectedQueryRef.current = part.partNumber.trim();

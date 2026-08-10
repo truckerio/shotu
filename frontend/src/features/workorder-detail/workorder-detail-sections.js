@@ -74,6 +74,9 @@ export function buildWorkorderDetailSections({
       count: pendingPartCount || filledPartCount || undefined,
       attention: pendingPartCount > 0,
     },
+    [WORKORDER_MODULE_IDS.COMPLETION]: {
+      alwaysPrimary: isMechanicDetail,
+    },
     [WORKORDER_MODULE_IDS.UNIT]: {
       label: unitType || (isMechanicDetail ? mechanicLabel("detail.unit") : workorderModuleLabel(WORKORDER_MODULE_IDS.UNIT)),
     },

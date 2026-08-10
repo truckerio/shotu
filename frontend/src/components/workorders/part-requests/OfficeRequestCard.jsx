@@ -6,6 +6,7 @@ import { formatQuantityUnit } from "../../forms/quantity-unit-model.js";
 import { textEntryProps } from "../../forms/text-entry-policy.js";
 import { Button } from "../../ui/Button.jsx";
 import { AllocationEditor } from "./AllocationEditor.jsx";
+import { PartCatalogCombobox } from "./PartCatalogCombobox.jsx";
 import {
   ALLOCATION_STATUS_LABELS,
   FITMENT_OPTIONS,
@@ -38,7 +39,14 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
             </div>
           </div>
           <div className="part-office-fields">
-            <label>Part number<input {...textEntryProps("identifier")} value={review.form.partNumber} onChange={(event) => review.update("partNumber", event.target.value)} /></label>
+            <PartCatalogCombobox
+              workorderId={detail.workorder.id}
+              value={review.form.partNumber}
+              onChange={review.updatePartNumber}
+              onSelect={review.selectCatalogPart}
+              label="Part number"
+              inputPolicy="identifier"
+            />
             <QuantityUnitInput
               id={`request-quantity-${request.id}`}
               quantity={review.form.quantity}
@@ -50,10 +58,10 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
             />
             <label className="part-field-wide">Description<NarrativeField singleLine value={review.form.description} onChange={(event) => review.update("description", event.target.value)} /></label>
             <label className="part-field-wide">Repair order<input {...textEntryProps("identifier")} value={review.form.repairOrder} onChange={(event) => review.update("repairOrder", event.target.value)} /></label>
-            {request.catalogPartId ? <div className="part-field-wide">
+            {review.form.catalogPartId ? <div className="part-field-wide">
               <RepairHistorySuggestions
                 workorderId={detail.workorder.id}
-                catalogPartId={request.catalogPartId}
+                catalogPartId={review.form.catalogPartId}
                 partNumber={review.form.partNumber}
                 assetId={detail.workorder.asset?.id || detail.workorder.assetId}
                 onApply={(text) => review.update("repairOrder", text)}

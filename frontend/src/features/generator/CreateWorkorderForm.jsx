@@ -47,7 +47,7 @@ export function CreateWorkorderForm({
       onReload: onReloadLocations,
       selectedVehicle,
     },
-    parts: { activeSection: mobileSection, errors, parts: form.parts, onAdd: onAddPart, onChange: onPartChange, onRemove: onRemovePart },
+    parts: { activeSection: mobileSection, errors, locationId: form.locationId, parts: form.parts, onAdd: onAddPart, onChange: onPartChange, onRemove: onRemovePart },
     schedule: { activeSection: mobileSection, form, onChange: onFieldChange },
     unit: { activeSection: mobileSection, errors, form, onChange: onFieldChange, onUnitChange, onVehicleSelect, selectedVehicle, vehicleLookup },
   };

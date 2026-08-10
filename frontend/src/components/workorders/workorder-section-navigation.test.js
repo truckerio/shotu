@@ -25,3 +25,16 @@ test("navigation preserves a short primary set and all explicit overflow modules
   assert.deepEqual(result.primarySections.map(({ id }) => id), ["work", "chat"]);
   assert.deepEqual(result.overflowSections.map(({ id }) => id), ["activity"]);
 });
+
+test("navigation keeps an always-primary action visible beyond the ordinary four-item limit", () => {
+  const result = splitWorkorderSections([
+    { id: "concern" },
+    { id: "diagnosisRepair" },
+    { id: "chat" },
+    { id: "parts" },
+    { id: "preview" },
+    { id: "completion", alwaysPrimary: true },
+  ]);
+  assert.deepEqual(result.primarySections.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "completion"]);
+  assert.deepEqual(result.overflowSections.map(({ id }) => id), ["preview"]);
+});
