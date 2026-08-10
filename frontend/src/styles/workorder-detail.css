@@ -196,18 +196,8 @@
   width: 17px;
 }
 
-.workorder-object-actions .finish-work-button {
-  background: #067647;
-  border-color: #067647;
-  color: #fff;
+.workorder-object-actions .work-done-button {
   margin-left: auto;
-}
-
-.workorder-object-actions .finish-work-button:hover,
-.workorder-object-actions .finish-work-button:focus-visible {
-  background: #085d3a;
-  border-color: #085d3a;
-  color: #fff;
 }
 
 .workorder-object-actions button:disabled {
@@ -782,28 +772,9 @@ fieldset.workorder-unit-content {
     z-index: 30;
   }
 
-  .mechanic-compact-primary-action .finish-work-button {
-    align-items: center;
-    background: #067647;
-    border: 1px solid #067647;
-    border-radius: 7px;
-    color: #fff;
-    display: flex;
-    font-size: var(--detail-body-size);
-    font-weight: var(--weight-semibold);
-    gap: 7px;
-    justify-content: center;
+  .mechanic-compact-primary-action .work-done-button {
     min-height: 44px;
     width: 100%;
-  }
-
-  .mechanic-compact-primary-action .finish-work-button svg {
-    height: 17px;
-    width: 17px;
-  }
-
-  .mechanic-compact-primary-action .finish-work-button:disabled {
-    opacity: 0.5;
   }
 }
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const detailPage = readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta.url), "utf8");
+const workDoneButton = readFileSync(new URL("../../components/workorders/WorkDoneButton.jsx", import.meta.url), "utf8");
 const detailSections = readFileSync(new URL("./WorkorderDetailSections.jsx", import.meta.url), "utf8");
 const concernModule = readFileSync(new URL("../workorder-modules/work/WorkorderConcernModule.jsx", import.meta.url), "utf8");
 const diagnosisRepairModule = readFileSync(new URL("../workorder-modules/diagnosis-repair/WorkorderDiagnosisRepairModule.jsx", import.meta.url), "utf8");
@@ -21,7 +22,8 @@ const roleRouterModel = readFileSync(new URL("../../app/routes/role-router-model
 const presentation = readFileSync(new URL("../../lib/workorder-presentation.js", import.meta.url), "utf8");
 
 test("existing mechanic completion flow uses Work done language", () => {
-  assert.match(detailPage, /"Work done"/);
+  assert.match(detailPage, /WorkDoneButton/);
+  assert.match(workDoneButton, /label = "Work done"/);
   assert.match(detailPage, /completion\.workDone/);
   assert.match(detailPage, /completion\.yes/);
   assert.match(detailPage, /completion\.keepWorking/);

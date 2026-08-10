@@ -164,18 +164,6 @@
   width: 19px;
 }
 
-.mechanic-job-actions .finish-work-button {
-  background: #067647;
-  border-color: #067647;
-  color: #fff;
-}
-
-.mechanic-job-actions .finish-work-button:hover,
-.mechanic-job-actions .finish-work-button:focus-visible {
-  background: #085d3a;
-  border-color: #085d3a;
-}
-
 .mechanic-job-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.5;

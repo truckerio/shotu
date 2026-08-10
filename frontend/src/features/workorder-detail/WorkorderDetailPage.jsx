@@ -9,6 +9,7 @@ import { ChatThread } from "../../components/workorders/ChatThread.jsx";
 import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
 import { WorkorderDetailSurface } from "../../components/workorders/WorkorderDetailSurface.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
+import { WorkDoneButton } from "../../components/workorders/WorkDoneButton.jsx";
 import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
@@ -327,15 +328,12 @@ export function WorkorderDetailPage({
           unit: unitPolicy.canRead ? form.unitNo || mechanicAsset.unitNo || mechanicAsset.name : "",
           unitType: unitPolicy.canRead ? form.unitType || mechanicAsset.unitType || "Unit" : "Workorder",
           actions: isMechanicDetail && !isCompact && completionPolicy.canWrite && activeWorkorder?.allowedActions.markDone ? (
-              <button
-                className="finish-work-button"
+              <WorkDoneButton
                 type="button"
                 onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                disabled={Boolean(mechanicAction.busy)}
-              >
-                <CheckCircle />
-                <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>
-              </button>
+                busy={mechanicAction.busy === "done"}
+                disabled={Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
+              />
             ) : null,
           children: (
             <>
@@ -399,15 +397,12 @@ export function WorkorderDetailPage({
 
           {isMechanicDetail && isCompact && renderedDetailSection === "completion" && completionPolicy.canWrite && activeWorkorder?.allowedActions.markDone ? (
             <div className="mechanic-compact-primary-action">
-              <button
-                className="finish-work-button"
+              <WorkDoneButton
                 type="button"
                 onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                disabled={Boolean(mechanicAction.busy)}
-              >
-                <CheckCircle />
-                <span>{mechanicAction.busy === "done" ? "Submitting" : "Work done"}</span>
-              </button>
+                busy={mechanicAction.busy === "done"}
+                disabled={Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
+              />
             </div>
           ) : null}
 
