@@ -18,9 +18,10 @@ test("read-only Chat has no composer and visible Photos enable chat attachments"
   assert.match(detailPage, /attachment: null, attachments: \[\]/);
 });
 
-test("lifecycle controls require module write plus server allowed actions", () => {
+test("office lifecycle controls require module write and mechanic completion trusts the filtered server action", () => {
   assert.match(detailPage, /completionPolicy\.canWrite && activeWorkorder\.allowedActions\?\.approve/);
   assert.match(detailPage, /completionPolicy\.canWrite && mechanicFinish\.open/);
+  assert.match(detailPage, /canMarkWorkDone = isMechanicDetail && activeWorkorder\.allowedActions\?\.markDone === true/);
   assert.match(diagnosisRepairModule, /writable\(access\) && Boolean\(allowedActions\.saveNotes\)/);
 });
 

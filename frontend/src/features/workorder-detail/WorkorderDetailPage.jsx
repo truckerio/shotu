@@ -210,6 +210,7 @@ export function WorkorderDetailPage({
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
     && !resolveWorkPerformed(form);
+  const canMarkWorkDone = isMechanicDetail && activeWorkorder.allowedActions?.markDone === true;
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
   useEffect(() => {
     if (!visibleDetailSections.length || renderedDetailSection === detailSection) return;
@@ -343,7 +344,7 @@ export function WorkorderDetailPage({
           mechanics: assignmentPolicy.canRead ? detailMechanicNames : "",
           unit: unitPolicy.canRead ? form.unitNo || mechanicAsset.unitNo || mechanicAsset.name : "",
           unitType: unitPolicy.canRead ? form.unitType || mechanicAsset.unitType || "Unit" : "Workorder",
-          actions: isMechanicDetail && !isCompact && completionPolicy.canWrite && activeWorkorder?.allowedActions.markDone ? (
+          actions: canMarkWorkDone && !isCompact ? (
               <WorkDoneButton
                 type="button"
                 onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
@@ -411,7 +412,7 @@ export function WorkorderDetailPage({
             </div>
           ) : null}
 
-          {isMechanicDetail && isCompact && renderedDetailSection === "completion" && completionPolicy.canWrite && activeWorkorder?.allowedActions.markDone ? (
+          {canMarkWorkDone && isCompact ? (
             <div className="mechanic-compact-primary-action">
               <WorkDoneButton
                 type="button"

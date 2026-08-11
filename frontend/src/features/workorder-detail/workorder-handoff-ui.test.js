@@ -55,6 +55,7 @@ test("mechanic progress is automatic and timing stays outside the primary work f
 test("manager handoff actions use allowed actions and documented endpoints", () => {
   assert.match(completionModule, /allowedActions\.returnToMechanic/);
   assert.match(completionModule, /allowedActions\.cancel/);
+  assert.match(completionModule, /canMarkDone = allowedActions\.markDone === true/);
   assert.match(officeActions, /action: "return"/);
   assert.match(officeActions, /action: "cancel"/);
   assert.match(officeActions, /expectedUpdatedAt: workorder\.updatedAt/);
@@ -62,6 +63,19 @@ test("manager handoff actions use allowed actions and documented endpoints", () 
   assert.match(detailViewModel, /formatLifecycleLabel/);
   assert.match(roleRouter, /useOfficeWorkorderActions/);
   assert.match(presentation, /cancelled: "Cancelled"/);
+});
+
+test("mechanic Work done visibility follows the server-authorized action", () => {
+  assert.match(
+    detailPage,
+    /canMarkWorkDone = isMechanicDetail && activeWorkorder\.allowedActions\?\.markDone === true/,
+  );
+  assert.match(detailPage, /actions: canMarkWorkDone && !isCompact/);
+  assert.match(detailPage, /\{canMarkWorkDone && isCompact \? \(/);
+  assert.doesNotMatch(
+    detailPage,
+    /renderedDetailSection === "completion" && completionPolicy\.canWrite && activeWorkorder\?\.allowedActions\.markDone/,
+  );
 });
 
 test("shared detail shows canonical read-only timing and separates authorization", () => {
