@@ -5,7 +5,7 @@ const FORM_KEYS = Object.freeze({
   schedule: Object.freeze(["workStartDate", "workEndDate", "startTime", "endTime"]),
   assignment: Object.freeze(["mechanicName", "customerSignature", "authorizedBy"]),
   concern: Object.freeze(["mechanicConcern"]),
-  parts: Object.freeze(["parts"]),
+  parts: Object.freeze(["parts", "laborHours"]),
 });
 
 const BASE_WORKORDER_KEYS = Object.freeze([

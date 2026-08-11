@@ -43,7 +43,27 @@ test("input ownership decomposes broad updates into touched modules", () => {
   assert.deepEqual(workorderInputModules({
     assetId: null,
     officeNotes: "call customer",
-    formData: { workStartDate: "2026-08-08", parts: [] },
+    formData: { workStartDate: "2026-08-08", parts: [], laborHours: "2.5" },
   }).sort(), ["concern", "parts", "schedule", "unit"]);
   assert.deepEqual(workorderInputModules({ concern: "inspect", formData: {} }, { create: true }), ["concern"]);
+});
+
+test("parts projection returns persisted labor hours with used parts", () => {
+  const projected = projectProtectedWorkorderDetail({
+    workorder: {
+      id: "wo-1",
+      companyId: "company-1",
+      serial: "WO-1",
+      status: "in_progress",
+      formData: {
+        laborHours: "2.5",
+        parts: [{ partNo: "P1", qty: "1", uomCode: "ea", repairOrder: "Installed" }],
+      },
+    },
+  }, {
+    parts: { access: "write", source: "default" },
+  });
+
+  assert.equal(projected.workorder.formData.laborHours, "2.5");
+  assert.equal(projected.modules.parts.data.formData.laborHours, "2.5");
 });
