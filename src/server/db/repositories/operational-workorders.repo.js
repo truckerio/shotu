@@ -1493,14 +1493,24 @@ export async function markOperationalWorkorderDone(
             mechanic_done_at = now(),
             updated_at = now()
         where id = $1
-          ${requireAssignedMechanic ? `and exists (
-            select 1 from workorder_mechanic_assignments assignment
-            where assignment.workorder_id = operational_workorders.id
-              and assignment.mechanic_user_id = $2
-              and assignment.active = true
-          )` : ""}
+          and (
+            $6::boolean = false
+            or exists (
+              select 1 from workorder_mechanic_assignments assignment
+              where assignment.workorder_id = operational_workorders.id
+                and assignment.mechanic_user_id = $2
+                and assignment.active = true
+            )
+          )
       `,
-      [workorderId, completedByUserId, nextInput.diagnosis, nextInput.workPerformed, WORKORDER_STATUS.MECHANIC_DONE]
+      [
+        workorderId,
+        completedByUserId,
+        nextInput.diagnosis,
+        nextInput.workPerformed,
+        WORKORDER_STATUS.MECHANIC_DONE,
+        requireAssignedMechanic,
+      ]
     );
     await addFieldEvents(client, { workorderId, changes: changedFields(before, nextInput), changedByUserId: completedByUserId });
     await addStatusEvent(client, {
