@@ -1,10 +1,10 @@
-import { CheckCircle, SearchMd } from "@untitledui/icons";
+import { SearchMd } from "@untitledui/icons";
 import { AnchoredSelect } from "../../forms/AnchoredSelect.jsx";
 import { NarrativeField } from "../../forms/NarrativeField.jsx";
 import { QuantityUnitInput } from "../../forms/QuantityUnitInput.jsx";
 import { formatQuantityUnit } from "../../forms/quantity-unit-model.js";
 import { textEntryProps } from "../../forms/text-entry-policy.js";
-import { Button } from "../../ui/Button.jsx";
+import { ApproveButton } from "../ApproveButton.jsx";
 import { AllocationEditor } from "./AllocationEditor.jsx";
 import { PartCatalogCombobox } from "./PartCatalogCombobox.jsx";
 import {
@@ -109,9 +109,13 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
             />
             <span>This response will also appear in the workorder chat and activity history.</span>
             <div className="part-decision-actions">
-              <Button variant="primary" icon={CheckCircle} onClick={() => review.decide("approved")} disabled={Boolean(review.busy)}>
-                {review.busy === "approved" ? "Approving" : "Approve request"}
-              </Button>
+              <ApproveButton
+                onClick={() => review.decide("approved")}
+                busy={review.busy === "approved"}
+                disabled={Boolean(review.busy)}
+                label="Approve request"
+                busyLabel="Approving"
+              />
               <button type="button" onClick={() => review.decide("needs_info")} disabled={Boolean(review.busy)}>
                 {review.busy === "needs_info" ? "Sending question" : "Ask mechanic"}
               </button>

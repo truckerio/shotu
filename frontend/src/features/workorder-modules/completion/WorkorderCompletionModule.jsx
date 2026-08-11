@@ -1,5 +1,6 @@
 import { CheckCircle } from "@untitledui/icons";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import { ApproveButton } from "../../../components/workorders/ApproveButton.jsx";
 import { WorkDoneButton } from "../../../components/workorders/WorkDoneButton.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { WorkorderHandoffFacts } from "../WorkorderHandoffFacts.jsx";
@@ -47,7 +48,7 @@ export function WorkorderCompletionModule({
         <div className="office-handoff-actions" aria-label="Completion actions">
           {canWrite && allowedActions.accept ? <Button type="button" onClick={onAccept} disabled={busy}><CheckCircle />Accept work</Button> : null}
           {canMarkDone ? <WorkDoneButton type="button" onClick={onMarkDone} busy={busy} /> : null}
-          {canWrite && allowedActions.approve ? <Button variant="primary" type="button" onClick={onApprove} disabled={busy}><CheckCircle />Approve</Button> : null}
+          {canWrite && allowedActions.approve ? <ApproveButton type="button" onClick={onApprove} busy={busy} /> : null}
           {canWrite && allowedActions.returnToMechanic ? <Button type="button" onClick={onRequestChanges} disabled={busy}>Return to mechanic</Button> : null}
           {canWrite && allowedActions.cancel ? <Button variant="danger" type="button" onClick={onCancel} disabled={busy}>Cancel workorder</Button> : null}
         </div>

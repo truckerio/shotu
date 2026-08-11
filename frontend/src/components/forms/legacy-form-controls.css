@@ -120,6 +120,13 @@ textarea:focus {
   min-height: 46px;
 }
 
+.button.success {
+  background: #067647;
+  border-color: #067647;
+  color: #fff;
+  min-height: 46px;
+}
+
 .button:hover {
   background: #f5f5f5;
 }
@@ -129,4 +136,15 @@ textarea:focus {
   background: #175cd3;
   border-color: #175cd3;
   color: #fff;
+}
+
+.button.success:hover,
+.button.success:focus-visible {
+  background: #085d3a;
+  border-color: #085d3a;
+  color: #fff;
+}
+
+.button.success:focus-visible {
+  box-shadow: 0 0 0 3px #d1fadf;
 }

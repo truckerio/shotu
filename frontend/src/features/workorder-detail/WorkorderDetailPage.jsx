@@ -10,6 +10,7 @@ import { CompactWorkorderPreview } from "../../components/workorders/CompactWork
 import { WorkorderDetailSurface } from "../../components/workorders/WorkorderDetailSurface.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { WorkDoneButton } from "../../components/workorders/WorkDoneButton.jsx";
+import { ApproveButton } from "../../components/workorders/ApproveButton.jsx";
 import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
@@ -302,20 +303,17 @@ export function WorkorderDetailPage({
                 </button>
               ) : null}
               {isOfficeDetail && completionPolicy.canWrite && activeWorkorder.allowedActions?.approve ? (
-                <button
+                <ApproveButton
                   className="detail-close-workorder-button"
                   type="button"
                   onClick={() => {
                     setOfficeDetailState((current) => ({ ...current, message: "" }));
                     setOfficeCloseOpen(true);
                   }}
-                  disabled={officeDetailState.busy}
+                  busy={officeDetailState.busy}
                   aria-label="Approve workorder"
                   title="Approve workorder"
-                >
-                  <CheckCircle />
-                  <span>Approve</span>
-                </button>
+                />
               ) : null}
               {isMechanicDetail && assignmentPolicy.canWrite && activeWorkorder.allowedActions?.accept ? (
                 <button
@@ -586,7 +584,7 @@ export function WorkorderDetailPage({
             {officeDetailState.message ? <p className="mechanic-completion-message" role="status">{officeDetailState.message}</p> : null}
             <div className="mechanic-completion-actions">
               <Button variant="secondary" type="button" onClick={() => setOfficeCloseOpen(false)}>Cancel</Button>
-              <Button variant="primary" type="submit" disabled={officeDetailState.busy}>{officeDetailState.busy ? "Approving..." : "Approve workorder"}</Button>
+              <ApproveButton type="submit" busy={officeDetailState.busy} label="Approve workorder" />
             </div>
           </form>
         </div>
