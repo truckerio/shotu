@@ -708,3 +708,14 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.match(repository, /appendIntegrationAudit/);
   assert.doesNotMatch(service, /action_confirm|_create_invoices|action_post|payment/i);
 });
+
+test("draft claim accepts workorder-owned labor without a legacy preparation row", async () => {
+  const repository = await readFile(new URL("./odoo.outbound.repo.js", import.meta.url), "utf8");
+  const claimStart = repository.indexOf("export async function claimOdooOutboundOrder");
+  const claimEnd = repository.indexOf("export async function updateOdooOutboundPayload", claimStart);
+  const claimSource = repository.slice(claimStart, claimEnd);
+
+  assert.ok(claimStart >= 0 && claimEnd > claimStart);
+  assert.doesNotMatch(claimSource, /join odoo_workorder_preparation/);
+  assert.match(claimSource, /for update of wo/);
+});
