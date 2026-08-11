@@ -134,26 +134,41 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
          case
            when catalog.id is null then null
            when coalesce(part.value->>'uomCode', 'pc') = catalog.uom_code
-             then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
-               then (part.value->>'qty')::numeric else null end
+             then case
+               when btrim(coalesce(part.value->>'qty', '')) = '' then 1::numeric
+               when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
+                 then (part.value->>'qty')::numeric
+               else null
+             end
            when conversion.id is not null
-             then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
-               then (part.value->>'qty')::numeric * conversion.conversion_factor else null end
+             then case
+               when btrim(coalesce(part.value->>'qty', '')) = '' then 1::numeric
+               when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
+                 then (part.value->>'qty')::numeric * conversion.conversion_factor
+               else null
+             end
            -- Temporary outbound compatibility policy: Odoo currently uses
            -- Each for parts regardless of the unit recorded in Workorders.
            -- Preserve the entered numeric quantity; an explicit product
            -- conversion above still takes precedence when one is configured.
            when catalog.uom_code = 'ea'
-             then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
-               then (part.value->>'qty')::numeric else null end
+             then case
+               when btrim(coalesce(part.value->>'qty', '')) = '' then 1::numeric
+               when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
+                 then (part.value->>'qty')::numeric
+               else null
+             end
            when source_uom.reference_code <> ''
              and source_uom.reference_code = expected_uom.reference_code
              and source_uom.conversion_factor is not null
              and expected_uom.conversion_factor is not null
-             then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
-               then (part.value->>'qty')::numeric
-                 * source_uom.conversion_factor / expected_uom.conversion_factor
-               else null end
+             then case
+               when btrim(coalesce(part.value->>'qty', '')) = '' then 1::numeric
+               when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
+                 then (part.value->>'qty')::numeric
+                   * source_uom.conversion_factor / expected_uom.conversion_factor
+               else null
+             end
            else null
          end as odoo_quantity
        from operational_workorders wo

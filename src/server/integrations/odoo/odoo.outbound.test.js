@@ -701,6 +701,7 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.match(repository, /source_uom\.reference_code = expected_uom\.reference_code/);
   assert.match(repository, /source_uom\.conversion_factor \/ expected_uom\.conversion_factor/);
   assert.match(repository, /when catalog\.uom_code = 'ea'[\s\S]*then \(part\.value->>'qty'\)::numeric/);
+  assert.match(repository, /btrim\(coalesce\(part\.value->>'qty', ''\)\) = '' then 1::numeric/);
   assert.match(repository, /upsertIntegrationMapping/);
   assert.match(repository, /appendIntegrationAudit/);
   assert.doesNotMatch(service, /action_confirm|_create_invoices|action_post|payment/i);
