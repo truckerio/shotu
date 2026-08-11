@@ -139,6 +139,21 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
            when conversion.id is not null
              then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
                then (part.value->>'qty')::numeric * conversion.conversion_factor else null end
+           -- Temporary outbound compatibility policy: Odoo currently uses
+           -- Each for parts regardless of the unit recorded in Workorders.
+           -- Preserve the entered numeric quantity; an explicit product
+           -- conversion above still takes precedence when one is configured.
+           when catalog.uom_code = 'ea'
+             then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
+               then (part.value->>'qty')::numeric else null end
+           when source_uom.reference_code <> ''
+             and source_uom.reference_code = expected_uom.reference_code
+             and source_uom.conversion_factor is not null
+             and expected_uom.conversion_factor is not null
+             then case when coalesce(part.value->>'qty', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$'
+               then (part.value->>'qty')::numeric
+                 * source_uom.conversion_factor / expected_uom.conversion_factor
+               else null end
            else null
          end as odoo_quantity
        from operational_workorders wo
@@ -172,8 +187,11 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
         and conversion.catalog_part_id = catalog.id
         and conversion.from_uom_code = coalesce(part.value->>'uomCode', 'pc')
         and conversion.to_uom_code = catalog.uom_code
-        and conversion.provider = 'odoo'
-        and conversion.active = true
+       and conversion.provider = 'odoo'
+       and conversion.active = true
+       left join units_of_measure source_uom
+         on source_uom.code = coalesce(part.value->>'uomCode', 'pc')
+        and source_uom.active = true
        left join units_of_measure expected_uom
          on expected_uom.code = catalog.uom_code and expected_uom.active = true
        where wo.company_id = $1 and wo.id = $2

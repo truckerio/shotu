@@ -175,6 +175,14 @@ test("readiness blocks malformed stored parts data", () => {
   assert.ok(result.blockers.some((item) => item.code === "ODOO_PARTS_INVALID"));
 });
 
+test("readiness calls the labor description a repair order", () => {
+  const data = readyData();
+  data.workorder.workPerformed = "";
+  const result = evaluateOdooOutboundReadiness(data, { configured: true });
+  const blocker = result.blockers.find((item) => item.code === "ODOO_WORK_PERFORMED_MISSING");
+  assert.equal(blocker.message, "A repair order is required for the labor description.");
+});
+
 test("workorder mileage normalizes for Odoo and invalid values fail before draft creation", () => {
   assert.equal(normalizeOdooOdometer("482,150 mi"), 482150);
   assert.equal(normalizeOdooOdometer(" 482150.5 "), 482150.5);
@@ -647,6 +655,9 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.match(repository, /workorderUpdate\.rowCount !== 1/);
   assert.match(repository, /jsonb_typeof\(wo\.form_data->'parts'\) = 'array'/);
   assert.match(repository, /wo\.form_data->>'mileage' as mileage/);
+  assert.match(repository, /source_uom\.reference_code = expected_uom\.reference_code/);
+  assert.match(repository, /source_uom\.conversion_factor \/ expected_uom\.conversion_factor/);
+  assert.match(repository, /when catalog\.uom_code = 'ea'[\s\S]*then \(part\.value->>'qty'\)::numeric/);
   assert.match(repository, /upsertIntegrationMapping/);
   assert.match(repository, /appendIntegrationAudit/);
   assert.doesNotMatch(service, /action_confirm|_create_invoices|action_post|payment/i);

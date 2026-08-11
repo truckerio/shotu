@@ -103,7 +103,7 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
     blockers.push(blocker("ODOO_LABOR_INVALID", "Enter actual labor hours with no more than two decimal places.", "laborHours"));
   }
   if (!String(workorder?.workPerformed || "").trim()) {
-    blockers.push(blocker("ODOO_WORK_PERFORMED_MISSING", "Work performed is required for the labor description.", "workPerformed"));
+    blockers.push(blocker("ODOO_WORK_PERFORMED_MISSING", "A repair order is required for the labor description.", "workPerformed"));
   }
   if (!labor?.productExternalId || labor.active === false || labor.uomCode !== "hr") {
     blockers.push(blocker("ODOO_LABOR_PRODUCT_INVALID", "Configure an active Odoo labor product using Hours.", "laborProduct"));

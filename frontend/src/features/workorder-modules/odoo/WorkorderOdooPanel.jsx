@@ -55,8 +55,7 @@ export function WorkorderOdooPanel({
       {fieldAccess.concern || fieldAccess.diagnosisRepair ? (
         <div className="surveillance-copy-grid">
           {fieldAccess.concern ? <div><span>Concern</span><p>{workorder.concern || "-"}</p></div> : null}
-          {fieldAccess.diagnosisRepair ? <div><span>Diagnosis</span><p>{workorder.diagnosis || "-"}</p></div> : null}
-          {fieldAccess.diagnosisRepair ? <div><span>Work performed</span><p>{workorder.workPerformed || "-"}</p></div> : null}
+          {fieldAccess.diagnosisRepair ? <div><span>Repair order</span><p>{workorder.workPerformed || "-"}</p></div> : null}
         </div>
       ) : null}
 

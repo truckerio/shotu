@@ -7,10 +7,8 @@ export function isWorkorderOdooEligible(status) {
 export function missingOdooWorkorderFields(workorder = {}) {
   return [
     !workorder.concern ? "Concern" : "",
-    !workorder.diagnosis ? "Diagnosis" : "",
-    !workorder.workPerformed ? "Work performed" : "",
+    !workorder.workPerformed ? "Repair order" : "",
     !workorder.asset?.unitNo && !workorder.asset?.name ? "Unit" : "",
-    !(workorder.mechanics?.length || workorder.mechanic?.name) ? "Mechanic" : "",
   ].filter(Boolean);
 }
 
