@@ -7,12 +7,14 @@ import {
 } from "../../../components/workorders/used-parts-model.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { laborProductLabel } from "../../../../../shared/labor-product.js";
 
 export function CreatePartsModule({
   access,
   activeSection,
   errors,
   laborHours = "",
+  laborProduct = null,
   laborRepairOrder = "",
   locationId,
   parts,
@@ -30,8 +32,7 @@ export function CreatePartsModule({
           <div className="operational-part-row has-quantity-unit operational-part-labor-row">
             <strong>1</strong>
             <div className="operational-part-labor-name">
-              <span>Labor</span>
-              <strong>[PTR001] LABOR HOURS</strong>
+              <strong>{laborProductLabel(laborProduct)}</strong>
             </div>
             <QuantityUnitInput
               id="create-workorder-labor-hours"
@@ -64,7 +65,7 @@ export function CreatePartsModule({
                 qty: defaultUsedPartQuantity(part.qty),
                 uomCode: catalogPart.uomCode || part.uomCode,
               })}
-              label="Part number"
+              label=""
               inputAriaLabel={`Part number ${index + 1}`}
               placeholder="Part number or description"
               inputPolicy="identifier"

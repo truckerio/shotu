@@ -37,6 +37,7 @@ export function normalizeCreateLocationResponse(payload = {}) {
 export function createLoadedLocationModel({ currentLocationId = "", payload = {} } = {}) {
   const { defaultLocationEntry, locations } = normalizeCreateLocationResponse(payload);
   const hadValidLocation = Boolean(resolveCreateLocation(locations, currentLocationId)?.location?.id);
+  const selectedEntry = resolveCreateLocation(locations, currentLocationId) || defaultLocationEntry;
   const patch = defaultLocationEntry?.location
     ? createLocationDefaultPatch({
       currentLocationId,
@@ -45,6 +46,7 @@ export function createLoadedLocationModel({ currentLocationId = "", payload = {}
       template: defaultLocationEntry.template,
     })
     : {};
+  if (selectedEntry) patch.laborProduct = selectedEntry.laborProduct || null;
 
   return {
     defaultLocationEntry,
@@ -61,6 +63,7 @@ export function createLocationSelectionPatch(locations = [], locationId = "") {
   return {
     locationId: selectedLocation.location.id,
     locationName: selectedLocation.location.name || "",
+    laborProduct: selectedLocation.laborProduct || null,
     ...templateFieldsForCreateLocation(selectedLocation.location, selectedLocation.template),
   };
 }

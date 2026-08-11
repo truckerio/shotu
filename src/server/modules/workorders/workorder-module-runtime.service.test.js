@@ -6,6 +6,7 @@ import {
   patchWorkorderModules,
   protectedWorkorderModule,
   runWorkorderModuleAction,
+  workorderCreateContext,
 } from "./workorder-module-runtime.service.js";
 
 const context = { actor: { id: "actor-1", role: "office" } };
@@ -129,8 +130,38 @@ test("canonical create derives actor identity and preserves mechanic start seman
   }, {
     authorizeCreate: async (...args) => { authorized = args; },
     create: async (input) => input,
+    loadLaborProduct: async () => ({ externalId: "91", code: "LAB", name: "Shop labor", uomCode: "hr" }),
   });
   assert.deepEqual(result.mechanicUserIds, ["actor-1"]);
   assert.equal(result.startImmediately, true);
+  assert.equal(result.formData.laborProduct.code, "LAB");
   assert.deepEqual(authorized[1].moduleKeys, ["concern", "unit", "location", "schedule", "parts"]);
+});
+
+test("create context exposes the company-selected labor product to every location", async () => {
+  const result = await workorderCreateContext({
+    actor: { id: "admin-1", role: "admin" },
+    companyIds: new Set(["company-1"]),
+    locationIds: new Set(),
+  }, {
+    loadTemplates: async () => [{
+      company_id: "company-1",
+      location_id: "location-1",
+      location_name: "Chino Yard",
+      location_type: "yard",
+      location_address: "",
+    }],
+    resolveModules: async () => ({ decisions: {
+      concern: { access: "write" },
+      assignment: { access: "hidden" },
+    } }),
+    loadLaborProduct: async () => ({ externalId: "91", code: "LAB200", name: "Shop labor", uomCode: "hr" }),
+  });
+
+  assert.deepEqual(result.locations[0].laborProduct, {
+    externalId: "91",
+    code: "LAB200",
+    name: "Shop labor",
+    uomCode: "hr",
+  });
 });

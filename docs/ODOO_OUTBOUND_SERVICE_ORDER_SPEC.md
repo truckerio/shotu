@@ -9,7 +9,7 @@
 
 ## Context
 
-The connected Odoo instance represents truck service records as `sale.order` rows with `is_service_order = true` and `vehicle_id` set to the Odoo `fleet.vehicle`. The truck's custom Services smart button reads exactly that relationship. The first normal line is the `[PTR001] LABOR HOURS` service product and its description contains the work performed; goods lines follow it.
+The connected Odoo instance represents truck service records as `sale.order` rows with `is_service_order = true` and `vehicle_id` set to the Odoo `fleet.vehicle`. The truck's custom Services smart button reads exactly that relationship. The first normal line is the labor service product selected by an Admin in integration settings and its description contains the work performed; goods lines follow it. `[PTR001] LABOR HOURS` is the current production selection, not a permanent application constant.
 
 Outbound creation is unsafe until provider identities are explicit. Live discovery found unique matches for 1,166 of 1,580 application assets, 69 ambiguous matches, and 345 unmatched assets. The existing stock-location mapping is unsuitable for order warehouses because one application location can map to many Odoo stock locations. Labor now uses the canonical `hr` unit and the selected Odoo labor product must expose the Odoo UoM `Hours`; draft readiness blocks if that provider unit drifts.
 
@@ -33,7 +33,7 @@ Read-only verification on 2026-08-10 confirmed application-created draft S00017 
 - FR-6: Outbound preparation MUST require a positive labor-hours value with at most two decimal places and MUST use the workorder's current `work_performed` text as the labor description.
 - FR-7: Customer resolution MUST default to the confirmed Odoo vehicle's customer and MAY store an explicit Odoo customer override for a workorder. The resolved customer MUST be visible in readiness output.
 - FR-8: Draft creation MUST fail closed unless the workorder is office-approved, the Odoo connection is configured, the asset and warehouse mappings are confirmed, labor hours are valid, work performed is non-empty, the labor product is active with the Hours UoM, and every non-empty part line has an active Odoo product mapping.
-- FR-9: Draft creation MUST create a `sale.order` with `is_service_order = true`, the mapped `vehicle_id`, resolved `partner_id`, mapped `warehouse_id`, and a stable workorder marker. PTR001 MUST be sequence 10 and goods MUST follow in their saved order.
+- FR-9: Draft creation MUST create a `sale.order` with `is_service_order = true`, the mapped `vehicle_id`, resolved `partner_id`, mapped `warehouse_id`, and a stable workorder marker. The Admin-selected labor product MUST be sequence 10 and goods MUST follow in their saved order.
 - FR-10: The initial outbound implementation MUST create Odoo orders in Draft and MUST NOT call confirmation, invoicing, stock-picking, or payment methods.
 - FR-11: Draft creation MUST be idempotent across concurrent calls, timeouts, and application restarts. It MUST recover an existing Odoo order by the stable marker before attempting a create.
 - FR-12: Every preparation change, creation attempt, failure, recovery, and successful draft creation MUST be recorded through durable outbound state and the shared integration audit.
@@ -77,7 +77,7 @@ Given any prerequisite is missing, when readiness is requested, then it returns 
 
 ### AC-5: Draft payload matches Odoo (FR-9, FR-10)
 
-Given all prerequisites are ready, when draft creation runs, then one draft `sale.order` payload contains the mapped vehicle, customer, warehouse, PTR001 first, and ordered part lines; no confirmation method is called.
+Given all prerequisites are ready, when draft creation runs, then one draft `sale.order` payload contains the mapped vehicle, customer, warehouse, the Admin-selected labor product first, and ordered part lines; no confirmation method is called.
 
 ### AC-6: Retry cannot duplicate (FR-11, NFR-1)
 

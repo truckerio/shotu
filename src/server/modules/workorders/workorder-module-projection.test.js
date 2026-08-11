@@ -57,6 +57,7 @@ test("parts projection returns persisted labor hours with used parts", () => {
       status: "in_progress",
       formData: {
         laborHours: "2.5",
+        laborProduct: { externalId: "91", code: "LAB200", name: "Shop labor", uomCode: "hr" },
         parts: [{ partNo: "P1", qty: "1", uomCode: "ea", repairOrder: "Installed" }],
       },
     },
@@ -66,4 +67,5 @@ test("parts projection returns persisted labor hours with used parts", () => {
 
   assert.equal(projected.workorder.formData.laborHours, "2.5");
   assert.equal(projected.modules.parts.data.formData.laborHours, "2.5");
+  assert.equal(projected.modules.parts.data.formData.laborProduct.code, "LAB200");
 });

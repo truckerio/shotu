@@ -6,6 +6,11 @@
   display: none;
 }
 
+.create-workorder-section-nav.workorder-section-nav-desktop {
+  min-width: 0;
+  width: 100%;
+}
+
 .create-assignment-content,
 .create-known-parts-content {
   display: grid;
@@ -24,11 +29,6 @@
   display: grid;
   gap: 2px;
   min-width: 0;
-}
-
-.operational-part-labor-name span {
-  color: #667085;
-  font-size: 12px;
 }
 
 .operational-part-labor-name strong,

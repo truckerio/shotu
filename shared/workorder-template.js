@@ -1,4 +1,5 @@
 import { DEFAULT_UOM_CODE, formatQuantity, normalizeUomCode } from "./units-of-measure.js";
+import { laborProductLabel } from "./labor-product.js";
 
 export const emptyPart = () => ({ partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" });
 export const DEFAULT_PART_ENTRY_ROWS = 3;
@@ -58,7 +59,7 @@ function inputPartRows(form) {
   const inputParts = Array.isArray(form.parts) ? form.parts : [];
   const laborHours = String(form.laborHours || "").trim();
   const rows = laborHours ? [{
-    partNo: "[PTR001] LABOR HOURS",
+    partNo: laborProductLabel(form.laborProduct),
     qty: laborHours,
     uomCode: "hr",
     repairOrder: String(form.workPerformed || ""),

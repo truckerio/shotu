@@ -20,9 +20,18 @@ test("section navigation resolves icons from module-owned manifests", () => {
   assert.doesNotMatch(source, /SECTION_ICONS/);
 });
 
-test("More navigation uses its visible label without a redundant dots icon", () => {
+test("More navigation keeps its stable visible label and exposes overflow selection", () => {
   assert.doesNotMatch(source, /DotsHorizontal/);
-  assert.equal((source.match(/activeOverflowSection\?\.label \|\| "More"/g) || []).length, 2);
+  assert.equal((source.match(/<span>More<\/span>/g) || []).length, 3);
   assert.match(source, /ChevronDown aria-hidden="true"/);
-  assert.match(source, /aria-label=\{activeOverflowSection \? `More sections/);
+  assert.match(source, /aria-current=\{desktopActiveOverflowSection \? "page" : undefined\}/);
+  assert.match(source, /aria-current=\{phoneActiveOverflowSection \? "page" : undefined\}/);
+  assert.match(source, /`More sections, \$\{desktopActiveOverflowSection\.label\} selected`/);
+});
+
+test("desktop navigation measures its container and preserves phone four-plus-More behavior", () => {
+  assert.match(source, /new ResizeObserver\(measure\)/);
+  assert.match(source, /fitWorkorderSections\(sections, \{ availableWidth, sectionWidths, moreWidth \}\)/);
+  assert.match(source, /const phoneLayout = splitWorkorderSections\(sections\)/);
+  assert.match(source, /className = ""/);
 });

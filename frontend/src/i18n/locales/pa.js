@@ -38,7 +38,7 @@ export const pa = Object.freeze({
   "mechanic.otherAssigned": "ਹੋਰ ਸੌਂਪੇ ਕੰਮ",
   "mechanic.viewAvailable": "ਉਪਲਬਧ ਕੰਮ ਵੇਖੋ",
   "mechanic.readyForJob": "ਤੁਸੀਂ ਨਵੇਂ ਕੰਮ ਲਈ ਤਿਆਰ ਹੋ।",
-  "mechanic.moreSummary": "ਉਡੀਕ, ਪਿਛਲਾ ਕੰਮ, ਖੋਜ, ਫਿਲਟਰ ਅਤੇ ਬਣਾਓ",
+  "mechanic.moreSummary": "ਪਿਛਲਾ ਕੰਮ, ਸਾਰੇ ਸਰਗਰਮ ਅਤੇ ਖਾਤਾ ਕੰਟਰੋਲ",
   "detail.work": "ਕੰਮ",
   "detail.help": "ਮਦਦ",
   "detail.parts": "ਪਾਰਟਸ",

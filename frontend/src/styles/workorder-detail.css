@@ -235,9 +235,12 @@
   border-bottom: 1px solid #d5d7da;
   display: flex;
   min-height: 48px;
-  overflow-x: auto;
+  min-width: 0;
+  overflow: hidden;
   padding: 0 20px;
+  position: relative;
   scrollbar-width: none;
+  width: 100%;
 }
 
 .workorder-section-nav::-webkit-scrollbar {
@@ -258,6 +261,31 @@
   gap: 7px;
   min-height: 48px;
   padding: 0 12px;
+  white-space: nowrap;
+}
+
+.workorder-section-nav-measurement {
+  height: 0;
+  left: 0;
+  overflow: clip;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  visibility: hidden;
+  width: 0;
+}
+
+.workorder-section-nav-measure-item {
+  align-items: center;
+  display: inline-flex;
+  font-size: var(--detail-body-size);
+  font-weight: var(--weight-semibold);
+  gap: 7px;
+  min-height: 48px;
+  padding: 0 12px;
+  position: absolute;
+  white-space: nowrap;
+  width: max-content;
 }
 
 .workorder-section-nav button:hover,

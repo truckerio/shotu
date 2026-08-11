@@ -15,6 +15,19 @@ const UNIT_FIELDS = new Set([
   "vinNo",
 ]);
 
+const CREATE_SECTION_PRIORITY = Object.freeze([
+  WORKORDER_MODULE_IDS.LOCATION,
+  WORKORDER_MODULE_IDS.SCHEDULE,
+  WORKORDER_MODULE_IDS.CONCERN,
+  WORKORDER_MODULE_IDS.UNIT,
+  WORKORDER_MODULE_IDS.ASSIGNMENT,
+  WORKORDER_MODULE_IDS.PARTS,
+]);
+
+const CREATE_SECTION_PRIORITY_BY_ID = new Map(
+  CREATE_SECTION_PRIORITY.map((id, index) => [id, CREATE_SECTION_PRIORITY.length - index]),
+);
+
 export function buildCreateWorkorderSections({
   canAssign = true,
   includePreview = true,
@@ -25,7 +38,16 @@ export function buildCreateWorkorderSections({
   const modules = workorderModuleDescriptors(WORKORDER_SURFACES.CREATE)
     .filter(({ id }) => includePreview || id !== WORKORDER_MODULE_IDS.PREVIEW)
     .filter(({ id }) => canAssign || id !== WORKORDER_MODULE_IDS.ASSIGNMENT)
-    .map((descriptor) => ({ id: descriptor.routeBySurface.create, label: descriptor.label }));
+    .map((descriptor) => {
+      const id = descriptor.routeBySurface.create;
+      return {
+        id,
+        label: descriptor.label,
+        alwaysPrimary: CREATE_SECTION_PRIORITY_BY_ID.has(id),
+        priority: CREATE_SECTION_PRIORITY_BY_ID.get(id) || 0,
+        overflow: descriptor.placementBySurface?.create === "supporting",
+      };
+    });
 
   return filterWorkorderModulesForPolicy(modules, {
     overrides: policyOverrides,

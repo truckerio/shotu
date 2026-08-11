@@ -13,9 +13,9 @@ import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import {
-  MECHANIC_PRIMARY_TABS,
-  MECHANIC_SECONDARY_TABS,
+  MECHANIC_QUEUE_TABS,
   mechanicActionLabel,
+  mechanicQueueTabsForViewport,
 } from "./mechanicWorkspaceConfig.js";
 import {
   buildMechanicHomeView,
@@ -108,19 +108,16 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
   }
 
   const homeView = useMemo(() => buildMechanicHomeView(dashboard), [dashboard]);
-  const primaryTabs = MECHANIC_PRIMARY_TABS.map((tab) => ({
-    ...tab,
-    label: t(tab.key === "myWork" ? "mechanic.myWork" : "mechanic.availableJobs"),
-    count: dashboard?.counts[tab.countKey] || 0,
-    icon: tab.key === "myWork" ? Briefcase02 : Inbox01,
-  }));
   const secondaryIcons = { waiting: Clock, done: FileCheck02, activeWork: Users01 };
-  const secondaryTabs = MECHANIC_SECONDARY_TABS.map((tab) => ({
+  const queueTabs = MECHANIC_QUEUE_TABS.map((tab) => ({
     ...tab,
-    label: t(tab.key === "waiting" ? "mechanic.waiting" : tab.key === "done" ? "mechanic.history" : "mechanic.allActive"),
+    label: t(tab.labelKey),
     count: dashboard?.counts[tab.countKey] || 0,
-    icon: secondaryIcons[tab.key],
+    icon: tab.key === "myWork" ? Briefcase02 : tab.key === "openWork" ? Inbox01 : secondaryIcons[tab.key],
   }));
+  const phoneQueueKeys = mechanicQueueTabsForViewport(true);
+  const phonePrimaryTabs = queueTabs.filter((tab) => phoneQueueKeys.primary.some(({ key }) => key === tab.key));
+  const phoneSecondaryTabs = queueTabs.filter((tab) => phoneQueueKeys.secondary.some(({ key }) => key === tab.key));
   const nextJob = activeTab === "myWork" ? homeView.nextJob : null;
   const activeRows = activeTab === "myWork"
     ? homeView.assignedJobs
@@ -146,13 +143,28 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
         {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
         <section className="mechanic-queue-shell" aria-label="Mechanic work">
           <div className="mechanic-primary-queues">
-            <WorkorderQueueTabs tabs={primaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+            <div className="mechanic-wide-queues">
+              <WorkorderQueueTabs tabs={queueTabs} activeTab={activeTab} onChange={setActiveTab} />
+            </div>
+            <div className="mechanic-phone-queues">
+              <WorkorderQueueTabs tabs={phonePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+            </div>
             {onCreateWorkorder ? (
               <Button className="mechanic-primary-create" type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>
                 {t("mechanic.createWorkorder")}
               </Button>
             ) : null}
           </div>
+
+          <section className="mechanic-visible-tools" aria-label="Search and filters">
+            <label className="mechanic-search">
+              <SearchMd aria-hidden="true" />
+              <input aria-label="Search workorders" {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" />
+            </label>
+            <div className="mechanic-secondary-actions mechanic-wide-account-actions">
+              <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
+            </div>
+          </section>
 
           {error ? <p className="ops-error" role="alert">{error}</p> : null}
 
@@ -191,7 +203,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
           {!loading && (activeTab !== "myWork" || rows.length) ? (
             <section className="mechanic-assigned-list" aria-label={activeTab === "myWork" ? "Other assigned jobs" : "Workorders"}>
               <div className="mechanic-list-title">
-                <h2>{activeTab === "myWork" ? t("mechanic.otherAssigned") : primaryTabs.concat(secondaryTabs).find((tab) => tab.key === activeTab)?.label}</h2>
+                <h2>{activeTab === "myWork" ? t("mechanic.otherAssigned") : queueTabs.find((tab) => tab.key === activeTab)?.label}</h2>
                 <span>{rows.length}</span>
               </div>
               <WorkorderTableHeader variant="mechanic" />
@@ -226,20 +238,9 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
             <summary><span>{t("detail.more")}</span><small>{t("mechanic.moreSummary")}</small></summary>
             <div className="mechanic-home-more-body">
               <div className="mechanic-secondary-queues">
-                <WorkorderQueueTabs tabs={secondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+                <WorkorderQueueTabs tabs={phoneSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
               </div>
-              <section className="mechanic-secondary-tools" aria-label="Search and filters">
-                <div>
-                  <strong>{t("mechanic.searchAndFilters")}</strong>
-                  <label className="mechanic-search mechanic-secondary-search-desktop">
-                    <SearchMd aria-hidden="true" />
-                    <input aria-label="Search workorders" {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" />
-                  </label>
-                  <label className="mechanic-search mechanic-secondary-search-mobile">
-                    <SearchMd aria-hidden="true" />
-                    <input aria-label="Search workorders" {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" />
-                  </label>
-                </div>
+              <section className="mechanic-secondary-tools" aria-label="Account controls">
                 <div className="mechanic-secondary-actions">
                   <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
                   <ProfileMenu actor={actor} mobileAction />

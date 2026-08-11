@@ -176,7 +176,11 @@ connection, discover provider vehicles/warehouses/service products, confirm
 one-to-one vehicle and warehouse mappings, and select the labor product through
 authenticated Admin routes. Authorized Admin and Surveillance users then use
 the shared workorder Odoo module to create draft-only Odoo `sale.order` service
-orders through canonical module routes. Role-specific Surveillance Odoo aliases
+orders through canonical module routes. Create context exposes that company-scoped
+selection, and new workorders snapshot its provider ID, code, and name into the
+printable form so historical details do not change when an Admin selects a new
+labor product for future work. Older workorders without a snapshot resolve the
+current configured selection when their detail is loaded. Role-specific Surveillance Odoo aliases
 were removed in V2.0. The
 application records the Odoo ID, service-order number, stable workorder marker,
 audit events, and lifecycle transition; it does not confirm, invoice, or mutate

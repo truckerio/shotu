@@ -306,6 +306,22 @@ test("detail routes and compact placement come from module manifests", () => {
   assert.deepEqual(ordered.filter(({ overflow }) => overflow).map(({ id }) => id), ["unit", "activity"]);
 });
 
+test("assignment stays in the main detail navigation for operational roles", () => {
+  for (const role of ["admin", "mechanic", "office"]) {
+    const [assignment] = orderWorkorderModules(
+      [{ id: "assignment" }],
+      { compact: true, role, surface: WORKORDER_SURFACES.DETAIL },
+    );
+    assert.equal(assignment.overflow, undefined, role);
+  }
+
+  const [surveillanceAssignment] = orderWorkorderModules(
+    [{ id: "assignment" }],
+    { compact: true, role: "surveillance", surface: WORKORDER_SURFACES.DETAIL },
+  );
+  assert.equal(surveillanceAssignment.overflow, true);
+});
+
 test("resolved policies expose stable read and write metadata", () => {
   const readPolicy = resolveWorkorderModulePolicy({
     moduleId: "unit",

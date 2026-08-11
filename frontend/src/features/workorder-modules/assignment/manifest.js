@@ -8,5 +8,5 @@ export const assignmentModuleManifest = Object.freeze({
   owner: "workorder-modules/assignment",
   routeBySurface: Object.freeze({ create: "assignment", detail: "assignment" }),
   orderBySurface: Object.freeze({ create: 50, detail: 55 }),
-  compactPlacement: Object.freeze({ admin: "overflow", mechanic: "overflow", office: "overflow", surveillance: "overflow" }),
+  compactPlacement: Object.freeze({ admin: "primary", mechanic: "primary", office: "primary", surveillance: "overflow" }),
 });

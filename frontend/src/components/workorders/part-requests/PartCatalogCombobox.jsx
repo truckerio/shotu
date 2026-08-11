@@ -151,7 +151,7 @@ export function PartCatalogCombobox({
 
   return (
     <div className="part-catalog-field" ref={rootRef}>
-      <label htmlFor={inputId}>{label}</label>
+      {label ? <label htmlFor={inputId}>{label}</label> : null}
       <input
         {...textEntryProps(inputPolicy)}
         id={inputId}

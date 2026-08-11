@@ -1,11 +1,11 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Tool02,
 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { workorderModuleDescriptor } from "../../features/workorder-modules/workorder-module-registry.js";
-import { splitWorkorderSections } from "./workorder-section-navigation.js";
+import { fitWorkorderSections, splitWorkorderSections } from "./workorder-section-navigation.js";
 import "./workorder-object-page.css";
 
 function sectionIcon(sectionId) {
@@ -64,14 +64,52 @@ export function WorkorderObjectSummary({
   );
 }
 
-export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
+export function WorkorderSectionNav({ sections, activeSection, onSelect, className = "" }) {
   const [visualActiveSection, setVisualActiveSection] = useState(activeSection);
-  const { primarySections, overflowSections } = splitWorkorderSections(sections);
-  const activeOverflowSection = overflowSections.find(({ id }) => id === visualActiveSection);
+  const [desktopLayout, setDesktopLayout] = useState(() => ({
+    primarySections: sections,
+    overflowSections: [],
+  }));
+  const desktopNavRef = useRef(null);
+  const measurementRef = useRef(null);
+  const phoneLayout = splitWorkorderSections(sections);
+  const desktopActiveOverflowSection = desktopLayout.overflowSections.find(({ id }) => id === visualActiveSection);
+  const phoneActiveOverflowSection = phoneLayout.overflowSections.find(({ id }) => id === visualActiveSection);
 
   useEffect(() => {
     setVisualActiveSection(activeSection);
   }, [activeSection]);
+
+  useLayoutEffect(() => {
+    const nav = desktopNavRef.current;
+    const measurement = measurementRef.current;
+    if (!nav || !measurement) return undefined;
+
+    function measure() {
+      const style = window.getComputedStyle(nav);
+      const availableWidth = nav.clientWidth
+        - (Number.parseFloat(style.paddingLeft) || 0)
+        - (Number.parseFloat(style.paddingRight) || 0);
+      const sectionWidths = Object.fromEntries(
+        [...measurement.querySelectorAll("[data-measure-section-id]")].map((element) => [
+          element.dataset.measureSectionId,
+          element.getBoundingClientRect().width,
+        ]),
+      );
+      const moreWidth = measurement.querySelector("[data-measure-more]")?.getBoundingClientRect().width || 0;
+      setDesktopLayout(fitWorkorderSections(sections, { availableWidth, sectionWidths, moreWidth }));
+    }
+
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [sections]);
 
   function SectionContent({ section, showIcon = false }) {
     const Icon = sectionIcon(section.id);
@@ -91,8 +129,12 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
 
   return (
     <>
-      <nav className="workorder-section-nav workorder-section-nav-desktop" aria-label="Workorder sections">
-        {primarySections.map((section) => (
+      <nav
+        className={`workorder-section-nav workorder-section-nav-desktop ${className}`.trim()}
+        aria-label="Workorder sections"
+        ref={desktopNavRef}
+      >
+        {desktopLayout.primarySections.map((section) => (
           <button
             className={`${visualActiveSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
@@ -104,18 +146,19 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             <SectionContent section={section} />
           </button>
         ))}
-        {overflowSections.length ? (
+        {desktopLayout.overflowSections.length ? (
           <MenuTrigger>
             <Button
-              className={`${activeOverflowSection ? "is-active" : ""} ${activeOverflowSection?.attention ? "has-attention" : ""}`.trim()}
-              aria-label={activeOverflowSection ? `More sections, ${activeOverflowSection.label} selected` : "More workorder sections"}
+              className={`${desktopActiveOverflowSection ? "is-active" : ""} ${desktopActiveOverflowSection?.attention ? "has-attention" : ""}`.trim()}
+              aria-current={desktopActiveOverflowSection ? "page" : undefined}
+              aria-label={desktopActiveOverflowSection ? `More sections, ${desktopActiveOverflowSection.label} selected` : "More workorder sections"}
             >
-              <span>{activeOverflowSection?.label || "More"}</span>
+              <span>More</span>
               <ChevronDown aria-hidden="true" />
             </Button>
             <Popover className="workorder-section-more-popover" placement="bottom end">
               <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
-                {overflowSections.map((section) => {
+                {desktopLayout.overflowSections.map((section) => {
                   const Icon = sectionIcon(section.id);
                   return (
                     <MenuItem
@@ -136,10 +179,21 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             </Popover>
           </MenuTrigger>
         ) : null}
+        <div className="workorder-section-nav-measurement" aria-hidden="true" ref={measurementRef}>
+          {sections.map((section) => (
+            <span className="workorder-section-nav-measure-item" data-measure-section-id={section.id} key={section.id}>
+              <SectionContent section={section} />
+            </span>
+          ))}
+          <span className="workorder-section-nav-measure-item" data-measure-more>
+            <span>More</span>
+            <ChevronDown aria-hidden="true" />
+          </span>
+        </div>
       </nav>
 
-      <nav className="workorder-section-nav-mobile" aria-label="Workorder sections">
-        {primarySections.map((section) => (
+      <nav className={`workorder-section-nav-mobile ${className}`.trim()} aria-label="Workorder sections">
+        {phoneLayout.primarySections.map((section) => (
           <button
             className={`${visualActiveSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
             type="button"
@@ -151,18 +205,19 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect }) {
             <SectionContent section={section} showIcon />
           </button>
         ))}
-        {overflowSections.length ? (
+        {phoneLayout.overflowSections.length ? (
           <MenuTrigger>
             <Button
-              className={`${activeOverflowSection ? "is-active" : ""} ${activeOverflowSection?.attention ? "has-attention" : ""}`.trim()}
-              aria-label={activeOverflowSection ? `More sections, ${activeOverflowSection.label} selected` : "More workorder sections"}
+              className={`${phoneActiveOverflowSection ? "is-active" : ""} ${phoneActiveOverflowSection?.attention ? "has-attention" : ""}`.trim()}
+              aria-current={phoneActiveOverflowSection ? "page" : undefined}
+              aria-label={phoneActiveOverflowSection ? `More sections, ${phoneActiveOverflowSection.label} selected` : "More workorder sections"}
             >
-              <span>{activeOverflowSection?.label || "More"}</span>
-              {activeOverflowSection?.count !== undefined ? <small>{activeOverflowSection.count}</small> : null}
+              <span>More</span>
+              {phoneActiveOverflowSection?.count !== undefined ? <small>{phoneActiveOverflowSection.count}</small> : null}
             </Button>
             <Popover className="workorder-section-more-popover" placement="top end">
               <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
-                {overflowSections.map((section) => {
+                {phoneLayout.overflowSections.map((section) => {
                   const Icon = sectionIcon(section.id);
                   return (
                     <MenuItem

@@ -13,6 +13,12 @@ import { uomCodeSchema, validateQuantityUnit } from "../parts/quantity-uom.js";
 export { userRoleSchema };
 
 const customerCompanyNameSchema = z.string().trim().max(300, "Customer company must be 300 characters or less.");
+const laborProductSchema = z.object({
+  externalId: z.string().trim().max(200).default(""),
+  code: z.string().trim().max(100).default(""),
+  name: z.string().trim().min(1).max(300),
+  uomCode: z.literal("hr").default("hr"),
+}).strict();
 
 /**
  * Typed boundary for printable form snapshots.
@@ -24,6 +30,7 @@ const customerCompanyNameSchema = z.string().trim().max(300, "Customer company m
 export const workorderFormDataSchema = z.object({
   customerCompanyName: customerCompanyNameSchema.optional(),
   companyName: customerCompanyNameSchema.optional(),
+  laborProduct: laborProductSchema.nullable().optional(),
 }).catchall(z.unknown()).superRefine((formData, context) => {
   if (formData.parts === undefined) return;
   if (!Array.isArray(formData.parts)) {

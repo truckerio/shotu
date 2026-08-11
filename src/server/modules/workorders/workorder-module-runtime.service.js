@@ -28,6 +28,7 @@ import { loadWorkorderDetail } from "./workorder-detail.service.js";
 import { createOperationalWorkorder } from "../../db/repositories/operational-workorders.repo.js";
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
+import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import {
   authorizeWorkorderModule,
@@ -214,9 +215,15 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
     moduleKeys: workorderInputModules(rawInput, { create: true }),
   });
   const create = dependencies.create || createOperationalWorkorder;
+  const loadLaborProduct = dependencies.loadLaborProduct || getConfiguredLaborProduct;
+  const laborProduct = await loadLaborProduct(input.companyId);
   const mechanic = context.actor.role === "mechanic";
   return create({
     ...input,
+    formData: {
+      ...(input.formData || {}),
+      ...(laborProduct ? { laborProduct } : { laborProduct: null }),
+    },
     createdByUserId: context.actor.id,
     mechanicUserIds: mechanic ? [context.actor.id] : input.mechanicUserIds,
     startImmediately: mechanic,
@@ -227,11 +234,13 @@ export async function workorderCreateContext(context, dependencies = {}) {
   const loadTemplates = dependencies.loadTemplates || getAuthorizedLocationTemplates;
   const resolveModules = dependencies.resolveModules || resolveWorkorderModuleDecisions;
   const listMechanics = dependencies.listMechanics || listUsersByLocation;
+  const loadLaborProduct = dependencies.loadLaborProduct || getConfiguredLaborProduct;
   const rows = await loadTemplates({
     companyIds: [...(context.companyIds || [])],
     locationIds: context.actor.role === "admin" ? null : [...(context.locationIds || [])],
   });
   const locations = [];
+  const laborProducts = new Map();
   for (const row of rows) {
     const syntheticWorkorderId = `create:${row.location_id}`;
     const { decisions } = await resolveModules(context, syntheticWorkorderId, {
@@ -242,6 +251,9 @@ export async function workorderCreateContext(context, dependencies = {}) {
     });
     if (decisions.concern?.access === "hidden") continue;
     const canAssign = ["write", "required"].includes(decisions.assignment?.access);
+    if (!laborProducts.has(row.company_id)) {
+      laborProducts.set(row.company_id, await loadLaborProduct(row.company_id));
+    }
     locations.push({
       location: {
         id: row.location_id,
@@ -264,6 +276,7 @@ export async function workorderCreateContext(context, dependencies = {}) {
         updated_at: row.updated_at,
       } : null,
       moduleAccess: decisions,
+      laborProduct: laborProducts.get(row.company_id),
       mechanics: canAssign
         ? (await listMechanics(row.location_id)).filter((user) => user.role === "mechanic" && user.active)
           .map((user) => ({ id: user.id, name: user.name }))

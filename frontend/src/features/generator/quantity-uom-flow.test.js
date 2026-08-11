@@ -5,6 +5,7 @@ import {
   emptyPart,
   renderWorkorderPageHtml,
 } from "../../../../shared/workorder-template.js";
+import { laborProductLabel } from "../../../../shared/labor-product.js";
 
 const createForm = readFileSync(new URL("./CreateWorkorderForm.jsx", import.meta.url), "utf8");
 const createPartsModule = readFileSync(new URL("../workorder-modules/parts/CreatePartsModule.jsx", import.meta.url), "utf8");
@@ -60,11 +61,18 @@ test("create workorder uses the location-scoped catalog selector and retains sel
   assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
 });
 
-test("create parts show labor first and avoid duplicate visible row numbering", () => {
+test("create parts show configured labor first and avoid duplicate visible row numbering", () => {
   assert.match(createForm, /laborHours:\s*form\.laborHours/);
   assert.match(createForm, /onFieldChange\("laborHours", value\)/);
-  assert.match(createPartsModule, /\[PTR001\] LABOR HOURS/);
+  assert.match(createPartsModule, /laborProductLabel\(laborProduct\)/);
+  assert.equal(laborProductLabel({ code: "LAB200", name: "Shop labor" }), "[LAB200] Shop labor");
   assert.match(createPartsModule, /<strong>\{index \+ 2\}<\/strong>/);
-  assert.match(createPartsModule, /label="Part number"/);
+  assert.match(createPartsModule, /label=""/);
+  assert.doesNotMatch(createPartsModule, /<span>Labor<\/span>/);
   assert.doesNotMatch(createPartsModule, /label=\{`Part number \$\{index \+ 1\}`\}/);
+});
+
+test("detail parts use the same configured labor product label as create and print", () => {
+  assert.match(usedPartsEditor, /laborProductLabel\(laborProduct\)/);
+  assert.doesNotMatch(usedPartsEditor, /\[PTR001\] LABOR HOURS/);
 });

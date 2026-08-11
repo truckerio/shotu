@@ -39,6 +39,7 @@ export function WorkorderPartsModule({
           detail={activeWorkorder}
           parts={form.parts}
           laborHours={form.laborHours || ""}
+          laborProduct={form.laborProduct || null}
           laborRepairOrder={form.workPerformed || ""}
           onLaborHoursChange={onLaborHoursChange}
           onPartsChange={onPartsChange}

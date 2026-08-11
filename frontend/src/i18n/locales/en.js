@@ -39,7 +39,7 @@ export const en = Object.freeze({
   "mechanic.otherAssigned": "Other assigned jobs",
   "mechanic.viewAvailable": "View available jobs",
   "mechanic.readyForJob": "You are ready for a new job.",
-  "mechanic.moreSummary": "Waiting, history, search, filters, and create",
+  "mechanic.moreSummary": "History, all active, and account controls",
   "detail.work": "Work",
   "detail.help": "Help",
   "detail.parts": "Parts",

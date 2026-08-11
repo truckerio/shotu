@@ -23,6 +23,7 @@ import "./used-parts-editor.css";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
 import { RepairHistorySuggestions } from "./part-requests/RepairHistorySuggestions.jsx";
 import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
+import { laborProductLabel } from "../../../../shared/labor-product.js";
 
 function vehicleInput(detail) {
   const asset = detail.workorder.asset || {};
@@ -57,6 +58,7 @@ export function UsedPartsEditor({
   detail,
   parts,
   laborHours = "",
+  laborProduct = null,
   laborRepairOrder = "",
   onLaborHoursChange = () => {},
   onChange,
@@ -205,7 +207,7 @@ export function UsedPartsEditor({
         {laborHours ? (
           <ul className="used-parts-readonly-list">
             <li>
-              <strong>[PTR001] LABOR HOURS</strong>
+              <strong>{laborProductLabel(laborProduct)}</strong>
               <span>{laborHours} hr</span>
               {laborRepairOrder ? <span>{laborRepairOrder}</span> : null}
             </li>
@@ -240,7 +242,7 @@ export function UsedPartsEditor({
           <strong>1</strong>
           <div className="used-part-field">
             <span className="used-part-label">Labor</span>
-            <strong className="used-part-labor-name">[PTR001] LABOR HOURS</strong>
+            <strong className="used-part-labor-name">{laborProductLabel(laborProduct)}</strong>
           </div>
           <div className="used-part-field used-part-quantity">
             <QuantityUnitInput

@@ -65,6 +65,7 @@ export function buildWorkorderDraftPayload({
       vinNo: text(form.vinNo),
       mechanicConcern: text(form.mechanicConcern),
       laborHours: text(form.laborHours),
+      laborProduct: form.laborProduct || null,
       startTime: text(form.startTime),
       endTime: text(form.endTime),
       managerName: text(form.managerName),

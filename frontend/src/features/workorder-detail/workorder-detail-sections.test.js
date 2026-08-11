@@ -138,12 +138,12 @@ test("compact phone detail keeps role actions visible and moves supporting secti
   ];
 
   const office = buildCompactPhoneDetailSections(sections, "office");
-  assert.deepEqual(office.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "preview", "completion", "photos", "unit", "location", "assignment", "schedule", "activity"]);
-  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "assignment", "schedule", "activity"]);
+  assert.deepEqual(office.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "assignment", "preview", "completion", "photos", "unit", "location", "schedule", "activity"]);
+  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "schedule", "activity"]);
 
   const mechanic = buildCompactPhoneDetailSections(sections, "mechanic");
-  assert.deepEqual(mechanic.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "preview", "completion", "photos", "unit", "location", "assignment", "schedule", "activity"]);
-  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "assignment", "schedule", "activity"]);
+  assert.deepEqual(mechanic.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "assignment", "preview", "completion", "photos", "unit", "location", "schedule", "activity"]);
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "schedule", "activity"]);
 
   const surveillance = buildCompactPhoneDetailSections(sections, "surveillance");
   assert.deepEqual(surveillance.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "activity", "preview", "completion", "photos", "unit", "location", "assignment", "schedule"]);
@@ -161,7 +161,7 @@ test("compact detail keeps an eligible Odoo action in manifest order", () => {
     { id: "activity", label: "Activity" },
   ], "admin");
 
-  assert.equal(compact.findIndex(({ id }) => id === "odoo"), 3);
+  assert.equal(compact.findIndex(({ id }) => id === "odoo"), 4);
   assert.equal(compact.find(({ id }) => id === "odoo").access, "write");
 });
 

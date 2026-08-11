@@ -25,6 +25,37 @@ test("create workorder phone sections follow the shared detail navigation shape"
   );
 });
 
+test("create workorder navigation promotes every editable workflow section when width allows", () => {
+  const sections = buildCreateWorkorderSections({ includePreview: false });
+
+  assert.deepEqual(
+    sections.map(({ id, alwaysPrimary }) => [id, alwaysPrimary]),
+    [
+      ["location", true],
+      ["schedule", true],
+      ["concern", true],
+      ["unit", true],
+      ["assignment", true],
+      ["parts", true],
+    ],
+  );
+  assert.deepEqual(
+    [...sections].sort((left, right) => right.priority - left.priority).map(({ id }) => id),
+    ["location", "schedule", "concern", "unit", "assignment", "parts"],
+  );
+  assert.equal(sections.some(({ overflow }) => overflow), false);
+});
+
+test("compact Preview remains a supporting create destination", () => {
+  const sections = buildCreateWorkorderSections({ includePreview: true });
+  const preview = sections.find(({ id }) => id === "preview");
+
+  assert.deepEqual(
+    { alwaysPrimary: preview.alwaysPrimary, overflow: preview.overflow, priority: preview.priority },
+    { alwaysPrimary: false, overflow: true, priority: 0 },
+  );
+});
+
 test("create workorder sections respect location module policy", () => {
   const sections = buildCreateWorkorderSections({
     canAssign: true,

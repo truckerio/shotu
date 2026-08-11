@@ -51,6 +51,7 @@ export function CreateWorkorderForm({
       activeSection: mobileSection,
       errors,
       laborHours: form.laborHours,
+      laborProduct: form.laborProduct,
       laborRepairOrder: form.workPerformed,
       locationId: form.locationId,
       parts: form.parts,

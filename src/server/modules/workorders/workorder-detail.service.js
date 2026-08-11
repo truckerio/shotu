@@ -5,6 +5,7 @@ import {
   recordWorkorderOpened,
 } from "../../db/repositories/operational-workorders.repo.js";
 import { listWorkorderPartRequests } from "../../db/repositories/part-requests.repo.js";
+import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
 
 function mechanicParticipants(workorder, timeline) {
   const participants = new Map();
@@ -74,10 +75,17 @@ export function canViewWorkorderChat(workorder, { viewerUserId = null, participa
 
 export async function loadWorkorderDetail(
   workorderId,
-  { viewerUserId = null, participantChatOnly = false } = {},
+  { viewerUserId = null, participantChatOnly = false, loadLaborProduct = getConfiguredLaborProduct } = {},
 ) {
   const workorder = await getOperationalWorkorderById(workorderId);
   if (!workorder) throw new Error("Workorder not found.");
+  if (!workorder.formData?.laborProduct) {
+    const laborProduct = await loadLaborProduct(workorder.companyId);
+    workorder.formData = {
+      ...(workorder.formData || {}),
+      ...(laborProduct ? { laborProduct } : {}),
+    };
+  }
   const includeChat = canViewWorkorderChat(workorder, { viewerUserId, participantChatOnly });
   const [messages, timeline, partRequests] = await Promise.all([
     includeChat ? listChatMessages(workorderId, { viewerUserId }) : [],

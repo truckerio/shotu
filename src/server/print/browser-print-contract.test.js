@@ -79,6 +79,7 @@ test("shared template keeps operational text readable without ellipsis clipping"
 test("workorder preview renders labor first without treating it as inventory", () => {
   const html = renderWorkorderPagesHtml({
     laborHours: "2.5",
+    laborProduct: { externalId: "91", code: "PTR001", name: "LABOR HOURS", uomCode: "hr" },
     workPerformed: "Replace hub seal",
     parts: [{ partNo: "46305", qty: "1", uomCode: "ea", repairOrder: "Replace hub seal" }],
   }, "WO-000102");

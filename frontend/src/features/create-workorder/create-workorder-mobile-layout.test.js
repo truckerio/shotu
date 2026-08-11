@@ -109,6 +109,11 @@ test("Create shell owns shared summary and section navigation", () => {
   assert.match(createShell, /showPristine/);
   assert.doesNotMatch(createShell, /create-workorder-section-tabs/);
   assert.match(createPage, /<CreateWorkorderShell/);
+  assert.equal((createShell.match(/className="create-workorder-section-nav"/g) || []).length, 2);
+  assert.match(
+    createCss,
+    /\.create-workorder-section-nav\.workorder-section-nav-desktop\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
+  );
 });
 
 test("mechanic Create omits assignment page while preserving assigned mechanic data", () => {

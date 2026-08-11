@@ -96,6 +96,7 @@ export function CreateWorkorderShell({
       />
 
       <WorkorderSectionNav
+        className="create-workorder-section-nav"
         sections={sections}
         activeSection={activeSection}
         onSelect={onSelectSection}
@@ -121,6 +122,7 @@ export function CreateWorkorderShell({
           </div>
           <div className="create-workorder-mobile-nav">
             <WorkorderSectionNav
+              className="create-workorder-section-nav"
               sections={sections}
               activeSection={activeSection}
               onSelect={onSelectSection}

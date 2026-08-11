@@ -69,7 +69,7 @@ test("loaded location model preserves a valid selection without resetting the dr
     },
   });
 
-  assert.deepEqual(model.patch, { locationId: "loc-chino", locationName: "Chino Yard" });
+  assert.deepEqual(model.patch, { locationId: "loc-chino", locationName: "Chino Yard", laborProduct: null });
   assert.equal(model.resetDraftBaseline, false);
 });
 
@@ -93,6 +93,7 @@ test("selection patch changes location and template as one autosave-ready payloa
   assert.deepEqual(createLocationSelectionPatch(locations, "loc-chino"), {
     locationId: "loc-chino",
     locationName: "Chino Yard",
+    laborProduct: null,
     headerTitle: "CHINO WORKORDER",
     brandTop: "PRO TEC",
     brandBottom: "REPAIR",
@@ -101,6 +102,15 @@ test("selection patch changes location and template as one autosave-ready payloa
     authorizationText: undefined,
   });
   assert.equal(createLocationSelectionPatch(locations, "missing"), null);
+});
+
+test("location selection carries the company labor product into the autosaved draft", () => {
+  const laborProduct = { externalId: "91", code: "LAB200", name: "Shop labor", uomCode: "hr" };
+  const result = createLocationSelectionPatch([
+    { ...locations[1], laborProduct },
+  ], "loc-chino");
+
+  assert.deepEqual(result.laborProduct, laborProduct);
 });
 
 test("canonical create context exposes allowed assignment choices for any granted role", () => {
