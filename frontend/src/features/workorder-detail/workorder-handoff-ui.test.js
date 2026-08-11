@@ -58,6 +58,9 @@ test("manager handoff actions use allowed actions and documented endpoints", () 
   assert.match(completionModule, /canMarkDone = allowedActions\.markDone === true/);
   assert.match(officeActions, /action: "return"/);
   assert.match(officeActions, /action: "cancel"/);
+  assert.match(officeActions, /action: "mark-done"/);
+  assert.match(officeActions, /resolveWorkPerformed\(form\)/);
+  assert.match(detailSections, /onMarkDone: isOfficeDetail \? markOfficeWorkorderDone : openMechanicFinish/);
   assert.match(officeActions, /expectedUpdatedAt: workorder\.updatedAt/);
   assert.match(detailPage, /maxLength="1000"/);
   assert.match(detailViewModel, /formatLifecycleLabel/);
@@ -65,13 +68,13 @@ test("manager handoff actions use allowed actions and documented endpoints", () 
   assert.match(presentation, /cancelled: "Cancelled"/);
 });
 
-test("mechanic Work done visibility follows the server-authorized action", () => {
+test("Work done visibility follows the server-authorized action for mechanic and office", () => {
   assert.match(
     detailPage,
-    /canMarkWorkDone = isMechanicDetail && activeWorkorder\.allowedActions\?\.markDone === true/,
+    /canMarkWorkDone = \(isMechanicDetail \|\| isOfficeDetail\) && activeWorkorder\.allowedActions\?\.markDone === true/,
   );
   assert.match(detailPage, /actions: canMarkWorkDone && !isCompact/);
-  assert.match(detailPage, /\{canMarkWorkDone && isCompact \? \(/);
+  assert.match(detailPage, /\{canMarkWorkDone && isMechanicDetail && isCompact \? \(/);
   assert.doesNotMatch(
     detailPage,
     /renderedDetailSection === "completion" && completionPolicy\.canWrite && activeWorkorder\?\.allowedActions\.markDone/,

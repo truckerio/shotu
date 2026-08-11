@@ -25,12 +25,14 @@ test("Manager actions reflect active, review, correction, and terminal lifecycle
     sendMessage: true,
     recordUsedParts: true,
     addApprovedParts: true,
+    markDone: true,
     approve: false,
     returnToMechanic: false,
     cancel: true,
     assignMechanics: true,
   });
   assert.equal(officeAllowedActions("mechanic_done").approve, true);
+  assert.equal(officeAllowedActions("mechanic_done").markDone, false);
   assert.equal(officeAllowedActions("mechanic_done").addApprovedParts, false);
   assert.equal(officeAllowedActions("mechanic_done").returnToMechanic, true);
   assert.equal(officeAllowedActions("closed").updateAdministrative, false);

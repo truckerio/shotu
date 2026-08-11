@@ -41,6 +41,7 @@ test("office workorder mutations declare their canonical module actions", () => 
     ["parts", "record"],
     ["parts", "allocate"],
     ["chat", "acknowledge"],
+    ["completion", "markWorkDone"],
     ["completion", "close"],
     ["completion", "requestChanges"],
     ["completion", "cancel"],

@@ -6,6 +6,7 @@ import {
   cancelOperationalWorkorder,
   closeOperationalWorkorder,
   createOperationalWorkorder,
+  markOperationalWorkorderDone,
   reassignOperationalWorkorder,
   setOperationalWorkorderMechanics,
   returnOperationalWorkorder,
@@ -50,6 +51,7 @@ export function officeAllowedActions(status, activeAttention = []) {
     sendMessage: active || review,
     recordUsedParts: canUpdate,
     addApprovedParts: active,
+    markDone: active,
     approve: review,
     returnToMechanic: review,
     cancel: active || review,
@@ -121,6 +123,22 @@ export async function createOfficeWorkorder(input) {
     createdByUserId: office?.id || input.createdByUserId || null,
     locationId: input.locationId || location?.id || null,
   });
+}
+
+export async function markOfficeWorkorderDone(workorderId, input) {
+  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  if (!office) throw new Error("Office user not found.");
+  try {
+    return await markOperationalWorkorderDone(workorderId, office.id, input, {
+      requireAssignedMechanic: false,
+      statusNote: "Office marked work done.",
+    });
+  } catch (error) {
+    if (error instanceof WorkorderLifecycleConflictError) {
+      throw new AuthError(error.statusCode, error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 export async function officeWorkorderDetail(workorderId, officeUserId) {

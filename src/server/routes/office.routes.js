@@ -9,6 +9,7 @@ import {
   cancelWorkorderSchema,
   closeWorkorderSchema,
   createWorkorderSchema,
+  markDoneSchema,
   reassignWorkorderSchema,
   returnWorkorderSchema,
   sendMessageSchema,
@@ -227,6 +228,13 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   if (req.method === "POST" && closeId) {
     const input = closeWorkorderSchema.parse(await readBody(req));
     sendJson(res, 200, { workorder: await runAction(requestContext, closeId, "completion", "close", input) });
+    return true;
+  }
+
+  const doneId = workorderIdFrom(url.pathname, "/mark-done");
+  if (req.method === "POST" && doneId) {
+    const input = markDoneSchema.parse(await readBody(req));
+    sendJson(res, 200, { workorder: await runAction(requestContext, doneId, "completion", "markWorkDone", input) });
     return true;
   }
 

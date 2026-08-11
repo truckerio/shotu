@@ -22,6 +22,7 @@ import {
   saveOfficeUsedParts,
   sendOfficeMessage,
   updateOfficeWorkorder,
+  markOfficeWorkorderDone,
 } from "../office/office.service.js";
 import { loadWorkorderDetail } from "./workorder-detail.service.js";
 import { createOperationalWorkorder } from "../../db/repositories/operational-workorders.repo.js";
@@ -171,7 +172,15 @@ export async function runWorkorderModuleAction(
   }
 
   if (moduleKey === "completion") {
-    if (action === "markWorkDone") return (dependencies.markDone || markMechanicDone)(workorderId, actorId, input);
+    if (action === "markWorkDone") {
+      if (context.actor.role === "mechanic") {
+        return (dependencies.markDone || markMechanicDone)(workorderId, actorId, input);
+      }
+      if (["office", "admin"].includes(context.actor.role)) {
+        return (dependencies.markOfficeDone || markOfficeWorkorderDone)(workorderId, { ...input, officeUserId: actorId });
+      }
+      throw permissionDenied();
+    }
     if (action === "close") return (dependencies.close || closeOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });
     if (action === "cancel") return (dependencies.cancel || cancelOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });
     if (action === "requestChanges") return (dependencies.requestChanges || returnOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });

@@ -112,6 +112,7 @@ export function WorkorderDetailPage({
   applyVehicle,
   acceptOpenedMechanicWorkorder,
   closeOfficeWorkorder,
+  markOfficeWorkorderDone,
   cancelOfficeWorkorder,
   jumpToPreview,
   openFullscreenPreview,
@@ -210,7 +211,11 @@ export function WorkorderDetailPage({
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
     && !resolveWorkPerformed(form);
-  const canMarkWorkDone = isMechanicDetail && activeWorkorder.allowedActions?.markDone === true;
+  const canMarkWorkDone = (isMechanicDetail || isOfficeDetail) && activeWorkorder.allowedActions?.markDone === true;
+  const markWorkDone = isOfficeDetail
+    ? markOfficeWorkorderDone
+    : () => setMechanicFinish({ open: true, name: "", message: "" });
+  const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
   useEffect(() => {
     if (!visibleDetailSections.length || renderedDetailSection === detailSection) return;
@@ -347,9 +352,11 @@ export function WorkorderDetailPage({
           actions: canMarkWorkDone && !isCompact ? (
               <WorkDoneButton
                 type="button"
-                onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                busy={mechanicAction.busy === "done"}
-                disabled={Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
+                onClick={markWorkDone}
+                busy={markWorkDoneBusy}
+                disabled={isOfficeDetail
+                  ? officeDetailState.busy
+                  : Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
               />
             ) : null,
           children: (
@@ -412,7 +419,7 @@ export function WorkorderDetailPage({
             </div>
           ) : null}
 
-          {canMarkWorkDone && isCompact ? (
+          {canMarkWorkDone && isMechanicDetail && isCompact ? (
             <div className="mechanic-compact-primary-action">
               <WorkDoneButton
                 type="button"
@@ -476,6 +483,7 @@ export function WorkorderDetailPage({
             vehicleModelText={vehicleModelText}
             acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
             openMechanicFinish={() => setMechanicFinish({ open: true, name: "", message: "" })}
+            markOfficeWorkorderDone={markOfficeWorkorderDone}
             openOfficeClose={() => {
               setOfficeDetailState((current) => ({ ...current, message: "" }));
               setOfficeCloseOpen(true);

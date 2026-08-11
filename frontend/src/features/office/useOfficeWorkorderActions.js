@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 
 const ADMINISTRATIVE_FORM_EXCLUSIONS = new Set([
   "diagnosis",
@@ -268,6 +269,39 @@ export function useOfficeWorkorderActions({
     setOfficeDetailState,
   ]);
 
+  const markOfficeWorkorderDone = useCallback(async () => {
+    const workorderId = activeWorkorder?.workorder?.id;
+    if (!workorderId || !isOfficeDetail) return false;
+    setOfficeDetailState({ busy: true, message: "" });
+    try {
+      await runOfficeWorkorderAction({
+        request,
+        workorderId,
+        action: "mark-done",
+        body: {
+          diagnosis: form.diagnosis || "",
+          workPerformed: resolveWorkPerformed(form),
+        },
+      });
+      await reloadOfficeWorkorder(workorderId);
+      setOfficeDetailState({
+        busy: false,
+        message: "Work marked done. Review and approve it when ready.",
+      });
+      return true;
+    } catch (error) {
+      setOfficeDetailState({ busy: false, message: error.message });
+      return false;
+    }
+  }, [
+    activeWorkorder?.workorder?.id,
+    form,
+    isOfficeDetail,
+    reloadOfficeWorkorder,
+    request,
+    setOfficeDetailState,
+  ]);
+
   const openOfficeReturn = useCallback(() => {
     setOfficeDetailState((current) => ({ ...current, message: "" }));
     setOfficeReturn({ open: true, reason: "", categories: [], message: "" });
@@ -408,6 +442,7 @@ export function useOfficeWorkorderActions({
     autosaveRevision,
     cancelOfficeWorkorder,
     closeOfficeWorkorder,
+    markOfficeWorkorderDone,
     openOfficeCancel,
     openOfficeReturn,
     queueOfficeWorkorderAutosave,

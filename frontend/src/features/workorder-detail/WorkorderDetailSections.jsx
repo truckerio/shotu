@@ -52,6 +52,7 @@ export function WorkorderDetailSections({
   vehicleMileage,
   vehicleModelText,
   acceptOpenedMechanicWorkorder,
+  markOfficeWorkorderDone,
   openOfficeClose,
   openMechanicFinish,
 }) {
@@ -99,7 +100,7 @@ export function WorkorderDetailSections({
       onAccept: acceptOpenedMechanicWorkorder,
       onApprove: openOfficeClose,
       onCancel: openOfficeCancel,
-      onMarkDone: openMechanicFinish,
+      onMarkDone: isOfficeDetail ? markOfficeWorkorderDone : openMechanicFinish,
       onRequestChanges: openOfficeReturn,
       onSelect: setDetailSection,
       workorder: { ...activeWorkorder.workorder, formData: form },

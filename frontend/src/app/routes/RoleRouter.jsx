@@ -329,6 +329,7 @@ export function RoleRouter({ actor }) {
   const {
     cancelOfficeWorkorder,
     closeOfficeWorkorder,
+    markOfficeWorkorderDone,
     openOfficeCancel,
     openOfficeReturn,
     returnOfficeWorkorder,
@@ -464,7 +465,7 @@ export function RoleRouter({ actor }) {
         previewFullscreen, previewGridRef, previewPanelOpen, previewRef, previewSerials,
         printMenuOpen, printState, primaryActionLabel, range, selectedVehicle,
         supportingView, vehicleLookup, workorderCountLabel, applyVehicle,
-        acceptOpenedMechanicWorkorder, cancelOfficeWorkorder, closeOfficeWorkorder,
+        acceptOpenedMechanicWorkorder, cancelOfficeWorkorder, closeOfficeWorkorder, markOfficeWorkorderDone,
         jumpToPreview, openFullscreenPreview, openOfficeCancel, openOfficeReturn,
         onLocaleChange: interfacePreferences.saveLocale, printWorkorders, reloadActiveWorkorder,
         returnOfficeWorkorder, returnToRoleWorkspace, saveActiveUsedParts, saveOfficeWorkorder,

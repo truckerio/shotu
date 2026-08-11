@@ -74,6 +74,21 @@ test("generic action routes assignment through authenticated actor after module 
   assert.equal(result[1].officeUserId, "actor-1");
 });
 
+test("office Work done uses the shared completion transition with the authenticated office actor", async () => {
+  const calls = [];
+  const result = await runWorkorderModuleAction(context, "wo-1", "completion", "markWorkDone", {
+    diagnosis: "Found an oil leak",
+    workPerformed: "Replaced the oil filter",
+  }, {
+    authorize: async (...args) => calls.push(args),
+    markOfficeDone: async (...args) => args,
+    markDone: async () => assert.fail("office must not use the mechanic completion path"),
+  });
+  assert.equal(calls[0][2].action, "markWorkDone");
+  assert.equal(result[1].officeUserId, "actor-1");
+  assert.equal(result[1].workPerformed, "Replaced the oil filter");
+});
+
 test("canonical create derives actor identity and preserves mechanic start semantics", async () => {
   const mechanicContext = {
     actor: { id: "actor-1", role: "mechanic" },

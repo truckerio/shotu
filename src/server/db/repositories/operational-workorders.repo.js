@@ -1436,7 +1436,12 @@ export function updateOfficeUsedParts(workorderId, officeUserId, parts) {
   return updateOperationalUsedParts(workorderId, officeUserId, parts);
 }
 
-export async function markOperationalWorkorderDone(workorderId, mechanicUserId, input) {
+export async function markOperationalWorkorderDone(
+  workorderId,
+  completedByUserId,
+  input,
+  { requireAssignedMechanic = true, statusNote = "Mechanic marked work done." } = {},
+) {
   const pool = getPool();
   const client = await pool.connect();
   try {
@@ -1447,15 +1452,20 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
     );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
-    if (![WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS].includes(workorder.status)) {
+    const eligibleStatuses = requireAssignedMechanic
+      ? [WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS]
+      : [WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS];
+    if (!eligibleStatuses.includes(workorder.status)) {
       throw lifecycleConflict("WORKORDER_NOT_ACTIVE", "Only active work can be marked done.");
     }
-    const assignment = await client.query(
-      `select 1 from workorder_mechanic_assignments
-       where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
-      [workorderId, mechanicUserId],
-    );
-    if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
+    if (requireAssignedMechanic) {
+      const assignment = await client.query(
+        `select 1 from workorder_mechanic_assignments
+         where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
+        [workorderId, completedByUserId],
+      );
+      if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
+    }
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     const nextInput = {
@@ -1483,22 +1493,22 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
             mechanic_done_at = now(),
             updated_at = now()
         where id = $1
-          and exists (
+          ${requireAssignedMechanic ? `and exists (
             select 1 from workorder_mechanic_assignments assignment
             where assignment.workorder_id = operational_workorders.id
               and assignment.mechanic_user_id = $2
               and assignment.active = true
-          )
+          )` : ""}
       `,
-      [workorderId, mechanicUserId, nextInput.diagnosis, nextInput.workPerformed, WORKORDER_STATUS.MECHANIC_DONE]
+      [workorderId, completedByUserId, nextInput.diagnosis, nextInput.workPerformed, WORKORDER_STATUS.MECHANIC_DONE]
     );
-    await addFieldEvents(client, { workorderId, changes: changedFields(before, nextInput), changedByUserId: mechanicUserId });
+    await addFieldEvents(client, { workorderId, changes: changedFields(before, nextInput), changedByUserId: completedByUserId });
     await addStatusEvent(client, {
       workorderId,
       fromStatus: workorder.status,
       toStatus: WORKORDER_STATUS.MECHANIC_DONE,
-      changedByUserId: mechanicUserId,
-      note: "Mechanic marked work done.",
+      changedByUserId: completedByUserId,
+      note: statusNote,
     });
     const activeRevision = await client.query(
       `select 1 from workorder_attention_state
@@ -1510,7 +1520,7 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
         workorderId,
         reason: "revision_requested",
         active: false,
-        actorUserId: mechanicUserId,
+        actorUserId: completedByUserId,
         details: { note: "Requested changes completed." },
       });
     }
