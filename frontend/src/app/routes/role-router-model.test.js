@@ -17,8 +17,9 @@ test("create state has one shared template baseline and mechanic ownership", () 
 
   assert.equal(form.locationId, "yard-1");
   assert.equal(form.mechanicName, "Mechanic One");
+  assert.equal(form.laborHours, "");
   assert.equal(form.headerTitle, baseline.formData.headerTitle);
-  assert.equal(form.parts.length, 1);
+  assert.equal(form.parts.length, 3);
   assert.deepEqual(createDraftBaselineFromForm(form), baseline);
 });
 
@@ -31,6 +32,7 @@ test("create reset preserves location and template while clearing workorder cont
     unitNo: "TRUCK-9",
     mechanicConcern: "Inspect brakes",
     mechanicName: "Old Mechanic",
+    laborHours: "2.5",
     parts: [{ partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" }],
   };
 
@@ -42,7 +44,11 @@ test("create reset preserves location and template while clearing workorder cont
   assert.equal(reset.unitNo, "");
   assert.equal(reset.mechanicConcern, "");
   assert.equal(reset.mechanicName, "");
-  assert.deepEqual(reset.parts, [{ partNo: "", qty: "", uomCode: "pc", repairOrder: "" }]);
+  assert.equal(reset.laborHours, "");
+  assert.equal(reset.parts.length, 3);
+  assert.ok(reset.parts.every((part) => (
+    part.partNo === "" && part.qty === "" && part.uomCode === "pc" && part.repairOrder === ""
+  )));
   assert.equal(reset.workDate, "2026-08-02");
 });
 

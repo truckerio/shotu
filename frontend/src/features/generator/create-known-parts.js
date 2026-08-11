@@ -1,5 +1,5 @@
-import { emptyPart } from "../../../../shared/workorder-template.js";
+import { emptyPartRows } from "../../../../shared/workorder-template.js";
 
 export function createInitialKnownParts() {
-  return [emptyPart()];
+  return emptyPartRows();
 }

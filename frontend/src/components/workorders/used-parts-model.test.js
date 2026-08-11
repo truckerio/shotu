@@ -4,6 +4,7 @@ import {
   addUsedPart,
   canEditUsedParts,
   defaultUsedPartQuantity,
+  initialUsedPartRows,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
@@ -14,6 +15,18 @@ import {
 test("zero used parts stay empty until Add part", () => {
   assert.deepEqual(normalizeUsedParts([], 0), []);
   assert.deepEqual(addUsedPart([]), [{ partNo: "", qty: "", uomCode: "pc", repairOrder: "" }]);
+});
+
+test("an editable used-parts surface opens with three blank rows by default", () => {
+  const rows = initialUsedPartRows([]);
+  assert.deepEqual(rows, [
+    { partNo: "", qty: "", uomCode: "pc", repairOrder: "" },
+    { partNo: "", qty: "", uomCode: "pc", repairOrder: "" },
+    { partNo: "", qty: "", uomCode: "pc", repairOrder: "" },
+  ]);
+  assert.equal(initialUsedPartRows([{ partNo: "FILTER", qty: "1" }]).length, 3);
+  assert.equal(addUsedPart(rows, rows.length).length, 4);
+  assert.equal(removeUsedPart(rows, 1, rows.length - 1).length, 2);
 });
 
 test("selected used parts default an empty quantity to one", () => {

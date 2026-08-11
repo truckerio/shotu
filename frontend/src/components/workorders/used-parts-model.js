@@ -1,4 +1,5 @@
 import { DEFAULT_UOM_CODE, normalizeUomCode } from "../../../../shared/units-of-measure.js";
+import { DEFAULT_PART_ENTRY_ROWS } from "../../../../shared/workorder-template.js";
 
 export const MAX_USED_PARTS = 18;
 
@@ -46,13 +47,17 @@ export function normalizeUsedParts(parts, minimumRows = 0) {
   return rows.slice(0, MAX_USED_PARTS);
 }
 
-export function addUsedPart(parts) {
-  const rows = normalizeUsedParts(parts);
+export function initialUsedPartRows(parts, defaultRows = DEFAULT_PART_ENTRY_ROWS) {
+  return normalizeUsedParts(parts, defaultRows);
+}
+
+export function addUsedPart(parts, minimumRows = 0) {
+  const rows = normalizeUsedParts(parts, minimumRows);
   return rows.length >= MAX_USED_PARTS ? rows : [...rows, emptyUsedPart()];
 }
 
 export function removeUsedPart(parts, index, minimumRows = 0) {
-  const rows = normalizeUsedParts(parts);
+  const rows = normalizeUsedParts(parts, Array.isArray(parts) ? parts.length : 0);
   const next = rows.filter((_, rowIndex) => rowIndex !== index);
   return normalizeUsedParts(next, minimumRows);
 }

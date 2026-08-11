@@ -431,7 +431,6 @@ export function RoleRouter({ actor }) {
     mechanicProgressBackupRestoredRef, reloadActiveWorkorder, setForm, setMapsConfig,
     setMechanicAction, setUsedPartsDirty, shouldPreserveActiveWorkorderForm, usedPartsDirty,
   });
-
   return (
     <RoleWorkspaceOutlet
       activeWorkorder={activeWorkorder}

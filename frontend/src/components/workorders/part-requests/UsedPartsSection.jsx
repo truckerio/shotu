@@ -28,7 +28,6 @@ export function UsedPartsSection({
         onSave={onSaveParts}
         disabled={!editable}
         readonlyMessage={readonlyMessage}
-        minimumRows={0}
         suggestionsEnabled={suggestionsEnabled}
       />
     </div>

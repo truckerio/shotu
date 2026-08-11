@@ -9,6 +9,7 @@ import {
   MAX_USED_PARTS,
   addUsedPart,
   defaultUsedPartQuantity,
+  initialUsedPartRows,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
@@ -61,15 +62,14 @@ export function UsedPartsEditor({
   onChange,
   onSave,
   disabled = false,
-  minimumRows = 0,
+  defaultRows,
   suggestionsEnabled = true,
   readonlyMessage = "Used parts are read-only for your role.",
 }) {
-  const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
-  const [visibleRowCount, setVisibleRowCount] = useState(() => normalizeUsedParts(parts, minimum).length);
+  const [visibleRowCount, setVisibleRowCount] = useState(() => initialUsedPartRows(parts, defaultRows).length);
   const rows = useMemo(
-    () => normalizeUsedParts(parts, Math.max(minimum, visibleRowCount)),
-    [minimum, parts, visibleRowCount],
+    () => normalizeUsedParts(parts, visibleRowCount),
+    [parts, visibleRowCount],
   );
   const savePayload = useMemo(
     () => JSON.stringify({ parts: rows, laborHours: String(laborHours || "") }),
@@ -91,7 +91,7 @@ export function UsedPartsEditor({
   }, [onSave]);
 
   useEffect(() => {
-    const currentRows = normalizeUsedParts(parts, minimum);
+    const currentRows = initialUsedPartRows(parts, defaultRows);
     setVisibleRowCount(currentRows.length);
     hydratedRef.current = false;
     persistedRef.current = JSON.stringify({ parts: currentRows, laborHours: String(laborHours || "") });
@@ -106,7 +106,7 @@ export function UsedPartsEditor({
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
       const storedValue = JSON.parse(stored);
-      const recovered = normalizeUsedParts(Array.isArray(storedValue) ? storedValue : storedValue.parts, minimum);
+      const recovered = initialUsedPartRows(Array.isArray(storedValue) ? storedValue : storedValue.parts, defaultRows);
       const recoveredLaborHours = Array.isArray(storedValue) ? laborHours : String(storedValue.laborHours || "");
       setVisibleRowCount(recovered.length);
       if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
@@ -147,13 +147,13 @@ export function UsedPartsEditor({
   }
 
   function addRow() {
-    const next = addUsedPart(rows);
+    const next = addUsedPart(rows, rows.length);
     setVisibleRowCount(next.length);
     onChange(next);
   }
 
   function removeRow(index) {
-    const normalized = removeUsedPart(rows, index, minimum);
+    const normalized = removeUsedPart(rows, index, Math.max(0, rows.length - 1));
     setVisibleRowCount(normalized.length);
     setSelectedCatalogParts((current) => current.filter((_, rowIndex) => rowIndex !== index));
     onChange(normalized);

@@ -59,3 +59,12 @@ test("create workorder uses the location-scoped catalog selector and retains sel
   assert.match(createPartsModule, /qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
   assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
 });
+
+test("create parts show labor first and avoid duplicate visible row numbering", () => {
+  assert.match(createForm, /laborHours:\s*form\.laborHours/);
+  assert.match(createForm, /onFieldChange\("laborHours", value\)/);
+  assert.match(createPartsModule, /\[PTR001\] LABOR HOURS/);
+  assert.match(createPartsModule, /<strong>\{index \+ 2\}<\/strong>/);
+  assert.match(createPartsModule, /label="Part number"/);
+  assert.doesNotMatch(createPartsModule, /label=\{`Part number \$\{index \+ 1\}`\}/);
+});

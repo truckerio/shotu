@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { Button } from "../../../components/ui/Button.jsx";
-import { emptyPart, renderWorkorderPageHtml } from "../../../../../shared/workorder-template.js";
+import { emptyPartRows, renderWorkorderPageHtml } from "../../../../../shared/workorder-template.js";
 
 function previewForm(location, template) {
   return {
@@ -23,7 +23,7 @@ function previewForm(location, template) {
     managerName: "",
     customerSignature: "",
     authorizedBy: "",
-    parts: [emptyPart(), emptyPart(), emptyPart()],
+    parts: emptyPartRows(),
   };
 }
 

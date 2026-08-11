@@ -64,6 +64,7 @@ export function buildWorkorderDraftPayload({
       model: text(form.model),
       vinNo: text(form.vinNo),
       mechanicConcern: text(form.mechanicConcern),
+      laborHours: text(form.laborHours),
       startTime: text(form.startTime),
       endTime: text(form.endTime),
       managerName: text(form.managerName),
@@ -94,6 +95,7 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
     || text(form.model)
     || text(form.vinNo)
     || text(form.mechanicName)
+    || text(form.laborHours)
     || text(form.startTime)
     || text(form.endTime)
     || text(form.managerName)

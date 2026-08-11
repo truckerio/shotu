@@ -1,6 +1,10 @@
 import { DEFAULT_UOM_CODE, formatQuantity, normalizeUomCode } from "./units-of-measure.js";
 
 export const emptyPart = () => ({ partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" });
+export const DEFAULT_PART_ENTRY_ROWS = 3;
+export const emptyPartRows = (count = DEFAULT_PART_ENTRY_ROWS) => (
+  Array.from({ length: Math.max(0, Number(count) || 0) }, emptyPart)
+);
 
 function trimmedText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -59,7 +63,7 @@ function inputPartRows(form) {
     uomCode: "hr",
     repairOrder: String(form.workPerformed || ""),
   }, ...inputParts] : inputParts;
-  return rows.length ? rows : [emptyPart(), emptyPart(), emptyPart()];
+  return rows.length ? rows : emptyPartRows();
 }
 
 export function paginateWorkorderParts(form) {

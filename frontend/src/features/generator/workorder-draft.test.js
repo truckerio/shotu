@@ -158,6 +158,7 @@ test("create autosave round-trips every editable workorder field", () => {
     model: "579",
     vinNo: "1XKWDB0X0XR123456",
     mechanicConcern: "Clutch slips under load",
+    laborHours: "2.5",
     mechanicName: "Mechanic One",
     startTime: "09:15",
     endTime: "11:45",
