@@ -93,7 +93,11 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
     blockers.push(blocker("ODOO_WAREHOUSE_UNMAPPED", "Map this workorder location to an active Odoo warehouse.", "warehouse"));
   }
   if (!customerExternalId) {
-    blockers.push(blocker("ODOO_CUSTOMER_MISSING", "Select an Odoo customer for this service order.", "customerExternalId"));
+    blockers.push(blocker(
+      "ODOO_CUSTOMER_MISSING",
+      "Ask an Admin to map this unit to an Odoo vehicle with a customer, then refresh readiness.",
+      "customerExternalId",
+    ));
   }
   if (!laborHours || laborHours <= 0 || Math.round(laborHours * 100) !== laborHours * 100) {
     blockers.push(blocker("ODOO_LABOR_INVALID", "Enter actual labor hours with no more than two decimal places.", "laborHours"));
@@ -509,6 +513,18 @@ function safeProviderMessage(error) {
     .slice(0, 1000);
 }
 
+function exportedDraftResult(workorderId, exported) {
+  return {
+    workorderId,
+    status: "draft",
+    externalId: String(exported.externalId),
+    serviceOrderNo: exported.serviceOrderNo || "",
+    recordUrl: exported.recordUrl || "",
+    serviceOrderActionId: exported.serviceOrderActionId || "",
+    replayed: true,
+  };
+}
+
 export async function createOdooWorkorderDraft({
   companyId,
   workorderId,
@@ -521,13 +537,7 @@ export async function createOdooWorkorderDraft({
   const readExported = dependencies.readExported || readExportedOdooOutboundOrder;
   const existingExport = await readExported(companyId, parsedWorkorderId);
   if (existingExport?.externalId) {
-    return {
-      workorderId: parsedWorkorderId,
-      status: "draft",
-      externalId: String(existingExport.externalId),
-      serviceOrderNo: existingExport.serviceOrderNo || "",
-      replayed: true,
-    };
+    return exportedDraftResult(parsedWorkorderId, existingExport);
   }
   const { data, configuration } = await readinessContext({ companyId, workorderId: parsedWorkorderId }, dependencies);
   const readiness = evaluateOdooOutboundReadiness(data, { configured: Boolean(configuration) });
@@ -554,13 +564,8 @@ export async function createOdooWorkorderDraft({
     requestId,
   });
   if (claim.replayed) {
-    return {
-      workorderId: parsedWorkorderId,
-      status: "draft",
-      externalId: String(claim.externalId),
-      serviceOrderNo: claim.serviceOrderNo || "",
-      replayed: true,
-    };
+    const exported = await readExported(companyId, parsedWorkorderId);
+    return exportedDraftResult(parsedWorkorderId, exported?.externalId ? exported : claim);
   }
   if (!claim.claimed) {
     if (claim.conflict) {

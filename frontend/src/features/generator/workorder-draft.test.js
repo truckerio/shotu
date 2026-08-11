@@ -55,6 +55,23 @@ test("mechanic creation leaves assignment ownership to the authenticated server"
   assert.equal(payload.concern, "Inspection");
 });
 
+test("direct create derives company ownership from the selected repair location", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: {
+      role: "mechanic",
+      companyIds: ["company-a", "company-b"],
+      companyMemberships: [{ companyId: "company-a" }, { companyId: "company-b" }],
+    },
+    form: { locationId: "location-b", mechanicConcern: "Inspect brakes", parts: [] },
+    selectedLocation: {
+      location: { id: "location-b", company_id: "company-b" },
+    },
+  });
+
+  assert.equal(payload.companyId, "company-b");
+  assert.equal(payload.locationId, "location-b");
+});
+
 test("draft values restore into the controlled create form", () => {
   const restored = formValuesFromWorkorderDraft({
     locationId: "location-2",

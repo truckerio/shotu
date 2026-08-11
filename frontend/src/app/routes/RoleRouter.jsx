@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { readInitialWorkspace, replaceRouteSearch, routeStartsLoading } from "./route-state.js";
 import { roleCapabilities } from "./role-capabilities.js";
-import { activeWorkorderModulePolicy, canOpenCreateWorkspaceForActor } from "./role-router-module-access.js";
+import { activeWorkorderCompanyId, activeWorkorderModulePolicy, canOpenCreateWorkspaceForActor } from "./role-router-module-access.js";
 import { useRoleRouteNavigation } from "./useRoleRouteNavigation.js";
 import { useRoleRouterFormController } from "./useRoleRouterFormController.js";
 import { useRoleRouterCommands } from "./useRoleRouterCommands.js";
@@ -179,6 +179,7 @@ export function RoleRouter({ actor }) {
   } = useVehicleLookupController({
     activeWorkorderId: activeWorkorder?.workorder?.id,
     clearCreateErrors: clearOfficeCreateErrors,
+    companyId: activeWorkorderCompanyId(activeWorkorder, selectedOfficeLocation),
     enabled: workspace === "generator" || Boolean(activeWorkorder),
     form,
     setForm,
@@ -205,7 +206,7 @@ export function RoleRouter({ actor }) {
       }
       : createAssignment
   ), [actor.id, actor.name, actor.role, createAssignment, createMechanicUserIds]);
-  const activeWorkorderPolicy = activeWorkorderModulePolicy({ activeWorkorder, selectedOfficeLocation });
+  const activeWorkorderPolicy = activeWorkorderModulePolicy({ activeWorkorder, actorRole: actor.role, selectedOfficeLocation });
   const canOpenCreateWorkspace = useMemo(
     () => canOpenCreateWorkspaceForActor({ actor, locations: officeLocations }),
     [actor, officeLocations],
@@ -234,7 +235,7 @@ export function RoleRouter({ actor }) {
     form,
     initialBaseline: createInitialDatesRef,
     mechanicUserIds: createMechanicUserIds,
-    selectedVehicle,
+    selectedLocation: selectedOfficeLocation, selectedVehicle,
     restoreDraftVehicle,
     setActiveWorkorder,
     setCreateAssignment,
@@ -272,7 +273,6 @@ export function RoleRouter({ actor }) {
     workorderDraft,
     workspace,
   });
-
   const detailViewModel = useWorkorderDetailViewModel({
     activeWorkorder,
     detailStatus,

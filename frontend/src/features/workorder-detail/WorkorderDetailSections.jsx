@@ -163,7 +163,9 @@ export function WorkorderDetailSections({
       isOfficeDetail,
       locale,
       pendingPartCount,
-      onChanged: reloadActiveWorkorder,
+      onChanged: () => reloadActiveWorkorder({
+        preserveForm: Boolean(isMechanicDetail && mechanicProgress?.hasUnsyncedChanges),
+      }),
       onPartsChange: updateActiveUsedParts,
       onSaveParts: saveActiveUsedParts,
       onSelect: setDetailSection,

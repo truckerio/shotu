@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
@@ -241,6 +242,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
                 </div>
                 <div className="mechanic-secondary-actions">
                   <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
+                  <ProfileMenu actor={actor} mobileAction />
                 </div>
               </section>
             </div>

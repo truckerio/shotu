@@ -152,6 +152,7 @@ test("Odoo service-history read is confirmed-order only, introspected, ordered, 
   const calls = [];
   const allFields = {
     id: {}, name: {}, state: {}, date_order: {}, effective_date: {}, commitment_date: {}, write_date: {},
+    is_service_order: {}, vehicle_id: {},
     order_id: {}, sequence: {}, display_type: {}, product_id: {}, product_uom_qty: {}, product_uom: {},
     default_code: {}, barcode: {}, type: {}, detailed_type: {},
   };
@@ -159,7 +160,14 @@ test("Odoo service-history read is confirmed-order only, introspected, ordered, 
     async execute(model, method, args, kwargs) {
       calls.push({ model, method, args, kwargs });
       if (method === "fields_get") return allFields;
-      if (model === "sale.order") return [{ id: 10, name: "S001", state: "sale", write_date: "2026-08-01T00:00:00Z" }];
+      if (model === "sale.order") return [{
+        id: 10,
+        name: "S001",
+        state: "sale",
+        is_service_order: true,
+        vehicle_id: [77, "FREIGHTLINER/G2116"],
+        write_date: "2026-08-01T00:00:00Z",
+      }];
       if (model === "sale.order.line") return [
         { id: 102, order_id: [10, "S001"], sequence: 20, product_id: [2, "Seal"] },
         { id: 101, order_id: [10, "S001"], sequence: 10, product_id: [1, "Labor"] },
@@ -175,12 +183,15 @@ test("Odoo service-history read is confirmed-order only, introspected, ordered, 
   assert.equal(result.lines.length, 2);
   assert.equal(result.products.length, 2);
   assert.equal(result.activeOrderIds, null);
+  assert.deepEqual(result.orders[0].vehicle_id, [77, "FREIGHTLINER/G2116"]);
   const orderReads = calls.filter((call) => call.model === "sale.order" && call.method === "search_read");
   assert.equal(orderReads.length, 2);
   assert.equal(orderReads[0].args[0][0][0], "write_date");
   assert.match(orderReads[0].args[0][0][2], /^2026-07-30 23:55:00$/);
+  assert.deepEqual(orderReads[0].args[0][1], ["is_service_order", "=", true]);
   assert.deepEqual(orderReads[1].args[0][0], ["id", "in", [10]]);
   assert.deepEqual(orderReads[1].args[0][1], ["state", "in", ["sale", "done"]]);
+  assert.deepEqual(orderReads[1].args[0][2], ["is_service_order", "=", true]);
   assert.equal(orderReads[0].kwargs.order, "id asc");
   assert.equal(orderReads[0].kwargs.limit, 500);
   assert.ok(calls.filter((call) => call.method === "search_read").every((call) => call.args[0].some((term) => term[0] === "id" && term[1] === ">")));
@@ -190,6 +201,7 @@ test("incremental Odoo history reloads an order when only a line write date chan
   const calls = [];
   const fields = {
     id: {}, name: {}, state: {}, write_date: {}, order_id: {}, sequence: {},
+    is_service_order: {}, vehicle_id: {},
     product_id: {}, display_type: {}, product_uom_qty: {}, product_uom: {}, detailed_type: {}, default_code: {},
   };
   const client = {
@@ -199,7 +211,7 @@ test("incremental Odoo history reloads an order when only a line write date chan
       const domain = args[0] || [];
       if (model === "sale.order") {
         if (domain.some((term) => term[0] === "write_date")) return [];
-        return [{ id: 10, name: "S001", state: "sale", write_date: "2026-08-01 00:00:00" }];
+        return [{ id: 10, name: "S001", state: "sale", is_service_order: true, write_date: "2026-08-01 00:00:00" }];
       }
       if (model === "sale.order.line") {
         if (domain.some((term) => term[0] === "write_date")) {
@@ -218,12 +230,12 @@ test("incremental Odoo history reloads an order when only a line write date chan
     && call.args[0].some((term) => term[0] === "write_date")));
 });
 
-test("periodic Odoo reconciliation reloads all active orders and returns their complete identity set", async () => {
-  const fields = { id: {}, name: {}, state: {}, write_date: {}, order_id: {} };
+test("periodic Odoo reconciliation reloads all active service orders and returns their complete identity set", async () => {
+  const fields = { id: {}, name: {}, state: {}, write_date: {}, order_id: {}, is_service_order: {}, vehicle_id: {} };
   const client = {
     async execute(model, method) {
       if (method === "fields_get") return fields;
-      if (model === "sale.order") return [{ id: 10, name: "S001", state: "sale" }];
+      if (model === "sale.order") return [{ id: 10, name: "S001", state: "sale", is_service_order: true }];
       if (model === "sale.order.line") return [];
       return [];
     },
@@ -234,6 +246,37 @@ test("periodic Odoo reconciliation reloads all active orders and returns their c
   });
   assert.deepEqual(result.orders.map((order) => order.id), [10]);
   assert.deepEqual(result.activeOrderIds, ["10"]);
+});
+
+test("Odoo history fails closed instead of importing ordinary sales when the service-order flag is unavailable", async () => {
+  const client = {
+    async execute(model, method) {
+      if (method === "fields_get") return { id: {}, state: {}, order_id: {} };
+      assert.fail(`history must not read ${model} without a service-order discriminator`);
+    },
+  };
+  await assert.rejects(
+    () => readOdooServiceHistory(client),
+    /missing the required is_service_order service-order field/,
+  );
+});
+
+test("Odoo history defensively excludes ordinary sales from a mixed provider response", async () => {
+  const fields = { id: {}, name: {}, state: {}, order_id: {}, is_service_order: {}, vehicle_id: {} };
+  const client = {
+    async execute(model, method) {
+      if (method === "fields_get") return fields;
+      if (model === "sale.order") return [
+        { id: 10, name: "S001", state: "sale", is_service_order: false },
+        { id: 11, name: "SR001", state: "sale", is_service_order: true },
+      ];
+      if (model === "sale.order.line") return [];
+      return [];
+    },
+  };
+  const result = await readOdooServiceHistory(client, { reconcile: true });
+  assert.deepEqual(result.orders.map((order) => order.id), [11]);
+  assert.deepEqual(result.activeOrderIds, ["11"]);
 });
 
 test("inventory sync isolates optional service-history permission failures", async () => {
@@ -250,5 +293,9 @@ test("Odoo history schema preserves all lines while materialized relationships r
   assert.match(migration, /service_history_lines_order_sequence_idx/i);
   assert.match(repository, /relationship:\s*"same_order_context"/i);
   assert.match(repository, /'context'/i);
+  assert.match(repository, /from odoo_vehicles[\s\S]*mapping_status = 'mapped'[\s\S]*app_asset_id is not null/i);
+  assert.match(repository, /asset_external_id:\s*assetExternalId/i);
+  assert.match(repository, /asset_id = excluded\.asset_id/i);
+  assert.match(repository, /normalized_part_number, asset_id, repair_text/i);
   assert.doesNotMatch(repository, /lineDistance[^\n]+confirmed/i);
 });

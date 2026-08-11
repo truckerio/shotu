@@ -211,6 +211,26 @@ test("chat posts through the mechanic route and reloads the shared detail", asyn
   ]);
 });
 
+test("chat refresh preserves unsynced mechanic progress after the message commits", async () => {
+  const { actions, calls } = actionHarness({
+    mechanicProgress: {
+      flush: async () => {},
+      hasUnsyncedChanges: true,
+      reset: () => {},
+      status: "dirty",
+    },
+  });
+
+  assert.equal(await actions.sendWorkorderChat({
+    body: "Photo and update sent",
+    clientMessageId: "client-message-2",
+  }), true);
+  const apiIndex = calls.findIndex(([name]) => name === "api");
+  const loadIndex = calls.findIndex(([name]) => name === "load");
+  assert.ok(apiIndex >= 0 && loadIndex > apiIndex);
+  assert.equal(calls.some(([name]) => name === "form"), false);
+});
+
 test("detail reload preserves an actively edited form when requested", async () => {
   const { actions, calls } = actionHarness();
   await actions.reloadActiveWorkorder({ preserveForm: true });

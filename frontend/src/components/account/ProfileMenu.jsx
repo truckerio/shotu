@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ChevronDown, Key01, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
 import { Button, Dialog, DialogTrigger, Popover, Separator } from "react-aria-components";
 import { useKioskSession } from "../../features/kiosk/KioskSessionContext.jsx";
+import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import { authClient } from "../../lib/auth-client.js";
 import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
 import { PasskeyManager } from "./PasskeyManager.jsx";
@@ -27,8 +28,12 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
   const signOut = useCallback(async () => {
-    await authClient.signOut();
-    window.location.replace("/");
+    try {
+      await authClient.signOut();
+    } finally {
+      purgeMechanicWorkStorage();
+      window.location.replace("/");
+    }
   }, []);
 
   const menuActions = useMemo(() => {

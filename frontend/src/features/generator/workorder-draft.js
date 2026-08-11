@@ -24,11 +24,20 @@ export function buildWorkorderDraftPayload({
   actor,
   form,
   mechanicUserIds = [],
+  selectedLocation = null,
   selectedVehicle,
 }) {
   const isMechanicCreate = actor.role === "mechanic";
+  const selectedCompanyId = selectedLocation?.location?.company_id
+    || selectedLocation?.location?.companyId
+    || selectedLocation?.company_id
+    || selectedLocation?.companyId
+    || "";
   return {
-    companyId: actor.companyMemberships?.[0]?.companyId || actor.companyIds?.[0] || "",
+    companyId: selectedCompanyId
+      || actor.companyMemberships?.[0]?.companyId
+      || actor.companyIds?.[0]
+      || "",
     locationId: form.locationId || actor.locationIds?.[0] || null,
     assetId: selectedVehicle?.id || null,
     concern: text(form.mechanicConcern),

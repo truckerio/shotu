@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 
-import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
 import { canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
 import { api } from "../../lib/api.js";
@@ -21,10 +20,6 @@ export function useRoleRouterLifecycleEffects({
   shouldPreserveActiveWorkorderForm,
   usedPartsDirty,
 }) {
-  useEffect(() => () => {
-    if (actor.role === "mechanic") purgeMechanicWorkStorage();
-  }, [actor.id, actor.role]);
-
   useEffect(() => {
     const workorderId = activeWorkorder?.workorder?.id;
     const backup = mechanicProgress.backup;

@@ -190,7 +190,7 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   const decisionRoute = partDecisionPath(url.pathname);
   if (req.method === "POST" && decisionRoute) {
     const input = decidePartRequestSchema.parse(await readBody(req));
-    const action = input.decision === "declined" ? "decline" : "approve";
+    const action = input.decision === "rejected" ? "decline" : "approve";
     sendJson(res, 200, { partRequest: await runAction(requestContext, decisionRoute.workorderId, "parts", action, {
       ...input, requestId: decisionRoute.requestId,
     }) });

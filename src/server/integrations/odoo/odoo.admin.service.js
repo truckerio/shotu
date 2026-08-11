@@ -29,6 +29,7 @@ const MAX_HISTORY_ORDERS = 100_000;
 const MAX_HISTORY_LINES = 500_000;
 const MAX_HISTORY_PRODUCTS = 100_000;
 const ELIGIBLE_HISTORY_STATES = new Set(["sale", "done"]);
+const ODOO_SERVICE_ORDER_FIELD = "is_service_order";
 const HISTORY_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 
 async function supportedFields(client, model, candidates) {
@@ -74,7 +75,12 @@ async function pagedSearchRead(client, model, domain, fields, maxRecords) {
 export async function readOdooServiceHistory(client, { updatedSince = null, reconcile = false } = {}) {
   const orderFields = await supportedFields(client, "sale.order", [
     "id", "name", "state", "date_order", "effective_date", "commitment_date", "write_date",
+    ODOO_SERVICE_ORDER_FIELD, "vehicle_id",
   ]);
+  if (!orderFields.includes(ODOO_SERVICE_ORDER_FIELD)) {
+    throw new Error(`Odoo sale.order is missing the required ${ODOO_SERVICE_ORDER_FIELD} service-order field.`);
+  }
+  const serviceOrderDomain = [[ODOO_SERVICE_ORDER_FIELD, "=", true]];
   const lineFields = await supportedFields(client, "sale.order.line", [
     "id", "order_id", "sequence", "display_type", "product_id", "name",
     "product_uom_qty", "product_uom", "write_date",
@@ -85,14 +91,20 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
     orders = await pagedSearchRead(
       client,
       "sale.order",
-      [["state", "in", [...ELIGIBLE_HISTORY_STATES]]],
+      [["state", "in", [...ELIGIBLE_HISTORY_STATES]], ...serviceOrderDomain],
       orderFields,
       MAX_HISTORY_ORDERS,
     );
   } else {
     const overlap = odooDateTime(new Date(new Date(updatedSince).valueOf() - 5 * 60_000));
     const changedOrders = overlap && orderFields.includes("write_date")
-      ? await pagedSearchRead(client, "sale.order", [["write_date", ">=", overlap]], orderFields, MAX_HISTORY_ORDERS)
+      ? await pagedSearchRead(
+        client,
+        "sale.order",
+        [["write_date", ">=", overlap], ...serviceOrderDomain],
+        orderFields,
+        MAX_HISTORY_ORDERS,
+      )
       : [];
     const changedLines = overlap && lineFields.includes("write_date")
       ? await pagedSearchRead(
@@ -112,12 +124,13 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
       orders.push(...await pagedSearchRead(
         client,
         "sale.order",
-        [["id", "in", orderIds], ["state", "in", [...ELIGIBLE_HISTORY_STATES]]],
+        [["id", "in", orderIds], ["state", "in", [...ELIGIBLE_HISTORY_STATES]], ...serviceOrderDomain],
         orderFields,
         MAX_HISTORY_ORDERS - orders.length,
       ));
     }
   }
+  orders = orders.filter((order) => order[ODOO_SERVICE_ORDER_FIELD] === true);
   const activeOrderIds = fullHistoryRead ? orders.map((order) => String(order.id)) : null;
   if (!orders.length) return { orders: [], lines: [], products: [], activeOrderIds };
 

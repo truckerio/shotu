@@ -16,3 +16,16 @@ export function vehicleModelText(vehicle = {}) {
     })
     .join(" ");
 }
+
+export function vehicleCompanyId(vehicle = {}) {
+  return String(vehicle.company_id || vehicle.companyId || "").trim();
+}
+
+export function vehicleBelongsToCompany(vehicle, companyId) {
+  const expectedCompanyId = String(companyId || "").trim();
+  return !expectedCompanyId || vehicleCompanyId(vehicle) === expectedCompanyId;
+}
+
+export function vehiclesForCompany(vehicles = [], companyId = "") {
+  return vehicles.filter((vehicle) => vehicleBelongsToCompany(vehicle, companyId));
+}

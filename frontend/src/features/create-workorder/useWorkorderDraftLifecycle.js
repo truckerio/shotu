@@ -19,6 +19,7 @@ export function useWorkorderDraftLifecycle({
   form,
   initialBaseline,
   mechanicUserIds,
+  selectedLocation,
   selectedVehicle,
   restoreDraftVehicle,
   setActiveWorkorder,
@@ -44,8 +45,9 @@ export function useWorkorderDraftLifecycle({
     actor,
     form,
     mechanicUserIds,
+    selectedLocation,
     selectedVehicle,
-  }), [actor, form, mechanicUserIds, selectedVehicle]);
+  }), [actor, form, mechanicUserIds, selectedLocation, selectedVehicle]);
   const meaningful = workspace === "generator"
     && !activeWorkorder
     && canManageDrafts

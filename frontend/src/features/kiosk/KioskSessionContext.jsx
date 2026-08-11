@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { authClient } from "../../lib/auth-client.js";
 import { api } from "../../lib/api.js";
+import { purgeMechanicWorkStorage } from "../mechanic/progress/mechanic-work-storage.js";
 import { KIOSK_ACTIVITY_EVENTS, KIOSK_IDLE_TIMEOUT_MS } from "./kiosk-utils.js";
 
 const KioskSessionContext = createContext(null);
@@ -35,6 +36,7 @@ export function KioskSessionProvider({
     try {
       await authClient.signOut();
     } finally {
+      purgeMechanicWorkStorage();
       window.location.replace("/");
     }
   }, [leaving]);

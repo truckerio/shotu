@@ -53,7 +53,7 @@ test("office workorder mutations declare their canonical module actions", () => 
   }
 
   assert.match(officeSource, /patchModules\([\s\S]{0,180}?moduleKeys\.map/);
-  assert.match(officeSource, /const action = input\.decision === "declined" \? "decline" : "approve"/);
+  assert.match(officeSource, /const action = input\.decision === "rejected" \? "decline" : "approve"/);
   assert.match(officeSource, /"chat", input\.attachment \? "attach" : "send"/);
   assert.match(officeSource, /createRuntime\(requestContext, input, rawInput\)/);
 });

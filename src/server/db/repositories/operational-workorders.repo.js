@@ -1720,6 +1720,21 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
     if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
       throw lifecycleConflict("WORKORDER_NOT_READY_FOR_APPROVAL", "Only workorders ready for Manager review can be approved.");
     }
+    const pendingParts = await client.query(
+      `select id
+       from workorder_part_requests
+       where workorder_id = $1
+         and approval_status in ('submitted', 'needs_info')
+       order by id
+       for update`,
+      [workorderId],
+    );
+    if (pendingParts.rows.length) {
+      throw lifecycleConflict(
+        "WORKORDER_PARTS_PENDING",
+        "Review all pending part requests before approving this workorder.",
+      );
+    }
     await client.query(
       `
         update operational_workorders

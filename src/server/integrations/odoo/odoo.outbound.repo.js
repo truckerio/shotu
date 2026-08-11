@@ -10,6 +10,7 @@ import {
   integrationConflict,
   integrationNotFound,
 } from "../core/integration-errors.js";
+import { publicOdooRecordUrl } from "./odoo.navigation.js";
 
 function publicPreparation(row) {
   return row ? {
@@ -411,17 +412,43 @@ export async function claimOdooOutboundOrder({
 export async function readExportedOdooOutboundOrder(companyId, workorderId) {
   const tenantId = requireCompanyId(companyId);
   const result = await query(
-    `select external_id, external_number
-     from odoo_outbound_orders
-     where company_id = $1 and workorder_id = $2 and state = 'exported'
+    `select outbound.external_id, outbound.external_number, outbound.target_model,
+            settings.service_action_external_id,
+            settings.service_action_base_url,
+            settings.service_action_database,
+            credential.metadata
+     from odoo_outbound_orders outbound
+     left join odoo_service_order_settings settings
+       on settings.company_id = outbound.company_id
+     left join integration_credentials credential
+       on credential.company_id = outbound.company_id
+      and credential.integration_account_id = settings.integration_account_id
+      and credential.credential_kind = 'api'
+     where outbound.company_id = $1 and outbound.workorder_id = $2 and outbound.state = 'exported'
      limit 1`,
     [tenantId, workorderId],
   );
   const row = result.rows[0];
-  return row ? {
+  if (!row) return null;
+  const metadataBaseUrl = String(row.metadata?.baseUrl || "").replace(/\/+$/, "");
+  const actionBaseUrl = String(row.service_action_base_url || "").replace(/\/+$/, "");
+  const actionMatchesCredential = Boolean(
+    metadataBaseUrl
+    && metadataBaseUrl === actionBaseUrl
+    && String(row.metadata?.database || "") === String(row.service_action_database || ""),
+  );
+  const serviceOrderActionId = actionMatchesCredential ? row.service_action_external_id || "" : "";
+  return {
     externalId: row.external_id,
     serviceOrderNo: row.external_number,
-  } : null;
+    recordUrl: publicOdooRecordUrl({
+      baseUrl: metadataBaseUrl,
+      externalId: row.external_id,
+      model: row.target_model || "sale.order",
+      actionId: serviceOrderActionId,
+    }),
+    serviceOrderActionId,
+  };
 }
 
 export async function updateOdooOutboundPayload(companyId, workorderId, payloadSnapshot) {

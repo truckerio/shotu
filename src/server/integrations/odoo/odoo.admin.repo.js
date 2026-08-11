@@ -1069,6 +1069,18 @@ export async function importOdooServiceHistory(companyId, {
       [tenantId],
     );
     const mappings = new Map(mappingResult.rows.map((row) => [row.external_id, row]));
+    const vehicleMappingResult = await client.query(
+      `select external_id, app_asset_id
+       from odoo_vehicles
+       where company_id = $1
+         and mapping_status = 'mapped'
+         and active = true
+         and app_asset_id is not null`,
+      [tenantId],
+    );
+    const vehicleMappings = new Map(
+      vehicleMappingResult.rows.map((row) => [String(row.external_id), row.app_asset_id]),
+    );
     const historyOrderIds = new Map();
     let removedCount = 0;
     if (Array.isArray(activeOrderIds)) {
@@ -1089,31 +1101,38 @@ export async function importOdooServiceHistory(companyId, {
         historyRemovedCount: removedCount,
       };
     }
-    const orderRows = orders.map((order) => ({
-      external_id: String(order.id),
-      reference: order.name || `Odoo ${order.id}`,
-      status: order.state || "",
-      ordered_at: order.date_order || null,
-      completed_at: order.effective_date || order.commitment_date || null,
-      source_updated_at: order.write_date || null,
-      raw_metadata: order,
-    }));
+    const orderRows = orders.map((order) => {
+      const assetExternalId = relationId(order.vehicle_id);
+      return {
+        external_id: String(order.id),
+        reference: order.name || `Odoo ${order.id}`,
+        status: order.state || "",
+        asset_id: vehicleMappings.get(assetExternalId) || null,
+        asset_external_id: assetExternalId,
+        ordered_at: order.date_order || null,
+        completed_at: order.effective_date || order.commitment_date || null,
+        source_updated_at: order.write_date || null,
+        raw_metadata: order,
+      };
+    });
     const savedOrders = await client.query(
       `insert into service_history_orders (
          company_id, source_provider, external_id, reference, status,
-         ordered_at, completed_at, source_updated_at, raw_metadata,
+         asset_id, asset_external_id, ordered_at, completed_at, source_updated_at, raw_metadata,
          last_seen_at, updated_at
        )
        select $1, 'odoo', source.external_id, source.reference, source.status,
-              source.ordered_at, source.completed_at, source.source_updated_at,
+              source.asset_id, source.asset_external_id, source.ordered_at, source.completed_at, source.source_updated_at,
               source.raw_metadata, now(), now()
        from jsonb_to_recordset($2::jsonb) as source(
-         external_id text, reference text, status text, ordered_at timestamptz,
+         external_id text, reference text, status text, asset_id uuid, asset_external_id text, ordered_at timestamptz,
          completed_at timestamptz, source_updated_at timestamptz, raw_metadata jsonb
        )
        on conflict (company_id, source_provider, external_id) do update
        set reference = excluded.reference,
            status = excluded.status,
+           asset_id = excluded.asset_id,
+           asset_external_id = excluded.asset_external_id,
            ordered_at = excluded.ordered_at,
            completed_at = excluded.completed_at,
            source_updated_at = excluded.source_updated_at,
@@ -1137,6 +1156,7 @@ export async function importOdooServiceHistory(companyId, {
     for (const order of orders) {
       const orderExternalId = String(order.id);
       const serviceOrderId = historyOrderIds.get(orderExternalId);
+      const assetId = vehicleMappings.get(relationId(order.vehicle_id)) || null;
       const orderLines = (groupedLines.get(orderExternalId) || [])
         .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0) || Number(left.id) - Number(right.id));
       await client.query(
@@ -1219,6 +1239,7 @@ export async function importOdooServiceHistory(companyId, {
             occurrence_key: occurrenceKey,
             catalog_part_id: partLine.mapping?.catalog_part_id || null,
             normalized_part_number: partLine.mapping?.normalized_part_number || normalizePartNumber(partLine.partNumber),
+            asset_id: assetId,
             repair_text: repairLine.repairText,
             used_at: order.effective_date || order.commitment_date || order.date_order || order.write_date || null,
             evidence: {
@@ -1236,15 +1257,15 @@ export async function importOdooServiceHistory(companyId, {
         await client.query(
           `insert into part_repair_history (
              company_id, service_order_id, source_provider, occurrence_key,
-             catalog_part_id, normalized_part_number, repair_text, confidence,
+             catalog_part_id, normalized_part_number, asset_id, repair_text, confidence,
              used_at, evidence
            )
            select $1, $2, 'odoo', source.occurrence_key, source.catalog_part_id,
-                  source.normalized_part_number, source.repair_text, 'context',
+                  source.normalized_part_number, source.asset_id, source.repair_text, 'context',
                   source.used_at, source.evidence
            from jsonb_to_recordset($3::jsonb) as source(
              occurrence_key text, catalog_part_id uuid, normalized_part_number text,
-             repair_text text, used_at timestamptz, evidence jsonb
+             asset_id uuid, repair_text text, used_at timestamptz, evidence jsonb
            )`,
           [tenantId, serviceOrderId, JSON.stringify(contextRows)],
         );

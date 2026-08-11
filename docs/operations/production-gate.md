@@ -139,6 +139,20 @@ event-loop delay, PostgreSQL connections, query latency, and error rate.
 
 ## 5. Role Walkthrough
 
+Run the disposable or approved-staging role workflow before the manual
+walkthrough:
+
+```bash
+npm run test:role-workflow
+```
+
+That workflow creates application workorders and stops after canonical Odoo
+readiness. It does not create a provider draft. When Odoo outbound code or
+configuration changes, separately create one explicitly approved draft in the
+intended Odoo staging database, then verify its vehicle, mileage, warehouse,
+marker, service-order link, and application tracking record before production
+cutover.
+
 Verify desktop and phone widths with real sessions:
 
 - **Admin:** Operations, Drafts, Locations, Settings, user administration,
@@ -146,10 +160,12 @@ Verify desktop and phone widths with real sessions:
 - **Office:** queues, owned drafts, creation, assignment, chat, part decisions,
   review, print, and close.
 - **Mechanic:** My jobs, New jobs, Waiting, Finished, assignment acceptance,
-  progress autosave, chat/part request, and completion. Mechanics must not see
-  workorder creation or office/admin drafts.
-- **Surveillance:** completed queue, read-only workorder detail, and Odoo
-  service-order entry.
+  progress autosave, chat/part request, completion, and direct workorder
+  creation. Mechanic-created workorders are self-assigned operational records;
+  mechanics must not see office/admin creation drafts.
+- **Surveillance:** completed queue, read-only workorder detail, canonical Odoo
+  readiness/blockers, explicit draft creation in an approved Odoo staging run,
+  and persisted service-order number/link after creation.
 
 At each width, require:
 

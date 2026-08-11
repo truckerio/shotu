@@ -7,7 +7,13 @@ import {
   uniqueExactVehicleMatch,
   vehicleLookupValues,
 } from "./create-workorder-utils.js";
-import { vehicleMileage, vehicleModelText } from "./vehicle-lookup-model.js";
+import {
+  vehicleBelongsToCompany,
+  vehicleCompanyId,
+  vehicleMileage,
+  vehicleModelText,
+  vehiclesForCompany,
+} from "./vehicle-lookup-model.js";
 import { selectedVehicleFromWorkorderDraft } from "../generator/workorder-draft.js";
 
 const EMPTY_LOOKUP = Object.freeze({ loading: false, status: "", results: [] });
@@ -15,6 +21,7 @@ const EMPTY_LOOKUP = Object.freeze({ loading: false, status: "", results: [] });
 export function useVehicleLookupController({
   activeWorkorderId,
   clearCreateErrors,
+  companyId = "",
   enabled,
   form,
   setForm,
@@ -24,11 +31,13 @@ export function useVehicleLookupController({
   const locationBackoffUntilRef = useRef(0);
   const detailLocationRefreshRef = useRef("");
   const formRef = useRef(form);
+  const companyIdRef = useRef(companyId);
   const selectedVehicleRef = useRef(null);
   const applyVehicleRef = useRef(null);
   const [vehicleLookup, setVehicleLookup] = useState(EMPTY_LOOKUP);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   formRef.current = form;
+  companyIdRef.current = companyId;
   selectedVehicleRef.current = selectedVehicle;
 
   const refreshVehicleLocation = useCallback(async (vehicle = selectedVehicleRef.current) => {
@@ -62,6 +71,14 @@ export function useVehicleLookupController({
   }, []);
 
   const applyVehicle = useCallback((vehicle) => {
+    if (!vehicleBelongsToCompany(vehicle, companyIdRef.current)) {
+      setVehicleLookup({
+        loading: false,
+        status: "Select a vehicle owned by the same company as the repair location.",
+        results: [],
+      });
+      return false;
+    }
     const currentForm = formRef.current;
     const modelText = vehicleModelText(vehicle);
     clearCreateErrors("unitNo", ...(vehicle.owner_name ? ["customerCompanyName"] : []));
@@ -83,6 +100,7 @@ export function useVehicleLookupController({
     });
     setSelectedVehicle(vehicle);
     refreshVehicleLocation(vehicle);
+    return true;
   }, [clearCreateErrors, refreshVehicleLocation, setForm, stageAutosave]);
   applyVehicleRef.current = applyVehicle;
 
@@ -103,7 +121,7 @@ export function useVehicleLookupController({
       api(`/api/vehicles/search?q=${encodeURIComponent(query)}&limit=8`, { timeoutMs: 10_000 })
         .then((result) => {
           if (cancelled) return;
-          const vehicles = result.vehicles || [];
+          const vehicles = vehiclesForCompany(result.vehicles || [], companyIdRef.current);
           const exactMatch = uniqueExactVehicleMatch(vehicles, query);
           if (exactMatch) {
             applyVehicleRef.current(exactMatch);
@@ -124,6 +142,20 @@ export function useVehicleLookupController({
       window.clearTimeout(timer);
     };
   }, [form.unitNo, selectedVehicle]);
+
+  useEffect(() => {
+    if (
+      !selectedVehicle
+      || !vehicleCompanyId(selectedVehicle)
+      || vehicleBelongsToCompany(selectedVehicle, companyId)
+    ) return;
+    setSelectedVehicle(null);
+    setVehicleLookup({
+      loading: false,
+      status: "Vehicle cleared because the repair location belongs to a different company.",
+      results: [],
+    });
+  }, [companyId, selectedVehicle]);
 
   useEffect(() => {
     if (!activeWorkorderId || !selectedVehicle?.id) {
@@ -154,6 +186,15 @@ export function useVehicleLookupController({
     if (!snapshot?.id) return;
     try {
       const result = await api(`/api/vehicles/${encodeURIComponent(snapshot.id)}`);
+      if (!vehicleBelongsToCompany(result.vehicle, companyIdRef.current)) {
+        setSelectedVehicle(null);
+        setVehicleLookup({
+          loading: false,
+          status: "The saved vehicle does not belong to the selected repair-location company.",
+          results: [],
+        });
+        return;
+      }
       setSelectedVehicle((current) => current?.id === snapshot.id ? result.vehicle : current);
       refreshVehicleLocation(result.vehicle);
     } catch (error) {

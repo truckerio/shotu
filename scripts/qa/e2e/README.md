@@ -10,12 +10,20 @@ roles.
 2. Office assigns the deterministic mechanic and verifies assigned access.
 3. Office returns it to the available queue; the mechanic accepts it and a
    duplicate accept is rejected.
-4. Mechanic sends chat and requests a part.
-5. Mechanic marks work done.
-6. Office closes the workorder.
-7. Surveillance verifies the Odoo backlog and marks it entered.
-8. Office, mechanic, and surveillance are denied access to another location's
+4. Mechanic sends chat and requests a synthetic part.
+5. Office rejects that synthetic request so the acceptance run never reserves
+   or consumes inventory.
+6. Mechanic marks work done.
+7. Office closes the workorder.
+8. Surveillance verifies the Odoo backlog and reads canonical Odoo readiness.
+9. Office, mechanic, and surveillance are denied access to another location's
    workorder, and cross-role API permissions are checked.
+
+This disposable workflow deliberately stops at Odoo readiness. It records
+whether the workorder is ready or which stable blocker codes explain missing
+setup, but it never creates a provider draft. Draft creation requires a
+separate explicitly approved Odoo staging acceptance run; the workflow never
+invents a service-order number when no provider is configured.
 
 Office assignment already changes lifecycle from `open` to `accepted`; the API
 does not support accepting an already assigned workorder. The assign/unassign
@@ -57,8 +65,8 @@ export QA_E2E_CONFIRM_REMOTE_WRITES='RUN_ROLE_WORKFLOW'
 ```
 
 `DATABASE_URL` must point to the same isolated database used by
-`QA_E2E_BASE_URL`. The test leaves its completed, uniquely tagged workorder in
-the audit trail and cancels the restricted-location fixture.
+`QA_E2E_BASE_URL`. The test leaves its closed, uniquely tagged workorder in the
+Odoo-readiness backlog and cancels the restricted-location fixture.
 
 ## Verification
 

@@ -95,6 +95,7 @@ export function WorkorderDetailPage({
   officeDetailState,
   officeLocations,
   pendingPartCount,
+  policyOverrides,
   previewFullscreen,
   previewGridRef,
   previewPanelOpen,
@@ -171,11 +172,11 @@ export function WorkorderDetailPage({
     WORKORDER_MODULE_IDS.ODOO,
   ].map((moduleId) => [moduleId, resolveWorkorderModulePolicy({
     moduleId,
-    overrides: activeWorkorder.policy,
+    overrides: policyOverrides,
     role: actor.role,
     surface: WORKORDER_SURFACES.DETAIL,
     userId: actor.id,
-  })])), [activeWorkorder.policy, actor.id, actor.role]);
+  })])), [actor.id, actor.role, policyOverrides]);
   const unitPolicy = modulePolicies[WORKORDER_MODULE_IDS.UNIT];
   const locationPolicy = modulePolicies[WORKORDER_MODULE_IDS.LOCATION];
   const schedulePolicy = modulePolicies[WORKORDER_MODULE_IDS.SCHEDULE];
@@ -202,12 +203,12 @@ export function WorkorderDetailPage({
   const visibleDetailSections = useMemo(
     () => {
       if (isCompact) return buildCompactPhoneDetailSections(detailSections, actor.role, {
-        policyOverrides: activeWorkorder.policy,
+        policyOverrides,
         userId: actor.id,
       });
       return detailSections;
     },
-    [activeWorkorder.policy, actor.id, actor.role, detailSections, isCompact],
+    [actor.id, actor.role, detailSections, isCompact, policyOverrides],
   );
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"

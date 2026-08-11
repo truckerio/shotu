@@ -7,6 +7,7 @@ import {
   workorderDetailSearch,
 } from "./route-state.js";
 import { workorderDraftOwnerId, workorderFormValues } from "./role-router-model.js";
+import { projectedModuleAccessPolicy } from "./role-router-module-access.js";
 import {
   allowedDetailSection,
   buildWorkorderDetailSections,
@@ -63,7 +64,7 @@ export function requestedAllowedDetailSection({
     isCompact,
     isMechanicDetail,
     isOfficeDetail,
-    policyOverrides: detail?.policy,
+    policyOverrides: projectedModuleAccessPolicy(detail?.moduleAccess, role) || detail?.policy,
     pendingPartCount: pendingPartRequestCount(detail),
     role,
     timelineCount: timelineEventCount(detail?.timeline),

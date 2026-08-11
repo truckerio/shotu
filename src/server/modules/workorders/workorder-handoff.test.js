@@ -7,6 +7,7 @@ import { cancelWorkorderSchema, returnWorkorderSchema } from "./workorder.schema
 
 const migrationUrl = new URL("../../db/migrations/039_workorder_handoff.sql", import.meta.url);
 const repositoryUrl = new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url);
+const partRequestRepositoryUrl = new URL("../../db/repositories/part-requests.repo.js", import.meta.url);
 
 test("handoff mutation inputs require useful bounded reasons and known categories", () => {
   assert.equal(returnWorkorderSchema.safeParse({ reason: " " }).success, false);
@@ -56,9 +57,10 @@ test("cancelled work locks every mechanic repair action while retaining particip
 });
 
 test("handoff migration and repository encode transactional lifecycle ownership", async () => {
-  const [migration, repository] = await Promise.all([
+  const [migration, repository, partRequestRepository] = await Promise.all([
     readFile(migrationUrl, "utf8"),
     readFile(repositoryUrl, "utf8"),
+    readFile(partRequestRepositoryUrl, "utf8"),
   ]);
   for (const column of ["cancelled_at", "cancelled_by_user_id", "cancel_reason", "approved_by_user_id"]) {
     assert.match(migration, new RegExp(column));
@@ -71,4 +73,12 @@ test("handoff migration and repository encode transactional lifecycle ownership"
   assert.match(repository, /mechanic_done_at = null/);
   assert.match(repository, /quantity_reserved = quantity_reserved - \$2/);
   assert.match(repository, /approved_by_user_id = \$3/);
+  assert.match(repository, /approval_status in \('submitted', 'needs_info'\)[\s\S]*for update/);
+  assert.match(repository, /WORKORDER_PARTS_PENDING/);
+  assert.match(repository, /Review all pending part requests before approving this workorder\./);
+  const decision = partRequestRepository.slice(partRequestRepository.indexOf("export async function decidePartRequest"));
+  assert.match(
+    decision,
+    /select id from operational_workorders where id = \$1 for update[\s\S]*from workorder_part_requests pr[\s\S]*for update/,
+  );
 });

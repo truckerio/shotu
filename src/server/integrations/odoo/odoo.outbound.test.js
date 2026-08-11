@@ -487,7 +487,12 @@ test("draft creation fails closed when Odoo drops the service-order vehicle rela
 
 test("already exported workorders replay before readiness or Odoo calls", async () => {
   const result = await createOdooWorkorderDraft({ companyId, workorderId, userId }, {
-    readExported: async () => ({ externalId: "901", serviceOrderNo: "S0901" }),
+    readExported: async () => ({
+      externalId: "901",
+      serviceOrderNo: "S0901",
+      recordUrl: "https://protec.example.odoo.com/web#action=311&id=901&model=sale.order&view_type=form",
+      serviceOrderActionId: "311",
+    }),
     readReadiness: async () => assert.fail("exported replay must not need readiness"),
     readConfiguration: async () => assert.fail("exported replay must not read credentials"),
     claimDraft: async () => assert.fail("exported replay must not claim a new draft"),
@@ -499,8 +504,34 @@ test("already exported workorders replay before readiness or Odoo calls", async 
     status: "draft",
     externalId: "901",
     serviceOrderNo: "S0901",
+    recordUrl: "https://protec.example.odoo.com/web#action=311&id=901&model=sale.order&view_type=form",
+    serviceOrderActionId: "311",
     replayed: true,
   });
+});
+
+test("claim-race replay reloads the exported link without calling Odoo", async () => {
+  let exportedReads = 0;
+  const result = await createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+    readExported: async () => {
+      exportedReads += 1;
+      return exportedReads === 1 ? null : {
+        externalId: "901",
+        serviceOrderNo: "S0901",
+        recordUrl: "https://protec.example.odoo.com/web#action=311&id=901&model=sale.order&view_type=form",
+        serviceOrderActionId: "311",
+      };
+    },
+    readReadiness: async () => readyData(),
+    readConfiguration: async () => providerConfiguration,
+    claimDraft: async () => ({ replayed: true, externalId: "901", serviceOrderNo: "S0901" }),
+    createClient: () => assert.fail("claim replay must not call Odoo"),
+  });
+
+  assert.equal(exportedReads, 2);
+  assert.equal(result.recordUrl, "https://protec.example.odoo.com/web#action=311&id=901&model=sale.order&view_type=form");
+  assert.equal(result.serviceOrderActionId, "311");
+  assert.equal(result.replayed, true);
 });
 
 test("readiness blockers prevent claiming or writing to Odoo", async () => {

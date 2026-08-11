@@ -554,6 +554,10 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query(
+      "select id from operational_workorders where id = $1 for update",
+      [workorderId],
+    );
     const result = await client.query(
       `select pr.*, wo.company_id, wo.location_id, wo.status as workorder_status,
               exists (

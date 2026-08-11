@@ -21,3 +21,10 @@ test("vehicle search has a bounded request timeout", () => {
     /api\(`\/api\/vehicles\/search\?q=\$\{encodeURIComponent\(query\)\}&limit=8`, \{ timeoutMs: 10_000 \}\)/,
   );
 });
+
+test("vehicle selection is scoped to the selected repair-location company", () => {
+  assert.match(source, /vehiclesForCompany\(result\.vehicles \|\| \[\], companyIdRef\.current\)/);
+  assert.match(source, /if \(!vehicleBelongsToCompany\(vehicle, companyIdRef\.current\)\)/);
+  assert.match(source, /Select a vehicle owned by the same company as the repair location\./);
+  assert.match(source, /!vehicleCompanyId\(selectedVehicle\)/);
+});

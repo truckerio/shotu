@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 
 export const ROLE_WORKFLOW_STEPS = Object.freeze([
   "admin-create",
+  "authorization-boundaries",
   "office-assign",
   "mechanic-accept",
   "chat-and-parts",
+  "office-part-decision",
   "mechanic-done",
   "office-close",
-  "surveillance-odoo",
-  "authorization-boundaries",
+  "surveillance-odoo-readiness",
 ]);
 
 function lifecycle(workorder) {
@@ -20,6 +21,19 @@ export function assertLifecycle(workorder, expected, stage) {
   if (actual !== expected) {
     throw new Error(`${stage} expected lifecycle ${expected}, received ${actual || "unknown"}.`);
   }
+}
+
+export function assertOdooReadiness(readiness) {
+  if (typeof readiness?.ready !== "boolean") {
+    throw new Error("Canonical Odoo readiness did not return a boolean ready state.");
+  }
+  if (!readiness.ready && !readiness.blockers?.length) {
+    throw new Error("Blocked Odoo readiness did not explain what setup is missing.");
+  }
+  return {
+    ready: readiness.ready,
+    blockerCodes: (readiness.blockers || []).map((blocker) => blocker.code),
+  };
 }
 
 export function chooseWorkflowLocations(locations, { primaryName, scopedLocationIds = [] }) {
@@ -162,7 +176,7 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
   }
   record("mechanic-accept");
 
-  const chatBody = `QA mechanic message ${runId}`;
+  const chatBody = `QA status update completed at ${Date.now()}.`;
   const partNumber = `QA-${runId.slice(-8).toUpperCase()}`;
   await clients.mechanic.request(`/api/mechanic/workorders/${workorder.id}/messages`, {
     method: "POST",
@@ -191,6 +205,23 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
   }
   record("chat-and-parts", { partRequestId: partResult.body.partRequest.id });
 
+  const partDecision = await clients.office.request(
+    `/api/office/workorders/${workorder.id}/parts/${partResult.body.partRequest.id}/decision`,
+    {
+      method: "POST",
+      body: {
+        decision: "rejected",
+        quantity: 1,
+        uomCode: "pc",
+        reason: "Synthetic acceptance request does not consume inventory.",
+      },
+    },
+  );
+  if (partDecision.body?.partRequest?.approvalStatus !== "rejected") {
+    throw new Error("Office part decision did not resolve the synthetic request.");
+  }
+  record("office-part-decision", { decision: "rejected" });
+
   const done = await clients.mechanic.request(`/api/mechanic/workorders/${workorder.id}/mark-done`, {
     method: "POST",
     body: {
@@ -215,14 +246,16 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
   if (!surveillanceBefore.body?.pendingOdoo?.some((item) => item.id === workorder.id)) {
     throw new Error("Closed workorder was not present in the Surveillance Odoo backlog.");
   }
-  const odooServiceOrderNo = `QA-${Date.now()}`;
-  await clients.surveillance.request(`/api/surveillance/workorders/${workorder.id}/mark-odoo-entered`, {
-    method: "POST",
-    body: { odooServiceOrderNo, note: "QA surveillance entry complete." },
-  });
+  const odooReadinessResult = await clients.surveillance.request(
+    `/api/workorders/${workorder.id}/modules/odoo/readiness`,
+  );
+  const odooReadiness = assertOdooReadiness(odooReadinessResult.body);
   const finalDetail = await clients.surveillance.request(`/api/surveillance/workorders/${workorder.id}`);
-  assertLifecycle(finalDetail.body?.workorder, "odoo_entered", "surveillance Odoo entry");
-  record("surveillance-odoo", { odooServiceOrderNo });
+  assertLifecycle(finalDetail.body?.workorder, "closed", "surveillance Odoo readiness");
+  record("surveillance-odoo-readiness", {
+    ready: odooReadiness.ready,
+    blockerCodes: odooReadiness.blockerCodes,
+  });
 
   await clients.admin.request(`/api/office/workorders/${restrictedWorkorder.id}/cancel`, {
     method: "POST",
@@ -236,7 +269,10 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
     concern: mainConcern,
     chatBody,
     partNumber,
-    odooServiceOrderNo,
+    odooReadiness: {
+      ready: odooReadiness.ready,
+      blockerCodes: odooReadiness.blockerCodes,
+    },
     restrictedWorkorderId: restrictedWorkorder.id,
     trace,
   };

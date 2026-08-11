@@ -4,6 +4,7 @@ import { authClient } from "../../lib/auth-client.js";
 import { api } from "../../lib/api.js";
 import { KioskGate, KioskStandardLogin } from "../kiosk/KioskGate.jsx";
 import { KioskSessionProvider } from "../kiosk/KioskSessionContext.jsx";
+import { purgeMechanicWorkStorage } from "../mechanic/progress/mechanic-work-storage.js";
 import {
   shouldEnforceInactivity,
   useInactivitySession,
@@ -21,8 +22,12 @@ function LoadingScreen() {
 
 function AccessUnavailable({ message }) {
   async function signOut() {
-    await authClient.signOut();
-    window.location.replace("/");
+    try {
+      await authClient.signOut();
+    } finally {
+      purgeMechanicWorkStorage();
+      window.location.replace("/");
+    }
   }
 
   return (
@@ -68,6 +73,7 @@ export function AuthGate({ children }) {
     try {
       await authClient.signOut();
     } finally {
+      purgeMechanicWorkStorage();
       window.location.replace("/");
     }
   }, []);

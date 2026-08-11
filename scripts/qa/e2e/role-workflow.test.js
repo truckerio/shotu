@@ -6,6 +6,7 @@ import { parseRoleWorkflowConfig, publicRoleWorkflowConfig } from "./config.js";
 import {
   ROLE_WORKFLOW_STEPS,
   assertLifecycle,
+  assertOdooReadiness,
   buildWorkorderInput,
   chooseWorkflowLocations,
 } from "./workflow.js";
@@ -73,20 +74,59 @@ test("workorder payload and lifecycle assertions preserve workflow truth", () =>
   assert.throws(() => assertLifecycle({ status: "open" }, "closed", "close"), /expected lifecycle closed/);
 });
 
+test("Odoo readiness reports provider truth without inventing a draft result", () => {
+  assert.deepEqual(assertOdooReadiness({
+    ready: false,
+    blockers: [{ code: "ODOO_CONNECTION_MISSING", message: "Configure Odoo." }],
+  }), {
+    ready: false,
+    blockerCodes: ["ODOO_CONNECTION_MISSING"],
+  });
+  assert.deepEqual(assertOdooReadiness({ ready: true, blockers: [] }), {
+    ready: true,
+    blockerCodes: [],
+  });
+  assert.throws(() => assertOdooReadiness({ ready: false, blockers: [] }), /did not explain/);
+  assert.throws(() => assertOdooReadiness({}), /boolean ready state/);
+});
+
 test("workflow source covers every requested stage and avoids production domain imports", async () => {
   assert.deepEqual(ROLE_WORKFLOW_STEPS, [
     "admin-create",
+    "authorization-boundaries",
     "office-assign",
     "mechanic-accept",
     "chat-and-parts",
+    "office-part-decision",
     "mechanic-done",
     "office-close",
-    "surveillance-odoo",
-    "authorization-boundaries",
+    "surveillance-odoo-readiness",
   ]);
   const workflowPath = fileURLToPath(new URL("./workflow.js", import.meta.url));
   const source = await readFile(workflowPath, "utf8");
   assert.match(source, /expectedStatuses: \[403, 404\]/);
   assert.match(source, /WORKORDER_ALREADY_ACCEPTED/);
+  assert.match(source, /decision: "rejected"/);
+  assert.match(source, /modules\/odoo\/readiness/);
+  assert.doesNotMatch(source, /mark-odoo-entered/);
+  assert.doesNotMatch(source, /modules\/odoo\/draft/);
   assert.doesNotMatch(source, /src\/server\/modules|src\/server\/db\/repositories/);
+});
+
+test("browser workflow measures real role workorders at release viewports and captures browser errors", async () => {
+  const browserPath = fileURLToPath(new URL("./browser-assertions.js", import.meta.url));
+  const source = await readFile(browserPath, "utf8");
+  for (const [name, width, height] of [
+    ["phone-390", 390, 844],
+    ["phone-430", 430, 932],
+    ["desktop-1280", 1280, 800],
+    ["desktop-1920", 1920, 1080],
+  ]) {
+    assert.match(source, new RegExp(`name: "${name}", width: ${width}, height: ${height}`));
+  }
+  assert.match(source, /documentElement\.scrollWidth/);
+  assert.match(source, /page\.on\("console"/);
+  assert.match(source, /page\.on\("pageerror"/);
+  assert.match(source, /Needs Odoo/);
+  assert.match(source, /assertOdooReadinessSurface/);
 });

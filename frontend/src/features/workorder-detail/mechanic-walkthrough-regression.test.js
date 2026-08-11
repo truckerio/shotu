@@ -4,7 +4,9 @@ import test from "node:test";
 
 const roleRouter = readFileSync(new URL("../../app/routes/RoleRouter.jsx", import.meta.url), "utf8");
 const mechanicActions = readFileSync(new URL("../mechanic/useMechanicWorkorderActions.js", import.meta.url), "utf8");
+const mechanicWorkspace = readFileSync(new URL("../mechanic/MechanicWorkspace.jsx", import.meta.url), "utf8");
 const detailPage = readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta.url), "utf8");
+const detailSections = readFileSync(new URL("./WorkorderDetailSections.jsx", import.meta.url), "utf8");
 const previewController = readFileSync(new URL("./useWorkorderPreviewController.js", import.meta.url), "utf8");
 
 test("available work can be accepted from opened mechanic detail", () => {
@@ -24,4 +26,15 @@ test("desktop mechanic Help stays in the primary detail panel", () => {
     previewController,
     /if \(!activeWorkorder \|\| actorRole === "mechanic" \|\| isCompact \|\| detailSection !== "chat"\) return;/,
   );
+});
+
+test("part request refresh preserves unsaved mechanic progress", () => {
+  assert.match(
+    detailSections,
+    /onChanged: \(\) => reloadActiveWorkorder\(\{[\s\S]*preserveForm: Boolean\(isMechanicDetail && mechanicProgress\?\.hasUnsyncedChanges\),[\s\S]*\}\)/,
+  );
+});
+
+test("mechanic phone More tools retain access to the shared profile menu", () => {
+  assert.match(mechanicWorkspace, /<ProfileMenu actor=\{actor\} mobileAction \/>/);
 });

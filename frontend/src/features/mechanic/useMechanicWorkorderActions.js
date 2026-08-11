@@ -219,7 +219,7 @@ export function createMechanicWorkorderActions({
         workorderId,
       });
       await apiRequest(request.path, request.options);
-      await reloadActiveWorkorder();
+      await reloadActiveWorkorder({ preserveForm: shouldPreserveActiveWorkorderForm() });
       setMechanicAction({ busy: "", message: "" });
       return true;
     } catch (error) {

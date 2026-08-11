@@ -1,6 +1,13 @@
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
 
+const WORKORDER_VIEWPORTS = Object.freeze([
+  { name: "phone-390", width: 390, height: 844 },
+  { name: "phone-430", width: 430, height: 932 },
+  { name: "desktop-1280", width: 1280, height: 800 },
+  { name: "desktop-1920", width: 1920, height: 1080 },
+]);
+
 async function visibleText(page, text) {
   await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 15_000 });
 }
@@ -45,19 +52,26 @@ async function assertRapidSectionNavigation(page) {
   const navigation = page.locator(".workorder-section-nav-desktop");
   await navigation.waitFor({ state: "visible", timeout: 15_000 });
 
-  for (const sectionId of ["parts", "unit", "team", "activity", "work", "parts"]) {
+  // Return to the stable Parts tab before opening each overflow-only section.
+  // The active overflow item is promoted into the primary row, so the More
+  // trigger is intentionally absent until a primary tab is active again.
+  for (const sectionId of [
+    "parts", "unit", "parts", "assignment", "parts", "activity", "parts", "diagnosisRepair", "parts",
+  ]) {
     const sectionButton = navigation.locator(`[data-section-id="${sectionId}"]`);
     const startedAt = Date.now();
-    await sectionButton.click();
+    await selectWorkorderSection(page, sectionId);
     assert.ok(
       Date.now() - startedAt < 1_500,
       `Expected ${sectionId} navigation to respond within 1.5 seconds.`,
     );
-    assert.equal(
-      await sectionButton.getAttribute("aria-current"),
-      "page",
-      `Expected ${sectionId} to become the active workorder section.`,
-    );
+    if (await sectionButton.count()) {
+      assert.equal(
+        await sectionButton.getAttribute("aria-current"),
+        "page",
+        `Expected ${sectionId} to become the active workorder section.`,
+      );
+    }
     assert.equal(
       await page.locator(".workorder-detail-page").getAttribute("data-detail-section"),
       sectionId,
@@ -73,19 +87,21 @@ async function assertCreateSectionNavigation(page, baseUrl) {
   const navigation = page.locator(".workorder-section-nav-desktop");
   await navigation.waitFor({ state: "visible", timeout: 15_000 });
 
-  for (const sectionId of ["unit", "assignment", "parts", "work"]) {
+  for (const sectionId of ["location", "schedule", "concern", "unit", "location", "parts"]) {
     const sectionButton = navigation.locator(`[data-section-id="${sectionId}"]`);
     const startedAt = Date.now();
-    await sectionButton.click();
+    await selectWorkorderSection(page, sectionId);
     assert.ok(
       Date.now() - startedAt < 1_500,
       `Expected create ${sectionId} navigation to respond within 1.5 seconds.`,
     );
-    assert.equal(
-      await sectionButton.getAttribute("aria-current"),
-      "page",
-      `Expected create ${sectionId} to become the active workorder section.`,
-    );
+    if (await sectionButton.count()) {
+      assert.equal(
+        await sectionButton.getAttribute("aria-current"),
+        "page",
+        `Expected create ${sectionId} to become the active workorder section.`,
+      );
+    }
     assert.equal(
       await pageSurface.getAttribute("data-detail-section"),
       sectionId,
@@ -94,11 +110,71 @@ async function assertCreateSectionNavigation(page, baseUrl) {
   }
 }
 
+function collectBrowserErrors(page) {
+  const errors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(`console: ${message.text()}`);
+  });
+  page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
+  return errors;
+}
+
+async function assertWorkorderViewportMatrix(page, role) {
+  const results = [];
+  for (const viewport of WORKORDER_VIEWPORTS) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.locator(".workorder-detail-page").waitFor({ state: "visible", timeout: 15_000 });
+    await page.waitForTimeout(50);
+    const geometry = await page.evaluate(() => {
+      const documentElement = document.documentElement;
+      const surface = document.querySelector(".workorder-detail-page");
+      const bounds = surface?.getBoundingClientRect();
+      return {
+        clientWidth: documentElement.clientWidth,
+        scrollWidth: documentElement.scrollWidth,
+        surfaceLeft: bounds?.left ?? -1,
+        surfaceRight: bounds?.right ?? -1,
+        surfaceWidth: bounds?.width ?? 0,
+      };
+    });
+    assert.equal(
+      geometry.scrollWidth,
+      geometry.clientWidth,
+      `${role} ${viewport.name}: workorder page must not overflow horizontally`,
+    );
+    assert.ok(geometry.surfaceWidth > 0, `${role} ${viewport.name}: workorder surface must render`);
+    assert.ok(
+      geometry.surfaceLeft >= 0 && geometry.surfaceRight <= geometry.clientWidth,
+      `${role} ${viewport.name}: workorder surface must remain inside the viewport`,
+    );
+    results.push({ ...viewport, ...geometry, passed: true });
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  return results;
+}
+
+async function selectWorkorderSection(page, sectionId) {
+  const visibleSection = page.locator(`[data-section-id="${sectionId}"]:visible`).first();
+  if (await visibleSection.count()) {
+    await visibleSection.click();
+    return;
+  }
+  await page.locator('.workorder-section-nav-desktop button[aria-label^="More "]:visible').click();
+  await page.locator(`[role="menu"] [data-section-id="${sectionId}"]`).click();
+}
+
+async function assertOdooReadinessSurface(page, workflow) {
+  await selectWorkorderSection(page, "odoo");
+  await page.getByRole("region", { name: "Odoo readiness" }).waitFor({ state: "visible", timeout: 15_000 });
+  await visibleText(page, workflow.odooReadiness.ready ? "Ready to create draft" : "Needs setup");
+}
+
 async function assertRoleSurface({ browser, config, role, workflow }) {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
   });
   const page = await context.newPage();
+  const browserErrors = collectBrowserErrors(page);
   try {
     await signIn(page, config, role);
     await assertProfileMenu(page);
@@ -108,7 +184,7 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
       mechanic: "parts",
     };
     if (role === "surveillance") {
-      await page.getByRole("button", { name: /^Entered, \d+ workorders$/ }).click();
+      await page.getByRole("button", { name: /^Needs Odoo, \d+ workorders$/ }).click();
       await page.getByLabel("Search workorders").fill(workflow.serial);
       await page.getByRole("button", { name: new RegExp(workflow.serial) }).click();
     } else {
@@ -118,6 +194,9 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
       );
     }
     await visibleText(page, workflow.concern);
+
+    if (role === "surveillance") await assertOdooReadinessSurface(page, workflow);
+    const viewportAssertions = await assertWorkorderViewportMatrix(page, role);
 
     if (role === "admin") {
       await assertRapidSectionNavigation(page);
@@ -129,11 +208,9 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
       await visibleText(page, workflow.chatBody);
     }
     if (role === "mechanic") await visibleText(page, workflow.partNumber);
-    if (role === "surveillance") {
-      await page.getByText(/Odoo_entered|Entered in Odoo/i).first().waitFor({ state: "visible", timeout: 15_000 });
-    }
+    assert.deepEqual(browserErrors, [], `${role} browser emitted errors:\n${browserErrors.join("\n")}`);
 
-    return { role, url: page.url(), passed: true };
+    return { role, url: page.url(), viewportAssertions, passed: true };
   } catch (error) {
     const bodyText = await page.locator("body").innerText().catch(() => "");
     error.message = `${role} browser assertion failed at ${page.url()}: ${error.message}\nVisible text: ${bodyText.slice(0, 500) || "[empty]"}`;

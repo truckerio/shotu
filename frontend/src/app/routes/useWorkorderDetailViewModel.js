@@ -108,6 +108,7 @@ export function useWorkorderDetailViewModel({
     mechanicVehicleLabel,
     officeAssignmentChanged: officeAssignmentKey !== assignedMechanicKey,
     pendingPartCount,
+    policyOverrides,
     showEmbeddedPreview: previewPanelOpen && (!activeWorkorder || !isCompact),
     visibleTimeline,
   };

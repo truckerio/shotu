@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   mechanicWorkStorageKey,
@@ -106,4 +107,19 @@ test("progress backups cannot cross mechanic identities", () => {
   } finally {
     delete globalThis.window;
   }
+});
+
+test("normal router unmount preserves recovery data while explicit session exits purge it", () => {
+  const lifecycle = readFileSync(
+    new URL("../app/routes/useRoleRouterLifecycleEffects.js", import.meta.url),
+    "utf8",
+  );
+  const profile = readFileSync(new URL("../components/account/ProfileMenu.jsx", import.meta.url), "utf8");
+  const authGate = readFileSync(new URL("../features/auth/AuthGate.jsx", import.meta.url), "utf8");
+  const kiosk = readFileSync(new URL("../features/kiosk/KioskSessionContext.jsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(lifecycle, /purgeMechanicWorkStorage/);
+  assert.match(profile, /authClient\.signOut\(\)[\s\S]*purgeMechanicWorkStorage\(\)/);
+  assert.match(authGate, /authClient\.signOut\(\)[\s\S]*purgeMechanicWorkStorage\(\)/);
+  assert.match(kiosk, /authClient\.signOut\(\)[\s\S]*purgeMechanicWorkStorage\(\)/);
 });
