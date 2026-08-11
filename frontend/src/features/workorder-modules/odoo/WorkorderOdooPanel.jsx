@@ -1,7 +1,10 @@
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
-import { odooReadinessStatus } from "./workorder-odoo-model.js";
+import {
+  odooReadinessStatus,
+  odooServiceOrderRecordUrl,
+} from "./workorder-odoo-model.js";
 import "./workorder-odoo-module.css";
 
 function identityLabel(value) {
@@ -35,6 +38,10 @@ export function WorkorderOdooPanel({
     || access === WORKORDER_MODULE_ACCESS.REQUIRED
     || access === WORKORDER_MODULE_ACCESS.ACTION;
   const createdOrderNo = odooDraftResult?.serviceOrderNo || workorder.odooServiceOrderNo || "";
+  const createdOrderUrl = odooDraftResult?.recordUrl || odooServiceOrderRecordUrl(
+    workorder.odooUrl,
+    odooDraftResult?.serviceOrderActionId || odooReadiness?.serviceOrderActionId,
+  );
   const blockers = createdOrderNo ? [] : odooReadiness?.blockers || [];
   const canCreateDraft = Boolean(String(laborHours).trim() && !createdOrderNo);
   const readinessStatus = odooReadinessStatus({
@@ -85,8 +92,8 @@ export function WorkorderOdooPanel({
           {createdOrderNo ? (
             <section className="surveillance-odoo-result" aria-label="Odoo draft created">
               <strong>Odoo draft created</strong>
-              {workorder.odooUrl ? (
-                <a href={workorder.odooUrl} target="_blank" rel="noreferrer">{createdOrderNo}</a>
+              {createdOrderUrl ? (
+                <a href={createdOrderUrl} target="_blank" rel="noreferrer">{createdOrderNo}</a>
               ) : <span>{createdOrderNo}</span>}
               {odooDraftResult?.replayed ? <small>Existing draft recovered by workorder marker.</small> : null}
             </section>

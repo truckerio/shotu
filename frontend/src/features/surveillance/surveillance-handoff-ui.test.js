@@ -35,8 +35,9 @@ test("Surveillance reports blocked draft attempts without flickering known readi
 test("Surveillance treats a persisted Odoo order as created after reopening", () => {
   assert.match(odooPanel, /const createdOrderNo = odooDraftResult\?\.serviceOrderNo \|\| workorder\.odooServiceOrderNo \|\| ""/);
   assert.match(odooPanel, /const blockers = createdOrderNo \? \[\] : odooReadiness\?\.blockers \|\| \[\]/);
-  assert.match(odooPanel, /workorder\.odooUrl \? \(/);
-  assert.match(odooPanel, /<a href=\{workorder\.odooUrl\} target="_blank" rel="noreferrer">\{createdOrderNo\}<\/a>/);
+  assert.match(odooPanel, /const createdOrderUrl = odooDraftResult\?\.recordUrl \|\| odooServiceOrderRecordUrl\(/);
+  assert.match(odooPanel, /odooReadiness\?\.serviceOrderActionId/);
+  assert.match(odooPanel, /<a href=\{createdOrderUrl\} target="_blank" rel="noreferrer">\{createdOrderNo\}<\/a>/);
   assert.match(odooPanel, /disabled=\{Boolean\(createdOrderNo\)\}/);
 });
 

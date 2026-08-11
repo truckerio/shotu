@@ -17,6 +17,11 @@ const companyId = "11111111-1111-4111-8111-111111111111";
 const workorderId = "22222222-2222-4222-8222-222222222222";
 const userId = "33333333-3333-4333-8333-333333333333";
 const updatedAt = "2026-08-03T20:00:00.000Z";
+const providerConfiguration = {
+  baseUrl: "https://protec.example.odoo.com",
+  database: "protec",
+  apiKey: "server-only",
+};
 
 function readyData() {
   return {
@@ -58,6 +63,9 @@ function readyData() {
       serviceFlagField: "is_service_order",
       warehouseField: "warehouse_id",
       stableMarkerField: "client_order_ref",
+      serviceActionExternalId: "941",
+      serviceActionBaseUrl: providerConfiguration.baseUrl,
+      serviceActionDatabase: providerConfiguration.database,
     },
     parts: [{
       lineIndex: 0,
@@ -183,7 +191,7 @@ test("workorder mileage normalizes for Odoo and invalid values fail before draft
 test("ready status validates the live Odoo service-order model", async () => {
   const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
     readReadiness: async () => readyData(),
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     createClient: () => ({
       execute: async () => ({ partner_id: {}, order_line: {} }),
     }),
@@ -195,7 +203,7 @@ test("ready status validates the live Odoo service-order model", async () => {
 test("readiness accepts equivalent Odoo count-unit labels", async () => {
   const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
     readReadiness: async () => readyData(),
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     createClient: () => ({
       execute: async (model, method) => {
         if (method === "fields_get") return requiredOrderFields();
@@ -209,12 +217,46 @@ test("readiness accepts equivalent Odoo count-unit labels", async () => {
   assert.equal(readiness.workorder.odometer, 482150);
 });
 
+test("readiness discovers and caches the service-order form action", async () => {
+  const data = readyData();
+  data.settings.serviceActionExternalId = "";
+  let savedAction = "";
+  const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
+    readReadiness: async () => data,
+    readConfiguration: async () => providerConfiguration,
+    saveServiceOrderAction: async (_companyId, navigation) => { savedAction = navigation; },
+    createClient: () => ({
+      execute: async (model, method) => {
+        if (model === "ir.actions.act_window" && method === "search_read") return [{
+          id: 941,
+          name: "Service Orders",
+          res_model: "sale.order",
+          view_mode: "list,form",
+          domain: "[('is_service_order', '=', True)]",
+          context: "{'default_is_service_order': True}",
+          views: [[3595, "list"], [3594, "form"]],
+        }];
+        if (method === "fields_get") return requiredOrderFields();
+        if (model === "product.product" && method === "read") return [...providerProducts().values()];
+        throw new Error(`Unexpected ${model}.${method}`);
+      },
+    }),
+  });
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.serviceOrderActionId, "941");
+  assert.deepEqual(savedAction, {
+    actionId: "941",
+    baseUrl: providerConfiguration.baseUrl,
+    database: providerConfiguration.database,
+  });
+});
+
 test("older workorders without mileage do not require the optional Odoo odometer field", async () => {
   const data = readyData();
   data.workorder.mileage = "";
   const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
     readReadiness: async () => data,
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     createClient: () => ({
       execute: async (model, method) => {
         if (method === "fields_get") {
@@ -234,7 +276,7 @@ test("older workorders without mileage do not require the optional Odoo odometer
 test("mileage blocks before creation when Odoo odometer is not writable numeric data", async () => {
   const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
     readReadiness: async () => readyData(),
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     createClient: () => ({
       execute: async (_model, method) => {
         if (method === "fields_get") {
@@ -253,7 +295,7 @@ test("readiness reports real live Odoo part-unit drift before creation", async (
   products[1] = { ...products[1], uom_id: [12, "Dozen"] };
   const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
     readReadiness: async () => readyData(),
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     createClient: () => ({
       execute: async (model, method) => {
         if (method === "fields_get") return requiredOrderFields();
@@ -318,7 +360,15 @@ test("draft creation writes one draft without calling confirmation or browser on
       if (model === "product.product" && method === "read") return [...providerProducts().values()];
       if (model === "sale.order" && method === "create") return 901;
       if (model === "sale.order" && method === "read") {
-        return [{ id: 901, name: "S0901", state: "draft", client_order_ref: stableOdooWorkorderMarker(companyId, workorderId) }];
+        return [{
+          id: 901,
+          name: "S0901",
+          state: "draft",
+          client_order_ref: stableOdooWorkorderMarker(companyId, workorderId),
+          is_service_order: true,
+          vehicle_id: [17968, "Trailer 24"],
+          warehouse_id: [28, "Chino"],
+        }];
       }
       throw new Error(`Unexpected ${model}.${method}`);
     },
@@ -333,7 +383,7 @@ test("draft creation writes one draft without calling confirmation or browser on
   }, {
     readExported: async () => null,
     readReadiness: async () => readyData(),
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     claimDraft: async (input) => {
       assert.equal(input.payloadSnapshot.readiness.ready, true);
       return { claimed: true, replayed: false };
@@ -349,6 +399,8 @@ test("draft creation writes one draft without calling confirmation or browser on
     status: "draft",
     externalId: "901",
     serviceOrderNo: "S0901",
+    recordUrl: "https://protec.example.odoo.com/web#action=941&id=901&model=sale.order&view_type=form",
+    serviceOrderActionId: "941",
     replayed: false,
   });
   assert.equal(payloads.length, 1);
@@ -370,14 +422,23 @@ test("retry recovers an existing marked draft without creating another", async (
   const result = await createOdooWorkorderDraft({ companyId, workorderId, userId }, {
     readExported: async () => null,
     readReadiness: async () => readyData(),
-    readConfiguration: async () => ({ apiKey: "server-only" }),
+    readConfiguration: async () => providerConfiguration,
     claimDraft: async () => ({ claimed: true, replayed: false }),
     createClient: () => ({
       execute: async (model, method) => {
         calls.push({ model, method });
         if (method === "fields_get") return requiredOrderFields();
-        if (method === "search_read") return [{ id: 901, name: "S0901", state: "draft" }];
-        throw new Error("Recovery must not call another Odoo method.");
+        if (model === "sale.order" && method === "search_read") return [{
+          id: 901,
+          name: "S0901",
+          state: "draft",
+          client_order_ref: stableOdooWorkorderMarker(companyId, workorderId),
+          is_service_order: true,
+          vehicle_id: [17968, "Trailer 24"],
+          warehouse_id: [28, "Chino"],
+        }];
+        if (model === "product.product" && method === "read") return [...providerProducts().values()];
+        throw new Error("Recovery must only verify the existing Odoo draft.");
       },
     }),
     recordSuccess: async (input) => { recorded = input; },
@@ -387,6 +448,41 @@ test("retry recovers an existing marked draft without creating another", async (
   assert.equal(result.replayed, true);
   assert.equal(recorded.replayed, true);
   assert.equal(calls.some((call) => call.method === "create"), false);
+});
+
+test("draft creation fails closed when Odoo drops the service-order vehicle relationship", async () => {
+  const failures = [];
+  await assert.rejects(
+    () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+      readExported: async () => null,
+      readReadiness: async () => readyData(),
+      readConfiguration: async () => providerConfiguration,
+      claimDraft: async () => ({ claimed: true, replayed: false }),
+      updatePayload: async () => {},
+      createClient: () => ({
+        execute: async (model, method) => {
+          if (method === "fields_get") return requiredOrderFields();
+          if (model === "sale.order" && method === "search_read") return [];
+          if (model === "res.partner" && method === "address_get") return { invoice: 302, delivery: 303 };
+          if (model === "product.product" && method === "read") return [...providerProducts().values()];
+          if (model === "sale.order" && method === "create") return 901;
+          if (model === "sale.order" && method === "read") return [{
+            id: 901,
+            name: "S0901",
+            state: "draft",
+            client_order_ref: stableOdooWorkorderMarker(companyId, workorderId),
+            is_service_order: true,
+            vehicle_id: false,
+            warehouse_id: [28, "Chino"],
+          }];
+          throw new Error(`Unexpected ${model}.${method}`);
+        },
+      }),
+      recordFailure: async (input) => failures.push(input),
+    }),
+    (error) => error instanceof OdooOutboundError && error.code === "ODOO_DRAFT_MISMATCH",
+  );
+  assert.equal(failures[0].code, "ODOO_DRAFT_MISMATCH");
 });
 
 test("already exported workorders replay before readiness or Odoo calls", async () => {
@@ -416,7 +512,7 @@ test("readiness blockers prevent claiming or writing to Odoo", async () => {
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
       readExported: async () => null,
       readReadiness: async () => data,
-      readConfiguration: async () => ({ apiKey: "server-only" }),
+      readConfiguration: async () => providerConfiguration,
       claimDraft: async () => { claimed = true; },
       createClient: () => { clientCreated = true; },
     }),
@@ -434,7 +530,7 @@ test("live Odoo UoM drift blocks creation before payload persistence", async () 
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
       readExported: async () => null,
       readReadiness: async () => readyData(),
-      readConfiguration: async () => ({ apiKey: "server-only" }),
+      readConfiguration: async () => providerConfiguration,
       claimDraft: async () => ({ claimed: true, replayed: false }),
       createClient: () => ({
         execute: async (model, method) => {
@@ -459,7 +555,7 @@ test("multiple marked orders fail closed and record a conflict", async () => {
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
       readExported: async () => null,
       readReadiness: async () => readyData(),
-      readConfiguration: async () => ({ apiKey: "server-only" }),
+      readConfiguration: async () => providerConfiguration,
       claimDraft: async () => ({ claimed: true, replayed: false }),
       createClient: () => ({
         execute: async (_model, method) => {
@@ -487,7 +583,7 @@ test("an unknown Odoo create result enters manual reconciliation instead of retr
     () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
       readExported: async () => null,
       readReadiness: async () => readyData(),
-      readConfiguration: async () => ({ apiKey: "server-only" }),
+      readConfiguration: async () => providerConfiguration,
       claimDraft: async () => ({ claimed: true, replayed: false }),
       updatePayload: async () => {},
       createClient: () => ({

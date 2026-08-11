@@ -19,7 +19,9 @@ Read-only production discovery on 2026-08-07 found that Odoo already supports dr
 
 Production application verification on 2026-08-07 created and persisted a draft service order for G2116 / `WO-000013` as Odoo `sale.order` ID `13380`, number `S00016`, through the configured Odoo.sh connection. That connection pointed at an Odoo staging database (`protechrepair-july16staging-34752423.dev.odoo.com`), so it proves the application flow and tracking path, not that the real Odoo production database is connected. Production application deployment and production Odoo database selection are separate operational controls.
 
-The Surveillance result panel now renders a created draft number as an external Odoo link when the application has both the stored Odoo external ID and the saved Odoo base URL. The current link is a browser convenience built from the configured base URL and the Odoo record identity; `odoo_entry_status` and `odoo_outbound_orders` remain the durable tracking truth.
+The shared result panel renders a created draft number as an external Odoo link when the application has the stored Odoo external ID, saved Odoo base URL, and a discovered Service Orders window action. The action is discovered and cached per connected Odoo database because numeric action IDs are provider data, not portable application constants. Including that action in the link opens the custom service-order form that displays Truck / Trailer, Odometer / Mileage, and Location instead of Odoo's generic quotation form. `odoo_entry_status` and `odoo_outbound_orders` remain the durable tracking truth.
+
+Read-only verification on 2026-08-10 confirmed application-created draft S00017 already retained `is_service_order = true`, vehicle G2026, odometer 711,997, the Chino warehouse, and the stable workorder marker. The missing truck details were caused by the generic Sales-form deep link, not by lost draft data.
 
 ## Functional Requirements
 
@@ -42,6 +44,8 @@ The Surveillance result panel now renders a created draft number as an external 
 - FR-17: Odoo draft creation MUST be an explicit user action and MUST NOT run automatically when Office closes a workorder.
 - FR-18: The old manual service-order-number entry MUST NOT be the normal entered path once draft creation is available.
 - FR-19: A persisted Odoo draft result SHOULD expose a non-secret browser link to the configured Odoo record when a valid Odoo base URL and numeric external ID are available. Missing or invalid URL data MUST fall back to displaying the service-order number without a link.
+- FR-20: Readiness MUST discover and cache the connected database's `ir.actions.act_window` action whose service-flag domain opens the service-order form. Created-record links MUST include that action and MUST NOT hardcode an action ID from another Odoo database.
+- FR-21: After create or marker recovery, the application MUST read the draft back and fail closed unless Odoo retained the service flag, mapped vehicle, mapped warehouse, and stable marker.
 
 ## Non-Functional Requirements
 
@@ -87,9 +91,13 @@ Given Odoo rejects or times out, when the attempt ends, then retryable failure s
 
 Given Odoo returns a draft ID and name, when the result is recorded, then `odoo_entry_status` and the workorder lifecycle reference that same external identity.
 
-### AC-8a: Created draft links are non-secret (FR-13, FR-19, NFR-2)
+### AC-8a: Created draft links open the service-order form (FR-13, FR-19, FR-20, NFR-2)
 
-Given a reopened Odoo-entered workorder has a stored Odoo external ID and the configured Odoo base URL is available, when the shared Odoo module renders, then the service-order number is a link to that Odoo `sale.order` record. Given the URL cannot be safely built, then the number still renders as plain text and no credential or API key is exposed.
+Given a reopened Odoo-entered workorder has a stored Odoo external ID and the configured Odoo base URL is available, when the shared Odoo module renders, then the service-order number links through the discovered Service Orders action to the custom Odoo service-order form. Given the URL or action cannot be safely resolved, then the number still renders without exposing any credential or API key.
+
+### AC-8b: Provider readback proves service-order identity (FR-9, FR-21)
+
+Given Odoo returns a created or marker-recovered draft, when the application reads it back, then the service flag is true and the vehicle, warehouse, and marker match the requested payload before success is persisted. Any mismatch returns `ODOO_DRAFT_MISMATCH` and records a failed attempt.
 
 ### AC-9: Admin UI is safe and accessible (NFR-2, NFR-6)
 
@@ -123,6 +131,7 @@ Given a workorder is Odoo-eligible, when the shared Odoo module renders, then it
 - EC-12: A draft was created in Odoo but the browser retry runs after a network interruption; the server marker search returns the existing draft instead of creating a duplicate.
 - EC-13: The configured application production environment points to an Odoo staging database; drafts are created and linked in that staging Odoo database until an Admin replaces the Odoo URL, database, user, and API key with production Odoo values.
 - EC-14: Odoo login or Odoo's web router drops the record target from a browser link; the application still stores the durable external ID and service-order number, and the operator can search the service-order number in Odoo.
+- EC-15: The configured Odoo database has no readable Service Orders action with a matching service-flag domain and form view; readiness blocks with `ODOO_SERVICE_ACTION_MISSING` rather than returning a generic quotation link.
 
 ## API Contracts
 

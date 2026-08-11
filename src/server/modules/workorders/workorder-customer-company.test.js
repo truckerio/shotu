@@ -122,6 +122,7 @@ test("public workorder projection exposes asset owner and a canonical form snaps
     odoo_external_id: "13380",
     odoo_base_url: "https://protec.example.odoo.com",
     odoo_target_model: "sale.order",
+    odoo_service_action_external_id: "941",
   });
 
   assert.equal(workorder.asset.ownerName, "Acme Logistics");
@@ -132,7 +133,7 @@ test("public workorder projection exposes asset owner and a canonical form snaps
   assert.equal(workorder.odooExternalId, "13380");
   assert.equal(
     workorder.odooUrl,
-    "https://protec.example.odoo.com/web#id=13380&model=sale.order&view_type=form",
+    "https://protec.example.odoo.com/web#action=941&id=13380&model=sale.order&view_type=form",
   );
 });
 

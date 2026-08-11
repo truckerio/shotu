@@ -6,6 +6,7 @@ import {
   readOdooOutboundReadiness,
   recordOdooOutboundFailure,
   recordOdooOutboundSuccess,
+  saveOdooServiceOrderAction,
   saveOdooWorkorderPreparation,
   updateOdooOutboundPayload,
 } from "./odoo.outbound.repo.js";
@@ -15,6 +16,10 @@ import {
   prepareOdooWorkorderSchema,
 } from "./odoo.outbound.schemas.js";
 import { IntegrationHttpError } from "../core/integration-errors.js";
+import {
+  publicOdooRecordUrl,
+  selectOdooServiceOrderAction,
+} from "./odoo.navigation.js";
 
 export class OdooOutboundError extends IntegrationHttpError {
   constructor(code, message, statusCode = 422, details = undefined) {
@@ -193,10 +198,35 @@ export async function odooWorkorderReadiness({ companyId, workorderId }, depende
   const parsedWorkorderId = odooOutboundWorkorderIdSchema.parse(workorderId);
   const { data, configuration } = await readinessContext({ companyId, workorderId: parsedWorkorderId }, dependencies);
   const readiness = evaluateOdooOutboundReadiness(data, { configured: Boolean(configuration) });
-  if (readiness.ready) {
+  let serviceOrderActionId = String(data?.settings?.serviceActionExternalId || "");
+  let client = null;
+  if (configuration && data?.settings) {
     const createClient = dependencies.createClient || createOdooClient;
+    client = createClient(configuration);
     try {
-      const client = createClient(configuration);
+      serviceOrderActionId = await requireServiceOrderAction(client, data.settings, {
+        companyId,
+        configuration,
+        saveAction: dependencies.saveServiceOrderAction || saveOdooServiceOrderAction,
+      });
+    } catch (error) {
+      if (!(error instanceof OdooOutboundError)) throw error;
+      if (readiness.ready) {
+        return {
+          ...readiness,
+          ready: false,
+          blockers: [blocker(error.code, error.message, "odooNavigation")],
+          serviceOrderActionId: "",
+        };
+      }
+    }
+  }
+  if (readiness.ready) {
+    try {
+      if (!client) {
+        const createClient = dependencies.createClient || createOdooClient;
+        client = createClient(configuration);
+      }
       await requireCompatibleSaleOrder(client, data.settings || {}, {
         requireOdometer: normalizeOdooOdometer(data.workorder?.mileage) !== null,
       });
@@ -214,7 +244,7 @@ export async function odooWorkorderReadiness({ companyId, workorderId }, depende
       };
     }
   }
-  return readiness;
+  return { ...readiness, serviceOrderActionId };
 }
 
 function numericExternalId(value, field) {
@@ -375,11 +405,72 @@ async function requireCompatibleSaleOrder(client, settings, { requireOdometer = 
   }
 }
 
+async function requireServiceOrderAction(client, settings, { companyId, configuration, saveAction }) {
+  const cached = String(settings.serviceActionExternalId || "").trim();
+  const baseUrl = String(configuration?.baseUrl || "").trim().replace(/\/+$/, "");
+  const database = String(configuration?.database || "").trim();
+  const sameConnection = baseUrl
+    && database
+    && baseUrl === String(settings.serviceActionBaseUrl || "").trim().replace(/\/+$/, "")
+    && database === String(settings.serviceActionDatabase || "").trim();
+  if (/^[1-9][0-9]*$/.test(cached) && sameConnection) return cached;
+  const model = settings.orderModel || "sale.order";
+  const serviceFlagField = settings.serviceFlagField || "is_service_order";
+  const actions = await client.execute("ir.actions.act_window", "search_read", [[
+    ["res_model", "=", model],
+  ]], {
+    fields: ["id", "name", "res_model", "view_mode", "domain", "context", "views"],
+    limit: 200,
+    order: "id asc",
+  });
+  const actionId = selectOdooServiceOrderAction(actions, { orderModel: model, serviceFlagField });
+  if (!actionId) {
+    throw new OdooOutboundError(
+      "ODOO_SERVICE_ACTION_MISSING",
+      "Odoo does not expose a Service Orders action that opens the service-order form.",
+    );
+  }
+  await saveAction(companyId, { actionId, baseUrl, database });
+  settings.serviceActionExternalId = actionId;
+  settings.serviceActionBaseUrl = baseUrl;
+  settings.serviceActionDatabase = database;
+  return actionId;
+}
+
+function relationId(value) {
+  return Array.isArray(value) ? Number(value[0]) : Number(value);
+}
+
+function requireMatchingServiceDraft(order, payload, settings) {
+  const serviceFlagField = settings.serviceFlagField || "is_service_order";
+  const vehicleField = settings.vehicleField || "vehicle_id";
+  const warehouseField = settings.warehouseField || "warehouse_id";
+  const markerField = settings.stableMarkerField || "client_order_ref";
+  const mismatches = [];
+  if (order?.[serviceFlagField] !== true) mismatches.push(serviceFlagField);
+  if (relationId(order?.[vehicleField]) !== Number(payload[vehicleField])) mismatches.push(vehicleField);
+  if (relationId(order?.[warehouseField]) !== Number(payload[warehouseField])) mismatches.push(warehouseField);
+  if (String(order?.[markerField] || "") !== String(payload[markerField] || "")) mismatches.push(markerField);
+  if (mismatches.length) {
+    throw new OdooOutboundError(
+      "ODOO_DRAFT_MISMATCH",
+      "Odoo created a draft that does not retain the required service-order identity.",
+      502,
+      { incompatibleFields: mismatches },
+    );
+  }
+}
+
 async function findDraftByMarker(client, marker, settings) {
   const model = settings.orderModel || "sale.order";
   const markerField = settings.stableMarkerField || "client_order_ref";
   const orders = await client.execute(model, "search_read", [[[markerField, "=", marker]]], {
-    fields: ["id", "name", "state", markerField],
+    fields: [
+      "id", "name", "state", markerField,
+      settings.serviceFlagField || "is_service_order",
+      settings.vehicleField || "vehicle_id",
+      settings.warehouseField || "warehouse_id",
+    ],
     limit: 2,
     order: "id asc",
   });
@@ -396,7 +487,12 @@ async function readCreatedDraft(client, externalId, settings) {
   const model = settings.orderModel || "sale.order";
   const markerField = settings.stableMarkerField || "client_order_ref";
   const rows = await client.execute(model, "read", [[externalId]], {
-    fields: ["id", "name", "state", markerField],
+    fields: [
+      "id", "name", "state", markerField,
+      settings.serviceFlagField || "is_service_order",
+      settings.vehicleField || "vehicle_id",
+      settings.warehouseField || "warehouse_id",
+    ],
   });
   const order = rows[0];
   if (!order || order.state !== "draft") {
@@ -477,6 +573,11 @@ export async function createOdooWorkorderDraft({
     const createClient = dependencies.createClient || createOdooClient;
     const client = createClient(configuration);
     const settings = data.settings || {};
+    const serviceOrderActionId = await requireServiceOrderAction(client, settings, {
+      companyId,
+      configuration,
+      saveAction: dependencies.saveServiceOrderAction || saveOdooServiceOrderAction,
+    });
     await requireCompatibleSaleOrder(client, settings, {
       requireOdometer: normalizeOdooOdometer(data.workorder?.mileage) !== null,
     });
@@ -505,6 +606,12 @@ export async function createOdooWorkorderDraft({
         throw error;
       }
       order = await readCreatedDraft(client, createdId, settings);
+      requireMatchingServiceDraft(order, payload, settings);
+    } else {
+      const replayPayload = buildOdooDraftPayload(data, marker, {
+        products: await readCurrentMappedProducts(client, data),
+      });
+      requireMatchingServiceDraft(order, replayPayload, settings);
     }
     await recordSuccess({
       companyId,
@@ -521,6 +628,13 @@ export async function createOdooWorkorderDraft({
       status: "draft",
       externalId: String(order.id),
       serviceOrderNo: String(order.name || ""),
+      recordUrl: publicOdooRecordUrl({
+        baseUrl: configuration.baseUrl,
+        externalId: order.id,
+        model: settings.orderModel || "sale.order",
+        actionId: serviceOrderActionId,
+      }),
+      serviceOrderActionId,
       replayed,
     };
   } catch (error) {

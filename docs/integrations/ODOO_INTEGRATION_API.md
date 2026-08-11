@@ -819,7 +819,7 @@ WO:<company-id>:<workorder-id>
 
 Successful creation records the Odoo external ID and service-order number in `odoo_outbound_orders`, `odoo_entry_status`, `integration_mappings`, integration audit, and the outbox. Reopening an entered workorder uses those stored values instead of asking the user to type the service-order number again.
 
-The shared Admin/Surveillance Odoo module displays a created service-order number as a link when the application can safely build one from the saved Odoo base URL and numeric Odoo external ID. The current browser link is a convenience for signed-in Odoo users; durable reconciliation remains the stored external ID and service-order number.
+The shared Admin/Surveillance Odoo module displays a created service-order number as a link when the application can safely build one from the saved Odoo base URL, numeric Odoo external ID, and the connected database's discovered Service Orders window action. The action is cached in `odoo_service_order_settings` and included in the URL so Odoo opens its custom service-order form rather than the generic quotation form. After creation or marker recovery, the server reads the draft back and verifies the service flag, vehicle, warehouse, and marker before persisting success. The browser link remains a convenience for signed-in Odoo users; durable reconciliation remains the stored external ID and service-order number.
 
 ## 22. Failure handling and operations
 
@@ -932,7 +932,7 @@ Every location refresh and full inventory sync discovers Odoo locations again. W
 - [ ] Record the exact production database name; do not infer it only from the URL.
 - [ ] Verify mapped, unmatched, and ignored locations with real naming differences.
 - [ ] Reconcile a sample of products, physical quantity, reserved quantity, and calculated availability with Odoo.
-- [ ] Create one draft-only service order from the shared Odoo module in staging and verify the `sale.order`, marker, vehicle, warehouse, labor line, goods lines, and stored application tracking.
+- [ ] Create one draft-only service order from the shared Odoo module in staging and verify the `sale.order`, marker, vehicle, warehouse, labor line, goods lines, stored application tracking, and that the application link opens Odoo's Truck / Trailer service-order form.
 - [ ] Repeat the draft-only service-order test against production Odoo only after the production Odoo URL, database, user, API key, vehicle mappings, warehouse mappings, and labor product have been explicitly approved.
 - [ ] Confirm application reservations survive an Odoo refresh.
 - [ ] Verify sync error reporting, skipped-location counts, timeout handling, and audit logs.

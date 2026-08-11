@@ -32,6 +32,20 @@ export function odooDraftBlockedMessage(readiness) {
   return "Odoo readiness could not be confirmed. Refresh the workorder and try again.";
 }
 
+export function odooServiceOrderRecordUrl(recordUrl, actionId) {
+  const action = String(actionId || "").trim();
+  if (!recordUrl || !/^[1-9][0-9]*$/.test(action)) return recordUrl || "";
+  try {
+    const url = new URL(recordUrl);
+    const params = new URLSearchParams(url.hash.replace(/^#/, ""));
+    params.set("action", action);
+    url.hash = params.toString();
+    return url.toString();
+  } catch {
+    return recordUrl;
+  }
+}
+
 function eventTime(event) {
   const value = new Date(event?.created_at || 0).getTime();
   return Number.isFinite(value) ? value : 0;

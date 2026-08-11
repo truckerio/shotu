@@ -83,6 +83,9 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
          settings.service_flag_field,
          settings.warehouse_field,
          settings.stable_marker_field,
+         settings.service_action_external_id,
+         settings.service_action_base_url,
+         settings.service_action_database,
          settings.labor_product_external_id,
          settings.labor_uom_external_id,
          labor.display_name as labor_product_name,
@@ -230,6 +233,9 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       serviceFlagField: row.service_flag_field,
       warehouseField: row.warehouse_field,
       stableMarkerField: row.stable_marker_field,
+      serviceActionExternalId: row.service_action_external_id || "",
+      serviceActionBaseUrl: row.service_action_base_url || "",
+      serviceActionDatabase: row.service_action_database || "",
     } : null,
     parts: partResult.rows.map((part) => ({
       lineIndex: Number(part.line_index),
@@ -244,6 +250,35 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       odooQuantity: part.odoo_quantity === null ? null : Number(part.odoo_quantity),
     })),
   };
+}
+
+export async function saveOdooServiceOrderAction(companyId, {
+  actionId: actionExternalId,
+  baseUrl,
+  database,
+}) {
+  const tenantId = requireCompanyId(companyId);
+  const actionId = String(actionExternalId || "").trim();
+  const providerBaseUrl = String(baseUrl || "").trim().replace(/\/+$/, "");
+  const providerDatabase = String(database || "").trim();
+  if (!/^[1-9][0-9]*$/.test(actionId)) {
+    throw integrationConflict("ODOO_SERVICE_ACTION_INVALID", "Odoo returned an invalid service-order action.");
+  }
+  if (!providerBaseUrl || providerBaseUrl.length > 2000 || !providerDatabase || providerDatabase.length > 200) {
+    throw integrationConflict("ODOO_SERVICE_ACTION_INVALID", "Odoo service-order navigation context is invalid.");
+  }
+  const result = await query(
+    `update odoo_service_order_settings
+     set service_action_external_id = $2,
+         service_action_base_url = $3,
+         service_action_database = $4,
+         updated_at = now()
+     where company_id = $1 and active = true
+     returning service_action_external_id`,
+    [tenantId, actionId, providerBaseUrl, providerDatabase],
+  );
+  if (!result.rows[0]) throw integrationNotFound("Odoo service-order settings");
+  return result.rows[0].service_action_external_id;
 }
 
 export async function claimOdooOutboundOrder({

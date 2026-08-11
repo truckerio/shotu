@@ -9,6 +9,7 @@ import {
 } from "../../../../shared/units-of-measure.js";
 
 const migrationUrl = new URL("../../db/migrations/048_odoo_outbound_service_orders.sql", import.meta.url);
+const navigationMigrationUrl = new URL("../../db/migrations/056_odoo_service_order_navigation.sql", import.meta.url);
 
 test("outbound Odoo migration persists discovered provider truth and explicit mappings", async () => {
   const sql = await readFile(migrationUrl, "utf8");
@@ -63,4 +64,13 @@ test("canonical hours use time category and two-decimal quantities", async () =>
   assert.equal(UOM_BY_CODE.hr.odooName, "Hours");
   assert.equal(normalizeQuantity("0.50", "hr"), "0.5");
   assert.equal(quantityStep("hr"), "0.01");
+});
+
+test("service-order navigation caches a validated provider action instead of hardcoding one", async () => {
+  const sql = await readFile(navigationMigrationUrl, "utf8");
+  assert.match(sql, /add column if not exists service_action_external_id text not null default ''/i);
+  assert.match(sql, /add column if not exists service_action_base_url text not null default ''/i);
+  assert.match(sql, /add column if not exists service_action_database text not null default ''/i);
+  assert.match(sql, /service_action_external_id ~ '\^\[1-9\]\[0-9\]\*\$'/i);
+  assert.doesNotMatch(sql, /\b941\b/);
 });

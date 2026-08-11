@@ -5,6 +5,7 @@ import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.j
 import { OPERATIONS_ACTIVE_LIFECYCLES } from "../../modules/workorders/workorder-lifecycle-policy.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
+import { publicOdooRecordUrl } from "../../integrations/odoo/odoo.navigation.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
   return `
@@ -76,6 +77,7 @@ function workorderSelect() {
       coalesce(oes.external_id, '') as odoo_external_id,
       coalesce(odoo_link.base_url, '') as odoo_base_url,
       coalesce(odoo_link.target_model, 'sale.order') as odoo_target_model,
+      coalesce(odoo_link.service_action_external_id, '') as odoo_service_action_external_id,
       ${publicAssetSelect("a")} as asset,
       jsonb_build_object('id', l.id, 'name', l.name, 'type', l.type, 'address', l.address) as location,
       team.primary_mechanic as mechanic,
@@ -90,8 +92,18 @@ function workorderSelect() {
     left join lateral (
       select
         credential.metadata->>'baseUrl' as base_url,
-        outbound.target_model
+        outbound.target_model,
+        case
+          when settings.service_action_base_url = regexp_replace(coalesce(credential.metadata->>'baseUrl', ''), '/+$', '')
+           and settings.service_action_database = coalesce(credential.metadata->>'database', '')
+          then settings.service_action_external_id
+          else ''
+        end as service_action_external_id
       from odoo_outbound_orders outbound
+      join odoo_service_order_settings settings
+        on settings.company_id = outbound.company_id
+       and settings.integration_account_id = outbound.integration_account_id
+       and settings.active = true
       join integration_credentials credential
         on credential.company_id = outbound.company_id
        and credential.integration_account_id = outbound.integration_account_id
@@ -141,21 +153,6 @@ function emptyObjectToNull(value) {
   return value;
 }
 
-function publicOdooRecordUrl({ baseUrl, externalId, model = "sale.order" } = {}) {
-  if (!baseUrl || !/^\d+$/.test(String(externalId || ""))) return "";
-  try {
-    const url = new URL(String(baseUrl));
-    const localHost = ["localhost", "127.0.0.1"].includes(url.hostname);
-    if (url.protocol !== "https:" && !localHost) return "";
-    url.pathname = `${url.pathname.replace(/\/+$/, "")}/web`;
-    url.search = "";
-    url.hash = `id=${externalId}&model=${encodeURIComponent(model || "sale.order")}&view_type=form`;
-    return url.toString();
-  } catch {
-    return "";
-  }
-}
-
 export function publicWorkorderRow(row) {
   if (!row) return null;
   const asset = emptyObjectToNull(row.asset);
@@ -196,6 +193,7 @@ export function publicWorkorderRow(row) {
       baseUrl: row.odoo_base_url,
       externalId: row.odoo_external_id,
       model: row.odoo_target_model,
+      actionId: row.odoo_service_action_external_id,
     }),
     asset,
     location: emptyObjectToNull(row.location),
