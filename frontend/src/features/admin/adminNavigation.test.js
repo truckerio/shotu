@@ -25,6 +25,15 @@ test("admin phone shell reserves a shared profile destination outside route stat
   assert.match(source, /<ProfileMenu actor=\{actor\} mobileNav \/>/);
 });
 
+test("admin phone destinations divide the full bottom navigation evenly", async () => {
+  const styles = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./admin.css", import.meta.url),
+    "utf8",
+  ));
+  assert.match(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/s);
+  assert.doesNotMatch(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(6,/s);
+});
+
 test("Locations stays active throughout location-owned users and template pages", () => {
   const locations = ADMIN_MOBILE_DESTINATIONS.find(({ key }) => key === "locations");
   assert.equal(adminMobileDestinationState({ view: "locations", selectedId: "loc-1", tab: "users" }, locations), true);

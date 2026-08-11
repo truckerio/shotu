@@ -24,7 +24,7 @@
 }
 
 @media (max-width: 1180px) {
-  .workorder-detail-page.is-keyboard-open {
+  .prototype.workorder-detail-page.is-keyboard-open {
     height: var(--workorder-visual-viewport-height, 100dvh);
     inset: var(--workorder-visual-viewport-offset-top, 0) 0 auto;
     min-height: 0;
@@ -42,7 +42,7 @@
   }
 
   .workorder-detail-page.is-keyboard-open .control-panel {
-    padding-bottom: 0;
+    padding-bottom: 48px;
   }
 
   .workorder-detail-page.is-keyboard-open .workorder-section-nav-mobile,

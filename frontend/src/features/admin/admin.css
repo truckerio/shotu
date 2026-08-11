@@ -253,7 +253,7 @@
     border-top: 1px solid #d0d5dd;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     height: calc(58px + env(safe-area-inset-bottom));
     left: 0;
     padding: 4px 8px env(safe-area-inset-bottom);

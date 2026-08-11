@@ -129,4 +129,8 @@ test("browser workflow measures real role workorders at release viewports and ca
   assert.match(source, /page\.on\("pageerror"/);
   assert.match(source, /Needs Odoo/);
   assert.match(source, /assertOdooReadinessSurface/);
+  assert.match(source, /name: "phone-390", width: 390, layoutHeight: 844, keyboardHeight: 500/);
+  assert.match(source, /name: "tablet-820", width: 820, layoutHeight: 1180, keyboardHeight: 700/);
+  assert.match(source, /focus\(\{ preventScroll: true \}\)/);
+  assert.match(source, /focused create field must keep 32px clearance above the onscreen keyboard/);
 });

@@ -25,7 +25,7 @@ test("shared detail page emits one keyboard state contract for every role", () =
 });
 
 test("compact keyboard mode hides detail navigation and bounds the page to visual viewport", () => {
-  assert.match(layoutCss, /@media \(max-width:\s*1180px\)[\s\S]*\.workorder-detail-page\.is-keyboard-open\s*\{[^}]*height:\s*var\(--workorder-visual-viewport-height[^}]*position:\s*fixed;/s);
+  assert.match(layoutCss, /@media \(max-width:\s*1180px\)[\s\S]*\.prototype\.workorder-detail-page\.is-keyboard-open\s*\{[^}]*height:\s*var\(--workorder-visual-viewport-height[^}]*position:\s*fixed;/s);
   assert.match(layoutCss, /\.is-keyboard-open\s+\.workorder-section-nav-mobile,[\s\S]*\.mechanic-compact-primary-action\s*\{[^}]*display:\s*none\s*!important;/s);
 });
 

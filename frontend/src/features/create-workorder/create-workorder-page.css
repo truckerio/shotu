@@ -47,6 +47,47 @@
   flex: 0 0 auto;
 }
 
+@media (max-width: 1180px) {
+  .prototype.create-workorder-page.is-keyboard-open {
+    height: var(--create-visual-viewport-height, 100dvh);
+    inset: var(--create-visual-viewport-offset-top, 0) 0 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 12px;
+    position: fixed;
+    width: 100%;
+  }
+
+  .create-workorder-page.is-keyboard-open .workorder-detail-layout,
+  .create-workorder-page.is-keyboard-open .control-panel {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  .create-workorder-page.is-keyboard-open .control-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  .create-workorder-page.is-keyboard-open .office-create-nav {
+    flex: 0 0 auto;
+  }
+
+  .create-workorder-page.is-keyboard-open .create-workorder-form {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-bottom: 48px;
+    scroll-padding-block: 32px 48px;
+    width: 100%;
+  }
+}
+
 @media (max-width: 700px) {
   .create-location-load-error {
     align-items: stretch;
@@ -82,45 +123,6 @@
   .create-workorder-page .control-panel {
     min-width: 0;
     padding-bottom: calc(126px + env(safe-area-inset-bottom));
-  }
-
-  .create-workorder-page.is-keyboard-open {
-    height: var(--create-visual-viewport-height, 100dvh);
-    inset: var(--create-visual-viewport-offset-top, 0) 0 auto;
-    min-height: 0;
-    overflow: hidden;
-    padding: 0 12px;
-    position: fixed;
-    width: 100%;
-  }
-
-  .create-workorder-page.is-keyboard-open .workorder-detail-layout,
-  .create-workorder-page.is-keyboard-open .control-panel {
-    height: 100%;
-    max-height: 100%;
-    min-height: 0;
-  }
-
-  .create-workorder-page.is-keyboard-open .control-panel {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding-bottom: 0;
-  }
-
-  .create-workorder-page.is-keyboard-open .office-create-nav {
-    flex: 0 0 auto;
-  }
-
-  .create-workorder-page.is-keyboard-open .create-workorder-form {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    padding-bottom: 12px;
-    scroll-padding: 12px 0;
-    width: 100%;
   }
 
   .create-workorder-page.create-section-preview .create-workorder-form {

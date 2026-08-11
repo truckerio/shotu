@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { AppErrorBoundary, AppLoadingFallback } from "./app/AppErrorBoundary.jsx";
+import { OnscreenKeyboardRoot } from "./components/layout/OnscreenKeyboardRoot.jsx";
 import { AuthGate } from "./features/auth/AuthGate.jsx";
 import "./typography.css";
 
@@ -16,16 +17,18 @@ const resetError = search.get("error");
 
 createRoot(document.getElementById("root")).render(
   <AppErrorBoundary>
-    <Suspense fallback={<AppLoadingFallback />}>
-      {resetPassword ? (
-        <ResetPasswordPage token={resetToken} tokenError={resetError} />
-      ) : inviteToken ? (
-        <InviteAcceptPage token={inviteToken} />
-      ) : (
-        <AuthGate>
-          {({ actor }) => <App actor={actor} />}
-        </AuthGate>
-      )}
-    </Suspense>
+    <OnscreenKeyboardRoot>
+      <Suspense fallback={<AppLoadingFallback />}>
+        {resetPassword ? (
+          <ResetPasswordPage token={resetToken} tokenError={resetError} />
+        ) : inviteToken ? (
+          <InviteAcceptPage token={inviteToken} />
+        ) : (
+          <AuthGate>
+            {({ actor }) => <App actor={actor} />}
+          </AuthGate>
+        )}
+      </Suspense>
+    </OnscreenKeyboardRoot>
   </AppErrorBoundary>,
 );

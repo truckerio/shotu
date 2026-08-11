@@ -8,6 +8,11 @@ const WORKORDER_VIEWPORTS = Object.freeze([
   { name: "desktop-1920", width: 1920, height: 1080 },
 ]);
 
+const ONSCREEN_KEYBOARD_VIEWPORTS = Object.freeze([
+  { name: "phone-390", width: 390, layoutHeight: 844, keyboardHeight: 500 },
+  { name: "tablet-820", width: 820, layoutHeight: 1180, keyboardHeight: 700 },
+]);
+
 async function visibleText(page, text) {
   await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 15_000 });
 }
@@ -110,6 +115,48 @@ async function assertCreateSectionNavigation(page, baseUrl) {
   }
 }
 
+async function assertCreateOnscreenKeyboardVisibility(page, baseUrl) {
+  const results = [];
+  for (const viewport of ONSCREEN_KEYBOARD_VIEWPORTS) {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(new URL("/?view=create", baseUrl).href, { waitUntil: "domcontentloaded" });
+    await page.locator(".create-workorder-page").waitFor({ state: "visible", timeout: 15_000 });
+    await selectWorkorderSection(page, "unit");
+    await page.setViewportSize({ width: viewport.width, height: viewport.layoutHeight });
+
+    await page.locator("#workorder-unit").focus();
+    await page.waitForFunction(() => document.activeElement?.id === "workorder-unit");
+    await page.waitForTimeout(50);
+    await page.setViewportSize({ width: viewport.width, height: viewport.keyboardHeight });
+    await page.locator('.create-workorder-page[data-keyboard-open="true"]').waitFor({
+      state: "visible",
+      timeout: 5_000,
+    });
+    await page.locator("#customer-company-name").evaluate((field) => field.focus({ preventScroll: true }));
+    await page.waitForTimeout(500);
+
+    const geometry = await page.locator("#customer-company-name").evaluate((field) => {
+      const bounds = field.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const viewportTop = viewport?.offsetTop || 0;
+      const viewportBottom = viewportTop + (viewport?.height || window.innerHeight);
+      return {
+        fieldTop: bounds.top,
+        fieldBottom: bounds.bottom,
+        viewportTop,
+        viewportBottom,
+      };
+    });
+    assert.ok(
+      geometry.fieldTop >= geometry.viewportTop && geometry.fieldBottom <= geometry.viewportBottom - 32,
+      `${viewport.name}: focused create field must keep 32px clearance above the onscreen keyboard`,
+    );
+    results.push({ ...viewport, ...geometry, passed: true });
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  return results;
+}
+
 function collectBrowserErrors(page) {
   const errors = [];
   page.on("console", (message) => {
@@ -201,6 +248,7 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
     if (role === "admin") {
       await assertRapidSectionNavigation(page);
       await assertCreateSectionNavigation(page, config.baseUrl);
+      await assertCreateOnscreenKeyboardVisibility(page, config.baseUrl);
     }
 
     if (role === "office") {

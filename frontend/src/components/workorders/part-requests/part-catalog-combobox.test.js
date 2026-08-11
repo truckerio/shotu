@@ -51,4 +51,5 @@ test("catalog popup stays readable beyond the narrow input column", () => {
   assert.match(styles, /max-width:\s*calc\(100vw - 32px\);/);
   assert.match(styles, /overflow-wrap:\s*anywhere;/);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?max-width:\s*calc\(100vw - 24px\);/);
+  assert.match(styles, /@container part-requests-panel \(max-width: 720px\)[\s\S]*?\.part-catalog-popup\s*\{[^}]*max-width:\s*100%;[^}]*width:\s*100%;/s);
 });

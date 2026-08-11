@@ -15,6 +15,7 @@
   background: #fff;
   border: 1px solid var(--border-subtle, #d0d5dd);
   border-radius: 8px;
+  box-sizing: border-box;
   box-shadow: 0 10px 24px rgb(16 24 40 / 14%);
   left: 0;
   max-height: min(320px, 50vh);
@@ -88,5 +89,12 @@
     max-height: min(300px, 46vh);
     max-width: calc(100vw - 24px);
     width: 420px;
+  }
+}
+
+@container part-requests-panel (max-width: 720px) {
+  .part-catalog-popup {
+    max-width: 100%;
+    width: 100%;
   }
 }

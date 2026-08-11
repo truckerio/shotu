@@ -57,7 +57,7 @@ test("phone Create uses shared keyboard foundation and one docked primary action
   assert.match(createShell, /<KeyboardAwareDock/);
   assert.match(createShell, /"Creating\.\.\." : "Create workorder"/);
   assert.match(createShell, /\{!isPhone \? \([\s\S]*className="detail-create-button"/);
-  assert.match(createCss, /\.create-workorder-page\.is-keyboard-open\s*\{[^}]*position:\s*fixed;[^}]*width:\s*100%;/s);
+  assert.match(createCss, /@media \(max-width:\s*1180px\)[\s\S]*\.prototype\.create-workorder-page\.is-keyboard-open\s*\{[^}]*position:\s*fixed;[^}]*width:\s*100%;/s);
   assert.match(createCss, /\.create-workorder-page\.is-keyboard-open\s+\.create-workorder-form\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s);
 });
 

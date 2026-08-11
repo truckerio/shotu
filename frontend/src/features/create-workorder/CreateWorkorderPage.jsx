@@ -98,7 +98,7 @@ export function CreateWorkorderPage({
   const [activeSection, setActiveSection] = useState("location");
   const mobileScrollRef = useRef(null);
   const viewport = useVisualViewport();
-  const keyboardOpen = Boolean(isPhone && viewport.keyboardOpen);
+  const keyboardOpen = viewport.keyboardOpen;
   const createSections = useMemo(
     () => buildCreateWorkorderSections({
       canAssign,
@@ -123,7 +123,7 @@ export function CreateWorkorderPage({
   );
 
   const ensureFocusedFieldVisible = useFocusedFieldVisibility({
-    enabled: isPhone,
+    enabled: true,
     containerRef: mobileScrollRef,
     keyboardOpen,
     margin: 12,
