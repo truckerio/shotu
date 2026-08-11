@@ -14,6 +14,16 @@ test("catalog lookup stays deterministic, bounded, debounced, and cancellable", 
   assert.doesNotMatch(source, /parts-helper\/identify|live-prices/);
 });
 
+test("saved part values stay closed until the user interacts with the combobox", () => {
+  assert.match(source, /const \[interacting, setInteracting\] = useState\(false\)/);
+  assert.match(source, /if \(!interacting \|\| disabled/);
+  assert.match(source, /onFocus=\{\(\) => \{[\s\S]*?setInteracting\(true\)/);
+  assert.match(source, /onChange=\{\(event\) => \{[\s\S]*?setInteracting\(true\)/);
+  assert.match(source, /closeFromOutside[\s\S]*?setInteracting\(false\)/);
+  assert.match(source, /event\.key === "Escape"[\s\S]*?setInteracting\(false\)/);
+  assert.match(source, /event\.key === "Tab"[\s\S]*?setInteracting\(false\)/);
+});
+
 test("combobox exposes listbox semantics and complete keyboard selection", () => {
   assert.match(source, /role="combobox"/);
   assert.match(source, /aria-autocomplete="list"/);

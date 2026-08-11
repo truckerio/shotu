@@ -34,17 +34,29 @@ export function PartCatalogCombobox({
   const [state, setState] = useState("idle");
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
+  const [interacting, setInteracting] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const query = String(value || "");
   const normalizedQuery = query.trim();
 
   useEffect(() => {
     function closeFromOutside(event) {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      if (!rootRef.current?.contains(event.target)) {
+        setInteracting(false);
+        setOpen(false);
+      }
     }
     document.addEventListener("pointerdown", closeFromOutside);
     return () => document.removeEventListener("pointerdown", closeFromOutside);
   }, []);
+
+  useEffect(() => {
+    setInteracting(false);
+    setOpen(false);
+    setItems([]);
+    setState("idle");
+    selectedQueryRef.current = "";
+  }, [locationId, workorderId]);
 
   useEffect(() => {
     if (!open || activeIndex < 0) return;
@@ -56,7 +68,7 @@ export function PartCatalogCombobox({
     const controller = new AbortController();
     setActiveIndex(-1);
 
-    if (disabled || (!workorderId && !locationId) || normalizedQuery.length < MIN_QUERY_LENGTH
+    if (!interacting || disabled || (!workorderId && !locationId) || normalizedQuery.length < MIN_QUERY_LENGTH
       || selectedQueryRef.current === normalizedQuery) {
       setItems([]);
       setState("idle");
@@ -91,11 +103,12 @@ export function PartCatalogCombobox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [disabled, locationId, normalizedQuery, workorderId]);
+  }, [disabled, interacting, locationId, normalizedQuery, workorderId]);
 
   function select(part) {
     selectedQueryRef.current = part.partNumber.trim();
     onSelect(part);
+    setInteracting(false);
     setOpen(false);
     setActiveIndex(-1);
   }
@@ -106,11 +119,13 @@ export function PartCatalogCombobox({
       // combobox dismissal local so closing a dropdown never hides Chat or
       // Preview behind it.
       event.stopPropagation();
+      setInteracting(false);
       setOpen(false);
       setActiveIndex(-1);
       return;
     }
     if (event.key === "Tab") {
+      setInteracting(false);
       setOpen(false);
       return;
     }
@@ -150,10 +165,12 @@ export function PartCatalogCombobox({
         value={query}
         onChange={(event) => {
           selectedQueryRef.current = "";
+          setInteracting(true);
           onChange(event.target.value);
           setOpen(true);
         }}
         onFocus={() => {
+          setInteracting(true);
           if (normalizedQuery.length >= MIN_QUERY_LENGTH && selectedQueryRef.current !== normalizedQuery) setOpen(true);
         }}
         onKeyDown={handleKeyDown}
