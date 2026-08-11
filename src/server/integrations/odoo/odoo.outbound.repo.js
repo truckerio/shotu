@@ -335,13 +335,15 @@ export async function claimOdooOutboundOrder({
   try {
     await client.query("begin");
     const context = await client.query(
-      `select wo.status, settings.integration_account_id,
+      `select wo.status, preparation.id as preparation_id, settings.integration_account_id,
               coalesce(settings.order_model, 'sale.order') as target_model
        from operational_workorders wo
+       join odoo_workorder_preparation preparation
+         on preparation.company_id = wo.company_id and preparation.workorder_id = wo.id
        join odoo_service_order_settings settings
          on settings.company_id = wo.company_id and settings.active = true
        where wo.company_id = $1 and wo.id = $2
-       for update of wo`,
+       for update of wo, preparation`,
       [tenantId, workorderId],
     );
     const source = context.rows[0];

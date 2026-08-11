@@ -561,6 +561,17 @@ export async function createOdooWorkorderDraft({
     throw new OdooOutboundError("ODOO_WORKORDER_STALE", "The workorder changed after readiness was reviewed.", 409);
   }
 
+  if (!data.preparation?.id) {
+    const savePreparation = dependencies.savePreparation || saveOdooWorkorderPreparation;
+    const savedPreparation = await savePreparation(companyId, parsedWorkorderId, {
+      laborHours: data.preparation.laborHours,
+      customerExternalId: data.preparation.customerExternalId || null,
+      customerDisplayName: data.preparation.customerDisplayName || "",
+      userId,
+    });
+    data.preparation = { ...data.preparation, id: savedPreparation.id };
+  }
+
   const marker = stableOdooWorkorderMarker(companyId, parsedWorkorderId);
   const claimDraft = dependencies.claimDraft || claimOdooOutboundOrder;
   const updatePayload = dependencies.updatePayload || updateOdooOutboundPayload;

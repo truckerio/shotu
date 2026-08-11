@@ -709,13 +709,34 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.doesNotMatch(service, /action_confirm|_create_invoices|action_post|payment/i);
 });
 
-test("draft claim accepts workorder-owned labor without a legacy preparation row", async () => {
-  const repository = await readFile(new URL("./odoo.outbound.repo.js", import.meta.url), "utf8");
-  const claimStart = repository.indexOf("export async function claimOdooOutboundOrder");
-  const claimEnd = repository.indexOf("export async function updateOdooOutboundPayload", claimStart);
-  const claimSource = repository.slice(claimStart, claimEnd);
+test("draft creation snapshots workorder-owned labor before claiming the durable export", async () => {
+  const data = readyData();
+  data.preparation.id = null;
+  let savedPreparation;
+  let claimObservedSave = false;
 
-  assert.ok(claimStart >= 0 && claimEnd > claimStart);
-  assert.doesNotMatch(claimSource, /join odoo_workorder_preparation/);
-  assert.match(claimSource, /for update of wo/);
+  await assert.rejects(
+    () => createOdooWorkorderDraft({ companyId, workorderId, userId }, {
+      readExported: async () => null,
+      readReadiness: async () => data,
+      readConfiguration: async () => providerConfiguration,
+      savePreparation: async (...args) => {
+        savedPreparation = args;
+        return { id: "44444444-4444-4444-8444-444444444444" };
+      },
+      claimDraft: async () => {
+        claimObservedSave = Boolean(savedPreparation);
+        return { claimed: false, replayed: false, conflict: false };
+      },
+    }),
+    (error) => error instanceof OdooOutboundError && error.code === "ODOO_DRAFT_IN_PROGRESS",
+  );
+
+  assert.equal(claimObservedSave, true);
+  assert.deepEqual(savedPreparation, [companyId, workorderId, {
+    laborHours: 2.5,
+    customerExternalId: null,
+    customerDisplayName: "",
+    userId,
+  }]);
 });
