@@ -21,6 +21,7 @@ export function CreatePartsModule({
   onAdd,
   onChange,
   onLaborHoursChange,
+  onLaborRepairOrderChange,
   onRemove,
 }) {
   if (!access) return null;
@@ -45,7 +46,14 @@ export function CreatePartsModule({
               compact
               max={9999}
             />
-            <span className="operational-part-labor-repair">{laborRepairOrder || "Add in Diagnosis and repair"}</span>
+            <input
+              {...textEntryProps("narrative")}
+              className="operational-part-labor-repair"
+              value={laborRepairOrder}
+              onChange={(event) => onLaborRepairOrderChange(event.target.value)}
+              aria-label="Labor repair order"
+              placeholder="Repair order"
+            />
             <span aria-hidden="true"></span>
           </div>
           {parts.map((part, index) => (

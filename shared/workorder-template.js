@@ -58,11 +58,12 @@ export const WORKORDER_PART_ROWS_PER_PAGE = 6;
 function inputPartRows(form) {
   const inputParts = Array.isArray(form.parts) ? form.parts : [];
   const laborHours = String(form.laborHours || "").trim();
-  const rows = laborHours ? [{
+  const workPerformed = String(form.workPerformed || "").trim();
+  const rows = laborHours || workPerformed ? [{
     partNo: laborProductLabel(form.laborProduct),
     qty: laborHours,
     uomCode: "hr",
-    repairOrder: String(form.workPerformed || ""),
+    repairOrder: workPerformed,
   }, ...inputParts] : inputParts;
   return rows.length ? rows : emptyPartRows();
 }

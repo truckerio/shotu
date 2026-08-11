@@ -31,6 +31,7 @@ export const workorderFormDataSchema = z.object({
   customerCompanyName: customerCompanyNameSchema.optional(),
   companyName: customerCompanyNameSchema.optional(),
   laborProduct: laborProductSchema.nullable().optional(),
+  workPerformed: z.string().trim().max(5000, "Repair order must be 5000 characters or less.").optional(),
 }).catchall(z.unknown()).superRefine((formData, context) => {
   if (formData.parts === undefined) return;
   if (!Array.isArray(formData.parts)) {

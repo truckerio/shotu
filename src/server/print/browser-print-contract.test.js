@@ -90,6 +90,17 @@ test("workorder preview renders labor first without treating it as inventory", (
   assert.match(html, />Replace hub seal</);
 });
 
+test("workorder preview keeps a labor repair order visible before hours are entered", () => {
+  const html = renderWorkorderPagesHtml({
+    laborProduct: { externalId: "91", code: "LAB200", name: "Shop labor", uomCode: "hr" },
+    workPerformed: "Diagnose intermittent no-start",
+    parts: [],
+  }, "WO-000103");
+
+  assert.match(html, /\[LAB200\] Shop labor/);
+  assert.match(html, />Diagnose intermittent no-start</);
+});
+
 test("parts overflow creates numbered continuation pages without shrinking the workorder", () => {
   const parts = Array.from({ length: 14 }, (_, index) => ({
     partNo: `PART-${index + 1}`,

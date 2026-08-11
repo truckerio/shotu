@@ -10,3 +10,8 @@ test("administrative module updates persist diagnosis and repair with optimistic
   assert.match(source, /work_performed = case when \$11::boolean then \$12 else work_performed end/);
   assert.match(source, /progress_version = progress_version \+ case when \$9::boolean or \$11::boolean then 1 else 0 end/);
 });
+
+test("creation promotes the labor-row repair order into canonical work performed", () => {
+  assert.match(source, /insert into operational_workorders \([\s\S]*work_performed[\s\S]*values \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8::jsonb, \$9\)/);
+  assert.match(source, /formData\.workPerformed \|\| ""/);
+});

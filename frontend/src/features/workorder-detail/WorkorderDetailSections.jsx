@@ -169,6 +169,7 @@ export function WorkorderDetailSections({
       }),
       onPartsChange: updateActiveUsedParts,
       onLaborHoursChange: updateActiveLaborHours,
+      onLaborRepairOrderChange: (value) => updateField("workPerformed", value),
       onSaveParts: saveActiveUsedParts,
       onSelect: setDetailSection,
     },

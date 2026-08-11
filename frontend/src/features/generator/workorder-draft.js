@@ -66,6 +66,7 @@ export function buildWorkorderDraftPayload({
       mechanicConcern: text(form.mechanicConcern),
       laborHours: text(form.laborHours),
       laborProduct: form.laborProduct || null,
+      workPerformed: text(form.workPerformed),
       startTime: text(form.startTime),
       endTime: text(form.endTime),
       managerName: text(form.managerName),
@@ -97,6 +98,7 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
     || text(form.vinNo)
     || text(form.mechanicName)
     || text(form.laborHours)
+    || text(form.workPerformed)
     || text(form.startTime)
     || text(form.endTime)
     || text(form.managerName)
@@ -125,6 +127,7 @@ export function formValuesFromWorkorderDraft(payload, currentForm) {
     locationId: payload?.locationId || currentForm.locationId,
     customerCompanyName: saved.customerCompanyName || saved.companyName || "",
     mechanicConcern: saved.mechanicConcern || payload?.concern || "",
+    workPerformed: saved.workPerformed || "",
     officeNotes: payload?.officeNotes || "",
     parts: savedParts.length ? savedParts : currentForm.parts,
   };

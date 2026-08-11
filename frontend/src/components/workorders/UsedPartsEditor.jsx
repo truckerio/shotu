@@ -60,7 +60,9 @@ export function UsedPartsEditor({
   laborHours = "",
   laborProduct = null,
   laborRepairOrder = "",
+  laborRepairOrderDisabled = false,
   onLaborHoursChange = () => {},
+  onLaborRepairOrderChange = () => {},
   onChange,
   onSave,
   disabled = false,
@@ -204,7 +206,7 @@ export function UsedPartsEditor({
     return (
       <div className="used-parts-editor is-readonly" aria-label="Used parts">
         <p className="used-parts-readonly-state" role="status">{readonlyMessage}</p>
-        {laborHours ? (
+        {laborHours || laborRepairOrder ? (
           <ul className="used-parts-readonly-list">
             <li>
               <strong>{laborProductLabel(laborProduct)}</strong>
@@ -252,14 +254,21 @@ export function UsedPartsEditor({
               onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
               quantityLabel="Labor hours"
               unitLabel="Unit"
-              disabled={disabled}
+              disabled={disabled || laborRepairOrderDisabled}
               unitReadOnly
               compact
               max={9999}
             />
           </div>
           <div className="used-part-field used-part-repair">
-            <span className="used-part-labor-repair" aria-label="Labor repair order">{laborRepairOrder || "Add in Diagnosis and repair"}</span>
+            <NarrativeField
+              singleLine
+              value={laborRepairOrder}
+              onChange={(event) => onLaborRepairOrderChange(event.target.value)}
+              aria-label="Labor repair order"
+              placeholder="Repair order"
+              disabled={disabled}
+            />
           </div>
           <span aria-hidden="true"></span>
         </div>

@@ -15,6 +15,7 @@ export function WorkorderPartsModule({
   pendingPartCount,
   onChanged,
   onLaborHoursChange,
+  onLaborRepairOrderChange,
   onPartsChange,
   onSaveParts,
   onSelect,
@@ -41,7 +42,9 @@ export function WorkorderPartsModule({
           laborHours={form.laborHours || ""}
           laborProduct={form.laborProduct || null}
           laborRepairOrder={form.workPerformed || ""}
+          laborRepairOrderDisabled={!activeWorkorder.allowedActions?.saveNotes}
           onLaborHoursChange={onLaborHoursChange}
+          onLaborRepairOrderChange={onLaborRepairOrderChange}
           onPartsChange={onPartsChange}
           onSaveParts={onSaveParts}
           onChanged={onChanged}

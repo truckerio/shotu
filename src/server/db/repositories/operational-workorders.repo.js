@@ -476,9 +476,10 @@ export async function createOperationalWorkorderInTransaction(input, client) {
   const result = await client.query(
     `
       insert into operational_workorders (
-        company_id, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data
+        company_id, serial, asset_id, location_id, created_by_user_id, concern, office_notes, form_data,
+        work_performed
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
       returning id, status
     `,
     [
@@ -490,6 +491,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       input.concern,
       input.officeNotes || "",
       JSON.stringify(formData),
+      formData.workPerformed || "",
     ]
   );
   await addStatusEvent(client, {

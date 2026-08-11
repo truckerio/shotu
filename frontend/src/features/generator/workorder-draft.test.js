@@ -159,6 +159,7 @@ test("create autosave round-trips every editable workorder field", () => {
     vinNo: "1XKWDB0X0XR123456",
     mechanicConcern: "Clutch slips under load",
     laborHours: "2.5",
+    workPerformed: "Replace clutch assembly and road test",
     mechanicName: "Mechanic One",
     startTime: "09:15",
     endTime: "11:45",
@@ -187,5 +188,21 @@ test("create autosave round-trips every editable workorder field", () => {
   }
   assert.equal(restored.locationId, form.locationId);
   assert.equal(restored.officeNotes, form.officeNotes);
+  assert.equal(isMeaningfulWorkorderDraft(payload), true);
+});
+
+test("labor repair order is meaningful and survives create draft restore", () => {
+  const actor = { companyIds: ["company-1"], locationIds: ["location-1"] };
+  const payload = buildWorkorderDraftPayload({
+    actor,
+    form: {
+      locationId: "location-1",
+      workPerformed: "Inspect and adjust brakes",
+      parts: [],
+    },
+  });
+
+  assert.equal(payload.formData.workPerformed, "Inspect and adjust brakes");
+  assert.equal(formValuesFromWorkorderDraft(payload, { workPerformed: "", parts: [] }).workPerformed, "Inspect and adjust brakes");
   assert.equal(isMeaningfulWorkorderDraft(payload), true);
 });

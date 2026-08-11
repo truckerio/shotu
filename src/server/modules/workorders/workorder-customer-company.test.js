@@ -77,9 +77,10 @@ test("workorder schemas type and normalize customerCompanyName while preserving 
     companyId: COMPANY_ID,
     locationId: LOCATION_ID,
     concern: "Inspect air leak.",
-    formData: { companyName: "Legacy Fleet" },
+    formData: { companyName: "Legacy Fleet", workPerformed: "Replace the hub seal" },
   });
   assert.equal(created.formData.customerCompanyName, "Legacy Fleet");
+  assert.equal(created.formData.workPerformed, "Replace the hub seal");
 
   const updated = updateOfficeWorkorderSchema.parse({
     formData: { customerCompanyName: "New Owner" },

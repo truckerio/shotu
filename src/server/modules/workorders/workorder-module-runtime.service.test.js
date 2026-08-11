@@ -113,7 +113,7 @@ test("canonical create derives actor identity and preserves mechanic start seman
   };
   let authorized;
   const result = await createWorkorderRuntime(mechanicContext, {
-    companyId: "company-1", locationId: "location-1", concern: "Inspect", mechanicUserIds: [], formData: {},
+    companyId: "company-1", locationId: "location-1", concern: "Inspect", mechanicUserIds: [], formData: { workPerformed: "Inspect brakes" },
   }, {
     companyId: "company-1",
     locationId: "location-1",
@@ -125,6 +125,7 @@ test("canonical create derives actor identity and preserves mechanic start seman
       workStartDate: "2026-08-10",
       unitNo: "G2026",
       mechanicConcern: "Inspect",
+      workPerformed: "Inspect brakes",
       parts: [],
     },
   }, {
@@ -135,6 +136,7 @@ test("canonical create derives actor identity and preserves mechanic start seman
   assert.deepEqual(result.mechanicUserIds, ["actor-1"]);
   assert.equal(result.startImmediately, true);
   assert.equal(result.formData.laborProduct.code, "LAB");
+  assert.equal(result.formData.workPerformed, "Inspect brakes");
   assert.deepEqual(authorized[1].moduleKeys, ["concern", "unit", "location", "schedule", "parts"]);
 });
 

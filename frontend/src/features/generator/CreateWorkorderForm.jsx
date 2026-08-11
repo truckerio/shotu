@@ -58,6 +58,7 @@ export function CreateWorkorderForm({
       onAdd: onAddPart,
       onChange: onPartChange,
       onLaborHoursChange: (value) => onFieldChange("laborHours", value),
+      onLaborRepairOrderChange: (value) => onFieldChange("workPerformed", value),
       onRemove: onRemovePart,
     },
     schedule: { activeSection: mobileSection, form, onChange: onFieldChange },
