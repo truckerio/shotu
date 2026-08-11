@@ -4,6 +4,9 @@ export function UsedPartsSection({
   actorId,
   detail,
   parts,
+  laborHours,
+  laborRepairOrder,
+  onLaborHoursChange,
   onPartsChange,
   onSaveParts,
   editable,
@@ -18,6 +21,9 @@ export function UsedPartsSection({
         actorId={actorId}
         detail={detail}
         parts={parts}
+        laborHours={laborHours}
+        laborRepairOrder={laborRepairOrder}
+        onLaborHoursChange={onLaborHoursChange}
         onChange={onPartsChange}
         onSave={onSaveParts}
         disabled={!editable}

@@ -140,8 +140,12 @@ export async function runWorkorderModuleAction(
     if (action === "request") return (dependencies.requestPart || requestMechanicPart)(workorderId, { ...input, mechanicUserId: actorId });
     if (action === "record" && input.operation === "usedParts") {
       return context.actor.role === "mechanic"
-        ? (dependencies.saveMechanicParts || saveMechanicUsedParts)(workorderId, actorId, input.parts)
-        : (dependencies.saveOfficeParts || saveOfficeUsedParts)(workorderId, { parts: input.parts, officeUserId: actorId });
+        ? (dependencies.saveMechanicParts || saveMechanicUsedParts)(workorderId, actorId, input.parts, input.laborHours)
+        : (dependencies.saveOfficeParts || saveOfficeUsedParts)(workorderId, {
+          parts: input.parts,
+          laborHours: input.laborHours,
+          officeUserId: actorId,
+        });
     }
     if (action === "record" && input.operation === "usage" && context.actor.role === "mechanic") {
       return (dependencies.updateUsage || updateMechanicPartUsage)(workorderId, input.requestId, { ...input, mechanicUserId: actorId });

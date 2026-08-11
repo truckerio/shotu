@@ -5,6 +5,9 @@ export function ReadOnlyPartsSurface({
   actorId,
   detail,
   parts,
+  laborHours,
+  laborRepairOrder,
+  onLaborHoursChange,
   onPartsChange,
   onSaveParts,
   onChanged,
@@ -17,6 +20,9 @@ export function ReadOnlyPartsSurface({
         actorId={actorId}
         detail={detail}
         parts={parts}
+        laborHours={laborHours}
+        laborRepairOrder={laborRepairOrder}
+        onLaborHoursChange={onLaborHoursChange}
         onPartsChange={onPartsChange}
         onSaveParts={onSaveParts}
         editable={usedPartsAccess.editable}

@@ -145,16 +145,16 @@ test("lifecycle and assignment helpers preserve action endpoints and request bod
   ]);
 });
 
-test("used-parts helper saves only parts and detail loader reads canonical office truth", async () => {
+test("parts helper saves labor and goods together and detail loader reads canonical office truth", async () => {
   const recorder = requestRecorder({ workorder: { id: "wo-3" } });
   const parts = [{ partNo: "OIL", qty: "2", uomCode: "qt", repairOrder: "Refill" }];
-  await saveOfficeUsedPartsRequest({ request: recorder.request, workorderId: "wo-3", parts });
+  await saveOfficeUsedPartsRequest({ request: recorder.request, workorderId: "wo-3", parts, laborHours: "2.5" });
   await loadOfficeWorkorder({ request: recorder.request, workorderId: "wo-3" });
 
   assert.deepEqual(recorder.calls, [
     ["/api/office/workorders/wo-3/used-parts", {
       method: "PATCH",
-      body: JSON.stringify({ parts }),
+      body: JSON.stringify({ parts, laborHours: "2.5" }),
     }],
     ["/api/office/workorders/wo-3"],
   ]);

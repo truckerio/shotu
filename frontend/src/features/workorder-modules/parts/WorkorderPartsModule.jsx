@@ -14,6 +14,7 @@ export function WorkorderPartsModule({
   locale,
   pendingPartCount,
   onChanged,
+  onLaborHoursChange,
   onPartsChange,
   onSaveParts,
   onSelect,
@@ -37,6 +38,9 @@ export function WorkorderPartsModule({
           role={canWrite ? (isOfficeDetail ? "office" : "mechanic") : "read"}
           detail={activeWorkorder}
           parts={form.parts}
+          laborHours={form.laborHours || ""}
+          laborRepairOrder={form.workPerformed || ""}
+          onLaborHoursChange={onLaborHoursChange}
           onPartsChange={onPartsChange}
           onSaveParts={onSaveParts}
           onChanged={onChanged}

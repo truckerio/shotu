@@ -147,6 +147,7 @@ export function WorkorderDetailPage({
   returnOfficeWorkorder,
   toggleWorkorderTools,
   updateActiveUsedParts,
+  updateActiveLaborHours,
   updateField,
   updateOfficeMechanicTeam,
   updateStartDate,
@@ -474,6 +475,7 @@ export function WorkorderDetailPage({
             setDetailSection={selectDetailSection}
             setOfficeAssignment={setOfficeAssignment}
             updateActiveUsedParts={updateActiveUsedParts}
+            updateActiveLaborHours={updateActiveLaborHours}
             updateField={updateField}
             updateOfficeMechanicTeam={updateOfficeMechanicTeam}
             updateStartDate={updateStartDate}

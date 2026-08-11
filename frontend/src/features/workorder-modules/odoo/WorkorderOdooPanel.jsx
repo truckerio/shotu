@@ -23,7 +23,6 @@ export function WorkorderOdooPanel({
   const {
     createOdooDraft,
     error,
-    laborHours,
     markMissingInfo,
     odooDraftResult,
     odooDraftFeedback,
@@ -31,7 +30,6 @@ export function WorkorderOdooPanel({
     odooNote,
     odooReadiness,
     saving,
-    setLaborHours,
     setOdooNote,
   } = controller;
   const canWrite = access === WORKORDER_MODULE_ACCESS.WRITE
@@ -43,7 +41,7 @@ export function WorkorderOdooPanel({
     odooDraftResult?.serviceOrderActionId || odooReadiness?.serviceOrderActionId,
   );
   const blockers = createdOrderNo ? [] : odooReadiness?.blockers || [];
-  const canCreateDraft = Boolean(String(laborHours).trim() && !createdOrderNo);
+  const canCreateDraft = !createdOrderNo;
   const readinessStatus = odooReadinessStatus({
     created: Boolean(createdOrderNo),
     loading: odooLoading,
@@ -118,19 +116,6 @@ export function WorkorderOdooPanel({
 
           {canWrite ? (
             <form onSubmit={createOdooDraft}>
-              <label>
-                <span>Labor hours</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0.01"
-                  max="999.99"
-                  step="0.01"
-                  value={laborHours}
-                  onChange={(event) => setLaborHours(event.target.value)}
-                  disabled={Boolean(createdOrderNo)}
-                />
-              </label>
               <label>
                 <span>Note for Odoo or Manager</span>
                 <NarrativeField value={odooNote} onChange={(event) => setOdooNote(event.target.value)} rows="3" placeholder="Required when requesting information" />

@@ -100,7 +100,7 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
     ));
   }
   if (!laborHours || laborHours <= 0 || Math.round(laborHours * 100) !== laborHours * 100) {
-    blockers.push(blocker("ODOO_LABOR_INVALID", "Enter actual labor hours with no more than two decimal places.", "laborHours"));
+    blockers.push(blocker("ODOO_LABOR_INVALID", "Add actual labor hours in the Parts section with no more than two decimal places.", "laborHours"));
   }
   if (!String(workorder?.workPerformed || "").trim()) {
     blockers.push(blocker("ODOO_WORK_PERFORMED_MISSING", "A repair order is required for the labor description.", "workPerformed"));

@@ -15,7 +15,6 @@ export function useWorkorderOdooModule({
   reportError,
   workorderId,
 }) {
-  const [laborHours, setLaborHours] = useState("");
   const [odooDraftFeedback, setOdooDraftFeedback] = useState("");
   const [odooDraftResult, setOdooDraftResult] = useState(null);
   const [odooLoading, setOdooLoading] = useState(false);
@@ -30,14 +29,13 @@ export function useWorkorderOdooModule({
     reportError?.(message);
   }, [reportError]);
 
-  const loadOdooReadiness = useCallback(async ({ fillLaborHours = false } = {}) => {
+  const loadOdooReadiness = useCallback(async () => {
     if (!enabled || !eligible || !workorderId) return null;
     setOdooLoading(true);
     try {
       const readiness = await api(moduleEndpoint(workorderId, "readiness"));
       setOdooReadiness(readiness);
       if (readiness?.ready) setOdooDraftFeedback("");
-      if (fillLaborHours && readiness?.labor?.hours) setLaborHours(String(readiness.labor.hours));
       return readiness;
     } catch (cause) {
       fail(cause);
@@ -48,26 +46,21 @@ export function useWorkorderOdooModule({
   }, [eligible, enabled, fail, workorderId]);
 
   useEffect(() => {
-    setLaborHours("");
     setOdooDraftFeedback("");
     setOdooDraftResult(null);
     setOdooNote("");
     setOdooReadiness(null);
     setError("");
-    if (enabled && eligible && workorderId) loadOdooReadiness({ fillLaborHours: true });
+    if (enabled && eligible && workorderId) loadOdooReadiness();
   }, [eligible, enabled, loadOdooReadiness, workorderId]);
 
   async function createOdooDraft(event) {
     event?.preventDefault?.();
-    if (!enabled || !eligible || !workorderId || !String(laborHours).trim()) return;
+    if (!enabled || !eligible || !workorderId) return;
     setSaving(true);
     setError("");
     setOdooDraftFeedback("");
     try {
-      await api(moduleEndpoint(workorderId, "preparation"), {
-        method: "PUT",
-        body: JSON.stringify({ laborHours: String(laborHours).trim() }),
-      });
       const readiness = await loadOdooReadiness();
       if (!readiness?.ready) {
         setOdooDraftFeedback(odooDraftBlockedMessage(readiness));
@@ -109,7 +102,6 @@ export function useWorkorderOdooModule({
   return {
     createOdooDraft,
     error,
-    laborHours,
     loadOdooReadiness,
     markMissingInfo,
     odooDraftFeedback,
@@ -118,7 +110,6 @@ export function useWorkorderOdooModule({
     odooNote,
     odooReadiness,
     saving,
-    setLaborHours,
     setOdooNote,
   };
 }

@@ -698,6 +698,8 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.match(repository, /workorderUpdate\.rowCount !== 1/);
   assert.match(repository, /jsonb_typeof\(wo\.form_data->'parts'\) = 'array'/);
   assert.match(repository, /wo\.form_data->>'mileage' as mileage/);
+  assert.match(repository, /wo\.form_data->>'laborHours'/);
+  assert.match(repository, /else preparation\.labor_hours[\s\S]*end as effective_labor_hours/);
   assert.match(repository, /source_uom\.reference_code = expected_uom\.reference_code/);
   assert.match(repository, /source_uom\.conversion_factor \/ expected_uom\.conversion_factor/);
   assert.match(repository, /when catalog\.uom_code = 'ea'[\s\S]*then \(part\.value->>'qty'\)::numeric/);

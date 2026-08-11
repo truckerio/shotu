@@ -74,6 +74,21 @@ test("generic action routes assignment through authenticated actor after module 
   assert.equal(result[1].officeUserId, "actor-1");
 });
 
+test("parts action persists labor hours with goods through the authenticated role", async () => {
+  const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", {
+    operation: "usedParts",
+    laborHours: "2.5",
+    parts: [{ partNo: "46305", qty: "1", uomCode: "ea", repairOrder: "Replace seal" }],
+  }, {
+    authorize: async () => {},
+    saveOfficeParts: async (...args) => args,
+  });
+
+  assert.equal(result[1].officeUserId, "actor-1");
+  assert.equal(result[1].laborHours, "2.5");
+  assert.equal(result[1].parts[0].partNo, "46305");
+});
+
 test("office Work done uses the shared completion transition with the authenticated office actor", async () => {
   const calls = [];
   const result = await runWorkorderModuleAction(context, "wo-1", "completion", "markWorkDone", {

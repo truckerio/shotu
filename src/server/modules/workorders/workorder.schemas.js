@@ -93,6 +93,13 @@ const usedPartQuantitySchema = z.union([
 ]);
 
 export const updateMechanicUsedPartsSchema = z.object({
+  laborHours: z.union([
+    z.literal(""),
+    z.number().positive().max(9999),
+    z.string().trim()
+      .regex(/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/, "Labor hours must be positive with at most two decimals.")
+      .refine((value) => Number(value) > 0 && Number(value) <= 9999, "Labor hours must be greater than zero and within the supported range."),
+  ]).optional().transform((value) => value === undefined || value === "" ? value : String(Number(value))),
   parts: z.array(z.object({
     partNo: z.string().trim().max(200).default(""),
     qty: usedPartQuantitySchema.default(""),

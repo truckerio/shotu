@@ -10,6 +10,9 @@ export function MechanicPartsSurface({
   actorId,
   detail,
   parts,
+  laborHours,
+  laborRepairOrder,
+  onLaborHoursChange,
   onPartsChange,
   onSaveParts,
   onChanged,
@@ -17,7 +20,7 @@ export function MechanicPartsSurface({
   usedPartsAccess,
 }) {
   const mechanicActions = mechanicPartsActionState(detail.allowedActions || {});
-  const [activeAction, setActiveAction] = useState("");
+  const [activeAction, setActiveAction] = useState(() => mechanicActions.canRecordUsedPart ? "used" : "");
   const requests = detail.partRequests || [];
   const hasRecordedUsedParts = Array.isArray(parts) && parts.some(usedPartHasValue);
   const showUsedParts = mechanicActions.canRecordUsedPart || hasRecordedUsedParts;
@@ -26,8 +29,8 @@ export function MechanicPartsSurface({
   const t = (key) => interfaceText(locale, key);
 
   useEffect(() => {
-    setActiveAction("");
-  }, [detail.workorder.id]);
+    setActiveAction(mechanicActions.canRecordUsedPart ? "used" : "");
+  }, [detail.workorder.id, mechanicActions.canRecordUsedPart]);
 
   return (
     <>
@@ -69,6 +72,9 @@ export function MechanicPartsSurface({
           actorId={actorId}
           detail={detail}
           parts={parts}
+          laborHours={laborHours}
+          laborRepairOrder={laborRepairOrder}
+          onLaborHoursChange={onLaborHoursChange}
           onPartsChange={onPartsChange}
           onSaveParts={onSaveParts}
           editable={usedPartsAccess.editable}

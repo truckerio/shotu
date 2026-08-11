@@ -52,6 +52,23 @@
   min-width: 0;
 }
 
+.used-part-labor-row {
+  background: var(--surface-subtle, #f9fafb);
+}
+
+.used-part-labor-name,
+.used-part-labor-repair {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.used-part-labor-repair {
+  color: var(--text-secondary, #475467);
+  font-weight: 400;
+}
+
 .used-parts-editor .used-part-number-control .part-catalog-field > label {
   display: none;
 }

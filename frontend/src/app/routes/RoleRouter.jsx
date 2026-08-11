@@ -110,6 +110,7 @@ export function RoleRouter({ actor }) {
     saveActiveUsedParts,
     stageOfficeAutosave: stageOfficeWorkorderAutosave,
     updateActiveUsedParts,
+    updateActiveLaborHours,
     updateField,
     updatePart,
     updateStartDate,
@@ -473,7 +474,7 @@ export function RoleRouter({ actor }) {
         setFullscreenPageIndex, setFullscreenZoom, setMechanicFinish, setOfficeAssignment,
         setOfficeCancel, setOfficeCloseNote, setOfficeCloseOpen, setOfficeDetailState,
         setOfficeReturn, setPreviewFullscreen, setPrintMenuOpen, setPrintState,
-        setSupportingView, submitMechanicFinish, toggleWorkorderTools, updateActiveUsedParts,
+        setSupportingView, submitMechanicFinish, toggleWorkorderTools, updateActiveUsedParts, updateActiveLaborHours,
         updateField, updateOfficeMechanicTeam, updateStartDate, updateUnitNumber,
         vehicleMileage, vehicleModelText,
       }}

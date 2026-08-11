@@ -205,7 +205,7 @@ export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId,
   }
 }
 
-export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts) {
+export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours) {
   await requireMechanic(mechanicUserId);
   const policy = await getWorkorderMechanicPartsPolicy(workorderId);
   if (!policy?.mechanicCanRecordParts) {
@@ -215,7 +215,7 @@ export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts) 
       "Mechanics cannot record used parts at this location. Send a part request to the office instead.",
     );
   }
-  return updateMechanicUsedParts(workorderId, mechanicUserId, parts);
+  return updateMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours);
 }
 
 export async function markMechanicDone(workorderId, mechanicUserId, input) {

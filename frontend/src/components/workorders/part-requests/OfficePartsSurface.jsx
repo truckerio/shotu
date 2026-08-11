@@ -7,6 +7,9 @@ export function OfficePartsSurface({
   actorId,
   detail,
   parts,
+  laborHours,
+  laborRepairOrder,
+  onLaborHoursChange,
   onPartsChange,
   onSaveParts,
   onChanged,
@@ -23,6 +26,9 @@ export function OfficePartsSurface({
         actorId={actorId}
         detail={detail}
         parts={parts}
+        laborHours={laborHours}
+        laborRepairOrder={laborRepairOrder}
+        onLaborHoursChange={onLaborHoursChange}
         onPartsChange={onPartsChange}
         onSaveParts={onSaveParts}
         editable={usedPartsAccess.editable}

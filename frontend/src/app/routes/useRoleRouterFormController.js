@@ -80,25 +80,30 @@ export function createRoleRouterFormController({
     setForm((current) => ({ ...current, parts }));
   }
 
-  async function saveActiveUsedParts(parts) {
+  function updateActiveLaborHours(laborHours) {
+    setUsedPartsDirty(true);
+    setForm((current) => ({ ...current, laborHours }));
+  }
+
+  async function saveActiveUsedParts(parts, laborHours) {
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId) throw new Error("Open a workorder before saving parts.");
     if (isOfficeDetail) {
-      await officeActionsRef.current?.saveActiveUsedParts(parts);
+      await officeActionsRef.current?.saveActiveUsedParts(parts, laborHours);
       return;
     }
 
     const savedParts = normalizeSavedUsedParts(parts);
     await api(`/api/mechanic/workorders/${workorderId}/used-parts`, {
       method: "PATCH",
-      body: JSON.stringify({ parts: savedParts }),
+      body: JSON.stringify({ parts: savedParts, laborHours }),
     });
-    setForm((current) => ({ ...current, parts: savedParts }));
+    setForm((current) => ({ ...current, parts: savedParts, laborHours }));
     setActiveWorkorder((current) => current ? {
       ...current,
       workorder: {
         ...current.workorder,
-        formData: { ...(current.workorder.formData || {}), parts: savedParts },
+        formData: { ...(current.workorder.formData || {}), parts: savedParts, laborHours },
       },
     } : current);
     setUsedPartsDirty(false);
@@ -111,6 +116,7 @@ export function createRoleRouterFormController({
     saveActiveUsedParts,
     stageOfficeAutosave,
     updateActiveUsedParts,
+    updateActiveLaborHours,
     updateField,
     updatePart,
     updateStartDate,

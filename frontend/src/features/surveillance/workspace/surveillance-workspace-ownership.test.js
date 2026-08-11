@@ -33,7 +33,7 @@ test("queue, detail, and Odoo behavior have focused owners", () => {
   assert.doesNotMatch(detailController, /odoo-readiness|odoo-preparation|odoo-draft|mark-missing-info/);
   assert.match(odooController, /modules\/odoo/);
   assert.match(odooController, /moduleEndpoint\(workorderId, "readiness"\)/);
-  assert.match(odooController, /moduleEndpoint\(workorderId, "preparation"\)/);
+  assert.doesNotMatch(odooController, /moduleEndpoint\(workorderId, "preparation"\)/);
   assert.match(odooController, /moduleEndpoint\(workorderId, "draft"\)/);
   assert.match(odooController, /moduleEndpoint\(workorderId, "missing-info"\)/);
   assert.match(detailController, /useWorkorderDetailRealtime/);
@@ -41,7 +41,7 @@ test("queue, detail, and Odoo behavior have focused owners", () => {
   assert.match(detailPage, /<WorkorderDetailModuleHost/);
   assert.match(source("../../workorder-modules/WorkorderDetailModuleHost.jsx"), /WorkorderOdooModule/);
   assert.match(odooPanel, /Create Odoo draft/);
-  assert.match(odooPanel, /Labor hours/);
+  assert.doesNotMatch(odooPanel, /Labor hours/);
   assert.doesNotMatch(detailPage, /mark-odoo-entered|mark-missing-info/);
 });
 

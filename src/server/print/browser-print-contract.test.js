@@ -76,6 +76,19 @@ test("shared template keeps operational text readable without ellipsis clipping"
   assert.doesNotMatch(workorderTemplateStyles, /\.wo-disclaimer span\s*\{[^}]*text-overflow:\s*ellipsis/s);
 });
 
+test("workorder preview renders labor first without treating it as inventory", () => {
+  const html = renderWorkorderPagesHtml({
+    laborHours: "2.5",
+    workPerformed: "Replace hub seal",
+    parts: [{ partNo: "46305", qty: "1", uomCode: "ea", repairOrder: "Replace hub seal" }],
+  }, "WO-000102");
+
+  assert.ok(html.indexOf("[PTR001] LABOR HOURS") < html.indexOf("46305"));
+  assert.match(html, /\[PTR001\] LABOR HOURS/);
+  assert.match(html, />2\.5 hr</);
+  assert.match(html, />Replace hub seal</);
+});
+
 test("parts overflow creates numbered continuation pages without shrinking the workorder", () => {
   const parts = Array.from({ length: 14 }, (_, index) => ({
     partNo: `PART-${index + 1}`,

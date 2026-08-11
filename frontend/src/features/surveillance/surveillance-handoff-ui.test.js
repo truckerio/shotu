@@ -20,9 +20,10 @@ test("Surveillance uses explicit request and correction handoff language", () =>
   assert.doesNotMatch(odooPanel, />Send back for information</);
 });
 
-test("Surveillance can save labor before readiness becomes ready", () => {
-  assert.match(odooPanel, /const canCreateDraft = Boolean\(String\(laborHours\)\.trim\(\) && !createdOrderNo\)/);
-  assert.doesNotMatch(odooPanel, /const canCreateDraft = Boolean\(odooReadiness\?\.ready/);
+test("Surveillance reads workorder labor instead of entering it again", () => {
+  assert.match(odooPanel, /const canCreateDraft = !createdOrderNo/);
+  assert.doesNotMatch(odooPanel, /Labor hours/);
+  assert.doesNotMatch(detailController, /moduleEndpoint\(workorderId, "preparation"\)/);
 });
 
 test("Surveillance reports blocked draft attempts without flickering known readiness", () => {
@@ -38,7 +39,7 @@ test("Surveillance treats a persisted Odoo order as created after reopening", ()
   assert.match(odooPanel, /const createdOrderUrl = odooDraftResult\?\.recordUrl \|\| odooServiceOrderRecordUrl\(/);
   assert.match(odooPanel, /odooReadiness\?\.serviceOrderActionId/);
   assert.match(odooPanel, /<a href=\{createdOrderUrl\} target="_blank" rel="noreferrer">\{createdOrderNo\}<\/a>/);
-  assert.match(odooPanel, /disabled=\{Boolean\(createdOrderNo\)\}/);
+  assert.match(odooPanel, /disabled=\{saving \|\| !canCreateDraft\}/);
 });
 
 test("Surveillance Preview overlays stale saved headings with the current location", () => {

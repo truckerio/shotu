@@ -63,6 +63,12 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       `select
          wo.id, wo.serial, wo.status, wo.work_performed, wo.updated_at,
          wo.form_data->>'mileage' as mileage,
+         case
+           when coalesce(wo.form_data->>'laborHours', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$'
+             and (wo.form_data->>'laborHours')::numeric > 0
+             then (wo.form_data->>'laborHours')::numeric
+           else preparation.labor_hours
+         end as effective_labor_hours,
          jsonb_typeof(coalesce(wo.form_data->'parts', '[]'::jsonb)) = 'array' as parts_valid,
          preparation.id as preparation_id,
          preparation.labor_hours,
@@ -234,9 +240,9 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       updatedAt: row.updated_at,
       partsValid: row.parts_valid,
     },
-    preparation: row.preparation_id ? {
+    preparation: row.effective_labor_hours !== null ? {
       id: row.preparation_id,
-      laborHours: Number(row.labor_hours),
+      laborHours: Number(row.effective_labor_hours),
       customerExternalId: row.override_customer_external_id || null,
       customerDisplayName: row.override_customer_display_name || "",
     } : null,

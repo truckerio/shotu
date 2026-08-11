@@ -47,9 +47,10 @@ test("confirmed saves clear only the scoped backup", () => {
 
 test("Office parts autosave uses the narrow persistence endpoint and reloads server truth", () => {
   assert.match(officeActions, /workorderPath\(workorderId, "\/used-parts"\)/);
-  assert.match(officeActions, /body: JSON\.stringify\(\{ parts \}\)/);
+  assert.match(officeActions, /body: JSON\.stringify\(\{ parts, laborHours \}\)/);
   assert.match(officeActions, /reloadOfficeWorkorder\(result\.workorder\.id/);
   assert.match(officeActions, /savedParts = detail\.workorder\.formData\?\.parts \|\| \[\]/);
+  assert.match(officeActions, /savedLaborHours = detail\.workorder\.formData\?\.laborHours \|\| ""/);
   assert.doesNotMatch(officeActions, /formData:\s*\{\s*\.\.\.\(activeWorkorder\.workorder\.formData \|\| \{\}\),\s*parts,/s);
   assert.match(roleRouter, /useOfficeWorkorderActions/);
 });

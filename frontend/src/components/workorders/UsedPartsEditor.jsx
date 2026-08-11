@@ -55,6 +55,9 @@ export function UsedPartsEditor({
   actorId,
   detail,
   parts,
+  laborHours = "",
+  laborRepairOrder = "",
+  onLaborHoursChange = () => {},
   onChange,
   onSave,
   disabled = false,
@@ -68,11 +71,14 @@ export function UsedPartsEditor({
     () => normalizeUsedParts(parts, Math.max(minimum, visibleRowCount)),
     [minimum, parts, visibleRowCount],
   );
-  const rowsPayload = useMemo(() => JSON.stringify(rows), [rows]);
+  const savePayload = useMemo(
+    () => JSON.stringify({ parts: rows, laborHours: String(laborHours || "") }),
+    [laborHours, rows],
+  );
   const storageKey = actorId
     ? mechanicWorkStorageKey("used-parts", actorId, detail.workorder.id)
     : "";
-  const persistedRef = useRef(rowsPayload);
+  const persistedRef = useRef(savePayload);
   const hydratedRef = useRef(false);
   const saveRef = useRef(onSave);
   const [findingRow, setFindingRow] = useState(-1);
@@ -88,7 +94,7 @@ export function UsedPartsEditor({
     const currentRows = normalizeUsedParts(parts, minimum);
     setVisibleRowCount(currentRows.length);
     hydratedRef.current = false;
-    persistedRef.current = JSON.stringify(currentRows);
+    persistedRef.current = JSON.stringify({ parts: currentRows, laborHours: String(laborHours || "") });
     setSaveState("");
     setMessage("");
     setSelectedCatalogParts([]);
@@ -99,12 +105,15 @@ export function UsedPartsEditor({
     try {
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
-      const recovered = normalizeUsedParts(JSON.parse(stored), minimum);
+      const storedValue = JSON.parse(stored);
+      const recovered = normalizeUsedParts(Array.isArray(storedValue) ? storedValue : storedValue.parts, minimum);
+      const recoveredLaborHours = Array.isArray(storedValue) ? laborHours : String(storedValue.laborHours || "");
       setVisibleRowCount(recovered.length);
       if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
         onChange(recovered);
         setMessage("Recovered your unsaved part entries.");
       }
+      if (recoveredLaborHours !== String(laborHours || "")) onLaborHoursChange(recoveredLaborHours);
     } catch {
       window.localStorage.removeItem(storageKey);
     }
@@ -112,13 +121,13 @@ export function UsedPartsEditor({
 
   useEffect(() => {
     if (!hydratedRef.current || disabled || !storageKey) return undefined;
-    if (rowsPayload === persistedRef.current) return undefined;
-    window.localStorage.setItem(storageKey, rowsPayload);
+    if (savePayload === persistedRef.current) return undefined;
+    window.localStorage.setItem(storageKey, savePayload);
     setSaveState("Saving...");
     const timer = window.setTimeout(async () => {
       try {
-        await saveRef.current(rows);
-        persistedRef.current = rowsPayload;
+        await saveRef.current(rows, String(laborHours || ""));
+        persistedRef.current = savePayload;
         window.localStorage.removeItem(storageKey);
         setSaveState("Saved");
       } catch (error) {
@@ -127,7 +136,7 @@ export function UsedPartsEditor({
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [disabled, rows, rowsPayload, storageKey]);
+  }, [disabled, laborHours, rows, savePayload, storageKey]);
 
   function update(index, field, value) {
     onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
@@ -193,6 +202,15 @@ export function UsedPartsEditor({
     return (
       <div className="used-parts-editor is-readonly" aria-label="Used parts">
         <p className="used-parts-readonly-state" role="status">{readonlyMessage}</p>
+        {laborHours ? (
+          <ul className="used-parts-readonly-list">
+            <li>
+              <strong>[PTR001] LABOR HOURS</strong>
+              <span>{laborHours} hr</span>
+              {laborRepairOrder ? <span>{laborRepairOrder}</span> : null}
+            </li>
+          </ul>
+        ) : null}
         {savedParts.length ? (
           <ul className="used-parts-readonly-list">
             {savedParts.map((part, index) => (
@@ -210,13 +228,6 @@ export function UsedPartsEditor({
 
   return (
     <div className="used-parts-editor">
-      {!rows.length ? (
-        <div className="used-parts-empty-state">
-          <p>No used parts recorded.</p>
-          <Button icon={Plus} onClick={addRow}>Record used part</Button>
-        </div>
-      ) : null}
-      {rows.length ? (
       <div className="parts-editor">
         <div className="part-row part-row-head" aria-hidden="true">
           <span>S.No</span>
@@ -225,9 +236,34 @@ export function UsedPartsEditor({
           <span>Repair order</span>
           <span></span>
         </div>
+        <div className="part-row used-part-labor-row">
+          <strong>1</strong>
+          <div className="used-part-field">
+            <span className="used-part-label">Labor</span>
+            <strong className="used-part-labor-name">[PTR001] LABOR HOURS</strong>
+          </div>
+          <div className="used-part-field used-part-quantity">
+            <QuantityUnitInput
+              id="workorder-labor-hours"
+              quantity={laborHours}
+              uomCode="hr"
+              onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
+              quantityLabel="Labor hours"
+              unitLabel="Unit"
+              disabled={disabled}
+              unitReadOnly
+              compact
+              max={9999}
+            />
+          </div>
+          <div className="used-part-field used-part-repair">
+            <span className="used-part-labor-repair" aria-label="Labor repair order">{laborRepairOrder || "Add in Diagnosis and repair"}</span>
+          </div>
+          <span aria-hidden="true"></span>
+        </div>
         {rows.map((part, index) => (
           <div className="part-row" key={index}>
-            <strong>{index + 1}</strong>
+            <strong>{index + 2}</strong>
             <div className="used-part-field">
               <span className="used-part-label">Part number</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
@@ -299,8 +335,9 @@ export function UsedPartsEditor({
           </div>
         ))}
       </div>
-      ) : null}
-      {rows.length ? <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>Add another part</Button> : null}
+      <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
+        {rows.length ? "Add another part" : "Record used part"}
+      </Button>
       <div className="used-parts-feedback" aria-live="polite">
         {message ? <span>{message}</span> : <span></span>}
         {saveState ? <strong>{saveState}</strong> : null}

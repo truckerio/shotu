@@ -218,7 +218,7 @@ export async function saveOfficeUsedParts(workorderId, input) {
   const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   try {
-    return await updateOfficeUsedParts(workorderId, office.id, input.parts);
+    return await updateOfficeUsedParts(workorderId, office.id, input.parts, input.laborHours);
   } catch (error) {
     return mapLifecycleConflict(error);
   }

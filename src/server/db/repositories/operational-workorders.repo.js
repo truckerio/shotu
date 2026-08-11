@@ -370,6 +370,7 @@ const FIELD_EVENT_LABELS = {
   "formData.workStartDate": "Start date",
   "formData.workEndDate": "End date",
   "formData.parts": "Used parts",
+  "formData.laborHours": "Labor hours",
 };
 
 const MECHANIC_OWNED_FORM_KEYS = new Set([
@@ -1344,7 +1345,7 @@ export async function releaseOperationalWorkorder(workorderId, mechanicUserId, r
   }
 }
 
-async function updateOperationalUsedParts(workorderId, changedByUserId, parts, {
+async function updateOperationalUsedParts(workorderId, changedByUserId, parts, laborHours, {
   requireAssignedMechanic = false,
 } = {}) {
   const pool = getPool();
@@ -1395,10 +1396,12 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, {
     const nextFormData = {
       ...formData,
       parts,
+      ...(laborHours !== undefined ? { laborHours } : {}),
     };
     const nextInput = { formData: nextFormData };
     const partsChanged = JSON.stringify(canonicalJson(formData.parts || [])) !== JSON.stringify(canonicalJson(nextFormData.parts));
-    const changes = partsChanged ? changedFields(before, nextInput) : [];
+    const laborChanged = laborHours !== undefined && String(formData.laborHours || "") !== String(laborHours || "");
+    const changes = partsChanged || laborChanged ? changedFields(before, nextInput) : [];
 
     if (changes.length) {
       await client.query(
@@ -1426,14 +1429,14 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, {
   }
 }
 
-export function updateMechanicUsedParts(workorderId, mechanicUserId, parts) {
-  return updateOperationalUsedParts(workorderId, mechanicUserId, parts, {
+export function updateMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours) {
+  return updateOperationalUsedParts(workorderId, mechanicUserId, parts, laborHours, {
     requireAssignedMechanic: true,
   });
 }
 
-export function updateOfficeUsedParts(workorderId, officeUserId, parts) {
-  return updateOperationalUsedParts(workorderId, officeUserId, parts);
+export function updateOfficeUsedParts(workorderId, officeUserId, parts, laborHours) {
+  return updateOperationalUsedParts(workorderId, officeUserId, parts, laborHours);
 }
 
 export async function markOperationalWorkorderDone(

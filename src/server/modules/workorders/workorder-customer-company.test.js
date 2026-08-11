@@ -8,6 +8,7 @@ import {
 import { publicWorkorderRow } from "../../db/repositories/operational-workorders.repo.js";
 import {
   createWorkorderSchema,
+  updateMechanicUsedPartsSchema,
   updateOfficeWorkorderSchema,
   workorderFormDataSchema,
 } from "./workorder.schemas.js";
@@ -20,6 +21,14 @@ test("canonical customer snapshot wins over legacy and asset owner values", () =
     customerCompanyName: "Current Customer",
     companyName: "Legacy Customer",
   }, "Asset Owner"), "Current Customer");
+});
+
+test("labor hours save with parts using the Odoo two-decimal contract", () => {
+  const parsed = updateMechanicUsedPartsSchema.parse({ laborHours: "2.50", parts: [] });
+  assert.equal(parsed.laborHours, "2.5");
+  assert.equal(updateMechanicUsedPartsSchema.parse({ parts: [] }).laborHours, undefined);
+  assert.throws(() => updateMechanicUsedPartsSchema.parse({ laborHours: "1.234", parts: [] }), /two decimals/i);
+  assert.throws(() => updateMechanicUsedPartsSchema.parse({ laborHours: "0", parts: [] }), /greater than zero/i);
 });
 
 test("legacy companyName remains readable and is promoted to the canonical snapshot", () => {

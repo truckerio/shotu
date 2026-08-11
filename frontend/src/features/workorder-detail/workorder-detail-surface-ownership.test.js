@@ -108,11 +108,11 @@ test("Admin and Surveillance reuse one policy-aware Odoo module owner", () => {
   assert.match(sharedOdooPanel, /Odoo readiness/);
   assert.match(sharedOdooPanel, /canWrite/);
   assert.match(sharedOdooPanel, /canWrite\s*\?/);
-  assert.match(sharedOdooPanel, /disabled=\{Boolean\(createdOrderNo\)\}/);
+  assert.match(sharedOdooPanel, /disabled=\{saving \|\| !canCreateDraft\}/);
 
   assert.match(sharedOdooController, /modules\/odoo/);
   assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "readiness"\)/);
-  assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "preparation"\)/);
+  assert.doesNotMatch(sharedOdooController, /moduleEndpoint\(workorderId, "preparation"\)/);
   assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "draft"\)/);
   assert.match(sharedOdooController, /moduleEndpoint\(workorderId, "missing-info"\)/);
   assert.doesNotMatch(surveillanceController, /odoo-readiness|odoo-preparation|odoo-draft|mark-missing-info/);
