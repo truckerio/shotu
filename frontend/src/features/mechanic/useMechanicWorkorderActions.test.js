@@ -126,9 +126,13 @@ test("preservation protects unsynced mechanic progress and focused form controls
   }), true);
 });
 
-test("finish validation requires completed repair text", () => {
-  assert.equal(mechanicFinishError({ workPerformed: "   " }), "Add the repair completed before marking Work done.");
+test("finish validation accepts repair-completed text or part repair orders", () => {
+  assert.equal(mechanicFinishError({ workPerformed: "   " }), "Add repair details in Parts or Repair completed before marking Work done.");
   assert.equal(mechanicFinishError({ workPerformed: "Installed new belt" }), "");
+  assert.equal(mechanicFinishError({
+    workPerformed: "",
+    parts: [{ partNo: "46305", repairOrder: "Put new hub seal, adjust brakes" }],
+  }), "");
 });
 
 test("returnToMyWork blocks navigation when the unsynced progress flush fails", async () => {
@@ -226,6 +230,26 @@ test("mark done flushes progress before posting the preserved diagnosis and repa
   });
 });
 
+test("mark done reuses part repair orders when repair completed is blank", async () => {
+  const { actions, calls } = actionHarness({
+    form: {
+      diagnosis: "Hub seal leaking",
+      workPerformed: "",
+      parts: [
+        { partNo: "46305", repairOrder: "Put new hub seal, adjust brakes" },
+        { partNo: "46305-C24", repairOrder: "put new hub seal, adjust brakes" },
+      ],
+    },
+  });
+
+  assert.equal(await actions.markMechanicWorkDone(), true);
+  const apiCall = calls.find(([name, path]) => name === "api" && path.endsWith("/mark-done"));
+  assert.deepEqual(JSON.parse(apiCall[2].body), {
+    diagnosis: "Hub seal leaking",
+    workPerformed: "Put new hub seal, adjust brakes",
+  });
+});
+
 test("submit finish opens Diagnosis and repair and highlights the missing repair field", async () => {
   const { actions, calls } = actionHarness({
     form: { diagnosis: "Checked brakes", workPerformed: "" },
@@ -237,7 +261,7 @@ test("submit finish opens Diagnosis and repair and highlights the missing repair
   assert.deepEqual(calls.find(([name]) => name === "section"), ["section", "diagnosisRepair"]);
   assert.deepEqual(calls.find(([name]) => name === "action"), ["action", {
     busy: "",
-    message: "Add the repair completed before marking Work done.",
+    message: "Add repair details in Parts or Repair completed before marking Work done.",
     validationField: "workPerformed",
   }]);
 });

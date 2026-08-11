@@ -19,6 +19,7 @@ import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
 import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
 import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import { interfaceText } from "../../i18n/index.js";
+import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 import {
   buildCompactPhoneDetailSections,
   coerceAllowedDetailSection,
@@ -208,7 +209,7 @@ export function WorkorderDetailPage({
   );
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
-    && !String(form.workPerformed || "").trim();
+    && !resolveWorkPerformed(form);
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
   useEffect(() => {
     if (!visibleDetailSections.length || renderedDetailSection === detailSection) return;

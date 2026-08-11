@@ -37,7 +37,7 @@ test("existing mechanic completion flow uses Work done language", () => {
   assert.match(detailPage, /is-validation-warning/);
   assert.match(detailPage, /role=\{validation \? "alert" : "status"\}/);
   assert.match(diagnosisRepairModule, /is-completion-required/);
-  assert.match(diagnosisRepairModule, /Required — add the repair completed/);
+  assert.match(diagnosisRepairModule, /Required — add repair details here or in a part repair order/);
   assert.match(detailToolbarCss, /\.mechanic-action-message\.is-validation-warning[\s\S]*#b42318/);
   assert.match(detailCss, /@keyframes mechanic-required-field-blink/);
   assert.match(detailCss, /\.operational-form-field\.is-completion-required/);

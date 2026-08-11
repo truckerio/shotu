@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 
 const DETAIL_FORM_CONTROL_SELECTOR = [
   ".workorder-detail-page input",
@@ -66,9 +67,9 @@ export function mechanicChatRequest({
 }
 
 export function mechanicFinishError(form) {
-  return String(form?.workPerformed || "").trim()
+  return resolveWorkPerformed(form)
     ? ""
-    : "Add the repair completed before marking Work done.";
+    : "Add repair details in Parts or Repair completed before marking Work done.";
 }
 
 export function shouldPreserveMechanicWorkorderForm({
@@ -279,7 +280,7 @@ export function createMechanicWorkorderActions({
         method: "POST",
         body: JSON.stringify({
           diagnosis: form.diagnosis,
-          workPerformed: form.workPerformed,
+          workPerformed: resolveWorkPerformed(form),
         }),
       }),
       "Work sent to office for review.",

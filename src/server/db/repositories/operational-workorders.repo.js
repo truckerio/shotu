@@ -4,6 +4,7 @@ import { reserveWorkorderSerials } from "./serial-counters.repo.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 import { OPERATIONS_ACTIVE_LIFECYCLES } from "../../modules/workorders/workorder-lifecycle-policy.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
+import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
   return `
@@ -1459,7 +1460,16 @@ export async function markOperationalWorkorderDone(workorderId, mechanicUserId, 
     if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
-    const nextInput = { diagnosis: input.diagnosis || "", workPerformed: input.workPerformed || "" };
+    const nextInput = {
+      diagnosis: input.diagnosis || "",
+      workPerformed: resolveWorkPerformed({
+        workPerformed: input.workPerformed || before.work_performed,
+        parts: before.form_data?.parts,
+      }),
+    };
+    if (!nextInput.workPerformed) {
+      throw new Error("Add repair details in Parts or Repair completed before marking Work done.");
+    }
     // Mark-done is an explicit terminal mutation, so it intentionally bypasses
     // expectedVersion while advancing the progress token atomically.
     await client.query(

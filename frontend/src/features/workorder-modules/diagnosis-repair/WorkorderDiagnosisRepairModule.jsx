@@ -43,7 +43,7 @@ export function WorkorderDiagnosisRepairModule({
             label={localeText("detail.repairCompleted")}
             hint="Write what was repaired, replaced, adjusted, or checked."
             required={repairRequired}
-            error={repairRequired ? "Required — add the repair completed before marking Work done." : ""}
+            error={repairRequired ? "Required — add repair details here or in a part repair order." : ""}
             className={repairRequired ? "is-completion-required" : ""}
           >
             <NarrativeField id="mechanic-work-performed" rows="4" value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
