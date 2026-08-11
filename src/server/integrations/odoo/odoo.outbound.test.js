@@ -89,6 +89,7 @@ function providerProducts() {
       active: true,
       uom_id: [4, "Hours"],
       lst_price: 150,
+      standard_price: 82.25,
       sale_delay: 0,
     }],
     ["46305", {
@@ -97,6 +98,7 @@ function providerProducts() {
       active: true,
       uom_id: [1, "Each"],
       lst_price: 49.5,
+      standard_price: 21.75,
       sale_delay: 1,
     }],
   ]);
@@ -317,6 +319,33 @@ test("readiness reports real live Odoo part-unit drift before creation", async (
   assert.equal(readiness.blockers[0].field, "parts");
 });
 
+test("readiness blocks when an Odoo product has no cost instead of using its sales price", async () => {
+  const products = [...providerProducts().values()];
+  products[1] = { ...products[1], standard_price: undefined, lst_price: 999.99 };
+  let requestedProductFields = [];
+  const readiness = await odooWorkorderReadiness({ companyId, workorderId }, {
+    readReadiness: async () => readyData(),
+    readConfiguration: async () => providerConfiguration,
+    createClient: () => ({
+      execute: async (model, method, _args, kwargs = {}) => {
+        if (method === "fields_get") return requiredOrderFields();
+        if (model === "product.product" && method === "read") {
+          requestedProductFields = kwargs.fields;
+          return products;
+        }
+        throw new Error(`Unexpected ${model}.${method}`);
+      },
+    }),
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.blockers[0].code, "ODOO_PRODUCT_COST_INVALID");
+  assert.equal(readiness.blockers[0].field, "parts.0");
+  assert.match(readiness.blockers[0].message, /Set a valid Cost/);
+  assert.ok(requestedProductFields.includes("standard_price"));
+  assert.ok(!requestedProductFields.includes("lst_price"));
+  assert.ok(!requestedProductFields.includes("list_price"));
+});
+
 test("draft payload includes explicit required values and keeps labor before goods", () => {
   const data = readyData();
   const marker = stableOdooWorkorderMarker(companyId, workorderId);
@@ -336,14 +365,28 @@ test("draft payload includes explicit required values and keeps labor before goo
   assert.equal(payload.order_line[0][2].product_id, 85226);
   assert.equal(payload.order_line[0][2].product_uom, 4);
   assert.equal(payload.order_line[0][2].product_uom_qty, 2.5);
-  assert.equal(payload.order_line[0][2].price_unit, 150);
+  assert.equal(payload.order_line[0][2].price_unit, 82.25);
   assert.equal(payload.order_line[0][2].customer_lead, 0);
   assert.equal(payload.order_line[0][2].name, "[PTR001] LABOR HOURS\nPUT NEW HUB SEAL, ADJUST BRAKES");
   assert.equal(payload.order_line[1][2].sequence, 20);
   assert.equal(payload.order_line[1][2].product_id, 46305);
   assert.equal(payload.order_line[1][2].product_uom, 1);
-  assert.equal(payload.order_line[1][2].price_unit, 49.5);
+  assert.equal(payload.order_line[1][2].price_unit, 21.75);
   assert.equal(payload.state, undefined);
+});
+
+test("draft lines use Odoo cost and never fall back to sales price", () => {
+  const products = providerProducts();
+  products.get("46305").standard_price = undefined;
+  assert.throws(
+    () => buildOdooDraftPayload(readyData(), stableOdooWorkorderMarker(companyId, workorderId), {
+      products,
+      addresses: { invoice: 302, delivery: 303 },
+    }),
+    (error) => error instanceof OdooOutboundError
+      && error.code === "ODOO_PRODUCT_COST_INVALID"
+      && error.details?.field === "parts.0",
+  );
 });
 
 function requiredOrderFields() {

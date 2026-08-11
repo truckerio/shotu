@@ -238,9 +238,9 @@ export async function odooWorkorderReadiness({ companyId, workorderId }, depende
       requireCurrentProductUoms(data, products);
     } catch (error) {
       if (!(error instanceof OdooOutboundError)) throw error;
-      const field = error.code === "ODOO_MODEL_INCOMPATIBLE"
+      const field = error.details?.field || (error.code === "ODOO_MODEL_INCOMPATIBLE"
         ? "odooModel"
-        : error.code === "ODOO_LABOR_PRODUCT_INVALID" ? "laborProduct" : "parts";
+        : error.code === "ODOO_LABOR_PRODUCT_INVALID" ? "laborProduct" : "parts");
       return {
         ...readiness,
         ready: false,
@@ -261,16 +261,27 @@ function numericExternalId(value, field) {
   return number;
 }
 
-function productDetail(products, externalId) {
+function productDetail(products, externalId, { field = "parts" } = {}) {
   const product = products.get(String(externalId));
   if (!product) throw new OdooOutboundError("ODOO_PART_UNMAPPED", "An Odoo product could not be read.");
   const uomId = Array.isArray(product.uom_id) ? product.uom_id[0] : product.uom_id;
   if (!uomId) throw new OdooOutboundError("ODOO_PART_UOM_INVALID", "An Odoo product is missing its unit of measure.");
+  const cost = Number(product.standard_price);
+  if (!Number.isFinite(cost) || cost < 0) {
+    const name = String(product.display_name || product.name || "product").trim();
+    throw new OdooOutboundError(
+      "ODOO_PRODUCT_COST_INVALID",
+      `Set a valid Cost for ${name} in Odoo, then refresh readiness.`,
+      422,
+      { field },
+    );
+  }
   return {
     id: numericExternalId(product.id, "product"),
     name: String(product.display_name || product.name || "Product").trim(),
     uomId: numericExternalId(uomId, "product unit"),
-    priceUnit: Number(product.lst_price ?? product.list_price ?? 0),
+    uomName: relationName(product.uom_id),
+    priceUnit: cost,
     customerLead: Math.max(0, Number(product.sale_delay) || 0),
   };
 }
@@ -303,7 +314,7 @@ function mappedProductIds(data) {
 async function readCurrentMappedProducts(client, data) {
   const productIds = mappedProductIds(data);
   const productRows = await client.execute("product.product", "read", [productIds], {
-    fields: ["id", "display_name", "name", "active", "uom_id", "lst_price", "list_price", "sale_delay"],
+    fields: ["id", "display_name", "name", "active", "uom_id", "standard_price", "sale_delay"],
   });
   if (productRows.length !== productIds.length || productRows.some((product) => product.active === false)) {
     throw new OdooOutboundError("ODOO_PART_UNMAPPED", "One or more mapped Odoo products are missing or inactive.");
@@ -312,7 +323,7 @@ async function readCurrentMappedProducts(client, data) {
 }
 
 function requireCurrentProductUoms(data, products) {
-  const labor = productDetail(products, data.labor.productExternalId);
+  const labor = productDetail(products, data.labor.productExternalId, { field: "laborProduct" });
   if (String(labor.uomId) !== String(data.labor.uomExternalId || "")) {
     throw new OdooOutboundError(
       "ODOO_LABOR_PRODUCT_INVALID",
@@ -320,8 +331,8 @@ function requireCurrentProductUoms(data, products) {
     );
   }
   for (const part of data.parts || []) {
-    const product = products.get(String(part.productExternalId));
-    if (!compatibleOdooUomNames(part.expectedOdooUomName, relationName(product?.uom_id))) {
+    const product = productDetail(products, part.productExternalId, { field: `parts.${part.lineIndex}` });
+    if (!compatibleOdooUomNames(part.expectedOdooUomName, product.uomName)) {
       throw new OdooOutboundError(
         "ODOO_PART_UOM_INVALID",
         `The Odoo unit for part ${part.partNumber || part.lineIndex + 1} changed. Rediscover products and review the mapping.`,
@@ -352,10 +363,10 @@ export function buildOdooDraftPayload(data, marker, { products = new Map(), addr
   const customerId = numericExternalId(customerExternalId, "customer");
   const laborName = String(labor.productName || labor.displayName || "LABOR HOURS").trim();
   const workPerformed = String(workorder.workPerformed || "").trim();
-  const laborProduct = productDetail(products, labor.productExternalId);
+  const laborProduct = productDetail(products, labor.productExternalId, { field: "laborProduct" });
   const goods = (data.parts || []).map((part, index) => orderLine({
     sequence: 20 + (index * 10),
-    product: productDetail(products, part.productExternalId),
+    product: productDetail(products, part.productExternalId, { field: `parts.${part.lineIndex}` }),
     quantity: part.odooQuantity,
     name: part.productName || part.partNumber || "Part",
   }));
