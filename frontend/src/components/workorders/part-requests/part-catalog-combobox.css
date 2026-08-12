@@ -45,6 +45,7 @@
   min-height: 58px;
   overflow-wrap: anywhere;
   padding: 8px 10px;
+  text-align: left;
 }
 
 .part-catalog-popup [role="option"].is-active {
@@ -61,9 +62,10 @@
   min-width: 0;
 }
 
-.part-catalog-option-heading strong {
+.part-catalog-popup .part-catalog-option-heading strong {
   min-width: 0;
   overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .part-catalog-popup small {

@@ -51,6 +51,7 @@ test("catalog popup stays readable beyond the narrow input column", () => {
   assert.match(styles, /width:\s*var\(--part-catalog-popup-width, min\(480px, calc\(100vw - 32px\)\)\);/);
   assert.match(styles, /max-width:\s*calc\(100vw - 32px\);/);
   assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
+  assert.match(styles, /\.part-catalog-popup \.part-catalog-option-heading strong\s*\{[^}]*text-align:\s*left;/s);
   assert.match(styles, /overflow-wrap:\s*anywhere;/);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?max-width:\s*calc\(100vw - 24px\);/);
 });
