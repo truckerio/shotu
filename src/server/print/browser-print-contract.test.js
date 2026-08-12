@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   renderWorkorderDocument,
   renderWorkorderPagesHtml,
+  workorderQuantityTotals,
   workorderPhysicalPageCount,
   workorderTemplateStyles,
 } from "../../../shared/workorder-template.js";
@@ -88,6 +89,22 @@ test("workorder preview renders labor first without treating it as inventory", (
   assert.match(html, /\[PTR001\] LABOR HOURS/);
   assert.match(html, />2\.5 hr</);
   assert.match(html, />Replace hub seal</);
+  assert.match(html, /Total Labor:<strong>2\.5 hr<\/strong>/);
+  assert.match(html, /Total Parts:<strong>1<\/strong>/);
+});
+
+test("workorder quantity totals add used parts without counting labor or blank rows", () => {
+  const totals = workorderQuantityTotals({
+    laborHours: "3.25",
+    parts: [
+      { partNo: "FILTER", qty: "2", uomCode: "pc" },
+      { partNo: "OIL", qty: "1.5", uomCode: "gal" },
+      { partNo: "", qty: "9", uomCode: "pc" },
+      { partNo: "BELT", qty: "", uomCode: "pc" },
+    ],
+  });
+
+  assert.deepEqual(totals, { labor: "3.25 hr", parts: "3.5" });
 });
 
 test("workorder preview keeps a labor repair order visible before hours are entered", () => {

@@ -68,6 +68,25 @@ function inputPartRows(form) {
   return rows.length ? rows : emptyPartRows();
 }
 
+function positiveQuantity(value) {
+  const quantity = Number(value);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
+}
+
+export function workorderQuantityTotals(form = {}) {
+  const parts = Array.isArray(form.parts) ? form.parts : [];
+  const partsQuantity = parts.reduce((total, part) => (
+    String(part?.partNo || "").trim()
+      ? total + positiveQuantity(part?.qty)
+      : total
+  ), 0);
+
+  return {
+    labor: formatQuantity(positiveQuantity(form.laborHours), "hr"),
+    parts: partsQuantity > 0 ? String(Number(partsQuantity.toFixed(3))) : "",
+  };
+}
+
 export function paginateWorkorderParts(form) {
   const rows = inputPartRows(form);
   const pages = [];
@@ -337,6 +356,8 @@ export const workorderTemplateStyles = `
 }
 
 .wo-totals span {
+  gap: 6px;
+  justify-content: space-between;
   border-bottom: 1px solid #111;
   align-items: center;
   display: flex;
@@ -397,6 +418,7 @@ export function renderWorkorderPageHtml(form, serial, {
   isDocumentFinalPage = false,
 } = {}) {
   const customerCompanyName = resolveCustomerCompanyName(form, form?.assetOwnerName);
+  const quantityTotals = workorderQuantityTotals(form);
   const pageMarker = pageCount > 1 ? `Page ${pageIndex + 1} of ${pageCount}` : "";
   return `
     <article class="workorder-page${isDocumentFinalPage ? " is-document-final-page" : ""}" data-workorder-serial="${escapeHtml(serial)}" data-page-number="${pageIndex + 1}">
@@ -453,8 +475,8 @@ export function renderWorkorderPageHtml(form, serial, {
         <div class="wo-footer-line"><span>Manager:</span><strong class="wo-value">${escapeHtml(form.managerName)}</strong></div>
         <div class="wo-footer-line"><span>Customer Sign:</span><strong class="wo-value">${escapeHtml(form.customerSignature)}</strong></div>
         <div class="wo-totals">
-          <span>Total Labor:</span>
-          <span>Total Parts:</span>
+          <span>Total Labor:<strong>${escapeHtml(quantityTotals.labor)}</strong></span>
+          <span>Total Parts:<strong>${escapeHtml(quantityTotals.parts)}</strong></span>
           <span>Tax:</span>
           <span>Total:</span>
         </div>
