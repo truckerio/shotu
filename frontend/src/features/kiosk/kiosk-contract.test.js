@@ -30,6 +30,7 @@ test("kiosk unlock uses approved endpoint and minimal mechanic roster fields", a
   assert.doesNotMatch(source, /interfaceText\([^\n]*mechanic\.name/);
   assert.match(source, /minLength="4"/);
   assert.match(source, /pattern="\[0-9\]\{4,\}"/);
+  assert.match(source, /id="kiosk-pin"\s+autoFocus\s+autoComplete="one-time-code"/);
   assert.doesNotMatch(source, /type="password"/);
   assert.equal((source.match(/type="text"/g) || []).length, 3);
   assert.doesNotMatch(source, /six-digit PIN/);

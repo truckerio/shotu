@@ -114,6 +114,7 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
               <input
                 {...textEntryProps("identifier")}
                 id="kiosk-pin"
+                autoFocus
                 autoComplete="one-time-code"
                 inputMode="numeric"
                 minLength="4"
