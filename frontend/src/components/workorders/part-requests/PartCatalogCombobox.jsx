@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
 import { textEntryProps } from "../../forms/text-entry-policy.js";
 import {
@@ -6,10 +6,12 @@ import {
   catalogPartDetails,
   normalizeCatalogResponse,
 } from "./catalog-parts-model.js";
+import { catalogPopupWidth } from "./part-catalog-popup-model.js";
 import "./part-catalog-combobox.css";
 
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_DELAY_MS = 250;
+const POPUP_FALLBACK_WIDTH = 480;
 
 export function PartCatalogCombobox({
   workorderId,
@@ -36,6 +38,7 @@ export function PartCatalogCombobox({
   const [open, setOpen] = useState(false);
   const [interacting, setInteracting] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [popupWidth, setPopupWidth] = useState(null);
   const query = String(value || "");
   const normalizedQuery = query.trim();
 
@@ -149,6 +152,37 @@ export function PartCatalogCombobox({
     && ["waiting", "loading", "results", "no-match", "empty", "error"].includes(state);
   const activeOptionId = activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined;
 
+  useLayoutEffect(() => {
+    if (!showPopup || !rootRef.current) return undefined;
+    const root = rootRef.current;
+    const row = root.closest(".part-row, .operational-part-row");
+
+    function measure() {
+      const anchor = root.getBoundingClientRect();
+      const repairField = row?.querySelector(".used-part-repair, input[aria-label^='Repair order']");
+      const rowEnd = repairField?.getBoundingClientRect().right
+        || anchor.left + Math.max(anchor.width, POPUP_FALLBACK_WIDTH);
+      setPopupWidth(catalogPopupWidth({
+        anchorLeft: anchor.left,
+        anchorWidth: anchor.width,
+        rowEnd,
+        viewportWidth: window.innerWidth,
+      }));
+    }
+
+    measure();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    if (observer) {
+      observer.observe(root);
+      if (row) observer.observe(row);
+    }
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [showPopup]);
+
   return (
     <div className="part-catalog-field" ref={rootRef}>
       {label ? <label htmlFor={inputId}>{label}</label> : null}
@@ -178,7 +212,13 @@ export function PartCatalogCombobox({
         disabled={disabled}
       />
       {showPopup ? (
-        <div className="part-catalog-popup" id={listboxId} role="listbox" aria-label="Company parts">
+        <div
+          className="part-catalog-popup"
+          id={listboxId}
+          role="listbox"
+          aria-label="Company parts"
+          style={popupWidth ? { "--part-catalog-popup-width": `${popupWidth}px` } : undefined}
+        >
           {state === "results" ? (
             <ul role="presentation">
               {items.map((part, index) => (

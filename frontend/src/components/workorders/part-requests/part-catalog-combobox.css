@@ -24,7 +24,7 @@
   position: absolute;
   right: auto;
   top: calc(100% + 4px);
-  width: 480px;
+  width: var(--part-catalog-popup-width, min(480px, calc(100vw - 32px)));
   z-index: 30;
 }
 
@@ -55,9 +55,9 @@
 .part-catalog-option-heading {
   align-items: center;
   color: #181d27;
-  display: flex;
+  display: grid;
   gap: 8px;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
 }
 
@@ -88,13 +88,5 @@
   .part-catalog-popup {
     max-height: min(300px, 46vh);
     max-width: calc(100vw - 24px);
-    width: 420px;
-  }
-}
-
-@container part-requests-panel (max-width: 720px) {
-  .part-catalog-popup {
-    max-width: 100%;
-    width: 100%;
   }
 }

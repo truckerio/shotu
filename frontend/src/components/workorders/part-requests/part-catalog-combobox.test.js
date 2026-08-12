@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { catalogPopupWidth } from "./part-catalog-popup-model.js";
 
 const source = readFileSync(new URL("./PartCatalogCombobox.jsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./part-catalog-combobox.css", import.meta.url), "utf8");
@@ -47,9 +48,18 @@ test("manual entry remains available for empty, unmatched, and failed lookup", (
 
 test("catalog popup stays readable beyond the narrow input column", () => {
   assert.match(styles, /\.part-catalog-popup\s*\{[\s\S]*?right:\s*auto;/);
-  assert.match(styles, /\.part-catalog-popup\s*\{[\s\S]*?width:\s*480px;/);
+  assert.match(styles, /width:\s*var\(--part-catalog-popup-width, min\(480px, calc\(100vw - 32px\)\)\);/);
   assert.match(styles, /max-width:\s*calc\(100vw - 32px\);/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
   assert.match(styles, /overflow-wrap:\s*anywhere;/);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?max-width:\s*calc\(100vw - 24px\);/);
-  assert.match(styles, /@container part-requests-panel \(max-width: 720px\)[\s\S]*?\.part-catalog-popup\s*\{[^}]*max-width:\s*100%;[^}]*width:\s*100%;/s);
+});
+
+test("catalog popup follows the parts row and stays inside the viewport", () => {
+  assert.equal(catalogPopupWidth({ anchorLeft: 108, anchorWidth: 396, rowEnd: 1236, viewportWidth: 1498 }), 1128);
+  assert.equal(catalogPopupWidth({ anchorLeft: 80, anchorWidth: 220, rowEnd: 500, viewportWidth: 390 }), 294);
+  assert.equal(catalogPopupWidth({ anchorLeft: 100, anchorWidth: 360, rowEnd: 300, viewportWidth: 1200 }), 360);
+  assert.match(source, /closest\("\.part-row, \.operational-part-row"\)/);
+  assert.match(source, /\.used-part-repair, input\[aria-label\^='Repair order'\]/);
+  assert.match(source, /new ResizeObserver\(measure\)/);
 });
