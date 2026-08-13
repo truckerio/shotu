@@ -1481,7 +1481,10 @@ export async function markOperationalWorkorderDone(
       }),
     };
     if (!nextInput.workPerformed) {
-      throw new Error("Add repair details in Parts or Repair completed before marking Work done.");
+      throw lifecycleConflict(
+        "WORKORDER_REPAIR_DETAILS_REQUIRED",
+        "Add a repair order in Parts before marking Work done.",
+      );
     }
     // Mark-done is an explicit terminal mutation, so it intentionally bypasses
     // expectedVersion while advancing the progress token atomically.

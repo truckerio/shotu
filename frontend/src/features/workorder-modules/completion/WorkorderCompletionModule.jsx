@@ -16,6 +16,7 @@ export function WorkorderCompletionModule({
   allowedActions = {},
   busy,
   customerSignature,
+  message,
   onAccept,
   onApprove,
   onCancel,
@@ -53,6 +54,7 @@ export function WorkorderCompletionModule({
           {canWrite && allowedActions.cancel ? <Button variant="danger" type="button" onClick={onCancel} disabled={busy}>Cancel workorder</Button> : null}
         </div>
       ) : null}
+      {message ? <p className="mechanic-action-message" role="status">{message}</p> : null}
     </ProgressiveWorkorderSection>
   );
 }

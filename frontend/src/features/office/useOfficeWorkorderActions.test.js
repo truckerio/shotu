@@ -34,6 +34,10 @@ test("office action validation preserves return, cancel, and assignment requirem
 
 test("autosave queue serializes writes and reruns for queued or newer revisions", () => {
   const queue = createOfficeAutosaveQueue();
+  assert.equal(queue.schedule(0), false);
+  assert.equal(queue.schedule(1), true);
+  assert.equal(queue.schedule(1), false);
+  assert.equal(queue.schedule(2), true);
   assert.equal(queue.begin(), true);
   assert.equal(queue.begin(), false);
   assert.equal(queue.finish({ currentRevision: 1, savingRevision: 1 }), true);
@@ -43,6 +47,14 @@ test("autosave queue serializes writes and reruns for queued or newer revisions"
 
   assert.equal(queue.begin(), true);
   assert.equal(queue.finish({ currentRevision: 3, savingRevision: 3 }), false);
+});
+
+test("an autosave revision is consumed once even when a detail reload changes hook dependencies", () => {
+  const queue = createOfficeAutosaveQueue();
+  assert.equal(queue.schedule(7), true);
+  assert.equal(queue.schedule(7), false);
+  assert.equal(queue.schedule(7), false);
+  assert.equal(queue.schedule(8), true);
 });
 
 test("office save patch keeps administrative fields and excludes mechanic-owned progress", () => {

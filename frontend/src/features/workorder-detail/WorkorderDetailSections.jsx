@@ -98,6 +98,7 @@ export function WorkorderDetailSections({
       allowedActions: activeWorkorder.allowedActions,
       busy: Boolean(mechanicAction?.busy || officeDetailState.busy),
       customerSignature: form.customerSignature,
+      message: officeDetailState.message,
       onAccept: acceptOpenedMechanicWorkorder,
       onApprove: openOfficeClose,
       onCancel: openOfficeCancel,

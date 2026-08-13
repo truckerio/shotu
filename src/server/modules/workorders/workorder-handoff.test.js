@@ -70,6 +70,8 @@ test("handoff migration and repository encode transactional lifecycle ownership"
   assert.match(repository, /started_at = coalesce\(started_at, now\(\)\)/);
   assert.match(repository, /\$6::boolean = false[\s\S]*assignment\.mechanic_user_id = \$2/);
   assert.match(repository, /WORKORDER_STATUS\.MECHANIC_DONE,[\s\S]*requireAssignedMechanic/);
+  assert.match(repository, /WORKORDER_REPAIR_DETAILS_REQUIRED/);
+  assert.match(repository, /Add a repair order in Parts before marking Work done\./);
   assert.match(repository, /mechanic_done_at = null/);
   assert.match(repository, /quantity_reserved = quantity_reserved - \$2/);
   assert.match(repository, /approved_by_user_id = \$3/);

@@ -20,3 +20,13 @@ test("office can mark active work done, including work not assigned to a mechani
     assert.equal(officeAllowedActions(status).markDone, false, status);
   }
 });
+
+test("overdue attention never freezes an active workorder", () => {
+  const overdue = [{ reason: "overdue", details: { thresholdHours: 8 } }];
+  for (const status of ["open", "accepted", "in_progress"]) {
+    const actions = officeAllowedActions(status, overdue);
+    assert.equal(actions.update, true, `${status} schedule remains editable`);
+    assert.equal(actions.markDone, true, `${status} can be marked done`);
+    assert.equal(actions.cancel, true, `${status} can be cancelled`);
+  }
+});

@@ -32,7 +32,13 @@ export function officeActionValidationMessage(action, value) {
 export function createOfficeAutosaveQueue() {
   let inFlight = false;
   let queued = false;
+  let scheduledRevision = 0;
   return {
+    schedule(revision) {
+      if (!revision || revision <= scheduledRevision) return false;
+      scheduledRevision = revision;
+      return true;
+    },
     begin() {
       if (inFlight) {
         queued = true;
@@ -227,6 +233,7 @@ export function useOfficeWorkorderActions({
 
   useEffect(() => {
     if (!autosaveRevision || !isOfficeDetail || !activeWorkorder?.allowedActions?.update) return undefined;
+    if (!autosaveQueueRef.current.schedule(autosaveRevision)) return undefined;
     clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null;

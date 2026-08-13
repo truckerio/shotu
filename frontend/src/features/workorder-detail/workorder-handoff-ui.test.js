@@ -45,6 +45,12 @@ test("existing mechanic completion flow uses Work done language", () => {
   assert.match(roleRouter, /useMechanicWorkorderActions/);
 });
 
+test("office lifecycle failures remain visible inside Completion", () => {
+  assert.match(detailSections, /message: officeDetailState\.message/);
+  assert.match(completionModule, /mechanic-action-message/);
+  assert.match(completionModule, /role="status"/);
+});
+
 test("mechanic progress is automatic and timing stays outside the primary work form", () => {
   assert.doesNotMatch(diagnosisRepairModule, /WorkorderHandoffFacts/);
   assert.doesNotMatch(diagnosisRepairModule, /Save progress/);
