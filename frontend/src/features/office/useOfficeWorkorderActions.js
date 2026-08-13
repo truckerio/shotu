@@ -209,7 +209,7 @@ export function useOfficeWorkorderActions({
       });
       return true;
     } catch (error) {
-      setOfficeDetailState({ busy: false, message: error.message });
+      setOfficeDetailState({ busy: false, message: error.message, error: true });
       return false;
     } finally {
       if (autosaveQueueRef.current.finish({
@@ -262,7 +262,7 @@ export function useOfficeWorkorderActions({
       setOfficeDetailState({ busy: false, message: "Workorder approved and sent to surveillance." });
       return true;
     } catch (error) {
-      setOfficeDetailState({ busy: false, message: error.message });
+      setOfficeDetailState({ busy: false, message: error.message, error: true });
       return false;
     }
   }, [
@@ -297,7 +297,7 @@ export function useOfficeWorkorderActions({
       });
       return true;
     } catch (error) {
-      setOfficeDetailState({ busy: false, message: error.message });
+      setOfficeDetailState({ busy: false, message: error.message, error: true });
       return false;
     }
   }, [
@@ -399,7 +399,7 @@ export function useOfficeWorkorderActions({
     const reason = officeAssignment.reason.trim();
     const validationMessage = officeActionValidationMessage("assignment", reason);
     if (validationMessage) {
-      setOfficeDetailState({ busy: false, message: validationMessage });
+      setOfficeDetailState({ busy: false, message: validationMessage, error: true });
       return false;
     }
     setOfficeDetailState({ busy: true, message: "Updating assignment..." });
@@ -421,7 +421,7 @@ export function useOfficeWorkorderActions({
       });
       return true;
     } catch (error) {
-      setOfficeDetailState({ busy: false, message: error.message });
+      setOfficeDetailState({ busy: false, message: error.message, error: true });
       return false;
     }
   }, [

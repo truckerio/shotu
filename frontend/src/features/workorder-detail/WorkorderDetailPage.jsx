@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { CheckCircle, Save01, XClose } from "@untitledui/icons";
+import { AlertCircle, CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
@@ -370,6 +370,12 @@ export function WorkorderDetailPage({
               </div>
             ) : null}
             <MechanicActionMessage action={mechanicAction} validationActive={mechanicValidationActive} />
+            {officeDetailState.error && officeDetailState.message ? (
+              <p className="mechanic-action-message is-validation-warning" role="alert">
+                <AlertCircle aria-hidden="true" />
+                <strong>{officeDetailState.message}</strong>
+              </p>
+            ) : null}
             </>
           ),
         }}

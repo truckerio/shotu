@@ -46,9 +46,13 @@ test("existing mechanic completion flow uses Work done language", () => {
 });
 
 test("office lifecycle failures remain visible inside Completion", () => {
-  assert.match(detailSections, /message: officeDetailState\.message/);
+  assert.match(detailPage, /officeDetailState\.error && officeDetailState\.message/);
+  assert.match(detailPage, /className="mechanic-action-message is-validation-warning" role="alert"/);
+  assert.match(detailPage, /<AlertCircle aria-hidden="true" \/>/);
+  assert.match(detailSections, /message: officeDetailState\.error \? "" : officeDetailState\.message/);
   assert.match(completionModule, /mechanic-action-message/);
   assert.match(completionModule, /role="status"/);
+  assert.match(officeActions, /message: error\.message, error: true/);
 });
 
 test("mechanic progress is automatic and timing stays outside the primary work form", () => {
