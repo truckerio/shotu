@@ -19,6 +19,12 @@ const LEGACY_MIGRATION_CHECKSUMS = new Map([
       "69b4787e8422993a3b83efba357c06163f1dc1d76c7919116650371871452d5b",
     ]),
   ],
+  [
+    "041_one_active_workorder_per_asset.sql",
+    new Set([
+      "7cf9bbddfe1e52e0bfeae23c9e900e1f17293ed4e2a07d71885a2df77d32e77e",
+    ]),
+  ],
 ]);
 
 function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {

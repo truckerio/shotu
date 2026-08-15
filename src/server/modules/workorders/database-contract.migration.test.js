@@ -53,12 +53,16 @@ test("an allocated workorder cannot be moved to another company", async () => {
 
 test("an asset can have only one active workorder", async () => {
   const sql = await migration("041_one_active_workorder_per_asset.sql");
+  const convergenceSql = await migration("042_safe_active_workorder_asset_enforcement.sql");
   const repository = await readFile(repositoryUrl, "utf8");
 
-  assert.match(sql, /create unique index operational_workorders_one_active_per_asset_uidx/i);
-  assert.match(sql, /on operational_workorders\(asset_id\)/i);
-  assert.match(sql, /asset_id is not null/i);
-  assert.match(sql, /status not in \('closed', 'odoo_entered', 'cancelled'\)/i);
+  assert.match(sql, /create trigger operational_workorders_one_active_per_asset/i);
+  assert.match(sql, /before insert or update of asset_id, status/i);
+  assert.match(sql, /existing\.asset_id = new\.asset_id/i);
+  assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\(new\.asset_id::text, 0\)\)/i);
+  assert.match(sql, /constraint = 'operational_workorders_one_active_per_asset_uidx'/i);
+  assert.match(convergenceSql, /drop index if exists operational_workorders_one_active_per_asset_uidx/i);
+  assert.match(convergenceSql, /create trigger operational_workorders_one_active_per_asset/i);
   assert.match(repository, /ASSET_ACTIVE_WORKORDER_EXISTS/);
   assert.match(repository, /This unit already has an active workorder/);
 });

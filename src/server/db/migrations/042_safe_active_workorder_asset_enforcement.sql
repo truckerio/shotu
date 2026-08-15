@@ -1,6 +1,7 @@
--- Block new asset concurrency without rewriting legacy workorders.
--- Existing duplicates may continue through their current active lifecycle and
--- naturally converge as workorders are closed or cancelled.
+-- Converge environments that applied the original strict index migration.
+-- The trigger preserves legacy duplicates while blocking every new conflict.
+
+drop index if exists operational_workorders_one_active_per_asset_uidx;
 
 create or replace function enforce_one_active_workorder_per_asset()
 returns trigger
