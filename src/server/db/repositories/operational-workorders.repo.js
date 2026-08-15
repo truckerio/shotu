@@ -216,6 +216,18 @@ function lifecycleConflict(code, message) {
   return new WorkorderLifecycleConflictError(code, message);
 }
 
+const ACTIVE_ASSET_CONSTRAINT = "operational_workorders_one_active_per_asset_uidx";
+
+function mapActiveAssetConflict(error) {
+  if (error?.code === "23505" && error?.constraint === ACTIVE_ASSET_CONSTRAINT) {
+    return lifecycleConflict(
+      "ASSET_ACTIVE_WORKORDER_EXISTS",
+      "This unit already has an active workorder. Close or cancel it before creating another.",
+    );
+  }
+  return error;
+}
+
 async function addStatusEvent(client, { workorderId, fromStatus, toStatus, changedByUserId, note = "" }) {
   await client.query(
     `
@@ -539,7 +551,7 @@ export async function createOperationalWorkorder(input) {
     return getOperationalWorkorderById(created.id);
   } catch (error) {
     await client.query("rollback").catch(() => {});
-    throw error;
+    throw mapActiveAssetConflict(error);
   } finally {
     client.release();
   }
@@ -629,8 +641,8 @@ export async function updateOperationalWorkorder(workorderId, input) {
     await client.query("commit");
     return getOperationalWorkorderById(workorderId);
   } catch (error) {
-    await client.query("rollback");
-    throw error;
+    await client.query("rollback").catch(() => {});
+    throw mapActiveAssetConflict(error);
   } finally {
     client.release();
   }

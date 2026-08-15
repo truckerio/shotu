@@ -50,3 +50,15 @@ test("an allocated workorder cannot be moved to another company", async () => {
   assert.equal(parsed.companyId, undefined);
   assert.doesNotMatch(repository, /set company_id = coalesce/i);
 });
+
+test("an asset can have only one active workorder", async () => {
+  const sql = await migration("041_one_active_workorder_per_asset.sql");
+  const repository = await readFile(repositoryUrl, "utf8");
+
+  assert.match(sql, /create unique index operational_workorders_one_active_per_asset_uidx/i);
+  assert.match(sql, /on operational_workorders\(asset_id\)/i);
+  assert.match(sql, /asset_id is not null/i);
+  assert.match(sql, /status not in \('closed', 'odoo_entered', 'cancelled'\)/i);
+  assert.match(repository, /ASSET_ACTIVE_WORKORDER_EXISTS/);
+  assert.match(repository, /This unit already has an active workorder/);
+});
