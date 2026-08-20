@@ -18,6 +18,7 @@ const suffix = `${Date.now().toString(36)}-${process.pid}`;
 let companyId;
 let locationId;
 let mechanicId;
+let joiningMechanicId;
 let officeId;
 let primaryWorkorderId;
 let cancellationWorkorderId;
@@ -36,25 +37,28 @@ try {
   )).rows[0].id;
   const users = await query(
     `insert into user_profiles (display_name, contact_email)
-     values ($1, $2), ($3, $4) returning id, contact_email`,
+     values ($1, $2), ($3, $4), ($5, $6) returning id, contact_email`,
     [
       "Handoff Mechanic",
       `handoff-mechanic-${suffix}@example.test`,
+      "Joining Mechanic",
+      `handoff-joining-mechanic-${suffix}@example.test`,
       "Handoff Manager",
       `handoff-manager-${suffix}@example.test`,
     ],
   );
-  mechanicId = users.rows.find((row) => row.contact_email.includes("mechanic"))?.id;
+  mechanicId = users.rows.find((row) => row.contact_email.includes("handoff-mechanic"))?.id;
+  joiningMechanicId = users.rows.find((row) => row.contact_email.includes("joining-mechanic"))?.id;
   officeId = users.rows.find((row) => row.contact_email.includes("manager"))?.id;
   await query(
     `insert into user_company_memberships (user_id, company_id, role)
-     values ($1, $3, 'mechanic'), ($2, $3, 'office')`,
-    [mechanicId, officeId, companyId],
+     values ($1, $4, 'mechanic'), ($2, $4, 'mechanic'), ($3, $4, 'office')`,
+    [mechanicId, joiningMechanicId, officeId, companyId],
   );
   await query(
     `insert into user_location_memberships (user_id, location_id, company_id)
-     values ($1, $3, $4), ($2, $3, $4)`,
-    [mechanicId, officeId, locationId, companyId],
+     values ($1, $4, $5), ($2, $4, $5), ($3, $4, $5)`,
+    [mechanicId, joiningMechanicId, officeId, locationId, companyId],
   );
   await query(
     "insert into workorder_serial_counters (company_id, prefix, next_number, digits) values ($1, $2, 1, 4)",
@@ -77,6 +81,28 @@ try {
   const accepted = await getOperationalWorkorderById(available.id);
   assert.equal(accepted.status, "in_progress");
   assert.ok(accepted.startedAt);
+
+  const joined = await acceptOperationalWorkorder(available.id, joiningMechanicId);
+  assert.equal(joined.status, "in_progress");
+  assert.deepEqual(joined.mechanicIds, [mechanicId, joiningMechanicId]);
+  const joinedAssignment = await query(
+    `select assignment_role, reason
+     from workorder_mechanic_assignments
+     where workorder_id = $1 and mechanic_user_id = $2 and active`,
+    [available.id, joiningMechanicId],
+  );
+  assert.deepEqual(joinedAssignment.rows[0], {
+    assignment_role: "support",
+    reason: "Mechanic joined active work",
+  });
+  const joinEvents = await getWorkorderTimeline(available.id);
+  assert.ok(joinEvents.some((event) => event.type === "assignment"
+    && event.action === "accepted"
+    && event.to_mechanic_id === joiningMechanicId));
+  await assert.rejects(
+    acceptOperationalWorkorder(available.id, joiningMechanicId),
+    (error) => error instanceof WorkorderLifecycleConflictError && error.code === "WORKORDER_ALREADY_ACCEPTED",
+  );
 
   const mechanicCreated = await createOperationalWorkorder({
     companyId,
@@ -230,6 +256,7 @@ try {
     passed: true,
     canonicalStart: true,
     atomicAccept: true,
+    activeJoin: true,
     mechanicCreationStart: true,
     idempotentOpen: true,
     workDoneAndReturn: true,
@@ -248,7 +275,7 @@ try {
   }
   if (inventoryId) await query("delete from inventory_items where id = $1", [inventoryId]).catch(() => {});
   if (companyId) await query("delete from workorder_serial_counters where company_id = $1", [companyId]).catch(() => {});
-  const userIds = [mechanicId, officeId].filter(Boolean);
+  const userIds = [mechanicId, joiningMechanicId, officeId].filter(Boolean);
   if (userIds.length) await query("delete from user_profiles where id = any($1::uuid[])", [userIds]).catch(() => {});
   if (locationId) await query("delete from locations where id = $1", [locationId]).catch(() => {});
   if (companyId) await query("delete from companies where id = $1", [companyId]).catch(() => {});

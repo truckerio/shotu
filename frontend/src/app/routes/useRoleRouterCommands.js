@@ -30,12 +30,12 @@ export function useRoleRouterCommands({
     if (Object.keys(errors).length) {
       setCreateErrors(errors);
       setCreateAttempt((attempt) => attempt + 1);
-      setCreateState({ busy: false, message: "Fix the highlighted fields before creating the workorder." });
+      setCreateState({ busy: false, message: "Fix the highlighted fields before creating the workorder.", error: true });
       return;
     }
     setCreateErrors({});
     setCreateAttempt(0);
-    setCreateState({ busy: true, message: "Creating workorder..." });
+    setCreateState({ busy: true, message: "Creating workorder...", error: false });
     try {
       if (!["admin", "office"].includes(actor.role)) {
         const result = await api("/api/workorders", {
@@ -44,6 +44,7 @@ export function useRoleRouterCommands({
         });
         setCreateState({
           busy: false,
+          error: false,
           message: createdWorkorderMessage({ mechanic: actor.role === "mechanic", serial: result.workorder.serial }),
         });
         if (actor.role === "mechanic") {
@@ -66,6 +67,7 @@ export function useRoleRouterCommands({
       setResumedDraft(null);
       setCreateState({
         busy: false,
+        error: false,
         message: createdWorkorderMessage({
           assigned: createAssignment.mechanicUserIds.length > 0,
           serial: result.workorder.serial,
@@ -74,7 +76,7 @@ export function useRoleRouterCommands({
       const opened = await openOfficeWorkorder(result.workorder.id);
       if (!opened) finishRoleWorkspace();
     } catch (error) {
-      setCreateState({ busy: false, message: error.message });
+      setCreateState({ busy: false, message: error.message, error: true });
     }
   }
 

@@ -172,3 +172,30 @@ test("canonical authenticated create and create-context routes are role neutral"
   });
   assert.equal(contextTarget.responses[0].payload.locations.length, 1);
 });
+
+test("mechanic creation uses the same canonical role-neutral create route", async () => {
+  const mechanicContext = { actor: { id: "mechanic-one", role: "mechanic" } };
+  const target = harness({
+    method: "POST",
+    path: "/api/workorders",
+    body: {
+      companyId: WORKORDER_ID,
+      locationId: "22222222-2222-4222-8222-222222222222",
+      concern: "Inspect brakes",
+    },
+  });
+  target.helpers.requestContext = mechanicContext;
+  let createCall;
+  await handleWorkorderModulesApi(target.req, target.res, target.url, target.helpers, {
+    createWorkorder: async (...args) => {
+      createCall = args;
+      return { id: "wo-mechanic", status: "in_progress" };
+    },
+  });
+  assert.equal(createCall[0], mechanicContext);
+  assert.equal(createCall[1].concern, "Inspect brakes");
+  assert.deepEqual(target.responses, [{
+    status: 201,
+    payload: { workorder: { id: "wo-mechanic", status: "in_progress" } },
+  }]);
+});

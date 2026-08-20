@@ -1,4 +1,4 @@
-import { invalidRequest, permissionDenied } from "../../auth/errors.js";
+import { AuthError, invalidRequest, permissionDenied } from "../../auth/errors.js";
 import { acknowledgeChatReceipts } from "../chat/chat-receipts.service.js";
 import {
   acceptMechanicWorkorder,
@@ -25,7 +25,11 @@ import {
   markOfficeWorkorderDone,
 } from "../office/office.service.js";
 import { loadWorkorderDetail } from "./workorder-detail.service.js";
-import { createOperationalWorkorder } from "../../db/repositories/operational-workorders.repo.js";
+import {
+  createOperationalWorkorder,
+  mapActiveAssetConflict,
+  WorkorderLifecycleConflictError,
+} from "../../db/repositories/operational-workorders.repo.js";
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
@@ -218,16 +222,24 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
   const loadLaborProduct = dependencies.loadLaborProduct || getConfiguredLaborProduct;
   const laborProduct = await loadLaborProduct(input.companyId);
   const mechanic = context.actor.role === "mechanic";
-  return create({
-    ...input,
-    formData: {
-      ...(input.formData || {}),
-      ...(laborProduct ? { laborProduct } : { laborProduct: null }),
-    },
-    createdByUserId: context.actor.id,
-    mechanicUserIds: mechanic ? [context.actor.id] : input.mechanicUserIds,
-    startImmediately: mechanic,
-  });
+  try {
+    return await create({
+      ...input,
+      formData: {
+        ...(input.formData || {}),
+        ...(laborProduct ? { laborProduct } : { laborProduct: null }),
+      },
+      createdByUserId: context.actor.id,
+      mechanicUserIds: mechanic ? [context.actor.id] : input.mechanicUserIds,
+      startImmediately: mechanic,
+    });
+  } catch (error) {
+    const mapped = mapActiveAssetConflict(error);
+    if (mapped instanceof WorkorderLifecycleConflictError) {
+      throw new AuthError(mapped.statusCode, mapped.code, mapped.message);
+    }
+    throw mapped;
+  }
 }
 
 export async function workorderCreateContext(context, dependencies = {}) {

@@ -8,6 +8,7 @@ export function CreateWorkorderForm({
   assignment,
   busy,
   errors,
+  error,
   errorFocusKey,
   errorFocusReady = true,
   form,
@@ -68,7 +69,7 @@ export function CreateWorkorderForm({
   return (
     <OperationalForm ref={mobileScrollRef} id={CREATE_WORKORDER_FORM_ID} className="create-workorder-form" data-mobile-section={mobileSection} busy={busy} onSubmit={onSubmit} noValidate>
       <FormErrorSummary errors={summaryErrors} focusFirstField focusKey={errorFocusKey} focusOnMount focusReady={errorFocusReady} onFocusTarget={onErrorFocusTarget} title="Check the workorder details" />
-      {message ? <p className="create-workorder-form-message" role="status">{message}</p> : null}
+      {message ? <p className="create-workorder-form-message" role={error ? "alert" : "status"}>{message}</p> : null}
       <WorkorderCreateModuleHost sections={sections} moduleProps={moduleProps} />
     </OperationalForm>
   );

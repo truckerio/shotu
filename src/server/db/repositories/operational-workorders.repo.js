@@ -218,7 +218,7 @@ function lifecycleConflict(code, message) {
 
 const ACTIVE_ASSET_CONSTRAINT = "operational_workorders_one_active_per_asset_uidx";
 
-function mapActiveAssetConflict(error) {
+export function mapActiveAssetConflict(error) {
   if (error?.code === "23505" && error?.constraint === ACTIVE_ASSET_CONSTRAINT) {
     return lifecycleConflict(
       "ASSET_ACTIVE_WORKORDER_EXISTS",
@@ -1241,42 +1241,57 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
     );
     const mechanicIds = assignments.rows.map((row) => row.mechanic_user_id);
     const previousPrimaryId = assignments.rows.find((row) => row.assignment_role === "primary")?.mechanic_user_id || null;
-    if (workorder.status !== WORKORDER_STATUS.OPEN || mechanicIds.length) {
+    const acceptsUnassignedWork = workorder.status === WORKORDER_STATUS.OPEN && mechanicIds.length === 0;
+    const joinsActiveWork = [WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS].includes(workorder.status)
+      && mechanicIds.length > 0;
+    if (!acceptsUnassignedWork && !joinsActiveWork) {
       throw lifecycleConflict("WORKORDER_ALREADY_ACCEPTED", "This workorder has already been accepted.");
+    }
+    if (mechanicIds.includes(mechanicUserId)) {
+      throw lifecycleConflict("WORKORDER_ALREADY_ACCEPTED", "You have already joined this workorder.");
     }
     await client.query(
       `insert into workorder_mechanic_assignments (
          workorder_id, mechanic_user_id, assignment_role, assigned_by_user_id, reason
-       ) values ($1, $2, 'primary', $2, 'Mechanic accepted work')`,
-      [workorderId, mechanicUserId],
+       ) values ($1, $2, $3, $2, $4)`,
+      [
+        workorderId,
+        mechanicUserId,
+        acceptsUnassignedWork ? "primary" : "support",
+        acceptsUnassignedWork ? "Mechanic accepted work" : "Mechanic joined active work",
+      ],
     );
-    const nextStatus = WORKORDER_STATUS.IN_PROGRESS;
-    await client.query(
-      `
-        update operational_workorders
-        set status = $2,
-            accepted_at = coalesce(accepted_at, now()),
-            started_at = coalesce(started_at, now()),
-            updated_at = now()
-        where id = $1
-      `,
-      [workorderId, nextStatus]
-    );
+    const nextStatus = acceptsUnassignedWork ? WORKORDER_STATUS.IN_PROGRESS : workorder.status;
+    if (acceptsUnassignedWork) {
+      await client.query(
+        `
+          update operational_workorders
+          set status = $2,
+              accepted_at = coalesce(accepted_at, now()),
+              started_at = coalesce(started_at, now()),
+              updated_at = now()
+          where id = $1
+        `,
+        [workorderId, nextStatus]
+      );
+    }
     await addAssignmentEvent(client, {
       workorderId,
       fromMechanicId: previousPrimaryId,
       toMechanicId: mechanicUserId,
       action: "accepted",
-      reason: mechanicIds.length ? "Joined active work." : "",
+      reason: acceptsUnassignedWork ? "" : "Joined active work.",
       changedByUserId: mechanicUserId,
     });
-    await addStatusEvent(client, {
-      workorderId,
-      fromStatus: workorder.status,
-      toStatus: nextStatus,
-      changedByUserId: mechanicUserId,
-      note: "Mechanic accepted and started work.",
-    });
+    if (acceptsUnassignedWork) {
+      await addStatusEvent(client, {
+        workorderId,
+        fromStatus: workorder.status,
+        toStatus: nextStatus,
+        changedByUserId: mechanicUserId,
+        note: "Mechanic accepted and started work.",
+      });
+    }
     await client.query("commit");
     return getOperationalWorkorderById(workorderId);
   } catch (error) {

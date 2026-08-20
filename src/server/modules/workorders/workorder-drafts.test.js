@@ -7,6 +7,7 @@ import {
   publicWorkorderDraftRow,
   submitWorkorderDraftInTransaction,
 } from "../../db/repositories/workorder-drafts.repo.js";
+import { WorkorderLifecycleConflictError } from "../../db/repositories/operational-workorders.repo.js";
 import {
   createWorkorderDraftSchema,
   submitWorkorderDraftSchema,
@@ -268,6 +269,36 @@ test("submission locks the draft before creating and marks it submitted in the s
   assert.deepEqual(events, ["lock", "validate", "create", "submit"]);
   assert.equal(result.draft.submittedWorkorderId, workorderId);
   assert.equal(result.idempotent, false);
+});
+
+test("draft submission maps an active-unit conflict before the generic request handler", async () => {
+  const client = {
+    async query(sql) {
+      if (/select \*[\s\S]*from workorder_drafts[\s\S]*for update/i.test(sql)) {
+        return { rows: [draftRow()] };
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  };
+  await assert.rejects(
+    submitWorkorderDraftInTransaction({
+      id: draftId,
+      companyIds: [companyId],
+      userId: actorId,
+      version: 2,
+      prepareCreateInput: async () => ({ concern: "Inspect an air leak." }),
+    }, client, {
+      createWorkorder: async () => {
+        throw Object.assign(new Error("Asset already has an active workorder."), {
+          code: "23505",
+          constraint: "operational_workorders_one_active_per_asset_uidx",
+        });
+      },
+    }),
+    (error) => error instanceof WorkorderLifecycleConflictError
+      && error.code === "ASSET_ACTIVE_WORKORDER_EXISTS"
+      && /already has an active workorder/i.test(error.message),
+  );
 });
 
 test("repeated submission returns the original workorder without creating another serial", async () => {

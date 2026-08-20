@@ -1,5 +1,6 @@
 import { AuthError, invalidRequest, permissionDenied, resourceNotFound } from "../../auth/errors.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
+import { WorkorderLifecycleConflictError } from "../../db/repositories/operational-workorders.repo.js";
 import {
   WorkorderDraftConflictError,
   WorkorderDraftLimitError,
@@ -36,6 +37,9 @@ async function accessibleLocation(context, locationId, dependencies = {}) {
 }
 
 function mapDraftError(error) {
+  if (error instanceof WorkorderLifecycleConflictError) {
+    throw new AuthError(error.statusCode, error.code, error.message);
+  }
   if (!(error instanceof WorkorderDraftConflictError)
     && !(error instanceof WorkorderDraftLimitError)
     && !(error instanceof WorkorderDraftPermissionError)) throw error;

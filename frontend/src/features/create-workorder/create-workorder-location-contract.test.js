@@ -6,6 +6,7 @@ const form = readFileSync(new URL("../workorder-modules/location/CreateLocationM
 const router = readFileSync(new URL("../../app/routes/RoleRouter.jsx", import.meta.url), "utf8");
 const locationController = readFileSync(new URL("./useCreateLocationController.js", import.meta.url), "utf8");
 const commands = readFileSync(new URL("../../app/routes/useRoleRouterCommands.js", import.meta.url), "utf8");
+const createForm = readFileSync(new URL("../generator/CreateWorkorderForm.jsx", import.meta.url), "utf8");
 
 test("required create location remains visible while location data loads or fails", () => {
   assert.match(form, /id="workorder-location"/);
@@ -27,4 +28,9 @@ test("create location loading failures are explicit instead of silently swallowe
   assert.match(locationController, /setLocationsState\(\{ error: "", loading: true \}\)/);
   assert.match(locationController, /error\?\.message \|\| "Locations could not be loaded\."/);
   assert.doesNotMatch(locationController, /request\(endpoint\)[\s\S]{0,900}\.catch\(\(\) => \{\}\)/);
+});
+
+test("create conflicts are announced as alerts instead of generic status copy", () => {
+  assert.match(commands, /message: error\.message, error: true/);
+  assert.match(createForm, /role=\{error \? "alert" : "status"\}/);
 });

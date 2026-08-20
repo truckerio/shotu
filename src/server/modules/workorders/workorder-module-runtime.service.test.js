@@ -140,6 +140,38 @@ test("canonical create derives actor identity and preserves mechanic start seman
   assert.deepEqual(authorized[1].moduleKeys, ["concern", "unit", "location", "schedule", "parts"]);
 });
 
+test("active-unit creation conflicts are returned as actionable HTTP errors", async () => {
+  const conflict = Object.assign(new Error("Asset already has an active workorder."), {
+    code: "23505",
+    constraint: "operational_workorders_one_active_per_asset_uidx",
+  });
+  await assert.rejects(
+    createWorkorderRuntime({
+      actor: { id: "actor-1", role: "office" },
+      companyIds: new Set(["company-1"]),
+      locationIds: new Set(["location-1"]),
+    }, {
+      companyId: "company-1",
+      locationId: "location-1",
+      concern: "Inspect",
+      mechanicUserIds: [],
+      formData: {},
+    }, {
+      companyId: "company-1",
+      locationId: "location-1",
+      concern: "Inspect",
+      formData: {},
+    }, {
+      authorizeCreate: async () => {},
+      loadLaborProduct: async () => null,
+      create: async () => { throw conflict; },
+    }),
+    (error) => error.statusCode === 409
+      && error.code === "ASSET_ACTIVE_WORKORDER_EXISTS"
+      && /already has an active workorder/i.test(error.message),
+  );
+});
+
 test("create context exposes the company-selected labor product to every location", async () => {
   const result = await workorderCreateContext({
     actor: { id: "admin-1", role: "admin" },

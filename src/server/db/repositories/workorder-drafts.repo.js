@@ -2,6 +2,7 @@ import { getPool, query } from "../pool.js";
 import {
   createOperationalWorkorderInTransaction,
   getOperationalWorkorderById,
+  mapActiveAssetConflict,
 } from "./operational-workorders.repo.js";
 
 export class WorkorderDraftConflictError extends Error {
@@ -371,7 +372,12 @@ export async function submitWorkorderDraftInTransaction({
     companyId: draftRow.company_id,
     createdByUserId: draftRow.created_by_user_id,
   });
-  const created = await createWorkorder(createInput, client);
+  let created;
+  try {
+    created = await createWorkorder(createInput, client);
+  } catch (error) {
+    throw mapActiveAssetConflict(error);
+  }
   const submitted = await client.query(
     `update workorder_drafts
         set status = 'submitted',

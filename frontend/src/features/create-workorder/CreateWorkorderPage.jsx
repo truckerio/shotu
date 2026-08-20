@@ -215,6 +215,7 @@ export function CreateWorkorderPage({
             <CreateWorkorderForm
               assignment={assignment}
               busy={officeCreateState.busy}
+              error={officeCreateState.error}
               errors={officeCreateErrors}
               errorFocusKey={officeCreateAttempt}
               errorFocusReady={errorFocusReady}
