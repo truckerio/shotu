@@ -3,6 +3,7 @@ import { getVehicleLocation } from "../../../components/workorders/AssetLocation
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Field } from "../../generator/GeneratorUi.jsx";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
+import { UnitServiceHistory } from "./UnitServiceHistory.jsx";
 
 function writable(access) {
   return access === WORKORDER_MODULE_ACCESS.WRITE || access === WORKORDER_MODULE_ACCESS.REQUIRED;
@@ -26,8 +27,10 @@ function ReadOnlyUnit({ form, workorder }) {
 export function WorkorderUnitModule({
   access,
   activeWorkorder,
+  actorRole,
   detailSection,
   form,
+  historyController,
   onApplyVehicle,
   onFieldChange,
   onSelect,
@@ -89,8 +92,9 @@ export function WorkorderUnitModule({
             <Field label="Customer company"><input {...textEntryProps("name")} value={form.customerCompanyName} onChange={(event) => onFieldChange("customerCompanyName", event.target.value)} /></Field>
             <Field label="VIN no."><input {...textEntryProps("identifier")} value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} /></Field>
           </div>
+          <UnitServiceHistory actorRole={actorRole} historyController={historyController} workorderId={activeWorkorder.workorder?.id} />
         </div>
-      ) : <ReadOnlyUnit form={form} workorder={activeWorkorder.workorder} />}
+      ) : <><ReadOnlyUnit form={form} workorder={activeWorkorder.workorder} /><UnitServiceHistory actorRole={actorRole} historyController={historyController} workorderId={activeWorkorder.workorder?.id} /></>}
     </ProgressiveWorkorderSection>
   );
 }

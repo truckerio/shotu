@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { rankPartRepairHistoryRows } from "./service-history.repo.js";
+import {
+  decodeUnitHistoryCursor,
+  encodeUnitHistoryCursor,
+  rankPartRepairHistoryRows,
+} from "./service-history.repo.js";
 
 const migrationUrl = new URL("../migrations/045_service_repair_history.sql", import.meta.url);
 const deleteCleanupMigrationUrl = new URL("../migrations/046_local_service_history_delete_cleanup.sql", import.meta.url);
 const syncStateMigrationUrl = new URL("../migrations/047_service_history_sync_state.sql", import.meta.url);
+const unitHistoryMigrationUrl = new URL("../migrations/057_unit_service_history_read_model.sql", import.meta.url);
 
 function row(overrides = {}) {
   return {
@@ -87,4 +92,61 @@ test("provider history watermark and reconciliation state are durable and succes
   assert.match(migration, /provider_watermark timestamptz/i);
   assert.match(migration, /last_reconciled_at timestamptz/i);
   assert.match(repository, /markServiceHistorySyncSucceeded/i);
+});
+
+test("unit history cursor round-trips a deterministic date and row identity", () => {
+  const input = {
+    serviceAt: "2026-08-20T12:30:00.000Z",
+    id: "11111111-1111-4111-8111-111111111111",
+  };
+  assert.deepEqual(decodeUnitHistoryCursor(encodeUnitHistoryCursor(input)), input);
+  assert.throws(() => decodeUnitHistoryCursor("not-a-cursor"), (error) => (
+    error.statusCode === 400 && error.code === "INVALID_SERVICE_HISTORY_CURSOR"
+  ));
+});
+
+test("unit history query is tenant and exact-asset scoped, excludes current work, and deduplicates Odoo identity", async () => {
+  const repository = await readFile(new URL("./service-history.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /history\.company_id = \$1[\s\S]*history\.asset_id = \$2::uuid/i);
+  assert.match(repository, /workorder\.id <> \$3::uuid/i);
+  assert.match(repository, /workorder\.closed_at is not null[\s\S]*history\.completion_date_kind = 'verified_completed'/i);
+  assert.match(repository, /from odoo_entry_status entry[\s\S]*entry\.external_id = history\.external_id/i);
+  assert.match(repository, /line\.line_kind = 'service'/i);
+  assert.match(repository, /line\.line_kind = 'goods'/i);
+  assert.doesNotMatch(repository, /raw_metadata:\s*row\./i);
+  assert.doesNotMatch(repository, /raw_payload:\s*row\./i);
+});
+
+test("unit history migration separates scheduled dates and records durable sync failure health", async () => {
+  const migration = await readFile(unitHistoryMigrationUrl, "utf8");
+  const repository = await readFile(new URL("./service-history.repo.js", import.meta.url), "utf8");
+  assert.match(migration, /scheduled_at timestamptz/i);
+  assert.match(migration, /completion_date_kind[\s\S]*verified_completed[\s\S]*scheduled/i);
+  assert.match(migration, /scheduled_at = service_history_safe_timestamptz\(history\.raw_metadata -> 'commitment_date'\)/i);
+  assert.match(migration, /exception when others then[\s\S]*return null/i);
+  assert.match(migration, /service_history_orders_unit_timeline_idx/i);
+  assert.match(migration, /last_attempted_at timestamptz[\s\S]*last_succeeded_at timestamptz[\s\S]*last_error_at timestamptz/i);
+  assert.match(repository, /markServiceHistorySyncAttempted/i);
+  assert.match(repository, /markServiceHistorySyncFailed/i);
+});
+
+test("unit history bounds every record payload and reports explicit truncation", async () => {
+  const repository = await readFile(new URL("./service-history.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /MAX_HISTORY_TEXT_LENGTH = 4_000/i);
+  assert.match(repository, /MAX_HISTORY_SERVICE_LINES = 25/i);
+  assert.match(repository, /MAX_HISTORY_PARTS = 50/i);
+  assert.match(repository, /left\(workorder\.concern, \$\{MAX_HISTORY_TEXT_LENGTH\}\)/i);
+  assert.match(repository, /limit \$\{MAX_HISTORY_SERVICE_LINES \+ 1\}/i);
+  assert.match(repository, /limit \$\{MAX_HISTORY_PARTS \+ 1\}/i);
+  assert.match(repository, /truncated:\s*\{[\s\S]*serviceLines:[\s\S]*parts:/i);
+  assert.match(repository, /bool_or\(length\(candidate\.description\) > \$\{MAX_HISTORY_LINE_TEXT_LENGTH\}/i);
+});
+
+test("sync health uses attempt timestamps to prevent stale completions from regressing state", async () => {
+  const repository = await readFile(new URL("./service-history.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /provider_watermark = greatest\([\s\S]*service_history_sync_state\.provider_watermark[\s\S]*excluded\.provider_watermark/i);
+  assert.match(repository, /last_succeeded_at = greatest\([\s\S]*excluded\.last_succeeded_at/i);
+  assert.match(repository, /when excluded\.last_succeeded_at >= service_history_sync_state\.last_attempted_at then null/i);
+  assert.match(repository, /when excluded\.last_attempted_at >= service_history_sync_state\.last_attempted_at[\s\S]*then excluded\.last_error_at/i);
+  assert.doesNotMatch(repository, /set provider_watermark = excluded\.provider_watermark/i);
 });

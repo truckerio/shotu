@@ -18,6 +18,7 @@ import {
   patchWorkorderModule,
   protectedWorkorderDetail,
   readWorkorderModuleRuntime,
+  readWorkorderUnitHistory,
   runWorkorderModuleAction,
   createWorkorderRuntime,
   workorderCreateContext,
@@ -57,6 +58,11 @@ function genericModuleRoute(pathname) {
   } : null;
 }
 
+function unitHistoryRoute(pathname) {
+  const match = /^\/api\/workorders\/([^/]+)\/modules\/unit\/history$/.exec(pathname);
+  return match ? { workorderId: decodeURIComponent(match[1]) } : null;
+}
+
 export async function handleWorkorderModulesApi(req, res, url, helpers, dependencies = {}) {
   const { sendJson, readBody, requestContext } = helpers;
   if (req.method === "GET" && url.pathname === "/api/workorders/create-context") {
@@ -71,9 +77,10 @@ export async function handleWorkorderModulesApi(req, res, url, helpers, dependen
     sendJson(res, 201, { workorder: await createWorkorder(requestContext, input, rawInput) });
     return true;
   }
-  const route = odooModuleRoute(url.pathname);
-  const genericRoute = route ? null : genericModuleRoute(url.pathname);
-  if (!route && !genericRoute) return false;
+  const historyRoute = unitHistoryRoute(url.pathname);
+  const route = historyRoute ? null : odooModuleRoute(url.pathname);
+  const genericRoute = route || historyRoute ? null : genericModuleRoute(url.pathname);
+  if (!historyRoute && !route && !genericRoute) return false;
 
   const readiness = dependencies.readiness || workorderOdooReadiness;
   const prepare = dependencies.prepare || prepareWorkorderOdooModule;
@@ -83,6 +90,16 @@ export async function handleWorkorderModulesApi(req, res, url, helpers, dependen
   const readModule = dependencies.readModule || readWorkorderModuleRuntime;
   const patchModule = dependencies.patchModule || patchWorkorderModule;
   const runAction = dependencies.runAction || runWorkorderModuleAction;
+  const readUnitHistory = dependencies.readUnitHistory || readWorkorderUnitHistory;
+
+  if (historyRoute) {
+    if (req.method !== "GET") return false;
+    sendJson(res, 200, await readUnitHistory(requestContext, historyRoute.workorderId, {
+      limit: url.searchParams.get("limit") || undefined,
+      cursor: url.searchParams.get("cursor") || null,
+    }));
+    return true;
+  }
 
   if (genericRoute) {
     if (req.method === "GET" && !genericRoute.moduleKey) {

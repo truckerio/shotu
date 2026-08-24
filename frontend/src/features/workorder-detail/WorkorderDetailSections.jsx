@@ -6,6 +6,7 @@ import { workorderNeedsChatAttention } from "./workorder-detail-sections.js";
 export function WorkorderDetailSections({
   activeWorkorder,
   actorId,
+  actorRole,
   assignedMechanicIds,
   conversationMessages,
   detailMechanicNames,
@@ -50,6 +51,7 @@ export function WorkorderDetailSections({
   updateOfficeMechanicTeam,
   updateStartDate,
   updateUnitNumber,
+  unitHistoryController,
   vehicleMileage,
   vehicleModelText,
   acceptOpenedMechanicWorkorder,
@@ -188,8 +190,10 @@ export function WorkorderDetailSections({
     },
     unit: {
       activeWorkorder,
+      actorRole,
       detailSection,
       form,
+      historyController: unitHistoryController,
       onApplyVehicle: applyVehicle,
       onFieldChange: updateField,
       onSelect: setDetailSection,

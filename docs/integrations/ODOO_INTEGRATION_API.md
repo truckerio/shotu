@@ -6,9 +6,9 @@
 
 **API version:** v1
 
-**Document version:** 3.2
+**Document version:** 3.3
 
-**Last verified:** August 7, 2026
+**Last verified:** August 24, 2026
 
 **Status:** Workorder API implemented and acceptance-tested. Odoo.sh master-data import, service-history import, outbound mapping, and draft-only `sale.order` creation are implemented and contract-tested. Live application verification created a draft in the configured Odoo staging database; production Odoo database cutover is still an operational configuration gate.
 
@@ -38,6 +38,26 @@ https://<product-host>/api/integrations/odoo/v1
 The machine credential is scoped to one company. A client can never list or read another company's workorders.
 
 The first-party outbound creation path is intentionally not part of the external OpenAPI contract. It uses authenticated Admin and Surveillance routes, encrypted Odoo credentials stored in the application, and the same integration audit/idempotency infrastructure. See `docs/ODOO_OUTBOUND_SERVICE_ORDER_SPEC.md` for that implementation contract.
+
+### In-product Unit service history
+
+The authenticated workorder detail UI reads prior completed service through:
+
+```http
+GET /api/workorders/{workorderId}/modules/unit/history?limit=10&cursor=<opaque>
+```
+
+This is a first-party browser route, not part of the external machine API. The
+server derives company, location, Unit-module access, and exact asset identity
+from the authorized workorder. It reads the local PostgreSQL projection only;
+it does not call Odoo while a mechanic or office user opens history.
+
+Only verified completed Odoo orders and office-closed local workorders appear in
+the completed-service timeline. Odoo `commitment_date` remains scheduled evidence
+and can never establish completion. Responses expose bounded operational fields,
+an opaque cursor, and explicit `unlinked`, `never_synced`, `stale`, `unavailable`,
+`empty`, or `ready` state. Raw provider metadata, private notes, credentials,
+signatures, and direct provider URLs are not returned.
 
 ## 2. Integration workflow
 
@@ -1009,6 +1029,10 @@ Not yet verified against the real Odoo production database:
 ### Production gate
 
 Do not mark the Odoo integration production-ready until the staging acceptance checklist passes and an Admin explicitly switches the Workorder production configuration from staging Odoo values to approved production Odoo values.
+
+### Service-history release rollback
+
+The timeline added by migration `057_unit_service_history_read_model.sql` is a read projection. Roll back a failed application release by restoring the prior application code while retaining the additive date/sync columns, normalization trigger/function, and index. Do not delete imported history or reverse migration `057` as incident response. Any later schema or data removal needs separate approval, backup evidence, and a new reviewed migration.
 
 ## 26. Engineering references
 

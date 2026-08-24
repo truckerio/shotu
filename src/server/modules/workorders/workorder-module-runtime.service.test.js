@@ -5,6 +5,7 @@ import {
   patchWorkorderModule,
   patchWorkorderModules,
   protectedWorkorderModule,
+  readWorkorderUnitHistory,
   runWorkorderModuleAction,
   workorderCreateContext,
 } from "./workorder-module-runtime.service.js";
@@ -18,6 +19,17 @@ test("protected module read never loads data before authorization", async () => 
     loadDetail: async () => { calls.push("load"); },
   }), /denied/);
   assert.deepEqual(calls, ["authorize"]);
+});
+
+test("Unit history runtime forwards query input through the dedicated reader", async () => {
+  const calls = [];
+  const result = await readWorkorderUnitHistory(context, "wo-1", { limit: "10", cursor: "next" }, {
+    readHistory: async (...args) => { calls.push(args); return { state: "ready" }; },
+  });
+  assert.equal(result.state, "ready");
+  assert.equal(calls[0][0], context);
+  assert.equal(calls[0][1], "wo-1");
+  assert.deepEqual(calls[0][2], { limit: "10", cursor: "next" });
 });
 
 test("generic patch authorizes the exact module and passes authenticated actor", async () => {

@@ -30,6 +30,8 @@ import {
 import { RETURN_CATEGORIES } from "./workorder-handoff.js";
 import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOdooModule.js";
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
+import { UnitServiceHistorySummary } from "../workorder-modules/unit/UnitServiceHistory.jsx";
+import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
 import {
   resolveWorkorderModulePolicy,
   WORKORDER_MODULE_IDS,
@@ -201,6 +203,10 @@ export function WorkorderDetailPage({
     onDetailRefresh: reloadActiveWorkorder,
     workorderId: activeWorkorder.workorder.id,
   });
+  const unitHistoryController = useUnitServiceHistory({
+    enabled: unitPolicy.canRead,
+    workorderId: activeWorkorder.workorder.id,
+  });
   const visibleDetailSections = useMemo(
     () => {
       if (isCompact) return buildCompactPhoneDetailSections(detailSections, actor.role, {
@@ -361,6 +367,18 @@ export function WorkorderDetailPage({
             ) : null,
           children: (
             <>
+            {unitPolicy.canRead ? (
+              <UnitServiceHistorySummary
+                actionLabel={unitHistoryController.expanded ? "Hide history" : "View history"}
+                expanded={unitHistoryController.expanded}
+                history={unitHistoryController.history}
+                loading={unitHistoryController.loading}
+                onToggle={() => {
+                  selectDetailSection("unit");
+                  unitHistoryController.setExpanded(!unitHistoryController.expanded);
+                }}
+              />
+            ) : null}
             {isMechanicDetail && unitPolicy.canRead ? (
               <div className="workorder-object-inline-detail">
                 <span>{mechanicUnitType} details</span>
@@ -439,6 +457,7 @@ export function WorkorderDetailPage({
           <WorkorderDetailSections
             activeWorkorder={activeWorkorder}
             actorId={actor.id}
+            actorRole={actor.role}
             assignedMechanicIds={assignedMechanicIds}
             conversationMessages={conversationMessages}
             detailMechanicNames={detailMechanicNames}
@@ -486,6 +505,7 @@ export function WorkorderDetailPage({
             updateOfficeMechanicTeam={updateOfficeMechanicTeam}
             updateStartDate={updateStartDate}
             updateUnitNumber={updateUnitNumber}
+            unitHistoryController={unitHistoryController}
             vehicleMileage={vehicleMileage}
             vehicleModelText={vehicleModelText}
             acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}

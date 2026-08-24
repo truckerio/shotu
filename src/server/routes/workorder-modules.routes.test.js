@@ -53,6 +53,46 @@ test("canonical readiness route passes authenticated context and workorder id", 
   assert.deepEqual(target.responses, [{ status: 200, payload: { ready: true } }]);
 });
 
+test("canonical Unit history route forwards bounded pagination input and authenticated context", async () => {
+  const target = harness({
+    method: "GET",
+    path: `/api/workorders/${WORKORDER_ID}/modules/unit/history?limit=7&cursor=next-page`,
+  });
+  let call;
+  const handled = await handleWorkorderModulesApi(
+    target.req, target.res, target.url, target.helpers, {
+      readUnitHistory: async (...args) => {
+        call = args;
+        return {
+          state: "empty",
+          unit: { assetId: "asset-1", unitNo: "G2116" },
+          summary: {
+            historyCount: 0, returnedCount: 0,
+            lastCompletedServiceAt: null, latestRecordedServiceAt: null,
+          },
+          freshness: {
+            state: "current", lastAttemptedAt: "2026-08-24T10:00:00Z",
+            lastSucceededAt: "2026-08-24T10:00:01Z", lastErrorAt: null,
+            errorCode: "", warning: "",
+          },
+          items: [],
+          nextCursor: null,
+        };
+      },
+    },
+  );
+  assert.equal(handled, true);
+  assert.deepEqual(call, [requestContext, WORKORDER_ID, { limit: "7", cursor: "next-page" }]);
+  assert.equal(target.responses[0].status, 200);
+  assert.deepEqual(Object.keys(target.responses[0].payload), [
+    "state", "unit", "summary", "freshness", "items", "nextCursor",
+  ]);
+  assert.deepEqual(Object.keys(target.responses[0].payload.summary), [
+    "historyCount", "returnedCount", "lastCompletedServiceAt", "latestRecordedServiceAt",
+  ]);
+  assert.equal(target.responses[0].payload.freshness.state, "current");
+});
+
 test("canonical preparation and draft routes validate and forward provider inputs", async () => {
   const preparation = harness({
     method: "PUT",

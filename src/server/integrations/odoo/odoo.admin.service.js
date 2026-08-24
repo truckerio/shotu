@@ -17,6 +17,8 @@ import {
   upsertDiscoveredOdooLocations,
 } from "./odoo.admin.repo.js";
 import {
+  markServiceHistorySyncAttempted,
+  markServiceHistorySyncFailed,
   markServiceHistorySyncSucceeded,
   readServiceHistorySyncState,
 } from "../../db/repositories/service-history.repo.js";
@@ -291,8 +293,9 @@ export async function syncOdooPartsAndInventory(companyId) {
     ]),
   ]);
   const inventoryResult = await importOdooInventory(companyId, { products, quants });
+  const syncStartedAt = new Date();
   try {
-    const syncStartedAt = new Date();
+    await markServiceHistorySyncAttempted(companyId, "odoo", syncStartedAt);
     const syncState = await readServiceHistorySyncState(companyId, "odoo");
     const lastReconciledAt = syncState.lastReconciledAt ? new Date(syncState.lastReconciledAt) : null;
     const reconcile = !lastReconciledAt
@@ -309,6 +312,11 @@ export async function syncOdooPartsAndInventory(companyId) {
     });
     return { ...inventoryResult, ...historyResult, historyWarning: "" };
   } catch {
+    await markServiceHistorySyncFailed(companyId, "odoo", {
+      attemptedAt: syncStartedAt,
+      code: "ODOO_SERVICE_HISTORY_UNAVAILABLE",
+      message: "Odoo service history could not be synchronized.",
+    });
     return {
       ...inventoryResult,
       historyOrderCount: 0,

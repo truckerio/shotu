@@ -1110,7 +1110,12 @@ export async function importOdooServiceHistory(companyId, {
         asset_id: vehicleMappings.get(assetExternalId) || null,
         asset_external_id: assetExternalId,
         ordered_at: order.date_order || null,
-        completed_at: order.effective_date || order.commitment_date || null,
+        recorded_at: order.date_order || null,
+        scheduled_at: order.commitment_date || null,
+        completed_at: order.effective_date || null,
+        completion_date_kind: order.effective_date
+          ? "verified_completed"
+          : order.commitment_date ? "scheduled" : order.date_order ? "recorded" : "unknown",
         source_updated_at: order.write_date || null,
         raw_metadata: order,
       };
@@ -1118,15 +1123,18 @@ export async function importOdooServiceHistory(companyId, {
     const savedOrders = await client.query(
       `insert into service_history_orders (
          company_id, source_provider, external_id, reference, status,
-         asset_id, asset_external_id, ordered_at, completed_at, source_updated_at, raw_metadata,
+         asset_id, asset_external_id, ordered_at, recorded_at, scheduled_at,
+         completed_at, completion_date_kind, source_updated_at, raw_metadata,
          last_seen_at, updated_at
        )
        select $1, 'odoo', source.external_id, source.reference, source.status,
-              source.asset_id, source.asset_external_id, source.ordered_at, source.completed_at, source.source_updated_at,
+              source.asset_id, source.asset_external_id, source.ordered_at, source.recorded_at, source.scheduled_at,
+              source.completed_at, source.completion_date_kind, source.source_updated_at,
               source.raw_metadata, now(), now()
        from jsonb_to_recordset($2::jsonb) as source(
          external_id text, reference text, status text, asset_id uuid, asset_external_id text, ordered_at timestamptz,
-         completed_at timestamptz, source_updated_at timestamptz, raw_metadata jsonb
+         recorded_at timestamptz, scheduled_at timestamptz, completed_at timestamptz,
+         completion_date_kind text, source_updated_at timestamptz, raw_metadata jsonb
        )
        on conflict (company_id, source_provider, external_id) do update
        set reference = excluded.reference,
@@ -1134,7 +1142,10 @@ export async function importOdooServiceHistory(companyId, {
            asset_id = excluded.asset_id,
            asset_external_id = excluded.asset_external_id,
            ordered_at = excluded.ordered_at,
+           recorded_at = excluded.recorded_at,
+           scheduled_at = excluded.scheduled_at,
            completed_at = excluded.completed_at,
+           completion_date_kind = excluded.completion_date_kind,
            source_updated_at = excluded.source_updated_at,
            raw_metadata = excluded.raw_metadata,
            last_seen_at = now(),
@@ -1241,7 +1252,7 @@ export async function importOdooServiceHistory(companyId, {
             normalized_part_number: partLine.mapping?.normalized_part_number || normalizePartNumber(partLine.partNumber),
             asset_id: assetId,
             repair_text: repairLine.repairText,
-            used_at: order.effective_date || order.commitment_date || order.date_order || order.write_date || null,
+            used_at: order.effective_date || order.date_order || order.write_date || null,
             evidence: {
               partLineExternalId: String(partLine.line.id),
               repairLineExternalId: String(repairLine.line.id),

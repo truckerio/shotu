@@ -37,6 +37,7 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Attention | `workorder_attention_state`, `workorder_attention_events` | `repositories/workorder-attention.repo.js` |
 | Parts and stock | catalog, inventory, request, allocation, and UoM tables | `repositories/part-requests.repo.js` |
 | Odoo handoff | `odoo_entry_status` | workorder repository and surveillance service |
+| Unit service-history projection | `service_history_orders`, `service_history_lines`, `service_history_sync_state` | `repositories/service-history.repo.js` and Odoo admin sync |
 | Odoo stock-location identity | `odoo_inventory_locations` | `integrations/odoo/odoo.admin.repo.js` |
 | Odoo product identity | `odoo_product_mappings` | `integrations/odoo/odoo.admin.repo.js` |
 | Provider connection | `integration_accounts` | `repositories/integrations.repo.js` |
@@ -176,6 +177,11 @@ imports that bypass application schemas.
   `odoo_warehouses`, `odoo_service_products`, and
   `odoo_location_warehouse_mappings`. `odoo_workorder_preparation` stores
   per-workorder labor/customer preparation before creation.
+- Unit service history is read from the company- and asset-scoped PostgreSQL
+  projection. Workorder detail requests never call Odoo directly. Only verified
+  completion dates can appear as completed service; scheduled and recorded dates
+  remain separate evidence. Failed sync attempts retain prior successful history
+  and expose sanitized freshness state rather than turning failure into fresh empty data.
 - `odoo_outbound_orders` is the durable idempotency and reconciliation record
   for first-party draft creation. Successful creation also updates
   `odoo_entry_status`, `integration_mappings`, integration audit, and the
@@ -294,6 +300,10 @@ erDiagram
 7. Run migration twice, `npm run db:check`, integration tests, then `npm run verify`.
 
 `src/server/db/migrate.js` sorts migrations, validates SHA-256 checksums, takes a PostgreSQL advisory transaction lock, and applies pending files atomically.
+
+### Unit service-history rollback
+
+Migration `057_unit_service_history_read_model.sql` is additive. If the application release must be rolled back, restore the prior application code and leave its added date/sync columns, trigger, function, and timeline index in place. Do not delete projected history or reverse the migration during an incident. Removing this additive schema or data requires separate authorization, a backup, and a reviewed forward migration.
 
 ## Naming Rules
 

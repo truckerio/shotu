@@ -25,6 +25,8 @@ import {
 } from "../../../../../shared/workorder-template.js";
 import { surveillanceMissingInfoHandoff } from "../surveillanceQueue.js";
 import { WorkorderDetailModuleHost } from "../../workorder-modules/WorkorderDetailModuleHost.jsx";
+import { UnitServiceHistorySummary } from "../../workorder-modules/unit/UnitServiceHistory.jsx";
+import { useUnitServiceHistory } from "../../workorder-modules/unit/useUnitServiceHistory.js";
 import { localDate, missingFields, progressTimestamp } from "./surveillance-workspace-model.js";
 
 function valueOrDash(value) {
@@ -78,6 +80,11 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     : baseDetailSections;
   const selectedSection = coerceAllowedDetailSection(detailSection, detailSections);
   const odooSection = detailSections.find((section) => section.id === "odoo");
+  const unitSection = detailSections.find((section) => section.id === "unit");
+  const unitHistoryController = useUnitServiceHistory({
+    enabled: Boolean(unitSection),
+    workorderId: workorder.id,
+  });
   useEffect(() => {
     if (!detailSections.length || selectedSection === detailSection) return;
     setDetailSection(selectedSection);
@@ -220,8 +227,10 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     },
     unit: {
       activeWorkorder: detail,
+      actorRole: actor?.role || "surveillance",
       detailSection: selectedSection,
       form: previewForm,
+      historyController: unitHistoryController,
       onSelect: setDetailSection,
       vehicleLookup: { loading: false, results: [] },
       vehicleMileage: () => "",
@@ -267,12 +276,24 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
           unit: canRead("unit") ? assetLabel : "",
           unitType: canRead("unit") ? unitType : "Workorder",
           children: (
-            canRead("unit") ? <div className="workorder-object-inline-detail surveillance-inline-detail">
-              <span>{unitType} details</span>
-              <strong>{vehicleLabel || valueOrDash(formData.model || workorder.asset?.model)}</strong>
-              <span>{progress.label}</span>
-              <strong>{valueOrDash(progress.value ? new Date(progress.value).toLocaleString() : "")}</strong>
-            </div> : null
+            canRead("unit") ? <>
+              <div className="workorder-object-inline-detail surveillance-inline-detail">
+                <span>{unitType} details</span>
+                <strong>{vehicleLabel || valueOrDash(formData.model || workorder.asset?.model)}</strong>
+                <span>{progress.label}</span>
+                <strong>{valueOrDash(progress.value ? new Date(progress.value).toLocaleString() : "")}</strong>
+              </div>
+              <UnitServiceHistorySummary
+                actionLabel={unitHistoryController.expanded ? "Hide history" : "View history"}
+                expanded={unitHistoryController.expanded}
+                history={unitHistoryController.history}
+                loading={unitHistoryController.loading}
+                onToggle={() => {
+                  setDetailSection("unit");
+                  unitHistoryController.setExpanded(!unitHistoryController.expanded);
+                }}
+              />
+            </> : null
           ),
         }}
         sections={{ items: detailSections, activeId: selectedSection, onSelect: setDetailSection }}

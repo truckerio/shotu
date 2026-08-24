@@ -284,7 +284,18 @@ test("inventory sync isolates optional service-history permission failures", asy
   assert.match(source, /const inventoryResult = await importOdooInventory[\s\S]*try \{[\s\S]*readOdooServiceHistory/);
   assert.match(source, /catch \{[\s\S]*\.\.\.inventoryResult[\s\S]*historyWarning:/);
   assert.match(source, /markServiceHistorySyncSucceeded[\s\S]*providerWatermark: syncStartedAt/);
+  assert.match(source, /const syncStartedAt = new Date\(\)[\s\S]*markServiceHistorySyncAttempted\(companyId, "odoo", syncStartedAt\)/);
+  assert.match(source, /catch \{[\s\S]*markServiceHistorySyncFailed[\s\S]*ODOO_SERVICE_HISTORY_UNAVAILABLE/);
+  assert.match(source, /markServiceHistorySyncFailed\(companyId, "odoo", \{[\s\S]*attemptedAt: syncStartedAt/);
   assert.match(source, /HISTORY_RECONCILE_INTERVAL_MS/);
+});
+
+test("Odoo commitment date remains scheduled and is never imported as completed", async () => {
+  const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /scheduled_at:\s*order\.commitment_date \|\| null/i);
+  assert.match(repository, /completed_at:\s*order\.effective_date \|\| null/i);
+  assert.doesNotMatch(repository, /completed_at:\s*order\.effective_date \|\| order\.commitment_date/i);
+  assert.match(repository, /completion_date_kind:\s*order\.effective_date[\s\S]*"verified_completed"[\s\S]*"scheduled"/i);
 });
 
 test("Odoo history schema preserves all lines while materialized relationships remain context only", async () => {

@@ -47,6 +47,7 @@ import {
   prepareWorkorderOdooModule,
   workorderOdooReadiness,
 } from "./workorder-odoo-module.service.js";
+import { readUnitServiceHistory } from "./unit-service-history.service.js";
 
 function resourceOptions(context) {
   return context.actor.role === "mechanic"
@@ -207,6 +208,10 @@ export async function runWorkorderModuleAction(
 export async function readWorkorderModuleRuntime(context, workorderId, moduleKey, dependencies = {}) {
   if (moduleKey === "odoo") return (dependencies.odooReadiness || workorderOdooReadiness)(context, workorderId);
   return protectedWorkorderModule(context, workorderId, moduleKey, dependencies);
+}
+
+export async function readWorkorderUnitHistory(context, workorderId, input = {}, dependencies = {}) {
+  return (dependencies.readHistory || readUnitServiceHistory)(context, workorderId, input, dependencies);
 }
 
 export async function createWorkorderRuntime(context, input, rawInput = input, dependencies = {}) {
