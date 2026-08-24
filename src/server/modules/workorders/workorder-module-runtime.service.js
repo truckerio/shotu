@@ -43,6 +43,7 @@ import {
 import { projectProtectedWorkorderDetail, workorderInputModules } from "./workorder-module-projection.js";
 import {
   createWorkorderOdooDraft,
+  mapWorkorderOdooPart,
   markWorkorderOdooMissingInfo,
   prepareWorkorderOdooModule,
   workorderOdooReadiness,
@@ -198,6 +199,7 @@ export async function runWorkorderModuleAction(
 
   if (moduleKey === "odoo") {
     if (action === "prepare") return (dependencies.prepareOdoo || prepareWorkorderOdooModule)(context, workorderId, input);
+    if (action === "mapPart") return (dependencies.mapOdooPart || mapWorkorderOdooPart)(context, workorderId, input);
     if (action === "createDraft") return (dependencies.createOdooDraft || createWorkorderOdooDraft)(context, workorderId, input);
     if (action === "markMissingInfo") return (dependencies.markMissingInfo || markWorkorderOdooMissingInfo)(context, workorderId, input);
   }

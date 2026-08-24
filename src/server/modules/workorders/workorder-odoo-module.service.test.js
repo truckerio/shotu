@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   authorizeWorkorderOdooModule,
   createWorkorderOdooDraft,
+  mapWorkorderOdooPart,
   markWorkorderOdooMissingInfo,
   prepareWorkorderOdooModule,
   workorderOdooReadiness,
@@ -132,6 +133,28 @@ test("write operations pass authenticated actor identity and bounded inputs", as
     requestId: "request-one",
     input: { expectedUpdatedAt: "2026-08-08T10:00:00.000Z" },
   });
+});
+
+test("part mapping passes the authenticated actor and exact Workorder-line selection", async () => {
+  let providerInput = null;
+  const result = await mapWorkorderOdooPart(context("admin", "admin-one"), WORKORDER_ID, {
+    lineIndex: 2,
+    productExternalId: "40409",
+    requestId: "request-one",
+  }, dependencies({
+    mapPart: async (input) => {
+      providerInput = input;
+      return { saved: true };
+    },
+  }));
+  assert.deepEqual(providerInput, {
+    companyId: COMPANY_ID,
+    workorderId: WORKORDER_ID,
+    userId: "admin-one",
+    requestId: "request-one",
+    input: { lineIndex: 2, productExternalId: "40409" },
+  });
+  assert.deepEqual(result, { saved: true });
 });
 
 test("missing information uses the authenticated actor and updates attention", async () => {

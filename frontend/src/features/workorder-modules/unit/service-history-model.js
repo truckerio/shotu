@@ -74,6 +74,13 @@ export function serviceHistoryDateLabel(dateKind) {
   })[text(dateKind).toLowerCase()] || "Service date";
 }
 
+export function serviceHistorySourceLabel(source) {
+  return ({
+    odoo: "Odoo service order",
+    local: "Local workorder",
+  })[text(source).toLowerCase()] || text(source);
+}
+
 export function formatServiceHistoryDate(value) {
   if (!value) return "Date not recorded";
   const date = new Date(value);

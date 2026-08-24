@@ -1,8 +1,9 @@
 .unit-service-history { border-top: 1px solid var(--border, #d7dce5); margin-top: 16px; padding-top: 14px; }
-.unit-service-history-summary { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
-.unit-service-history-summary div { display: grid; gap: 3px; min-width: 0; }
+.unit-service-history-summary { cursor: pointer; }
+.unit-service-history-summary-copy { display: grid; gap: 3px; min-width: 0; }
 .unit-service-history-summary strong { color: var(--text, #172033); font-size: .92rem; }
 .unit-service-history-summary span, .unit-service-history-record-heading span, .unit-service-history-state span { color: var(--muted, #657086); font-size: .82rem; }
+.unit-service-history-summary:focus-visible { border-radius: 4px; outline: 2px solid var(--primary, #1959b8); outline-offset: 4px; }
 .unit-service-history button { background: transparent; border: 0; color: var(--primary, #1959b8); cursor: pointer; font: inherit; font-weight: 700; padding: 10px 6px; text-align: right; }
 .unit-service-history-content { padding-top: 10px; }
 .unit-service-history-state { display: grid; gap: 4px; padding: 8px 0; }

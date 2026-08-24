@@ -89,6 +89,8 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
   ]);
   const fullHistoryRead = !updatedSince || reconcile;
   let orders;
+  let inactiveOrderIds = [];
+  let affectedOrderIds = [];
   if (fullHistoryRead) {
     orders = await pagedSearchRead(
       client,
@@ -103,7 +105,7 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
       ? await pagedSearchRead(
         client,
         "sale.order",
-        [["write_date", ">=", overlap], ...serviceOrderDomain],
+        [["write_date", ">=", overlap]],
         orderFields,
         MAX_HISTORY_ORDERS,
       )
@@ -117,7 +119,7 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
         MAX_HISTORY_LINES,
       )
       : [];
-    const affectedOrderIds = [...new Set([
+    affectedOrderIds = [...new Set([
       ...changedOrders.map((order) => order.id),
       ...changedLines.map((line) => Array.isArray(line.order_id) ? line.order_id[0] : line.order_id),
     ].filter(Boolean))];
@@ -133,8 +135,12 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
     }
   }
   orders = orders.filter((order) => order[ODOO_SERVICE_ORDER_FIELD] === true);
+  if (!fullHistoryRead) {
+    const activeIds = new Set(orders.map((order) => String(order.id)));
+    inactiveOrderIds = affectedOrderIds.map(String).filter((id) => !activeIds.has(id));
+  }
   const activeOrderIds = fullHistoryRead ? orders.map((order) => String(order.id)) : null;
-  if (!orders.length) return { orders: [], lines: [], products: [], activeOrderIds };
+  if (!orders.length) return { orders: [], lines: [], products: [], activeOrderIds, inactiveOrderIds };
 
   const lines = [];
   for (const orderIds of batches(orders.map((order) => order.id), ORDER_ID_BATCH_SIZE)) {
@@ -147,7 +153,7 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
     ));
   }
   const productIds = [...new Set(lines.map((line) => Array.isArray(line.product_id) ? line.product_id[0] : line.product_id).filter(Boolean))];
-  if (!productIds.length) return { orders, lines, products: [], activeOrderIds };
+  if (!productIds.length) return { orders, lines, products: [], activeOrderIds, inactiveOrderIds };
   const productFields = await supportedFields(client, "product.product", [
     "id", "default_code", "barcode", "name", "type", "detailed_type",
   ]);
@@ -161,7 +167,7 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
       MAX_HISTORY_PRODUCTS - products.length,
     ));
   }
-  return { orders, lines, products, activeOrderIds };
+  return { orders, lines, products, activeOrderIds, inactiveOrderIds };
 }
 
 async function configuredClient(companyId) {

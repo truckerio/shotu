@@ -148,6 +148,27 @@ test("canonical missing-info route returns the compatibility response shape", as
   }]);
 });
 
+test("canonical part-mapping route validates and forwards an audited provider choice", async () => {
+  const target = harness({
+    method: "PUT",
+    path: `/api/workorders/${WORKORDER_ID}/modules/odoo/part-mapping`,
+    body: { lineIndex: "2", productExternalId: "40409" },
+  });
+  let input = null;
+  await handleWorkorderModulesApi(target.req, target.res, target.url, target.helpers, {
+    mapPart: async (_context, _workorderId, value) => {
+      input = value;
+      return { saved: true };
+    },
+  });
+  assert.deepEqual(input, {
+    lineIndex: 2,
+    productExternalId: "40409",
+    requestId: "request-one",
+  });
+  assert.equal(target.responses[0].status, 200);
+});
+
 test("module route ignores unrelated workorder paths", async () => {
   const target = harness({ method: "GET", path: `/api/workorders/${WORKORDER_ID}` });
   assert.equal(

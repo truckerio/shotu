@@ -85,11 +85,13 @@ try {
     "99999999-9999-4999-8999-999999999999",
     { limit: 10 },
   );
-  assert.equal(history.historyCount, 1);
-  assert.equal(history.items.length, 1);
-  assert.equal(history.items[0].id, completedOrderId);
-  assert.equal(history.items[0].dateKind, "verified_completed");
-  assert.equal(history.items[0].reference, "SO-VALID");
+  assert.equal(history.historyCount, 2);
+  assert.equal(history.items.length, 2);
+  assert.equal(history.items[0].reference, "SO-SCHEDULED");
+  assert.equal(history.items[0].dateKind, "recorded");
+  assert.equal(history.items[1].id, completedOrderId);
+  assert.equal(history.items[1].dateKind, "verified_completed");
+  assert.equal(history.items[1].reference, "SO-VALID");
   const oldAttempt = new Date("2026-08-24T10:00:00Z");
   const success = new Date("2026-08-24T11:00:00Z");
   const newerAttempt = new Date("2026-08-24T12:00:00Z");

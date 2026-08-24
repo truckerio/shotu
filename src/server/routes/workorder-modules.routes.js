@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
   createOdooDraftSchema,
+  mapOdooWorkorderPartSchema,
   prepareOdooWorkorderSchema,
 } from "../integrations/odoo/odoo.outbound.schemas.js";
 import {
   createWorkorderOdooDraft,
+  mapWorkorderOdooPart,
   markWorkorderOdooMissingInfo,
   prepareWorkorderOdooModule,
   workorderOdooReadiness,
@@ -40,7 +42,7 @@ function validated(schema, value) {
 }
 
 function odooModuleRoute(pathname) {
-  const match = /^\/api\/workorders\/([^/]+)\/modules\/odoo\/(readiness|preparation|draft|missing-info)$/.exec(pathname);
+  const match = /^\/api\/workorders\/([^/]+)\/modules\/odoo\/(readiness|preparation|part-mapping|draft|missing-info)$/.exec(pathname);
   return match ? {
     workorderId: decodeURIComponent(match[1]),
     action: match[2],
@@ -85,6 +87,7 @@ export async function handleWorkorderModulesApi(req, res, url, helpers, dependen
   const readiness = dependencies.readiness || workorderOdooReadiness;
   const prepare = dependencies.prepare || prepareWorkorderOdooModule;
   const createDraft = dependencies.createDraft || createWorkorderOdooDraft;
+  const mapPart = dependencies.mapPart || mapWorkorderOdooPart;
   const markMissingInfo = dependencies.markMissingInfo || markWorkorderOdooMissingInfo;
   const readDetail = dependencies.readDetail || protectedWorkorderDetail;
   const readModule = dependencies.readModule || readWorkorderModuleRuntime;
@@ -149,6 +152,15 @@ export async function handleWorkorderModulesApi(req, res, url, helpers, dependen
   if (req.method === "POST" && route.action === "draft") {
     const input = validated(createOdooDraftSchema, await readBody(req));
     sendJson(res, 201, await createDraft(requestContext, route.workorderId, {
+      ...input,
+      requestId: req.requestId,
+    }));
+    return true;
+  }
+
+  if (req.method === "PUT" && route.action === "part-mapping") {
+    const input = validated(mapOdooWorkorderPartSchema, await readBody(req));
+    sendJson(res, 200, await mapPart(requestContext, route.workorderId, {
       ...input,
       requestId: req.requestId,
     }));

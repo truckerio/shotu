@@ -30,7 +30,6 @@ import {
 import { RETURN_CATEGORIES } from "./workorder-handoff.js";
 import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOdooModule.js";
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
-import { UnitServiceHistorySummary } from "../workorder-modules/unit/UnitServiceHistory.jsx";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
 import {
   resolveWorkorderModulePolicy,
@@ -367,18 +366,6 @@ export function WorkorderDetailPage({
             ) : null,
           children: (
             <>
-            {unitPolicy.canRead ? (
-              <UnitServiceHistorySummary
-                actionLabel={unitHistoryController.expanded ? "Hide history" : "View history"}
-                expanded={unitHistoryController.expanded}
-                history={unitHistoryController.history}
-                loading={unitHistoryController.loading}
-                onToggle={() => {
-                  selectDetailSection("unit");
-                  unitHistoryController.setExpanded(!unitHistoryController.expanded);
-                }}
-              />
-            ) : null}
             {isMechanicDetail && unitPolicy.canRead ? (
               <div className="workorder-object-inline-detail">
                 <span>{mechanicUnitType} details</span>

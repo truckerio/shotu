@@ -19,7 +19,11 @@ import {
   updateMechanicUsedPartsSchema,
 } from "./workorder.schemas.js";
 import { mechanicProgressSchema } from "../mechanic/mechanic-progress.schemas.js";
-import { createOdooDraftSchema, prepareOdooWorkorderSchema } from "../../integrations/odoo/odoo.outbound.schemas.js";
+import {
+  createOdooDraftSchema,
+  mapOdooWorkorderPartSchema,
+  prepareOdooWorkorderSchema,
+} from "../../integrations/odoo/odoo.outbound.schemas.js";
 
 const expectedUpdatedAt = z.string().datetime().optional();
 const formPatch = (shape) => z.object({
@@ -97,6 +101,7 @@ const ACTIONS = Object.freeze({
   }),
   odoo: Object.freeze({
     prepare: prepareOdooWorkorderSchema,
+    mapPart: mapOdooWorkorderPartSchema,
     createDraft: createOdooDraftSchema,
     markMissingInfo: z.object({ note: z.string().trim().min(1).max(1000) }).strict(),
   }),

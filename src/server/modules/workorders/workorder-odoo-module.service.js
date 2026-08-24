@@ -2,6 +2,7 @@ import { query } from "../../db/pool.js";
 import { setWorkorderAttention } from "../../db/repositories/workorder-attention.repo.js";
 import {
   createOdooWorkorderDraft,
+  mapOdooWorkorderPart,
   OdooOutboundError,
   odooWorkorderReadiness,
   prepareOdooWorkorder,
@@ -100,6 +101,26 @@ export async function createWorkorderOdooDraft(context, workorderId, input, depe
     requestId: input.requestId || null,
     input: {
       expectedUpdatedAt: input.expectedUpdatedAt,
+    },
+  });
+}
+
+export async function mapWorkorderOdooPart(context, workorderId, input, dependencies = {}) {
+  const authorization = await authorizeWorkorderOdooModule(
+    context,
+    workorderId,
+    { write: true, action: "mapPart" },
+    dependencies,
+  );
+  const mapPart = dependencies.mapPart || mapOdooWorkorderPart;
+  return mapPart({
+    companyId: authorization.companyId,
+    workorderId: authorization.workorderId,
+    userId: context.actor.id,
+    requestId: input.requestId || null,
+    input: {
+      lineIndex: input.lineIndex,
+      productExternalId: input.productExternalId,
     },
   });
 }

@@ -59,6 +59,7 @@
 .workorder-odoo-panel .surveillance-progress-state p { color: #475467; font-size: var(--text-body); line-height: var(--leading-body); margin: 0; }
 .workorder-odoo-panel .surveillance-odoo-form label { display: grid; gap: 6px; }
 .workorder-odoo-panel .surveillance-odoo-form input,
+.workorder-odoo-panel .surveillance-odoo-form select,
 .workorder-odoo-panel .surveillance-odoo-form textarea {
   background: #fff;
   border: 1px solid #d0d5dd;
@@ -70,6 +71,8 @@
   padding: 10px 12px;
   width: 100%;
 }
+
+.workorder-odoo-panel .surveillance-odoo-part-mappings { display: grid; gap: 10px; }
 
 .workorder-odoo-panel .surveillance-odoo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .workorder-odoo-panel .surveillance-odoo-actions .button { min-height: 44px; }

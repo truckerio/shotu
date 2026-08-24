@@ -24,6 +24,7 @@ export function WorkorderOdooPanel({
     createOdooDraft,
     error,
     markMissingInfo,
+    mapOdooPart,
     odooDraftResult,
     odooDraftFeedback,
     odooLoading,
@@ -108,6 +109,29 @@ export function WorkorderOdooPanel({
               <strong>Odoo blockers</strong>
               <ul>{blockers.map((blocker) => <li key={`${blocker.code}-${blocker.field || ""}`}>{blocker.message}</li>)}</ul>
             </div>
+          ) : null}
+          {canWrite && odooReadiness?.parts?.some((part) => part.productCandidates?.length > 1) ? (
+            <section className="surveillance-odoo-part-mappings" aria-label="Odoo part mappings">
+              <strong>Choose Odoo products</strong>
+              {odooReadiness.parts.filter((part) => part.productCandidates?.length > 1).map((part) => (
+                <label key={part.lineIndex}>
+                  <span>{part.partNumber || `Part ${part.lineIndex + 1}`}</span>
+                  <select
+                    aria-label={`Odoo product for ${part.partNumber || `part ${part.lineIndex + 1}`}`}
+                    disabled={saving}
+                    value={part.productExternalId || ""}
+                    onChange={(event) => mapOdooPart(part.lineIndex, event.target.value)}
+                  >
+                    <option value="">Select Odoo product</option>
+                    {part.productCandidates.map((candidate) => (
+                      <option key={candidate.externalId} value={candidate.externalId}>
+                        {candidate.defaultCode ? `[${candidate.defaultCode}] ` : ""}{candidate.displayName} · #{candidate.externalId}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </section>
           ) : null}
           {odooDraftFeedback ? (
             <div className="surveillance-odoo-attempt" role="alert"><strong>Draft not created</strong><span>{odooDraftFeedback}</span></div>

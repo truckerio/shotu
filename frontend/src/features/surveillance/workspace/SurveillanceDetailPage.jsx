@@ -25,7 +25,6 @@ import {
 } from "../../../../../shared/workorder-template.js";
 import { surveillanceMissingInfoHandoff } from "../surveillanceQueue.js";
 import { WorkorderDetailModuleHost } from "../../workorder-modules/WorkorderDetailModuleHost.jsx";
-import { UnitServiceHistorySummary } from "../../workorder-modules/unit/UnitServiceHistory.jsx";
 import { useUnitServiceHistory } from "../../workorder-modules/unit/useUnitServiceHistory.js";
 import { localDate, missingFields, progressTimestamp } from "./surveillance-workspace-model.js";
 
@@ -283,16 +282,6 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
                 <span>{progress.label}</span>
                 <strong>{valueOrDash(progress.value ? new Date(progress.value).toLocaleString() : "")}</strong>
               </div>
-              <UnitServiceHistorySummary
-                actionLabel={unitHistoryController.expanded ? "Hide history" : "View history"}
-                expanded={unitHistoryController.expanded}
-                history={unitHistoryController.history}
-                loading={unitHistoryController.loading}
-                onToggle={() => {
-                  setDetailSection("unit");
-                  unitHistoryController.setExpanded(!unitHistoryController.expanded);
-                }}
-              />
             </> : null
           ),
         }}

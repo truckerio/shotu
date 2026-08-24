@@ -7,16 +7,20 @@ const hook = readFileSync(new URL("./unit/useUnitServiceHistory.js", import.meta
 const css = readFileSync(new URL("./unit/unit-service-history.css", import.meta.url), "utf8");
 const unit = readFileSync(new URL("./unit/WorkorderUnitModule.jsx", import.meta.url), "utf8");
 
-test("unit history stays inside the Unit module with explicit progressive disclosure", () => {
+test("unit history stays inside the Unit module as native progressive disclosure", () => {
   assert.match(unit, /<UnitServiceHistory actorRole=\{actorRole\} historyController=\{historyController\} workorderId=/);
-  assert.match(panel, /export function UnitServiceHistorySummary/);
-  assert.match(panel, /actionLabel \|\|/);
+  assert.match(panel, /<details[\s\S]*className="unit-service-history"/);
+  assert.match(panel, /<summary className="unit-service-history-summary">/);
+  assert.match(panel, /<span className="unit-service-history-summary-copy">/);
   assert.match(unit, /historyController/);
-  assert.match(panel, /View history/);
+  assert.doesNotMatch(panel, /View history|Hide history/);
+  assert.doesNotMatch(panel, /aria-controls="unit-service-history-list"/);
   assert.match(panel, /Show more/);
-  assert.match(panel, /aria-expanded=\{expanded\}/);
+  assert.match(panel, /open=\{expanded\}/);
+  assert.match(panel, /onToggle=\{\(event\) => setExpanded\(event\.currentTarget\.open\)\}/);
   assert.match(panel, /actorRole === "admin"/);
-  assert.match(panel, /Open Odoo settings/);
+  assert.match(panel, /error \|\| \["unlinked", "never_synced", "stale", "unavailable"\]/);
+  assert.match(panel, /Open integration settings/);
   assert.match(hook, /expanded, setExpanded/);
   assert.doesNotMatch(panel, /onApply|onFieldChange|set.*(?:diagnosis|workPerformed)/);
 });

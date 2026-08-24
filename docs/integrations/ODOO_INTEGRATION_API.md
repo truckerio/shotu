@@ -52,8 +52,10 @@ server derives company, location, Unit-module access, and exact asset identity
 from the authorized workorder. It reads the local PostgreSQL projection only;
 it does not call Odoo while a mechanic or office user opens history.
 
-Only verified completed Odoo orders and office-closed local workorders appear in
-the completed-service timeline. Odoo `commitment_date` remains scheduled evidence
+Confirmed Odoo Asset Service History orders and office-closed local workorders
+appear in the service timeline. A confirmed order's `date_order` is shown as a
+recorded service date, never as proof of completion. Only `effective_date`
+establishes verified Odoo completion; `commitment_date` remains scheduled evidence
 and can never establish completion. Responses expose bounded operational fields,
 an opaque cursor, and explicit `unlinked`, `never_synced`, `stale`, `unavailable`,
 `empty`, or `ready` state. Raw provider metadata, private notes, credentials,

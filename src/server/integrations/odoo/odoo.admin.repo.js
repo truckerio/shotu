@@ -10,6 +10,38 @@ import { IntegrationHttpError } from "../core/integration-errors.js";
 
 const PROVIDER = "odoo";
 
+export function buildOdooInventoryBalances({ quants, mappedLocations, catalogIds }) {
+  const balances = new Map();
+  for (const quant of quants) {
+    const locationId = mappedLocations.get(relationId(quant.location_id));
+    const product = catalogIds.get(relationId(quant.product_id));
+    if (!locationId || !product) continue;
+    const key = `${product.id}:${locationId}:${product.uomCode}`;
+    const available = Math.max(
+      0,
+      Number(quant.available_quantity ?? (Number(quant.quantity || 0) - Number(quant.reserved_quantity || 0))),
+    );
+    const current = balances.get(key) || {
+      catalogPartId: product.id,
+      locationId,
+      normalized: product.normalized,
+      partNumber: product.partNumber,
+      description: product.description,
+      uomCode: product.uomCode,
+      decimalScale: product.decimalScale,
+      availableQuantity: 0,
+      providerUpdatedAt: null,
+      externalId: `catalog:${product.id}:location:${locationId}:uom:${product.uomCode}`,
+    };
+    current.availableQuantity += available;
+    if (quant.write_date && (!current.providerUpdatedAt || quant.write_date > current.providerUpdatedAt)) {
+      current.providerUpdatedAt = quant.write_date;
+    }
+    balances.set(key, current);
+  }
+  return balances;
+}
+
 function outboundAdminError(code, message, statusCode = 400) {
   return new IntegrationHttpError(statusCode, code, message);
 }
@@ -1051,6 +1083,7 @@ export async function importOdooServiceHistory(companyId, {
   lines,
   products = [],
   activeOrderIds = null,
+  inactiveOrderIds = [],
 }) {
   const tenantId = requireCompanyId(companyId);
   const client = await getPool().connect();
@@ -1091,6 +1124,15 @@ export async function importOdooServiceHistory(companyId, {
         [tenantId, activeOrderIds.map(String)],
       );
       removedCount = removed.rowCount;
+    }
+    if (inactiveOrderIds.length) {
+      const removed = await client.query(
+        `delete from service_history_orders
+         where company_id = $1 and source_provider = 'odoo'
+           and external_id = any($2::text[])`,
+        [tenantId, inactiveOrderIds.map(String)],
+      );
+      removedCount += removed.rowCount;
     }
     if (!orders.length) {
       await client.query("commit");
@@ -1301,6 +1343,7 @@ export async function importOdooServiceHistory(companyId, {
 export async function importOdooInventory(companyId, { products, quants }) {
   const tenantId = requireCompanyId(companyId);
   const client = await getPool().connect();
+  const syncMarker = new Date();
   let changed = 0;
   try {
     await client.query("begin");
@@ -1339,42 +1382,42 @@ export async function importOdooInventory(companyId, { products, quants }) {
       );
       await client.query(
         `insert into odoo_product_mappings (
-           company_id, external_id, catalog_part_id, barcode, active,
+           company_id, external_id, catalog_part_id, barcode, default_code, display_name, active,
            provider_updated_at, last_seen_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, now(), now())
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
          on conflict (company_id, external_id) do update
          set catalog_part_id = excluded.catalog_part_id,
              barcode = excluded.barcode,
+             default_code = excluded.default_code,
+             display_name = excluded.display_name,
              active = excluded.active,
              provider_updated_at = excluded.provider_updated_at,
              last_seen_at = now(),
              updated_at = now()`,
-        [tenantId, String(product.id), catalog.rows[0].id, product.barcode || "", product.active !== false, product.write_date || null],
+        [
+          tenantId,
+          String(product.id),
+          catalog.rows[0].id,
+          product.barcode || "",
+          product.default_code || "",
+          product.name || product.display_name || partNumber,
+          product.active !== false,
+          product.write_date || null,
+        ],
       );
       catalogIds.set(String(product.id), { id: catalog.rows[0].id, partNumber, normalized, description: product.name || partNumber, uomCode: unit.code, decimalScale: unit.decimalScale });
       changed += 1;
     }
-    const balances = new Map();
-    for (const quant of quants) {
-      const key = `${relationId(quant.product_id)}:${relationId(quant.location_id)}`;
-      const available = Math.max(0, Number(quant.available_quantity ?? (Number(quant.quantity || 0) - Number(quant.reserved_quantity || 0))));
-      const current = balances.get(key) || { ...quant, available_quantity: 0 };
-      current.available_quantity += available;
-      if (quant.write_date && (!current.write_date || quant.write_date > current.write_date)) current.write_date = quant.write_date;
-      balances.set(key, current);
-    }
-    for (const [externalId, quant] of balances) {
-      const locationId = mappedLocations.get(relationId(quant.location_id));
-      const product = catalogIds.get(relationId(quant.product_id));
-      if (!locationId || !product) continue;
-      const factor = 10 ** product.decimalScale;
-      const available = Math.round(quant.available_quantity * factor) / factor;
+    const balances = buildOdooInventoryBalances({ quants, mappedLocations, catalogIds });
+    for (const balance of balances.values()) {
+      const factor = 10 ** balance.decimalScale;
+      const available = Math.round(balance.availableQuantity * factor) / factor;
       await client.query(
         `insert into inventory_items (
            company_id, location_id, catalog_part_id, normalized_part_number, part_number,
            description, quantity_on_hand, quantity_reserved, uom_code,
            source_provider, external_id, provider_updated_at, last_seen_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, 0, $8, 'odoo', $9, $10, now(), now())
+         ) values ($1, $2, $3, $4, $5, $6, $7, 0, $8, 'odoo', $9, $10, $11, now())
          on conflict (
            company_id,
            (coalesce(location_id, '00000000-0000-0000-0000-000000000000'::uuid)),
@@ -1388,14 +1431,41 @@ export async function importOdooInventory(companyId, { products, quants }) {
            part_number = excluded.part_number,
            description = excluded.description,
            uom_code = excluded.uom_code,
+           source_provider = excluded.source_provider,
+           external_id = excluded.external_id,
            quantity_on_hand = greatest(excluded.quantity_on_hand, inventory_items.quantity_reserved),
            provider_updated_at = excluded.provider_updated_at,
-           last_seen_at = now(),
+           last_seen_at = excluded.last_seen_at,
            updated_at = now()`,
-        [tenantId, locationId, product.id, product.normalized, product.partNumber, product.description, available, product.uomCode, externalId, quant.write_date || null],
+        [
+          tenantId,
+          balance.locationId,
+          balance.catalogPartId,
+          balance.normalized,
+          balance.partNumber,
+          balance.description,
+          available,
+          balance.uomCode,
+          balance.externalId,
+          balance.providerUpdatedAt,
+          syncMarker,
+        ],
       );
       changed += 1;
     }
+    await client.query(
+      `update inventory_items
+       set quantity_on_hand = quantity_reserved,
+           source_provider = '',
+           external_id = '',
+           provider_updated_at = null,
+           last_seen_at = null,
+           updated_at = now()
+       where company_id = $1
+         and source_provider = 'odoo'
+         and last_seen_at is distinct from $2`,
+      [tenantId, syncMarker],
+    );
     await client.query(
       `update integration_accounts set status = 'connected', last_full_sync_at = now(), updated_at = now()
        where company_id = $1 and provider = 'odoo'`,

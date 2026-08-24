@@ -56,6 +56,89 @@ export async function saveOdooWorkorderPreparation(companyId, workorderId, {
   return publicPreparation(result.rows[0]);
 }
 
+export async function saveOdooWorkorderPartMapping(companyId, workorderId, {
+  lineIndex,
+  productExternalId,
+  userId,
+  requestId = null,
+}) {
+  const tenantId = requireCompanyId(companyId);
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const result = await client.query(
+      `with selected_line as (
+         select catalog.id as catalog_part_id
+         from operational_workorders wo
+         cross join lateral jsonb_array_elements(
+           case when jsonb_typeof(wo.form_data->'parts') = 'array'
+             then wo.form_data->'parts' else '[]'::jsonb end
+         ) with ordinality as part(value, ordinality)
+         join parts_catalog catalog
+           on catalog.company_id = wo.company_id
+          and (
+            (coalesce(part.value->>'catalogPartId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+              and catalog.id = case
+                when coalesce(part.value->>'catalogPartId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+                then (part.value->>'catalogPartId')::uuid else null end)
+            or (coalesce(part.value->>'catalogPartId', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+              and catalog.normalized_part_number = upper(regexp_replace(coalesce(part.value->>'partNo', ''), '[^A-Za-z0-9]', '', 'g')))
+          )
+         where wo.company_id = $1 and wo.id = $2 and wo.status = 'closed'
+           and part.ordinality = $3 + 1
+       )
+       insert into odoo_workorder_part_mappings (
+         company_id, workorder_id, line_index, catalog_part_id,
+         product_external_id, confirmed_by_user_id, confirmed_at, updated_at
+       )
+       select $1, $2, $3, selected_line.catalog_part_id, mapping.external_id, $5, now(), now()
+       from selected_line
+       join odoo_product_mappings mapping
+         on mapping.company_id = $1
+        and mapping.catalog_part_id = selected_line.catalog_part_id
+        and mapping.external_id = $4
+        and mapping.active = true
+       on conflict (company_id, workorder_id, line_index) do update
+       set catalog_part_id = excluded.catalog_part_id,
+           product_external_id = excluded.product_external_id,
+           confirmed_by_user_id = excluded.confirmed_by_user_id,
+           confirmed_at = now(),
+           updated_at = now()
+       returning catalog_part_id, product_external_id`,
+      [tenantId, workorderId, lineIndex, String(productExternalId), userId],
+    );
+    if (!result.rows[0]) {
+      throw integrationConflict(
+        "ODOO_PART_MAPPING_INVALID",
+        "Select an active Odoo product that belongs to this Workorder part.",
+      );
+    }
+    await appendIntegrationAudit({
+      client,
+      companyId: tenantId,
+      provider: "odoo",
+      action: "workorder.part_mapping_confirmed",
+      actorType: "user",
+      actorId: userId,
+      targetType: "workorder",
+      targetId: workorderId,
+      requestId,
+      details: { lineIndex, productExternalId: String(productExternalId) },
+    });
+    await client.query("commit");
+    return {
+      lineIndex,
+      catalogPartId: result.rows[0].catalog_part_id,
+      productExternalId: result.rows[0].product_external_id,
+    };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function readOdooOutboundReadiness(companyId, workorderId) {
   const tenantId = requireCompanyId(companyId);
   const [mainResult, partResult] = await Promise.all([
@@ -129,6 +212,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
          catalog.id as catalog_part_id,
          mapping.external_id as product_external_id,
          mapping.active as product_active,
+         mapping.candidates as product_candidates,
          coalesce(
            nullif(btrim(catalog.description), ''),
            nullif(btrim(catalog.part_number), ''),
@@ -195,13 +279,30 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
             and catalog.normalized_part_number = upper(regexp_replace(coalesce(part.value->>'partNo', ''), '[^A-Za-z0-9]', '', 'g'))
           )
         )
+       left join odoo_workorder_part_mappings selection
+         on selection.company_id = wo.company_id
+        and selection.workorder_id = wo.id
+        and selection.line_index = part.ordinality - 1
+        and selection.catalog_part_id = catalog.id
        left join lateral (
-         select case when count(*) = 1 then min(identity.external_id) end external_id,
-                count(*) = 1 active
+         select case
+                  when count(*) filter (where identity.active and identity.external_id = selection.product_external_id) = 1
+                    then selection.product_external_id
+                  when count(*) filter (where identity.active) = 1
+                    then min(identity.external_id) filter (where identity.active)
+                end external_id,
+                count(*) filter (where identity.active) > 0 active,
+                coalesce(jsonb_agg(
+                  jsonb_build_object(
+                    'externalId', identity.external_id,
+                    'displayName', coalesce(nullif(identity.display_name, ''), nullif(identity.default_code, ''), identity.external_id),
+                    'defaultCode', identity.default_code,
+                    'barcode', identity.barcode
+                  ) order by identity.display_name, identity.default_code, identity.external_id
+                ) filter (where identity.active), '[]'::jsonb) candidates
          from odoo_product_mappings identity
          where identity.company_id = catalog.company_id
            and identity.catalog_part_id = catalog.id
-           and identity.active = true
        ) mapping on true
        left join part_uom_conversions conversion
          on conversion.company_id = catalog.company_id
@@ -284,6 +385,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       catalogPartId: part.catalog_part_id || null,
       productExternalId: part.product_external_id || null,
       productActive: part.product_active,
+      productCandidates: Array.isArray(part.product_candidates) ? part.product_candidates : [],
       productName: part.product_name || "",
       odooUomCode: part.odoo_uom_code || "",
       expectedOdooUomName: part.expected_odoo_uom_name || "",

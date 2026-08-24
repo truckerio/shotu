@@ -99,11 +99,29 @@ export function useWorkorderOdooModule({
     }
   }
 
+  async function mapOdooPart(lineIndex, productExternalId) {
+    if (!enabled || !eligible || !workorderId || !productExternalId) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api(moduleEndpoint(workorderId, "part-mapping"), {
+        method: "PUT",
+        body: JSON.stringify({ lineIndex, productExternalId }),
+      });
+      await loadOdooReadiness();
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return {
     createOdooDraft,
     error,
     loadOdooReadiness,
     markMissingInfo,
+    mapOdooPart,
     odooDraftFeedback,
     odooDraftResult,
     odooLoading,

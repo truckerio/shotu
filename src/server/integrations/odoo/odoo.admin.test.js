@@ -12,7 +12,7 @@ import {
   odooOutboundVehicleMappingSchema,
   odooOutboundWarehouseMappingSchema,
 } from "./odoo.admin.schemas.js";
-import { repairTextFromOdooLine } from "./odoo.admin.repo.js";
+import { buildOdooInventoryBalances, repairTextFromOdooLine } from "./odoo.admin.repo.js";
 import { readOdooServiceHistory } from "./odoo.admin.service.js";
 
 test("Odoo configuration requires a complete connection without accepting extra secrets", () => {
@@ -138,6 +138,48 @@ test("Odoo migration preserves explicit unmatched mapping state and immutable ex
   assert.match(productIdentitySql, /references parts_catalog\(company_id, id\)/i);
 });
 
+test("Odoo inventory collapses provider locations and duplicate product identities into one app balance", () => {
+  const appLocationId = "2eb1dbef-94a4-4d6d-a6f1-d813cd45fa60";
+  const catalogPartId = "7283dc5e-5f40-4e27-87cf-c25a7e247f37";
+  const mappedLocations = new Map([["38", appLocationId], ["334", appLocationId]]);
+  const product = {
+    id: catalogPartId,
+    normalized: "A83911",
+    partNumber: "A83911",
+    description: "Air valve",
+    uomCode: "ea",
+    decimalScale: 0,
+  };
+  const catalogIds = new Map([["40409", product], ["99999", product]]);
+  const balances = buildOdooInventoryBalances({
+    mappedLocations,
+    catalogIds,
+    quants: [
+      { product_id: [40409, "Air valve"], location_id: [38, "Stock"], available_quantity: 20, write_date: "2026-08-20" },
+      { product_id: [40409, "Air valve"], location_id: [334, "Shelf"], available_quantity: 2, write_date: "2026-08-21" },
+      { product_id: [99999, "Air valve alias"], location_id: [334, "Shelf"], available_quantity: 3, write_date: "2026-08-22" },
+      { product_id: [40409, "Air valve"], location_id: [777, "Unmapped"], available_quantity: 100 },
+    ],
+  });
+
+  assert.equal(balances.size, 1);
+  const balance = [...balances.values()][0];
+  assert.equal(balance.availableQuantity, 25);
+  assert.equal(balance.providerUpdatedAt, "2026-08-22");
+  assert.equal(
+    balance.externalId,
+    `catalog:${catalogPartId}:location:${appLocationId}:uom:ea`,
+  );
+});
+
+test("Odoo inventory import reconciles stale provider rows after canonical upserts", async () => {
+  const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /buildOdooInventoryBalances\(\{ quants, mappedLocations, catalogIds \}\)/);
+  assert.match(repository, /source_provider = excluded\.source_provider[\s\S]*external_id = excluded\.external_id/);
+  assert.match(repository, /source_provider = 'odoo'[\s\S]*last_seen_at is distinct from \$2/);
+  assert.match(repository, /set quantity_on_hand = quantity_reserved[\s\S]*source_provider = ''[\s\S]*external_id = ''/);
+});
+
 test("Odoo repair text keeps work performed and does not treat generic labor product names as repairs", () => {
   assert.equal(repairTextFromOdooLine({
     name: "[PTR001] LABOR HOURS\nPUT NEW HUB SEAL, ADJUST BRAKES",
@@ -183,12 +225,13 @@ test("Odoo service-history read is confirmed-order only, introspected, ordered, 
   assert.equal(result.lines.length, 2);
   assert.equal(result.products.length, 2);
   assert.equal(result.activeOrderIds, null);
+  assert.deepEqual(result.inactiveOrderIds, []);
   assert.deepEqual(result.orders[0].vehicle_id, [77, "FREIGHTLINER/G2116"]);
   const orderReads = calls.filter((call) => call.model === "sale.order" && call.method === "search_read");
   assert.equal(orderReads.length, 2);
   assert.equal(orderReads[0].args[0][0][0], "write_date");
   assert.match(orderReads[0].args[0][0][2], /^2026-07-30 23:55:00$/);
-  assert.deepEqual(orderReads[0].args[0][1], ["is_service_order", "=", true]);
+  assert.equal(orderReads[0].args[0].some((term) => term[0] === "is_service_order"), false);
   assert.deepEqual(orderReads[1].args[0][0], ["id", "in", [10]]);
   assert.deepEqual(orderReads[1].args[0][1], ["state", "in", ["sale", "done"]]);
   assert.deepEqual(orderReads[1].args[0][2], ["is_service_order", "=", true]);
@@ -226,8 +269,31 @@ test("incremental Odoo history reloads an order when only a line write date chan
   assert.deepEqual(result.orders.map((order) => order.id), [10]);
   assert.deepEqual(result.lines.map((line) => line.id), [102]);
   assert.equal(result.activeOrderIds, null);
+  assert.deepEqual(result.inactiveOrderIds, []);
   assert.ok(calls.some((call) => call.model === "sale.order.line" && call.method === "search_read"
     && call.args[0].some((term) => term[0] === "write_date")));
+});
+
+test("incremental Odoo history removes cancelled records and records that lose the service-order flag", async () => {
+  const fields = { id: {}, name: {}, state: {}, write_date: {}, order_id: {}, is_service_order: {}, vehicle_id: {} };
+  const client = {
+    async execute(model, method, args) {
+      if (method === "fields_get") return fields;
+      const domain = args[0] || [];
+      if (model === "sale.order" && domain.some((term) => term[0] === "write_date")) {
+        return [
+          { id: 10, state: "cancel", is_service_order: true },
+          { id: 11, state: "sale", is_service_order: false },
+        ];
+      }
+      if (model === "sale.order") return [];
+      if (model === "sale.order.line") return [];
+      return [];
+    },
+  };
+  const result = await readOdooServiceHistory(client, { updatedSince: "2026-08-03T09:00:00Z" });
+  assert.deepEqual(result.orders, []);
+  assert.deepEqual(result.inactiveOrderIds, ["10", "11"]);
 });
 
 test("periodic Odoo reconciliation reloads all active service orders and returns their complete identity set", async () => {
@@ -246,6 +312,7 @@ test("periodic Odoo reconciliation reloads all active service orders and returns
   });
   assert.deepEqual(result.orders.map((order) => order.id), [10]);
   assert.deepEqual(result.activeOrderIds, ["10"]);
+  assert.deepEqual(result.inactiveOrderIds, []);
 });
 
 test("Odoo history fails closed instead of importing ordinary sales when the service-order flag is unavailable", async () => {
@@ -277,6 +344,7 @@ test("Odoo history defensively excludes ordinary sales from a mixed provider res
   const result = await readOdooServiceHistory(client, { reconcile: true });
   assert.deepEqual(result.orders.map((order) => order.id), [11]);
   assert.deepEqual(result.activeOrderIds, ["11"]);
+  assert.deepEqual(result.inactiveOrderIds, []);
 });
 
 test("inventory sync isolates optional service-history permission failures", async () => {
@@ -296,6 +364,7 @@ test("Odoo commitment date remains scheduled and is never imported as completed"
   assert.match(repository, /completed_at:\s*order\.effective_date \|\| null/i);
   assert.doesNotMatch(repository, /completed_at:\s*order\.effective_date \|\| order\.commitment_date/i);
   assert.match(repository, /completion_date_kind:\s*order\.effective_date[\s\S]*"verified_completed"[\s\S]*"scheduled"/i);
+  assert.match(repository, /inactiveOrderIds[\s\S]*external_id = any\(\$2::text\[\]\)/i);
 });
 
 test("Odoo history schema preserves all lines while materialized relationships remain context only", async () => {

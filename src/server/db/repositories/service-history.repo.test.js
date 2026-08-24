@@ -11,6 +11,7 @@ const migrationUrl = new URL("../migrations/045_service_repair_history.sql", imp
 const deleteCleanupMigrationUrl = new URL("../migrations/046_local_service_history_delete_cleanup.sql", import.meta.url);
 const syncStateMigrationUrl = new URL("../migrations/047_service_history_sync_state.sql", import.meta.url);
 const unitHistoryMigrationUrl = new URL("../migrations/057_unit_service_history_read_model.sql", import.meta.url);
+const assetHistoryMigrationUrl = new URL("../migrations/060_odoo_asset_service_history_timeline.sql", import.meta.url);
 
 function row(overrides = {}) {
   return {
@@ -111,10 +112,19 @@ test("unit history query is tenant and exact-asset scoped, excludes current work
   assert.match(repository, /workorder\.id <> \$3::uuid/i);
   assert.match(repository, /workorder\.closed_at is not null[\s\S]*history\.completion_date_kind = 'verified_completed'/i);
   assert.match(repository, /from odoo_entry_status entry[\s\S]*entry\.external_id = history\.external_id/i);
+  assert.match(repository, /history\.source_provider = 'odoo'[\s\S]*history\.status in \('sale', 'done'\)[\s\S]*or history\.recorded_at is not null/i);
+  assert.match(repository, /coalesce\(history\.completed_at, history\.recorded_at, history\.scheduled_at/i);
   assert.match(repository, /line\.line_kind = 'service'/i);
   assert.match(repository, /line\.line_kind = 'goods'/i);
   assert.doesNotMatch(repository, /raw_metadata:\s*row\./i);
   assert.doesNotMatch(repository, /raw_payload:\s*row\./i);
+});
+
+test("Asset Service History timeline indexes recorded Odoo service orders without promoting schedules", async () => {
+  const migration = await readFile(assetHistoryMigrationUrl, "utf8");
+  assert.match(migration, /coalesce\(completed_at, recorded_at, scheduled_at, ordered_at, source_updated_at\)/i);
+  assert.match(migration, /completed_at is not null or recorded_at is not null/i);
+  assert.doesNotMatch(migration, /set\s+completed_at\s*=/i);
 });
 
 test("unit history migration separates scheduled dates and records durable sync failure health", async () => {

@@ -11,7 +11,7 @@ import {
   prepareOdooWorkorder,
   stableOdooWorkorderMarker,
 } from "./odoo.outbound.service.js";
-import { prepareOdooWorkorderSchema } from "./odoo.outbound.schemas.js";
+import { mapOdooWorkorderPartSchema, prepareOdooWorkorderSchema } from "./odoo.outbound.schemas.js";
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const workorderId = "22222222-2222-4222-8222-222222222222";
@@ -112,6 +112,28 @@ test("outbound preparation requires positive labor hours with two-decimal precis
   assert.equal(prepareOdooWorkorderSchema.safeParse({ laborHours: 1.234 }).success, false);
   assert.equal(prepareOdooWorkorderSchema.safeParse({ laborHours: 10_000 }).success, false);
   assert.equal(prepareOdooWorkorderSchema.safeParse({ laborHours: 1, customerExternalId: "not-odoo" }).success, false);
+});
+
+test("workorder part mapping accepts only bounded line indexes and provider record IDs", () => {
+  assert.deepEqual(mapOdooWorkorderPartSchema.parse({ lineIndex: "2", productExternalId: "40409" }), {
+    lineIndex: 2,
+    productExternalId: "40409",
+  });
+  assert.equal(mapOdooWorkorderPartSchema.safeParse({ lineIndex: -1, productExternalId: "40409" }).success, false);
+  assert.equal(mapOdooWorkorderPartSchema.safeParse({ lineIndex: 2, productExternalId: "not-odoo" }).success, false);
+});
+
+test("readiness exposes active Odoo candidates for explicit ambiguous-line selection", () => {
+  const data = readyData();
+  data.parts[0].productExternalId = null;
+  data.parts[0].productCandidates = [
+    { externalId: "40409", displayName: "Air valve", defaultCode: "A83911" },
+    { externalId: "99999", displayName: "Air valve alternate", defaultCode: "A83911" },
+  ];
+  const result = evaluateOdooOutboundReadiness(data, { configured: true });
+  assert.equal(result.ready, false);
+  assert.deepEqual(result.parts[0].productCandidates, data.parts[0].productCandidates);
+  assert.ok(result.blockers.some((item) => item.code === "ODOO_PART_UNMAPPED"));
 });
 
 test("explicit customer override is verified in Odoo before it is saved", async () => {

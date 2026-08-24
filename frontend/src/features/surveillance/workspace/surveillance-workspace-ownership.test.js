@@ -53,10 +53,9 @@ test("surveillance keeps shared preview and timeline implementations", () => {
   assert.doesNotMatch(detailPage, /(?:function|const)\s+(PreviewPane|CompactWorkorderPreview|WorkorderTimelinePanel)\b/);
 });
 
-test("surveillance reuses the shared Unit service-history controller and panel", () => {
+test("surveillance keeps shared service history inside the Unit module", () => {
   const detailPage = source("./SurveillanceDetailPage.jsx");
   assert.match(detailPage, /useUnitServiceHistory/);
-  assert.match(detailPage, /<UnitServiceHistorySummary/);
   assert.match(detailPage, /historyController: unitHistoryController/);
-  assert.match(detailPage, /setDetailSection\("unit"\);[\s\S]*unitHistoryController\.setExpanded/);
+  assert.doesNotMatch(detailPage, /UnitServiceHistorySummary|View history|Hide history/);
 });

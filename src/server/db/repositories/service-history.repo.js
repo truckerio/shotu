@@ -370,8 +370,13 @@ export async function listUnitServiceHistory(companyId, assetId, currentWorkorde
          history.completed_at,
          history.scheduled_at,
          history.recorded_at,
-         history.completion_date_kind as date_kind,
-         coalesce(history.completed_at, history.scheduled_at, history.recorded_at, history.ordered_at, history.source_updated_at) as service_at,
+         case
+           when history.completed_at is not null then history.completion_date_kind
+           when history.recorded_at is not null then 'recorded'
+           when history.scheduled_at is not null then 'scheduled'
+           else 'unknown'
+         end as date_kind,
+         coalesce(history.completed_at, history.recorded_at, history.scheduled_at, history.ordered_at, history.source_updated_at) as service_at,
          case when history.source_provider = 'local' then left(workorder.concern, ${MAX_HISTORY_TEXT_LENGTH}) else '' end as concern,
          case when history.source_provider = 'local' then length(workorder.concern) > ${MAX_HISTORY_TEXT_LENGTH} else false end as concern_truncated,
          case when history.source_provider = 'local' then left(workorder.diagnosis, ${MAX_HISTORY_TEXT_LENGTH}) else '' end as diagnosis,
@@ -397,8 +402,11 @@ export async function listUnitServiceHistory(companyId, assetId, currentWorkorde
            or
            (history.source_provider = 'odoo'
              and history.status in ('sale', 'done')
-             and history.completed_at is not null
-             and history.completion_date_kind = 'verified_completed'
+             and (
+               (history.completed_at is not null
+                 and history.completion_date_kind = 'verified_completed')
+               or history.recorded_at is not null
+             )
              and not exists (
                select 1
                from odoo_entry_status entry

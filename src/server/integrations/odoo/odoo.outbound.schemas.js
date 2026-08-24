@@ -21,3 +21,8 @@ export const prepareOdooWorkorderSchema = z.object({
 export const createOdooDraftSchema = z.object({
   expectedUpdatedAt: z.string().datetime().optional(),
 }).strict();
+
+export const mapOdooWorkorderPartSchema = z.object({
+  lineIndex: z.coerce.number().int().min(0).max(999),
+  productExternalId: externalIdSchema,
+}).strict();

@@ -7,6 +7,7 @@ import {
   recordOdooOutboundFailure,
   recordOdooOutboundSuccess,
   saveOdooServiceOrderAction,
+  saveOdooWorkorderPartMapping,
   saveOdooWorkorderPreparation,
   updateOdooOutboundPayload,
 } from "./odoo.outbound.repo.js";
@@ -154,8 +155,18 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
       uomCode: part.odooUomCode || part.uomCode || "",
       productExternalId: String(part.productExternalId || ""),
       productName: part.productName || "",
+      productCandidates: Array.isArray(part.productCandidates) ? part.productCandidates : [],
     })),
   };
+}
+
+export async function mapOdooWorkorderPart({ companyId, workorderId, userId, requestId, input }) {
+  const parsedWorkorderId = odooOutboundWorkorderIdSchema.parse(workorderId);
+  return saveOdooWorkorderPartMapping(companyId, parsedWorkorderId, {
+    ...input,
+    userId,
+    requestId,
+  });
 }
 
 export async function prepareOdooWorkorder({ companyId, workorderId, userId, input }, dependencies = {}) {

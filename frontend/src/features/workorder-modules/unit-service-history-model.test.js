@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeServiceHistoryResponse, serviceHistoryDateLabel, serviceHistoryStatus, serviceHistorySummaryLabel } from "./unit/service-history-model.js";
+import { normalizeServiceHistoryResponse, serviceHistoryDateLabel, serviceHistorySourceLabel, serviceHistoryStatus, serviceHistorySummaryLabel } from "./unit/service-history-model.js";
 
 test("normalizes a tolerant history response without turning unavailable into empty", () => {
   const history = normalizeServiceHistoryResponse({ state: "unavailable", summary: { historyCount: "7" }, freshness: { warning: "Odoo has not responded" }, items: [] });
@@ -37,4 +37,9 @@ test("does not label a recorded-only date as completed", () => {
   });
   assert.match(serviceHistorySummaryLabel(history), /^Latest service record/);
   assert.doesNotMatch(serviceHistorySummaryLabel(history), /completed/i);
+});
+
+test("uses plain-language labels for provider and local history sources", () => {
+  assert.equal(serviceHistorySourceLabel("odoo"), "Odoo service order");
+  assert.equal(serviceHistorySourceLabel("local"), "Local workorder");
 });
