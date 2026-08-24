@@ -25,6 +25,12 @@ const LEGACY_MIGRATION_CHECKSUMS = new Map([
       "7cf9bbddfe1e52e0bfeae23c9e900e1f17293ed4e2a07d71885a2df77d32e77e",
     ]),
   ],
+  [
+    "059_odoo_workorder_part_mapping.sql",
+    new Set([
+      "5eab64bb6c8ec8411c6326957f1688e7b6b85b5bb8322a3c83eb4bae9736cdc1",
+    ]),
+  ],
 ]);
 
 function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {
