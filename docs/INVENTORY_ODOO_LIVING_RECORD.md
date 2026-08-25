@@ -503,7 +503,7 @@ Each implementation slice records applicable evidence:
 
 ### INV-20260824-01 — Baseline audit and target decision record
 
-- Status: RELEASED
+- Status: VERIFIED
 - Decision/requirement: Establish one repository-grounded living record before inventory implementation continues.
 - Before: Product idea and prior planning existed outside a maintained repository record; current implementation and target state could be confused.
 - After: Current aggregate inventory/workorder-parts/Odoo behavior, canonical owners, gaps, accepted target experience, delivery order, and maintenance contract are recorded here.
@@ -533,7 +533,7 @@ Each implementation slice records applicable evidence:
 
 ### INV-20260825-01 — Reviewed invoice to serialized Odoo receipt and encrypted QR
 
-- Status: VERIFIED
+- Status: RELEASED
 - Decision/requirement: Prove the smallest complete receiving/identity loop without making the app a competing stock ledger or changing untracked Odoo products.
 - Before: Invoice approval stopped before inventory; no receipt command, exact serial identity, QR label, or authenticated scan resolver existed.
 - After: A reviewed invoice with whole-quantity lines mapped to exactly one serial-tracked Odoo product stages a durable receipt/outbox command, creates or safely replays one incoming Odoo picking, validates it, confirms local state only after Odoo reports `done`, stores one unit per provider lot/serial, renders authenticated-encrypted QR labels, and resolves one exact unit on a phone-oriented scan surface.
