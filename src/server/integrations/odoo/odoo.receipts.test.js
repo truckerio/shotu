@@ -54,6 +54,102 @@ test("Odoo receipt creation writes one move line per serial and validates to don
   assert.equal(calls.filter((call) => call.model === "stock.picking" && call.method === "button_validate").length, 1);
 });
 
+test("Odoo receipt reuses provider-created blank serial allocations", async () => {
+  const calls = [];
+  let pickingReads = 0;
+  const serials = ["WG-QA-BLANK-1", "WG-QA-BLANK-2"];
+  const client = {
+    execute: async (model, method, args, kwargs) => {
+      calls.push({ model, method, args, kwargs });
+      if (model === "stock.picking" && method === "search_read") {
+        return [{ id: 55, name: "CHI/IN/QA", origin: "WG-REC-BLANK", state: "assigned", picking_type_id: [245, "Receipts"], location_id: [4, "Vendors"], location_dest_id: [471, "CHI/Stock"], move_ids_without_package: [77] }];
+      }
+      if (model === "stock.move" && method === "read") {
+        return [{ id: 77, product_id: [99, "QA"], product_uom_qty: 2, product_uom: [1, "Each"], move_line_ids: [88, 89], state: "assigned" }];
+      }
+      if (model === "stock.move.line" && method === "search_read") {
+        return [
+          { id: 88, move_id: [77, "QA"], product_id: [99, "QA"], lot_id: false, lot_name: false, quantity: 1 },
+          { id: 89, move_id: [77, "QA"], product_id: [99, "QA"], lot_id: false, lot_name: false, quantity: 1 },
+        ];
+      }
+      if (model === "stock.move.line" && method === "write") return true;
+      if (model === "stock.picking" && method === "button_validate") return true;
+      if (model === "stock.picking" && method === "read") {
+        pickingReads += 1;
+        return [{ id: 55, name: "CHI/IN/QA", state: pickingReads ? "done" : "assigned", picking_type_id: [245, "Receipts"], location_id: [4, "Vendors"], location_dest_id: [471, "CHI/Stock"], move_ids_without_package: [77] }];
+      }
+      if (model === "stock.lot" && method === "search_read") return serials.map((name, index) => ({ id: 900 + index, name, product_id: [99, "QA"] }));
+      throw new Error(`unexpected ${model}.${method}`);
+    },
+  };
+  const result = await ensureOdooSerializedReceipt(client, {
+    marker: "WG-REC-BLANK",
+    context: {
+      pickingTypeId: 245, sourceLocationId: 4, destinationLocationId: 471,
+      products: [{ productExternalId: 99, productName: "QA", partNumber: "QA-1", quantity: 2, uomExternalId: 1, serials }],
+    },
+  });
+  assert.equal(result.state, "done");
+  const writes = calls.filter((call) => call.model === "stock.move.line" && call.method === "write");
+  assert.deepEqual(writes.map((call) => call.args), [
+    [[88], { lot_name: serials[0], quantity: 1 }],
+    [[89], { lot_name: serials[1], quantity: 1 }],
+  ]);
+  assert.equal(calls.some((call) => call.model === "stock.move.line" && call.method === "create"), false);
+});
+
+test("Odoo receipt rejects expected serials attached to the wrong product move", async () => {
+  let wrote = false;
+  const client = {
+    execute: async (model, method) => {
+      if (model === "stock.picking" && method === "search_read") return [{ id: 55, state: "assigned", picking_type_id: [245, "Receipts"], location_id: [4, "Vendors"], location_dest_id: [471, "CHI/Stock"], move_ids_without_package: [77, 78] }];
+      if (model === "stock.move" && method === "read") return [
+        { id: 77, product_id: [99, "A"], product_uom_qty: 1, move_line_ids: [88] },
+        { id: 78, product_id: [100, "B"], product_uom_qty: 1, move_line_ids: [89] },
+      ];
+      if (model === "stock.picking" && method === "read") return [{ id: 55, state: "assigned", picking_type_id: [245, "Receipts"], location_id: [4, "Vendors"], location_dest_id: [471, "CHI/Stock"], move_ids_without_package: [77, 78] }];
+      if (model === "stock.move.line" && method === "search_read") return [
+        { id: 88, move_id: [77, "A"], product_id: [99, "A"], lot_id: false, lot_name: "WG-B-1", quantity: 1 },
+        { id: 89, move_id: [78, "B"], product_id: [100, "B"], lot_id: false, lot_name: "WG-A-1", quantity: 1 },
+      ];
+      if (["create", "write", "button_validate"].includes(method)) wrote = true;
+      throw new Error(`unexpected ${model}.${method}`);
+    },
+  };
+  await assert.rejects(
+    ensureOdooSerializedReceipt(client, {
+      marker: "WG-REC-SWAP",
+      context: {
+        pickingTypeId: 245, sourceLocationId: 4, destinationLocationId: 471,
+        products: [
+          { productExternalId: 99, quantity: 1, serials: ["WG-A-1"] },
+          { productExternalId: 100, quantity: 1, serials: ["WG-B-1"] },
+        ],
+      },
+    }),
+    (error) => error.code === "ODOO_RECEIPT_MISMATCH",
+  );
+  assert.equal(wrote, false);
+});
+
+test("Odoo receipt rejects a returned lot linked to the wrong product", async () => {
+  const client = {
+    execute: async (model, method) => {
+      if (model === "stock.picking" && method === "search_read") return [{ id: 55, state: "done", picking_type_id: [245, "Receipts"], location_id: [4, "Vendors"], location_dest_id: [471, "CHI/Stock"], move_ids_without_package: [77] }];
+      if (model === "stock.lot" && method === "search_read") return [{ id: 900, name: "WG-A-1", product_id: [100, "B"] }];
+      throw new Error(`unexpected ${model}.${method}`);
+    },
+  };
+  await assert.rejects(
+    ensureOdooSerializedReceipt(client, {
+      marker: "WG-REC-LOT-SWAP",
+      context: { pickingTypeId: 245, sourceLocationId: 4, destinationLocationId: 471, products: [{ productExternalId: 99, serials: ["WG-A-1"] }] },
+    }),
+    (error) => error.code === "ODOO_SERIAL_RECONCILIATION_REQUIRED",
+  );
+});
+
 test("Odoo receipt replay reads an existing done marker without another create", async () => {
   const calls = [];
   const client = {

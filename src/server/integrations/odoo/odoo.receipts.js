@@ -4,6 +4,10 @@ function relationId(value) {
   return Number(Array.isArray(value) ? value[0] : value || 0);
 }
 
+function relationName(value) {
+  return String(Array.isArray(value) ? value[1] || "" : "").trim();
+}
+
 function providerError(code, message, statusCode = 422) {
   return new InventoryError(message, { code, statusCode });
 }
@@ -149,7 +153,11 @@ async function ensureMoves(client, picking, context) {
 }
 
 async function ensureMoveLines(client, picking, context, moveByProduct) {
-  const expectedSerials = new Set(context.products.flatMap((line) => line.serials));
+  const expectedBySerial = new Map(context.products.flatMap((line) => line.serials.map((serial) => [serial, {
+    productId: line.productExternalId,
+    moveId: Number(moveByProduct.get(line.productExternalId)?.id || 0),
+  }])));
+  const expectedSerials = new Set(expectedBySerial.keys());
   const existing = await client.execute("stock.move.line", "search_read", [[[
     "picking_id", "=", Number(picking.id),
   ]]], {
@@ -158,15 +166,33 @@ async function ensureMoveLines(client, picking, context, moveByProduct) {
     order: "id asc",
   });
   const existingNames = new Map();
+  const blankByProduct = new Map();
   for (const row of existing) {
-    const name = String(row.lot_name || "").trim();
-    if (!name && relationId(row.lot_id)) continue;
+    const name = String(row.lot_name || relationName(row.lot_id)).trim();
+    if (!name) {
+      const productId = relationId(row.product_id);
+      if (!context.products.some((line) => line.productExternalId === productId)) {
+        throw providerError("ODOO_RECEIPT_MISMATCH", "The existing Odoo receipt contains an unexpected product allocation.", 409);
+      }
+      const blanks = blankByProduct.get(productId) || [];
+      blanks.push(row);
+      blankByProduct.set(productId, blanks);
+      continue;
+    }
     if (!expectedSerials.has(name)) {
       throw providerError("ODOO_RECEIPT_MISMATCH", "The existing Odoo receipt contains an unexpected serial identity.", 409);
+    }
+    const expected = expectedBySerial.get(name);
+    if (relationId(row.product_id) !== expected.productId || relationId(row.move_id) !== expected.moveId) {
+      throw providerError("ODOO_RECEIPT_MISMATCH", "The existing Odoo receipt contains a serial assigned to the wrong product.", 409);
+    }
+    if (existingNames.has(name)) {
+      throw providerError("ODOO_RECEIPT_MISMATCH", "The existing Odoo receipt contains a duplicate serial identity.", 409);
     }
     existingNames.set(name, row);
   }
   const quantityFixIds = [];
+  const blankAssignments = [];
   const missingValues = [];
   for (const line of context.products) {
     const move = moveByProduct.get(line.productExternalId);
@@ -175,6 +201,11 @@ async function ensureMoveLines(client, picking, context, moveByProduct) {
       const row = existingNames.get(serial);
       if (row) {
         if (Number(row.quantity || 0) !== 1) quantityFixIds.push(Number(row.id));
+        continue;
+      }
+      const blank = blankByProduct.get(line.productExternalId)?.shift();
+      if (blank) {
+        blankAssignments.push({ id: Number(blank.id), serial });
         continue;
       }
       missingValues.push({
@@ -189,12 +220,25 @@ async function ensureMoveLines(client, picking, context, moveByProduct) {
       });
     }
   }
+  if ([...blankByProduct.values()].some((rows) => rows.some((row) => Number(row.quantity || 0) > 0))) {
+    throw providerError("ODOO_RECEIPT_MISMATCH", "The existing Odoo receipt contains an extra blank allocation.", 409);
+  }
   if (quantityFixIds.length) await client.execute("stock.move.line", "write", [quantityFixIds, { quantity: 1 }]);
+  for (const batch of chunks(blankAssignments, 10)) {
+    await Promise.all(batch.map((assignment) => client.execute(
+      "stock.move.line",
+      "write",
+      [[assignment.id], { lot_name: assignment.serial, quantity: 1 }],
+    )));
+  }
   await createInBatches(client, "stock.move.line", missingValues);
 }
 
 async function readLots(client, context) {
   const serials = context.products.flatMap((line) => line.serials);
+  const expectedProductBySerial = new Map(context.products.flatMap((line) => (
+    line.serials.map((serial) => [serial, line.productExternalId])
+  )));
   const lots = await client.execute("stock.lot", "search_read", [[[
     "name", "in", serials,
   ]]], {
@@ -204,6 +248,14 @@ async function readLots(client, context) {
   });
   if (lots.length !== serials.length) {
     throw providerError("ODOO_SERIAL_RECONCILIATION_REQUIRED", "Odoo confirmed the receipt but not every expected serial could be reconciled.", 502);
+  }
+  const seen = new Set();
+  for (const lot of lots) {
+    const name = String(lot.name || "");
+    if (seen.has(name) || relationId(lot.product_id) !== expectedProductBySerial.get(name)) {
+      throw providerError("ODOO_SERIAL_RECONCILIATION_REQUIRED", "Odoo confirmed a serial against the wrong product.", 502);
+    }
+    seen.add(name);
   }
   return lots.map((lot) => ({
     externalId: String(lot.id),
