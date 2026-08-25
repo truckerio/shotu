@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle, File02, RefreshCw01, Trash01, UploadCloud02 } from "@untitledui/icons";
+import { AlertCircle, CheckCircle, File02, Printer, QrCode01, RefreshCw01, Trash01, UploadCloud02 } from "@untitledui/icons";
 import { FormField, OptionalSection } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
@@ -79,6 +79,7 @@ export function InvoiceExtractionWorkspace() {
   const [error, setError] = useState("");
   const [approveLearning, setApproveLearning] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [receipt, setReceipt] = useState(null);
   const fileInputRef = useRef(null);
   const reviewKeyRef = useRef("");
 
@@ -165,6 +166,7 @@ export function InvoiceExtractionWorkspace() {
     setApproveLearning(false);
     setMessage("");
     setError("");
+    setReceipt(null);
     reviewKeyRef.current = "";
     rememberRun();
   }
@@ -278,6 +280,28 @@ export function InvoiceExtractionWorkspace() {
     }
   }
 
+  async function receiveAndCreateLabels() {
+    setBusy("receive");
+    setError("");
+    setMessage("Confirming the serialized receipt in Odoo…");
+    try {
+      const result = await api(`/api/office/invoice-extractions/${encodeURIComponent(run.id)}/receive`, {
+        method: "POST",
+        timeoutMs: 70_000,
+        body: JSON.stringify({
+          idempotencyKey: `receive-${run.id}`,
+        }),
+      });
+      setReceipt(result.receipt);
+      setMessage(`${result.receipt.units.length} serialized ${result.receipt.units.length === 1 ? "unit" : "units"} received in Odoo. Labels are ready.`);
+    } catch (nextError) {
+      setError(nextError.message);
+      setMessage("");
+    } finally {
+      setBusy("");
+    }
+  }
+
   function updateHeader(name, value) {
     reviewKeyRef.current = "";
     setDraft((current) => updateInvoiceField(current, name, value));
@@ -302,6 +326,22 @@ export function InvoiceExtractionWorkspace() {
         </header>
         {error ? <p className="ops-error" role="alert">{error}</p> : null}
         {message ? <p className="invoice-status" role="status">{message}</p> : null}
+        {receipt ? (
+          <section className="inventory-label-result" aria-labelledby="inventory-label-title">
+            <div className="inventory-label-heading">
+              <div><span>Odoo receipt {receipt.providerPickingName}</span><h3 id="inventory-label-title">{receipt.units.length} QR labels ready</h3></div>
+              <Button type="button" icon={Printer} onClick={() => window.print()}>Print labels</Button>
+            </div>
+            <div className="inventory-label-grid">
+              {receipt.units.map((unit) => (
+                <article className="inventory-unit-label" key={unit.id}>
+                  <img src={unit.qrSvgUrl} alt={`QR code for serial ${unit.serialNumber}`} />
+                  <div><strong>{unit.partNumber}</strong><span>{unit.description}</span><code>{unit.serialNumber}</code></div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {draft.warnings.length ? <div className="invoice-warning" role="alert"><strong>Check totals and document quality</strong>{draft.warnings.map((warning) => <span key={warning}>{warning}</span>)}</div> : null}
         <div className={`invoice-review-layout${displayedPreviewUrl ? " has-preview" : ""}`}>
           {displayedPreviewUrl ? (
@@ -337,7 +377,13 @@ export function InvoiceExtractionWorkspace() {
             <label className="invoice-learning-choice"><input type="checkbox" checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setApproveLearning(event.target.checked); }} /><span>Save this reviewed invoice as training data for our future local extractor</span></label>
             <p>Approval saves the reviewed draft. It does not receive parts or change Odoo.</p>
           </div>
-          <Button type="button" variant="primary" icon={busy === "review" ? LoadingRefreshIcon : CheckCircle} onClick={approve} disabled={Boolean(busy) || run.status === "reviewed"}>{run.status === "reviewed" ? "Reviewed" : "Approve reviewed draft"}</Button>
+          {run.status === "reviewed" ? (
+            <Button type="button" variant="primary" icon={busy === "receive" ? LoadingRefreshIcon : QrCode01} onClick={receiveAndCreateLabels} disabled={Boolean(busy) || receipt?.status === "confirmed"}>
+              {receipt?.status === "confirmed" ? "Labels ready" : "Receive in Odoo & create labels"}
+            </Button>
+          ) : (
+            <Button type="button" variant="primary" icon={busy === "review" ? LoadingRefreshIcon : CheckCircle} onClick={approve} disabled={Boolean(busy)}>Approve reviewed draft</Button>
+          )}
         </footer>
       </section>
     );

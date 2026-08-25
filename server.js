@@ -22,6 +22,7 @@ import { handleHealthRoute } from "./src/server/routes/health.routes.js";
 import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
 import { handleProofreadingApi } from "./src/server/routes/proofreading.routes.js";
 import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extraction.routes.js";
+import { handleInventoryApi } from "./src/server/routes/inventory.routes.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { handleOdooIntegrationApi } from "./src/server/integrations/odoo/odoo.routes.js";
 import {
@@ -743,6 +744,7 @@ async function handleApi(req, res) {
   if (await handleIntegrationsApi(req, res, url, helpers)) return;
   if (await handleMechanicApi(req, res, url, helpers)) return;
   if (await handleOfficeApi(req, res, url, helpers)) return;
+  if (await handleInventoryApi(req, res, url, helpers)) return;
   if (await handleInvoiceExtractionApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
   if (await handleWorkorderModulesApi(req, res, url, helpers)) return;

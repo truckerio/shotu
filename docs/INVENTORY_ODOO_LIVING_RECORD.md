@@ -1,8 +1,8 @@
 # Odoo Inventory And Workorder Parts — Living Record
 
 **Status:** Canonical current-state record<br>
-**Last verified:** 2026-08-24<br>
-**Verified against:** `main` at `d95cbd5f02d87544ee13ea20b1037c8c8f1a2860`<br>
+**Last verified:** 2026-08-25<br>
+**Verified against:** local task patch based on `main` at `2443dcaac1418dbf80d3dafc80256f7f8a2c3dfb` (release evidence pending)<br>
 **Scope:** Odoo product/inventory integration, workorder part requests, local inventory projection, future receiving/scanning/issuing/core workflows
 
 ## How To Use This File
@@ -64,9 +64,9 @@ Boundary rule: Workorder Generator may store workflow state and projections. It 
 
 ### Executive verdict
 
-The repository has a useful Odoo/catalog/workorder-parts foundation. It does **not** yet have the proposed inventory product.
+The repository now has one narrow, end-to-end receiving identity slice on top of the existing Odoo/catalog/workorder-parts foundation.
 
-Current capability is aggregate availability plus local part-allocation workflow. Exact physical identity, receiving, barcode operations, Odoo stock mutations, label generation, and core-return handling are not implemented.
+A reviewed invoice can create an idempotent Odoo incoming receipt for products already configured as serial-tracked, persist one exact local unit per confirmed Odoo lot/serial, produce authenticated-encrypted QR labels, and resolve a scan under authenticated company/location scope. This does not yet implement physical count/condition confirmation, putaway, issuing/installing, cores, or a dedicated Parts role.
 
 ### Capability matrix
 
@@ -76,7 +76,7 @@ Current capability is aggregate availability plus local part-allocation workflow
 | Odoo location discovery/mapping | IMPLEMENTED | `src/server/db/migrations/042_odoo_inventory_sync.sql`; `odoo.admin.service.js` | Admin maps Odoo internal locations to app locations. |
 | Odoo product mapping | IMPLEMENTED | migrations `043` and `059` | Stable `product.product` mapping; explicit workorder-line choice when duplicate Odoo products map to one catalog part. |
 | Odoo inventory read sync | IMPLEMENTED, AGGREGATE ONLY | `syncOdooPartsAndInventory`; `importOdooInventory` | Reads active products and internal `stock.quant` balances, then projects aggregated availability locally. |
-| Lot/serial/package projection | NOT IMPLEMENTED | Sync field list excludes lot, serial, package, and move-line identity. | App cannot identify an exact physical unit from Odoo. |
+| Lot/serial/package projection | PARTIAL, RECEIPTS ONLY | `inventory_serialized_units`; `inventory-receipts.repo.js`; `odoo.receipts.js` | Exact serial identity is preserved for units created by the reviewed-invoice receipt slice. General Odoo lot/package sync remains unimplemented. |
 | Mechanic part request | IMPLEMENTED | mechanic parts route, `MechanicPartRequestForm.jsx` | Mechanic submits structured request inside a workorder. |
 | Office review and supply allocation | IMPLEMENTED | Office parts routes and `OfficeRequestCard.jsx` | Office can approve, ask, reject, choose supply source, reserve aggregate local inventory, and update allocation status. |
 | Local issue/return quantity updates | IMPLEMENTED, TEMPORARY ARCHITECTURE | `part-requests.repo.js` | Reserved→issued decrements local balance; issued→returned increments it. No Odoo stock command is made. |
@@ -85,11 +85,11 @@ Current capability is aggregate availability plus local part-allocation workflow
 | Odoo service-order export | IMPLEMENTED, SEPARATE DOMAIN | `odoo.outbound.*`; migrations `048`, `056`, `059` | Creates a draft Odoo Sales service order after readiness checks. It intentionally does not confirm orders, create invoices, post payments, or mutate stock. |
 | Dedicated Parts role and permissions | NOT IMPLEMENTED | `src/server/auth/roles.js`; `permissions.js` | Roles remain mechanic, office, surveillance, and admin. No inventory permission family exists. |
 | Parts inventory workspace | NOT IMPLEMENTED | Current UI is workorder-scoped shared Parts section plus Admin integration settings. | No Today, Scan, Stock, or History workspace exists for Parts users. |
-| Invoice/receiving documents | NOT IMPLEMENTED | No inventory document/receipt records or `/api/inventory/*` routes. | No invoice extraction, physical receiving confirmation, duplicate detection, or receipt command. |
-| Scanner and secure QR resolution | NOT IMPLEMENTED | No inventory scan session or QR resolver. | Catalog barcode text search exists; transactional scanning does not. |
-| Label jobs/printing | NOT IMPLEMENTED | Existing printing is workorder printing. | No inventory identity or putaway label pipeline. |
+| Invoice/receiving documents | PARTIAL, LOCAL VERIFIED | `inventory_receipts`; `inventory_receipt_lines`; `inventory_provider_commands`; `POST /api/office/invoice-extractions/:runId/receive` | Reviewed invoices can create one idempotent Odoo receipt and become confirmed only after the provider picking is `done`. Physical count/condition and PO matching are still absent. |
+| Scanner and secure QR resolution | PARTIAL, LOCAL VERIFIED | `inventory-qr.js`; `POST /api/inventory/resolve`; `InventoryScanWorkspace.jsx` | Authenticated-encrypted QR tokens resolve one exact unit under authenticated company/location scope, with camera and manual-entry surfaces. Bin/pick/issue scanning remains absent. |
+| Label jobs/printing | PARTIAL, LOCAL VERIFIED | `GET /api/office/inventory/receipts/:receiptId/labels`; `GET /api/office/inventory/units/:unitId/qr.svg`; invoice review label grid | Confirmed receipt units render printable QR labels. Durable printer jobs, templates, and putaway completion remain absent. |
 | Core obligations and disposition | NOT IMPLEMENTED | No core tables, routes, service, or UI. | Removed core cannot be linked durably to replacement part and vendor credit. |
-| Provider command outbox/reconciliation | NOT IMPLEMENTED FOR INVENTORY | Integration platform and Odoo outbound patterns exist, but inventory commands do not. | No pending/unknown/replay/reconcile state for receipts, reservations, transfers, or returns. |
+| Provider command outbox/reconciliation | PARTIAL, RECEIPTS ONLY | `inventory_provider_commands`; `inventory-receiving.service.js` | Receipt commands persist pending/processing/succeeded/reconciliation-required state and reject key/hash conflicts. Transfers, issues, returns, and operator reconciliation UI remain absent. |
 
 ## Current Architecture
 
@@ -124,7 +124,7 @@ Important naming warning: `030_inventory_unit_identity.sql` adds unit of measure
 - `part_request_events` records request/allocation/usage activity.
 - `odoo_workorder_part_mappings` resolves ambiguous workorder-line→Odoo-product selection for service-order export.
 
-No current durable record represents one exact inventory unit, receiving session, pick session, core obligation, inventory label job, or inventory provider command.
+Migration `064_inventory_receipt_serialization.sql` adds `inventory_receipts`, `inventory_receipt_lines`, `inventory_serialized_units`, append-only `inventory_unit_events`, and `inventory_provider_commands`. These records cover the reviewed-invoice receipt slice only. No current durable record represents a physical count/condition session, pick/issue session, core obligation, or durable printer job.
 
 ### 2. Odoo read path
 
@@ -530,3 +530,18 @@ Each implementation slice records applicable evidence:
 - Verification: Documentation structure reviewed against current-state/target separation; no runtime behavior claimed.
 - Release evidence: Not applicable. Documentation-only local change.
 - Remaining gaps: Target remains unimplemented; first vertical slice requires exact identity, Parts authorization, inventory provider-command lifecycle, and completion preflight.
+
+### INV-20260825-01 — Reviewed invoice to serialized Odoo receipt and encrypted QR
+
+- Status: VERIFIED
+- Decision/requirement: Prove the smallest complete receiving/identity loop without making the app a competing stock ledger or changing untracked Odoo products.
+- Before: Invoice approval stopped before inventory; no receipt command, exact serial identity, QR label, or authenticated scan resolver existed.
+- After: A reviewed invoice with whole-quantity lines mapped to exactly one serial-tracked Odoo product stages a durable receipt/outbox command, creates or safely replays one incoming Odoo picking, validates it, confirms local state only after Odoo reports `done`, stores one unit per provider lot/serial, renders authenticated-encrypted QR labels, and resolves one exact unit on a phone-oriented scan surface.
+- Canonical owners: `src/server/modules/inventory/*`; `src/server/integrations/odoo/odoo.receipts.js`; `src/server/db/repositories/inventory-receipts.repo.js`; `frontend/src/features/inventory/*`; `frontend/src/features/office/InvoiceExtractionWorkspace.jsx`.
+- Data/API changes: Migration `064_inventory_receipt_serialization.sql`; exact receipt/label/QR/resolve routes named in the capability matrix; AES-256-GCM unit tokens with random nonces; provider marker `WG-REC-<receipt-id>` plus immutable idempotency-key/request-hash and frozen Odoo picking-type/source/destination replay validation; receipt-wide limit of 500 serialized units and bounded provider batches.
+- User-experience changes: Office/Admin invoice review exposes one next action after approval, then a minimal printable label grid. An encrypted QR opens part, serial, status, location, Odoo receipt, and event history; signed-out scans resume after login, and `Scan another` supports camera and manual fallback.
+- Authorization/security changes: Existing workorder-office policy protects receiving/labels; scan resolution requires authentication plus company and mapped-location scope. QR payload contains no vendor, price, invoice, tenant, or predictable serial data and is integrity protected by a dedicated signing key.
+- Failure/reconciliation behavior: Fractional or excessive quantities, duplicate part lines, missing/ambiguous product mapping, non-serial Odoo tracking, missing incoming route, provider rejection, incomplete picking, replay conflict, and token tampering fail closed. Claimed commands enter reconciliation-required on uncertain provider failure; local units do not become in-stock before provider confirmation.
+- Verification: Focused inventory/Odoo/UI tests passed; a fresh temporary PostgreSQL database applied all migrations including `064`; production build and structure checks passed; rendered local invoice upload/OCR/review passed; signed QR resolved the expected local fixture at 390×844. Repository-wide unit run retained four pre-existing failures in untouched workspace-header/supporting-text tests.
+- Release evidence: Pending commit, deployment, and Odoo-staging walkthrough. No production/app-provider records were created at this point.
+- Remaining gaps: Dedicated Parts role, physical arrival/count/condition and putaway confirmation, general lot/package sync, issuing/installing/return/core flows, durable printer jobs, receipt reversal/void workflow, and actual-device camera permission testing.

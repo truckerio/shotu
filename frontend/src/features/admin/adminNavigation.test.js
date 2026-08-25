@@ -46,6 +46,7 @@ test("admin opens location setup by default while explicit destinations remain l
   assert.equal(initialAdminView(""), "locations");
   assert.equal(initialAdminView("?adminView=locations"), "locations");
   assert.equal(initialAdminView("?adminView=modules"), "modules");
+  assert.equal(initialAdminView("?adminView=invoices"), "invoices");
   assert.equal(initialAdminView("?adminView=surveillance"), "operations");
   assert.equal(initialAdminView("?adminView=operations"), "operations");
   assert.equal(initialAdminView("?adminView=settings&settingsTab=integrations"), "settings");

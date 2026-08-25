@@ -14,6 +14,12 @@ function loginErrorMessage(error) {
   return "Username or password is incorrect.";
 }
 
+export function loginReturnTarget(search = window.location.search) {
+  const token = new URLSearchParams(search).get("inventoryScan")?.trim() || "";
+  if (token.length < 8 || token.length > 2000) return "/";
+  return `/?inventoryScan=${encodeURIComponent(token)}`;
+}
+
 export function LoginPage() {
   const {
     keyboardOpen,
@@ -61,7 +67,7 @@ export function LoginPage() {
       return;
     }
 
-    window.location.replace("/");
+    window.location.replace(loginReturnTarget());
   }
 
   async function signInWithPasskey() {
@@ -80,7 +86,7 @@ export function LoginPage() {
         setPasskeySubmitting(false);
         return;
       }
-      window.location.replace("/");
+      window.location.replace(loginReturnTarget());
     } catch {
       setError("Passkey sign-in was not completed. Try again or use your password.");
       setPasskeySubmitting(false);

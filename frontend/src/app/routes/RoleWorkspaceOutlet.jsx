@@ -7,6 +7,7 @@ import { MechanicWorkspace } from "../../features/mechanic/MechanicWorkspace.jsx
 import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceWorkspace.jsx";
 import { WorkorderDetailPage } from "../../features/workorder-detail/WorkorderDetailPage.jsx";
+import { InventoryScanWorkspace } from "../../features/inventory/InventoryScanWorkspace.jsx";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx")
   .then((module) => ({ default: module.AdminWorkspace })));
@@ -22,6 +23,9 @@ export function RoleWorkspaceOutlet({
   routeLoading,
   workspace,
 }) {
+  if (new URLSearchParams(window.location.search).has("inventoryScan")) {
+    return <InventoryScanWorkspace actor={actor} />;
+  }
   if (routeLoading) {
     return (
       <main className="prototype mechanic-home route-loading">

@@ -17,6 +17,7 @@ export function initialAdminView(search = "") {
   const params = new URLSearchParams(search);
   if (params.has("samsara") || params.get("adminView") === "settings") return "settings";
   if (params.get("adminView") === "modules") return "modules";
+  if (params.get("adminView") === "invoices") return "invoices";
   if (params.get("adminView") === "surveillance") return "operations";
   if (params.get("adminView") === "operations") return "operations";
   return "locations";

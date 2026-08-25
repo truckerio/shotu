@@ -66,6 +66,17 @@
 .invoice-review-actions p { color:#667085; max-width:620px; }
 .invoice-learning-choice { align-items:start; display:grid!important; gap:8px!important; grid-template-columns:auto minmax(0,1fr); margin-bottom:8px; }
 .invoice-learning-choice input { min-height:18px!important; width:18px!important; }
+.inventory-label-result { background:#f9fafb; border:1px solid #d0d5dd; border-radius:10px; display:grid; gap:12px; margin-top:14px; padding:14px; }
+.inventory-label-heading { align-items:center; display:flex; gap:12px; justify-content:space-between; }
+.inventory-label-heading>div { display:grid; gap:2px; }
+.inventory-label-heading span { color:#667085; font-size:12px; }
+.inventory-label-grid { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
+.inventory-unit-label { align-items:center; background:#fff; border:1px solid #101828; border-radius:6px; display:grid; gap:10px; grid-template-columns:96px minmax(0,1fr); min-width:0; padding:10px; break-inside:avoid; }
+.inventory-unit-label img { height:96px; width:96px; }
+.inventory-unit-label>div { display:grid; gap:3px; min-width:0; }
+.inventory-unit-label strong,.inventory-unit-label span,.inventory-unit-label code { overflow-wrap:anywhere; }
+.inventory-unit-label span { color:#475467; font-size:12px; }
+.inventory-unit-label code { color:#101828; font-size:11px; }
 @media (max-width:700px) {
   .invoice-extraction-workspace { margin:10px; padding:14px; }
   .invoice-upload-workspace { margin-inline:auto; }
@@ -76,4 +87,14 @@
   .invoice-review-layout.has-preview { grid-template-columns:minmax(0,1fr); }
   .invoice-source-preview { position:static; }
   .invoice-source-preview img,.invoice-source-preview object { max-height:60vh; min-height:320px; }
+  .inventory-label-heading { align-items:stretch; flex-direction:column; }
+  .inventory-unit-label { grid-template-columns:84px minmax(0,1fr); }
+  .inventory-unit-label img { height:84px; width:84px; }
+}
+@media print {
+  body * { visibility:hidden!important; }
+  .inventory-label-grid,.inventory-label-grid * { visibility:visible!important; }
+  .inventory-label-grid { display:grid; gap:8mm; grid-template-columns:repeat(2,80mm); left:8mm; position:absolute; top:8mm; }
+  .inventory-unit-label { border:1px solid #000; grid-template-columns:28mm minmax(0,1fr); min-height:32mm; padding:3mm; }
+  .inventory-unit-label img { height:28mm; width:28mm; }
 }
