@@ -2,7 +2,7 @@
 
 **Status:** Canonical current-state record<br>
 **Last verified:** 2026-08-25<br>
-**Verified against:** local task patch based on `main` at `2443dcaac1418dbf80d3dafc80256f7f8a2c3dfb` (release evidence pending)<br>
+**Verified against:** production code commit `52bac4d11cbde49b4645f651c47aa940f5a84220`<br>
 **Scope:** Odoo product/inventory integration, workorder part requests, local inventory projection, future receiving/scanning/issuing/core workflows
 
 ## How To Use This File
@@ -503,7 +503,7 @@ Each implementation slice records applicable evidence:
 
 ### INV-20260824-01 — Baseline audit and target decision record
 
-- Status: VERIFIED
+- Status: RELEASED
 - Decision/requirement: Establish one repository-grounded living record before inventory implementation continues.
 - Before: Product idea and prior planning existed outside a maintained repository record; current implementation and target state could be confused.
 - After: Current aggregate inventory/workorder-parts/Odoo behavior, canonical owners, gaps, accepted target experience, delivery order, and maintenance contract are recorded here.
@@ -543,5 +543,5 @@ Each implementation slice records applicable evidence:
 - Authorization/security changes: Existing workorder-office policy protects receiving/labels; scan resolution requires authentication plus company and mapped-location scope. QR payload contains no vendor, price, invoice, tenant, or predictable serial data and is integrity protected by a dedicated signing key.
 - Failure/reconciliation behavior: Fractional or excessive quantities, duplicate part lines, missing/ambiguous product mapping, non-serial Odoo tracking, missing incoming route, provider rejection, incomplete picking, replay conflict, and token tampering fail closed. Claimed commands enter reconciliation-required on uncertain provider failure; local units do not become in-stock before provider confirmation.
 - Verification: Focused inventory/Odoo/UI tests passed; a fresh temporary PostgreSQL database applied all migrations including `064`; production build and structure checks passed; rendered local invoice upload/OCR/review passed; signed QR resolved the expected local fixture at 390×844. Repository-wide unit run retained four pre-existing failures in untouched workspace-header/supporting-text tests.
-- Release evidence: Pending commit, deployment, and Odoo-staging walkthrough. No production/app-provider records were created at this point.
-- Remaining gaps: Dedicated Parts role, physical arrival/count/condition and putaway confirmation, general lot/package sync, issuing/installing/return/core flows, durable printer jobs, receipt reversal/void workflow, and actual-device camera permission testing.
+- Release evidence: Core workflow commit `63e091e3fd40f4904c094dd8559c4e79337257de`; confirmed-warehouse route fix `4cbd2905d4f10e3e2c3a1528bf3a429f3734b5ca`; Odoo 18 serial-allocation reconciliation fix `52bac4d11cbde49b4645f651c47aa940f5a84220`; Railway production deployment `83855aeb-1fb4-46cf-b5bf-9bd298190ad9` succeeded and `/health/ready` reported database available. Rendered production upload used synthetic reviewed invoice run `a46181bc-b526-412c-a580-d2d1d732f1e6`. Odoo staging database `protechrepair-july16staging-36196899` confirmed picking `CHI/IN/00312` (`13567`) on route `245 / 4 / 471`, product `QA-QR-20260825` (`95842`), two distinct serial lots (`1`, `2`), and two unreserved quants of quantity one at `CHI/Stock`. The app retained one confirmed receipt, one line, two in-stock units, their append-only events, and one succeeded command. The production QR SVG decoded to its scan URL; the authenticated 390x844 scan opened the exact first unit with `scrollWidth = innerWidth = 390`; an unauthenticated same-origin resolve returned `401`; receipt replay returned the same two labels without a second provider receipt.
+- Remaining gaps: Dedicated Parts role, physical arrival/count/condition and putaway confirmation, general lot/package sync, issuing/installing/return/core flows, durable printer jobs, receipt reversal/void workflow, and actual-device camera permission testing. The clearly labeled synthetic Odoo product, done receipt, two lots/quants, app invoice run, confirmed receipt, line, units/events, and command are intentionally retained as staging audit fixtures because no safe receipt-reversal workflow exists yet.
