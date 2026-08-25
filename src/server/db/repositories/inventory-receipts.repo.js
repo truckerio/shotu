@@ -33,10 +33,26 @@ export async function loadOdooProductMappings({ companyId, normalizedPartNumbers
 
 export async function loadMappedOdooReceiptLocations({ companyId, locationId }) {
   const result = await query(
-    `select external_id
-     from odoo_inventory_locations
-     where company_id = $1 and app_location_id = $2
-       and mapping_status = 'mapped' and active = true
+    `with confirmed_mapping as (
+       select mapping.warehouse_external_id
+       from odoo_location_warehouse_mappings mapping
+       where mapping.company_id = $1 and mapping.location_id = $2
+     ), configured_warehouse as (
+       select warehouse.stock_location_external_id as external_id
+       from confirmed_mapping mapping
+       join odoo_warehouses warehouse
+         on warehouse.company_id = $1
+        and warehouse.external_id = mapping.warehouse_external_id
+       where warehouse.active = true
+         and btrim(warehouse.stock_location_external_id) <> ''
+     )
+     select external_id from configured_warehouse
+     union all
+     select location.external_id
+     from odoo_inventory_locations location
+     where location.company_id = $1 and location.app_location_id = $2
+       and location.mapping_status = 'mapped' and location.active = true
+       and not exists (select 1 from confirmed_mapping)
      order by external_id`,
     [companyId, locationId],
   );

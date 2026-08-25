@@ -11,6 +11,9 @@ test("inventory repositories enforce company and location scope and serialize re
   assert.match(source, /\$4::boolean or unit\.location_id = any\(\$3::uuid\[\]\)/);
   assert.match(source, /receipt\.company_id = any\(\$2::uuid\[\]\)/);
   assert.match(source, /\$4::boolean or receipt\.location_id = any\(\$3::uuid\[\]\)/);
+  assert.match(source, /odoo_location_warehouse_mappings/);
+  assert.match(source, /warehouse\.stock_location_external_id/);
+  assert.match(source, /not exists \(select 1 from confirmed_mapping\)/);
 });
 
 test("authenticated scan projection excludes invoice, vendor, price, and QR secrets", async () => {
