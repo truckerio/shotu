@@ -22,6 +22,13 @@ test("shared activity surface has one hierarchy and retains actor, time, status,
   assert.match(surveillanceDetail, /activityCount = timelineEventCount\(detail\.timeline\)/);
 });
 
+test("shared timeline list owns timeline structure and record details", () => {
+  assert.match(component, /export function WorkorderTimelineList/);
+  assert.match(component, /<ol className="workorder-timeline-list">/);
+  assert.match(component, /<dl className="workorder-timeline-details">/);
+  assert.match(component, /return <WorkorderTimelineList items=\{items\} \/>/);
+});
+
 test("multi-change parents are collapsed by default with an accessible disclosure control", () => {
   assert.match(component, /useState\(\(\) => new Set\(\)\)/);
   assert.match(component, /const expandable = group\.childCount > 1/);

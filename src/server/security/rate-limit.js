@@ -5,6 +5,7 @@ export const SENSITIVE_RATE_LIMIT_POLICIES = Object.freeze({
   admin: Object.freeze({ limit: 60, windowMs: 60_000 }),
   integration: Object.freeze({ limit: 10, windowMs: 60_000 }),
   kiosk: Object.freeze({ limit: 10, windowMs: 60_000 }),
+  invoice: Object.freeze({ limit: 10, windowMs: 60_000 }),
 });
 
 function positiveInteger(value, name) {
@@ -93,6 +94,9 @@ export function sensitiveRateLimitPolicy(method, pathname) {
     return expensiveGet || !["GET", "HEAD", "OPTIONS"].includes(normalizedMethod)
       ? "integration"
       : null;
+  }
+  if (normalizedMethod === "POST" && path === "/api/office/invoice-extractions") {
+    return "invoice";
   }
   return null;
 }

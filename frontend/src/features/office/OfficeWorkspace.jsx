@@ -12,6 +12,7 @@ import { WorkorderDraftQueue } from "../workorder-drafts/index.js";
 import { MobileQueueToolbar } from "../../components/operations/MobileQueueToolbar.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
+import { InvoiceExtractionWorkspace } from "./InvoiceExtractionWorkspace.jsx";
 import {
   OFFICE_PRIMARY_TABS,
   OFFICE_SECONDARY_TAB_KEYS,
@@ -100,7 +101,9 @@ export function OfficeWorkspace({
 }) {
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState(() => (
-    new URLSearchParams(window.location.search).get("view") === "drafts" ? "drafts" : "needs"
+    ["drafts", "invoices"].includes(new URLSearchParams(window.location.search).get("view"))
+      ? new URLSearchParams(window.location.search).get("view")
+      : "needs"
   ));
   const [search, setSearch] = useState("");
   const [lifecycleFilter, setLifecycleFilter] = useState("");
@@ -109,8 +112,11 @@ export function OfficeWorkspace({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const preferenceHydrated = useRef(false);
-  const legacyDraftRoute = useMemo(
-    () => new URLSearchParams(window.location.search).get("view") === "drafts",
+  const requestedWorkspace = useMemo(
+    () => {
+      const requested = new URLSearchParams(window.location.search).get("view");
+      return ["drafts", "invoices"].includes(requested) ? requested : "";
+    },
     [],
   );
   const queuePreferences = useWorkorderPreferences("office");
@@ -135,9 +141,9 @@ export function OfficeWorkspace({
   useEffect(() => {
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
-    const savedTabCandidate = !legacyDraftRoute && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "all", "closed"].includes(saved.activeTab)
+    const savedTabCandidate = !requestedWorkspace && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "invoices", "all", "closed"].includes(saved.activeTab)
       ? saved.activeTab
-      : legacyDraftRoute ? "drafts" : "needs";
+      : requestedWorkspace || "needs";
     const savedTab = officeQueueForViewport(
       savedTabCandidate,
       window.matchMedia("(max-width: 700px)").matches,
@@ -148,7 +154,7 @@ export function OfficeWorkspace({
     setMechanicFilter(normalized.mechanicFilter);
     setLocationFilter(saved.locationFilter || "");
     preferenceHydrated.current = true;
-  }, [legacyDraftRoute, queuePreferences.ready]);
+  }, [requestedWorkspace, queuePreferences.ready]);
 
   useEffect(() => {
     const phoneQuery = window.matchMedia("(max-width: 700px)");
@@ -212,6 +218,7 @@ export function OfficeWorkspace({
     { key: "parts", label: "Parts", count: dashboard?.parts?.length || 0, icon: Tool02 },
     { key: "done", label: "Ready review", count: dashboard?.done?.length || 0, icon: CheckCircle },
     { key: "drafts", label: "Drafts", count: drafts.length, icon: File02 },
+    { key: "invoices", label: "Invoices", count: null, icon: FileCheck02 },
     { key: "all", label: "All", count: allRows.length, icon: Briefcase02 },
     { key: "closed", label: "Closed", count: dashboard?.closed?.length || 0, icon: FileCheck02 },
   ];
@@ -223,8 +230,8 @@ export function OfficeWorkspace({
         ? dashboard?.active?.length || 0
         : doneOdooRows.length,
   }));
-  const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key));
-  const tabRows = officeRowsForTab(activeTab, dashboard, allRows, needsRows);
+  const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key) || tab.key === "invoices");
+  const tabRows = activeTab === "invoices" ? [] : officeRowsForTab(activeTab, dashboard, allRows, needsRows);
   const filteredRows = tabRows
     .filter((row) => !lifecycleFilter || officeLifecycle(row) === lifecycleFilter)
     .filter((row) => !mechanicFilter || rowMechanicNames(row).includes(mechanicFilter))
@@ -240,8 +247,8 @@ export function OfficeWorkspace({
         actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={onCreateWorkorder} />}
       />
 
-      <section className={`office-layout${activeTab === "drafts" ? " is-drafts" : ""}`}>
-        {activeTab !== "drafts" ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
+      <section className={`office-layout${["drafts", "invoices"].includes(activeTab) ? " is-drafts" : ""}`}>
+        {!["drafts", "invoices"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
           <div className="office-panel-head"><strong>Mechanics</strong><span>{mechanics.length}</span></div>
           <button className={!mechanicFilter ? "active" : ""} type="button" onClick={() => selectMechanic("")}>
             <span>All mechanics</span><strong>{allRows.length}</strong>
@@ -273,7 +280,7 @@ export function OfficeWorkspace({
               <div className="role-mobile-secondary-queues">
                 <WorkorderQueueTabs tabs={mobileSecondaryTabs} activeTab={activeTab} onChange={selectQueue} />
               </div>
-              {activeTab !== "drafts" ? <>
+              {!["drafts", "invoices"].includes(activeTab) ? <>
                 <label className="mechanic-search">
                   <SearchMd />
                   <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
@@ -283,7 +290,7 @@ export function OfficeWorkspace({
                 <label><span>Stage</span><select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}><option value="">All stages</option><option value="open">Unassigned</option><option value="accepted">Accepted</option><option value="in_progress">In progress</option><option value="mechanic_done">Ready for review</option><option value="closed">Closed</option><option value="odoo_entered">Odoo entered</option><option value="cancelled">Cancelled</option></select></label>
               </> : null}
             </MobileQueueToolbar>
-            {activeTab !== "drafts" ? <div className="office-filter-row operations-filter-row role-desktop-filters">
+            {!["drafts", "invoices"].includes(activeTab) ? <div className="office-filter-row operations-filter-row role-desktop-filters">
                   <label className="mechanic-search">
                     <SearchMd />
                     <input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, location, or mechanic" aria-label="Search office workorders" />
@@ -307,7 +314,9 @@ export function OfficeWorkspace({
                 </div> : null}
           </div>
 
-          {activeTab === "drafts" ? (
+          {activeTab === "invoices" ? (
+            <InvoiceExtractionWorkspace />
+          ) : activeTab === "drafts" ? (
             <WorkorderDraftQueue
               role={actor.role}
               actorId={actor.id}

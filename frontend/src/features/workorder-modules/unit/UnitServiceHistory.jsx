@@ -5,27 +5,30 @@ import {
   serviceHistoryStatus,
   serviceHistorySummaryLabel,
 } from "./service-history-model.js";
+import { WorkorderTimelineList } from "../../../components/workorders/WorkorderTimeline.jsx";
 import { useUnitServiceHistory } from "./useUnitServiceHistory.js";
 import "./unit-service-history.css";
 
-function ServiceRecord({ item }) {
+function serviceRecordTimelineItem(item) {
   const workPerformed = item.workPerformed || item.serviceLines.join("; ");
   const details = [
     ["Concern", item.concern],
     ["Diagnosis", item.diagnosis],
     ["Work performed", workPerformed],
-  ].filter(([, value]) => value);
-  return (
-    <li className="unit-service-history-record">
-      <div className="unit-service-history-record-heading">
-        <strong>{serviceHistoryDateLabel(item.dateKind)} · {formatServiceHistoryDate(item.serviceDate)}</strong>
-        <span>{item.reference}{item.source ? ` · ${serviceHistorySourceLabel(item.source)}` : ""}</span>
-      </div>
-      {details.map(([label, value]) => <p key={label}><strong>{label}:</strong> {value}</p>)}
-      {item.parts.length ? <p><strong>Parts:</strong> {item.parts.map((part) => `${part.name}${part.quantity !== "" ? ` × ${part.quantity}` : ""}`).join(", ")}</p> : null}
-      {Object.values(item.truncated).some(Boolean) ? <p className="unit-service-history-truncated">Some details were shortened. Open the original service order for the complete record.</p> : null}
-    </li>
-  );
+    ["Parts", item.parts.map((part) => `${part.name}${part.quantity !== "" ? ` × ${part.quantity}` : ""}`).join(", ")],
+  ].filter(([, value]) => value).map(([label, value]) => ({ label, value }));
+  return {
+    id: item.id,
+    actorName: item.reference,
+    actorLabel: item.source ? serviceHistorySourceLabel(item.source) : "",
+    createdAt: item.serviceDate,
+    dateText: formatServiceHistoryDate(item.serviceDate),
+    title: `${serviceHistoryDateLabel(item.dateKind)} service`,
+    details,
+    content: Object.values(item.truncated).some(Boolean)
+      ? <p className="workorder-timeline-note">Some details were shortened. Open the original service order for the complete record.</p>
+      : null,
+  };
 }
 
 function UnitServiceHistorySummary({ history, loading }) {
@@ -65,7 +68,7 @@ export function UnitServiceHistory({ actorRole, historyController, workorderId }
         {!loading && !error && canShowRecords ? <>
           {history.state === "stale" ? <div className="unit-service-history-state is-warning" role="status"><strong>{status.title}</strong><span>{status.message}</span></div> : null}
           {providerNeverSynced ? <div className="unit-service-history-state is-warning" role="status"><strong>Odoo history has not been synced</strong><span>Local completed service records are shown. Ask an admin to check the integration.</span></div> : null}
-          <ol className="unit-service-history-records">{history.items.map((item) => <ServiceRecord key={item.id} item={item} />)}</ol>
+          <WorkorderTimelineList items={history.items.map(serviceRecordTimelineItem)} emptyMessage="No previous service records." />
           {history.nextCursor ? <button className="unit-service-history-more" type="button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? "Loading…" : "Show more"}</button> : null}
         </> : null}
       </div>

@@ -14,6 +14,7 @@ test("public auth and OAuth callback routes require no app permission", () => {
 test("route families map to domain permissions", () => {
   assert.equal(permissionForRequest("GET", "/api/mechanic/dashboard"), PERMISSION.WORKORDER_MECHANIC);
   assert.equal(permissionForRequest("PATCH", "/api/office/workorders/1"), PERMISSION.WORKORDER_OFFICE);
+  assert.equal(permissionForRequest("GET", "/api/office/invoice-extractions/run-1/source"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("GET", "/api/workorder-drafts"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("POST", "/api/workorder-drafts/1/takeover"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("POST", "/api/integrations/samsara/sync"), PERMISSION.INTEGRATION_ADMIN);

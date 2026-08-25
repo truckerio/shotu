@@ -21,6 +21,8 @@ import { handleWorkorderModulesApi } from "./src/server/routes/workorder-modules
 import { handleHealthRoute } from "./src/server/routes/health.routes.js";
 import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
 import { handleProofreadingApi } from "./src/server/routes/proofreading.routes.js";
+import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extraction.routes.js";
+import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { handleOdooIntegrationApi } from "./src/server/integrations/odoo/odoo.routes.js";
 import {
   isServiceIntegrationPath,
@@ -131,6 +133,7 @@ function requestBodyLimit(req) {
   const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
   if (pathname === "/api/upload") return 75_000_000;
   if (pathname.endsWith("/messages")) return 12_000_000;
+  if (pathname === "/api/office/invoice-extractions") return 14_200_000;
   return 1_000_000;
 }
 
@@ -680,7 +683,10 @@ async function serveStatic(req, res) {
 
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const rateLimit = sensitiveRouteRateLimiter.check(req, url, { trustedIpHeaders });
+  const deferInvoiceRateLimit = req.method === "POST" && url.pathname === "/api/office/invoice-extractions";
+  const rateLimit = deferInvoiceRateLimit
+    ? { policy: null, result: null }
+    : sensitiveRouteRateLimiter.check(req, url, { trustedIpHeaders });
   applyRateLimitHeaders(res, rateLimit.result);
 
   if (await handleAuthApi(req, res, url)) return;
@@ -715,6 +721,13 @@ async function handleApi(req, res) {
     requestContext = await resolveRequestContext(req);
     requirePermission(requestContext, requiredPermission);
   }
+  if (deferInvoiceRateLimit) {
+    const actorRateLimit = sensitiveRouteRateLimiter.check(req, url, {
+      actorId: requestContext?.actor?.id,
+      trustedIpHeaders,
+    });
+    applyRateLimitHeaders(res, actorRateLimit.result);
+  }
 
   const helpers = {
     sendJson,
@@ -730,6 +743,7 @@ async function handleApi(req, res) {
   if (await handleIntegrationsApi(req, res, url, helpers)) return;
   if (await handleMechanicApi(req, res, url, helpers)) return;
   if (await handleOfficeApi(req, res, url, helpers)) return;
+  if (await handleInvoiceExtractionApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
   if (await handleWorkorderModulesApi(req, res, url, helpers)) return;
   if (await handlePartsHelperApi(req, res, url, helpers)) return;
@@ -895,6 +909,7 @@ server.listen(port, process.env.HOST || "0.0.0.0", () => {
   console.log(`Workorder generator running at http://localhost:${port}`);
   startIntegrationWorker();
   startSamsaraAutoSync();
+  startInvoiceRetention();
 });
 
 installGracefulShutdown(server, {
@@ -902,5 +917,6 @@ installGracefulShutdown(server, {
   stopBackgroundJobs: () => {
     stopSamsaraAutoSync();
     stopIntegrationWorker();
+    stopInvoiceRetention();
   },
 });

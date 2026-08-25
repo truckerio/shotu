@@ -264,6 +264,36 @@
   overflow-wrap: anywhere;
 }
 
+.workorder-timeline-details {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.workorder-timeline-details > div {
+  display: grid;
+  gap: 2px;
+}
+
+.workorder-timeline-details dt {
+  color: var(--text, #172033);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.workorder-timeline-details dd,
+.workorder-timeline-note {
+  color: var(--muted, #4b5568);
+  font-size: .88rem;
+  margin: 0;
+}
+
+.workorder-timeline-note {
+  font-size: .8rem;
+  font-style: italic;
+  margin-top: 8px;
+}
+
 .workorder-timeline-children {
   display: grid;
   gap: 0;

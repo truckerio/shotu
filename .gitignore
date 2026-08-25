@@ -5,6 +5,8 @@
 .DS_Store
 *.log
 node_modules/
+__pycache__/
+*.py[cod]
 frontend/dist/
 data/
 printed-workorders/
@@ -12,6 +14,7 @@ uploaded-workorders/
 share-packages/
 .playwright-mcp/
 .tmp/
+.local-secrets/
 *.png
 !frontend/public/samsara-logo.png
 ui-preview.png

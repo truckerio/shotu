@@ -16,6 +16,10 @@ test("unit history stays inside the Unit module as native progressive disclosure
   assert.doesNotMatch(panel, /View history|Hide history/);
   assert.doesNotMatch(panel, /aria-controls="unit-service-history-list"/);
   assert.match(panel, /Show more/);
+  assert.match(panel, /import \{ WorkorderTimelineList \} from "\.\.\/\.\.\/\.\.\/components\/workorders\/WorkorderTimeline\.jsx"/);
+  assert.match(panel, /<WorkorderTimelineList items=\{history\.items\.map\(serviceRecordTimelineItem\)\}/);
+  assert.doesNotMatch(panel, /unit-service-history-record(?:s|-heading)?/);
+  assert.doesNotMatch(css, /unit-service-history-record(?:s|-heading)?/);
   assert.match(panel, /open=\{expanded\}/);
   assert.match(panel, /onToggle=\{\(event\) => setExpanded\(event\.currentTarget\.open\)\}/);
   assert.match(panel, /actorRole === "admin"/);

@@ -15,8 +15,8 @@ function actorRoleLabel(role) {
   return normalized.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function TimelineMeta({ actorName, actorRole, createdAt, event = {} }) {
-  const role = actorRoleLabel(actorRole);
+function TimelineMeta({ actorLabel, actorName, actorRole, createdAt, dateText, event = {} }) {
+  const role = actorLabel || actorRoleLabel(actorRole);
   const fallbackActorName = event.changed_by_name || "System";
   return (
     <span className="workorder-timeline-date">
@@ -24,9 +24,44 @@ function TimelineMeta({ actorName, actorRole, createdAt, event = {} }) {
       {role ? <span className="workorder-timeline-role">{role}</span> : null}
       <span aria-hidden="true">·</span>
       {createdAt ? (
-        <time dateTime={createdAt}>{formatCreatedAt(createdAt)}</time>
+        <time dateTime={createdAt}>{dateText || formatCreatedAt(createdAt)}</time>
       ) : <span>Time unavailable</span>}
     </span>
+  );
+}
+
+export function WorkorderTimelineList({ emptyMessage = "No activity yet.", items }) {
+  if (!items.length) return <p className="chat-empty">{emptyMessage}</p>;
+
+  return (
+    <ol className="workorder-timeline-list">
+      {items.map((item) => (
+        <li key={item.id} className={item.className || ""}>
+          <TimelineMeta
+            actorLabel={item.actorLabel}
+            actorName={item.actorName}
+            actorRole={item.actorRole}
+            createdAt={item.createdAt}
+            dateText={item.dateText}
+            event={item.event}
+          />
+          <span className="workorder-timeline-marker" aria-hidden="true" />
+          <div className="workorder-timeline-event">
+            <div className="workorder-timeline-event-heading">
+              <strong>{item.title}</strong>
+              {item.action || null}
+            </div>
+            {item.description ? <span className="workorder-timeline-description">{item.description}</span> : null}
+            {item.details?.length ? (
+              <dl className="workorder-timeline-details">
+                {item.details.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+              </dl>
+            ) : null}
+            {item.content || null}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -34,7 +69,6 @@ export function WorkorderTimeline({ timeline }) {
   const timelineId = useId();
   const groups = groupTimelineEvents(timeline);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
-  if (!groups.length) return <p className="chat-empty">No activity yet.</p>;
 
   function toggleGroup(groupId) {
     setExpandedGroups((current) => {
@@ -45,25 +79,20 @@ export function WorkorderTimeline({ timeline }) {
     });
   }
 
-  return (
-    <ol className="workorder-timeline-list">
-      {groups.map((group, index) => {
+  const items = groups.map((group, index) => {
         const expandable = group.childCount > 1;
         const expanded = expandable && expandedGroups.has(group.id);
         const childrenId = `${timelineId}-group-${index}`;
-        return (
-        <li key={group.id} className={expandable ? "has-children" : ""}>
-          <TimelineMeta
-            actorName={group.actorName}
-            actorRole={group.actorRole}
-            createdAt={group.createdAt}
-            event={group.children[group.children.length - 1]}
-          />
-          <span className="workorder-timeline-marker" aria-hidden="true" />
-          <div className="workorder-timeline-event">
-            <div className="workorder-timeline-event-heading">
-              <strong>{group.title}</strong>
-              {expandable ? (
+        return {
+          id: group.id,
+          className: expandable ? "has-children" : "",
+          actorName: group.actorName,
+          actorRole: group.actorRole,
+          createdAt: group.createdAt,
+          event: group.children[group.children.length - 1],
+          title: group.title,
+          description: group.description,
+          action: expandable ? (
                 <button
                   className="workorder-timeline-toggle"
                   type="button"
@@ -74,10 +103,8 @@ export function WorkorderTimeline({ timeline }) {
                   <span>{group.childCount} changes</span>
                   <ChevronDown aria-hidden="true" />
                 </button>
-              ) : null}
-            </div>
-            <span className="workorder-timeline-description">{group.description}</span>
-            {expandable && expanded ? (
+              ) : null,
+          content: expandable && expanded ? (
               <ol className="workorder-timeline-children" id={childrenId} aria-label={`${group.title} changes`}>
                 {group.children.map((event, childIndex) => (
                   <li key={`${event.type}-${event.id ?? childIndex}`}>
@@ -89,13 +116,11 @@ export function WorkorderTimeline({ timeline }) {
                   </li>
                 ))}
               </ol>
-            ) : null}
-          </div>
-        </li>
-        );
-      })}
-    </ol>
-  );
+            ) : null,
+        };
+      });
+
+  return <WorkorderTimelineList items={items} />;
 }
 
 export function WorkorderTimelinePanel({ timeline, participants = [], className = "" }) {

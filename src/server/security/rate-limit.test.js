@@ -56,12 +56,15 @@ test("sensitive route classification limits mutations and expensive OAuth start"
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/integrations/samsara/oauth/start"), "integration");
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/integrations/samsara/status"), null);
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/auth/kiosk/unlock"), "kiosk");
+  assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/invoice-extractions"), "invoice");
+  assert.equal(sensitiveRateLimitPolicy("GET", "/api/office/invoice-extractions/run-1"), null);
 });
 
 test("auth limiter gives users a short typo-friendly retry window", () => {
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.auth.limit, 20);
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.auth.windowMs, 60_000);
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.kiosk.limit, 10);
+  assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.invoice.limit, 10);
 });
 
 test("sensitive guard uses independent policies and throws a stable 429 error", () => {
