@@ -50,3 +50,35 @@ test("production rejects an insecure non-loopback OCR endpoint", async () => {
     config: { ocrBaseUrl: "http://ocr.internal", ocrTimeoutMs: 30_000, ocrMaxConcurrent: 1, ocrToken: "" },
   }), (error) => error.code === "ocr_not_configured");
 });
+
+test("production allows authenticated OCR over Railway private networking", async () => {
+  let requestedUrl;
+  const result = await extractInvoiceWithLocalOcr({ bytes: Buffer.from("safe"), mimeType: "image/png" }, {
+    production: true,
+    config: {
+      ocrBaseUrl: "http://invoice-ocr.railway.internal:8091",
+      ocrTimeoutMs: 30_000,
+      ocrMaxConcurrent: 1,
+      ocrToken: "private-service-token",
+    },
+    fetchFn: async (url) => {
+      requestedUrl = url;
+      return { ok: true, status: 200, json: async () => response() };
+    },
+  });
+
+  assert.equal(requestedUrl, "http://invoice-ocr.railway.internal:8091/v1/ocr");
+  assert.equal(result.provider, "paddleocr");
+});
+
+test("production rejects unauthenticated Railway private OCR", async () => {
+  await assert.rejects(() => extractInvoiceWithLocalOcr({ bytes: Buffer.from("safe"), mimeType: "image/png" }, {
+    production: true,
+    config: {
+      ocrBaseUrl: "http://invoice-ocr.railway.internal:8091",
+      ocrTimeoutMs: 30_000,
+      ocrMaxConcurrent: 1,
+      ocrToken: "",
+    },
+  }), (error) => error.code === "ocr_not_configured");
+});

@@ -25,7 +25,10 @@ const ocrResponseSchema = z.object({
   durationMs: z.number().int().min(0).max(600_000),
 }).strict();
 
-function validatedBaseUrl(value, { production = process.env.NODE_ENV === "production" } = {}) {
+function validatedBaseUrl(value, {
+  production = process.env.NODE_ENV === "production",
+  token = invoiceExtractionConfig.ocrToken,
+} = {}) {
   let parsed;
   try {
     parsed = new URL(String(value || ""));
@@ -42,7 +45,8 @@ function validatedBaseUrl(value, { production = process.env.NODE_ENV === "produc
     });
   }
   const isLoopback = ["127.0.0.1", "localhost", "::1"].includes(parsed.hostname);
-  if (production && parsed.protocol !== "https:" && !isLoopback) {
+  const isAuthenticatedRailwayPrivate = parsed.hostname.endsWith(".railway.internal") && Boolean(String(token || "").trim());
+  if (production && parsed.protocol !== "https:" && !isLoopback && !isAuthenticatedRailwayPrivate) {
     throw new InvoiceExtractionError("Local invoice OCR requires a secure endpoint.", {
       code: "ocr_not_configured",
       statusCode: 503,
@@ -62,7 +66,10 @@ export function ocrObservation(result, { pageNumber = 1 } = {}) {
 export async function extractInvoiceWithLocalOcr(input, options = {}) {
   const config = options.config || invoiceExtractionConfig;
   const fetchFn = options.fetchFn || fetch;
-  const baseUrl = validatedBaseUrl(config.ocrBaseUrl, { production: options.production });
+  const baseUrl = validatedBaseUrl(config.ocrBaseUrl, {
+    production: options.production,
+    token: config.ocrToken,
+  });
   const timeoutMs = Math.min(120_000, Math.max(5_000, Number(options.timeoutMs || config.ocrTimeoutMs) || 60_000));
   const maxConcurrent = Math.min(4, Math.max(1, Number(config.ocrMaxConcurrent) || 1));
   if (activeOcrRequests >= maxConcurrent) {
