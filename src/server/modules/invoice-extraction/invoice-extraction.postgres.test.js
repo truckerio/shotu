@@ -7,6 +7,7 @@ import {
   deleteExpiredInvoiceSources,
   getInvoiceExtractionRun,
   getInvoiceSourceDocument,
+  loadInvoiceExtractionMemory,
   loadInvoiceLayoutTemplates,
   reviewInvoiceExtractionRun,
 } from "../../db/repositories/invoice-extractions.repo.js";
@@ -155,6 +156,39 @@ test("real PostgreSQL serializes reviews, preserves replay idempotency, and hide
       [companyA, runId],
     );
     assert.deepEqual(counts.rows[0], { corrections: 1, approved_facts: 1, training_examples: 1, layout_templates: 1 });
+    const learnedMemory = await loadInvoiceExtractionMemory({ companyId: companyA, vendorKey: "fleetpride" });
+    assert.equal(learnedMemory.trainingExamples.length, 1);
+    assert.equal(learnedMemory.trainingExamples[0].corrections[0].fieldPath, "vendorName.value");
+    assert.equal(learnedMemory.trainingExamples[0].corrections[0].reviewedValue, "FleetPride");
+    await query(
+      `insert into invoice_training_examples (
+         company_id, run_id, source_document_id, predicted_draft, gold_draft,
+         quality_metrics, vendor_key, extractor_provider, extractor_model,
+         prompt_version, reviewer_id, status, label_version
+       )
+       select $1, $2, s.id, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, $3,
+              'integration-test', 'integration-test', 'invoice-v1', $4, 'eligible', $5
+       from invoice_source_documents s
+       where s.company_id = $1 and s.run_id = $2`,
+      [companyA, runId, "", actorId, 2],
+    );
+    await query(
+      `insert into invoice_training_examples (
+         company_id, run_id, source_document_id, predicted_draft, gold_draft,
+         quality_metrics, vendor_key, extractor_provider, extractor_model,
+         prompt_version, reviewer_id, status, label_version
+       )
+       select $1, $2, s.id, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, $3,
+              'integration-test', 'integration-test', 'invoice-v1', $4, 'eligible', $5
+       from invoice_source_documents s
+       where s.company_id = $1 and s.run_id = $2`,
+      [companyA, runId, "other-vendor", actorId, 3],
+    );
+    assert.equal((await loadInvoiceExtractionMemory({ companyId: companyA, vendorKey: "" })).trainingExamples.length, 0);
+    assert.equal((await loadInvoiceExtractionMemory({ companyId: companyA, vendorKey: "fleetpride" })).trainingExamples.length, 1);
+    assert.equal((await loadInvoiceExtractionMemory({ companyId: companyA, vendorKey: "other-vendor" })).trainingExamples.length, 1);
+    assert.equal((await loadInvoiceExtractionMemory({ companyId: companyA, vendorKey: "unmatched-vendor" })).trainingExamples.length, 0);
+    assert.equal((await loadInvoiceExtractionMemory({ companyId: companyB, vendorKey: "fleetpride" })).trainingExamples.length, 0);
     const candidateTemplates = await loadInvoiceLayoutTemplates({ companyId: companyA, vendorKey: "fleetpride", statuses: ["candidate"] });
     assert.equal(candidateTemplates.length, 1);
     assert.equal((await loadInvoiceLayoutTemplates({ companyId: companyB, vendorKey: "fleetpride", statuses: ["candidate"] })).length, 0);
@@ -205,7 +239,7 @@ test("real PostgreSQL serializes reviews, preserves replay idempotency, and hide
        from invoice_source_documents s where s.company_id = $1 and s.run_id = $2`,
       [companyA, runId],
     );
-    assert.deepEqual(retainedLineage.rows[0], { training_status: "deleted", payload_erased: true, examples: 1, deletion_events: 1 });
+    assert.deepEqual(retainedLineage.rows[0], { training_status: "deleted", payload_erased: true, examples: 3, deletion_events: 1 });
   } finally {
     if (additionalRunIds.length) await query("delete from invoice_extraction_runs where id = any($1::uuid[])", [additionalRunIds]).catch(() => {});
     if (runId) await query("delete from invoice_extraction_runs where id = $1", [runId]).catch(() => {});

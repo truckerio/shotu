@@ -16,7 +16,7 @@ import { decryptInvoiceDocument, encryptInvoiceDocument } from "./invoice-docume
 import { invoiceExtractionConfig } from "./invoice-extraction.config.js";
 import { assertInvoiceFileExtension, decodeInvoiceDocument, safeInvoiceFileName } from "./invoice-extraction.document.js";
 import { InvoiceExtractionError, invoiceNotFound } from "./invoice-extraction.errors.js";
-import { extractGenericInvoiceDraft, genericDraftHasEvidence } from "./invoice-generic-extractor.js";
+import { extractGenericInvoiceDraft } from "./invoice-generic-extractor.js";
 import {
   correctionEvents,
   extractionNeedsReview,
@@ -44,6 +44,31 @@ async function authorizedLocation(input, requestContext, dependencies) {
   return location;
 }
 
+export function guardPaidBalanceAsInvoiceTotal(draft, tolerance = 0.02) {
+  const rawTotal = draft?.total?.value;
+  const subtotal = Number(draft?.subtotal?.value);
+  const total = Number(rawTotal);
+  const lineTotals = draft?.lines?.map((line) => line?.lineTotal?.value) || [];
+  const hasAllLineTotals = lineTotals.length > 0
+    && lineTotals.every((value) => value !== null && value !== undefined && Number.isFinite(Number(value)));
+  const lineSum = lineTotals.reduce((sum, value) => sum + Number(value || 0), 0);
+  if (!(subtotal > 0 && rawTotal !== null && rawTotal !== undefined && total === 0
+    && hasAllLineTotals && Math.abs(lineSum - subtotal) <= tolerance)) return draft;
+
+  return {
+    ...draft,
+    total: {
+      value: null,
+      confidence: 0,
+      evidence: "Printed zero may be a paid balance rather than the original invoice total; confirm the invoice total.",
+    },
+    warnings: [...new Set([
+      ...(draft.warnings || []),
+      "A paid balance may have been mistaken for the invoice total; confirm the original invoice total.",
+    ])],
+  };
+}
+
 export async function extractInvoice(input, requestContext, dependencies = {}) {
   const parsed = extractInvoiceInputSchema.parse(input);
   const location = await authorizedLocation(parsed, requestContext, dependencies);
@@ -62,7 +87,7 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
   const loadMemory = dependencies.loadMemory || loadInvoiceExtractionMemory;
   const loadTemplates = dependencies.loadTemplates || loadInvoiceLayoutTemplates;
   const [memory, activeTemplates] = await Promise.all([
-    loadMemory({ companyId: location.company_id, vendorKey, factLimit: 20, playbookLimit: 5 }),
+    loadMemory({ companyId: location.company_id, vendorKey, factLimit: 20, playbookLimit: 5, exampleLimit: 3 }),
     loadTemplates({ companyId: location.company_id, vendorKey, statuses: ["active"], limit: 25 }),
   ]);
   const createRun = dependencies.createRun || createInvoiceExtractionRun;
@@ -76,8 +101,10 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
     mimeType: parsed.mimeType,
     byteSize: document.byteSize,
     idempotencyKey: parsed.idempotencyKey,
-    provider: "hybrid_local_first",
-    model: activeTemplates.length ? "paddleocr+learned-layout" : invoiceExtractionConfig.model,
+    provider: invoiceExtractionConfig.openAiApiKey ? "openai" : "hybrid_local_first",
+    model: invoiceExtractionConfig.openAiApiKey
+      ? invoiceExtractionConfig.model
+      : activeTemplates.length ? "paddleocr+learned-layout" : "paddleocr+generic-invoice-v1",
     promptVersion: invoiceExtractionConfig.promptVersion,
     memorySnapshot: memorySnapshot(memory),
     source,
@@ -94,6 +121,7 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
   const startedAt = performance.now();
   try {
     let providerResult = null;
+    let localOcrText = "";
     if (invoiceExtractionConfig.ocrBaseUrl) {
       try {
         const ocr = await (dependencies.extractWithOcr || extractInvoiceWithLocalOcr)({
@@ -101,12 +129,13 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
           mimeType: parsed.mimeType,
           fileName,
         }, dependencies.ocrOptions || {});
+        localOcrText = ocr.text;
         const observation = ocrObservation(ocr);
         const matches = activeTemplates
           .map((template) => ({ template, match: matchInvoiceTemplate(observation, template.template_payload) }))
           .filter(({ match }) => match.matched)
           .sort((left, right) => right.match.score - left.match.score);
-        if (matches[0]) {
+        if (matches[0] && !invoiceExtractionConfig.openAiApiKey) {
           const localDraft = buildInvoiceDraftFromTemplate({ observation, template: matches[0].template.template_payload });
           if (localTemplateDraftIsUsable(localDraft)) {
             providerResult = {
@@ -120,7 +149,7 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
         }
         if (!providerResult) {
           const genericDraft = extractGenericInvoiceDraft({ observation, ocrText: ocr.text });
-          if (genericDraftHasEvidence(genericDraft) || !invoiceExtractionConfig.openAiApiKey) {
+          if (!invoiceExtractionConfig.openAiApiKey) {
             providerResult = {
               draft: genericDraft,
               provider: "local_generic",
@@ -138,7 +167,7 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
       const openAiResult = await (dependencies.extractWithProvider || extractInvoiceWithOpenAI)({
         ...parsed,
         fileName,
-      }, memory, dependencies.providerOptions || {});
+      }, { ...memory, localOcrText }, dependencies.providerOptions || {});
       providerResult = {
         ...(openAiResult.draft ? openAiResult : { draft: openAiResult }),
         provider: "openai",
@@ -146,7 +175,7 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
         promptVersion: invoiceExtractionConfig.promptVersion,
       };
     }
-    const draft = providerResult.draft || providerResult;
+    const draft = guardPaidBalanceAsInvoiceTotal(providerResult.draft || providerResult);
     const warnings = [...new Set([...draft.warnings, ...reconciliationWarnings(draft)])];
     const finalDraft = { ...draft, warnings };
     const status = extractionNeedsReview(finalDraft) ? "needs_review" : "completed";

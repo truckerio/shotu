@@ -11,6 +11,8 @@ The app is built for four roles:
 - Office/Manager: creates workorders, assigns mechanics, reviews work, handles parts, and closes workorders.
 - Mechanic: sees assigned/open/active jobs, joins work, creates workorders, records repair progress, requests parts, chats with office, and finishes work.
 - Surveillance: reviews completed/closed workorders and tracks Odoo entry/backlog.
+- Office: can also review encrypted invoice-extraction drafts; receipt creation
+  remains a separate explicit inventory operation.
 
 GitHub: [truckerio/shotu](https://github.com/truckerio/shotu)
 
@@ -143,6 +145,8 @@ Frontend:
 - `frontend/src/features/workorder-detail` - shared workorder detail page behavior.
 - `frontend/src/features/mechanic` - mechanic home and mechanic-specific work/progress UI.
 - `frontend/src/features/office` - office queue/home UI.
+- `frontend/src/features/inventory` - authenticated inventory scan surface for
+  confirmed serialized receipt units.
 - `frontend/src/features/admin` - admin locations/users/templates/settings/integrations.
 - `frontend/src/features/surveillance` - completed/Odoo review flow.
 - `frontend/src/features/workorder-modules` - V2.0 frontend module filtering
@@ -163,6 +167,10 @@ Backend:
 - `src/server/integrations/odoo` - Odoo machine API, Admin-managed Odoo.sh
   connection, product/service-history import, outbound vehicle/warehouse/labor
   mapping, draft service-order creation, and inventory synchronization.
+- `src/server/modules/invoice-extraction` - encrypted invoice source handling,
+  provider adapters, reviewed drafts, correction history, and governed learning.
+- `src/server/modules/inventory` - confirmed serialized-invoice receipt,
+  provider-command reconciliation, QR labels, and scan resolution.
 - `src/server/services` - cross-domain services.
 - `src/server/print` - print/PDF behavior.
 - `src/server/security` - origin/rate-limit/security checks.
@@ -241,6 +249,12 @@ Attention signals are separate from lifecycle:
 - Print/preview workorder template.
 - Surveillance completed/Odoo flow, including readiness blockers, explicit
   draft Odoo service-order creation, and stored created-order tracking.
+- Office invoice extraction/review with encrypted source retention,
+  confidence/evidence, optimistic review, and explicit learning opt-in.
+- Narrow serialized inventory receipt slice: a reviewed invoice can drive an
+  idempotent Odoo receipt; confirmed units receive encrypted QR labels and can
+  be resolved under company/location access. This is not a general warehouse
+  workflow.
 
 ## Good First Files To Read
 
@@ -259,11 +273,11 @@ Attention signals are separate from lifecycle:
 - `src/server/routes/admin.routes.js`
 - `src/server/db/repositories/operational-workorders.repo.js`
 
-## Current Verification Baseline
+## Verification Baseline
 
-As of 2026-08-02, the combined checkout passed `npm run verify` with 609
-focused tests, the four-viewport CSS ownership harness, the complete Admin to
-Surveillance role workflow with authorization boundaries, and all three
-Chino-scale performance gates. Exact measurements and the distinction between
-local evidence and production telemetry are documented in
-`docs/PERFORMANCE_BASELINE.md`.
+Historical verification results are not a release guarantee for the current
+checkout. Run `npm run verify` against the exact revision, then run the
+additional shared-route/layout checks in `README.md` when applicable. Keep
+production evidence separate from local test evidence. The inventory living
+record contains the released receipt slice’s specific evidence and remaining
+production gaps; `docs/PERFORMANCE_BASELINE.md` contains performance evidence.

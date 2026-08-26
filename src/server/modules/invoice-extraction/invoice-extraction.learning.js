@@ -7,9 +7,15 @@ const REQUIRED_CONFIDENCE_PATHS = [
 
 export function reconciliationWarnings(draft, tolerance = 0.02) {
   const warnings = [];
-  const lineTotal = draft.lines.reduce((sum, line) => sum + (Number(line.lineTotal.value) || 0), 0);
+  const lineTotals = draft.lines.map((line) => line.lineTotal.value);
+  const missingLineTotals = lineTotals.some((value) => value === null || value === undefined);
+  const lineTotal = lineTotals.reduce((sum, value) => sum + (Number(value) || 0), 0);
   const subtotal = draft.subtotal.value;
-  if (subtotal !== null && Math.abs(lineTotal - subtotal) > tolerance) {
+  if (subtotal !== null && !lineTotals.length) {
+    warnings.push("No line totals were extracted; compare the invoice lines to subtotal.");
+  } else if (subtotal !== null && missingLineTotals) {
+    warnings.push("Some line totals were not extracted; compare the invoice lines to subtotal.");
+  } else if (subtotal !== null && Math.abs(lineTotal - subtotal) > tolerance) {
     warnings.push("Line totals do not reconcile to subtotal.");
   }
   const components = [draft.subtotal.value, draft.tax.value, draft.shipping.value];
@@ -101,5 +107,9 @@ export function memorySnapshot(memory) {
   return {
     semanticFacts: memory.semanticFacts.map(({ id, version }) => ({ id, version })),
     playbooks: memory.playbooks.map(({ id, version }) => ({ id, version })),
+    trainingExamples: (memory.trainingExamples || []).map(({ id, label_version: labelVersion, labelVersion: camelLabelVersion }) => ({
+      id,
+      labelVersion: Number(labelVersion ?? camelLabelVersion ?? 1),
+    })),
   };
 }

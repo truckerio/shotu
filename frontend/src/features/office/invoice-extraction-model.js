@@ -4,7 +4,7 @@ export const INVOICE_HEADER_FIELDS = Object.freeze([
   ["vendorAccount", "Vendor account", "text"],
   ["invoiceNumber", "Invoice number", "text"],
   ["invoiceDate", "Invoice date", "text"],
-  ["purchaseOrderNumber", "Purchase order", "text"],
+  ["purchaseOrderNumber", "PO number", "text", { optional: true, secondary: true }],
   ["currency", "Currency", "text"],
   ["subtotal", "Subtotal", "number"],
   ["tax", "Tax", "number"],
@@ -71,6 +71,18 @@ export function addBlankInvoiceLine(draft, lineId) {
 
 export function confidenceState(confidence, threshold = 90) {
   return Number(confidence) < threshold ? "Review" : "Confident";
+}
+
+export function invoiceFieldNeedsReview(field, { optional = false } = {}, threshold = 90) {
+  if (optional && !String(field?.value ?? "").trim()) return false;
+  return Number(field?.confidence) < threshold;
+}
+
+export function invoiceReviewErrorMessage(error) {
+  const issues = Array.isArray(error?.details?.issues) ? error.details.issues : [];
+  const messages = [...new Set(issues.map((issue) => String(issue?.message || "").trim()).filter(Boolean))];
+  if (error?.code === "validation_error" && messages.length) return messages.join(" ");
+  return error?.message || "The invoice review could not be saved.";
 }
 
 export function parseReviewNumber(value) {

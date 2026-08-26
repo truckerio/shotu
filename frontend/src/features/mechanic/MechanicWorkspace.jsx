@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, Plus, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
-import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
+import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
+import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
-import { Button } from "../../components/ui/Button.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
@@ -138,7 +137,16 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} className="role-home-account-header" />
       <div className="mechanic-home-content">
-        <PageHeader title={t("mechanic.workorders")} />
+        <PageHeader
+          title={t("mechanic.workorders")}
+          actions={(
+            <WorkspaceCreateActions
+              actor={actor}
+              onCreateWorkorder={onCreateWorkorder}
+              createLabel={t("mechanic.createWorkorder")}
+            />
+          )}
+        />
 
         {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
         <section className="mechanic-queue-shell" aria-label="Mechanic work">
@@ -149,11 +157,6 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
             <div className="mechanic-phone-queues">
               <WorkorderQueueTabs tabs={phonePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
             </div>
-            {onCreateWorkorder ? (
-              <Button className="mechanic-primary-create" type="button" variant="primary" icon={Plus} onClick={onCreateWorkorder}>
-                {t("mechanic.createWorkorder")}
-              </Button>
-            ) : null}
           </div>
 
           <section className="mechanic-visible-tools" aria-label="Search and filters">
@@ -243,7 +246,6 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
               <section className="mechanic-secondary-tools" aria-label="Account controls">
                 <div className="mechanic-secondary-actions">
                   <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
-                  <ProfileMenu actor={actor} mobileAction />
                 </div>
               </section>
             </div>

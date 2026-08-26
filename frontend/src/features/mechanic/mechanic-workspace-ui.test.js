@@ -14,17 +14,19 @@ test("desktop mechanic home exposes one next-job action and visible queue tools"
   assert.match(css, /\.mechanic-home-more[\s\S]*display:\s*none/);
 });
 
-test("create workorder stays visible with primary mechanic queues instead of More", () => {
+test("create workorder stays visible in the shared page actions instead of More", () => {
+  const pageHeader = workspace.indexOf("<PageHeader");
+  const createAction = workspace.indexOf("<WorkspaceCreateActions");
   const primaryStart = workspace.indexOf('className="mechanic-primary-queues"');
-  const createAction = workspace.indexOf('className="mechanic-primary-create"');
   const moreStart = workspace.indexOf('className="mechanic-home-more"');
 
+  assert.ok(pageHeader >= 0);
+  assert.ok(createAction > pageHeader);
+  assert.ok(createAction < primaryStart);
   assert.ok(primaryStart >= 0);
-  assert.ok(createAction > primaryStart);
   assert.ok(createAction < moreStart);
   assert.equal(workspace.slice(moreStart).includes("mechanic.createWorkorder"), false);
-  assert.match(css, /\.mechanic-primary-create[\s\S]*white-space:\s*nowrap/);
-  assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mechanic-primary-create[\s\S]*width:\s*100%/);
+  assert.match(workspace, /actor=\{actor\}[\s\S]*onCreateWorkorder=\{onCreateWorkorder\}[\s\S]*createLabel=\{t\("mechanic\.createWorkorder"\)\}/);
 });
 
 test("phone mechanic home shows three important queues and keeps secondary queues in More", () => {

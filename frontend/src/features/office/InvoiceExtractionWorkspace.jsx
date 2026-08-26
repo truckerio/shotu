@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle, File02, Printer, QrCode01, RefreshCw01, Trash01, UploadCloud02 } from "@untitledui/icons";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { CheckCircle, File02, Printer, QrCode01, RefreshCw01, Trash01, UploadCloud02 } from "@untitledui/icons";
 import { FormField, OptionalSection } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
+import { InvoiceDocumentViewer } from "./InvoiceDocumentViewer.jsx";
 import {
   confidenceState,
+  invoiceFieldNeedsReview,
+  invoiceReviewErrorMessage,
   addBlankInvoiceLine,
   INVOICE_HEADER_FIELDS,
   parseReviewNumber,
@@ -18,6 +21,7 @@ import "./invoice-extraction.css";
 const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_BATCH_FILES = 10;
+const STATUS_DISMISS_MS = 1_500;
 
 function readFileDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -32,36 +36,47 @@ function LoadingRefreshIcon(props) {
   return <RefreshCw01 {...props} className="loading-icon" />;
 }
 
-function Confidence({ field }) {
+function Confidence({ field, optional = false }) {
+  const blankOptional = optional && !String(field.value ?? "").trim();
+  if (blankOptional) return <span className="invoice-confidence is-optional" title={field.evidence}>Not provided</span>;
   const state = confidenceState(field.confidence);
   return (
     <span className={`invoice-confidence is-${state.toLowerCase()}`} title={field.evidence}>
-      {state === "Review" ? <AlertCircle /> : <CheckCircle />}
       {state} · {field.confidence}%
     </span>
   );
 }
 
-function Field({ fieldName, label, type, draft, onChange }) {
+function Field({ fieldName, label, type, draft, onChange, options = {} }) {
   const field = draft[fieldName];
+  const inputId = useId();
+  const needsReview = invoiceFieldNeedsReview(field, options);
   return (
-    <label className={`invoice-field${field.confidence < 90 ? " needs-review" : ""}`}>
-      <span>{label}</span>
+    <div className={`invoice-field${needsReview ? " needs-review" : ""}`}>
+      <div className="invoice-field-heading">
+        <label htmlFor={inputId}>{label}{options.optional ? <span>Optional</span> : null}</label>
+        <div className="invoice-field-meta">
+          <Confidence field={field} optional={options.optional} />
+          <details className="invoice-field-evidence">
+            <summary aria-label={`Show extraction evidence for ${label}`} title="Extraction evidence">i</summary>
+            <small>{field.evidence || "No visible evidence supplied."}</small>
+          </details>
+        </div>
+      </div>
       {type === "select" ? (
-        <select value={field.value} onChange={(event) => onChange(fieldName, event.target.value)}>
+        <select id={inputId} value={field.value} onChange={(event) => onChange(fieldName, event.target.value)}>
           <option value="invoice">Invoice</option><option value="credit_memo">Credit memo</option><option value="unknown">Unknown</option>
         </select>
       ) : (
         <input
+          id={inputId}
           type={type}
           step={type === "number" ? "0.01" : undefined}
           value={field.value ?? ""}
           onChange={(event) => onChange(fieldName, type === "number" ? parseReviewNumber(event.target.value) : event.target.value)}
         />
       )}
-      <Confidence field={field} />
-      <small>{field.evidence || "No visible evidence supplied."}</small>
-    </label>
+    </div>
   );
 }
 
@@ -122,12 +137,20 @@ export function InvoiceExtractionWorkspace() {
     return () => URL.revokeObjectURL(nextUrl);
   }, [batchIndex, batchRuns, uploads]);
 
+  useEffect(() => {
+    if (!message || busy) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), STATUS_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [busy, message]);
+
   const reviewCount = useMemo(() => {
     if (!draft) return 0;
     return [
-      ...INVOICE_HEADER_FIELDS.map(([name]) => draft[name]),
+      ...INVOICE_HEADER_FIELDS.map(([name, , , options]) => ({ field: draft[name], options })),
       ...draft.lines.flatMap((line) => [line.partNumber, line.description, line.quantity, line.unitOfMeasure, line.unitPrice, line.lineTotal]),
-    ].filter((field) => field.confidence < 90).length;
+    ].filter((candidate) => candidate?.field
+      ? invoiceFieldNeedsReview(candidate.field, candidate.options)
+      : Number(candidate?.confidence) < 90).length;
   }, [draft]);
   const displayedPreviewUrl = previewUrl || (run?.sourceAvailable
     ? `/api/office/invoice-extractions/${encodeURIComponent(run.id)}/source`
@@ -205,7 +228,7 @@ export function InvoiceExtractionWorkspace() {
       try {
         const result = await api("/api/office/invoice-extractions", {
           method: "POST",
-          timeoutMs: 70_000,
+          timeoutMs: 195_000,
           body: JSON.stringify({
             locationId,
             fileName: upload.file.name,
@@ -269,11 +292,11 @@ export function InvoiceExtractionWorkspace() {
         setDraft(result.run.draft);
         rememberRun(result.run.id);
         setMessage(approveLearning
-          ? `Reviewed invoice saved with ${result.correctionCount} correction${result.correctionCount === 1 ? "" : "s"}. One encrypted training example is ready; inventory was not changed.`
-          : `Reviewed invoice saved with ${result.correctionCount} correction${result.correctionCount === 1 ? "" : "s"}. It was excluded from model training; inventory was not changed.`);
+          ? `Reviewed invoice saved with ${result.correctionCount} correction${result.correctionCount === 1 ? "" : "s"}. Your approved example can guide future OpenAI extraction; inventory was not changed.`
+          : `Reviewed invoice saved with ${result.correctionCount} correction${result.correctionCount === 1 ? "" : "s"}. It was excluded from learning; inventory was not changed.`);
       }
     } catch (nextError) {
-      setError(nextError.message);
+      setError(invoiceReviewErrorMessage(nextError));
       setMessage("");
     } finally {
       setBusy("");
@@ -343,19 +366,17 @@ export function InvoiceExtractionWorkspace() {
           </section>
         ) : null}
         {draft.warnings.length ? <div className="invoice-warning" role="alert"><strong>Check totals and document quality</strong>{draft.warnings.map((warning) => <span key={warning}>{warning}</span>)}</div> : null}
-        <div className={`invoice-review-layout${displayedPreviewUrl ? " has-preview" : ""}`}>
-          {displayedPreviewUrl ? (
-            <aside className="invoice-source-preview" aria-label="Uploaded invoice preview">
-              <div><strong>Original invoice</strong><span>Compare every highlighted value</span></div>
-              {(activeFile?.type || run.mimeType) === "application/pdf"
-                ? <object data={displayedPreviewUrl} type="application/pdf"><a href={displayedPreviewUrl} target="_blank" rel="noreferrer">Open the uploaded PDF</a></object>
-                : <img src={displayedPreviewUrl} alt="Uploaded invoice for comparison" />}
-            </aside>
-          ) : null}
+        <div className="invoice-review-layout">
+          <InvoiceDocumentViewer sourceUrl={displayedPreviewUrl} mimeType={activeFile?.type || run.mimeType} fileName={run.fileName} />
           <div className="invoice-review-form">
             <div className="invoice-fields-grid">
-              {INVOICE_HEADER_FIELDS.map(([name, label, type]) => <Field key={name} fieldName={name} label={label} type={type} draft={draft} onChange={updateHeader} />)}
+              {INVOICE_HEADER_FIELDS.filter(([, , , options]) => !options?.secondary).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} />)}
             </div>
+            <OptionalSection className="invoice-optional-review" title="Additional details" description="PO number only if your company gave one to the seller.">
+              <div className="invoice-fields-grid invoice-secondary-fields">
+                {INVOICE_HEADER_FIELDS.filter(([, , , options]) => options?.secondary).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} />)}
+              </div>
+            </OptionalSection>
             <div className="invoice-lines-heading"><div><h3>Invoice lines</h3><span>{draft.lines.length} extracted</span></div><Button type="button" onClick={() => { reviewKeyRef.current = ""; setDraft((current) => addBlankInvoiceLine(current, `manual-${crypto.randomUUID()}`)); }}>Add missing line</Button></div>
             <div className="invoice-lines">
               {draft.lines.map((line, index) => (
@@ -374,7 +395,7 @@ export function InvoiceExtractionWorkspace() {
         </div>
         <footer className="invoice-review-actions">
           <div>
-            <label className="invoice-learning-choice"><input type="checkbox" checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setApproveLearning(event.target.checked); }} /><span>Save this reviewed invoice as training data for our future local extractor</span></label>
+            <label className="invoice-learning-choice"><input type="checkbox" checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setApproveLearning(event.target.checked); }} /><span>Use this reviewed invoice and its corrections for future OpenAI extraction context and governed local extraction learning</span></label>
             <p>Approval saves the reviewed draft. It does not receive parts or change Odoo.</p>
           </div>
           {run.status === "reviewed" ? (

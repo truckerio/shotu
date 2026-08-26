@@ -35,6 +35,6 @@ test("part request refresh preserves unsaved mechanic progress", () => {
   );
 });
 
-test("mechanic phone More tools retain access to the shared profile menu", () => {
-  assert.match(mechanicWorkspace, /<ProfileMenu actor=\{actor\} mobileAction \/>/);
+test("mechanic phone header retains access to the shared create and profile owner", () => {
+  assert.match(mechanicWorkspace, /<WorkspaceCreateActions[\s\S]*actor=\{actor\}[\s\S]*onCreateWorkorder=\{onCreateWorkorder\}/);
 });

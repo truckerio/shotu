@@ -54,6 +54,8 @@ coverage; a production build alone does not prove those paths execute.
 - Admin shell and data orchestration: `frontend/src/features/admin/AdminWorkspace.jsx`
 - Admin pages and dialogs: `frontend/src/features/admin/workspace/`
 - Office queues: `frontend/src/features/office/`
+- Invoice extraction/review and its source viewer: `frontend/src/features/office/InvoiceExtractionWorkspace.jsx`, `InvoiceDocumentViewer.jsx`, and their colocated model/CSS/test files.
+- Confirmed inventory scan surface: `frontend/src/features/inventory/InventoryScanWorkspace.jsx` and `inventory-scan.css`.
 - Office detail mutations and autosave: `frontend/src/features/office/useOfficeWorkorderActions.js`
 - Mechanic queues and mechanic-only behavior: `frontend/src/features/mechanic/`
 - Mechanic detail lifecycle, chat, and navigation actions: `frontend/src/features/mechanic/useMechanicWorkorderActions.js`

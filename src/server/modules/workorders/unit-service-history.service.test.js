@@ -35,6 +35,7 @@ test("unit history authorizes Unit read before deriving tenant and exact asset f
       calls.push(["authorize", ...args]);
       return { workorder };
     },
+    now: new Date("2026-08-24T12:00:00.000Z"),
     readSyncState: async (...args) => {
       calls.push(["sync", ...args]);
       return { lastSucceededAt: "2026-08-24T10:00:00.000Z" };

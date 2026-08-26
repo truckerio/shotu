@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   addBlankInvoiceLine,
   confidenceState,
+  invoiceFieldNeedsReview,
+  invoiceReviewErrorMessage,
   parseReviewNumber,
   removeInvoiceLine,
   updateInvoiceField,
@@ -30,6 +32,23 @@ test("review model preserves low-confidence text, nullable numbers, and stable l
   assert.equal(added.lines[1].id, "manual-1");
   assert.equal(added.lines[1].partNumber.confidence, 0);
   assert.match(added.lines[1].partNumber.evidence, /enter a value/i);
+});
+
+test("blank optional invoice fields do not create false review work", () => {
+  assert.equal(invoiceFieldNeedsReview(field("", 0), { optional: true }), false);
+  assert.equal(invoiceFieldNeedsReview(field("PO-9", 20), { optional: true }), true);
+  assert.equal(invoiceFieldNeedsReview(field("", 0)), true);
+});
+
+test("review validation exposes the actionable server issue", () => {
+  const error = new Error("Invalid invoice extraction request.");
+  error.code = "validation_error";
+  error.details = { issues: [
+    { message: "Enter a non-zero quantity for every invoice line." },
+    { message: "Enter a part number or description for every invoice line." },
+  ] };
+  assert.equal(invoiceReviewErrorMessage(error), "Enter a non-zero quantity for every invoice line. Enter a part number or description for every invoice line.");
+  assert.equal(invoiceReviewErrorMessage(new Error("Network unavailable")), "Network unavailable");
 });
 
 test("invoice selection validates every file and caps a batch at ten", () => {

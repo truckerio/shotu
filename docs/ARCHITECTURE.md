@@ -41,6 +41,7 @@ frontend/src/
     generator/          Physical workorder generator UI
     mechanic/           Mechanic workspace and active-work progress autosave
     office/             Office workspace
+    inventory/          Authenticated scan surface for confirmed serialized units
     surveillance/       Closed-workorder/Odoo workflow
     workorder-drafts/   Office/admin unfinished-creation queue
   lib/                  Browser API and date utilities
@@ -65,6 +66,8 @@ src/server/
     samsara/             Samsara OAuth, connection status, asset sync, and provider adapter
     vin/                 VIN decoding provider client
   modules/              Business workflows grouped by domain
+    invoice-extraction/ Encrypted invoice capture, extraction, review, and learning
+    inventory/          Explicit Odoo receipt, QR label, and scan workflows
   routes/               Thin HTTP route families
   services/             Small cross-domain application services
 
@@ -80,6 +83,8 @@ server.js               Composition root plus contained legacy print/share endpo
 | `/api/auth/*`, `/api/me` | `src/server/auth/` |
 | `/api/admin/*`, `/api/invitations/*` | `routes/admin.routes.js` and `modules/admin/` |
 | `/api/office/*` | `routes/office.routes.js` and `modules/office/` |
+| `/api/office/invoice-extractions/*` | `routes/invoice-extraction.routes.js` and `modules/invoice-extraction/`; the explicit `/receive` action is owned by `modules/inventory/` |
+| `/api/inventory/*`, `/api/office/inventory/*` | `routes/inventory.routes.js` and `modules/inventory/` |
 | `/api/mechanic/*` | `routes/mechanic.routes.js` and `modules/mechanic/` |
 | `/api/surveillance/*` | `routes/surveillance.routes.js` and `modules/surveillance/` |
 | `/api/vehicles/*` | `routes/vehicles.routes.js` and `services/vehicles.service.js` |
@@ -92,6 +97,18 @@ server.js               Composition root plus contained legacy print/share endpo
 | Physical batch print/share | `server.js` (legacy local workflow only) |
 
 Office and mechanic views read and update the same `operational_workorders` record. Role-specific UI changes presentation and allowed commands, not data ownership.
+
+### Invoice and inventory boundary
+
+`modules/invoice-extraction/` owns encrypted source capture, extraction,
+reviewed invoice drafts, correction history, and governed learning context.
+An extraction or review never moves stock. `modules/inventory/` owns the
+separate explicit receipt action: it validates a reviewed invoice, stages an
+idempotent provider command, and exposes success only after the Odoo receipt is
+confirmed. Local serialized-unit records and QR labels mirror that confirmed
+receipt; they are not a second stock ledger. See
+[`INVENTORY_ODOO_LIVING_RECORD.md`](INVENTORY_ODOO_LIVING_RECORD.md) for the
+verified scope and planned warehouse workflow.
 
 ### Shared Workorder Detail Surface
 

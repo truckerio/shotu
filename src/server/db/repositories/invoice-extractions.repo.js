@@ -41,8 +41,8 @@ async function selectRunWithSource(client, whereSql, parameters) {
   return result.rows[0] || null;
 }
 
-export async function loadInvoiceExtractionMemory({ companyId, vendorKey = "", factLimit = 20, playbookLimit = 5 }) {
-  const [facts, playbooks] = await Promise.all([
+export async function loadInvoiceExtractionMemory({ companyId, vendorKey = "", factLimit = 20, playbookLimit = 5, exampleLimit = 3 }) {
+  const [facts, playbooks, trainingExamples] = await Promise.all([
     query(
       `select id, fact_type, fact_key, fact_value, version
        from invoice_semantic_facts
@@ -63,8 +63,34 @@ export async function loadInvoiceExtractionMemory({ companyId, vendorKey = "", f
        limit $3`,
       [companyId, vendorKey, Math.min(5, Math.max(0, playbookLimit))],
     ),
+    query(
+      `select t.id, t.vendor_key, t.label_version,
+              coalesce(
+                jsonb_agg(
+                  jsonb_build_object(
+                    'fieldPath', c.field_path,
+                    'predictedValue', c.predicted_value,
+                    'reviewedValue', c.reviewed_value,
+                    'correctionType', c.correction_type
+                  ) order by c.created_at, c.id
+                ) filter (where c.id is not null),
+                '[]'::jsonb
+              ) as corrections
+       from invoice_training_examples t
+       left join invoice_correction_events c
+         on c.company_id = t.company_id and c.run_id = t.run_id
+       where t.company_id = $1
+         and t.status = 'eligible'
+         and $2 <> ''
+         and t.vendor_key = $2
+       group by t.id, t.vendor_key, t.label_version, t.created_at
+       having count(c.id) > 0
+       order by t.created_at desc, t.id
+       limit $3`,
+      [companyId, vendorKey, Math.min(5, Math.max(0, exampleLimit))],
+    ),
   ]);
-  return { semanticFacts: facts.rows, playbooks: playbooks.rows };
+  return { semanticFacts: facts.rows, playbooks: playbooks.rows, trainingExamples: trainingExamples.rows };
 }
 
 export async function loadInvoiceLayoutTemplates({ companyId, vendorKey = "", statuses = ["active"], limit = 25 }) {

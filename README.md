@@ -21,9 +21,27 @@ server.js       HTTP server plus legacy print/workorder routes
 templates/      Workorder background assets
 ```
 
-Start with `docs/PROJECT_REPORT.md`, `docs/ARCHITECTURE.md`,
-`docs/FRONTEND_OWNERSHIP.md`, and `src/server/db/README.md` before adding new
-features, tables, or route families.
+## Documentation map
+
+Start with these maintained documents before changing a workflow, schema, or
+route family:
+
+- [Project report](docs/PROJECT_REPORT.md): product scope, roles, and current
+  repository capabilities.
+- [Architecture](docs/ARCHITECTURE.md): canonical frontend, API, domain, and
+  integration ownership.
+- [Database architecture](docs/DATABASE.md): PostgreSQL ownership, lifecycle,
+  tenant rules, and migrations.
+- [Frontend ownership](docs/FRONTEND_OWNERSHIP.md): React component and style
+  owners.
+- [Odoo inventory living record](docs/INVENTORY_ODOO_LIVING_RECORD.md): the
+  verified inventory/receipt boundary, release evidence, and next planned
+  slices.
+- [Invoice extraction specification](docs/INVOICE_EXTRACTION_LEARNING_SPEC.md):
+  reviewed-invoice and governed-learning contract. Extraction/review is
+  separate from an explicit inventory receipt.
+
+`src/server/db/README.md` remains the database implementation guide.
 
 ## Integrations
 
@@ -86,6 +104,12 @@ INTEGRATION_ENCRYPTION_KEY_VERSION=v1
 INTEGRATION_JOB_POLL_MS=5000
 NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY=
 NEXT_PUBLIC_HERE_API_KEY=
+OPENAI_API_KEY=
+INVOICE_EXTRACTION_OPENAI_MODEL=gpt-5.6-terra
+INVOICE_DOCUMENT_ENCRYPTION_KEY=base64_encoded_32_byte_key
+INVOICE_DOCUMENT_ENCRYPTION_KEY_VERSION=v1
+INVOICE_DOCUMENT_RETENTION_DAYS=365
+INVENTORY_QR_SIGNING_KEY=base64_or_hex_32_byte_key
 ```
 
 OAuth is preferred for Samsara. In the Samsara dashboard, create an OAuth 2.0 app and set the redirect URL to:
@@ -95,6 +119,21 @@ https://junior01.up.railway.app/api/integrations/samsara/oauth/callback
 ```
 
 The browser never receives the OAuth client secret, access token, refresh token, or fallback API token.
+
+## Invoice and inventory boundary
+
+Office can upload an invoice, review the extracted draft, and explicitly opt in
+to using corrections as governed extraction-learning evidence. The encrypted
+source and reviewed record are application evidence; review itself does not
+change inventory or Odoo.
+
+Inventory movement is a separate, explicit operation. The current released
+slice supports idempotent, serial-tracked Odoo receipts only after a reviewed
+invoice and confirmed Odoo result, then provides authenticated QR labels and
+scan resolution. It does not establish physical count/condition, putaway,
+issue/install, returns, cores, or general serial/lot synchronization. Read the
+[inventory living record](docs/INVENTORY_ODOO_LIVING_RECORD.md) before changing
+this area.
 
 ## Authentication
 

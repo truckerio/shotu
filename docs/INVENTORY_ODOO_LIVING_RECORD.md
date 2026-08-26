@@ -229,13 +229,21 @@ Odoo is the intended inventory authority, but current issue/return transitions m
 
 Current projection cannot answer which serial, lot, package, or physical unit was received, picked, issued, installed, returned, or scrapped. A QR scanner built on current aggregate rows would imply traceability that does not exist.
 
-### P0 workflow gap — no receiving truth
+### P0 workflow gap — no physical receiving truth
 
-No inventory receiving document/session exists. An invoice or vendor bill must never be treated as proof of physical receipt. Future flow must separately preserve document evidence, human review, physical count/condition, and Odoo receipt validation.
+The released receipt slice preserves reviewed-document lineage and confirmed
+Odoo receipt/serial evidence, but it does not establish physical count,
+condition, putaway, discrepancy, or PO-match truth. An invoice or vendor bill
+is never itself proof of physical receipt. The next receiving flow must add
+human physical confirmation without weakening the existing explicit Odoo
+confirmation boundary.
 
-### P1 reliability gap — no inventory command/reconciliation lifecycle
+### P1 reliability gap — command/reconciliation coverage is receipt-only
 
-No durable outbox exists for inventory operations. Timeout, uncertain response, retry, replay, and reconciliation behavior are therefore undefined for receipts, reservations, transfers, issues, returns, and scrap.
+The released receipt slice has durable provider-command state and reconciliation
+for receipt creation. Timeout, uncertain response, retry, replay, and
+reconciliation behavior remain undefined for reservations, transfers, issues,
+returns, and scrap.
 
 ### P1 authorization gap — no least-privilege Parts role
 

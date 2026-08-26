@@ -40,12 +40,6 @@
   min-width: 0;
 }
 
-.mechanic-primary-create {
-  flex: 0 0 auto;
-  margin-bottom: 8px;
-  white-space: nowrap;
-}
-
 .mechanic-visible-tools {
   align-items: end;
   border-bottom: 1px solid #e4e7ec;
@@ -387,12 +381,6 @@
   .mechanic-primary-queues .mechanic-queue-tabs button span {
     line-height: 1.15;
     overflow-wrap: anywhere;
-  }
-
-  .mechanic-primary-create {
-    justify-content: center;
-    margin-bottom: 0;
-    width: 100%;
   }
 
   .mechanic-visible-tools {

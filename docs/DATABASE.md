@@ -36,6 +36,8 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Chat | `chat_messages`, `chat_message_attachments` | `repositories/chat.repo.js` |
 | Attention | `workorder_attention_state`, `workorder_attention_events` | `repositories/workorder-attention.repo.js` |
 | Parts and stock | catalog, inventory, request, allocation, and UoM tables | `repositories/part-requests.repo.js` |
+| Invoice extraction and learning | `invoice_extraction_*`, `invoice_source_documents`, correction/fact/playbook/training tables | `repositories/invoice-extractions.repo.js` |
+| Confirmed serialized receipt projection | `inventory_receipts`, `inventory_receipt_lines`, `inventory_serialized_units`, `inventory_unit_events`, `inventory_provider_commands` | `repositories/inventory-receipts.repo.js` |
 | Odoo handoff | `odoo_entry_status` | workorder repository and surveillance service |
 | Unit service-history projection | `service_history_orders`, `service_history_lines`, `service_history_sync_state` | `repositories/service-history.repo.js` and Odoo admin sync |
 | Odoo stock-location identity | `odoo_inventory_locations` | `integrations/odoo/odoo.admin.repo.js` |
@@ -182,6 +184,13 @@ imports that bypass application schemas.
   completion dates can appear as completed service; scheduled and recorded dates
   remain separate evidence. Failed sync attempts retain prior successful history
   and expose sanitized freshness state rather than turning failure into fresh empty data.
+- Invoice source documents are encrypted application evidence with retention,
+  access auditing, and company/location authorization. Extraction and review
+  do not issue stock commands.
+- A reviewed invoice may start one explicit, idempotent serialized receipt.
+  `inventory_provider_commands` records provider state; local receipt and unit
+  rows become confirmed only after Odoo confirms the picking. They do not make
+  PostgreSQL the inventory ledger.
 - `odoo_outbound_orders` is the durable idempotency and reconciliation record
   for first-party draft creation. Successful creation also updates
   `odoo_entry_status`, `integration_mappings`, integration audit, and the
@@ -236,6 +245,8 @@ erDiagram
     COMPANIES ||--o{ OPERATIONAL_WORKORDERS : owns
     COMPANIES ||--o{ PARTS_CATALOG : owns
     COMPANIES ||--o{ INVENTORY_ITEMS : owns
+    COMPANIES ||--o{ INVOICE_EXTRACTION_RUNS : reviews
+    COMPANIES ||--o{ INVENTORY_RECEIPTS : records
     COMPANIES ||--o{ INTEGRATION_ACCOUNTS : connects
     COMPANIES ||--o{ INTEGRATION_CLIENTS : authorizes
     COMPANIES ||--o{ INTEGRATION_JOBS : queues
@@ -255,6 +266,8 @@ erDiagram
     LOCATIONS ||--o{ USER_INVITATIONS : receives
 
     LOCATIONS ||--o{ OPERATIONAL_WORKORDERS : services
+    LOCATIONS ||--o{ INVOICE_EXTRACTION_RUNS : scopes
+    LOCATIONS ||--o{ INVENTORY_RECEIPTS : receives
     LOCATIONS o|--o{ ODOO_INVENTORY_LOCATIONS : maps
     ASSETS o|--o{ OPERATIONAL_WORKORDERS : identifies
     OPERATIONAL_WORKORDERS ||--o{ WORKORDER_MECHANIC_ASSIGNMENTS : staffs
@@ -280,6 +293,10 @@ erDiagram
     UNITS_OF_MEASURE ||--o{ PART_ALLOCATIONS : measures
     WORKORDER_PART_REQUESTS ||--o{ PART_ALLOCATIONS : sources
     INVENTORY_ITEMS o|--o{ PART_ALLOCATIONS : fulfills
+    INVOICE_EXTRACTION_RUNS ||--o| INVOICE_SOURCE_DOCUMENTS : encrypts
+    INVOICE_EXTRACTION_RUNS ||--o| INVENTORY_RECEIPTS : sources
+    INVENTORY_RECEIPTS ||--o{ INVENTORY_RECEIPT_LINES : contains
+    INVENTORY_RECEIPTS ||--o{ INVENTORY_SERIALIZED_UNITS : confirms
 
     INTEGRATION_ACCOUNTS ||--o{ INTEGRATION_SYNC_RUNS : produces
     INTEGRATION_ACCOUNTS ||--o{ INTEGRATION_CREDENTIALS : protects

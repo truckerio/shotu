@@ -2,10 +2,10 @@
 
 **Author:** Codex with product direction from the user
 **Date:** 2026-08-24
-**Status:** Approved
+**Status:** Implemented locally; release and production evidence are tracked separately
 **Approval basis:** The user explicitly requested a plan followed by execution in the same request.
 **Reviewers:** Product owner; engineering adversarial review required before completion
-**Related:** `docs/INVENTORY_ODOO_LIVING_RECORD.md`, `docs/DATABASE.md`
+**Related:** `docs/INVENTORY_ODOO_LIVING_RECORD.md`, `docs/DATABASE.md`, `docs/ARCHITECTURE.md`
 
 ## Context
 
@@ -13,7 +13,7 @@ The application has structured OpenAI Responses API patterns for part identifica
 
 The attached product concept defines three memory layers: episodic memory records what happened, semantic memory records what is true, and procedural memory records what works. In this module, those become append-only human corrections, approved tenant/vendor facts, and versioned extraction playbooks. Learning is retrieval and governed promotion, not uncontrolled online model training.
 
-This vertical slice ends at a reviewed invoice draft and an explicitly approved, encrypted training example. It deliberately does not create an Odoo receipt or mutate inventory. The hosted model's structured prediction is weak supervision; the human-reviewed draft is the gold label. The system records observable inputs, outputs, corrections, model/version, and token usage, but it neither receives nor claims to retain a provider's hidden chain-of-thought.
+This vertical slice ends at a reviewed invoice draft and an explicitly approved, encrypted training example. Extraction and review deliberately do not create an Odoo receipt or mutate inventory. A later, separate receipt slice may be invoked only by an explicit post-review action; its confirmed Odoo receipt, QR-label, and reconciliation contract is maintained in `docs/INVENTORY_ODOO_LIVING_RECORD.md`. The hosted model's structured prediction is weak supervision; the human-reviewed draft is the gold label. The system records observable inputs, outputs, corrections, model/version, and token usage, but it neither receives nor claims to retain a provider's hidden chain-of-thought.
 
 The resulting corpus is the product asset used to evaluate and eventually train a local extractor. Model training and automatic model promotion remain separate gated phases because a useful model requires enough diverse, reviewed invoices and an untouched evaluation set.
 
@@ -25,7 +25,7 @@ The resulting corpus is the product asset used to evaluate and eventually train 
 - FR-4: The extracted draft MUST contain vendor, invoice number/date, purchase-order number, currency, subtotal, tax, shipping, total, and zero or more line items.
 - FR-5: Every extracted scalar and every line item MUST include a confidence score from 0 through 100 and a short evidence string.
 - FR-6: The system MUST mark a draft `needs_review` when any required field has confidence below 90, any line has confidence below 90, totals do not reconcile within 0.02 currency units, or the provider reports uncertainty.
-- FR-7: Extraction MUST NOT create or modify products, vendors, receipts, serials, quantities, accounting entries, or Odoo records.
+- FR-7: Extraction and review MUST NOT create or modify products, vendors, receipts, serials, quantities, accounting entries, or Odoo records. A receipt, if requested after review, is a separate explicit inventory workflow with its own authorization, idempotency, confirmation, and reconciliation contract.
 - FR-8: The system MUST persist an immutable document hash, provider/model/prompt versions, extracted draft, status, and audit timestamps. It MUST persist source bytes only as authenticated encryption, never as a base64 data URL or plaintext database value.
 - FR-9: An authorized office or admin user MUST be able to retrieve a run only through its tenant and location scope.
 - FR-10: An authorized reviewer MUST be able to submit a complete corrected draft with the expected run version and an idempotency key.
@@ -401,12 +401,12 @@ The learned artifact excludes matched invoice numbers, part numbers, description
 ### Teaching loop
 
 1. The loopback-only Workorder OCR service runs PaddleOCR and returns text plus page-relative regions without retaining its own source copy.
-2. A trusted template may propose local fields. If no trusted template matches, the generic geometry extractor creates a conservative local review draft; OpenAI is only an optional fallback when the local result has insufficient evidence.
+2. Local OCR is corroborating context for the configured OpenAI extraction path. When OpenAI is configured, OpenAI owns the extraction result; trusted local/template and generic results own extraction only when OpenAI is not configured.
 3. The office reviewer corrects the draft and explicitly enables learning.
 4. The backend aligns approved values to OCR regions and creates or reinforces a company- and vendor-scoped candidate template.
 5. Candidate templates stay in shadow mode until they have multiple consistent approved examples and no unresolved contradictions.
-6. A promoted template extracts locally. Arithmetic reconciliation, duplicate-invoice checks, low confidence, drift, or ambiguity sends the draft to review or the configured fallback provider.
-7. Every fallback followed by an approved correction becomes new evaluation data. Provider output by itself never becomes truth.
+6. Without OpenAI configuration, a promoted template or generic local extractor creates the review draft. Arithmetic reconciliation, duplicate-invoice checks, low confidence, drift, or ambiguity still send the draft to review.
+7. Every approved correction becomes new evaluation data. Provider output by itself never becomes truth.
 
 ### Promotion gates
 

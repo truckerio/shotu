@@ -9,7 +9,7 @@ import {
   reconciliationWarnings,
   semanticCandidatesFromCorrections,
 } from "./invoice-extraction.learning.js";
-import { extractInvoice, readInvoiceExtraction, readInvoiceSource, reviewInvoice } from "./invoice-extraction.service.js";
+import { extractInvoice, guardPaidBalanceAsInvoiceTotal, readInvoiceExtraction, readInvoiceSource, reviewInvoice } from "./invoice-extraction.service.js";
 import { learnInvoiceTemplateCandidate } from "./invoice-template-learning.js";
 import { handleInvoiceExtractionApi } from "./invoice-extraction.routes.js";
 import { reviewInvoiceInputSchema } from "./invoice-extraction.schemas.js";
@@ -120,7 +120,27 @@ test("uncertainty and reconciliation preserve review instead of inventing truth"
   assert.equal(extractionNeedsReview(draft({ invoiceNumber: field("INV-10", 89) })), true);
   const mismatch = draft({ subtotal: field(25) });
   assert.deepEqual(reconciliationWarnings(mismatch), ["Line totals do not reconcile to subtotal.", "Subtotal, tax, and shipping do not reconcile to total."]);
+  const missingLineTotal = draft({
+    subtotal: field(25),
+    lines: [{ ...draft().lines[0], lineTotal: field(null, 0) }],
+  });
+  assert.deepEqual(reconciliationWarnings(missingLineTotal), ["Some line totals were not extracted; compare the invoice lines to subtotal.", "Subtotal, tax, and shipping do not reconcile to total."]);
   assert.equal(extractionNeedsReview({ ...mismatch, warnings: reconciliationWarnings(mismatch) }), true);
+});
+
+test("a paid zero balance cannot silently replace a positive invoice total", () => {
+  const guarded = guardPaidBalanceAsInvoiceTotal(draft({
+    subtotal: field(1470),
+    total: field(0),
+    lines: [{ ...draft().lines[0], quantity: field(1), unitPrice: field(1470), lineTotal: field(1470) }],
+  }));
+  assert.equal(guarded.total.value, null);
+  assert.equal(guarded.total.confidence, 0);
+  assert.match(guarded.warnings[0], /paid balance/i);
+  assert.equal(extractionNeedsReview(guarded), true);
+  assert.equal(guardPaidBalanceAsInvoiceTotal(draft()).total.value, 22);
+  const missing = draft({ subtotal: field(1470), total: field(null, 0) });
+  assert.deepEqual(guardPaidBalanceAsInvoiceTotal(missing), missing);
 });
 
 test("review corrections are episodic and only safe vendor aliases become semantic candidates", () => {
@@ -147,6 +167,11 @@ test("provider prompt includes approved memory as bounded data and disables prov
   }, {
     semanticFacts: [{ id: "fact-1", fact_type: "vendor_alias", fact_key: "fleet pride", fact_value: "FleetPride", version: 2 }],
     playbooks: [{ id: "rule-1", name: "columns", rule_text: "Read the rightmost extension column.", version: 1 }],
+    trainingExamples: [{
+      id: "example-1", vendor_key: "fleetpride", label_version: 2,
+      corrections: [{ fieldPath: "invoiceNumber.value", predictedValue: "INV-IO", reviewedValue: "INV-10", correctionType: "changed" }],
+    }],
+    localOcrText: "INVOICE NUMBER 3047165133",
   }, {
     config: { openAiApiKey: "test", openAiBaseUrl: "https://api.openai.test/v1", model: "test-model" },
     fetchFn: async (url, options) => {
@@ -160,8 +185,38 @@ test("provider prompt includes approved memory as bounded data and disables prov
   assert.equal(requests[0].body.store, false);
   assert.equal(requests[0].body.input[0].content[1].type, "input_file");
   assert.match(requests[0].body.input[0].content[0].text, /Governed memory/);
+  assert.match(requests[0].body.input[0].content[0].text, /verify every digit and the full year/i);
+  assert.match(requests[0].body.input[0].content[0].text, /set that field confidence below 90/i);
+  assert.match(requests[0].body.input[0].content[0].text, /Never substitute a reference, estimate, web order/i);
+  assert.match(requests[0].body.input[0].content[0].text, /negative return or core-credit quantities and amounts/i);
+  assert.match(requests[0].body.input[0].content[0].text, /Never use balance due, card payment remainder/i);
+  assert.match(requests[0].body.input[0].content[0].text, /never copy an old invoice number, date, PO, account, quantity, or amount/i);
+  assert.match(requests[0].body.input[0].content[0].text, /"approvedCorrectionExamples":\[\{"id":"example-1"/);
+  assert.match(requests[0].body.input[0].content[0].text, /never concatenate them/i);
+  assert.match(requests[0].body.input[0].content[0].text, /payment receipt placed over an invoice/i);
+  assert.match(requests[0].body.input[0].content[0].text, /Bounded local OCR transcription: "INVOICE NUMBER 3047165133"/);
   assert.doesNotMatch(extractionPrompt({}), /undefined/);
   assert.equal(requests[0].options.headers.authorization, "Bearer test");
+});
+
+test("OpenAI learning context caps examples, corrections, and correction value size", () => {
+  const oversizedValue = `${"x".repeat(2_000)}END_OF_UNBOUNDED_VALUE`;
+  const prompt = extractionPrompt({
+    trainingExamples: Array.from({ length: 8 }, (_, exampleIndex) => ({
+      id: `example-${exampleIndex}`,
+      vendor_key: "fleetpride",
+      label_version: 1,
+      corrections: Array.from({ length: 20 }, (_, correctionIndex) => ({
+        fieldPath: `lines.line-${correctionIndex}.description.value`,
+        predictedValue: oversizedValue,
+        reviewedValue: oversizedValue,
+        correctionType: "changed",
+      })),
+    })),
+  });
+  assert.equal((prompt.match(/"id":"example-/g) || []).length, 5);
+  assert.equal((prompt.match(/"fieldPath":/g) || []).length, 60);
+  assert.doesNotMatch(prompt, /END_OF_UNBOUNDED_VALUE/);
 });
 
 test("extract derives tenant from authorized location and performs no inventory action", async () => {
@@ -197,9 +252,51 @@ test("extract derives tenant from authorized location and performs no inventory 
   assert.equal(calls[1].input.companyId, COMPANY_ID);
 });
 
+test("incomplete generic OCR corroborates but does not suppress the image provider", async () => {
+  const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
+  process.env.OPENAI_API_KEY = "configured-for-routing-test";
+  try {
+    let ocrCalls = 0;
+    let providerCalls = 0;
+    const result = await extractInvoice({
+      locationId: LOCATION_ID,
+      fileName: "unlearned-invoice.png",
+      mimeType: "image/png",
+      dataUrl: pngDataUrl(),
+      idempotencyKey: "extract-unlearned-layout",
+    }, context(), {
+      getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      loadMemory: async () => ({ semanticFacts: [], playbooks: [] }),
+      loadTemplates: async () => [],
+      encryptDocument: encryptedSource,
+      createRun: async (input) => ({ ...input, id: RUN_ID, inserted: true, status: "processing", version: 1 }),
+      extractWithOcr: async () => { ocrCalls += 1; return localOcrResult(localObservation()); },
+      extractWithProvider: async () => { providerCalls += 1; return draft(); },
+      completeRun: async (input) => ({
+        id: RUN_ID, location_id: LOCATION_ID, file_name: "unlearned-invoice.png", mime_type: "image/png", byte_size: 9,
+        status: input.status, version: 1, extracted_draft: input.draft, provider: input.provider,
+        model: input.model, prompt_version: input.promptVersion, retryable: false, created_at: "now",
+      }),
+    });
+    assert.equal(ocrCalls, 1);
+    assert.equal(providerCalls, 1);
+    assert.equal(result.run.provider, "openai");
+    assert.equal(result.run.draft.lines[0].lineTotal.value, 20);
+  } finally {
+    if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
+    else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
+  }
+});
+
 test("active learned layout extracts locally and records the actual provider without OpenAI", async () => {
   const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
   process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
+  delete process.env.OPENAI_API_KEY;
   try {
     const observation = localObservation();
     const template = learnInvoiceTemplateCandidate({ observation, reviewedDraft: draft() });
@@ -237,6 +334,55 @@ test("active learned layout extracts locally and records the actual provider wit
   } finally {
     if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
     else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
+  }
+});
+
+test("configured OpenAI remains authoritative even when a learned local layout matches", async () => {
+  const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
+  process.env.OPENAI_API_KEY = "configured-for-learning-test";
+  try {
+    const observation = localObservation();
+    const template = learnInvoiceTemplateCandidate({ observation, reviewedDraft: draft() });
+    let providerMemory;
+    const providerDraft = draft({ invoiceNumber: field("OPENAI-10") });
+    const result = await extractInvoice({
+      locationId: LOCATION_ID,
+      fileName: "invoice.png",
+      mimeType: "image/png",
+      dataUrl: pngDataUrl(),
+      idempotencyKey: "extract-openai-learned-layout",
+      vendorHint: "FleetPride",
+    }, context(), {
+      getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      loadMemory: async () => ({
+        semanticFacts: [], playbooks: [],
+        trainingExamples: [{ id: "example-1", vendor_key: "fleetpride", label_version: 1, corrections: [] }],
+      }),
+      loadTemplates: async () => [{ id: "template-1", fingerprint: template.fingerprint, template_payload: template }],
+      encryptDocument: encryptedSource,
+      createRun: async (input) => ({ ...input, id: RUN_ID, inserted: true, status: "processing", version: 1 }),
+      extractWithOcr: async () => localOcrResult(observation),
+      extractWithProvider: async (_input, memory) => { providerMemory = memory; return providerDraft; },
+      completeRun: async (input) => ({
+        id: RUN_ID, location_id: LOCATION_ID, file_name: "invoice.png", mime_type: "image/png", byte_size: 9,
+        status: input.status, version: 1, extracted_draft: input.draft, provider: input.provider,
+        model: input.model, prompt_version: input.promptVersion, retryable: false, created_at: "now",
+      }),
+    });
+    assert.equal(result.run.provider, "openai");
+    assert.equal(result.run.draft.invoiceNumber.value, "OPENAI-10");
+    assert.equal(providerMemory.trainingExamples[0].id, "example-1");
+    assert.equal(providerMemory.localOcrText.includes("INVOICE NUMBER"), false);
+    assert.match(providerMemory.localOcrText, /Invoice number/i);
+  } finally {
+    if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
+    else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
   }
 });
 
@@ -495,6 +641,7 @@ test("local validation and memory preparation stay inside the 100 ms p95 budget"
   const memory = {
     semanticFacts: Array.from({ length: 20 }, (_, index) => ({ id: `fact-${index}`, version: 1 })),
     playbooks: Array.from({ length: 5 }, (_, index) => ({ id: `play-${index}`, version: 1 })),
+    trainingExamples: Array.from({ length: 3 }, (_, index) => ({ id: `example-${index}`, label_version: 1 })),
   };
   const timings = [];
   for (let iteration = 0; iteration < 1_000; iteration += 1) {
@@ -512,5 +659,10 @@ test("memory snapshot stores IDs and versions, never rule or fact contents", () 
   assert.deepEqual(memorySnapshot({
     semanticFacts: [{ id: "fact-1", version: 2, fact_value: "sensitive" }],
     playbooks: [{ id: "play-1", version: 3, rule_text: "sensitive" }],
-  }), { semanticFacts: [{ id: "fact-1", version: 2 }], playbooks: [{ id: "play-1", version: 3 }] });
+    trainingExamples: [{ id: "example-1", label_version: 4, corrections: [{ reviewedValue: "sensitive" }] }],
+  }), {
+    semanticFacts: [{ id: "fact-1", version: 2 }],
+    playbooks: [{ id: "play-1", version: 3 }],
+    trainingExamples: [{ id: "example-1", labelVersion: 4 }],
+  });
 });

@@ -26,7 +26,7 @@ test("supporting workorder prose uses the shared suggestion field while identifi
 test("supporting workspaces opt every text search out of correction", () => {
   const workspaceSearches = [
     ["../../features/office/OfficeWorkspace.jsx", 2],
-    ["../../features/mechanic/MechanicWorkspace.jsx", 2],
+    ["../../features/mechanic/MechanicWorkspace.jsx", 1],
     ["../../features/surveillance/workspace/SurveillanceQueueView.jsx", 2],
     ["../../features/workorder-drafts/WorkorderDraftQueue.jsx", 1],
     ["../operations/OperationsWorkspace.jsx", 1],

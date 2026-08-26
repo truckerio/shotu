@@ -104,7 +104,7 @@ export async function readUnitServiceHistory(context, workorderId, input = {}, d
       latestRecordedServiceAt: null, nextCursor: null,
     });
   const [syncState, history] = await Promise.all([syncStatePromise, historyPromise]);
-  const freshness = serviceHistoryFreshness(syncState);
+  const freshness = serviceHistoryFreshness(syncState, dependencies.now || new Date());
   return {
     state: responseState({ assetId, freshness, historyCount: history.historyCount }),
     unit: publicUnit(workorder),
