@@ -16,7 +16,8 @@ import { decryptInvoiceDocument, encryptInvoiceDocument } from "./invoice-docume
 import { invoiceExtractionConfig } from "./invoice-extraction.config.js";
 import { assertInvoiceFileExtension, decodeInvoiceDocument, safeInvoiceFileName } from "./invoice-extraction.document.js";
 import { InvoiceExtractionError, invoiceNotFound } from "./invoice-extraction.errors.js";
-import { extractGenericInvoiceDraft } from "./invoice-generic-extractor.js";
+import { reconcileInvoiceDrafts } from "./invoice-draft-reconciliation.js";
+import { extractGenericInvoiceDraft, genericDraftHasEvidence } from "./invoice-generic-extractor.js";
 import {
   correctionEvents,
   extractionNeedsReview,
@@ -32,7 +33,7 @@ import {
   matchInvoiceTemplate,
 } from "./invoice-template-learning.js";
 import { extractInvoiceInputSchema, normalizeVendorKey, reviewInvoiceInputSchema } from "./invoice-extraction.schemas.js";
-import { extractInvoiceWithLocalOcr, ocrObservation } from "./providers/local-ocr.provider.js";
+import { extractInvoiceWithLocalOcr, extractNativePdfText, ocrObservation } from "./providers/local-ocr.provider.js";
 import { extractInvoiceWithOpenAI } from "./providers/openai-invoice.provider.js";
 
 async function authorizedLocation(input, requestContext, dependencies) {
@@ -67,6 +68,176 @@ export function guardPaidBalanceAsInvoiceTotal(draft, tolerance = 0.02) {
       "A paid balance may have been mistaken for the invoice total; confirm the original invoice total.",
     ])],
   };
+}
+
+export function nativePdfTextIsUsable(value) {
+  const text = String(value || "").trim();
+  if (text.length < 200) return false;
+  const invoiceSignal = /\b(?:invoice|credit memo|parts invoice)\b/i.test(text);
+  const identitySignal = /\b(?:invoice\s*(?:number|no\.?|#)|date|customer[- ]?po|purchase order)\b/i.test(text);
+  const amountSignal = /\b(?:sub\s*total|sales tax|total|please pay)\b/i.test(text) && /\d+[.,]\d{2}\b/.test(text);
+  return invoiceSignal && identitySignal && amountSignal;
+}
+
+function localCandidateFromOcr(ocr, activeTemplates) {
+  const observation = ocrObservation(ocr);
+  const matches = activeTemplates
+    .map((template) => ({ template, match: matchInvoiceTemplate(observation, template.template_payload) }))
+    .filter(({ match }) => match.matched)
+    .sort((left, right) => right.match.score - left.match.score);
+  if (matches[0]) {
+    const localDraft = buildInvoiceDraftFromTemplate({ observation, template: matches[0].template.template_payload });
+    if (localTemplateDraftIsUsable(localDraft)) {
+      return {
+        draft: localDraft,
+        provider: "local_template",
+        model: `${ocr.provider}:${ocr.providerVersion}+layout:${matches[0].template.fingerprint.slice(0, 12)}`,
+        promptVersion: "local-layout-v1",
+        usage: {},
+      };
+    }
+  }
+  const genericDraft = extractGenericInvoiceDraft({ observation, ocrText: ocr.text });
+  if (!genericDraftHasEvidence(genericDraft)) return null;
+  return {
+    draft: genericDraft,
+    provider: "local_generic",
+    model: `${ocr.provider}:${ocr.providerVersion}+generic-invoice-v1`,
+    promptVersion: "local-generic-v1",
+    usage: {},
+  };
+}
+
+async function settledResult(promise) {
+  try {
+    return { value: await promise, error: null };
+  } catch (error) {
+    return { value: null, error };
+  }
+}
+
+export async function executeInvoiceExtractionRun({
+  run,
+  location,
+  parsed,
+  document,
+  memory,
+  activeTemplates,
+}, dependencies = {}) {
+  const startedAt = performance.now();
+  try {
+    let nativeDocumentText = "";
+    if (parsed.mimeType === "application/pdf" && invoiceExtractionConfig.ocrBaseUrl) {
+      const native = await settledResult((dependencies.extractNativeText || extractNativePdfText)({
+        bytes: document.bytes,
+        mimeType: parsed.mimeType,
+        fileName: parsed.fileName,
+      }, dependencies.nativeTextOptions || {}));
+      if (native.error && !(native.error instanceof InvoiceExtractionError)) throw native.error;
+      nativeDocumentText = native.value?.text || "";
+    }
+    const canUseNativeFastPath = Boolean(invoiceExtractionConfig.openAiApiKey)
+      && nativePdfTextIsUsable(nativeDocumentText);
+    const ocrPromise = invoiceExtractionConfig.ocrBaseUrl && !canUseNativeFastPath
+      ? settledResult((dependencies.extractWithOcr || extractInvoiceWithLocalOcr)({
+        bytes: document.bytes,
+        mimeType: parsed.mimeType,
+        fileName: parsed.fileName,
+      }, dependencies.ocrOptions || {}))
+      : Promise.resolve({ value: null, error: null });
+    const providerPromise = invoiceExtractionConfig.openAiApiKey
+      ? settledResult((dependencies.extractWithProvider || extractInvoiceWithOpenAI)(parsed, {
+        ...memory,
+        localOcrText: "",
+        nativeDocumentText,
+      }, dependencies.providerOptions || {}))
+      : Promise.resolve({ value: null, error: null });
+    const [ocrResult, openAiSettled] = await Promise.all([ocrPromise, providerPromise]);
+    if (ocrResult.error && !(ocrResult.error instanceof InvoiceExtractionError)) throw ocrResult.error;
+    if (openAiSettled.error && !(openAiSettled.error instanceof InvoiceExtractionError)) throw openAiSettled.error;
+    const localCandidate = ocrResult.value ? localCandidateFromOcr(ocrResult.value, activeTemplates) : null;
+    let providerResult = null;
+    if (openAiSettled.value) {
+      const openAiResult = openAiSettled.value;
+      const remoteCandidate = {
+        ...(openAiResult.draft ? openAiResult : { draft: openAiResult }),
+        provider: "openai",
+        model: invoiceExtractionConfig.model,
+        promptVersion: invoiceExtractionConfig.promptVersion,
+      };
+      providerResult = localCandidate ? {
+        ...remoteCandidate,
+        draft: reconcileInvoiceDrafts({
+          primaryDraft: remoteCandidate.draft,
+          localDraft: localCandidate.draft,
+          primarySource: "openai",
+          localSource: localCandidate.provider,
+        }),
+        provider: "hybrid_reconciled",
+        model: `${remoteCandidate.model}+${localCandidate.model}`.slice(0, 120),
+        promptVersion: `${remoteCandidate.promptVersion}+candidate-reconciliation-v1`,
+      } : remoteCandidate;
+    } else if (localCandidate) {
+      providerResult = invoiceExtractionConfig.openAiApiKey ? {
+        ...localCandidate,
+        draft: {
+          ...localCandidate.draft,
+          warnings: [...new Set([
+            ...(localCandidate.draft.warnings || []),
+            "Remote extraction was unavailable; this draft uses local OCR and must be reviewed.",
+          ])],
+        },
+      } : localCandidate;
+    } else {
+      const extractionError = openAiSettled.error || ocrResult.error;
+      if (extractionError) throw extractionError;
+    }
+    if (!providerResult) {
+      throw new InvoiceExtractionError("Invoice extraction produced no usable document evidence.", {
+        code: "provider_empty_result",
+        statusCode: 502,
+        retryable: true,
+      });
+    }
+    const draft = guardPaidBalanceAsInvoiceTotal(providerResult.draft || providerResult);
+    const warnings = [...new Set([...draft.warnings, ...reconciliationWarnings(draft)])];
+    const finalDraft = { ...draft, warnings };
+    const status = extractionNeedsReview(finalDraft) ? "needs_review" : "completed";
+    const completed = await (dependencies.completeRun || completeInvoiceExtractionRun)({
+      runId: run.id,
+      companyId: location.company_id,
+      draft: finalDraft,
+      status,
+      durationMs: Math.round(performance.now() - startedAt),
+      providerResponseId: providerResult.providerResponseId || null,
+      usage: providerResult.usage || {},
+      provider: providerResult.provider,
+      model: providerResult.model,
+      promptVersion: providerResult.promptVersion,
+    });
+    if (!completed) {
+      throw new InvoiceExtractionError("Invoice extraction state changed before completion.", {
+        code: "invoice_extraction_conflict",
+        statusCode: 409,
+        retryable: true,
+      });
+    }
+    return { run: publicInvoiceExtractionRun(completed), replayed: false };
+  } catch (error) {
+    const safe = error instanceof InvoiceExtractionError
+      ? error
+      : new InvoiceExtractionError("Invoice extraction failed.", { code: "provider_error", statusCode: 502, retryable: true });
+    if (!dependencies.deferFailure) {
+      await (dependencies.failRun || failInvoiceExtractionRun)({
+        runId: run.id,
+        companyId: location.company_id,
+        errorCode: safe.code,
+        retryable: safe.retryable,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    }
+    throw safe;
+  }
 }
 
 export async function extractInvoice(input, requestContext, dependencies = {}) {
@@ -107,6 +278,9 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
       : activeTemplates.length ? "paddleocr+learned-layout" : "paddleocr+generic-invoice-v1",
     promptVersion: invoiceExtractionConfig.promptVersion,
     memorySnapshot: memorySnapshot(memory),
+    vendorHint: parsed.vendorHint,
+    enqueueJob: dependencies.deferProcessing === true,
+    maxAttempts: invoiceExtractionConfig.workerMaxAttempts,
     source,
     retentionUntil: new Date(Date.now() + invoiceExtractionConfig.documentRetentionDays * 86_400_000).toISOString(),
   });
@@ -118,94 +292,18 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
     return { run: publicInvoiceExtractionRun(run), replayed: true };
   }
 
-  const startedAt = performance.now();
-  try {
-    let providerResult = null;
-    let localOcrText = "";
-    if (invoiceExtractionConfig.ocrBaseUrl) {
-      try {
-        const ocr = await (dependencies.extractWithOcr || extractInvoiceWithLocalOcr)({
-          bytes: document.bytes,
-          mimeType: parsed.mimeType,
-          fileName,
-        }, dependencies.ocrOptions || {});
-        localOcrText = ocr.text;
-        const observation = ocrObservation(ocr);
-        const matches = activeTemplates
-          .map((template) => ({ template, match: matchInvoiceTemplate(observation, template.template_payload) }))
-          .filter(({ match }) => match.matched)
-          .sort((left, right) => right.match.score - left.match.score);
-        if (matches[0] && !invoiceExtractionConfig.openAiApiKey) {
-          const localDraft = buildInvoiceDraftFromTemplate({ observation, template: matches[0].template.template_payload });
-          if (localTemplateDraftIsUsable(localDraft)) {
-            providerResult = {
-              draft: localDraft,
-              provider: "local_template",
-              model: `${ocr.provider}:${ocr.providerVersion}+layout:${matches[0].template.fingerprint.slice(0, 12)}`,
-              promptVersion: "local-layout-v1",
-              usage: {},
-            };
-          }
-        }
-        if (!providerResult) {
-          const genericDraft = extractGenericInvoiceDraft({ observation, ocrText: ocr.text });
-          if (!invoiceExtractionConfig.openAiApiKey) {
-            providerResult = {
-              draft: genericDraft,
-              provider: "local_generic",
-              model: `${ocr.provider}:${ocr.providerVersion}+generic-invoice-v1`,
-              promptVersion: "local-generic-v1",
-              usage: {},
-            };
-          }
-        }
-      } catch (error) {
-        if (!(error instanceof InvoiceExtractionError)) throw error;
-      }
-    }
-    if (!providerResult) {
-      const openAiResult = await (dependencies.extractWithProvider || extractInvoiceWithOpenAI)({
-        ...parsed,
-        fileName,
-      }, { ...memory, localOcrText }, dependencies.providerOptions || {});
-      providerResult = {
-        ...(openAiResult.draft ? openAiResult : { draft: openAiResult }),
-        provider: "openai",
-        model: invoiceExtractionConfig.model,
-        promptVersion: invoiceExtractionConfig.promptVersion,
-      };
-    }
-    const draft = guardPaidBalanceAsInvoiceTotal(providerResult.draft || providerResult);
-    const warnings = [...new Set([...draft.warnings, ...reconciliationWarnings(draft)])];
-    const finalDraft = { ...draft, warnings };
-    const status = extractionNeedsReview(finalDraft) ? "needs_review" : "completed";
-    const completed = await (dependencies.completeRun || completeInvoiceExtractionRun)({
-      runId: run.id,
-      companyId: location.company_id,
-      draft: finalDraft,
-      status,
-      durationMs: Math.round(performance.now() - startedAt),
-      providerResponseId: providerResult.providerResponseId || null,
-      usage: providerResult.usage || {},
-      provider: providerResult.provider,
-      model: providerResult.model,
-      promptVersion: providerResult.promptVersion,
-    });
-    if (!completed) throw new InvoiceExtractionError("Invoice extraction state changed before completion.", { code: "invoice_extraction_conflict", statusCode: 409, retryable: true });
-    return { run: publicInvoiceExtractionRun(completed), replayed: false };
-  } catch (error) {
-    const safe = error instanceof InvoiceExtractionError
-      ? error
-      : new InvoiceExtractionError("Invoice extraction failed.", { code: "provider_error", statusCode: 502, retryable: true });
-    await (dependencies.failRun || failInvoiceExtractionRun)({
-      runId: run.id,
-      companyId: location.company_id,
-      errorCode: safe.code,
-      retryable: safe.retryable,
-      durationMs: Math.round(performance.now() - startedAt),
-    });
-    throw safe;
+  if (dependencies.deferProcessing) {
+    return { run: publicInvoiceExtractionRun(run), replayed: false };
   }
+
+  return executeInvoiceExtractionRun({
+    run,
+    location,
+    parsed: { ...parsed, fileName },
+    document,
+    memory,
+    activeTemplates,
+  }, dependencies);
 }
 
 export async function readInvoiceSource(runId, requestContext, dependencies = {}) {

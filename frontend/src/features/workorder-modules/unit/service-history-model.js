@@ -1,3 +1,5 @@
+import { interfaceText, intlLocale } from "../../../i18n/index.js";
+
 const HISTORY_STATES = new Set(["ready", "empty", "unlinked", "never_synced", "stale", "unavailable"]);
 
 function text(value) {
@@ -17,7 +19,7 @@ export function normalizeServiceHistoryResponse(payload = {}) {
   const rawState = text(payload.state).toLowerCase().replace(/-/g, "_");
   const items = list(payload.items).map((item, index) => ({
     id: text(item?.id) || `service-${index}`,
-    reference: text(item?.reference) || "Service record",
+    reference: text(item?.reference),
     source: text(item?.source),
     serviceDate: text(item?.serviceDate || item?.completedAt || item?.date),
     dateKind: text(item?.dateKind),
@@ -27,7 +29,7 @@ export function normalizeServiceHistoryResponse(payload = {}) {
     serviceLines: list(item?.serviceLines).map(text).filter(Boolean),
     parts: list(item?.parts).map((part) => ({
       id: text(part?.id || part?.partId),
-      name: text(part?.name || part?.description || part?.partNumber) || "Part",
+      name: text(part?.name || part?.description || part?.partNumber),
       quantity: part?.quantity ?? part?.qty ?? "",
     })),
     truncated: Object.fromEntries([
@@ -55,47 +57,49 @@ export function normalizeServiceHistoryResponse(payload = {}) {
   };
 }
 
-export function serviceHistoryStatus(history) {
-  if (!history) return { title: "Loading service history", message: "" };
-  if (history.state === "unlinked") return { title: "Unit not matched", message: "This unit is not linked to an Odoo vehicle yet." };
-  if (history.state === "never_synced") return { title: "Service history has not been synced", message: "Try again later or ask an admin to check the integration." };
-  if (history.state === "stale") return { title: "History may be outdated", message: history.freshness.warning || "The latest available service history is shown." };
-  if (history.state === "unavailable") return { title: "Service history is unavailable", message: history.freshness.warning || "Try again." };
-  if (history.state === "empty") return { title: "No previous service found", message: "History is synchronized, but no earlier records exist for this unit." };
-  return { title: "Service history", message: "" };
+export function serviceHistoryStatus(history, locale = "en", { includeDiagnostic = false } = {}) {
+  const t = (key) => interfaceText(locale, key);
+  if (!history) return { title: t("history.loadingTitle"), message: "" };
+  if (history.state === "unlinked") return { title: t("history.unitNotMatched"), message: t("history.unitNotLinked") };
+  if (history.state === "never_synced") return { title: t("history.notSynced"), message: t("history.askAdmin") };
+  if (history.state === "stale") return { title: t("history.outdated"), message: includeDiagnostic && history.freshness.warning ? history.freshness.warning : t("history.latestShown") };
+  if (history.state === "unavailable") return { title: t("history.unavailable"), message: includeDiagnostic && history.freshness.warning ? history.freshness.warning : t("history.tryAgain") };
+  if (history.state === "empty") return { title: t("history.noneFound"), message: t("history.noneExist") };
+  return { title: t("history.title"), message: "" };
 }
 
-export function serviceHistoryDateLabel(dateKind) {
+export function serviceHistoryDateLabel(dateKind, locale = "en") {
   return ({
-    verified_completed: "Completed",
-    work_done: "Work done",
-    recorded: "Recorded",
-    scheduled: "Scheduled",
-  })[text(dateKind).toLowerCase()] || "Service date";
+    verified_completed: interfaceText(locale, "history.completed"),
+    work_done: interfaceText(locale, "history.workDone"),
+    recorded: interfaceText(locale, "history.recorded"),
+    scheduled: interfaceText(locale, "history.scheduled"),
+  })[text(dateKind).toLowerCase()] || interfaceText(locale, "history.serviceDate");
 }
 
-export function serviceHistorySourceLabel(source) {
+export function serviceHistorySourceLabel(source, locale = "en") {
   return ({
-    odoo: "Odoo service order",
-    local: "Local workorder",
+    odoo: interfaceText(locale, "history.odooOrder"),
+    local: interfaceText(locale, "history.localWorkorder"),
   })[text(source).toLowerCase()] || text(source);
 }
 
-export function formatServiceHistoryDate(value) {
-  if (!value) return "Date not recorded";
+export function formatServiceHistoryDate(value, locale = "en") {
+  if (!value) return interfaceText(locale, "history.dateNotRecorded");
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(intlLocale(locale), { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function serviceHistorySummaryLabel(history) {
-  if (!history) return "Loading previous service";
-  if (history.state === "unlinked" || history.state === "never_synced" || history.state === "unavailable") return serviceHistoryStatus(history).title;
+export function serviceHistorySummaryLabel(history, locale = "en") {
+  const t = (key) => interfaceText(locale, key);
+  if (!history) return t("history.loadingPrevious");
+  if (history.state === "unlinked" || history.state === "never_synced" || history.state === "unavailable") return serviceHistoryStatus(history, locale).title;
   if (history.summary.lastCompletedServiceAt) {
-    return `Last completed service · ${formatServiceHistoryDate(history.summary.lastCompletedServiceAt)}`;
+    return `${t("history.lastCompleted")} · ${formatServiceHistoryDate(history.summary.lastCompletedServiceAt, locale)}`;
   }
   if (history.summary.latestRecordedServiceAt) {
-    return `Latest service record · ${formatServiceHistoryDate(history.summary.latestRecordedServiceAt)}`;
+    return `${t("history.latestRecord")} · ${formatServiceHistoryDate(history.summary.latestRecordedServiceAt, locale)}`;
   }
-  return history.state === "stale" ? "History may be outdated" : "No previous service found";
+  return history.state === "stale" ? t("history.outdated") : t("history.noneFound");
 }

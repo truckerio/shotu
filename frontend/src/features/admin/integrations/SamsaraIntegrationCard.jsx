@@ -6,6 +6,7 @@ import {
   Trash01,
 } from "@untitledui/icons";
 import { Button } from "../../../components/ui/Button.jsx";
+import { samsaraCardState } from "./samsara-status.js";
 
 function dateTime(value) {
   if (!value) return "Never";
@@ -23,12 +24,6 @@ function authLabel(value) {
   return "Not connected";
 }
 
-function normalizedState(status) {
-  if (status?.status === "error" || status?.latestSync?.status === "failed") return "error";
-  if (status?.configured) return "connected";
-  return "disconnected";
-}
-
 export function SamsaraIntegrationCard({
   action = "",
   actionError = "",
@@ -39,7 +34,7 @@ export function SamsaraIntegrationCard({
   provider,
   status,
 }) {
-  const state = normalizedState(status);
+  const state = samsaraCardState(status, actionError);
   const connected = state !== "disconnected";
   const serverManagedToken = status?.authType === "api_token";
   const lastSuccessfulSync = status?.lastSuccessfulSyncAt

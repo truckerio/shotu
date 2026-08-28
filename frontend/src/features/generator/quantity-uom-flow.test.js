@@ -59,6 +59,7 @@ test("create workorder uses the location-scoped catalog selector and retains sel
   assert.match(createPartsModule, /locationId=\{locationId\}/);
   assert.match(createPartsModule, /catalogPartId:\s*catalogPart\.id/);
   assert.match(createPartsModule, /qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
+  assert.match(createPartsModule, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
   assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
 });
 
@@ -67,7 +68,7 @@ test("create parts show configured labor first and avoid duplicate visible row n
   assert.match(createForm, /onFieldChange\("laborHours", value\)/);
   assert.match(createForm, /onFieldChange\("workPerformed", value\)/);
   assert.match(createPartsModule, /laborProductLabel\(laborProduct\)/);
-  assert.match(createPartsModule, /aria-label="Labor repair order"/);
+  assert.match(createPartsModule, /aria-label=\{t\("create\.parts\.repairWork"\)\}/);
   assert.match(createPartsModule, /onLaborRepairOrderChange\(event\.target\.value\)/);
   assert.equal(laborProductLabel({ code: "LAB200", name: "Shop labor" }), "[LAB200] Shop labor");
   assert.match(createPartsModule, /<strong>\{index \+ 2\}<\/strong>/);
@@ -78,9 +79,10 @@ test("create parts show configured labor first and avoid duplicate visible row n
 
 test("detail parts use the same configured labor product label as create and print", () => {
   assert.match(usedPartsEditor, /laborProductLabel\(laborProduct\)/);
-  assert.match(usedPartsEditor, /aria-label="Labor repair order"/);
+  assert.match(usedPartsEditor, /aria-label=\{t\("parts\.repairOrderWorkPerformed"\)\}/);
   assert.match(usedPartsEditor, /onLaborRepairOrderChange\(event\.target\.value\)/);
+  assert.match(usedPartsEditor, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
   assert.match(detailPartsModule, /laborRepairOrderDisabled=\{!activeWorkorder\.allowedActions\?\.saveNotes\}/);
-  assert.match(usedPartsEditor, /disabled=\{disabled \|\| laborRepairOrderDisabled\}/);
+  assert.equal(usedPartsEditor.match(/disabled=\{disabled \|\| laborRepairOrderDisabled\}/g)?.length, 2);
   assert.doesNotMatch(usedPartsEditor, /\[PTR001\] LABOR HOURS/);
 });

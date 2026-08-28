@@ -1,20 +1,18 @@
 import { DraftSaveStatus } from "../../../components/drafts/DraftSaveStatus.jsx";
 
-const LABELS = {
-  pristine: "No changes",
-  dirty: "Saving…",
-  saving: "Saving…",
-  saved: "Saved",
-  error: "Not saved",
-};
-
-export function MechanicProgressStatus({ status, error }) {
+export function MechanicProgressStatus({ status, error, localeText = (key) => key }) {
   return (
     <DraftSaveStatus
       status={status}
       error={error}
       showPristine={false}
-      labels={LABELS}
+      labels={{
+        pristine: localeText("progress.noChanges"),
+        dirty: localeText("progress.saving"),
+        saving: localeText("progress.saving"),
+        saved: localeText("progress.saved"),
+        error: localeText("progress.notSaved"),
+      }}
       className="mechanic-progress-status"
     />
   );

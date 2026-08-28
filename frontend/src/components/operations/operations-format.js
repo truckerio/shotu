@@ -37,6 +37,29 @@ export const SORT_OPTIONS = [
   ["age:desc", "Oldest created"],
 ];
 
+export const PART_REQUEST_STATUS_OPTIONS = [
+  ["", "All request statuses"],
+  ["requested", "Requested"],
+  ["approved", "Approved"],
+  ["ordered", "Ordered"],
+  ["received", "Received"],
+];
+
+export const PART_REQUEST_SUPPLY_OPTIONS = [
+  ["", "All supply states"],
+  ["available", "Available"],
+  ["partial", "Partially available"],
+  ["unavailable", "Unavailable"],
+  ["ordered", "Ordered"],
+];
+
+export const PART_REQUEST_SORT_OPTIONS = [
+  ["waiting:desc", "Longest waiting"],
+  ["activity:desc", "Recent activity"],
+  ["activity:asc", "Oldest activity"],
+  ["created:desc", "Newest requested"],
+];
+
 export function operationsCategoryFromSearch(search = "") {
   const params = new URLSearchParams(search);
   if (params.get("view") === "drafts") return "drafts";
@@ -88,6 +111,19 @@ export function buildOperationsQuery(filters, page, pageSize = 50) {
   if (filters.lifecycle) params.set("lifecycle", filters.lifecycle);
   if (filters.attentionReason) params.set("attentionReason", filters.attentionReason);
   if (filters.search.trim()) params.set("search", filters.search.trim());
+  return params;
+}
+
+export function buildPartRequestsQuery(filters, page, pageSize = 50) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    sort: filters.sort,
+  });
+  if (filters.locationId) params.set("location", filters.locationId);
+  if (filters.search.trim()) params.set("search", filters.search.trim());
+  if (filters.status) params.set("status", filters.status);
+  if (filters.supply) params.set("supply", filters.supply);
   return params;
 }
 

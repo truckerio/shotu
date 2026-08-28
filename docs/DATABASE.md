@@ -37,7 +37,9 @@ HTTP route -> domain service -> repository -> PostgreSQL
 | Attention | `workorder_attention_state`, `workorder_attention_events` | `repositories/workorder-attention.repo.js` |
 | Parts and stock | catalog, inventory, request, allocation, and UoM tables | `repositories/part-requests.repo.js` |
 | Invoice extraction and learning | `invoice_extraction_*`, `invoice_source_documents`, correction/fact/playbook/training tables | `repositories/invoice-extractions.repo.js` |
-| Confirmed serialized receipt projection | `inventory_receipts`, `inventory_receipt_lines`, `inventory_serialized_units`, `inventory_unit_events`, `inventory_provider_commands` | `repositories/inventory-receipts.repo.js` |
+| Local inventory receipt and audit | `local_inventory_receipts`, `local_inventory_receipt_lines`, `inventory_stock_movements`, `inventory_authority_cutovers`, `inventory_items` | local inventory repositories and services |
+| Exact serialized inventory unit | `inventory_serialized_units`, `inventory_unit_events`, `inventory_unit_workorder_usages`, `inventory_label_batches`, `inventory_label_items` | inventory receipt, label, and unit-workorder repositories |
+| Opening-count import | `inventory_count_imports`, `inventory_count_import_lines` | `repositories/inventory-count-imports.repo.js` |
 | Odoo handoff | `odoo_entry_status` | workorder repository and surveillance service |
 | Unit service-history projection | `service_history_orders`, `service_history_lines`, `service_history_sync_state` | `repositories/service-history.repo.js` and Odoo admin sync |
 | Odoo stock-location identity | `odoo_inventory_locations` | `integrations/odoo/odoo.admin.repo.js` |
@@ -158,6 +160,16 @@ normalized part number, and unit so the same part can have separate `ea`,
 `case`, or measured balances without overwriting another row. Database triggers
 enforce whole-number balances for count and packaging units, including direct
 imports that bypass application schemas.
+
+For application-owned inventory, `inventory_stock_movements` is append-only
+audit evidence and `inventory_items` rows with `source_provider = 'local'` are
+the current-balance projection. A local receipt writes its receipt/lineage,
+movements, balance, and eligible exact unit identities in one transaction.
+Corrections must use compensating movements; provider synchronization must not
+overwrite a local-authority row. Odoo projections remain distinct optional
+provider data. Opening-count application is intentionally bounded: it can
+replace an unreserved provider projection after physical attestation, preserves
+the displaced provider snapshot, and rejects local/reserved stock conflicts.
 
 ## Integration Rules
 

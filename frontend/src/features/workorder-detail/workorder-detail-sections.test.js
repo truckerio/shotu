@@ -39,6 +39,38 @@ test("workorder detail sections keep shared tab contract across roles", () => {
   );
 });
 
+test("mechanic detail navigation localizes every static section label", () => {
+  const sections = buildWorkorderDetailSections({
+    activeWorkorder: { workorder: { id: "wo-es" } },
+    detailStatus: "closed",
+    isMechanicDetail: true,
+    isOfficeDetail: false,
+    locale: "es",
+    role: "mechanic",
+    unitType: "Truck",
+  });
+  const labels = Object.fromEntries(sections.map(({ id, label }) => [id, label]));
+  assert.deepEqual({
+    concern: labels.concern,
+    photos: labels.photos,
+    location: labels.location,
+    assignment: labels.assignment,
+    schedule: labels.schedule,
+    preview: labels.preview,
+    completion: labels.completion,
+    unit: labels.unit,
+  }, {
+    concern: "Problema",
+    photos: "Fotos",
+    location: "Ubicación",
+    assignment: "Asignación",
+    schedule: "Horario",
+    preview: "Vista previa",
+    completion: "Finalización",
+    unit: "Camión",
+  });
+});
+
 test("eligible Admin detail exposes Odoo in manifest order with resolved write access", () => {
   const sections = buildWorkorderDetailSections({
     activeWorkorder: { workorder: { id: "wo-odoo", status: "closed" } },

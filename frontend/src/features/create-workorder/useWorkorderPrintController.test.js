@@ -149,6 +149,18 @@ test("archive failures become print errors without changing the preserved page c
   }]);
 });
 
+test("mechanic print progress is localized and hides provider failure details", async () => {
+  const { actions, calls } = actionHarness({
+    locale: "es",
+    request: async () => { throw new Error("provider stack detail"); },
+  });
+  assert.equal(await actions.printWorkorders(), false);
+  const states = calls.filter(([name]) => name === "state").map(([, state]) => state);
+  assert.equal(states[0].message, "Guardando una copia PDF archivada.");
+  assert.equal(states.at(-1).message, "No se pudo imprimir. Inténtalo de nuevo.");
+  assert.doesNotMatch(states.at(-1).message, /provider/i);
+});
+
 test("browser print waits two frames and font readiness before opening the dialog", async () => {
   const calls = [];
   await openBrowserPrintDialog({

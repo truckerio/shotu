@@ -134,7 +134,7 @@ export function useWorkorderDetailRoute({
     setWorkspace,
   ]);
 
-  const hydrateOfficeWorkorder = useCallback((detail, { updateRoute = true } = {}) => {
+  const hydrateOfficeWorkorder = useCallback((detail, { updateRoute = true, partRequestId = "" } = {}) => {
     const workorder = detail.workorder;
     const editBackup = readOfficeWorkorderEditBackup(actor.id, workorder.id);
     const nextSection = requestedAllowedDetailSection({
@@ -142,7 +142,7 @@ export function useWorkorderDetailRoute({
       detail,
       isMechanicDetail: false,
       isOfficeDetail: true,
-      requestedSection: currentRouteParams().get("section"),
+      requestedSection: partRequestId ? "parts" : currentRouteParams().get("section"),
       role: actor.role,
       status: workorder.status,
       isCompact,
@@ -168,7 +168,7 @@ export function useWorkorderDetailRoute({
       busy: false,
       message: editBackup ? "Recovered unsaved changes. Saving automatically..." : "",
     });
-    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection));
+    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection, { partRequestId }));
   }, [
     actor.id,
     actor.role,
@@ -189,11 +189,11 @@ export function useWorkorderDetailRoute({
     setWorkspace,
   ]);
 
-  const openOfficeWorkorder = useCallback(async (workorderId) => {
+  const openOfficeWorkorder = useCallback(async (workorderId, { partRequestId = "" } = {}) => {
     setOfficeDetailState({ busy: true, message: "" });
     try {
       const detail = await loadWorkorderDetail({ markOpened: true, role: actor.role, workorderId });
-      hydrateOfficeWorkorder(detail);
+      hydrateOfficeWorkorder(detail, { partRequestId });
       return true;
     } catch (error) {
       setOfficeDetailState({ busy: false, message: error.message });

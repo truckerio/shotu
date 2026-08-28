@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from "react";
 import { ArrowUp, Plus, XClose } from "@untitledui/icons";
 import { NarrativeField } from "../forms/NarrativeField.jsx";
+import { interfaceText } from "../../i18n/index.js";
 import {
   buildChatPayload,
   createClientMessageId,
@@ -32,7 +33,9 @@ export function ChatComposer({
   compact = false,
   quickActions = [],
   allowAttachments = true,
+  locale = "en",
 }) {
+  const t = (key) => interfaceText(locale, key);
   const inputId = useId();
   const fileInputId = useId();
   const fileInputRef = useRef(null);
@@ -75,7 +78,7 @@ export function ChatComposer({
       pendingClientMessageIdRef.current = "";
       setAttachment({ dataUrl, fileName: file.name, mimeType: file.type });
     } catch (readError) {
-      setError(readError instanceof Error ? readError.message : "The photo could not be read. Please try again.");
+      setError(readError instanceof Error ? readError.message : t("chat.photoReadError"));
       clearFileInput();
     } finally {
       setReadingImage(false);
@@ -98,7 +101,7 @@ export function ChatComposer({
       clearFileInput();
       if (textareaRef.current) textareaRef.current.style.height = "";
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Message was not sent. Please try again.");
+      setError(sendError instanceof Error ? sendError.message : t("chat.sendError"));
     }
   }
 
@@ -136,13 +139,13 @@ export function ChatComposer({
           <img
             className="chat-composer-preview-image"
             src={attachment.dataUrl}
-            alt={`Selected photo: ${attachment.fileName}`}
+            alt={`${t("chat.selectedPhoto")}: ${attachment.fileName}`}
           />
           <figcaption className="chat-composer-preview-details">
             <span className="chat-composer-preview-name">{attachment.fileName}</span>
             <button className="chat-composer-remove" type="button" onClick={removeAttachment} disabled={busy}>
               <XClose aria-hidden="true" />
-              <span>Remove photo</span>
+              <span>{t("chat.removePhoto")}</span>
             </button>
           </figcaption>
         </figure>
@@ -151,7 +154,7 @@ export function ChatComposer({
       {error ? <p className="chat-composer-error" role="alert">{error}</p> : null}
 
       {quickActions.length ? (
-        <div className="chat-quick-actions" aria-label="Help actions">
+        <div className="chat-quick-actions" aria-label={t("chat.helpActions")}>
           {quickActions.map((action) => (
             <button key={action.id} type="button" onClick={() => useQuickAction(action)} disabled={busy}>
               {action.label}
@@ -190,14 +193,15 @@ export function ChatComposer({
                 fileInputRef.current?.click();
               }}
               aria-disabled={busy || undefined}
-              aria-label={readingImage ? "Loading photo" : cameraLabel}
-              title={readingImage ? "Loading photo" : cameraLabel}
+              aria-label={readingImage ? t("chat.loadingPhoto") : cameraLabel}
+              title={readingImage ? t("chat.loadingPhoto") : cameraLabel}
             >
               <Plus aria-hidden="true" />
             </label>
           </>
         ) : null}
         <NarrativeField
+          locale={locale}
           ref={textareaRef}
           id={inputId}
           className="chat-composer-input"
@@ -213,8 +217,8 @@ export function ChatComposer({
           className="chat-send-button"
           type="submit"
           disabled={!canSend}
-          aria-label={sending ? "Sending message" : sendLabel}
-          title={sending ? "Sending message" : sendLabel}
+          aria-label={sending ? t("chat.sending") : sendLabel}
+          title={sending ? t("chat.sending") : sendLabel}
         >
           <ArrowUp aria-hidden="true" />
         </button>

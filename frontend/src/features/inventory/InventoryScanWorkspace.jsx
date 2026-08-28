@@ -12,6 +12,7 @@ function eventLabel(type) {
   return {
     receipt_staged: "Identity prepared",
     receipt_confirmed: "Received in Odoo",
+    receipt_recorded: "Added to local inventory",
     reconciliation_required: "Needs reconciliation",
     void: "Voided",
   }[type] || type.replaceAll("_", " ");
@@ -26,6 +27,7 @@ export function InventoryScanWorkspace({ actor }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+  const resolveInFlightRef = useRef(false);
 
   function stopCamera() {
     if (timerRef.current) window.clearInterval(timerRef.current);
@@ -37,7 +39,8 @@ export function InventoryScanWorkspace({ actor }) {
 
   async function resolve(codeValue) {
     const next = String(codeValue || "").trim();
-    if (!next) return;
+    if (!next || resolveInFlightRef.current) return;
+    resolveInFlightRef.current = true;
     setBusy(true);
     setMessage("");
     try {
@@ -52,6 +55,7 @@ export function InventoryScanWorkspace({ actor }) {
       setUnit(null);
       setMessage(error.message);
     } finally {
+      resolveInFlightRef.current = false;
       setBusy(false);
     }
   }
@@ -78,7 +82,7 @@ export function InventoryScanWorkspace({ actor }) {
         await videoRef.current.play();
       }
       timerRef.current = window.setInterval(async () => {
-        if (!videoRef.current || busy) return;
+        if (!videoRef.current || resolveInFlightRef.current) return;
         try {
           const [result] = await detector.detect(videoRef.current);
           if (result?.rawValue) await resolve(result.rawValue);
@@ -105,7 +109,7 @@ export function InventoryScanWorkspace({ actor }) {
             <dl>
               <div><dt>Part</dt><dd><strong>{unit.partNumber}</strong><span>{unit.description}</span></dd></div>
               <div><dt>Serial</dt><dd><code>{unit.serialNumber}</code></dd></div>
-              <div><dt>Odoo receipt</dt><dd>{unit.receipt.reference || "Pending"}</dd></div>
+              <div><dt>Receipt</dt><dd>{unit.receipt.provider === "local" ? "Local invoice receipt" : unit.receipt.reference || "Odoo receipt"}</dd></div>
             </dl>
             <ol className="inventory-scan-history">
               {unit.events.map((event) => <li key={`${event.type}-${event.at}`}><span>{eventLabel(event.type)}</span><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time></li>)}

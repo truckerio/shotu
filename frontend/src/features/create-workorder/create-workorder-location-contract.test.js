@@ -11,9 +11,9 @@ const createForm = readFileSync(new URL("../generator/CreateWorkorderForm.jsx", 
 test("required create location remains visible while location data loads or fails", () => {
   assert.match(form, /id="workorder-location"/);
   assert.doesNotMatch(form, /locationOptions\.length \? \([\s\S]*id="workorder-location"/);
-  assert.match(form, /Loading locations\.\.\./);
-  assert.match(form, /Locations unavailable/);
-  assert.match(form, /onClick=\{onReload\}>Try again/);
+  assert.match(form, /t\("create\.location\.loading"\)/);
+  assert.match(form, /t\("create\.location\.unavailable"\)/);
+  assert.match(form, /onClick=\{onReload\}>\{t\("create\.tryAgain"\)\}/);
 });
 
 test("granted cross-role Create uses the neutral authenticated context and submit APIs", () => {

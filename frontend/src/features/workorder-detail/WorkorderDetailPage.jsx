@@ -19,7 +19,7 @@ import { workorderTemplateStyles } from "../../../../shared/workorder-template.j
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
 import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
 import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
-import { interfaceText } from "../../i18n/index.js";
+import { interfaceText, localizedUnitType } from "../../i18n/index.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 import {
   buildCompactPhoneDetailSections,
@@ -31,6 +31,8 @@ import { RETURN_CATEGORIES } from "./workorder-handoff.js";
 import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOdooModule.js";
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
+import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
+import { workspaceSearchForRole } from "../../app/routes/route-state.js";
 import {
   resolveWorkorderModulePolicy,
   WORKORDER_MODULE_IDS,
@@ -48,6 +50,15 @@ function MechanicActionMessage({ action, validationActive = false }) {
       {validation ? <strong>{action.message}</strong> : action.message}
     </p>
   );
+}
+
+function detailParent(actorRole, isOfficeDetail, locale) {
+  const url = new URL(window.location.href);
+  url.search = workspaceSearchForRole(actorRole);
+  return {
+    label: actorRole === "admin" ? "Operations" : isOfficeDetail ? "Office" : interfaceText(locale, "mechanic.myWork"),
+    href: url.toString(),
+  };
 }
 
 export function WorkorderDetailPage({
@@ -76,6 +87,7 @@ export function WorkorderDetailPage({
   isPhone,
   locale = "en",
   localeError = "",
+  localeReady = true,
   lastPhysicalPageIndex,
   lastSerial,
   mapsConfig,
@@ -204,17 +216,19 @@ export function WorkorderDetailPage({
   });
   const unitHistoryController = useUnitServiceHistory({
     enabled: unitPolicy.canRead,
+    locale: isMechanicDetail ? locale : "en",
     workorderId: activeWorkorder.workorder.id,
   });
   const visibleDetailSections = useMemo(
     () => {
       if (isCompact) return buildCompactPhoneDetailSections(detailSections, actor.role, {
+        locale: isMechanicDetail ? locale : "en",
         policyOverrides,
         userId: actor.id,
       });
       return detailSections;
     },
-    [actor.id, actor.role, detailSections, isCompact, policyOverrides],
+    [actor.id, actor.role, detailSections, isCompact, isMechanicDetail, locale, policyOverrides],
   );
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
@@ -225,6 +239,20 @@ export function WorkorderDetailPage({
     : () => setMechanicFinish({ open: true, name: "", message: "" });
   const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
   const compactPreviewState = workorderPreviewState(activeWorkorder, form);
+  const parent = detailParent(actor.role, isOfficeDetail, isMechanicDetail ? locale : "en");
+
+  function followDetailParent(event) {
+    if (!isPlainPrimaryActivation(event)) return;
+    event.preventDefault();
+    const serial = activeWorkorder.workorder.serial;
+    returnToRoleWorkspace();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (!serial) return;
+      const origin = [...document.querySelectorAll("button[aria-label], [role='row'][aria-label]")]
+        .find((element) => element.getAttribute("aria-label")?.includes(serial));
+      origin?.focus({ preventScroll: true });
+    }));
+  }
   useEffect(() => {
     if (!visibleDetailSections.length || renderedDetailSection === detailSection) return;
     selectDetailSection(renderedDetailSection);
@@ -242,6 +270,7 @@ export function WorkorderDetailPage({
         messages={visibleConversationMessages}
         currentRole={isOfficeDetail ? "office" : "mechanic"}
         currentUserId={actor.id}
+        locale={isMechanicDetail ? locale : "en"}
         keyboardOpen={viewport.keyboardOpen}
         viewportHeight={viewport.viewportHeight}
       />
@@ -249,10 +278,11 @@ export function WorkorderDetailPage({
         <ChatComposer
           onSend={sendWorkorderChat}
           sending={mechanicAction.busy === "chat"}
-          placeholder="Message..."
-          textareaLabel="Chat message"
-          cameraLabel={isOfficeDetail ? "Take or add photo" : "Take photo"}
-          sendLabel="Send"
+          placeholder={t("chat.message")}
+          textareaLabel={t("chat.messageLabel")}
+          cameraLabel={isOfficeDetail ? "Take or add photo" : t("chat.takePhoto")}
+          sendLabel={t("chat.send")}
+          locale={locale}
           compact={isMechanicDetail}
           quickActions={isMechanicDetail ? localizedMechanicHelpActions(locale) : []}
           allowAttachments={photosPolicy.canRead}
@@ -261,8 +291,8 @@ export function WorkorderDetailPage({
       {chatPolicy.canWrite && !activeWorkorder.allowedActions?.sendMessage ? (
         <p className="workorder-chat-unavailable" role="status">
           {assignedMechanicIds.length
-            ? "Chat is read-only while this workorder is in its current stage."
-            : "Assign a mechanic to start the workorder chat."}
+            ? t("chat.readOnly")
+            : t("chat.assignMechanic")}
         </p>
       ) : null}
       <MechanicActionMessage action={mechanicAction} validationActive={mechanicValidationActive} />
@@ -282,20 +312,21 @@ export function WorkorderDetailPage({
       <style>{workorderTemplateStyles}</style>
       {previewPolicy.canRead ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
       <WorkorderDetailSurface
+        locale={isMechanicDetail ? locale : "en"}
         previewOpen={!isPhone && supportingPaneVisible && showEmbeddedPreview}
         controlRef={formRef}
         context={{
-          onBack: returnToRoleWorkspace,
-          backLabel: actor.role === "admin" ? "Back to Operations" : isOfficeDetail ? "Back to Office" : "Back to My Work",
+          parent: { ...parent, onClick: followDetailParent },
+          current: activeWorkorder.workorder.serial || t("detail.workorder"),
           title: unitPolicy.canRead
-            ? activeWorkorder.workorder.asset?.unitNo || activeWorkorder.workorder.asset?.name || "Workorder"
-            : "Workorder",
+            ? activeWorkorder.workorder.asset?.unitNo || activeWorkorder.workorder.asset?.name || t("detail.workorder")
+            : t("detail.workorder"),
           subtitle: activeWorkorder.workorder.serial,
           status: <WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />,
           actions: (
             <>
               {isMechanicDetail ? (
-                <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} compact />
+                <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} compact />
               ) : null}
               {isOfficeDetail && concernPolicy.canWrite && activeWorkorder.allowedActions?.update ? (
                 <button
@@ -328,10 +359,10 @@ export function WorkorderDetailPage({
                   type="button"
                   onClick={acceptOpenedMechanicWorkorder}
                   disabled={Boolean(mechanicAction.busy)}
-                  aria-label="Accept work and start this job"
+                  aria-label={t("detail.acceptStart")}
                 >
                   <CheckCircle />
-                  <span>{mechanicAction.busy === "accept" ? "Accepting..." : "Accept work"}</span>
+                  <span>{mechanicAction.busy === "accept" ? t("detail.accepting") : t("detail.acceptWork")}</span>
                 </button>
               ) : null}
               {!isPhone && supportingPaneVisible ? (
@@ -339,8 +370,8 @@ export function WorkorderDetailPage({
                   open={showEmbeddedPreview || previewFullscreen}
                   onToggle={toggleWorkorderTools}
                   controls="workorder-preview-panel"
-                  openLabel="Open workorder tools"
-                  closeLabel="Close workorder tools"
+                  openLabel={t("preview.openWorkorderTools")}
+                  closeLabel={t("preview.closeWorkorderTools")}
                 />
               ) : null}
             </>
@@ -353,7 +384,11 @@ export function WorkorderDetailPage({
           location: locationPolicy.canRead ? detailLocationName : "",
           mechanics: assignmentPolicy.canRead ? detailMechanicNames : "",
           unit: unitPolicy.canRead ? form.unitNo || mechanicAsset.unitNo || mechanicAsset.name : "",
-          unitType: unitPolicy.canRead ? form.unitType || mechanicAsset.unitType || "Unit" : "Workorder",
+          unitType: unitPolicy.canRead
+            ? (isMechanicDetail
+              ? localizedUnitType(form.unitType || mechanicAsset.unitType, locale) || t("detail.unit")
+              : form.unitType || mechanicAsset.unitType || "Unit")
+            : (isMechanicDetail ? t("detail.workorder") : "Workorder"),
           actions: canMarkWorkDone && !isCompact ? (
               <WorkDoneButton
                 type="button"
@@ -362,16 +397,18 @@ export function WorkorderDetailPage({
                 disabled={isOfficeDetail
                   ? officeDetailState.busy
                   : Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
+                label={t("completion.workDone")}
+                busyLabel={t("completion.submitting")}
               />
             ) : null,
           children: (
             <>
             {isMechanicDetail && unitPolicy.canRead ? (
               <div className="workorder-object-inline-detail">
-                <span>{mechanicUnitType} details</span>
+                <span>{t("detail.assetDetails")}</span>
                 <strong>{mechanicVehicleLabel}</strong>
-                <span>Mileage</span>
-                <strong>{form.mileage ? `${form.mileage} mi` : "Not listed"}</strong>
+                <span>{t("detail.mileage")}</span>
+                <strong>{form.mileage ? `${form.mileage} ${t("unit.milesShort")}` : t("detail.notListed")}</strong>
               </div>
             ) : null}
             <MechanicActionMessage action={mechanicAction} validationActive={mechanicValidationActive} />
@@ -408,16 +445,17 @@ export function WorkorderDetailPage({
             onFullscreen={openFullscreenPreview}
             onOpenPreview={openFullscreenPreview}
             supportingContent={!isMechanicDetail && chatPolicy.canRead ? workorderChatContent : undefined}
-            supportingLabel={isOfficeDetail ? "Chat with mechanic" : "Help from office"}
+            supportingLabel={isOfficeDetail ? "Chat with mechanic" : t("detail.helpFromOffice")}
             supportingCount={chatPolicy.canRead ? visibleConversationMessages.length || undefined : undefined}
             supportingAttention={workorderNeedsChatAttention(detailStatus)}
             activeView={effectiveSupportingView}
             onViewChange={setSupportingView}
+            locale={isMechanicDetail ? locale : "en"}
           >
             {previewPolicy.canRead ? <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-              <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+              <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={form} />
               {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
                 : null}
             </div> : null}
           </PreviewPane>
@@ -425,8 +463,8 @@ export function WorkorderDetailPage({
       >
           {!visibleDetailSections.length ? (
             <div className="mechanic-empty-state" role="status">
-              <strong>No workorder modules available</strong>
-              <span>Your access does not include any visible detail sections for this workorder.</span>
+              <strong>{t("detail.noModules")}</strong>
+              <span>{t("detail.noModulesHelp")}</span>
             </div>
           ) : null}
 
@@ -437,6 +475,8 @@ export function WorkorderDetailPage({
                 onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
                 busy={mechanicAction.busy === "done"}
                 disabled={Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
+                label={t("completion.workDone")}
+                busyLabel={t("completion.submitting")}
               />
             </div>
           ) : null}
@@ -518,11 +558,12 @@ export function WorkorderDetailPage({
               primaryActionLabel={primaryActionLabel}
               onFullscreen={openFullscreenPreview}
               previewState={compactPreviewState}
+              locale={locale}
             >
               <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-                <WorkorderPreview label="First page" serial={firstSerial} form={form} />
+                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={form} />
                 {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label="Last page" serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
                   : null}
               </div>
             </CompactWorkorderPreview>
@@ -545,8 +586,9 @@ export function WorkorderDetailPage({
           setPreviewFullscreen(false);
           printWorkorders();
         } : undefined}
+        locale={isMechanicDetail ? locale : "en"}
       /> : null}
-      {previewPolicy.canRead ? <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
+      {previewPolicy.canRead ? <PrintModal state={printState} range={range} locale={isMechanicDetail ? locale : "en"} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
 
       {completionPolicy.canWrite && mechanicFinish.open ? (
         <div
@@ -558,13 +600,13 @@ export function WorkorderDetailPage({
             }
           }}
         >
-          <form className="mechanic-completion-modal" role="dialog" aria-modal="true" aria-label="Mark work as done" onSubmit={submitMechanicFinish}>
+          <form className="mechanic-completion-modal" role="dialog" aria-modal="true" aria-label={t("completion.dialogLabel")} onSubmit={submitMechanicFinish}>
             <button
               className="close-button"
               type="button"
               onClick={() => setMechanicFinish({ open: false, name: "", message: "" })}
               disabled={Boolean(mechanicAction.busy)}
-              aria-label="Cancel marking work as done"
+              aria-label={t("completion.cancelLabel")}
             >
               <XClose />
             </button>
@@ -581,7 +623,7 @@ export function WorkorderDetailPage({
                 {t("completion.keepWorking")}
               </Button>
               <Button variant="primary" type="submit" disabled={Boolean(mechanicAction.busy)} autoFocus>
-                {mechanicAction.busy === "done" ? "Submitting..." : t("completion.yes")}
+                {mechanicAction.busy === "done" ? t("completion.submitting") : t("completion.yes")}
               </Button>
             </div>
           </form>

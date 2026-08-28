@@ -1,7 +1,11 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchMd, Settings01, Shield03 } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
+import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
+import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
 import {
   WORKORDER_ACCESS_MODES,
   WORKORDER_INHERIT_ACCESS,
@@ -43,11 +47,11 @@ function AccessSelect({ includeInherit = false, inheritLabel = "Use inherited se
   return (
     <label className="admin-modules-access-field">
       <span>{label}</span>
-      <select aria-label={label} value={presentedValue} onChange={(event) => onChange(event.target.value)}>
+      <Dropdown aria-label={label} value={presentedValue} onChange={(event) => onChange(event.target.value)}>
         {options.map((mode) => (
           <option key={mode} value={mode}>{mode === WORKORDER_INHERIT_ACCESS ? inheritLabel : MODULE_ACCESS_LABELS[mode]}</option>
         ))}
-      </select>
+      </Dropdown>
       {note ? <small>{note}</small> : null}
     </label>
   );
@@ -128,12 +132,12 @@ function UserExceptions({ companyPolicy, module, policy, scopeType, setPolicy, s
       <div className="admin-module-exception-body">
         <label className="admin-modules-user-picker">
           <span>User</span>
-          <select aria-label="User" value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)}>
+          <Dropdown aria-label="User" value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)}>
             <option value="">Choose a user</option>
             {activeUsers.map((item) => (
               <option key={item.id} value={item.id}>{item.name} · {ROLE_LABELS[item.role] || item.role}</option>
             ))}
-          </select>
+          </Dropdown>
         </label>
         {user ? (
           <div className="admin-module-user-setting">
@@ -204,10 +208,28 @@ function ModuleManager({
 
   useEffect(() => titleRef.current?.focus(), [module.key]);
 
+  function followModulesBreadcrumb(event) {
+    if (!isPlainPrimaryActivation(event)) return;
+    event.preventDefault();
+    onBack();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const origin = [...document.querySelectorAll(".admin-module-card")]
+        .find((card) => card.querySelector("header strong")?.textContent?.trim() === module.label);
+      origin?.querySelector("button")?.focus({ preventScroll: true });
+    }));
+  }
+
   return (
     <section className="admin-module-manager" aria-labelledby="admin-module-manager-title">
       <header className="admin-module-manager-header">
-        <button type="button" onClick={onBack}>← All modules</button>
+        <ContextBreadcrumbs
+          items={[{
+            label: "Modules",
+            href: "/?adminView=modules",
+            onClick: followModulesBreadcrumb,
+          }]}
+          current={module.label}
+        />
         <div>
           <span className="admin-module-card-icon" aria-hidden="true"><Shield03 /></span>
           <span>
@@ -340,6 +362,7 @@ export function ModulesPage({
   const [activeModuleKey, setActiveModuleKey] = useState("");
   const catalogModules = catalog?.modules || WORKORDER_MODULES;
   const modules = useMemo(() => filterAdminModules(catalogModules, query), [catalogModules, query]);
+  const pagination = usePagination(modules, { pageSize: 12, resetKey: query });
   const activeModule = catalogModules.find((module) => module.key === activeModuleKey) || null;
   const scopePolicy = scopeType === "company" ? companyPolicy : policy;
   const setScopePolicy = scopeType === "company" ? setCompanyPolicy : setPolicy;
@@ -363,7 +386,7 @@ export function ModulesPage({
         actions={(
           <label className="admin-modules-location-picker">
             <span>Access scope</span>
-              <select aria-label="Access scope" value={scopeValue} onChange={(event) => onSelectScope(event.target.value)}>
+              <Dropdown aria-label="Access scope" value={scopeValue} onChange={(event) => onSelectScope(event.target.value)}>
               <option value="">Choose a scope</option>
               <optgroup label="Company">
                 {companyOptions.map((company) => <option key={company.id} value={`company:${company.id}`}>{company.label}</option>)}
@@ -371,7 +394,7 @@ export function ModulesPage({
               <optgroup label="Location overrides">
                 {locations.map((location) => <option key={location.id} value={`location:${location.id}`}>{location.name}</option>)}
               </optgroup>
-            </select>
+            </Dropdown>
           </label>
         )}
       />
@@ -405,9 +428,9 @@ export function ModulesPage({
             </label>
             <p><strong>{catalogModules.length}</strong> modules · {scopeName}</p>
           </div>
-          {modules.length ? (
+          {modules.length ? (<>
             <div className="admin-module-cards">
-              {modules.map((module) => (
+              {pagination.pageItems.map((module) => (
                 <ModuleCard
                   companyPolicy={companyPolicy}
                   key={module.key}
@@ -417,7 +440,8 @@ export function ModulesPage({
                 />
               ))}
             </div>
-          ) : (
+            <Pagination {...pagination} label="modules" />
+          </>) : (
             <div className="admin-modules-empty compact">
               <h2>No matching modules</h2>
               <button type="button" onClick={() => setQuery("")}>Clear search</button>

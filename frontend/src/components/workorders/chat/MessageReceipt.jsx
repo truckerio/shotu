@@ -1,16 +1,17 @@
 import { Check } from "@untitledui/icons";
+import { interfaceText } from "../../../i18n/index.js";
 import { receiptDisplayStatus } from "../../../lib/chat-receipts.js";
 import "./chat.css";
 
-const RECEIPT_LABEL = Object.freeze({
-  sent: "Sent",
-  delivered: "Delivered",
-  read: "Read",
+const RECEIPT_KEY = Object.freeze({
+  sent: "chat.receipt.sent",
+  delivered: "chat.receipt.delivered",
+  read: "chat.receipt.read",
 });
 
-export function MessageReceipt({ receipt }) {
+export function MessageReceipt({ receipt, locale = "en" }) {
   const status = receiptDisplayStatus(receipt);
-  const label = RECEIPT_LABEL[status];
+  const label = interfaceText(locale, RECEIPT_KEY[status]);
   const checkCount = status === "sent" ? 1 : 2;
 
   return (

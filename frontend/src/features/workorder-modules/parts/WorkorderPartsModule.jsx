@@ -1,5 +1,6 @@
 import { PartRequestsPanel } from "../../../components/workorders/PartRequestsPanel.jsx";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import { interfaceText } from "../../../i18n/index.js";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
 
 export function WorkorderPartsModule({
@@ -22,11 +23,14 @@ export function WorkorderPartsModule({
 }) {
   if (!access) return null;
   const canWrite = access === WORKORDER_MODULE_ACCESS.WRITE || access === WORKORDER_MODULE_ACCESS.REQUIRED;
+  const t = (key) => interfaceText(locale, key);
   return (
     <ProgressiveWorkorderSection
       id="parts"
-      title={isMechanicDetail ? "Parts used" : "Parts"}
-      summary={pendingPartCount ? `${pendingPartCount} awaiting action` : `${filledPartCount} recorded`}
+      title={isMechanicDetail ? t("parts.usedTitle") : "Parts"}
+      summary={pendingPartCount
+        ? `${pendingPartCount} ${isMechanicDetail ? t("parts.awaitingAction") : "awaiting action"}`
+        : `${filledPartCount} ${isMechanicDetail ? t("parts.recorded") : "recorded"}`}
       activeSection={detailSection}
       onSelect={onSelect}
       attention={pendingPartCount > 0}

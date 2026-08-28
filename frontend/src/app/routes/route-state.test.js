@@ -13,6 +13,10 @@ import {
 test("route search builders preserve detail and draft URL contracts", () => {
   assert.equal(workorderDetailSearch("wo 1"), "?workorder=wo%201");
   assert.equal(workorderDetailSearch("wo 1", "activity"), "?workorder=wo%201&section=activity");
+  assert.equal(
+    workorderDetailSearch("wo 1", "parts", { partRequestId: "request 2" }),
+    "?workorder=wo%201&section=parts&partRequest=request%202",
+  );
   assert.equal(createWorkorderSearch(), "?view=create");
   assert.equal(createWorkorderSearch("draft 1"), "?view=create&draft=draft%201");
   assert.equal(draftsSearch(), "?view=drafts");

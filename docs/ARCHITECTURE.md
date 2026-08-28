@@ -41,7 +41,7 @@ frontend/src/
     generator/          Physical workorder generator UI
     mechanic/           Mechanic workspace and active-work progress autosave
     office/             Office workspace
-    inventory/          Authenticated scan surface for confirmed serialized units
+    inventory/          Shared local-inventory workspace, count intake, scan, and exact-unit flows
     surveillance/       Closed-workorder/Odoo workflow
     workorder-drafts/   Office/admin unfinished-creation queue
   lib/                  Browser API and date utilities
@@ -103,10 +103,15 @@ Office and mechanic views read and update the same `operational_workorders` reco
 `modules/invoice-extraction/` owns encrypted source capture, extraction,
 reviewed invoice drafts, correction history, and governed learning context.
 An extraction or review never moves stock. `modules/inventory/` owns the
-separate explicit receipt action: it validates a reviewed invoice, stages an
-idempotent provider command, and exposes success only after the Odoo receipt is
-confirmed. Local serialized-unit records and QR labels mirror that confirmed
-receipt; they are not a second stock ledger. See
+separate explicit posting action: it validates a reviewed invoice and records
+one idempotent local receipt, append-only stock movements, and location balance
+updates in one database transaction. Whole count/package quantities also create
+one exact serialized unit per physical item in the same transaction; those
+identities use the shared encrypted QR label and authenticated scan surface.
+Measured quantities remain aggregate. The application-owned ledger is current
+inventory truth; optional provider integrations cannot overwrite rows marked
+as local inventory. Odoo-confirmed serialized receipts remain compatible but
+are not required by the local workflow. See
 [`INVENTORY_ODOO_LIVING_RECORD.md`](INVENTORY_ODOO_LIVING_RECORD.md) for the
 verified scope and planned warehouse workflow.
 

@@ -66,6 +66,19 @@ test("office/mechanic and surveillance details consume one structural surface", 
     assert.equal(renderedComponentNames(detailPage).has(componentName), false, `WorkorderDetailPage must not compose ${componentName} directly`);
     assert.equal(renderedComponentNames(surveillance).has(componentName), false, `SurveillanceWorkspace must not compose ${componentName} directly`);
   }
+
+  assertUsesComponent(surface, "ContextBreadcrumbs", "WorkorderDetailSurface");
+  assert.match(surface, /items=\{\[context\.parent\]\}/);
+  assert.match(surface, /current=\{context\.current\}/);
+  assert.doesNotMatch(surface, /ArrowLeft|context\.onBack|context\.backLabel/);
+  assert.match(detailPage, /label: actorRole === "admin" \? "Operations" : isOfficeDetail \? "Office" : interfaceText\(locale, "mechanic\.myWork"\)/);
+  assert.match(detailPage, /isPlainPrimaryActivation\(event\)/);
+  assert.match(detailPage, /\[role='row'\]\[aria-label\]/);
+  assert.match(detailPage, /focus\(\{ preventScroll: true \}\)/);
+  assert.match(surveillance, /label: "Surveillance"/);
+  assert.match(surveillance, /isPlainPrimaryActivation\(event\)/);
+  assert.match(surveillance, /button\[aria-label\]/);
+  assert.match(surveillance, /focus\(\{ preventScroll: true \}\)/);
 });
 
 test("role actions remain outside the shared structural surface", () => {

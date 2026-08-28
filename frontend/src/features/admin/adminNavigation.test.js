@@ -9,6 +9,7 @@ import {
 
 test("phone admin navigation keeps location-owned setup inside Locations", () => {
   assert.deepEqual(ADMIN_MOBILE_DESTINATIONS.map(({ key }) => key), [
+    "inventory",
     "locations",
     "modules",
     "settings",
@@ -30,8 +31,7 @@ test("admin phone destinations divide the full bottom navigation evenly", async 
     new URL("./admin.css", import.meta.url),
     "utf8",
   ));
-  assert.match(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/s);
-  assert.doesNotMatch(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(6,/s);
+  assert.match(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/s);
 });
 
 test("Locations stays active throughout location-owned users and template pages", () => {
@@ -46,7 +46,8 @@ test("admin opens location setup by default while explicit destinations remain l
   assert.equal(initialAdminView(""), "locations");
   assert.equal(initialAdminView("?adminView=locations"), "locations");
   assert.equal(initialAdminView("?adminView=modules"), "modules");
-  assert.equal(initialAdminView("?adminView=invoices"), "invoices");
+  assert.equal(initialAdminView("?adminView=invoices"), "inventory");
+  assert.equal(initialAdminView("?adminView=inventory"), "inventory");
   assert.equal(initialAdminView("?adminView=surveillance"), "operations");
   assert.equal(initialAdminView("?adminView=operations"), "operations");
   assert.equal(initialAdminView("?adminView=settings&settingsTab=integrations"), "settings");
@@ -63,4 +64,8 @@ test("legacy Admin Odoo links redirect to the Operations Odoo backlog", () => {
     "?adminView=operations&company=company-1&category=odoo_backlog",
   );
   assert.equal(canonicalAdminSearch("?adminView=modules"), "?adminView=modules");
+  assert.equal(
+    canonicalAdminSearch("?adminView=invoices&invoiceRun=run-1"),
+    "?adminView=inventory&invoiceRun=run-1&view=inventory",
+  );
 });

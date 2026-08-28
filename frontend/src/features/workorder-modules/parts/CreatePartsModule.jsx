@@ -1,6 +1,7 @@
 import { QuantityUnitInput } from "../../../components/forms/index.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
+import { repairOrderAfterCatalogSelection } from "../../../components/workorders/part-requests/catalog-parts-model.js";
 import {
   defaultUsedPartQuantity,
   usedPartQuantityAfterPartNumberChange,
@@ -8,6 +9,7 @@ import {
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { laborProductLabel } from "../../../../../shared/labor-product.js";
+import { interfaceText } from "../../../i18n/index.js";
 
 export function CreatePartsModule({
   access,
@@ -17,6 +19,7 @@ export function CreatePartsModule({
   laborProduct = null,
   laborRepairOrder = "",
   locationId,
+  locale = "en",
   parts,
   onAdd,
   onChange,
@@ -25,23 +28,29 @@ export function CreatePartsModule({
   onRemove,
 }) {
   if (!access) return null;
+  const t = (key) => interfaceText(locale, key);
+  const configuredLaborLabel = laborProductLabel(laborProduct);
+  const laborLabel = configuredLaborLabel === "Labor hours" && !laborProduct?.code
+    ? t("create.parts.laborHours")
+    : configuredLaborLabel;
   return (
-    <ProgressiveWorkorderSection id="parts" className="create-parts-card" title="Parts" summary="Optional. Record parts already known before work begins." activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
+    <ProgressiveWorkorderSection id="parts" className="create-parts-card" title={t("create.parts.title")} summary={t("create.parts.summary")} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
       <div className="create-known-parts-content">
         {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
         <div className="operational-parts-editor">
           <div className="operational-part-row has-quantity-unit operational-part-labor-row">
             <strong>1</strong>
             <div className="operational-part-labor-name">
-              <strong>{laborProductLabel(laborProduct)}</strong>
+              <strong>{laborLabel}</strong>
             </div>
             <QuantityUnitInput
               id="create-workorder-labor-hours"
               quantity={laborHours}
               uomCode="hr"
               onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
-              quantityLabel="Labor hours"
-              unitLabel="Unit"
+              quantityLabel={t("create.parts.laborHours")}
+              unitLabel={t("create.parts.unit")}
+              locale={locale}
               unitReadOnly
               compact
               max={9999}
@@ -51,8 +60,8 @@ export function CreatePartsModule({
               className="operational-part-labor-repair"
               value={laborRepairOrder}
               onChange={(event) => onLaborRepairOrderChange(event.target.value)}
-              aria-label="Labor repair order"
-              placeholder="Repair order"
+              aria-label={t("create.parts.repairWork")}
+              placeholder={t("create.parts.repairWork")}
             />
             <span aria-hidden="true"></span>
           </div>
@@ -72,19 +81,21 @@ export function CreatePartsModule({
                 partNo: catalogPart.partNumber,
                 qty: defaultUsedPartQuantity(part.qty),
                 uomCode: catalogPart.uomCode || part.uomCode,
+                repairOrder: repairOrderAfterCatalogSelection(part.repairOrder, catalogPart),
               })}
               label=""
-              inputAriaLabel={`Part number ${index + 1}`}
-              placeholder="Part number or description"
+              inputAriaLabel={`${t("create.parts.partNumber")} ${index + 1}`}
+              placeholder={t("create.parts.numberOrDescription")}
               inputPolicy="identifier"
+              locale={locale}
             />
-            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, "qty", value)} onUomCodeChange={(value) => onChange(index, "uomCode", value)} quantityLabel={`Quantity ${index + 1}`} unitLabel={`Unit ${index + 1}`} compact />
-            <input {...textEntryProps("identifier")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`Repair order ${index + 1}`} placeholder="Repair order" />
-            <button type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1}>Remove</button>
+            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, "qty", value)} onUomCodeChange={(value) => onChange(index, "uomCode", value)} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} compact />
+            <input {...textEntryProps("identifier")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
+            <button type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1}>{t("create.parts.remove")}</button>
           </div>
           ))}
         </div>
-        <Button type="button" variant="secondary" onClick={onAdd}>Add part</Button>
+        <Button type="button" variant="secondary" onClick={onAdd}>{t("create.parts.add")}</Button>
       </div>
     </ProgressiveWorkorderSection>
   );

@@ -10,7 +10,7 @@ test("desktop mechanic home exposes one next-job action and visible queue tools"
   assert.match(workspace, /className="[^"]*mechanic-next-job-action[^"]*"/);
   assert.match(workspace, /mechanicJobActionKey\(nextJob\)/);
   assert.match(workspace, /className="mechanic-wide-queues"[\s\S]*tabs=\{queueTabs\}/);
-  assert.match(workspace, /className="mechanic-visible-tools"[\s\S]*aria-label="Search workorders"/);
+  assert.match(workspace, /className="mechanic-visible-tools"[\s\S]*aria-label=\{t\("mechanic\.searchWorkorders"\)\}/);
   assert.match(css, /\.mechanic-home-more[\s\S]*display:\s*none/);
 });
 
@@ -41,8 +41,8 @@ test("search stays outside the compact More disclosure", () => {
   const moreStart = workspace.indexOf('className="mechanic-home-more"');
   assert.ok(visibleTools >= 0);
   assert.ok(moreStart > visibleTools);
-  assert.match(workspace.slice(visibleTools, moreStart), /aria-label="Search workorders"/);
-  assert.equal(workspace.slice(moreStart).includes('aria-label="Search workorders"'), false);
+  assert.match(workspace.slice(visibleTools, moreStart), /aria-label=\{t\("mechanic\.searchWorkorders"\)\}/);
+  assert.equal(workspace.slice(moreStart).includes('t("mechanic.searchWorkorders")'), false);
 });
 
 test("mechanic home keeps a readable desktop column and overflow-safe children", () => {

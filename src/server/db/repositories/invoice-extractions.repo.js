@@ -20,6 +20,30 @@ export function publicInvoiceExtractionRun(row) {
     durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
     sourceAvailable: Boolean(row.source_document_id) && row.source_training_status !== "deleted",
     trainingStatus: row.source_training_status || null,
+    inventoryReceipt: row.local_receipt_id ? {
+      id: row.local_receipt_id,
+      status: row.local_receipt_status,
+      locationId: row.location_id,
+      locationName: row.local_receipt_location_name || "",
+      lineCount: Number(row.local_receipt_line_count),
+      totalQuantity: Number(row.local_receipt_total_quantity),
+      postedAt: row.local_receipt_posted_at,
+      reversedAt: row.local_receipt_reversed_at || null,
+      physicalConfirmation: row.local_receipt_physical_confirmation,
+      reviewedRunVersion: Number(row.local_receipt_reviewed_run_version),
+      labelBatch: row.label_batch_id ? {
+        id: row.label_batch_id,
+        receiptId: row.local_receipt_id,
+        locationId: row.location_id,
+        locationName: row.local_receipt_location_name || "",
+        status: row.label_batch_status,
+        templateVersion: row.label_batch_template_version,
+        itemCount: Number(row.label_batch_item_count),
+        createdAt: row.label_batch_created_at,
+        manifestUrl: `/api/office/inventory/label-batches/${encodeURIComponent(row.label_batch_id)}/items`,
+        printUrl: `/api/office/inventory/label-batches/${encodeURIComponent(row.label_batch_id)}/print`,
+      } : null,
+    } : null,
     createdAt: row.created_at,
     reviewedAt: row.reviewed_at || null,
   };
@@ -30,10 +54,32 @@ async function selectRunWithSource(client, whereSql, parameters) {
     `select r.*,
             s.id as source_document_id,
             s.training_status as source_training_status,
-            s.retention_until as source_retention_until
+            s.retention_until as source_retention_until,
+            local_receipt.id as local_receipt_id,
+            local_receipt.status as local_receipt_status,
+            local_receipt.line_count as local_receipt_line_count,
+            local_receipt.total_quantity as local_receipt_total_quantity,
+            local_receipt.posted_at as local_receipt_posted_at,
+            local_receipt.reversed_at as local_receipt_reversed_at,
+            local_receipt.physical_confirmation as local_receipt_physical_confirmation,
+            local_receipt.reviewed_run_version as local_receipt_reviewed_run_version,
+            label_batch.id as label_batch_id,
+            label_batch.status as label_batch_status,
+            label_batch.template_version as label_batch_template_version,
+            label_batch.item_count as label_batch_item_count,
+            label_batch.created_at as label_batch_created_at,
+            local_receipt_location.name as local_receipt_location_name
      from invoice_extraction_runs r
      left join invoice_source_documents s
        on s.company_id = r.company_id and s.run_id = r.id
+     left join local_inventory_receipts local_receipt
+       on local_receipt.company_id = r.company_id and local_receipt.invoice_run_id = r.id
+     left join locations local_receipt_location
+       on local_receipt_location.company_id = local_receipt.company_id
+      and local_receipt_location.id = local_receipt.location_id
+     left join inventory_label_batches label_batch
+       on label_batch.company_id = local_receipt.company_id
+      and label_batch.receipt_id = local_receipt.id
      where ${whereSql}
      limit 1`,
     parameters,
@@ -137,6 +183,22 @@ export async function createInvoiceExtractionRun(input) {
         [input.companyId, input.runId, input.source.ciphertext, input.source.iv, input.source.authTag,
           input.source.keyVersion, input.documentHash, input.mimeType, input.byteSize, input.retentionUntil],
       );
+      if (input.enqueueJob) {
+        await client.query(
+          `insert into integration_jobs (
+             company_id, provider, job_type, payload, idempotency_key, max_attempts
+           ) values ($1, 'invoice_extraction', 'extract', $2::jsonb, $3, $4)
+           on conflict (company_id, provider, idempotency_key)
+             where idempotency_key is not null
+           do nothing`,
+          [
+            input.companyId,
+            JSON.stringify({ runId: input.runId, vendorHint: String(input.vendorHint || "").slice(0, 180) }),
+            `invoice-extraction:${input.runId}`,
+            Math.min(5, Math.max(1, Number(input.maxAttempts) || 2)),
+          ],
+        );
+      }
       const created = await selectRunWithSource(client, "r.id = $1 and r.company_id = $2", [input.runId, input.companyId]);
       await client.query("commit");
       return { ...created, inserted: true };
@@ -216,6 +278,20 @@ export async function getInvoiceSourceDocument({ runId, companyIds, locationIds 
        and ($4::boolean or r.location_id = any($3::uuid[]))
      limit 1`,
     [runId, companyIds, locationIds, isAdmin],
+  );
+  return result.rows[0] || null;
+}
+
+export async function getInvoiceExtractionWorkerSource({ runId, companyId }) {
+  const result = await query(
+    `select s.*, r.location_id, r.file_name, r.status as run_status,
+            r.created_by, r.provider, r.model, r.prompt_version
+     from invoice_source_documents s
+     join invoice_extraction_runs r on r.company_id = s.company_id and r.id = s.run_id
+     where s.run_id = $1 and s.company_id = $2
+       and s.training_status <> 'deleted' and r.status = 'processing'
+     limit 1`,
+    [runId, companyId],
   );
   return result.rows[0] || null;
 }

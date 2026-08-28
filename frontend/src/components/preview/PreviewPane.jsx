@@ -1,5 +1,6 @@
 import React from "react";
 import { Expand01, FileSearch01, LayoutRight, MessageChatCircle, Printer } from "@untitledui/icons";
+import { interfaceText } from "../../i18n/index.js";
 
 export function PreviewToggle({
   open,
@@ -49,7 +50,9 @@ export function PreviewPane({
   onViewChange,
   children,
   panelRef,
+  locale = "en",
 }) {
+  const t = (key) => interfaceText(locale, key);
   const isDock = variant === "dock";
   const hasSupportingView = isDock && Boolean(supportingContent) && Boolean(onViewChange);
   const previewVisible = !hasSupportingView || activeView === "preview";
@@ -73,7 +76,7 @@ export function PreviewPane({
     >
       <div className="preview-header">
         {hasSupportingView ? (
-          <div className="supporting-pane-tabs" role="tablist" aria-label="Workorder tools">
+          <div className="supporting-pane-tabs" role="tablist" aria-label={t("preview.workorderTools")}>
             <button
               type="button"
               role="tab"
@@ -93,18 +96,18 @@ export function PreviewPane({
               onClick={() => onViewChange("preview")}
             >
               <FileSearch01 />
-              <span>Preview</span>
+              <span>{t("preview.title")}</span>
             </button>
           </div>
         ) : (
           <div className="preview-title-row">
-            <h2>Preview</h2>
+            <h2>{t("preview.title")}</h2>
             {status}
           </div>
         )}
 
         {previewVisible ? <div className="preview-header-actions">
-          <div className="preview-summary" aria-label="Preview range">
+          <div className="preview-summary" aria-label={t("preview.range")}>
             <span>{countLabel}</span>
             <strong>{range}</strong>
           </div>
@@ -134,16 +137,16 @@ export function PreviewPane({
               >
                 <button className="print-command-run" type="button" role="menuitem" onClick={onPrint}>
                   <span>{primaryActionLabel}</span>
-                  <small>Choose a printer or Save as PDF in your browser</small>
+                  <small>{t("preview.printHelp")}</small>
                 </button>
                 {batchSettings ? (
-                  <div className="print-batch-settings" role="group" aria-label="Batch print settings">
+                  <div className="print-batch-settings" role="group" aria-label={t("preview.batchSettings")}>
                     <div>
-                      <span>Batch size</span>
-                      <small>Each workorder gets a unique serial</small>
+                      <span>{t("preview.batchSize")}</span>
+                      <small>{t("preview.uniqueSerial")}</small>
                     </div>
                     <label>
-                      Workorders
+                      {t("mechanic.workorders")}
                       <input type="number" min="1" max="250" value={batchSettings.copies} onChange={(event) => batchSettings.onChange("copies", event.target.value)} />
                     </label>
                   </div>
@@ -156,8 +159,8 @@ export function PreviewPane({
             className="preview-tool-button icon-tooltip"
             type="button"
             onClick={onFullscreen}
-            aria-label="Open fullscreen preview"
-            data-tooltip="Fullscreen"
+            aria-label={t("preview.openFullscreen")}
+            data-tooltip={t("preview.fullscreen")}
           >
             <Expand01 />
           </button>
@@ -169,7 +172,7 @@ export function PreviewPane({
           className="preview-pane-content"
           role={isDock && onOpenPreview ? "button" : undefined}
           tabIndex={open && isDock && onOpenPreview ? 0 : undefined}
-          aria-label={isDock && onOpenPreview ? "Open fullscreen workorder preview" : undefined}
+          aria-label={isDock && onOpenPreview ? t("preview.openFullscreenWorkorder") : undefined}
           onClick={openPreview}
           onKeyDown={handlePreviewKeyDown}
         >

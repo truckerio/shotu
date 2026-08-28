@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import { formatLocaleNumber, interfaceText } from "../../../i18n/index.js";
 import "./workorder-photos.css";
 
-function imageAttachments(messages = []) {
+function imageAttachments(messages = [], fallbackName = "Workorder photo") {
   return messages.flatMap((message) => {
     const attachments = Array.isArray(message.attachments) ? message.attachments : message.attachment ? [message.attachment] : [];
     return attachments.flatMap((attachment, index) => {
@@ -11,22 +12,22 @@ function imageAttachments(messages = []) {
       if (!source || (!mimeType.startsWith("image/") && !source.startsWith("data:image/"))) return [];
       return [{
         id: attachment.id || `${message.id}-photo-${index}`,
-        name: attachment.fileName || attachment.filename || "Workorder photo",
+        name: attachment.fileName || attachment.filename || fallbackName,
         source,
       }];
     });
   });
 }
 
-function WorkorderPhoto({ photo }) {
+function WorkorderPhoto({ photo, t }) {
   const [unavailable, setUnavailable] = useState(false);
 
   return (
     <figure className="workorder-photo-card">
       {unavailable ? (
-        <div className="workorder-photo-unavailable" role="img" aria-label={`${photo.name} is unavailable`}>
-          <span>Image unavailable</span>
-          <small>Upload this photo again to restore it.</small>
+        <div className="workorder-photo-unavailable" role="img" aria-label={`${photo.name}: ${t("photos.unavailable")} `}>
+          <span>{t("photos.unavailable")}</span>
+          <small>{t("photos.uploadAgain")}</small>
         </div>
       ) : (
         <a
@@ -34,7 +35,7 @@ function WorkorderPhoto({ photo }) {
           href={photo.source}
           target="_blank"
           rel="noreferrer"
-          aria-label={`Open ${photo.name}`}
+          aria-label={`${t("photos.open")}: ${photo.name}`}
         >
           <img
             className="workorder-photo-image"
@@ -50,18 +51,19 @@ function WorkorderPhoto({ photo }) {
   );
 }
 
-export function WorkorderPhotosModule({ access, activeSection, messages, onSelect }) {
+export function WorkorderPhotosModule({ access, activeSection, messages, onSelect, locale = "en" }) {
   if (!access) return null;
-  const photos = imageAttachments(messages);
+  const t = (key) => interfaceText(locale, key);
+  const photos = imageAttachments(messages, t("photos.workorderPhoto"));
   return (
-    <ProgressiveWorkorderSection id="photos" title="Photos" summary={photos.length ? `${photos.length} attached` : "No photos"} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
+    <ProgressiveWorkorderSection id="photos" title={t("photos.title")} summary={photos.length ? `${formatLocaleNumber(photos.length, locale)} ${t("photos.attached")}` : t("photos.none")} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
       {photos.length ? (
-        <div className="workorder-photo-grid" aria-label="Workorder photos">
+        <div className="workorder-photo-grid" aria-label={t("photos.list")}>
           {photos.map((photo) => (
-            <WorkorderPhoto photo={photo} key={photo.id} />
+            <WorkorderPhoto photo={photo} t={t} key={photo.id} />
           ))}
         </div>
-      ) : <p>No photos attached to this workorder.</p>}
+      ) : <p>{t("photos.noneOnWorkorder")}</p>}
     </ProgressiveWorkorderSection>
   );
 }

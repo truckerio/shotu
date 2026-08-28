@@ -1,25 +1,19 @@
 import { formatQuantity } from "../../../../shared/units-of-measure.js";
+import { interfaceText } from "../../i18n/index.js";
 
-const STATUS_LABELS = {
-  created: "Created",
-  pending: "Pending",
-  submitted: "Submitted",
-  assigned: "Assigned",
-  accepted: "Accepted",
-  in_progress: "Work started",
-  parts_requested: "Parts requested",
-  waiting_office: "Waiting for office",
-  mechanic_done: "Work completed",
-  completed: "Completed",
-  cancelled: "Cancelled",
+const STATUS_KEYS = {
+  created: "timeline.status.created", pending: "timeline.status.pending", submitted: "timeline.status.submitted",
+  assigned: "timeline.status.assigned", accepted: "timeline.status.accepted", in_progress: "timeline.status.inProgress",
+  parts_requested: "timeline.status.partsRequested", waiting_office: "timeline.status.waitingOffice",
+  mechanic_done: "timeline.status.workCompleted", completed: "timeline.status.completed", cancelled: "timeline.status.cancelled",
 };
 
 const ACTIVITY_GROUP_WINDOW_MS = 2 * 60 * 1000;
 
-export function humanizeStatus(value) {
+export function humanizeStatus(value, locale = "en") {
   const key = String(value || "").trim().toLowerCase();
   if (!key) return "";
-  return STATUS_LABELS[key] || key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return STATUS_KEYS[key] ? interfaceText(locale, STATUS_KEYS[key]) : key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function humanizeEventValue(value, fallback = "Updated") {
@@ -27,39 +21,41 @@ function humanizeEventValue(value, fallback = "Updated") {
   return text.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function timelineEventTitle(event) {
-  if (event.type === "access") return "Workorder opened";
-  if (event.type === "part") return `Part ${humanizeEventValue(event.action).toLowerCase()}`;
+export function timelineEventTitle(event, locale = "en") {
+  const t = (key) => interfaceText(locale, key);
+  if (event.type === "access") return t("timeline.opened");
+  if (event.type === "part") return `${t("timeline.part")} ${humanizeEventValue(event.action).toLowerCase()}`;
   if (event.type === "attention") {
-    const subject = event.field_key === "missing_info" ? "Information request" : humanizeEventValue(event.field_key, "Attention");
-    return event.action === "resolved" ? `${subject} resolved` : subject;
+    const subject = event.field_key === "missing_info" ? t("timeline.informationRequest") : humanizeEventValue(event.field_key, t("timeline.attention"));
+    return event.action === "resolved" ? `${subject} ${t("timeline.resolved")}` : subject;
   }
   if (event.type === "field") {
-    if (event.field_key === "work_details_updated") return "Work details updated";
-    return `${event.field_label || event.action || "Field"} changed`;
+    if (event.field_key === "work_details_updated") return t("timeline.workDetailsUpdated");
+    return `${event.field_label || event.action || t("timeline.field")} ${t("timeline.changed")}`;
   }
   if (event.type === "assignment") {
-    if (event.action === "reassigned") return event.from_mechanic_id ? "Mechanic reassigned" : "Mechanic assigned";
-    if (event.action === "unassigned") return "Returned to available queue";
-    return "Assignment changed";
+    if (event.action === "reassigned") return t(event.from_mechanic_id ? "timeline.mechanicReassigned" : "timeline.mechanicAssigned");
+    if (event.action === "unassigned") return t("timeline.returnedQueue");
+    return t("timeline.assignmentChanged");
   }
 
-  const from = humanizeStatus(event.from_status || "created");
-  const to = humanizeStatus(event.to_status);
-  if (!to) return from || "Workorder updated";
+  const from = humanizeStatus(event.from_status || "created", locale);
+  const to = humanizeStatus(event.to_status, locale);
+  if (!to) return from || t("timeline.workorderUpdated");
   if (!event.from_status || event.from_status === event.to_status) return to;
-  return to === "Work started" ? to : `${from} to ${to}`;
+  return event.to_status === "in_progress" ? to : `${from} ${t("timeline.to")} ${to}`;
 }
 
-export function timelineEventDescription(event) {
+export function timelineEventDescription(event, locale = "en") {
+  const t = (key) => interfaceText(locale, key);
   if (event.type === "assignment") {
-    const from = event.from_mechanic_name || "Unassigned";
-    const to = event.to_mechanic_name || "Unassigned";
+    const from = event.from_mechanic_name || t("timeline.unassigned");
+    const to = event.to_mechanic_name || t("timeline.unassigned");
     const description = event.action === "accepted"
-      ? `${to} accepted the workorder.`
+      ? `${to} ${t("timeline.acceptedWorkorder")}`
       : event.action === "unassigned"
-        ? `${from} returned the workorder to the available queue.`
-        : `${from} changed to ${to}.`;
+        ? `${from} ${t("timeline.returnedWorkorder")}`
+        : `${from} ${t("timeline.changedTo")} ${to}.`;
     return event.note ? `${description} ${event.note}` : description;
   }
   if (event.type === "field") {
@@ -67,29 +63,29 @@ export function timelineEventDescription(event) {
       try {
         const details = JSON.parse(event.new_value || "{}");
         const fields = Array.isArray(details.fieldsChanged) ? details.fieldsChanged : [];
-        if (fields.length === 2) return "Diagnosis and repair details saved.";
-        if (fields.includes("diagnosis")) return "Diagnosis saved.";
-        if (fields.includes("workPerformed")) return "Repair details saved.";
+        if (fields.length === 2) return t("timeline.diagnosisRepairSaved");
+        if (fields.includes("diagnosis")) return t("timeline.diagnosisSaved");
+        if (fields.includes("workPerformed")) return t("timeline.repairSaved");
       } catch {
         // Use stable grouped-event copy.
       }
-      return "Mechanic progress saved.";
+      return t("timeline.progressSaved");
     }
     if (String(event.field_label || "").toLowerCase() === "used parts") {
       try {
         const parts = JSON.parse(event.new_value || "[]")
           .filter((part) => part?.partNo)
-          .map((part) => `${formatQuantity(part.qty, part.uomCode) || "Quantity not recorded"} × ${part.partNo}`);
-        return parts.length ? `Used parts: ${parts.join(", ")}.` : "Used parts cleared.";
+          .map((part) => `${formatQuantity(part.qty, part.uomCode) || t("timeline.quantityNotRecorded")} × ${part.partNo}`);
+        return parts.length ? `${t("timeline.usedParts")}: ${parts.join(", ")}.` : t("timeline.usedPartsCleared");
       } catch {
-        return "Used parts updated.";
+        return t("timeline.usedPartsUpdated");
       }
     }
-    const label = event.field_label || "Field";
-    if (event.new_value) return `${label} updated to ${event.new_value}.`;
-    return `${label} cleared.`;
+    const label = event.field_label || t("timeline.field");
+    if (event.new_value) return `${label} ${t("timeline.updatedTo")} ${event.new_value}.`;
+    return `${label} ${t("timeline.cleared")}`;
   }
-  return event.note || "Workorder updated.";
+  return event.note || t("timeline.workorderUpdatedSentence");
 }
 
 export function meaningfulTimelineEvents(timeline) {
@@ -129,22 +125,22 @@ function timelineGroupId(event) {
   return `${timelineEventFamily(event)}:${timelineActorKey(event)}:${event.type || "activity"}:${event.id ?? event.created_at ?? "event"}`;
 }
 
-function finishTimelineGroup(group) {
+function finishTimelineGroup(group, locale) {
   const lastEvent = group.children[group.children.length - 1];
   return {
     id: group.id,
     actorUserId: lastEvent.actor_user_id || null,
-    actorName: lastEvent.changed_by_name || "System",
+    actorName: lastEvent.changed_by_name || interfaceText(locale, "timeline.system"),
     actorRole: lastEvent.actor_role || "",
     createdAt: lastEvent.created_at || group.children[0]?.created_at || null,
-    title: timelineEventTitle(lastEvent),
-    description: timelineEventDescription(lastEvent),
+    title: timelineEventTitle(lastEvent, locale),
+    description: timelineEventDescription(lastEvent, locale),
     childCount: group.children.length,
     children: group.children,
   };
 }
 
-export function groupTimelineEvents(timeline) {
+export function groupTimelineEvents(timeline, locale = "en") {
   const groups = [];
 
   for (const event of meaningfulTimelineEvents(timeline)) {
@@ -161,7 +157,7 @@ export function groupTimelineEvents(timeline) {
     });
   }
 
-  return groups.map(finishTimelineGroup);
+  return groups.map((group) => finishTimelineGroup(group, locale));
 }
 
 export function timelineEventCount(timeline) {

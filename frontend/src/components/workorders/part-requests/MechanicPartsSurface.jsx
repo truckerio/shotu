@@ -5,6 +5,7 @@ import { mechanicPartsActionState } from "../mechanic-part-request-model.js";
 import { usedPartHasValue } from "../used-parts-model.js";
 import { MechanicRequestCard } from "./MechanicRequestCard.jsx";
 import { UsedPartsSection } from "./UsedPartsSection.jsx";
+import { MechanicSerializedParts } from "./MechanicSerializedParts.jsx";
 
 export function MechanicPartsSurface({
   actorId,
@@ -66,35 +67,40 @@ export function MechanicPartsSurface({
 
       {mechanicActions.canRequestPart ? (
         <div id={requestPartPanelId} hidden={activeAction !== "request"}>
-          <MechanicPartRequestForm workorderId={detail.workorder.id} onChanged={onChanged} />
+          <MechanicPartRequestForm workorderId={detail.workorder.id} onChanged={onChanged} locale={locale} />
         </div>
       ) : null}
 
       {showUsedParts ? (
-        <UsedPartsSection
-          actorId={actorId}
-          detail={detail}
-          parts={parts}
-          laborHours={laborHours}
-          laborProduct={laborProduct}
-          laborRepairOrder={laborRepairOrder}
-          laborRepairOrderDisabled={laborRepairOrderDisabled}
-          onLaborHoursChange={onLaborHoursChange}
-          onLaborRepairOrderChange={onLaborRepairOrderChange}
-          onPartsChange={onPartsChange}
-          onSaveParts={onSaveParts}
-          editable={usedPartsAccess.editable}
-          readonlyMessage={usedPartsAccess.message}
-          suggestionsEnabled={false}
-          id={usedPartsPanelId}
-          hidden={mechanicActions.canRecordUsedPart && activeAction !== "used"}
-        />
+        <div hidden={mechanicActions.canRecordUsedPart && activeAction !== "used"}>
+          {mechanicActions.canRecordUsedPart ? (
+            <MechanicSerializedParts workorderId={detail.workorder.id} onChanged={onChanged} locale={locale} />
+          ) : null}
+          <UsedPartsSection
+            actorId={actorId}
+            detail={detail}
+            parts={parts}
+            laborHours={laborHours}
+            laborProduct={laborProduct}
+            laborRepairOrder={laborRepairOrder}
+            laborRepairOrderDisabled={laborRepairOrderDisabled}
+            onLaborHoursChange={onLaborHoursChange}
+            onLaborRepairOrderChange={onLaborRepairOrderChange}
+            onPartsChange={onPartsChange}
+            onSaveParts={onSaveParts}
+            editable={usedPartsAccess.editable}
+            readonlyMessage={usedPartsAccess.message}
+            suggestionsEnabled={false}
+            locale={locale}
+            id={usedPartsPanelId}
+          />
+        </div>
       ) : null}
 
       {requests.length ? (
         <div className="part-request-list">
           {requests.map((request) => (
-            <MechanicRequestCard request={request} detail={detail} onChanged={onChanged} key={request.id} />
+            <MechanicRequestCard request={request} detail={detail} onChanged={onChanged} locale={locale} key={request.id} />
           ))}
         </div>
       ) : null}

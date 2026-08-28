@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   catalogInventoryText,
   normalizeCatalogResponse,
+  repairOrderAfterCatalogSelection,
 } from "./catalog-parts-model.js";
 
 test("normalizes catalog and location inventory without leaking API shape", () => {
@@ -39,4 +40,16 @@ test("distinguishes an empty company catalog from a query with no matches", () =
     catalogAvailable: true,
     items: [],
   });
+});
+
+test("catalog description fills only a blank repair order", () => {
+  const catalogPart = { description: "  Oil filter, full-flow spin-on  " };
+
+  assert.equal(repairOrderAfterCatalogSelection("", catalogPart), "Oil filter, full-flow spin-on");
+  assert.equal(repairOrderAfterCatalogSelection("Install and inspect for leaks", catalogPart), "Install and inspect for leaks");
+  assert.equal(repairOrderAfterCatalogSelection("", {}), "");
+});
+
+test("catalog description autofill respects the used-parts payload limit", () => {
+  assert.equal(repairOrderAfterCatalogSelection("", { description: "x".repeat(2100) }).length, 2000);
 });

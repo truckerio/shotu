@@ -8,12 +8,15 @@ export function replaceRouteSearch(search = "") {
   window.history.replaceState({}, "", `${window.location.pathname}${search}`);
 }
 
-export function workorderDetailSearch(workorderId, section = "") {
+export function workorderDetailSearch(workorderId, section = "", { partRequestId = "" } = {}) {
   const encodedId = encodeURIComponent(workorderId);
   const sectionQuery = section && section !== "work"
     ? `&section=${encodeURIComponent(section)}`
     : "";
-  return `?workorder=${encodedId}${sectionQuery}`;
+  const partRequestQuery = partRequestId
+    ? `&partRequest=${encodeURIComponent(partRequestId)}`
+    : "";
+  return `?workorder=${encodedId}${sectionQuery}${partRequestQuery}`;
 }
 
 export function createWorkorderSearch(draftId = "") {

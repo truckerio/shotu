@@ -29,8 +29,11 @@ export async function handleInvoiceExtractionApi(req, res, url, helpers, depende
   if (!url.pathname.startsWith("/api/office/invoice-extractions")) return false;
   try {
     if (req.method === "POST" && url.pathname === "/api/office/invoice-extractions") {
-      const result = await extractInvoice(await helpers.readBody(req), helpers.requestContext, dependencies);
-      helpers.sendJson(res, result.replayed ? 200 : 201, result);
+      const result = await extractInvoice(await helpers.readBody(req), helpers.requestContext, {
+        ...dependencies,
+        deferProcessing: dependencies.deferProcessing ?? true,
+      });
+      helpers.sendJson(res, result.replayed ? 200 : 202, result);
       return true;
     }
     const reviewId = runPath(url.pathname, "/review");

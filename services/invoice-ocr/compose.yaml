@@ -10,6 +10,8 @@ services:
       OCR_MAX_DOCUMENT_BYTES: "10485760"
       OCR_MAX_PAGES: "3"
       OCR_MAX_REGIONS: "5000"
+      OCR_IMAGE_MAX_SIDE: "2200"
+      OCR_MAX_NATIVE_TEXT_CHARS: "100000"
     deploy:
       resources:
         limits:

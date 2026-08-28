@@ -1,3 +1,4 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
@@ -116,7 +117,7 @@ export function WorkorderOdooPanel({
               {odooReadiness.parts.filter((part) => part.productCandidates?.length > 1).map((part) => (
                 <label key={part.lineIndex}>
                   <span>{part.partNumber || `Part ${part.lineIndex + 1}`}</span>
-                  <select
+                  <Dropdown
                     aria-label={`Odoo product for ${part.partNumber || `part ${part.lineIndex + 1}`}`}
                     disabled={saving}
                     value={part.productExternalId || ""}
@@ -128,7 +129,7 @@ export function WorkorderOdooPanel({
                         {candidate.defaultCode ? `[${candidate.defaultCode}] ` : ""}{candidate.displayName} · #{candidate.externalId}
                       </option>
                     ))}
-                  </select>
+                  </Dropdown>
                 </label>
               ))}
             </section>

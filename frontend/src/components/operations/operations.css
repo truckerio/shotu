@@ -83,7 +83,7 @@
 .operations-tabs button:focus-visible,
 .operations-row:focus-visible,
 .operations-pagination button:focus-visible {
-  outline: 2px solid #84adff;
+  outline: 2px solid #2e6ee6;
   outline-offset: 2px;
 }
 
@@ -273,11 +273,60 @@
 .operations-pagination button:disabled { cursor: default; opacity: .45; }
 .operations-pagination svg { height: 15px; width: 15px; }
 
+.part-request-queue { min-width: 0; }
+.part-request-queue-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(190px, 1.5fr) repeat(4, minmax(132px, .8fr));
+  padding: 0 0 16px;
+}
+.part-request-queue-toolbar label { display: grid; gap: 5px; min-width: 0; }
+.part-request-queue-toolbar input,
+.part-request-queue-toolbar select {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #182230;
+  font: inherit;
+  font-size: var(--text-secondary);
+  height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  width: 100%;
+}
+.part-request-queue-toolbar .operations-input-with-icon input { padding-left: 34px; }
+.part-request-queue-toolbar input:focus,
+.part-request-queue-toolbar select:focus,
+.part-request-queue-open:focus-visible { outline: 2px solid #2e6ee6; outline-offset: 2px; }
+.part-request-queue-table { background: #fff; border-bottom: 1px solid #d0d5dd; border-top: 1px solid #d0d5dd; min-width: 0; }
+.part-request-queue-head,
+.part-request-queue-row { display: grid; grid-template-columns: minmax(150px, 1.25fr) minmax(130px, 1fr) minmax(120px, .9fr) minmax(110px, .8fr) minmax(120px, .9fr) minmax(150px, 1.15fr) minmax(120px, .9fr); }
+.part-request-queue-head { background: #f9fafb; color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); min-height: 40px; }
+.part-request-queue-head span,
+.part-request-queue-cell { align-items: center; border-right: 1px solid #eaecf0; display: flex; min-width: 0; padding: 9px 10px; }
+.part-request-queue-head span:last-child,
+.part-request-queue-cell:last-child { border-right: 0; }
+.part-request-queue-row { border-top: 1px solid #eaecf0; color: #344054; font-size: var(--text-secondary); min-height: 72px; outline: none; }
+.part-request-queue-cell { align-content: center; flex-direction: column; flex-wrap: wrap; gap: 3px; justify-content: center; overflow: hidden; overflow-wrap: anywhere; }
+.part-request-queue-cell strong { color: #182230; font-weight: var(--weight-semibold); }
+.part-request-queue-cell > span { color: #667085; font-size: var(--text-caption); overflow-wrap: anywhere; }
+.part-request-queue-open { align-items: flex-start; background: transparent; border: 0; color: #182230; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0; text-align: left; }
+.part-request-queue-open:hover strong { color: #175cd3; text-decoration: underline; text-underline-offset: 2px; }
+.part-request-queue-open span { color: #667085; font-size: var(--text-caption); }
+.part-request-queue-supply,
+.part-request-queue-status { border: 1px solid #d0d5dd; border-radius: 4px; color: #475467 !important; font-size: 11px !important; font-weight: var(--weight-semibold); line-height: 18px; padding: 0 6px; text-transform: capitalize; }
+.part-request-queue-status { background: #eff8ff; border-color: #b2ddff; color: #175cd3 !important; }
+.part-request-queue-loading { display: grid; gap: 1px; }
+.part-request-queue-loading span { animation: operations-pulse 1.4s ease-in-out infinite; background: linear-gradient(90deg, #f9fafb, #eef1f5, #f9fafb); background-size: 200% 100%; border-top: 1px solid #eaecf0; display: block; height: 72px; }
+
 @media (max-width: 1050px) {
   .operations-toolbar { grid-template-columns: 1.4fr repeat(2, 1fr); }
+  .part-request-queue-toolbar { grid-template-columns: 1.4fr repeat(2, 1fr); }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 960px) {
   .operations-table-head { display: none; }
   .operations-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; padding: 8px 0; }
   .operations-cell { align-items: flex-start; border: 0; display: flex; padding: 7px 12px; }
@@ -288,6 +337,20 @@
   .operations-identity > *, .operations-state > *, .operations-wait > *, .operations-activity > * { grid-column: 2; }
   .operations-flags { margin-top: 2px; }
   .operations-loading span { height: 150px; }
+  .part-request-queue-head {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+  .part-request-queue-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; padding: 8px 0; }
+  .part-request-queue-cell { align-items: flex-start; border: 0; display: flex; padding: 7px 12px; }
+  .part-request-queue-cell::before { color: #667085; content: attr(data-label); flex: 0 0 96px; font-size: var(--text-caption); font-weight: var(--weight-semibold); }
+  .part-request-queue-loading span { height: 150px; }
 }
 
 @media (max-width: 700px) {
@@ -393,8 +456,18 @@
   .operations-pagination button {
     min-height: 44px;
   }
+  .part-request-queue-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .part-request-queue-toolbar .part-request-queue-search { grid-column: 1 / -1; }
+  .part-request-queue-table { background: transparent; border: 0; display: grid; gap: 10px; }
+  .part-request-queue-row { background: #fff; border: 1px solid #eaecf0; border-radius: 10px; box-shadow: 0 1px 2px rgb(16 24 40 / 4%); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); overflow: hidden; padding: 14px; }
+  .part-request-queue-cell { align-items: flex-start; display: grid; gap: 2px 10px; grid-template-columns: 96px minmax(0, 1fr); padding: 0; }
+  .part-request-queue-cell::before { grid-column: 1; grid-row: 1 / span 2; }
+  .part-request-queue-cell > * { grid-column: 2; min-width: 0; overflow-wrap: anywhere; }
+  .part-request-queue-part { grid-template-columns: 0 minmax(0, 1fr); }
+  .part-request-queue-part::before { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .operations-loading span { animation: none; }
+  .operations-loading span,
+  .part-request-queue-loading span { animation: none; }
 }

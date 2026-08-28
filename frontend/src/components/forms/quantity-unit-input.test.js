@@ -7,8 +7,8 @@ const css = readFileSync(new URL("./quantity-unit-input.css", import.meta.url), 
 
 test("quantity control exposes a searchable grouped unit listbox", () => {
   assert.match(component, /aria-haspopup="listbox"/);
-  assert.match(component, /placeholder="Search units"/);
-  assert.match(component, /unitOptionGroups\(query\)/);
+  assert.match(component, /placeholder=\{t\("uom\.searchUnits"\)\}/);
+  assert.match(component, /unitOptionGroups\(\s*query,\s*\(kind, value\) => t\(`/);
   assert.match(component, /role="option"/);
   assert.match(component, /onValueChange\(\{\s*quantity:\s*model\.quantity,\s*uomCode:\s*nextCode\s*\}\)/);
   assert.doesNotMatch(component, /quantity:\s*normalized,\s*uomCode:\s*nextCode/);

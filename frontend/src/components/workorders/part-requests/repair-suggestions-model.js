@@ -1,3 +1,5 @@
+import { formatLocaleNumber, interfaceText } from "../../../i18n/index.js";
+
 function nonNegativeInteger(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
@@ -56,19 +58,20 @@ export function normalizeRepairSuggestionsResponse(payload = {}) {
   return suggestions;
 }
 
-export function repairSuggestionMeta(suggestion, currentAssetId = "") {
+export function repairSuggestionMeta(suggestion, currentAssetId = "", locale = "en") {
+  const t = (key) => interfaceText(locale, key);
   const parts = [];
   if (suggestion.usageCount) {
-    parts.push(`Used ${suggestion.usageCount} ${suggestion.usageCount === 1 ? "time" : "times"}`);
+    parts.push(`${t("parts.used")} ${formatLocaleNumber(suggestion.usageCount, locale)} ${t(suggestion.usageCount === 1 ? "parts.time" : "parts.times")}`);
   }
-  if (suggestion.confidence === "confirmed") parts.push("Confirmed link");
-  else if (suggestion.confidence === "context") parts.push("Same service order");
-  else if (suggestion.confidence) parts.push(`${suggestion.confidence} confidence`);
+  if (suggestion.confidence === "confirmed") parts.push(t("parts.confirmedLink"));
+  else if (suggestion.confidence === "context") parts.push(t("parts.sameServiceOrder"));
+  else if (suggestion.confidence) parts.push(t(`parts.confidence.${suggestion.confidence}`));
   if (suggestion.context) parts.push(suggestion.context);
   else if (suggestion.sameAsset
-    || (currentAssetId && suggestion.examples.some((example) => example.assetId === currentAssetId))) parts.push("Same unit");
-  else if (suggestion.examples[0]?.unitNo) parts.push(`Unit ${suggestion.examples[0].unitNo}`);
+    || (currentAssetId && suggestion.examples.some((example) => example.assetId === currentAssetId))) parts.push(t("parts.sameUnit"));
+  else if (suggestion.examples[0]?.unitNo) parts.push(`${t("parts.unit")} ${suggestion.examples[0].unitNo}`);
   else if (suggestion.examples[0]?.reference) parts.push(suggestion.examples[0].reference);
-  else if (suggestion.source === "odoo") parts.push("Odoo service history");
-  return parts.join(" · ") || "From service history";
+  else if (suggestion.source === "odoo") parts.push(t("parts.odooServiceHistory"));
+  return parts.join(" · ") || t("parts.fromServiceHistory");
 }

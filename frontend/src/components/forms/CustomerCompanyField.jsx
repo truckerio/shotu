@@ -9,11 +9,12 @@ export function CustomerCompanyField({
   label = "Customer company",
   onChange,
   required = false,
+  requiredLabel = "Required",
   value,
   ...inputProps
 }) {
   return (
-    <FormField id={id} label={label} hint={hint} error={error} required={required}>
+    <FormField id={id} label={label} hint={hint} error={error} required={required} requiredLabel={requiredLabel}>
       <input
         {...textEntryProps("name")}
         {...inputProps}

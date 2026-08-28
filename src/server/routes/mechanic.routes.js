@@ -144,6 +144,7 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
     sendJson(res, 200, projectProtectedWorkorderDetail(
       await mechanicWorkorderDetail(detailId, mechanicUserId),
       decisions,
+      { viewerRole: requestContext.actor.role },
     ));
     return true;
   }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "../../../components/ui/Button.jsx";
+import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 
 function dateLabel(value) {
@@ -20,6 +21,7 @@ export function IntegrationClientsCard({
 }) {
   const [name, setName] = useState("Odoo production");
   const [copied, setCopied] = useState(false);
+  const pagination = usePagination(clients, { pageSize: 10 });
 
   async function create(event) {
     event.preventDefault();
@@ -75,7 +77,7 @@ export function IntegrationClientsCard({
       )}
 
       <div className="integration-client-list">
-        {clients.length ? clients.map((client) => (
+        {clients.length ? pagination.pageItems.map((client) => (
           <article key={client.id}>
             <div>
               <strong>{client.name}</strong>
@@ -92,6 +94,7 @@ export function IntegrationClientsCard({
           </article>
         )) : <p className="integration-empty">No machine clients created.</p>}
       </div>
+      <Pagination {...pagination} label="clients" />
     </article>
   );
 }

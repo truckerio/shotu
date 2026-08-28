@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
@@ -10,7 +10,7 @@ import { progressiveQueueResetKey } from "../../components/responsive/Progressiv
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
-import { interfaceText } from "../../i18n/index.js";
+import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import {
   MECHANIC_QUEUE_TABS,
   mechanicActionLabel,
@@ -24,16 +24,20 @@ import {
 import "./mechanic-workspace.css";
 import "../role-workspaces.css";
 
-function jobUnit(workorder) {
-  return workorder.assetUnitNo || workorder.assetLabel || workorder.asset?.unitNo || workorder.asset?.name || "Unit not set";
+function jobUnit(workorder, fallback) {
+  return workorder.assetUnitNo || workorder.assetLabel || workorder.asset?.unitNo || workorder.asset?.name || fallback;
 }
 
-function jobLocation(workorder) {
-  return workorder.locationName || workorder.location?.name || "Location not set";
+function jobLocation(workorder, fallback) {
+  return workorder.locationName || workorder.location?.name || fallback;
 }
 
-export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLocaleChange, onCreateWorkorder, onOpenWorkorder }) {
+export function MechanicWorkspace({ actor, locale = "en", localeError = "", localeReady = true, onLocaleChange, onCreateWorkorder, onOpenWorkorder }) {
   const t = (key) => interfaceText(locale, key);
+  const errorText = useCallback(
+    (error) => locale === "en" && error?.message ? error.message : interfaceText(locale, "mechanic.requestFailed"),
+    [locale],
+  );
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState("myWork");
   const [search, setSearch] = useState("");
@@ -43,28 +47,28 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
   const [error, setError] = useState("");
   const [online, setOnline] = useState(() => navigator.onLine);
 
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     setError("");
     const result = await api("/api/mechanic/dashboard");
     setDashboard(result);
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     loadDashboard().catch((err) => {
-      setError(err.message);
+      setError(errorText(err));
       setLoading(false);
     });
-  }, []);
+  }, [errorText, loadDashboard]);
   useAutomaticRefresh(
-    () => loadDashboard().catch((err) => setError(err.message)),
+    () => loadDashboard().catch((err) => setError(errorText(err))),
     { enabled: online },
   );
 
   useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
-      loadDashboard().catch((err) => setError(err.message));
+      loadDashboard().catch((err) => setError(errorText(err)));
     };
     const handleOffline = () => setOnline(false);
     window.addEventListener("online", handleOnline);
@@ -73,7 +77,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [errorText, loadDashboard]);
 
   async function openWorkorder(id) {
     setOpeningId(id);
@@ -83,7 +87,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
       const detail = await api(`/api/mechanic/workorders/${id}`);
       onOpenWorkorder(detail);
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err));
       await loadDashboard().catch(() => {});
     } finally {
       setOpeningId("");
@@ -99,7 +103,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
       const detail = await api(`/api/mechanic/workorders/${id}`);
       onOpenWorkorder(detail);
     } catch (err) {
-      setError(err.message);
+      setError(errorText(err));
       await loadDashboard();
     } finally {
       setAcceptingId("");
@@ -135,52 +139,53 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
 
   return (
     <main className="prototype mechanic-home workspace-operations">
-      <WorkspaceHeader actor={actor} className="role-home-account-header" />
+      <WorkspaceHeader actor={actor} className="role-home-account-header" locale={locale} />
       <div className="mechanic-home-content">
         <PageHeader
           title={t("mechanic.workorders")}
           actions={(
             <WorkspaceCreateActions
               actor={actor}
+              locale={locale}
               onCreateWorkorder={onCreateWorkorder}
               createLabel={t("mechanic.createWorkorder")}
             />
           )}
         />
 
-        {!online ? <p className="workspace-connection-state" role="status">Offline. Saved work stays visible; sending and updates resume when connection returns.</p> : null}
-        <section className="mechanic-queue-shell" aria-label="Mechanic work">
+        {!online ? <p className="workspace-connection-state" role="status">{t("mechanic.offline")}</p> : null}
+        <section className="mechanic-queue-shell" aria-label={t("mechanic.work")}>
           <div className="mechanic-primary-queues">
             <div className="mechanic-wide-queues">
-              <WorkorderQueueTabs tabs={queueTabs} activeTab={activeTab} onChange={setActiveTab} />
+              <WorkorderQueueTabs tabs={queueTabs} activeTab={activeTab} onChange={setActiveTab} locale={locale} />
             </div>
             <div className="mechanic-phone-queues">
-              <WorkorderQueueTabs tabs={phonePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+              <WorkorderQueueTabs tabs={phonePrimaryTabs} activeTab={activeTab} onChange={setActiveTab} locale={locale} />
             </div>
           </div>
 
-          <section className="mechanic-visible-tools" aria-label="Search and filters">
+          <section className="mechanic-visible-tools" aria-label={t("mechanic.searchFilters")}>
             <label className="mechanic-search">
               <SearchMd aria-hidden="true" />
-              <input aria-label="Search workorders" {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit or workorder" />
+              <input aria-label={t("mechanic.searchWorkorders")} {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("mechanic.searchPlaceholder")} />
             </label>
             <div className="mechanic-secondary-actions mechanic-wide-account-actions">
-              <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
+              <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} />
             </div>
           </section>
 
           {error ? <p className="ops-error" role="alert">{error}</p> : null}
 
           {loading ? (
-            <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>Loading workorders</strong></div>
+            <div className="mechanic-empty-state"><RefreshCw01 className="loading-icon" /><strong>{t("mechanic.loading")}</strong></div>
           ) : nextJob ? (
             <section className="mechanic-next-job" aria-label={t("mechanic.nextJob")}>
               <div className="mechanic-next-job-copy">
                 <span className="mechanic-next-job-eyebrow">{t("mechanic.upNext")}</span>
                 <h2>{t("mechanic.nextJob")}</h2>
-                <strong className="mechanic-next-job-unit">{jobUnit(nextJob)}</strong>
-                <p>{nextJob.concern || "Problem not recorded"}</p>
-                <span>{jobLocation(nextJob)}{nextJob.serial ? ` · ${nextJob.serial}` : ""}</span>
+                <strong className="mechanic-next-job-unit">{jobUnit(nextJob, t("queue.noUnit"))}</strong>
+                <p>{nextJob.concern || t("mechanic.problemNotRecorded")}</p>
+                <span>{jobLocation(nextJob, t("queue.noLocation"))}{nextJob.serial ? ` · ${nextJob.serial}` : ""}</span>
               </div>
               <button
                 className="button primary mechanic-next-job-action"
@@ -189,7 +194,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
                 onClick={() => openWorkorder(nextJob.id)}
               >
                 {openingId === nextJob.id
-                  ? "Opening…"
+                  ? t("mechanic.opening")
                   : t(`mechanic.${mechanicJobActionKey(nextJob)}`)}
               </button>
             </section>
@@ -204,12 +209,12 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
           ) : null}
 
           {!loading && (activeTab !== "myWork" || rows.length) ? (
-            <section className="mechanic-assigned-list" aria-label={activeTab === "myWork" ? "Other assigned jobs" : "Workorders"}>
+            <section className="mechanic-assigned-list" aria-label={activeTab === "myWork" ? t("mechanic.otherAssigned") : t("mechanic.workorders")}>
               <div className="mechanic-list-title">
                 <h2>{activeTab === "myWork" ? t("mechanic.otherAssigned") : queueTabs.find((tab) => tab.key === activeTab)?.label}</h2>
-                <span>{rows.length}</span>
+                <span>{formatLocaleNumber(rows.length, locale)}</span>
               </div>
-              <WorkorderTableHeader variant="mechanic" />
+              <WorkorderTableHeader variant="mechanic" locale={locale} />
               <div className={`mechanic-work-list role-task-list role-task-list-${activeTab}`} aria-live="polite" data-mobile-action={mechanicActionLabel(activeTab)}>
                 {rows.length ? (
                   <ProgressiveQueue
@@ -220,8 +225,9 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
                         workorder={workorder}
                         available={activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
                         busy={acceptingId === workorder.id}
-                        acceptLabel={activeTab === "activeWork" ? "Join work" : "Accept work"}
-                        busyLabel={activeTab === "activeWork" ? "Joining..." : "Accepting..."}
+                        acceptLabel={activeTab === "activeWork" ? t("queue.joinWork") : t("queue.acceptWork")}
+                        busyLabel={activeTab === "activeWork" ? t("queue.joining") : t("queue.accepting")}
+                        locale={locale}
                         onOpen={() => openWorkorder(workorder.id)}
                         onAccept={() => acceptFromCard(workorder.id)}
                       />
@@ -229,8 +235,8 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
                   />
                 ) : (
                   <div className="mechanic-empty-state">
-                    <strong>{search ? "No matching jobs" : "No jobs here"}</strong>
-                    {search ? <button type="button" onClick={() => setSearch("")}>Clear search</button> : null}
+                    <strong>{search ? t("mechanic.noMatching") : t("mechanic.noJobsHere")}</strong>
+                    {search ? <button type="button" onClick={() => setSearch("")}>{t("mechanic.clearSearch")}</button> : null}
                   </div>
                 )}
               </div>
@@ -241,11 +247,11 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", onLo
             <summary><span>{t("detail.more")}</span><small>{t("mechanic.moreSummary")}</small></summary>
             <div className="mechanic-home-more-body">
               <div className="mechanic-secondary-queues">
-                <WorkorderQueueTabs tabs={phoneSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} />
+                <WorkorderQueueTabs tabs={phoneSecondaryTabs} activeTab={activeTab} onChange={setActiveTab} locale={locale} />
               </div>
-              <section className="mechanic-secondary-tools" aria-label="Account controls">
+              <section className="mechanic-secondary-tools" aria-label={t("mechanic.accountControls")}>
                 <div className="mechanic-secondary-actions">
-                  <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} />
+                  <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} />
                 </div>
               </section>
             </div>

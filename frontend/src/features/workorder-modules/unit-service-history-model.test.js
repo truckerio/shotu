@@ -12,6 +12,12 @@ test("normalizes a tolerant history response without turning unavailable into em
   assert.equal(normalizeServiceHistoryResponse({ state: "provider_error", items: [] }).state, "unavailable");
 });
 
+test("mechanic-safe status hides provider diagnostics behind localized text", () => {
+  const history = normalizeServiceHistoryResponse({ state: "stale", freshness: { warning: "Odoo timeout: provider detail" } });
+  assert.equal(serviceHistoryStatus(history, "es").message, "Se muestra el historial de servicio más reciente disponible.");
+  assert.equal(serviceHistoryStatus(history, "en", { includeDiagnostic: true }).message, "Odoo timeout: provider detail");
+});
+
 test("normalizes records and uses last completed service for compact context", () => {
   const history = normalizeServiceHistoryResponse({
     state: "ready",
@@ -27,6 +33,12 @@ test("normalizes records and uses last completed service for compact context", (
   assert.equal(history.items[0].truncated.parts, false);
   assert.equal(history.nextCursor, "next-page");
   assert.match(serviceHistorySummaryLabel(history), /^Last completed service/);
+});
+
+test("keeps missing record and part labels empty for locale-aware rendering", () => {
+  const history = normalizeServiceHistoryResponse({ state: "ready", items: [{ parts: [{}] }] });
+  assert.equal(history.items[0].reference, "");
+  assert.equal(history.items[0].parts[0].name, "");
 });
 
 test("does not label a recorded-only date as completed", () => {

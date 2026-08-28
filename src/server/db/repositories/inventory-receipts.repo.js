@@ -362,16 +362,26 @@ export async function getInventoryReceipt({ receiptId, companyIds, locationIds =
 export async function getSerializedInventoryUnit({ unitId, companyIds, locationIds = [], isAdmin = false }) {
   const unit = await query(
     `select unit.id, unit.company_id, unit.location_id, unit.serial_number,
-            unit.provider_lot_external_id, unit.status, unit.created_at, unit.updated_at,
-            line.part_number, line.description, receipt.id as receipt_id,
-            receipt.status as receipt_status, receipt.provider_picking_name,
-            receipt.confirmed_at, location.name as location_name
+            unit.receipt_line_id, unit.unit_ordinal, unit.provider_lot_external_id,
+            unit.status, unit.created_at, unit.updated_at,
+            line.line_index, line.part_number, line.description, line.uom_code,
+            receipt.id as receipt_id, receipt.invoice_run_id, receipt.count_import_id,
+            receipt.serialization_batch_id, receipt.created_by,
+            receipt.status as receipt_status, receipt.provider, receipt.provider_picking_name,
+            receipt.confirmed_at, location.name as location_name,
+            creator.display_name as created_by_name,
+            label_batch.id as label_batch_id, label_batch.status as label_batch_status,
+            label_batch.item_count as label_batch_item_count,
+            label_batch.created_at as label_batch_created_at
      from inventory_serialized_units unit
      join inventory_receipt_lines line
        on line.company_id = unit.company_id and line.id = unit.receipt_line_id
      join inventory_receipts receipt
        on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
      join locations location on location.company_id = unit.company_id and location.id = unit.location_id
+     left join user_profiles creator on creator.id = receipt.created_by
+     left join inventory_label_batches label_batch
+       on label_batch.company_id = receipt.company_id and label_batch.receipt_id = receipt.id
      where unit.id = $1 and unit.company_id = any($2::uuid[])
        and ($4::boolean or unit.location_id = any($3::uuid[]))
      limit 1`,
@@ -380,33 +390,72 @@ export async function getSerializedInventoryUnit({ unitId, companyIds, locationI
   const row = unit.rows[0];
   if (!row) return null;
   const events = await query(
-    `select event_type, provider_reference, details, created_at
-     from inventory_unit_events
-     where company_id = $1 and unit_id = $2
-     order by created_at, id`,
+    `select event.id, event.event_type, event.actor_id, actor.display_name as actor_name,
+            event.provider_reference, event.details, event.usage_id, event.workorder_id,
+            event.asset_id, workorder.serial as workorder_serial,
+            asset.unit_no as asset_unit_no, asset.name as asset_name, event.created_at
+     from inventory_unit_events event
+     left join user_profiles actor on actor.id = event.actor_id
+     left join operational_workorders workorder
+       on workorder.company_id = event.company_id and workorder.id = event.workorder_id
+     left join assets asset
+       on asset.company_id = event.company_id and asset.id = event.asset_id
+     where event.company_id = $1 and event.unit_id = $2
+     order by event.created_at, event.id`,
     [row.company_id, row.id],
   );
+  const source = row.serialization_batch_id ? { type: "manual", id: row.serialization_batch_id }
+    : row.count_import_id ? { type: "stock_count", id: row.count_import_id }
+      : row.invoice_run_id ? { type: "invoice", id: row.invoice_run_id }
+        : { type: "receipt", id: row.receipt_id };
   return {
     id: row.id,
     serialNumber: row.serial_number,
     status: row.status,
+    ordinal: Number(row.unit_ordinal),
+    receiptLineId: row.receipt_line_id,
+    lineIndex: Number(row.line_index),
     providerLotExternalId: row.provider_lot_external_id || null,
     partNumber: row.part_number,
     description: row.description,
+    uomCode: row.uom_code,
     locationId: row.location_id,
     locationName: row.location_name,
+    source,
+    createdBy: row.created_by ? { id: row.created_by, name: row.created_by_name || "" } : null,
     receipt: {
       id: row.receipt_id,
       status: row.receipt_status,
+      provider: row.provider,
       reference: row.provider_picking_name || "",
       confirmedAt: row.confirmed_at || null,
     },
+    labelBatch: row.label_batch_id ? {
+      id: row.label_batch_id,
+      status: row.label_batch_status,
+      itemCount: Number(row.label_batch_item_count),
+      createdAt: row.label_batch_created_at,
+      printUrl: `/api/office/inventory/label-batches/${encodeURIComponent(row.label_batch_id)}/print`,
+    } : null,
     events: events.rows.map((event) => ({
+      id: event.id,
       type: event.event_type,
+      actor: event.actor_id ? { id: event.actor_id, name: event.actor_name || "" } : null,
       providerReference: event.provider_reference || "",
       details: event.details || {},
+      usageId: event.usage_id || null,
+      workorderId: event.workorder_id || null,
+      workorderSerial: event.workorder_serial || "",
+      assetId: event.asset_id || null,
+      asset: event.asset_id ? {
+        id: event.asset_id,
+        unitNo: event.asset_unit_no || "",
+        name: event.asset_name || "",
+      } : null,
       at: event.created_at,
     })),
+    qrSvgUrl: `/api/office/inventory/units/${encodeURIComponent(row.id)}/qr.svg`,
+    printUrl: `/api/office/inventory/units/${encodeURIComponent(row.id)}/label`,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

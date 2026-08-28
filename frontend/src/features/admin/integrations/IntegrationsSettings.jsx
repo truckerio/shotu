@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, ArrowLeft, Key01, RefreshCw01, Trash01, XClose } from "@untitledui/icons";
+import { AlertCircle, Key01, RefreshCw01, Trash01, XClose } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
+import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
 import { api } from "../../../lib/api.js";
 import { integrationProvider } from "./provider-registry.js";
 import { SamsaraIntegrationCard } from "./SamsaraIntegrationCard.jsx";
 import { IntegrationClientsCard } from "./IntegrationClientsCard.jsx";
 import { IntegrationSummaryCard } from "./IntegrationSummaryCard.jsx";
 import { OdooIntegrationCard } from "./OdooIntegrationCard.jsx";
+import { samsaraPresentation } from "./samsara-status.js";
 import "./integrations.css";
 
 const samsaraProvider = integrationProvider("samsara");
@@ -17,14 +20,6 @@ const INTEGRATION_DETAILS = new Set(["samsara", "odoo", "clients"]);
 function selectedIntegrationFromLocation() {
   const selected = new URLSearchParams(window.location.search).get("integration");
   return INTEGRATION_DETAILS.has(selected) ? selected : "";
-}
-
-function samsaraPresentation(status) {
-  const error = status?.error || status?.lastError || status?.latestSync?.error;
-  const connected = Boolean(status?.connected || status?.configured || status?.status === "connected");
-  if (error) return { label: "Needs attention", tone: "error" };
-  if (connected) return { label: "Connected", tone: "connected" };
-  return { label: "Not connected", tone: "disconnected" };
 }
 
 function dateLabel(value) {
@@ -70,9 +65,6 @@ export function IntegrationsSettings() {
       setOdooStatus(odooResult);
       setClients(clientResult.clients || []);
     } catch (error) {
-      if (name === "test") {
-        setStatus((current) => current ? { ...current, status: "error" } : current);
-      }
       setNotice({ message: "", error: error.message, target: "samsara" });
     } finally {
       setLoading(false);
@@ -97,6 +89,18 @@ export function IntegrationsSettings() {
     else params.delete("integration");
     window.history.pushState({}, "", `/?${params.toString()}`);
     setSelectedIntegration(integrationId);
+  }
+
+  function followSettingsBreadcrumb(event) {
+    if (!isPlainPrimaryActivation(event)) return;
+    event.preventDefault();
+    const returnTitle = detailTitle;
+    showIntegration("");
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const origin = [...document.querySelectorAll(".integration-summary-card")]
+        .find((card) => card.querySelector("h2")?.textContent?.trim() === returnTitle);
+      origin?.querySelector("button")?.focus({ preventScroll: true });
+    }));
   }
 
   function connect() {
@@ -193,7 +197,14 @@ export function IntegrationsSettings() {
       <PageHeader
         title={detailTitle}
         subtitle={detailSubtitle}
-        leading={selectedIntegration ? <button className="admin-back" type="button" onClick={() => showIntegration("")} aria-label="Back to integrations"><ArrowLeft /></button> : null}
+        leading={selectedIntegration ? <ContextBreadcrumbs
+          items={[{
+            label: "Settings",
+            href: "/?adminView=settings&settingsTab=integrations",
+            onClick: followSettingsBreadcrumb,
+          }]}
+          current={detailTitle}
+        /> : null}
       />
       <nav className="admin-settings-tabs" aria-label="Company settings">
         <button className="active" type="button">Integrations</button>

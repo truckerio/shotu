@@ -6,6 +6,7 @@ import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mecha
 import { authClient } from "../../lib/auth-client.js";
 import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
 import { PasskeyManager } from "./PasskeyManager.jsx";
+import { interfaceText } from "../../i18n/index.js";
 import "./profile-menu.css";
 
 function initials(name = "") {
@@ -18,12 +19,13 @@ function initials(name = "") {
     .toUpperCase() || "U";
 }
 
-function roleLabel(role) {
-  if (role === "surveillance") return "Surveillance";
-  return role ? `${role[0].toUpperCase()}${role.slice(1)}` : "Account";
+function roleLabel(role, locale) {
+  const key = ["admin", "mechanic", "surveillance", "office"].includes(role) ? `account.role.${role}` : "account.account";
+  return interfaceText(locale, key);
 }
 
-export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false }) {
+export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = false, mobileNav = false, locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   const kioskSession = useKioskSession();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
@@ -43,35 +45,35 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
         id: "kiosk",
         Icon: Users01,
         label: kioskSession.leaving
-          ? "Opening kiosk..."
+          ? t("account.openingKiosk")
           : kioskSession.kioskSession
-            ? "Switch mechanic"
-            : "Open kiosk",
+            ? t("account.switchMechanic")
+            : t("account.openKiosk"),
         onAction: () => kioskSession.leaveForKiosk("switch"),
       });
     }
     actions.push(
-      { id: "passkeys", Icon: UserCircle, label: "Manage passkeys", onAction: () => setPasskeysOpen(true) },
-      { id: "change-password", Icon: Key01, label: "Change password", onAction: () => setChangePasswordOpen(true) },
-      { id: "sign-out", Icon: LogOut01, label: "Sign out", onAction: signOut },
+      { id: "passkeys", Icon: UserCircle, label: t("account.managePasskeys"), onAction: () => setPasskeysOpen(true) },
+      { id: "change-password", Icon: Key01, label: t("account.changePassword"), onAction: () => setChangePasswordOpen(true) },
+      { id: "sign-out", Icon: LogOut01, label: t("account.signOut"), onAction: signOut },
     );
     return actions;
-  }, [kioskSession, signOut]);
+  }, [kioskSession, locale, signOut]);
 
   const accountMenu = (
     <Popover className="profile-menu-popover" placement={mobileNav ? "top end" : "bottom end"}>
-      <Dialog className="profile-menu-dialog" aria-label="Profile actions">
+      <Dialog className="profile-menu-dialog" aria-label={t("account.profileActions")}>
         {({ close }) => (
           <>
             <div className="profile-menu-summary">
               <UserCircle aria-hidden="true" />
               <span>
-                <strong>{actor?.name || "User"}</strong>
-                <small>{actor?.email || roleLabel(actor?.role)}</small>
+                <strong>{actor?.name || t("account.user")}</strong>
+                <small>{actor?.email || roleLabel(actor?.role, locale)}</small>
               </span>
             </div>
             <Separator className="profile-menu-separator" />
-            <div className="profile-menu-list" role="menu" aria-label="Profile actions">
+            <div className="profile-menu-list" role="menu" aria-label={t("account.profileActions")}>
               {menuActions.map((item) => {
                 const Icon = item.Icon;
                 return (
@@ -102,15 +104,15 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
       <>
         <div className="profile-menu profile-menu-mobile-nav">
         <DialogTrigger>
-          <Button className="profile-menu-mobile-nav-trigger" aria-label="Open profile menu">
+          <Button className="profile-menu-mobile-nav-trigger" aria-label={t("account.openProfileMenu")}>
             <UserCircle aria-hidden="true" />
-            <span>Profile</span>
+            <span>{t("account.profile")}</span>
           </Button>
           {accountMenu}
         </DialogTrigger>
         </div>
-        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
-        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
+        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
+        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
       </>
     );
   }
@@ -120,14 +122,14 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
       <>
         <div className="profile-menu profile-menu-mobile-action">
         <DialogTrigger>
-          <Button className="profile-menu-mobile-action-trigger" aria-label="Open profile menu">
+          <Button className="profile-menu-mobile-action-trigger" aria-label={t("account.openProfileMenu")}>
             <UserCircle aria-hidden="true" />
           </Button>
           {accountMenu}
         </DialogTrigger>
         </div>
-        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
-        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
+        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
+        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
       </>
     );
   }
@@ -136,19 +138,19 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
     <>
       <div className={`profile-menu${compactOnPhone ? " profile-menu-with-phone-brand" : ""}`}>
         <DialogTrigger>
-          <Button className="profile-menu-trigger" aria-label="Open account menu">
+          <Button className="profile-menu-trigger" aria-label={t("account.openAccountMenu")}>
             <span className="profile-menu-initials" aria-hidden="true">{initials(actor?.name)}</span>
             <span className="profile-menu-identity">
-              <strong>{actor?.name || "User"}</strong>
-              <small>{roleLabel(actor?.role)}</small>
+              <strong>{actor?.name || t("account.user")}</strong>
+              <small>{roleLabel(actor?.role, locale)}</small>
             </span>
             <ChevronDown aria-hidden="true" />
           </Button>
           {accountMenu}
         </DialogTrigger>
       </div>
-      <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
-      <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} />
+      <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
+      <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
     </>
   );
 }

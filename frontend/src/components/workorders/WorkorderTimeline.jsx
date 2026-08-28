@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { ChevronDown } from "@untitledui/icons";
+import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import { formatCreatedAt } from "../../lib/dates.js";
 import {
   groupTimelineEvents,
@@ -8,30 +9,33 @@ import {
 } from "./workorder-timeline-model.js";
 import "./workorder-timeline.css";
 
-function actorRoleLabel(role) {
+function actorRoleLabel(role, locale) {
   const normalized = String(role || "").trim().toLowerCase();
   if (!normalized) return "";
-  if (normalized === "office" || normalized === "manager") return "Manager";
+  if (normalized === "office" || normalized === "manager") return interfaceText(locale, "timeline.manager");
+  if (["admin", "mechanic", "surveillance"].includes(normalized)) {
+    return interfaceText(locale, `timeline.role.${normalized}`);
+  }
   return normalized.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function TimelineMeta({ actorLabel, actorName, actorRole, createdAt, dateText, event = {} }) {
-  const role = actorLabel || actorRoleLabel(actorRole);
-  const fallbackActorName = event.changed_by_name || "System";
+function TimelineMeta({ actorLabel, actorName, actorRole, createdAt, dateText, event = {}, locale = "en" }) {
+  const role = actorLabel || actorRoleLabel(actorRole, locale);
+  const fallbackActorName = event.changed_by_name || interfaceText(locale, "timeline.system");
   return (
     <span className="workorder-timeline-date">
       <strong>{actorName || fallbackActorName}</strong>
       {role ? <span className="workorder-timeline-role">{role}</span> : null}
       <span aria-hidden="true">·</span>
       {createdAt ? (
-        <time dateTime={createdAt}>{dateText || formatCreatedAt(createdAt)}</time>
-      ) : <span>Time unavailable</span>}
+        <time dateTime={createdAt}>{dateText || formatCreatedAt(createdAt, locale)}</time>
+      ) : <span>{interfaceText(locale, "timeline.timeUnavailable")}</span>}
     </span>
   );
 }
 
-export function WorkorderTimelineList({ emptyMessage = "No activity yet.", items }) {
-  if (!items.length) return <p className="chat-empty">{emptyMessage}</p>;
+export function WorkorderTimelineList({ emptyMessage, items, locale = "en" }) {
+  if (!items.length) return <p className="chat-empty">{emptyMessage ?? interfaceText(locale, "timeline.noActivity")}</p>;
 
   return (
     <ol className="workorder-timeline-list">
@@ -44,6 +48,7 @@ export function WorkorderTimelineList({ emptyMessage = "No activity yet.", items
             createdAt={item.createdAt}
             dateText={item.dateText}
             event={item.event}
+            locale={locale}
           />
           <span className="workorder-timeline-marker" aria-hidden="true" />
           <div className="workorder-timeline-event">
@@ -65,9 +70,10 @@ export function WorkorderTimelineList({ emptyMessage = "No activity yet.", items
   );
 }
 
-export function WorkorderTimeline({ timeline }) {
+export function WorkorderTimeline({ timeline, locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   const timelineId = useId();
-  const groups = groupTimelineEvents(timeline);
+  const groups = groupTimelineEvents(timeline, locale);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   function toggleGroup(groupId) {
@@ -100,19 +106,19 @@ export function WorkorderTimeline({ timeline }) {
                   aria-controls={childrenId}
                   onClick={() => toggleGroup(group.id)}
                 >
-                  <span>{group.childCount} changes</span>
+                  <span>{formatLocaleNumber(group.childCount, locale)} {t("timeline.changes")}</span>
                   <ChevronDown aria-hidden="true" />
                 </button>
               ) : null,
           content: expandable && expanded ? (
-              <ol className="workorder-timeline-children" id={childrenId} aria-label={`${group.title} changes`}>
+              <ol className="workorder-timeline-children" id={childrenId} aria-label={`${group.title} ${t("timeline.changes")}`}>
                 {group.children.map((event, childIndex) => (
                   <li key={`${event.type}-${event.id ?? childIndex}`}>
                     <div className="workorder-timeline-child-heading">
-                      <strong>{timelineEventTitle(event)}</strong>
-                      {event.created_at ? <time dateTime={event.created_at}>{formatCreatedAt(event.created_at)}</time> : null}
+                      <strong>{timelineEventTitle(event, locale)}</strong>
+                      {event.created_at ? <time dateTime={event.created_at}>{formatCreatedAt(event.created_at, locale)}</time> : null}
                     </div>
-                    <span>{timelineEventDescription(event)}</span>
+                    <span>{timelineEventDescription(event, locale)}</span>
                   </li>
                 ))}
               </ol>
@@ -120,23 +126,24 @@ export function WorkorderTimeline({ timeline }) {
         };
       });
 
-  return <WorkorderTimelineList items={items} />;
+  return <WorkorderTimelineList items={items} locale={locale} />;
 }
 
-export function WorkorderTimelinePanel({ timeline, participants = [], className = "" }) {
+export function WorkorderTimelinePanel({ timeline, participants = [], className = "", locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   return (
-    <section className={`workorder-timeline-panel is-compact ${className}`.trim()} aria-label="Workorder timeline">
+    <section className={`workorder-timeline-panel is-compact ${className}`.trim()} aria-label={t("timeline.workorderTimeline")}>
       {participants.length ? (
         <div className="workorder-participants">
-          <span className="workorder-participants-label">Mechanics</span>
+          <span className="workorder-participants-label">{t("timeline.mechanics")}</span>
           <span>
             {participants.map((participant) => (
-              `${participant.name}${participant.isCurrent ? " (current)" : ""}`
+              `${participant.name}${participant.isCurrent ? ` (${t("timeline.current")})` : ""}`
             )).join(", ")}
           </span>
         </div>
       ) : null}
-      <WorkorderTimeline timeline={timeline} />
+      <WorkorderTimeline timeline={timeline} locale={locale} />
     </section>
   );
 }

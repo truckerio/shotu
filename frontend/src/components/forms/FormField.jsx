@@ -24,6 +24,7 @@ export function FormField({
   id,
   label,
   required = false,
+  requiredLabel = "Required",
 }) {
   const generatedId = useId();
   const controlId = id || `operational-field-${generatedId.replaceAll(":", "")}`;
@@ -40,7 +41,7 @@ export function FormField({
     <div className={joinClassNames("operational-form-field", error && "has-error", className)}>
       <label className="operational-form-field-label" htmlFor={controlId}>
         {label}
-        {required ? <span className="operational-form-required" aria-hidden="true">Required</span> : null}
+        {required ? <span className="operational-form-required" aria-hidden="true">{requiredLabel}</span> : null}
       </label>
       {hint ? <span className="operational-form-field-hint" id={hintId}>{hint}</span> : null}
       {controlWithAccessibility(control, {

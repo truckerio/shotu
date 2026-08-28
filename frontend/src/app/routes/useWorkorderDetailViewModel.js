@@ -9,6 +9,7 @@ import { getVehicleLocation } from "../../components/workorders/AssetLocationCar
 import { buildWorkorderDetailSections } from "../../features/workorder-detail/workorder-detail-sections.js";
 import { formatLifecycleLabel } from "../../lib/workorder-presentation.js";
 import { timelineEventCount } from "../../components/workorders/workorder-timeline-model.js";
+import { interfaceText } from "../../i18n/index.js";
 
 const ATTENTION_STATUS_LABELS = {
   waiting_office: "Needs office",
@@ -38,10 +39,11 @@ export function useWorkorderDetailViewModel({
   );
   const filledPartCount = form.parts.filter((part) => part.partNo || part.qty || part.repairOrder).length;
   const mechanicAsset = activeWorkorder?.workorder?.asset || {};
-  const mechanicUnitType = form.unitType || mechanicAsset.unitType || "Vehicle";
+  const t = (key) => interfaceText(interfaceLocale, key);
+  const mechanicUnitType = form.unitType || mechanicAsset.unitType || t("location.vehicle");
   const mechanicVehicleLabel = [mechanicAsset.year, mechanicAsset.make, mechanicAsset.model]
     .filter(Boolean)
-    .join(" ") || form.model || "Not listed";
+    .join(" ") || form.model || t("detail.notListed");
   const mechanicMapVehicle = selectedVehicle || mechanicAsset;
   const mechanicMapLocation = getVehicleLocation(mechanicMapVehicle);
   const pendingPartCount = pendingPartRequestCount(activeWorkorder);
@@ -84,12 +86,25 @@ export function useWorkorderDetailViewModel({
   ]);
   const assignedMechanicKey = [...assignedMechanicIds].sort().join(",");
   const officeAssignmentKey = [...officeAssignment.mechanicUserIds].sort().join(",");
+  const mechanicStatusKey = ({
+    accepted: "accepted",
+    cancelled: "cancelled",
+    closed: "closed",
+    in_progress: "inProgress",
+    mechanic_done: "workCompleted",
+    odoo_entered: "odooEntered",
+    open: "open",
+    parts_requested: "partsRequested",
+    waiting_office: "waitingOffice",
+  })[detailStatus] || "open";
 
   return {
     assignedMechanicIds,
     conversationMessages,
-    currentStatusLabel: ATTENTION_STATUS_LABELS[detailStatus]
-      || formatLifecycleLabel(detailStatus, { fallback: "Open" }),
+    currentStatusLabel: isMechanicDetail
+      ? (detailStatus === "waiting_office" ? t("queue.needsOffice")
+        : t(`timeline.status.${mechanicStatusKey}`))
+      : ATTENTION_STATUS_LABELS[detailStatus] || formatLifecycleLabel(detailStatus, { fallback: "Open" }),
     detailLocationName: activeWorkorder?.workorder?.location?.name
       || selectedOfficeLocation?.location?.name
       || "",

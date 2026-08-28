@@ -26,6 +26,14 @@ export const invoiceExtractionConfig = Object.freeze({
     const value = Number.parseInt(process.env.INVOICE_OCR_MAX_CONCURRENT || "1", 10);
     return Number.isSafeInteger(value) ? Math.min(4, Math.max(1, value)) : 1;
   },
+  get workerMaxAttempts() {
+    const value = Number.parseInt(process.env.INVOICE_EXTRACTION_WORKER_MAX_ATTEMPTS || "2", 10);
+    return Number.isSafeInteger(value) ? Math.min(5, Math.max(1, value)) : 2;
+  },
+  get workerConcurrency() {
+    const value = Number.parseInt(process.env.INVOICE_EXTRACTION_WORKER_CONCURRENCY || "2", 10);
+    return Number.isSafeInteger(value) ? Math.min(4, Math.max(1, value)) : 2;
+  },
   get templatePromotionExamples() {
     const value = Number.parseInt(process.env.INVOICE_TEMPLATE_PROMOTION_EXAMPLES || "3", 10);
     return Number.isSafeInteger(value) ? Math.min(10, Math.max(3, value)) : 3;

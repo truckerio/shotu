@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { XClose } from "@untitledui/icons";
 import { api } from "../../../lib/api.js";
+import { interfaceText } from "../../../i18n/index.js";
 import {
   normalizeRepairSuggestionsResponse,
   repairSuggestionMeta,
@@ -16,7 +17,9 @@ export function RepairHistorySuggestions({
   assetId,
   onApply,
   disabled = false,
+  locale = "en",
 }) {
+  const t = (key) => interfaceText(locale, key);
   const panelId = useId();
   const requestSequence = useRef(0);
   const [expanded, setExpanded] = useState(true);
@@ -79,22 +82,22 @@ export function RepairHistorySuggestions({
         aria-expanded="false"
         onClick={() => setExpanded(true)}
       >
-        Show previous work
+        {t("parts.showPreviousWork")}
       </button>
     );
   }
 
   return (
-    <section id={panelId} className="repair-history-suggestions" aria-label="Repair order suggestions from service history">
+    <section id={panelId} className="repair-history-suggestions" aria-label={t("parts.repairHistorySuggestions")}>
       <div className="repair-history-heading">
         <div>
-          <strong>Previous work with this part</strong>
-          <span>Nothing is filled until you apply a suggestion.</span>
+          <strong>{t("parts.previousWorkWithPart")}</strong>
+          <span>{t("parts.repairSuggestionHelp")}</span>
         </div>
         <button
           className="repair-history-dismiss"
           type="button"
-          aria-label="Hide previous work suggestions"
+          aria-label={t("parts.hidePreviousWorkSuggestions")}
           aria-controls={panelId}
           aria-expanded="true"
           onClick={() => setExpanded(false)}
@@ -108,15 +111,15 @@ export function RepairHistorySuggestions({
             <li key={suggestion.id}>
               <div>
                 <span className="repair-history-text">{suggestion.text}</span>
-                <small>{repairSuggestionMeta(suggestion, assetId)}</small>
+                <small>{repairSuggestionMeta(suggestion, assetId, locale)}</small>
               </div>
               <button
                 type="button"
                 onClick={() => onApply(suggestion.text)}
                 disabled={disabled}
-                aria-label={`Apply repair order suggestion: ${suggestion.text}`}
+                aria-label={`${t("parts.applyRepairSuggestion")}: ${suggestion.text}`}
               >
-                Apply
+                {t("parts.apply")}
               </button>
             </li>
           ))}
@@ -124,10 +127,10 @@ export function RepairHistorySuggestions({
       ) : (
         <p className="repair-history-state" role="status">
           {state === "waiting" || state === "loading"
-            ? "Checking service history…"
+            ? t("parts.checkingServiceHistory")
             : state === "error"
-              ? "Service history suggestions are unavailable."
-              : "No previous repair wording found for this part."}
+              ? t("parts.serviceHistorySuggestionsUnavailable")
+              : t("parts.noPreviousRepairWording")}
         </p>
       )}
     </section>

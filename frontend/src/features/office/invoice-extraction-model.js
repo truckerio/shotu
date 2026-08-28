@@ -85,6 +85,21 @@ export function invoiceReviewErrorMessage(error) {
   return error?.message || "The invoice review could not be saved.";
 }
 
+export function shouldConfirmInvoiceReviewLeave({ dirty = false, status = "" } = {}) {
+  return Boolean(dirty) && status !== "reviewed";
+}
+
+export function nextReviewableBatchIndex(entries, currentIndex = -1) {
+  const reviewable = (entry) => Boolean(entry?.run?.draft)
+    && !entry.error
+    && !["processing", "failed", "reviewed"].includes(entry.run.status);
+  for (let offset = 1; offset <= entries.length; offset += 1) {
+    const index = (currentIndex + offset) % entries.length;
+    if (reviewable(entries[index])) return index;
+  }
+  return -1;
+}
+
 export function parseReviewNumber(value) {
   if (value === "") return null;
   const number = Number(value);

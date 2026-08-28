@@ -1,0 +1,125 @@
+.mechanic-serialized-parts {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-secondary, #d0d5dd);
+  border-radius: 12px;
+}
+
+.mechanic-serialized-parts > header,
+.mechanic-serialized-parts > header > div,
+.mechanic-serialized-candidate,
+.mechanic-serialized-usage,
+.inventory-code-scanner,
+.inventory-code-scanner form,
+.inventory-code-scanner label {
+  display: grid;
+  gap: 8px;
+}
+
+.mechanic-serialized-parts > header {
+  grid-template-columns: 24px 1fr;
+  align-items: start;
+}
+
+.mechanic-serialized-parts h3,
+.mechanic-serialized-parts h4,
+.mechanic-serialized-parts p {
+  margin: 0;
+}
+
+.inventory-code-camera {
+  display: none;
+  width: 100%;
+  max-height: 320px;
+  border-radius: 10px;
+  background: #101828;
+}
+
+.inventory-code-camera.is-active {
+  display: block;
+}
+
+.inventory-code-scanner input {
+  min-height: 44px;
+  width: 100%;
+}
+
+.mechanic-serialized-candidate dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.mechanic-serialized-candidate dl > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.35fr) 1fr;
+  gap: 10px;
+}
+
+.mechanic-serialized-candidate dd,
+.mechanic-serialized-candidate dd span,
+.mechanic-serialized-usage > div {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  min-width: 0;
+}
+
+.mechanic-serialized-candidate code,
+.mechanic-serialized-usage code,
+.mechanic-serialized-history code {
+  overflow-wrap: anywhere;
+}
+
+.mechanic-serialized-usage fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-secondary, #d0d5dd);
+}
+
+.mechanic-serialized-usage legend {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.mechanic-serialized-history {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mechanic-serialized-history li {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.mechanic-serialized-history li span {
+  display: grid;
+  gap: 2px;
+}
+
+.mechanic-serialized-blocked,
+.inventory-code-message {
+  color: var(--text-error-primary, #b42318);
+}
+
+@media (max-width: 480px) {
+  .mechanic-serialized-candidate dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .mechanic-serialized-usage fieldset .button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

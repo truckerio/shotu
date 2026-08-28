@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readInitialWorkspace, replaceRouteSearch, routeStartsLoading } from "./route-state.js";
 import { roleCapabilities } from "./role-capabilities.js";
 import { activeWorkorderCompanyId, activeWorkorderModulePolicy, canOpenCreateWorkspaceForActor } from "./role-router-module-access.js";
@@ -10,12 +10,7 @@ import { RoleWorkspaceOutlet } from "./RoleWorkspaceOutlet.jsx";
 import { useInitialRoleRouteHydration, useWorkorderDetailRoute } from "./useWorkorderDetailRoute.js";
 import { useWorkorderDetailViewModel } from "./useWorkorderDetailViewModel.js";
 import { updateDetailDiagnosisRepair } from "./role-router-api.js";
-import {
-  createDraftBaselineFromForm,
-  createInitialDraftBaseline,
-  createInitialWorkorderForm,
-  workorderFormValues,
-} from "./role-router-model.js";
+import { createDraftBaselineFromForm, createInitialDraftBaseline, createInitialWorkorderForm, workorderFormValues } from "./role-router-model.js";
 import { vehicleMileage, vehicleModelText } from "../../features/create-workorder/vehicle-lookup-model.js";
 import { useVehicleLookupController } from "../../features/create-workorder/useVehicleLookupController.js";
 import { useWorkorderDraftLifecycle } from "../../features/create-workorder/useWorkorderDraftLifecycle.js";
@@ -28,7 +23,7 @@ import { loadWorkorderDetail } from "../../features/workorder-detail/workorder-d
 import { useWorkorderPreviewController } from "../../features/workorder-detail/useWorkorderPreviewController.js";
 import { clearOfficeWorkorderEditBackup, writeOfficeWorkorderEditBackup } from "../../features/workorder-detail/office-workorder-autosave-storage.js";
 import { useWorkorderPreferences } from "../../hooks/useWorkorderPreferences.js";
-import { normalizeLocale } from "../../i18n/index.js";
+import { interfaceText, normalizeLocale, setDocumentLocale } from "../../i18n/index.js";
 import { api } from "../../lib/api.js";
 import { workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
 export function RoleRouter({ actor }) {
@@ -55,6 +50,7 @@ export function RoleRouter({ actor }) {
   const [officeCreateAttempt, setOfficeCreateAttempt] = useState(0);
   const interfacePreferences = useWorkorderPreferences("mechanic-interface");
   const interfaceLocale = normalizeLocale(interfacePreferences.preferences.locale);
+  useEffect(() => setDocumentLocale(actor.role === "mechanic" ? interfaceLocale : "en"), [actor.role, interfaceLocale]);
   const createInitialDatesRef = useRef(createInitialDraftBaseline(actor));
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [usedPartsDirty, setUsedPartsDirty] = useState(false);
@@ -67,9 +63,9 @@ export function RoleRouter({ actor }) {
   const previewSerials = useMemo(() => [firstSerial], [firstSerial]);
   const lastSerial = firstSerial;
   const range = firstSerial;
-  const workorderCountLabel = activeWorkorder ? "1 workorder" : "Draft workorder";
+  const workorderCountLabel = actor.role === "mechanic" ? interfaceText(interfaceLocale, activeWorkorder ? "preview.oneWorkorder" : "preview.draftWorkorder") : (activeWorkorder ? "1 workorder" : "Draft workorder");
   const lastPhysicalPageIndex = workorderPhysicalPageCount(form) - 1;
-  const primaryActionLabel = "Print workorder";
+  const primaryActionLabel = actor.role === "mechanic" ? interfaceText(interfaceLocale, "preview.printWorkorder") : "Print workorder";
   const canPrint = capabilities.canPrintWorkorder;
   const {
     browserPrintPayload,
@@ -87,6 +83,7 @@ export function RoleRouter({ actor }) {
     range,
     request: api,
     setCreateState: setOfficeCreateState,
+    locale: actor.role === "mechanic" ? interfaceLocale : "en",
   });
   const closePrintMenu = useCallback(() => setPrintMenuOpen(false), [setPrintMenuOpen]);
   const isMechanicDetail = detailSource === "mechanic" && Boolean(activeWorkorder);
@@ -375,6 +372,8 @@ export function RoleRouter({ actor }) {
     form,
     isMechanicDetail,
     isOfficeDetail,
+    localeText: (key) => interfaceText(interfaceLocale, key),
+    localizedError: (error) => interfaceLocale === "en" && error?.message ? error.message : interfaceText(interfaceLocale, "mechanic.requestFailed"),
     mechanicProgress,
     normalizeWorkorderForm: workorderFormValues,
     officeLocations,
@@ -441,6 +440,7 @@ export function RoleRouter({ actor }) {
         error: interfacePreferences.error,
         locale: interfaceLocale,
         onLocaleChange: interfacePreferences.saveLocale,
+        ready: interfacePreferences.ready,
       }}
       navigation={{
         canOpenCreateWorkspace,
@@ -459,7 +459,7 @@ export function RoleRouter({ actor }) {
         activeWorkorder, actor, browserPrintPayload, canPrint, detailSection, detailStatus,
         effectiveCopies, firstSerial, form, formRef, fullscreenPageIndex, fullscreenZoom,
         isCompact, isMechanicDetail, isOfficeDetail, isPhone, locale: interfaceLocale,
-        localeError: interfacePreferences.error, lastPhysicalPageIndex, lastSerial, mapsConfig,
+        localeError: interfacePreferences.error, localeReady: interfacePreferences.ready, lastPhysicalPageIndex, lastSerial, mapsConfig,
         mechanicAction, mechanicFinish, mechanicProgress, officeAssignment, officeCancel,
         officeCloseNote, officeCloseOpen, officeDetailState, officeLocations, officeReturn,
         previewFullscreen, previewGridRef, previewPanelOpen, previewRef, previewSerials,
@@ -481,7 +481,7 @@ export function RoleRouter({ actor }) {
         actor, assignment: createAssignmentForRole, browserPrintPayload, effectiveCopies,
         firstSerial, form, formRef, fullscreenPageIndex, fullscreenZoom, isPhone,
         lastPhysicalPageIndex, lastSerial, locationPolicy: selectedOfficeLocation?.policy || null,
-        mapsConfig, officeCreateAttempt,
+        locale: actor.role === "mechanic" ? interfaceLocale : "en", mapsConfig, officeCreateAttempt,
         officeCreateErrors, officeCreateState, officeLocations, officeLocationsState,
         previewFullscreen, previewGridRef, previewRef, previewSerials, printMenuOpen,
         printState, primaryActionLabel, range, selectedVehicle,

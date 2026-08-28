@@ -9,7 +9,8 @@ import {
   reconciliationWarnings,
   semanticCandidatesFromCorrections,
 } from "./invoice-extraction.learning.js";
-import { extractInvoice, guardPaidBalanceAsInvoiceTotal, readInvoiceExtraction, readInvoiceSource, reviewInvoice } from "./invoice-extraction.service.js";
+import { extractInvoice, guardPaidBalanceAsInvoiceTotal, nativePdfTextIsUsable, readInvoiceExtraction, readInvoiceSource, reviewInvoice } from "./invoice-extraction.service.js";
+import { InvoiceExtractionError } from "./invoice-extraction.errors.js";
 import { learnInvoiceTemplateCandidate } from "./invoice-template-learning.js";
 import { handleInvoiceExtractionApi } from "./invoice-extraction.routes.js";
 import { reviewInvoiceInputSchema } from "./invoice-extraction.schemas.js";
@@ -53,6 +54,10 @@ function draft(overrides = {}) {
 
 function pngDataUrl() {
   return `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1]).toString("base64")}`;
+}
+
+function pdfDataUrl(text = "%PDF-1.7\n") {
+  return `data:application/pdf;base64,${Buffer.from(text).toString("base64")}`;
 }
 
 function encryptedSource() {
@@ -195,6 +200,7 @@ test("provider prompt includes approved memory as bounded data and disables prov
   assert.match(requests[0].body.input[0].content[0].text, /never concatenate them/i);
   assert.match(requests[0].body.input[0].content[0].text, /payment receipt placed over an invoice/i);
   assert.match(requests[0].body.input[0].content[0].text, /Bounded local OCR transcription: "INVOICE NUMBER 3047165133"/);
+  assert.match(requests[0].body.input[0].content[0].text, /Bounded native PDF transcription/);
   assert.doesNotMatch(extractionPrompt({}), /undefined/);
   assert.equal(requests[0].options.headers.authorization, "Bearer test");
 });
@@ -282,7 +288,7 @@ test("incomplete generic OCR corroborates but does not suppress the image provid
     });
     assert.equal(ocrCalls, 1);
     assert.equal(providerCalls, 1);
-    assert.equal(result.run.provider, "openai");
+    assert.equal(result.run.provider, "hybrid_reconciled");
     assert.equal(result.run.draft.lines[0].lineTotal.value, 20);
   } finally {
     if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
@@ -339,7 +345,7 @@ test("active learned layout extracts locally and records the actual provider wit
   }
 });
 
-test("configured OpenAI remains authoritative even when a learned local layout matches", async () => {
+test("configured OpenAI is reconciled with a matching learned local layout", async () => {
   const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
   const previousOpenAiKey = process.env.OPENAI_API_KEY;
   process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
@@ -373,11 +379,145 @@ test("configured OpenAI remains authoritative even when a learned local layout m
         model: input.model, prompt_version: input.promptVersion, retryable: false, created_at: "now",
       }),
     });
-    assert.equal(result.run.provider, "openai");
+    assert.equal(result.run.provider, "hybrid_reconciled");
     assert.equal(result.run.draft.invoiceNumber.value, "OPENAI-10");
+    assert.ok(result.run.draft.invoiceNumber.confidence < 90);
+    assert.ok(result.run.draft.warnings.some((warning) => /invoice number/i.test(warning)));
     assert.equal(providerMemory.trainingExamples[0].id, "example-1");
-    assert.equal(providerMemory.localOcrText.includes("INVOICE NUMBER"), false);
-    assert.match(providerMemory.localOcrText, /Invoice number/i);
+    assert.equal(providerMemory.localOcrText, "");
+  } finally {
+    if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
+    else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
+  }
+});
+
+test("image OCR and OpenAI extraction start concurrently", async () => {
+  const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
+  process.env.OPENAI_API_KEY = "configured-for-concurrency-test";
+  try {
+    let ocrStarted = false;
+    let providerStarted = false;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const maybeRelease = () => {
+      if (ocrStarted && providerStarted) release();
+    };
+    const result = await extractInvoice({
+      locationId: LOCATION_ID,
+      fileName: "parallel.png",
+      mimeType: "image/png",
+      dataUrl: pngDataUrl(),
+      idempotencyKey: "extract-parallel-branches",
+    }, context(), {
+      getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      loadMemory: async () => ({ semanticFacts: [], playbooks: [], trainingExamples: [] }),
+      loadTemplates: async () => [],
+      encryptDocument: encryptedSource,
+      createRun: async (input) => ({ ...input, id: RUN_ID, inserted: true, status: "processing", version: 1 }),
+      extractWithOcr: async () => { ocrStarted = true; maybeRelease(); await gate; return localOcrResult(); },
+      extractWithProvider: async () => { providerStarted = true; maybeRelease(); await gate; return draft(); },
+      completeRun: async (input) => ({
+        id: RUN_ID, location_id: LOCATION_ID, file_name: "parallel.png", mime_type: "image/png", byte_size: 9,
+        status: input.status, version: 1, extracted_draft: input.draft, provider: input.provider,
+        model: input.model, prompt_version: input.promptVersion, retryable: false, created_at: "now",
+      }),
+    });
+    assert.equal(ocrStarted, true);
+    assert.equal(providerStarted, true);
+    assert.equal(result.run.provider, "hybrid_reconciled");
+  } finally {
+    if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
+    else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
+  }
+});
+
+test("usable native PDF text skips OCR and is passed as bounded provider context", async () => {
+  const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
+  process.env.OPENAI_API_KEY = "configured-for-native-pdf-test";
+  const nativeText = `${"PARTS INVOICE Invoice number INV-10 Invoice date 2026-08-24 ".repeat(5)}SUBTOTAL 20.00 SALES TAX 2.00 TOTAL 22.00`;
+  try {
+    let ocrCalls = 0;
+    let providerMemory;
+    const result = await extractInvoice({
+      locationId: LOCATION_ID,
+      fileName: "native.pdf",
+      mimeType: "application/pdf",
+      dataUrl: pdfDataUrl(),
+      idempotencyKey: "extract-native-pdf-fast-path",
+    }, context(), {
+      getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      loadMemory: async () => ({ semanticFacts: [], playbooks: [], trainingExamples: [] }),
+      loadTemplates: async () => [],
+      encryptDocument: encryptedSource,
+      createRun: async (input) => ({ ...input, id: RUN_ID, inserted: true, status: "processing", version: 1 }),
+      extractNativeText: async () => ({ text: nativeText }),
+      extractWithOcr: async () => { ocrCalls += 1; return localOcrResult(); },
+      extractWithProvider: async (_input, memory) => { providerMemory = memory; return draft(); },
+      completeRun: async (input) => ({
+        id: RUN_ID, location_id: LOCATION_ID, file_name: "native.pdf", mime_type: "application/pdf", byte_size: 9,
+        status: input.status, version: 1, extracted_draft: input.draft, provider: input.provider,
+        model: input.model, prompt_version: input.promptVersion, retryable: false, created_at: "now",
+      }),
+    });
+    assert.equal(nativePdfTextIsUsable(nativeText), true);
+    assert.equal(ocrCalls, 0);
+    assert.equal(providerMemory.nativeDocumentText, nativeText);
+    assert.equal(result.run.provider, "openai");
+  } finally {
+    if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
+    else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
+  }
+});
+
+test("provider timeout completes a review-required local OCR draft instead of failing the run", async () => {
+  const previousOcrUrl = process.env.INVOICE_OCR_BASE_URL;
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  process.env.INVOICE_OCR_BASE_URL = "http://127.0.0.1:8091";
+  process.env.OPENAI_API_KEY = "configured-for-timeout-test";
+  try {
+    let failed = false;
+    let completedInput;
+    const result = await extractInvoice({
+      locationId: LOCATION_ID,
+      fileName: "invoice.png",
+      mimeType: "image/png",
+      dataUrl: pngDataUrl(),
+      idempotencyKey: "extract-provider-timeout-local-fallback",
+    }, context(), {
+      getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      loadMemory: async () => ({ semanticFacts: [], playbooks: [], trainingExamples: [] }),
+      loadTemplates: async () => [],
+      encryptDocument: encryptedSource,
+      createRun: async (input) => ({ ...input, id: RUN_ID, inserted: true, status: "processing", version: 1 }),
+      extractWithOcr: async () => localOcrResult(),
+      extractWithProvider: async () => {
+        throw new InvoiceExtractionError("Provider timed out.", { code: "provider_timeout", statusCode: 503, retryable: true });
+      },
+      completeRun: async (input) => {
+        completedInput = input;
+        return {
+          id: RUN_ID, location_id: LOCATION_ID, file_name: "invoice.png", mime_type: "image/png", byte_size: 9,
+          status: input.status, version: 1, extracted_draft: input.draft, provider: input.provider,
+          model: input.model, prompt_version: input.promptVersion, retryable: false, created_at: "now",
+        };
+      },
+      failRun: async () => { failed = true; },
+    });
+    assert.equal(failed, false);
+    assert.equal(result.run.provider, "local_generic");
+    assert.equal(result.run.status, "needs_review");
+    assert.equal(completedInput.draft.invoiceNumber.value, "INV-10");
+    assert.ok(completedInput.draft.warnings.some((warning) => /Remote extraction was unavailable/i.test(warning)));
   } finally {
     if (previousOcrUrl === undefined) delete process.env.INVOICE_OCR_BASE_URL;
     else process.env.INVOICE_OCR_BASE_URL = previousOcrUrl;
@@ -400,6 +540,23 @@ test("extract idempotency key cannot be replayed for a different document", asyn
     encryptDocument: encryptedSource,
     createRun: async () => ({ inserted: false, document_hash: "0".repeat(64), location_id: LOCATION_ID, mime_type: "image/png" }),
   }), (error) => error.code === "idempotency_conflict" && error.statusCode === 409);
+});
+
+test("background enqueue rejects a location outside the actor scope before encryption or persistence", async () => {
+  const calls = [];
+  await assert.rejects(() => extractInvoice({
+    locationId: LOCATION_ID,
+    fileName: "invoice.png",
+    mimeType: "image/png",
+    dataUrl: pngDataUrl(),
+    idempotencyKey: "extract-forbidden-location",
+  }, context({ locationIds: [] }), {
+    deferProcessing: true,
+    getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+    encryptDocument: () => { calls.push("encrypt"); return encryptedSource(); },
+    createRun: async () => { calls.push("persist"); },
+  }), (error) => error.code === "location_not_found" && error.statusCode === 404);
+  assert.deepEqual(calls, []);
 });
 
 test("cross-location reads are hidden even inside the same company", async () => {
@@ -514,6 +671,9 @@ test("route validation errors are safe and do not echo document bytes", async ()
 
 test("route success crosses request schema, tenant scope, provider, persistence, and response boundary", async () => {
   const response = {};
+  let createInput;
+  let providerCalls = 0;
+  const startedAt = performance.now();
   await handleInvoiceExtractionApi(
     { method: "POST" }, response, new URL("http://localhost/api/office/invoice-extractions"),
     {
@@ -526,13 +686,21 @@ test("route success crosses request schema, tenant scope, provider, persistence,
       loadMemory: async () => ({ semanticFacts: [], playbooks: [] }),
       loadTemplates: async () => [],
       encryptDocument: encryptedSource,
-      createRun: async (input) => ({ ...input, id: RUN_ID, inserted: true, status: "processing", version: 1, created_at: "now" }),
-      extractWithProvider: async () => draft(),
+      createRun: async (input) => {
+        createInput = input;
+        return { ...input, id: RUN_ID, inserted: true, status: "processing", version: 1, created_at: "now" };
+      },
+      extractWithProvider: async () => { providerCalls += 1; return draft(); },
       completeRun: async (input) => ({ id: RUN_ID, location_id: LOCATION_ID, file_name: "invoice.png", mime_type: "image/png", byte_size: 9, status: input.status, version: 1, extracted_draft: input.draft, model: "test", prompt_version: "invoice-v1", retryable: false, duration_ms: 1, created_at: "now" }),
     },
   );
-  assert.equal(response.status, 201);
-  assert.equal(response.body.run.draft.invoiceNumber.value, "INV-10");
+  assert.equal(response.status, 202);
+  assert.ok(performance.now() - startedAt < 100);
+  assert.equal(providerCalls, 0);
+  assert.equal(createInput.enqueueJob, true);
+  assert.equal(createInput.maxAttempts, 2);
+  assert.equal(response.body.run.status, "processing");
+  assert.equal(response.body.run.draft, null);
 });
 
 test("provider failure is recorded with a safe code and no document content", async () => {

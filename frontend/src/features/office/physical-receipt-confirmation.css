@@ -1,0 +1,84 @@
+.physical-receipt-confirmation {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem 1.5rem;
+  grid-template-columns: minmax(12rem, 1fr) minmax(24rem, auto);
+  width: 100%;
+}
+
+.physical-receipt-confirmation h3,
+.physical-receipt-confirmation p {
+  margin: 0;
+}
+
+.physical-receipt-copy {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.physical-receipt-copy p {
+  color: var(--color-text-secondary, #667085);
+  font-size: 0.875rem;
+}
+
+.physical-receipt-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: flex-end;
+}
+
+.physical-receipt-confirmation label {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.invoice-extraction-workspace .physical-receipt-confirmation input[type="checkbox"] {
+  flex: 0 0 auto;
+  height: 20px;
+  margin: 0;
+  min-height: 20px;
+  padding: 0;
+  width: 20px;
+}
+
+.physical-receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.physical-receipt-note {
+  color: var(--color-text-danger, #b42318);
+  font-size: 0.875rem;
+  grid-column: 1 / -1;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .physical-receipt-confirmation {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .physical-receipt-controls,
+  .physical-receipt-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .physical-receipt-controls {
+    justify-content: flex-start;
+  }
+
+  .physical-receipt-actions button {
+    width: 100%;
+  }
+
+  .physical-receipt-note {
+    text-align: left;
+  }
+}

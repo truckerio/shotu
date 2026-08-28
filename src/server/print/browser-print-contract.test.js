@@ -169,5 +169,5 @@ test("frontend browser print contract does not depend on enumerating printers", 
   );
   assert.doesNotMatch(`${routeSource}\n${printControllerSource}\n${createSource}\n${detailSource}`, /\/api\/printers|printerName|refreshPrinters/);
   assert.doesNotMatch(previewSource, /Use printer|Save PDF only|onSelectPrintDestination/);
-  assert.match(previewSource, /Each workorder gets a unique serial/);
+  assert.match(previewSource, /t\("preview\.uniqueSerial"\)/);
 });

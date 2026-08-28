@@ -66,7 +66,7 @@ export async function protectedWorkorderDetail(context, workorderId, dependencie
     viewerUserId: context.actor.id,
     participantChatOnly: context.actor.role === "mechanic",
   });
-  return projectProtectedWorkorderDetail(detail, decisions);
+  return projectProtectedWorkorderDetail(detail, decisions, { viewerRole: context.actor.role });
 }
 
 export async function protectedWorkorderModule(context, workorderId, moduleKey, dependencies = {}) {
@@ -83,7 +83,7 @@ export async function protectedWorkorderModule(context, workorderId, moduleKey, 
   });
   return projectProtectedWorkorderDetail(detail, {
     [moduleKey]: { access: authorization.access, source: authorization.source },
-  });
+  }, { viewerRole: context.actor.role });
 }
 
 export async function patchWorkorderModule(context, workorderId, moduleKey, input, dependencies = {}) {

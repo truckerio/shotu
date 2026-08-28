@@ -11,7 +11,7 @@ export async function drainIntegrationJobs({ maxJobs = 25 } = {}) {
   const results = [];
   try {
     for (let index = 0; index < maxJobs; index += 1) {
-      const result = await runNextIntegrationJob();
+      const result = await runNextIntegrationJob({ claimOptions: { excludeProviders: ["invoice_extraction"] } });
       if (!result) break;
       results.push(result);
     }

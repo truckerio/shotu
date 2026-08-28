@@ -6,6 +6,7 @@ export const SENSITIVE_RATE_LIMIT_POLICIES = Object.freeze({
   integration: Object.freeze({ limit: 10, windowMs: 60_000 }),
   kiosk: Object.freeze({ limit: 10, windowMs: 60_000 }),
   invoice: Object.freeze({ limit: 10, windowMs: 60_000 }),
+  inventoryUpload: Object.freeze({ limit: 5, windowMs: 60_000 }),
 });
 
 function positiveInteger(value, name) {
@@ -98,7 +99,18 @@ export function sensitiveRateLimitPolicy(method, pathname) {
   if (normalizedMethod === "POST" && path === "/api/office/invoice-extractions") {
     return "invoice";
   }
+  if (normalizedMethod === "POST" && path === "/api/office/inventory/count-imports") {
+    return "inventoryUpload";
+  }
+  if (normalizedMethod === "POST" && /^\/api\/office\/inventory\/parts\/[^/]+\/locations\/[^/]+\/units$/.test(path)) {
+    return "inventoryUpload";
+  }
   return null;
+}
+
+export function deferSensitiveRateLimitUntilActor(method, pathname) {
+  const policy = sensitiveRateLimitPolicy(method, pathname);
+  return policy === "invoice" || policy === "inventoryUpload";
 }
 
 function firstHeaderValue(value) {

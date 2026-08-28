@@ -6,6 +6,7 @@ import {
   unitOptionGroups,
 } from "./quantity-unit-model.js";
 import { textEntryProps } from "./text-entry-policy.js";
+import { interfaceText } from "../../i18n/index.js";
 import "./quantity-unit-input.css";
 
 export function QuantityUnitInput({
@@ -21,7 +22,9 @@ export function QuantityUnitInput({
   compact = false,
   max,
   id,
+  locale = "en",
 }) {
+  const t = (key) => interfaceText(locale, key);
   const generatedId = useId();
   const inputId = id || `quantity-${generatedId}`;
   const listboxId = `${inputId}-units`;
@@ -33,7 +36,10 @@ export function QuantityUnitInput({
   const [menuPlacement, setMenuPlacement] = useState("below");
   const [menuStyle, setMenuStyle] = useState(undefined);
   const model = quantityInputModel(quantity, uomCode);
-  const groups = useMemo(() => unitOptionGroups(query), [query]);
+  const groups = useMemo(() => unitOptionGroups(
+    query,
+    (kind, value) => t(`uom.${kind}.${value}`),
+  ), [locale, query]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -144,7 +150,7 @@ export function QuantityUnitInput({
             else onQuantityChange(value);
           }}
           onBlur={commitQuantity}
-          placeholder="Qty"
+          placeholder={t("uom.quantityShort")}
           aria-label={quantityLabel}
           disabled={disabled}
         />
@@ -178,13 +184,13 @@ export function QuantityUnitInput({
                 {...textEntryProps("search")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search units"
-                aria-label="Search units"
+                placeholder={t("uom.searchUnits")}
+                aria-label={t("uom.searchUnits")}
                 inputMode="search"
                 enterKeyHint="search"
               />
             </label>
-            <div id={listboxId} className="quantity-unit-options" role="listbox" aria-label="Units of measure">
+            <div id={listboxId} className="quantity-unit-options" role="listbox" aria-label={t("uom.unitsOfMeasure")}>
               {groups.length ? groups.map((group) => (
                 <section key={group.category}>
                   <strong>{group.label}</strong>
@@ -198,13 +204,13 @@ export function QuantityUnitInput({
                         onClick={() => selectUnit(unit.code)}
                         key={unit.code}
                       >
-                        <span>{unit.label}</span>
+                        <span>{t(`uom.unit.${unit.code}`)}</span>
                         <small>{unit.symbol}</small>
                       </button>
                     ))}
                   </div>
                 </section>
-              )) : <p>No units found.</p>}
+              )) : <p>{t("uom.noUnits")}</p>}
             </div>
           </div>
         ) : null}

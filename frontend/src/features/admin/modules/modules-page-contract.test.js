@@ -41,9 +41,15 @@ test("admin shell exposes Modules as a first-class destination", () => {
   assert.match(page, /ref=\{titleRef\} tabIndex="-1"/);
 });
 
-test("Modules page keeps native keyboard controls and responsive containment contracts", () => {
-  assert.match(page, /<button type="button" onClick=\{onBack\}>/);
-  assert.match(page, /<select aria-label=\{label\} value=\{presentedValue\}/);
+test("Modules page keeps shared keyboard dropdowns and responsive containment contracts", () => {
+  assert.match(page, /<ContextBreadcrumbs/);
+  assert.match(page, /label: "Modules"/);
+  assert.match(page, /href: "\/\?adminView=modules"/);
+  assert.match(page, /isPlainPrimaryActivation\(event\)/);
+  assert.match(page, /\.admin-module-card/);
+  assert.match(page, /focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(page, /← All modules/);
+  assert.match(page, /<Dropdown aria-label=\{label\} value=\{presentedValue\}/);
   assert.match(page, /<details className="admin-module-exceptions">/);
   assert.match(page, /role="tablist"/);
   assert.match(page, /aria-selected=\{surface === item\}/);

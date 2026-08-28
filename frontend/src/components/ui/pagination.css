@@ -1,0 +1,15 @@
+.ui-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; padding-top: 12px; border-top: 1px solid #eaecf0; color: #667085; }
+.ui-pagination button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 7px 12px; border: 1px solid #d0d5dd; border-radius: 8px; color: #344054; background: #fff; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.ui-pagination button:hover:not(:disabled) { border-color: #84adff; color: #175cd3; background: #f5f8ff; }
+.ui-pagination button:focus-visible { outline: 3px solid #84caff; outline-offset: 1px; }
+.ui-pagination button:disabled { opacity: .42; cursor: default; }
+.ui-pagination button svg { width: 16px; height: 16px; }
+.ui-pagination > span { display: flex; align-items: baseline; gap: 4px; font-size: 13px; }
+.ui-pagination > span strong { color: #101828; }
+.ui-pagination small { margin-left: 6px; color: #667085; }
+@media (max-width: 560px) {
+  .ui-pagination { gap: 8px; }
+  .ui-pagination button { min-width: 44px; padding-inline: 9px; font-size: 0; }
+  .ui-pagination button svg { margin: 0; }
+  .ui-pagination small { display: none; }
+}

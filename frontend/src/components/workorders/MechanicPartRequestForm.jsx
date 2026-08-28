@@ -6,13 +6,15 @@ import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { Button } from "../ui/Button.jsx";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
 import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
+import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import {
   createMechanicPartRequestDraft,
   mechanicPartRequestErrorFields,
   validateMechanicPartRequest,
 } from "./mechanic-part-request-model.js";
 
-export function MechanicPartRequestForm({ workorderId, onChanged }) {
+export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   const descriptionRef = useRef(null);
   const [draft, setDraft] = useState(createMechanicPartRequestDraft);
   const [errors, setErrors] = useState({});
@@ -34,7 +36,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
 
   async function submit(event) {
     event.preventDefault();
-    const validation = validateMechanicPartRequest(draft);
+    const validation = validateMechanicPartRequest(draft, t);
     if (Object.keys(validation.errors).length) {
       setErrors(validation.errors);
       setMessage("");
@@ -54,14 +56,14 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
       setDraft(createMechanicPartRequestDraft());
       setCatalogQuery("");
       setMessageTone("success");
-      setMessage("Part request sent to office.");
+      setMessage(t("parts.sent"));
     } catch (error) {
       const fieldErrors = mechanicPartRequestErrorFields(error);
       setErrors(fieldErrors);
       setMessageTone("error");
       setMessage(Object.keys(fieldErrors).length
-        ? "Check the highlighted fields. Your request is still here."
-        : `${error.message || "The request could not be sent."} Your request is still here.`);
+        ? t("parts.checkFields")
+        : locale === "en" && error?.message ? error.message : t("parts.requestFailed"));
       if (fieldErrors.query) descriptionRef.current?.focus();
     } finally {
       setBusy(false);
@@ -75,8 +77,8 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
   return (
     <form className="mechanic-part-request-form" onSubmit={submit} noValidate>
       <div className="mechanic-part-request-heading">
-        <strong>Request a part</strong>
-        <span>Tell the office what you need for this job.</span>
+        <strong>{t("parts.requestHeading")}</strong>
+        <span>{t("parts.requestHelp")}</span>
       </div>
       <PartCatalogCombobox
         workorderId={workorderId}
@@ -96,20 +98,22 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
           }));
           setErrors({});
           setMessageTone("success");
-          setMessage(catalogInventoryText(part));
+          setMessage(catalogInventoryText(part, t, (value) => formatLocaleNumber(value, locale)));
         }}
-        label="Search company parts (optional)"
-        placeholder="Part number or description"
+        label={t("parts.catalogSearch")}
+        placeholder={t("parts.numberOrDescription")}
         disabled={busy}
+        locale={locale}
       />
       <label className="mechanic-part-description" htmlFor="mechanic-part-query">
-        <span>Part description</span>
+        <span>{t("parts.description")}</span>
         <NarrativeField
+          locale={locale}
           id="mechanic-part-query"
           ref={descriptionRef}
           value={draft.query}
           onChange={(event) => update("query", event.target.value)}
-          placeholder="Example: Front brake pads"
+          placeholder={t("parts.example")}
           rows="2"
           maxLength="500"
           disabled={busy}
@@ -131,15 +135,15 @@ export function MechanicPartRequestForm({ workorderId, onChanged }) {
             update("uomCode", value);
             setDraft((current) => ({ ...current, catalogPartId: "", partNumber: "" }));
           }}
-          quantityLabel="Quantity"
-          unitLabel="Unit"
+          quantityLabel={t("parts.quantity")}
+          unitLabel={t("parts.unit")}
           disabled={busy}
         />
         {errors.quantity ? <p className="part-field-error" id={quantityErrorId} role="alert">{errors.quantity}</p> : null}
         {errors.uomCode ? <p className="part-field-error" id={unitErrorId} role="alert">{errors.uomCode}</p> : null}
       </div>
       <Button type="submit" variant="primary" icon={Plus} disabled={busy}>
-        {busy ? "Sending request" : "Send request"}
+        {busy ? t("parts.sendingRequest") : t("parts.sendRequest")}
       </Button>
       {message ? (
         <p

@@ -1,5 +1,7 @@
 import { normalizeUomCode } from "../../../../../shared/units-of-measure.js";
 
+const MAX_PART_REPAIR_ORDER_LENGTH = 2000;
+
 function numberOrZero(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -50,16 +52,29 @@ export function normalizeCatalogResponse(payload = {}) {
   };
 }
 
-export function catalogPartDetails(part) {
-  return [part.manufacturer, part.description].filter(Boolean).join(" · ") || "Company catalog part";
+export function catalogPartDetails(part, localeText = null) {
+  return [part.manufacturer, part.description].filter(Boolean).join(" · ")
+    || (localeText ? localeText("parts.companyCatalogPart") : "Company catalog part");
 }
 
-export function catalogInventoryText(part) {
+export function repairOrderAfterCatalogSelection(currentRepairOrder, catalogPart = {}) {
+  const current = String(currentRepairOrder || "");
+  if (current.trim()) return current;
+  return String(catalogPart.description || "").trim().slice(0, MAX_PART_REPAIR_ORDER_LENGTH);
+}
+
+export function catalogInventoryText(part, localeText = null, formatNumber = String) {
   const inventory = part.inventory;
   if (!inventory?.available) {
-    return "Catalog match · No available stock at this location";
+    return localeText
+      ? `${localeText("parts.catalogMatch")} · ${localeText("parts.noAvailableAtLocation")}`
+      : "Catalog match · No available stock at this location";
   }
-  const location = inventory.locationName ? ` at ${inventory.locationName}` : "";
-  const bin = inventory.binLocation ? ` · Bin ${inventory.binLocation}` : "";
-  return `${inventory.available} ${inventory.uomCode || part.uomCode} available${location}${bin}`;
+  const location = inventory.locationName
+    ? ` ${localeText ? localeText("parts.at") : "at"} ${inventory.locationName}`
+    : "";
+  const bin = inventory.binLocation
+    ? ` · ${localeText ? localeText("parts.bin") : "Bin"} ${inventory.binLocation}`
+    : "";
+  return `${formatNumber(inventory.available)} ${inventory.uomCode || part.uomCode} ${localeText ? localeText("parts.available") : "available"}${location}${bin}`;
 }

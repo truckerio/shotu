@@ -13,6 +13,7 @@ import {
 } from "../../db/repositories/invoice-extractions.repo.js";
 import { closePool, query } from "../../db/pool.js";
 import { encryptInvoiceDocument } from "./invoice-document.crypto.js";
+import { claimNextIntegrationJob } from "../../integrations/core/integration-platform.repo.js";
 
 const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -65,10 +66,35 @@ test("real PostgreSQL serializes reviews, preserves replay idempotency, and hide
       model: "integration-test",
       promptVersion: "invoice-v1",
       memorySnapshot: {},
+      vendorHint: "FleetPride",
+      enqueueJob: true,
+      maxAttempts: 2,
       source: encryptedSource,
       retentionUntil: new Date(Date.now() + 86_400_000).toISOString(),
     });
     runId = created.id;
+    const queuedJob = await query(
+      `select id, company_id, provider, job_type, status, payload, max_attempts
+       from integration_jobs
+       where company_id = $1 and provider = 'invoice_extraction'
+         and idempotency_key = $2`,
+      [companyA, `invoice-extraction:${runId}`],
+    );
+    assert.equal(queuedJob.rows.length, 1);
+    assert.equal(queuedJob.rows[0].company_id, companyA);
+    assert.equal(queuedJob.rows[0].job_type, "extract");
+    assert.equal(queuedJob.rows[0].status, "queued");
+    assert.equal(queuedJob.rows[0].payload.runId, runId);
+    assert.equal(queuedJob.rows[0].payload.vendorHint, "FleetPride");
+    assert.equal(Number(queuedJob.rows[0].max_attempts), 2);
+    assert.equal(await claimNextIntegrationJob(`test-worker-${suffix}`, {
+      includeProviders: ["samsara"],
+    }), null);
+    const claimedJob = await claimNextIntegrationJob(`test-worker-${suffix}`, {
+      includeProviders: ["invoice_extraction"],
+    });
+    assert.equal(claimedJob.id, queuedJob.rows[0].id);
+    assert.equal(claimedJob.locked_by, `test-worker-${suffix}`);
     const storedSource = await query(
       "select ciphertext from invoice_source_documents where company_id = $1 and run_id = $2",
       [companyA, runId],

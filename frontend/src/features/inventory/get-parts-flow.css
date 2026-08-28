@@ -1,0 +1,12 @@
+.get-parts-flow { display: grid; gap: 12px; max-inline-size: 520px; }
+.get-parts-flow header span { color: var(--text-subtle, #667085); font-size: .85rem; }
+.get-parts-flow h2 { margin: 0; }
+.get-parts-flow p { margin: 0; color: var(--text-subtle, #475467); }
+.get-parts-flow form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.get-parts-flow label { display: grid; gap: 4px; font-weight: 600; }
+.get-parts-selected-part { display: grid; gap: 4px; align-content: center; padding: 8px 10px; border-radius: 8px; background: var(--surface-subtle, #f9fafb); }
+.get-parts-selected-part span { color: var(--text-subtle, #667085); font-size: .8rem; }
+.get-parts-flow input { inline-size: 100%; min-block-size: 40px; }
+.get-parts-flow form > button { grid-column: 1 / -1; justify-self: start; }
+.get-parts-result { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border-subtle, #d0d5dd); border-radius: 10px; }
+@media (max-width: 480px) { .get-parts-flow form { grid-template-columns: 1fr; } }

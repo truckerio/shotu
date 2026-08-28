@@ -8,23 +8,23 @@ const css = readFileSync(new URL("./unit/unit-service-history.css", import.meta.
 const unit = readFileSync(new URL("./unit/WorkorderUnitModule.jsx", import.meta.url), "utf8");
 
 test("unit history stays inside the Unit module as native progressive disclosure", () => {
-  assert.match(unit, /<UnitServiceHistory actorRole=\{actorRole\} historyController=\{historyController\} workorderId=/);
+  assert.match(unit, /<UnitServiceHistory actorRole=\{actorRole\} historyController=\{historyController\} locale=\{locale\} workorderId=/);
   assert.match(panel, /<details[\s\S]*className="unit-service-history"/);
   assert.match(panel, /<summary className="unit-service-history-summary">/);
   assert.match(panel, /<span className="unit-service-history-summary-copy">/);
   assert.match(unit, /historyController/);
   assert.doesNotMatch(panel, /View history|Hide history/);
   assert.doesNotMatch(panel, /aria-controls="unit-service-history-list"/);
-  assert.match(panel, /Show more/);
+  assert.match(panel, /t\("history\.showMore"\)/);
   assert.match(panel, /import \{ WorkorderTimelineList \} from "\.\.\/\.\.\/\.\.\/components\/workorders\/WorkorderTimeline\.jsx"/);
-  assert.match(panel, /<WorkorderTimelineList items=\{history\.items\.map\(serviceRecordTimelineItem\)\}/);
+  assert.match(panel, /<WorkorderTimelineList items=\{history\.items\.map\(\(item\) => serviceRecordTimelineItem\(item, locale\)\)\}/);
   assert.doesNotMatch(panel, /unit-service-history-record(?:s|-heading)?/);
   assert.doesNotMatch(css, /unit-service-history-record(?:s|-heading)?/);
   assert.match(panel, /open=\{expanded\}/);
   assert.match(panel, /onToggle=\{\(event\) => setExpanded\(event\.currentTarget\.open\)\}/);
   assert.match(panel, /actorRole === "admin"/);
   assert.match(panel, /error \|\| \["unlinked", "never_synced", "stale", "unavailable"\]/);
-  assert.match(panel, /Open integration settings/);
+  assert.match(panel, /t\("history\.openSettings"\)/);
   assert.match(hook, /expanded, setExpanded/);
   assert.doesNotMatch(panel, /onApply|onFieldChange|set.*(?:diagnosis|workPerformed)/);
 });

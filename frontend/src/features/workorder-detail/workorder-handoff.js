@@ -14,10 +14,10 @@ export function canonicalTimeInput(value) {
   }).format(date);
 }
 
-export function formatHandoffTimestamp(value) {
+export function formatHandoffTimestamp(value, { locale, notRecorded = "Not recorded" } = {}) {
   const date = validDate(value);
-  if (!date) return "Not recorded";
-  return new Intl.DateTimeFormat(undefined, {
+  if (!date) return notRecorded;
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -46,14 +46,16 @@ export function canonicalApprovalName(workorder) {
   return workorder?.approvedBy?.name || workorder?.approvedByName || "";
 }
 
-export function workorderHandoffFacts(workorder) {
+export function workorderHandoffFacts(workorder, { locale, localeText } = {}) {
+  const text = (key, english) => localeText ? localeText(key) : english;
+  const timeOptions = { locale, notRecorded: text("detail.notRecorded", "Not recorded") };
   return [
-    { label: "Assigned", value: formatHandoffTimestamp(earliestAssignmentAt(workorder)) },
-    { label: "Started", value: formatHandoffTimestamp(workorder?.startedAt) },
-    { label: "Work done", value: formatHandoffTimestamp(workorder?.mechanicDoneAt) },
+    { label: text("completion.assigned", "Assigned"), value: formatHandoffTimestamp(earliestAssignmentAt(workorder), timeOptions) },
+    { label: text("completion.started", "Started"), value: formatHandoffTimestamp(workorder?.startedAt, timeOptions) },
+    { label: text("completion.workDone", "Work done"), value: formatHandoffTimestamp(workorder?.mechanicDoneAt, timeOptions) },
     {
-      label: "Manager approved",
-      value: formatHandoffTimestamp(workorder?.closedAt),
+      label: text("completion.managerApproved", "Manager approved"),
+      value: formatHandoffTimestamp(workorder?.closedAt, timeOptions),
       detail: canonicalApprovalName(workorder),
     },
   ];

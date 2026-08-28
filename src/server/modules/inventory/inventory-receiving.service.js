@@ -116,10 +116,10 @@ function hashRequest(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-function withLabels(receipt, qrOptions = {}) {
+export function withInventoryLabels(receipt, qrOptions = {}) {
   return {
     ...receipt,
-    units: receipt.units.map((unit) => {
+    units: (receipt.units || []).map((unit) => {
       const token = createInventoryQrToken(unit.id, qrOptions);
       return {
         ...unit,
@@ -217,7 +217,7 @@ export async function receiveReviewedInvoice(runId, input, requestContext, depen
       409,
     );
   }
-  if (staged.receipt.status === "confirmed") return { receipt: withLabels(staged.receipt, dependencies.qrOptions), replayed: true };
+  if (staged.receipt.status === "confirmed") return { receipt: withInventoryLabels(staged.receipt, dependencies.qrOptions), replayed: true };
   const persistedLines = staged.receipt.lines.map((line) => ({
     lineIndex: line.lineIndex,
     catalogPartId: line.catalogPartId,
@@ -259,14 +259,14 @@ export async function receiveReviewedInvoice(runId, input, requestContext, depen
     if (error instanceof InventoryError) throw error;
     throw publicError("ODOO_RECEIPT_RECONCILIATION_REQUIRED", "Odoo receipt status is uncertain. Reconcile it before retrying.", 502, true);
   }
-  return { receipt: withLabels(confirmed, dependencies.qrOptions), replayed: !staged.inserted };
+  return { receipt: withInventoryLabels(confirmed, dependencies.qrOptions), replayed: !staged.inserted };
 }
 
 export async function readInventoryReceiptLabels(receiptId, requestContext, dependencies = {}) {
   const receipt = await (dependencies.getReceipt || getInventoryReceipt)({ receiptId, ...actorScope(requestContext) });
   if (!receipt) throw inventoryNotFound();
-  if (receipt.status !== "confirmed") throw publicError("INVENTORY_RECEIPT_NOT_CONFIRMED", "Labels are available only after Odoo confirms the receipt.", 409);
-  return { receipt: withLabels(receipt, dependencies.qrOptions) };
+  if (receipt.status !== "confirmed") throw publicError("INVENTORY_RECEIPT_NOT_CONFIRMED", "Labels are available only after the receipt is confirmed.", 409);
+  return { receipt: withInventoryLabels(receipt, dependencies.qrOptions) };
 }
 
 export async function renderInventoryUnitQr(unitId, requestContext, dependencies = {}) {

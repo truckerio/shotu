@@ -4,6 +4,7 @@ import {
   officeWorkorderDetail,
 } from "../modules/office/office.service.js";
 import { createOfficePartSchema, decidePartRequestSchema, updatePartAllocationSchema } from "../modules/parts/part.schemas.js";
+import { loadUnresolvedPartRequestQueue } from "../modules/parts/part-request-queue.service.js";
 import {
   assignMechanicsSchema,
   cancelWorkorderSchema,
@@ -82,6 +83,7 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   const createRuntime = dependencies.createRuntime || createWorkorderRuntime;
   const patchModules = dependencies.patchModules || patchWorkorderModules;
   const runAction = dependencies.runAction || runWorkorderModuleAction;
+  const loadPartRequestQueue = dependencies.loadPartRequestQueue || loadUnresolvedPartRequestQueue;
 
   if (req.method === "GET" && url.pathname === "/api/office/template") {
     const rows = await loadOfficeLocationTemplates(requestContext);
@@ -114,6 +116,11 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
 
   if (req.method === "GET" && url.pathname === "/api/office/dashboard") {
     sendJson(res, 200, await officeDashboard(requestContext));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/office/part-requests/queue") {
+    sendJson(res, 200, await loadPartRequestQueue(Object.fromEntries(url.searchParams), requestContext));
     return true;
   }
 

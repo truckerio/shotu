@@ -11,12 +11,16 @@ import {
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { OperationsWorkspace } from "../../../components/operations/OperationsWorkspace.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
+import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
+import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
 import { KioskSettingsPanel } from "../KioskSettingsPanel.jsx";
 import { locationHasTemplate } from "../adminLocationStatus.js";
 import { TemplatePage, WorkorderRulesPage } from "./TemplatePage.jsx";
 import { UsersPage } from "./UsersPage.jsx";
 
 export function LocationsPage({ locations, loading, onCreate, onOpen }) {
+  const pagination = usePagination(locations, { pageSize: 15 });
   return (
     <section className="admin-content">
       <PageHeader
@@ -25,7 +29,7 @@ export function LocationsPage({ locations, loading, onCreate, onOpen }) {
       />
       <div className="admin-location-table">
         <div className="admin-table-head"><span>Location</span><span>Assigned active</span><span>Open work</span><span>Template</span><span></span></div>
-        {loading ? <div className="admin-empty">Loading locations</div> : locations.map((location) => (
+        {loading ? <div className="admin-empty">Loading locations</div> : pagination.pageItems.map((location) => (
           <button className="admin-location-row" type="button" key={location.id} onClick={() => onOpen(location.id)}>
             <span className="admin-location-name"><span className="admin-location-icon"><MarkerPin01 /></span><span><strong>{location.name}</strong><small>{location.address || location.type}</small></span></span>
             <span className="admin-location-stat"><small>Assigned active</small><strong>{location.assigned_active_user_count ?? location.user_count ?? 0}</strong></span>
@@ -35,6 +39,7 @@ export function LocationsPage({ locations, loading, onCreate, onOpen }) {
           </button>
         ))}
       </div>
+      {!loading ? <Pagination {...pagination} label="locations" /> : null}
     </section>
   );
 }
@@ -60,12 +65,31 @@ export function LocationDetailPage({
   saving,
   onOpenWorkorder,
 }) {
+  function followLocationsBreadcrumb(event) {
+    if (!isPlainPrimaryActivation(event)) return;
+    event.preventDefault();
+    onBack();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const origin = [...document.querySelectorAll(".admin-location-row")]
+        .find((row) => row.querySelector(".admin-location-name strong")?.textContent?.trim() === detail.location.name);
+      origin?.focus({ preventScroll: true });
+    }));
+  }
+
   return (
     <section className="admin-content">
       <PageHeader
+        className="admin-location-detail-header"
         title={detail.location.name}
         subtitle={detail.location.address || detail.location.type}
-        leading={<button className="admin-back" type="button" onClick={onBack} aria-label="Back to locations"><ArrowLeft /></button>}
+        leading={<ContextBreadcrumbs
+          items={[{
+            label: "Locations",
+            href: "/?adminView=locations",
+            onClick: followLocationsBreadcrumb,
+          }]}
+          current={detail.location.name}
+        />}
       />
       <nav className="admin-tabs" aria-label="Location settings">
         <button className={tab === "work" ? "active" : ""} type="button" onClick={() => setTab("work")}><Tool02 /> Work</button>

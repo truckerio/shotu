@@ -8,6 +8,7 @@ import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
 import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceWorkspace.jsx";
 import { WorkorderDetailPage } from "../../features/workorder-detail/WorkorderDetailPage.jsx";
 import { InventoryScanWorkspace } from "../../features/inventory/InventoryScanWorkspace.jsx";
+import { interfaceText } from "../../i18n/index.js";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx")
   .then((module) => ({ default: module.AdminWorkspace })));
@@ -23,6 +24,8 @@ export function RoleWorkspaceOutlet({
   routeLoading,
   workspace,
 }) {
+  const locale = actor?.role === "mechanic" ? interfacePreferences?.locale || "en" : "en";
+  const t = (key) => interfaceText(locale, key);
   if (new URLSearchParams(window.location.search).has("inventoryScan")) {
     return <InventoryScanWorkspace actor={actor} />;
   }
@@ -31,7 +34,7 @@ export function RoleWorkspaceOutlet({
       <main className="prototype mechanic-home route-loading">
         <div className="mechanic-empty-state">
           <RefreshCw01 className="loading-icon" />
-          <strong>Opening workorder...</strong>
+          <strong>{t("create.openingWorkorder")}</strong>
         </div>
       </main>
     );
@@ -43,6 +46,7 @@ export function RoleWorkspaceOutlet({
         actor={actor}
         locale={interfacePreferences.locale}
         localeError={interfacePreferences.error}
+        localeReady={interfacePreferences.ready}
         onLocaleChange={interfacePreferences.onLocaleChange}
         onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
         onOpenWorkorder={navigation.openOperationalWorkorder}
@@ -86,8 +90,8 @@ export function RoleWorkspaceOutlet({
     return (
       <main className="prototype mechanic-home">
         <div className="mechanic-empty-state" role="status">
-          <strong>Create workorder is not available</strong>
-          <span>Your module access does not include create workorder entry for your assigned location.</span>
+          <strong>{t("create.unavailable")}</strong>
+          <span>{t("create.routeUnavailableMessage")}</span>
         </div>
       </main>
     );

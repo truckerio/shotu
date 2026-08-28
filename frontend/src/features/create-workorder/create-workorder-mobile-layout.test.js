@@ -55,7 +55,7 @@ test("phone Create uses shared keyboard foundation and one docked primary action
   assert.match(createPage, /useVisualViewport/);
   assert.match(createPage, /useFocusedFieldVisibility/);
   assert.match(createShell, /<KeyboardAwareDock/);
-  assert.match(createShell, /"Creating\.\.\." : "Create workorder"/);
+  assert.match(createShell, /t\("create\.creating"\) : t\("create\.title"\)/);
   assert.match(createShell, /\{!isPhone \? \([\s\S]*className="detail-create-button"/);
   assert.match(createCss, /@media \(max-width:\s*1180px\)[\s\S]*\.prototype\.create-workorder-page\.is-keyboard-open\s*\{[^}]*position:\s*fixed;[^}]*width:\s*100%;/s);
   assert.match(createCss, /\.create-workorder-page\.is-keyboard-open\s+\.create-workorder-form\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s);
@@ -95,7 +95,7 @@ test("phone Create renders one form page and a contained compact Preview", () =>
   );
   assert.match(
     createPage,
-    /activeSection === "preview" && previewPolicy\.canRead[\s\S]*<CompactWorkorderPreview[\s\S]*<WorkorderPreview label="First page"/,
+    /activeSection === "preview" && previewPolicy\.canRead[\s\S]*<CompactWorkorderPreview[\s\S]*<WorkorderPreview label=\{t\("preview\.firstPage"\)\}/,
   );
   assert.match(
     createCss,

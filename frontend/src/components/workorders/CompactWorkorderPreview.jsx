@@ -15,6 +15,7 @@ export function CompactWorkorderPreview({
   onPrint,
   onTogglePrintMenu,
   previewState = { status: "ready", message: "" },
+  locale = "en",
 }) {
   const internalPanelRef = useRef(null);
 
@@ -57,6 +58,7 @@ export function CompactWorkorderPreview({
         primaryActionLabel={primaryActionLabel}
         onFullscreen={onFullscreen}
         onOpenPreview={onOpenPreview}
+        locale={locale}
       >
         {previewState.status === "ready"
           ? children

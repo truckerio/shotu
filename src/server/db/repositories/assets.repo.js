@@ -8,30 +8,44 @@ export async function searchVehicles(searchText, limit = 12, companyIds = []) {
   const like = `%${q.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
   const result = await query(
     `
-      select id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
-             make, model, year, serial, last_odometer_meters, last_odometer_miles,
-             last_location, last_seen_at, synced_at
-      from assets
-      where company_id = any($5::uuid[])
+      select a.id, a.company_id, a.provider, a.provider_vehicle_id, a.unit_type, a.owner_name, a.name, a.unit_no, a.vin, a.license_plate,
+             a.make, a.model, a.year, a.serial, a.last_odometer_meters, a.last_odometer_miles,
+             a.last_location, a.last_seen_at, a.synced_at,
+             case when active_workorder.id is null then null else jsonb_build_object(
+               'id', active_workorder.id,
+               'serial', active_workorder.serial,
+               'status', active_workorder.status
+             ) end as active_workorder
+      from assets a
+      left join lateral (
+        select wo.id, wo.serial, wo.status
+        from operational_workorders wo
+        where wo.asset_id = a.id
+          and wo.company_id = a.company_id
+          and wo.status not in ('closed', 'odoo_entered', 'cancelled')
+        order by wo.created_at desc, wo.id desc
+        limit 1
+      ) active_workorder on true
+      where a.company_id = any($5::uuid[])
         and (
-          unit_no ilike $1 escape '\\'
-          or name ilike $1 escape '\\'
-          or vin ilike $1 escape '\\'
-          or license_plate ilike $1 escape '\\'
-          or serial ilike $1 escape '\\'
+          a.unit_no ilike $1 escape '\\'
+          or a.name ilike $1 escape '\\'
+          or a.vin ilike $1 escape '\\'
+          or a.license_plate ilike $1 escape '\\'
+          or a.serial ilike $1 escape '\\'
         )
       order by
         case
-          when regexp_replace(lower(coalesce(unit_no, '')), '[^a-z0-9]', '', 'g') = $4 and unit_type = 'Trailer' then -2
-          when regexp_replace(lower(coalesce(name, '')), '[^a-z0-9]', '', 'g') = $4 and unit_type = 'Trailer' then -2
-          when regexp_replace(lower(coalesce(unit_no, '')), '[^a-z0-9]', '', 'g') = $4 then -1
-          when regexp_replace(lower(coalesce(name, '')), '[^a-z0-9]', '', 'g') = $4 then -1
-          when unit_no ilike $2 then 0
-          when name ilike $2 then 1
-          when vin ilike $2 then 2
+          when regexp_replace(lower(coalesce(a.unit_no, '')), '[^a-z0-9]', '', 'g') = $4 and a.unit_type = 'Trailer' then -2
+          when regexp_replace(lower(coalesce(a.name, '')), '[^a-z0-9]', '', 'g') = $4 and a.unit_type = 'Trailer' then -2
+          when regexp_replace(lower(coalesce(a.unit_no, '')), '[^a-z0-9]', '', 'g') = $4 then -1
+          when regexp_replace(lower(coalesce(a.name, '')), '[^a-z0-9]', '', 'g') = $4 then -1
+          when a.unit_no ilike $2 then 0
+          when a.name ilike $2 then 1
+          when a.vin ilike $2 then 2
           else 3
         end,
-        coalesce(unit_no, name, vin, license_plate)
+        coalesce(a.unit_no, a.name, a.vin, a.license_plate)
       limit $3
     `,
     [like, `${q}%`, Math.max(1, Math.min(Number(limit) || 12, 25)), qKey, companyIds]
@@ -43,11 +57,25 @@ export async function getVehicleById(id, companyIds = []) {
   if (!companyIds.length) return null;
   const result = await query(
     `
-      select id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
-             make, model, year, serial, last_odometer_meters, last_odometer_miles,
-             last_location, last_seen_at, synced_at
-      from assets
-      where id = $1 and company_id = any($2::uuid[])
+      select a.id, a.company_id, a.provider, a.provider_vehicle_id, a.unit_type, a.owner_name, a.name, a.unit_no, a.vin, a.license_plate,
+             a.make, a.model, a.year, a.serial, a.last_odometer_meters, a.last_odometer_miles,
+             a.last_location, a.last_seen_at, a.synced_at,
+             case when active_workorder.id is null then null else jsonb_build_object(
+               'id', active_workorder.id,
+               'serial', active_workorder.serial,
+               'status', active_workorder.status
+             ) end as active_workorder
+      from assets a
+      left join lateral (
+        select wo.id, wo.serial, wo.status
+        from operational_workorders wo
+        where wo.asset_id = a.id
+          and wo.company_id = a.company_id
+          and wo.status not in ('closed', 'odoo_entered', 'cancelled')
+        order by wo.created_at desc, wo.id desc
+        limit 1
+      ) active_workorder on true
+      where a.id = $1 and a.company_id = any($2::uuid[])
     `,
     [id, companyIds]
   );

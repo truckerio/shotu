@@ -1,3 +1,4 @@
+import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useState } from "react";
 import { ArrowLeft, LogIn01, RefreshCw01, User01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
@@ -201,11 +202,11 @@ export function KioskGate({ context, onRefresh, onStandardLogin }) {
           </header>
           <label className="kiosk-language" htmlFor="kiosk-language">
             <span>{text("kiosk.language")}</span>
-            <select id="kiosk-language" value={deviceLocale} onChange={changeDeviceLocale}>
+            <Dropdown id="kiosk-language" value={deviceLocale} onChange={changeDeviceLocale}>
               {KIOSK_LANGUAGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
-            </select>
+            </Dropdown>
           </label>
         </div>
         {context.mechanics.length ? (

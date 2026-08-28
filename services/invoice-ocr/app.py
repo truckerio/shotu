@@ -17,6 +17,8 @@ MAX_DOCUMENT_BYTES = min(20 * 1024 * 1024, max(1, int(os.getenv("OCR_MAX_DOCUMEN
 MAX_PAGES = min(10, max(1, int(os.getenv("OCR_MAX_PAGES", "3"))))
 MAX_REGIONS = min(10_000, max(100, int(os.getenv("OCR_MAX_REGIONS", "5000"))))
 PDF_RENDER_SCALE = min(3.0, max(1.0, float(os.getenv("OCR_PDF_RENDER_SCALE", "1.35"))))
+IMAGE_MAX_SIDE = min(4096, max(1200, int(os.getenv("OCR_IMAGE_MAX_SIDE", "2200"))))
+MAX_NATIVE_TEXT_CHARS = min(500_000, max(10_000, int(os.getenv("OCR_MAX_NATIVE_TEXT_CHARS", "100000"))))
 SERVICE_TOKEN = os.getenv("OCR_SERVICE_TOKEN", "").strip()
 ALLOWED_TYPES = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
 
@@ -110,13 +112,66 @@ def _parse_page_result(raw: Any, *, page_number: int, width: int, height: int) -
     return text_lines, scores, regions
 
 
-def _ocr_image(path: str, *, page_number: int) -> tuple[list[str], list[float], list[dict[str, Any]]]:
-    from PIL import Image
+def _prepare_image(path: str, output_path: str) -> tuple[int, int]:
+    from PIL import Image, ImageOps
 
-    with Image.open(path) as image:
+    with Image.open(path) as source:
+        image = ImageOps.exif_transpose(source)
         width, height = image.size
-    raw = _get_model().ocr(path, cls=True)
+        longest_side = max(width, height)
+        if longest_side > IMAGE_MAX_SIDE:
+            scale = IMAGE_MAX_SIDE / longest_side
+            image = image.resize(
+                (max(1, round(width * scale)), max(1, round(height * scale))),
+                Image.Resampling.LANCZOS,
+            )
+        if image.mode != "RGB":
+            converted = Image.new("RGB", image.size, "white")
+            if "A" in image.getbands():
+                converted.paste(image, mask=image.getchannel("A"))
+            else:
+                converted.paste(image)
+            image = converted
+        image.save(output_path, format="JPEG", quality=92, optimize=True)
+        return image.size
+
+
+def _ocr_image(path: str, *, page_number: int) -> tuple[list[str], list[float], list[dict[str, Any]]]:
+    with tempfile.NamedTemporaryFile(suffix=".jpg") as prepared:
+        width, height = _prepare_image(path, prepared.name)
+        raw = _get_model().ocr(prepared.name, cls=True)
     return _parse_page_result(raw, page_number=page_number, width=width, height=height)
+
+
+def _extract_native_pdf_text(document: bytes) -> dict[str, Any]:
+    import pypdfium2 as pdfium
+
+    started = time.perf_counter()
+    pdf = pdfium.PdfDocument(document)
+    page_count = min(len(pdf), MAX_PAGES)
+    pages: list[str] = []
+    try:
+        for index in range(page_count):
+            page = pdf[index]
+            try:
+                text_page = page.get_textpage()
+                try:
+                    pages.append(str(text_page.get_text_range() or "").strip())
+                finally:
+                    text_page.close()
+            finally:
+                page.close()
+    finally:
+        pdf.close()
+    text = "\n\n".join(page for page in pages if page).strip()[:MAX_NATIVE_TEXT_CHARS]
+    return {
+        "provider": "pdfium",
+        "providerVersion": _package_version("pypdfium2"),
+        "text": text,
+        "pageCount": page_count,
+        "characterCount": len(text),
+        "durationMs": round((time.perf_counter() - started) * 1000),
+    }
 
 
 def _extract_document(document: bytes, content_type: str) -> dict[str, Any]:
@@ -178,6 +233,7 @@ async def health() -> dict[str, Any]:
         "providerVersion": _package_version("paddleocr"),
         "maxDocumentBytes": MAX_DOCUMENT_BYTES,
         "maxPages": MAX_PAGES,
+        "imageMaxSide": IMAGE_MAX_SIDE,
     }
 
 
@@ -198,3 +254,21 @@ async def extract_ocr(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=413, detail="Document too large")
     async with _inference_lock:
         return await asyncio.to_thread(_extract_document, document, content_type)
+
+
+@app.post("/v1/native-text")
+async def extract_native_text(request: Request) -> dict[str, Any]:
+    if SERVICE_TOKEN and request.headers.get("x-ocr-token", "") != SERVICE_TOKEN:
+        raise HTTPException(status_code=404, detail="Not found")
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != "application/pdf":
+        raise HTTPException(status_code=415, detail="Native text extraction requires a PDF")
+    declared_length = request.headers.get("content-length")
+    if declared_length and int(declared_length) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Document too large")
+    document = await request.body()
+    if not document:
+        raise HTTPException(status_code=400, detail="Empty document")
+    if len(document) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Document too large")
+    return await asyncio.to_thread(_extract_native_pdf_text, document)

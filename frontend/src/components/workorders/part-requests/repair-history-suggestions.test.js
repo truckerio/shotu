@@ -16,27 +16,30 @@ test("history lookup is bounded, cancellable, stale-safe, and explicit apply onl
   assert.match(component, /limit: "5"/);
   assert.match(component, /repair-suggestions\?/);
   assert.match(component, /onClick=\{\(\) => onApply\(suggestion\.text\)\}/);
-  assert.match(component, /Nothing is filled until you apply a suggestion/);
+  assert.match(component, /interfaceText\(locale, key\)/);
+  assert.match(component, /parts\.repairSuggestionHelp/);
 });
 
 test("history suggestions can be dismissed and reopened without changing repair text", () => {
-  assert.match(component, /aria-label="Hide previous work suggestions"/);
+  assert.match(component, /aria-label=\{t\("parts\.hidePreviousWorkSuggestions"\)\}/);
   assert.match(component, /onClick=\{\(\) => setExpanded\(false\)\}/);
-  assert.match(component, /Show previous work/);
+  assert.match(component, /parts\.showPreviousWork/);
   assert.match(component, /onClick=\{\(\) => setExpanded\(true\)\}/);
   assert.match(component, /useEffect\(\(\) => \{\s*setExpanded\(true\);\s*\}, \[catalogPartId, normalizedPartNumber\]\)/s);
   assert.doesNotMatch(component, /setExpanded\(false\)[\s\S]{0,120}onApply/);
 });
 
-test("catalog selection does not automatically write repair order", () => {
+test("catalog selection does not silently apply repair-history or AI repair suggestions", () => {
   assert.doesNotMatch(office, /repairOrder: part\.repairOrder/);
   assert.doesNotMatch(office, /repairOrder: result\.part\.repairOrder/);
   assert.doesNotMatch(used, /repairOrder: catalogPart\.repairOrder/);
   assert.doesNotMatch(used, /repairOrder: result\.part\.repairOrder/);
   assert.doesNotMatch(officeReview, /repairOrder:\s*result\.part\.repairOrder/);
+  assert.match(used, /repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
   assert.match(office, /<RepairHistorySuggestions/);
   assert.match(officeRequest, /<RepairHistorySuggestions/);
   assert.match(used, /<RepairHistorySuggestions/);
+  assert.match(used, /locale=\{locale\}/);
 });
 
 test("mobile apply controls meet the 44px target", () => {

@@ -1,4 +1,5 @@
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import { formatLocaleNumber, interfaceText } from "../../../i18n/index.js";
 
 export function WorkorderChatModule({
   access,
@@ -9,15 +10,17 @@ export function WorkorderChatModule({
   isCompact,
   isMechanicDetail,
   label,
+  locale = "en",
   onSelect,
   content,
 }) {
   if (!access || !activeWorkorder || (!isCompact && !isMechanicDetail)) return null;
+  const t = (key) => interfaceText(locale, key);
   return (
     <ProgressiveWorkorderSection
       id="chat"
       title={label}
-      summary={`${conversationMessages.length} ${conversationMessages.length === 1 ? "message" : "messages"}`}
+      summary={`${formatLocaleNumber(conversationMessages.length, locale)} ${conversationMessages.length === 1 ? t("chat.messageCount") : t("chat.messagesCount")}`}
       activeSection={detailSection}
       onSelect={onSelect}
       attention={attention}

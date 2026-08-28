@@ -1,3 +1,4 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { RefreshCw01, SearchMd } from "@untitledui/icons";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
@@ -65,14 +66,14 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder }) {
           >
             <label>
               <span>Queue</span>
-              <select aria-label="More surveillance queues" value={isSurveillancePhonePrimaryTab(activeTab) ? "" : activeTab} onChange={(event) => event.target.value && setActiveTab(event.target.value)}>
+              <Dropdown aria-label="More surveillance queues" value={isSurveillancePhonePrimaryTab(activeTab) ? "" : activeTab} onChange={(event) => event.target.value && setActiveTab(event.target.value)}>
                 <option value="">Choose queue</option>
                 {SURVEILLANCE_PHONE_SECONDARY_TABS.map((phoneTab) => (
                   <option key={phoneTab.key} value={phoneTab.key}>
                     {phoneTab.label} ({dashboard?.counts[phoneTab.key] || 0})
                   </option>
                 ))}
-              </select>
+              </Dropdown>
             </label>
             <label className="mechanic-search">
               <SearchMd />
@@ -81,10 +82,10 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder }) {
             {locations.length > 1 ? (
               <label>
                 <span>Location</span>
-                <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
+                <Dropdown value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
                   <option value="">All locations</option>
                   {locations.map((location) => <option key={location}>{location}</option>)}
-                </select>
+                </Dropdown>
               </label>
             ) : null}
             <label><span>From</span><input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" /></label>
@@ -93,10 +94,10 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder }) {
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
             {locations.length > 1 ? (
-              <select value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
+              <Dropdown value={effectiveLocationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Location filter">
                 <option value="">All locations</option>
                 {locations.map((location) => <option key={location}>{location}</option>)}
-              </select>
+              </Dropdown>
             ) : null}
             <label className="surveillance-date-filter surveillance-desktop-date">
               <span>From</span>

@@ -56,8 +56,8 @@ test("shared map exposes bounded zoom controls", () => {
   assert.match(component, /const MIN_ASSET_LOCATION_ZOOM = 17/);
   assert.match(component, /MAX_SATELLITE_ZOOM/);
   assert.doesNotMatch(component, /const MAX_ASSET_LOCATION_ZOOM = 20/);
-  assert.match(component, /aria-label="Zoom in"/);
-  assert.match(component, /aria-label="Zoom out"/);
+  assert.match(component, /aria-label=\{t\("location\.zoomIn"\)\}/);
+  assert.match(component, /aria-label=\{t\("location\.zoomOut"\)\}/);
   assert.match(componentCss, /@media \(max-width: 700px\)[\s\S]*?height: 44px;[\s\S]*?width: 44px;/);
 });
 

@@ -1,5 +1,6 @@
+import { Dropdown } from "../forms/Dropdown.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock, Inbox01, SearchMd } from "@untitledui/icons";
+import { Clock, Inbox01, SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
@@ -8,7 +9,10 @@ import { WorkorderDraftQueue } from "../../features/workorder-drafts/index.js";
 import { ProgressiveQueue } from "../responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../responsive/ProgressiveQueue.js";
 import { WorkorderQueueTabs } from "../workorders/WorkorderQueue.jsx";
+import { Pagination } from "../ui/Pagination.jsx";
 import { MobileQueueToolbar } from "./MobileQueueToolbar.jsx";
+import { PartRequestQueue } from "./PartRequestQueue.jsx";
+import { usePartRequestQueueCount } from "./usePartRequestQueueCount.js";
 import {
   ATTENTION_OPTIONS,
   LIFECYCLE_OPTIONS,
@@ -71,29 +75,29 @@ function OperationsFilters({
       {!fixedLocationId ? (
         <label>
           <span className="operations-field-label">Location</span>
-          <select value={filters.locationId} onChange={(event) => onUpdate("locationId", event.target.value)}>
+          <Dropdown value={filters.locationId} onChange={(event) => onUpdate("locationId", event.target.value)}>
             <option value="">All locations</option>
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-          </select>
+          </Dropdown>
         </label>
       ) : null}
       <label>
         <span className="operations-field-label">Lifecycle</span>
-        <select value={filters.lifecycle} onChange={(event) => onUpdate("lifecycle", event.target.value)}>
+        <Dropdown value={filters.lifecycle} onChange={(event) => onUpdate("lifecycle", event.target.value)}>
           {LIFECYCLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        </Dropdown>
       </label>
       <label>
         <span className="operations-field-label">Attention</span>
-        <select value={filters.attentionReason} onChange={(event) => onUpdate("attentionReason", event.target.value)}>
+        <Dropdown value={filters.attentionReason} onChange={(event) => onUpdate("attentionReason", event.target.value)}>
           {ATTENTION_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        </Dropdown>
       </label>
       <label>
         <span className="operations-field-label">Sort</span>
-        <select value={filters.sort} onChange={(event) => onUpdate("sort", event.target.value)}>
+        <Dropdown value={filters.sort} onChange={(event) => onUpdate("sort", event.target.value)}>
           {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        </Dropdown>
       </label>
     </>
   );
@@ -225,9 +229,17 @@ export function OperationsWorkspace({
   const [refreshKey, setRefreshKey] = useState(0);
   const [summary, setSummary] = useState({ counts: emptyCounts, loading: true, loaded: false, error: "" });
   const [list, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, loaded: false, error: "" });
+  const [partFilters, setPartFilters] = useState({
+    locationId: fixedLocationId,
+    search: "",
+    status: "",
+    supply: "",
+    sort: "waiting:desc",
+  });
   const preferenceHydrated = useRef(false);
   const queuePreferences = useWorkorderPreferences("admin");
   useAutomaticRefresh(() => setRefreshKey((current) => current + 1));
+  const partRequestCount = usePartRequestQueueCount({ locationId: fixedLocationId, refreshKey });
 
   useEffect(() => {
     if (fixedLocationId || !queuePreferences.ready || preferenceHydrated.current) return;
@@ -259,6 +271,7 @@ export function OperationsWorkspace({
   useEffect(() => {
     if (!fixedLocationId) return;
     setFilters((current) => ({ ...current, locationId: fixedLocationId }));
+    setPartFilters((current) => ({ ...current, locationId: fixedLocationId }));
     setPage(1);
   }, [fixedLocationId]);
 
@@ -285,7 +298,7 @@ export function OperationsWorkspace({
 
   useEffect(() => {
     const controller = new AbortController();
-    if (filters.category === "drafts") {
+    if (filters.category === "drafts" || filters.category === "parts") {
       setList({
         items: [],
         total: drafts.filter((draft) => !fixedLocationId || draft.locationId === fixedLocationId).length,
@@ -322,8 +335,12 @@ export function OperationsWorkspace({
     [drafts, fixedLocationId],
   );
   const categoryCounts = useMemo(
-    () => ({ ...summary.counts, drafts: visibleDraftCount }),
-    [summary.counts, visibleDraftCount],
+    () => ({
+      ...summary.counts,
+      drafts: visibleDraftCount,
+      parts: partRequestCount.total,
+    }),
+    [summary.counts, visibleDraftCount, partRequestCount.total],
   );
   const mobileCategories = OPERATION_CATEGORIES.map((category) => ({
     key: category.id,
@@ -373,6 +390,10 @@ export function OperationsWorkspace({
     setRefreshKey((current) => current + 1);
   }
 
+  function updatePartFilter(key, value) {
+    setPartFilters((current) => ({ ...current, [key]: value }));
+  }
+
   return (
     <section className="operations-workspace" aria-label="Workorder operations">
       <div className="operations-tabs-wrap role-desktop-queues">
@@ -387,8 +408,8 @@ export function OperationsWorkspace({
               onClick={() => updateFilter("category", category.id)}
             >
               <span>{category.label}</span>
-              <strong aria-label={`${categoryCounts[category.countKey]} ${category.id === "drafts" ? "drafts" : "workorders"}`}>
-                {category.id !== "drafts" && summary.loading ? "-" : categoryCounts[category.countKey]}
+              <strong aria-label={`${categoryCounts[category.countKey] ?? "Unavailable"} ${category.id === "parts" ? "part requests" : category.id === "drafts" ? "drafts" : "workorders"}`}>
+                {category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "-") : category.id !== "drafts" && summary.loading ? "-" : categoryCounts[category.countKey]}
               </strong>
             </button>
           ))}
@@ -423,7 +444,7 @@ export function OperationsWorkspace({
             onChange={(category) => updateFilter("category", category)}
           />
         </div>
-        {filters.category !== "drafts" ? (
+        {filters.category !== "drafts" && filters.category !== "parts" ? (
           <div className="operations-toolbar">
             <OperationsFilters
               filters={filters}
@@ -437,7 +458,7 @@ export function OperationsWorkspace({
         ) : null}
       </MobileQueueToolbar>
 
-      {filters.category !== "drafts" ? <div className="operations-toolbar role-desktop-filters">
+      {filters.category !== "drafts" && filters.category !== "parts" ? <div className="operations-toolbar role-desktop-filters">
         <OperationsFilters
           filters={filters}
           fixedLocationId={fixedLocationId}
@@ -448,10 +469,10 @@ export function OperationsWorkspace({
         />
       </div> : null}
 
-      {filters.category !== "drafts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
+      {filters.category !== "drafts" && filters.category !== "parts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
       <div className="operations-list-header">
-        <span><strong>{activeCategory.label}</strong>{filters.category === "drafts" || !list.loading ? ` · ${filters.category === "drafts" ? visibleDraftCount : list.total}` : ""}</span>
-        {filters.category !== "drafts" && filters.locationId && !fixedLocationId ? <span>{locations.find((location) => location.id === filters.locationId)?.name}</span> : null}
+        <span><strong>{activeCategory.label}</strong>{filters.category === "drafts" || filters.category === "parts" || !list.loading ? ` · ${filters.category === "drafts" ? visibleDraftCount : filters.category === "parts" ? categoryCounts.parts : list.total}` : ""}</span>
+        {filters.category !== "drafts" && filters.category !== "parts" && filters.locationId && !fixedLocationId ? <span>{locations.find((location) => location.id === filters.locationId)?.name}</span> : null}
       </div>
 
       {filters.category === "drafts" ? (
@@ -467,6 +488,15 @@ export function OperationsWorkspace({
           onDiscard={onDiscardDraft}
           onTakeover={onTakeoverDraft}
           onRefresh={onRefreshDrafts}
+        />
+      ) : filters.category === "parts" ? (
+        <PartRequestQueue
+          filters={partFilters}
+          locations={locations}
+          fixedLocationId={fixedLocationId}
+          onFiltersChange={updatePartFilter}
+          onOpenWorkorder={onOpenWorkorder}
+          refreshKey={refreshKey}
         />
       ) : <div className="operations-table" role="table" aria-label={`${activeCategory.label} workorders`} aria-busy={list.loading}>
         <div className="operations-table-head" role="row">
@@ -516,13 +546,7 @@ export function OperationsWorkspace({
         ) : null}
       </div>}
 
-      {filters.category !== "drafts" && list.pageCount > 1 ? (
-        <nav className="operations-pagination" aria-label="Workorder pages">
-          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}><ChevronLeft />Previous</button>
-          <span>Page {page} of {list.pageCount}</span>
-          <button type="button" onClick={() => setPage((current) => Math.min(list.pageCount, current + 1))} disabled={page >= list.pageCount}>Next<ChevronRight /></button>
-        </nav>
-      ) : null}
+      {filters.category !== "drafts" && filters.category !== "parts" ? <Pagination currentPage={page} pageCount={list.pageCount} setPage={setPage} total={list.total} label="workorders" loading={list.loading} /> : null}
     </section>
   );
 }

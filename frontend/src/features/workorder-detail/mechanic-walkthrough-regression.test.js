@@ -12,7 +12,7 @@ const previewController = readFileSync(new URL("./useWorkorderPreviewController.
 test("available work can be accepted from opened mechanic detail", () => {
   assert.match(
     detailPage,
-    /activeWorkorder\.allowedActions\?\.accept[\s\S]*aria-label="Accept work and start this job"/,
+    /activeWorkorder\.allowedActions\?\.accept[\s\S]*aria-label=\{t\("detail\.acceptStart"\)\}/,
   );
   assert.match(
     mechanicActions,

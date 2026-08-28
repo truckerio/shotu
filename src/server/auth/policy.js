@@ -14,6 +14,9 @@ export function permissionForRequest(method, pathname) {
   if (pathname.startsWith("/api/admin/")) return PERMISSION.ADMIN_MANAGE;
   if (pathname.startsWith("/api/mechanic/chat-media/") && method === "GET") return PERMISSION.WORKORDER_CHAT_READ;
   if (pathname.startsWith("/api/mechanic/")) return PERMISSION.WORKORDER_MECHANIC;
+  if (method === "POST" && /^\/api\/office\/inventory\/count-imports\/[^/]+\/apply$/.test(pathname)) {
+    return PERMISSION.INVENTORY_COUNT_APPLY;
+  }
   if (pathname.startsWith("/api/office/")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/workorder-drafts")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/surveillance/")) return PERMISSION.WORKORDER_SURVEILLANCE;

@@ -4,6 +4,21 @@
   gap: 10px;
 }
 
+.part-request-focus-target {
+  border-radius: 8px;
+  scroll-margin-block: 24px;
+}
+
+.part-request-focus-target.is-selected {
+  background: #f5f8ff;
+  box-shadow: 0 0 0 2px #84adff;
+}
+
+.part-request-focus-target.is-selected:focus {
+  outline: 3px solid #2e6ee6;
+  outline-offset: 3px;
+}
+
 .mechanic-part-composer,
 .office-add-part {
   background: #f8f9fb;

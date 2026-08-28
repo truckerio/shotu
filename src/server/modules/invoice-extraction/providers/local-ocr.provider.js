@@ -4,6 +4,13 @@ import { InvoiceExtractionError } from "../invoice-extraction.errors.js";
 
 let activeOcrRequests = 0;
 
+function requestTimeout(timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
+  timer.unref?.();
+  return { controller, timer };
+}
+
 const ocrRegionSchema = z.object({
   text: z.string().max(1000),
   confidence: z.number().min(0).max(1),
@@ -22,6 +29,15 @@ const ocrResponseSchema = z.object({
   text: z.string().max(500_000),
   pageCount: z.number().int().min(1).max(10),
   regions: z.array(ocrRegionSchema).max(5_000),
+  durationMs: z.number().int().min(0).max(600_000),
+}).strict();
+
+const nativePdfTextSchema = z.object({
+  provider: z.literal("pdfium"),
+  providerVersion: z.string().min(1).max(80),
+  text: z.string().max(100_000),
+  pageCount: z.number().int().min(1).max(10),
+  characterCount: z.number().int().min(0).max(100_000),
   durationMs: z.number().int().min(0).max(600_000),
 }).strict();
 
@@ -81,6 +97,7 @@ export async function extractInvoiceWithLocalOcr(input, options = {}) {
   }
   activeOcrRequests += 1;
   let response;
+  const timeout = requestTimeout(timeoutMs);
   try {
     response = await fetchFn(`${baseUrl}/v1/ocr`, {
       method: "POST",
@@ -90,7 +107,7 @@ export async function extractInvoiceWithLocalOcr(input, options = {}) {
         ...(config.ocrToken ? { "x-ocr-token": config.ocrToken } : {}),
       },
       body: input.bytes,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: timeout.controller.signal,
     });
   } catch (error) {
     throw new InvoiceExtractionError("Local invoice OCR is unavailable.", {
@@ -99,6 +116,7 @@ export async function extractInvoiceWithLocalOcr(input, options = {}) {
       retryable: true,
     });
   } finally {
+    clearTimeout(timeout.timer);
     activeOcrRequests -= 1;
   }
   const body = await response.json().catch(() => ({}));
@@ -119,4 +137,59 @@ export async function extractInvoiceWithLocalOcr(input, options = {}) {
   return parsed.data;
 }
 
-export { ocrResponseSchema };
+export async function extractNativePdfText(input, options = {}) {
+  if (input.mimeType !== "application/pdf") {
+    throw new InvoiceExtractionError("Native text extraction requires a PDF.", {
+      code: "native_pdf_required",
+      statusCode: 415,
+    });
+  }
+  const config = options.config || invoiceExtractionConfig;
+  const fetchFn = options.fetchFn || fetch;
+  const baseUrl = validatedBaseUrl(config.ocrBaseUrl, {
+    production: options.production,
+    token: config.ocrToken,
+  });
+  const timeoutMs = Math.min(15_000, Math.max(1_000, Number(options.timeoutMs) || 10_000));
+  let response;
+  const timeout = requestTimeout(timeoutMs);
+  try {
+    response = await fetchFn(`${baseUrl}/v1/native-text`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/pdf",
+        "content-length": String(input.bytes.length),
+        ...(config.ocrToken ? { "x-ocr-token": config.ocrToken } : {}),
+      },
+      body: input.bytes,
+      signal: timeout.controller.signal,
+    });
+  } catch (error) {
+    throw new InvoiceExtractionError("Native PDF text extraction is unavailable.", {
+      code: error?.name === "TimeoutError" ? "native_pdf_timeout" : "native_pdf_unavailable",
+      statusCode: 503,
+      retryable: true,
+    });
+  } finally {
+    clearTimeout(timeout.timer);
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new InvoiceExtractionError("Native PDF text extraction failed.", {
+      code: response.status === 413 ? "document_too_large" : "native_pdf_failed",
+      statusCode: response.status === 413 ? 413 : 502,
+      retryable: response.status >= 500,
+    });
+  }
+  const parsed = nativePdfTextSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new InvoiceExtractionError("Native PDF text extraction returned an invalid result.", {
+      code: "native_pdf_invalid_result",
+      statusCode: 502,
+      retryable: true,
+    });
+  }
+  return parsed.data;
+}
+
+export { nativePdfTextSchema, ocrResponseSchema };

@@ -11,8 +11,8 @@ test("vehicle search debounce is not restarted by callback identity changes", ()
   assert.match(source, /const applyVehicleRef = useRef\(null\)/);
   assert.match(source, /applyVehicleRef\.current = applyVehicle/);
   assert.match(source, /applyVehicleRef\.current\(exactMatch\)/);
-  assert.match(source, /\}, \[form\.unitNo, selectedVehicle\]\);/);
-  assert.doesNotMatch(source, /\}, \[applyVehicle, form\.unitNo, selectedVehicle\]\);/);
+  assert.match(source, /\}, \[activeWorkorderId, form\.unitNo, selectedVehicle\]\);/);
+  assert.doesNotMatch(source, /\}, \[activeWorkorderId, applyVehicle, form\.unitNo, selectedVehicle\]\);/);
 });
 
 test("vehicle search has a bounded request timeout", () => {
@@ -27,4 +27,10 @@ test("vehicle selection is scoped to the selected repair-location company", () =
   assert.match(source, /if \(!vehicleBelongsToCompany\(vehicle, companyIdRef\.current\)\)/);
   assert.match(source, /Select a vehicle owned by the same company as the repair location\./);
   assert.match(source, /!vehicleCompanyId\(selectedVehicle\)/);
+});
+
+test("active workorder units stay visible but cannot auto-select", () => {
+  assert.match(source, /if \(!vehicleCanBeSelected\(vehicle, activeWorkorderId\)\)/);
+  assert.match(source, /exactMatch && vehicleCanBeSelected\(exactMatch, activeWorkorderId\)/);
+  assert.match(source, /activeWorkorderUnavailableMessage\(exactMatch\)/);
 });

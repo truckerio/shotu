@@ -216,6 +216,24 @@ function lifecycleConflict(code, message) {
   return new WorkorderLifecycleConflictError(code, message);
 }
 
+async function assertNoUnresolvedSerializedParts(client, workorderId, message) {
+  const pending = await client.query(
+    `select id
+     from workorder_serialized_part_usages
+     where workorder_id = $1 and status = 'issued'
+     order by id
+     limit 1
+     for update`,
+    [workorderId],
+  );
+  if (pending.rows[0]) {
+    throw lifecycleConflict(
+      "WORKORDER_SERIALIZED_PARTS_PENDING",
+      message || "Record whether every issued serialized part was installed or returned before continuing.",
+    );
+  }
+}
+
 const ACTIVE_ASSET_CONSTRAINT = "operational_workorders_one_active_per_asset_uidx";
 
 export function mapActiveAssetConflict(error) {
@@ -589,6 +607,18 @@ export async function updateOperationalWorkorder(workorderId, input) {
     if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS, WORKORDER_STATUS.MECHANIC_DONE].includes(before.status)
       && !canCorrectClosed) {
       throw lifecycleConflict("WORKORDER_UPDATE_NOT_ALLOWED", "This workorder can no longer be edited.");
+    }
+    const changesSerializedScope = (
+      Object.prototype.hasOwnProperty.call(input, "assetId") && input.assetId !== before.asset_id
+    ) || (
+      Object.prototype.hasOwnProperty.call(input, "locationId") && input.locationId !== before.location_id
+    );
+    if (changesSerializedScope) {
+      await assertNoUnresolvedSerializedParts(
+        client,
+        workorderId,
+        "Install or return every issued serialized part before changing the workorder unit or location.",
+      );
     }
     const nextAssetId = Object.prototype.hasOwnProperty.call(input, "assetId")
       ? input.assetId
@@ -1313,6 +1343,11 @@ export async function releaseOperationalWorkorder(workorderId, mechanicUserId, r
     );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
+    await assertNoUnresolvedSerializedParts(
+      client,
+      workorderId,
+      "Install or return every issued serialized part before leaving this workorder.",
+    );
     const released = await client.query(
       `update workorder_mechanic_assignments
        set active = false, released_at = now(), reason = $3
@@ -1498,6 +1533,7 @@ export async function markOperationalWorkorderDone(
       );
       if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
     }
+    await assertNoUnresolvedSerializedParts(client, workorderId);
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     const nextInput = {
@@ -1639,6 +1675,11 @@ export async function cancelOperationalWorkorder(workorderId, officeUserId, reas
     if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS, WORKORDER_STATUS.MECHANIC_DONE].includes(workorder.status)) {
       throw lifecycleConflict("WORKORDER_CANCELLATION_NOT_ALLOWED", "This workorder can no longer be cancelled.");
     }
+    await assertNoUnresolvedSerializedParts(
+      client,
+      workorderId,
+      "Install or return every issued serialized part before cancelling this workorder.",
+    );
 
     const assignments = await client.query(
       `select mechanic_user_id from workorder_mechanic_assignments
@@ -1703,6 +1744,30 @@ export async function cancelOperationalWorkorder(workorderId, officeUserId, reas
       );
     }
 
+    const cancelledFulfillments = await client.query(
+      `update part_fulfillment_requests
+       set state = 'cancelled', cancelled_at = now(), updated_at = now()
+       where workorder_id = $1
+         and state in ('recommended', 'approved', 'partially_fulfilled', 'backordered')
+       returning id, company_id`,
+      [workorderId],
+    );
+    for (const fulfillment of cancelledFulfillments.rows) {
+      await client.query(
+        `update part_fulfillment_legs
+         set state = 'cancelled', updated_at = now()
+         where company_id = $1 and fulfillment_request_id = $2
+           and state <> 'cancelled'`,
+        [fulfillment.company_id, fulfillment.id],
+      );
+      await client.query(
+        `insert into part_fulfillment_events (
+           company_id, fulfillment_request_id, event_type, actor_id, details
+         ) values ($1, $2, 'cancelled_with_workorder', $3, $4::jsonb)`,
+        [fulfillment.company_id, fulfillment.id, officeUserId, JSON.stringify({ reason })],
+      );
+    }
+
     const activeAttention = await client.query(
       "select reason from workorder_attention_state where workorder_id = $1 and active = true for update",
       [workorderId],
@@ -1749,7 +1814,7 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const current = await client.query("select id, status from operational_workorders where id = $1 for update", [workorderId]);
+    const current = await client.query("select id, company_id, status from operational_workorders where id = $1 for update", [workorderId]);
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
     if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
@@ -1768,6 +1833,31 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
       throw lifecycleConflict(
         "WORKORDER_PARTS_PENDING",
         "Review all pending part requests before approving this workorder.",
+      );
+    }
+    await assertNoUnresolvedSerializedParts(client, workorderId);
+    const cancelledFulfillments = await client.query(
+      `update part_fulfillment_requests
+          set state = 'cancelled', cancelled_at = now(), updated_at = now()
+        where company_id = $1 and workorder_id = $2
+          and state in ('recommended', 'approved', 'partially_fulfilled', 'backordered')
+        returning id`,
+      [workorder.company_id, workorderId],
+    );
+    if (cancelledFulfillments.rows.length) {
+      const fulfillmentIds = cancelledFulfillments.rows.map((row) => row.id);
+      await client.query(
+        `update part_fulfillment_legs
+            set state = 'cancelled', updated_at = now()
+          where company_id = $1 and fulfillment_request_id = any($2::uuid[])
+            and state <> 'cancelled'`,
+        [workorder.company_id, fulfillmentIds],
+      );
+      await client.query(
+        `insert into part_fulfillment_events (company_id, fulfillment_request_id, event_type, actor_id, details)
+         select $1, ids.id, 'cancelled', $3, $4::jsonb
+           from unnest($2::uuid[]) as ids(id)`,
+        [workorder.company_id, fulfillmentIds, officeUserId, JSON.stringify({ reason: "workorder_closed" })],
       );
     }
     await client.query(
@@ -1820,6 +1910,11 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
     if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS].includes(workorder.status)) {
       throw lifecycleConflict("WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Mechanic assignments can only change on active workorders.");
     }
+    await assertNoUnresolvedSerializedParts(
+      client,
+      workorderId,
+      "Install or return every issued serialized part before changing the mechanic assignment.",
+    );
     const active = await client.query(
       `select mechanic_user_id, assignment_role
        from workorder_mechanic_assignments

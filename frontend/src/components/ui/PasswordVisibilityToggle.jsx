@@ -1,8 +1,8 @@
 import { Eye, EyeOff } from "@untitledui/icons";
 import "./password-visibility-toggle.css";
 
-export function PasswordVisibilityToggle({ visible, onToggle, controls }) {
-  const label = visible ? "Hide password" : "Show password";
+export function PasswordVisibilityToggle({ visible, onToggle, controls, hideLabel = "Hide password", showLabel = "Show password" }) {
+  const label = visible ? hideLabel : showLabel;
 
   return (
     <button

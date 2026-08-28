@@ -18,6 +18,7 @@ import {
   checkNarrativeSpelling,
 } from "./narrative-spellcheck-engine.js";
 import { textEntryProps } from "./text-entry-policy.js";
+import { interfaceText } from "../../i18n/index.js";
 import "./narrative-field.css";
 
 const CHECK_DELAY_MS = 650;
@@ -55,8 +56,8 @@ function issueAtSelection(issues, control) {
   )) || null;
 }
 
-function issueLabel(issue) {
-  return issue.kind === "spelling" ? "Spelling" : "Grammar and context";
+function issueLabel(issue, locale) {
+  return interfaceText(locale, issue.kind === "spelling" ? "narrative.spelling" : "narrative.grammarContext");
 }
 
 function setControlRange(control, replacement, start, end, selectionMode) {
@@ -67,6 +68,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
   {
     className = "",
     companyId,
+    locale = "en",
     onBlur,
     onChange,
     onCompositionEnd,
@@ -103,6 +105,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
   const [providerAvailable, setProviderAvailable] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
   const text = String(value || "");
+  const t = (key) => interfaceText(locale, key);
   latestTextRef.current = text;
 
   useImperativeHandle(forwardedRef, () => controlRef.current);
@@ -244,14 +247,14 @@ export const NarrativeField = forwardRef(function NarrativeField(
   function updateActiveIssue() {
     const issue = issueAtSelection(issues, controlRef.current);
     setActiveIssue(issue);
-    if (issue) setStatusMessage(`${issueLabel(issue)} suggestion available for “${issue.problem}”.`);
+    if (issue) setStatusMessage(`${issueLabel(issue, locale)}: ${t("narrative.suggestionAvailable")} “${issue.problem}”.`);
   }
 
   function ignoreActiveIssue() {
     if (!activeIssue) return;
     ignoredIssuesRef.current.add(issueOccurrenceKey(activeIssue));
     setIssues((current) => current.filter((issue) => issueOccurrenceKey(issue) !== issueOccurrenceKey(activeIssue)));
-    setStatusMessage(`Ignored “${activeIssue.problem}” once.`);
+    setStatusMessage(`${t("narrative.ignoredOnce")} “${activeIssue.problem}”.`);
     setActiveIssue(null);
     controlRef.current?.focus({ preventScroll: true });
   }
@@ -267,11 +270,11 @@ export const NarrativeField = forwardRef(function NarrativeField(
       await addNarrativeDictionaryWord(activeIssue.problem, { companyId, signal: controller.signal });
       dictionaryWordsRef.current.add(word);
       setIssues((current) => current.filter((issue) => issue.problem.toLocaleLowerCase("en-US") !== word));
-      setStatusMessage(`Added “${activeIssue.problem}” to your dictionary.`);
+      setStatusMessage(`${t("narrative.addedToDictionary")} “${activeIssue.problem}”.`);
       setActiveIssue(null);
       controlRef.current?.focus({ preventScroll: true });
     } catch (error) {
-      if (error?.name !== "AbortError") setStatusMessage(error.message);
+      if (error?.name !== "AbortError") setStatusMessage(t("narrative.dictionaryError"));
     } finally {
       if (!controller.signal.aborted) setDictionaryBusy(false);
     }
@@ -358,7 +361,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
           className={`narrative-suggestion-menu ${menuLayout.above ? "is-above" : "is-below"}`}
           ref={menuRef}
           role="dialog"
-          aria-label={`${issueLabel(activeIssue)} suggestions for ${activeIssue.problem}`}
+          aria-label={`${issueLabel(activeIssue, locale)} ${t("narrative.suggestionsFor")} ${activeIssue.problem}`}
           onBlur={(event) => {
             if (event.currentTarget.contains(event.relatedTarget)) return;
             setActiveIssue(null);
@@ -368,7 +371,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
           style={{ maxHeight: `${menuLayout.maxHeight}px` }}
         >
           <span className={`narrative-suggestion-label is-${activeIssue.kind}`}>
-            {issueLabel(activeIssue)} · Replace “{activeIssue.problem}”
+            {issueLabel(activeIssue, locale)} · {t("narrative.replace")} “{activeIssue.problem}”
           </span>
           <span className="narrative-suggestion-actions">
             {activeIssue.suggestions.map((suggestion) => (
@@ -388,7 +391,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
               onMouseDown={(event) => event.preventDefault()}
               onClick={ignoreActiveIssue}
             >
-              Ignore once
+              {t("narrative.ignoreOnce")}
             </button>
             {activeIssue.kind === "spelling" ? (
               <button
@@ -398,7 +401,7 @@ export const NarrativeField = forwardRef(function NarrativeField(
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={addActiveWordToDictionary}
               >
-                {dictionaryBusy ? "Adding…" : "Add to my dictionary"}
+                {dictionaryBusy ? t("narrative.adding") : t("narrative.addToDictionary")}
               </button>
             ) : null}
           </span>

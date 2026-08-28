@@ -1,4 +1,5 @@
 import { Children, useEffect, useRef, useState } from "react";
+import { interfaceText } from "../../i18n/index.js";
 import "./workorder-detail-layout.css";
 
 const DETAIL_LAYOUT = Object.freeze({
@@ -51,7 +52,7 @@ function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-export function WorkorderDetailLayout({ detail, previewOpen, children }) {
+export function WorkorderDetailLayout({ detail, previewOpen, children, locale = "en" }) {
   const shellRef = useRef(null);
   const layout = detail ? DETAIL_LAYOUT : CREATE_LAYOUT;
   const [previewPercent, setPreviewPercent] = useState(() => initialPreviewPercent(layout));
@@ -155,7 +156,7 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
   const limits = bounds();
   const effectivePercent = previewOpen ? clamp(previewPercent, limits.minimum, limits.maximum) : 0;
   const layoutClass = detail ? "workorder-detail-layout" : "generator-layout";
-  const separatorLabel = detail ? "Resize workorder and preview panels" : "Resize form and preview panels";
+  const separatorLabel = interfaceText(locale, detail ? "preview.resizeWorkorder" : "preview.resizeForm");
   return (
     <section
       ref={shellRef}
@@ -176,7 +177,7 @@ export function WorkorderDetailLayout({ detail, previewOpen, children }) {
           aria-valuemax={Math.round(limits.maximum)}
           aria-valuenow={Math.round(previewPercent)}
           tabIndex={0}
-          title="Drag to resize panels"
+          title={interfaceText(locale, "preview.dragResize")}
           onPointerDown={startResize}
           onKeyDown={resizeWithKeyboard}
           onDoubleClick={() => {

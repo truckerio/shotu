@@ -17,6 +17,7 @@ import {
   Popover,
 } from "react-aria-components";
 import { Button } from "../../../components/ui/Button.jsx";
+import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
 import { locationUserGroups } from "./admin-workspace-model.js";
 
 function formatInviteExpiry(value) {
@@ -133,7 +134,9 @@ function AdminUserGroup({ actor, description, onManage, title, users }) {
 
 export function UsersPage({ actor, detail, onInvite, onManage, onResend, resendingId }) {
   const pendingInvitations = detail.invitations.filter((invite) => invite.status === "pending");
-  const groups = locationUserGroups(detail.users);
+  const userPagination = usePagination(detail.users, { pageSize: 20 });
+  const invitationPagination = usePagination(pendingInvitations, { pageSize: 10 });
+  const groups = locationUserGroups(userPagination.pageItems);
   return (
     <section className="admin-panel">
       <header className="admin-panel-header"><h2>Users</h2><Button variant="primary" icon={Mail01} onClick={onInvite}>Invite user</Button></header>
@@ -147,11 +150,12 @@ export function UsersPage({ actor, detail, onInvite, onManage, onResend, resendi
           </>
         ) : <div className="admin-empty">No users assigned.</div>}
       </div>
+      <Pagination {...userPagination} label="users" />
       {pendingInvitations.length ? (
         <div className="admin-pending">
           <strong>Pending invitations</strong>
           <div className="admin-pending-list">
-            {pendingInvitations.map((invite) => (
+            {invitationPagination.pageItems.map((invite) => (
               <div className="admin-pending-row" key={invite.id}>
                 <span>
                   <strong>{invite.email}</strong>
@@ -163,6 +167,7 @@ export function UsersPage({ actor, detail, onInvite, onManage, onResend, resendi
               </div>
             ))}
           </div>
+          <Pagination {...invitationPagination} label="invitations" />
         </div>
       ) : null}
     </section>

@@ -12,6 +12,7 @@ import {
 import { authClient } from "../../lib/auth-client.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
 import { PasswordVisibilityToggle } from "../ui/PasswordVisibilityToggle.jsx";
+import { interfaceText } from "../../i18n/index.js";
 
 const EMPTY_PASSWORDS = {
   current: "",
@@ -19,15 +20,16 @@ const EMPTY_PASSWORDS = {
   confirmation: "",
 };
 
-function changePasswordError(error) {
+function changePasswordError(error, locale) {
   const code = String(error?.code || "").toUpperCase();
   if (code.includes("INVALID_PASSWORD") || code.includes("PASSWORD_MISMATCH")) {
-    return "Current password is incorrect.";
+    return interfaceText(locale, "account.passwordIncorrect");
   }
-  return "Password could not be changed. Check your current password and try again.";
+  return interfaceText(locale, "account.passwordChangeError");
 }
 
-export function ChangePasswordDialog({ isOpen, onOpenChange }) {
+export function ChangePasswordDialog({ isOpen, onOpenChange, locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS);
   const [visible, setVisible] = useState({ current: false, next: false, confirmation: false });
   const [status, setStatus] = useState({ kind: "idle", message: "" });
@@ -52,7 +54,7 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
   async function submit(event) {
     event.preventDefault();
     if (!canSubmit) return;
-    setStatus({ kind: "busy", message: "Changing password..." });
+    setStatus({ kind: "busy", message: t("account.changingPassword") });
     try {
       const result = await authClient.changePassword({
         currentPassword: passwords.current,
@@ -60,13 +62,13 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
         revokeOtherSessions: true,
       });
       if (result.error) {
-        setStatus({ kind: "error", message: changePasswordError(result.error) });
+        setStatus({ kind: "error", message: changePasswordError(result.error, locale) });
         return;
       }
       setPasswords(EMPTY_PASSWORDS);
-      setStatus({ kind: "success", message: "Password changed. Other sessions were signed out." });
+      setStatus({ kind: "success", message: t("account.passwordChanged") });
     } catch (error) {
-      setStatus({ kind: "error", message: changePasswordError(error) });
+      setStatus({ kind: "error", message: changePasswordError(error, locale) });
     }
   }
 
@@ -81,12 +83,12 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
         <Dialog className="account-dialog" aria-labelledby="change-password-title">
           <div className="account-dialog-heading">
             <div>
-              <Heading id="change-password-title" slot="title">Change password</Heading>
-              <p>Use your current password to protect your account.</p>
+              <Heading id="change-password-title" slot="title">{t("account.changePassword")}</Heading>
+              <p>{t("account.passwordHelp")}</p>
             </div>
             <Button
               className="account-dialog-close"
-              aria-label="Close password settings"
+              aria-label={t("account.closePasswordSettings")}
               isDisabled={busy}
               onPress={() => onOpenChange(false)}
             >
@@ -96,7 +98,7 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
 
           <form className="change-password-form" onSubmit={submit}>
             <TextField isRequired value={passwords.current} onChange={(value) => updatePassword("current", value)}>
-              <Label>Current password</Label>
+              <Label>{t("account.currentPassword")}</Label>
               <div className="password-input-control">
                 <Input
                   {...textEntryProps("identifier")}
@@ -109,12 +111,14 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
                   visible={visible.current}
                   controls="current-account-password"
                   onToggle={() => setVisible((current) => ({ ...current, current: !current.current }))}
+                  hideLabel={t("account.hidePassword")}
+                  showLabel={t("account.showPassword")}
                 />
               </div>
             </TextField>
 
             <TextField isRequired value={passwords.next} onChange={(value) => updatePassword("next", value)}>
-              <Label>New password</Label>
+              <Label>{t("account.newPassword")}</Label>
               <div className="password-input-control">
                 <Input
                   {...textEntryProps("identifier")}
@@ -128,12 +132,14 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
                   visible={visible.next}
                   controls="new-account-password"
                   onToggle={() => setVisible((current) => ({ ...current, next: !current.next }))}
+                  hideLabel={t("account.hidePassword")}
+                  showLabel={t("account.showPassword")}
                 />
               </div>
             </TextField>
 
             <TextField isRequired value={passwords.confirmation} onChange={(value) => updatePassword("confirmation", value)}>
-              <Label>Confirm new password</Label>
+              <Label>{t("account.confirmNewPassword")}</Label>
               <div className="password-input-control">
                 <Input
                   {...textEntryProps("identifier")}
@@ -147,13 +153,15 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
                   visible={visible.confirmation}
                   controls="confirm-account-password"
                   onToggle={() => setVisible((current) => ({ ...current, confirmation: !current.confirmation }))}
+                  hideLabel={t("account.hidePassword")}
+                  showLabel={t("account.showPassword")}
                 />
               </div>
             </TextField>
 
             <div className="change-password-rules" aria-live="polite">
-              <span className={longEnough ? "valid" : ""}>At least 12 characters</span>
-              <span className={passwordsMatch ? "valid" : passwords.confirmation ? "invalid" : ""}>Passwords match</span>
+              <span className={longEnough ? "valid" : ""}>{t("account.passwordMinimum")}</span>
+              <span className={passwordsMatch ? "valid" : passwords.confirmation ? "invalid" : ""}>{t("account.passwordsMatch")}</span>
             </div>
 
             {status.message ? (
@@ -167,7 +175,7 @@ export function ChangePasswordDialog({ isOpen, onOpenChange }) {
             ) : null}
 
             <Button className="change-password-submit" type="submit" isDisabled={!canSubmit}>
-              {busy ? "Changing password..." : "Change password"}
+              {busy ? t("account.changingPassword") : t("account.changePassword")}
             </Button>
           </form>
         </Dialog>

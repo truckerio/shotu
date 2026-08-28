@@ -1,4 +1,4 @@
-import { interfaceText } from "../../i18n/index.js";
+import { interfaceText, localizedUnitType } from "../../i18n/index.js";
 import {
   orderWorkorderModules,
   resolveWorkorderModuleNavigation,
@@ -57,6 +57,7 @@ export function buildWorkorderDetailSections({
   if (!activeWorkorder) return [];
   const mechanicLabel = (key) => interfaceText(locale, key);
   const metadata = {
+    [WORKORDER_MODULE_IDS.CONCERN]: { label: isMechanicDetail ? mechanicLabel("detail.concern") : undefined },
     [WORKORDER_MODULE_IDS.DIAGNOSIS_REPAIR]: {
       label: isMechanicDetail ? mechanicLabel("detail.work") : workorderModuleLabel(WORKORDER_MODULE_IDS.DIAGNOSIS_REPAIR),
     },
@@ -74,13 +75,18 @@ export function buildWorkorderDetailSections({
       count: pendingPartCount || filledPartCount || undefined,
       attention: pendingPartCount > 0,
     },
+    [WORKORDER_MODULE_IDS.PHOTOS]: { label: isMechanicDetail ? mechanicLabel("detail.photos") : undefined },
     [WORKORDER_MODULE_IDS.COMPLETION]: {
+      label: isMechanicDetail ? mechanicLabel("detail.completion") : undefined,
       alwaysPrimary: isMechanicDetail,
     },
     [WORKORDER_MODULE_IDS.UNIT]: {
-      label: unitType || (isMechanicDetail ? mechanicLabel("detail.unit") : workorderModuleLabel(WORKORDER_MODULE_IDS.UNIT)),
+      label: unitType
+        ? (isMechanicDetail ? localizedUnitType(unitType, locale) : unitType)
+        : (isMechanicDetail ? mechanicLabel("detail.unit") : workorderModuleLabel(WORKORDER_MODULE_IDS.UNIT)),
     },
     [WORKORDER_MODULE_IDS.ASSIGNMENT]: {
+      label: isMechanicDetail ? mechanicLabel("detail.assignment") : undefined,
       count: assignedMechanicCount || undefined,
       attention: assignedMechanicCount === 0 || undefined,
     },
@@ -88,6 +94,9 @@ export function buildWorkorderDetailSections({
       label: isMechanicDetail ? mechanicLabel("detail.activity") : workorderModuleLabel(WORKORDER_MODULE_IDS.ACTIVITY),
       count: timelineCount || undefined,
     },
+    [WORKORDER_MODULE_IDS.LOCATION]: { label: isMechanicDetail ? mechanicLabel("detail.location") : undefined },
+    [WORKORDER_MODULE_IDS.SCHEDULE]: { label: isMechanicDetail ? mechanicLabel("detail.schedule") : undefined },
+    [WORKORDER_MODULE_IDS.PREVIEW]: { label: isMechanicDetail ? mechanicLabel("detail.preview") : undefined },
   };
   const sections = workorderModuleDescriptors(WORKORDER_SURFACES.DETAIL)
     .map((descriptor) => ({
@@ -103,7 +112,7 @@ export function buildWorkorderDetailSections({
   });
 }
 
-export function buildCompactPhoneDetailSections(sections, role, { policyOverrides = [], userId = "" } = {}) {
+export function buildCompactPhoneDetailSections(sections, role, { locale = "en", policyOverrides = [], userId = "" } = {}) {
   const previewPolicy = resolveWorkorderModulePolicy({
     moduleId: WORKORDER_MODULE_IDS.PREVIEW,
     overrides: policyOverrides,
@@ -116,7 +125,7 @@ export function buildCompactPhoneDetailSections(sections, role, { policyOverride
     : previewPolicy.visible
       ? [...sections, {
         id: WORKORDER_MODULE_IDS.PREVIEW,
-        label: workorderModuleLabel(WORKORDER_MODULE_IDS.PREVIEW),
+        label: role === "mechanic" ? interfaceText(locale, "detail.preview") : workorderModuleLabel(WORKORDER_MODULE_IDS.PREVIEW),
         access: previewPolicy.access,
         modulePolicy: previewPolicy,
       }]

@@ -12,6 +12,17 @@ const BASE_WORKORDER_KEYS = Object.freeze([
   "id", "companyId", "serial", "status", "progressVersion", "createdAt", "updatedAt",
 ]);
 
+const MECHANIC_PART_REQUEST_KEYS = Object.freeze([
+  "id", "workorderId", "catalogPartId", "requestedByName", "rawQuery", "partNumber",
+  "manufacturer", "description", "category", "quantity", "uomCode", "repairOrder",
+  "approvalStatus", "fitmentStatus", "fitmentNotes", "usageStatus", "approvedByName",
+  "approvedAt", "decisionReason", "createdAt", "updatedAt",
+]);
+
+const MECHANIC_AVAILABILITY_KEYS = Object.freeze([
+  "locationId", "locationName", "quantityAvailable", "uomCode", "updatedAt",
+]);
+
 const ALLOWED_ACTION_MODULES = Object.freeze({
   accept: "assignment", release: "assignment", assignMechanics: "assignment",
   saveNotes: "diagnosisRepair", sendMessage: "chat",
@@ -65,7 +76,17 @@ function formSlice(workorder, moduleKey) {
   return pick(workorder?.formData || {}, FORM_KEYS[moduleKey] || []);
 }
 
-function moduleData(detail, moduleKey) {
+function mechanicPartRequest(request, workorderLocationId) {
+  return {
+    ...pick(request, MECHANIC_PART_REQUEST_KEYS),
+    allocations: [],
+    inventory: (request?.inventory || [])
+      .filter((item) => workorderLocationId && item.locationId === workorderLocationId)
+      .map((item) => pick(item, MECHANIC_AVAILABILITY_KEYS)),
+  };
+}
+
+function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
   const { workorder = {} } = detail;
   switch (moduleKey) {
     case "unit": return { ...pick(workorder, ["assetId", "asset"]), formData: formSlice(workorder, moduleKey) };
@@ -86,7 +107,15 @@ function moduleData(detail, moduleKey) {
         attachment: message.attachment,
       })),
     };
-    case "parts": return { formData: formSlice(workorder, moduleKey), partRequests: detail.partRequests || [] };
+    case "parts": return {
+      formData: formSlice(workorder, moduleKey),
+      partRequests: ["mechanic", "kiosk"].includes(viewerRole)
+        ? (detail.partRequests || []).map((request) => mechanicPartRequest(
+          request,
+          workorder.locationId || workorder.location?.id || null,
+        ))
+        : detail.partRequests || [],
+    };
     case "chat": return { messages: detail.messages || [] };
     case "activity": return { timeline: detail.timeline || [] };
     case "preview": return { available: true };
@@ -111,7 +140,8 @@ function mergeCompatibility(output, moduleKey, data) {
   if (moduleKey === "photos") output.attachments = data.attachments;
 }
 
-export function projectProtectedWorkorderDetail(detail, moduleDecisions) {
+export function projectProtectedWorkorderDetail(detail, moduleDecisions, options = {}) {
+  const viewerRole = options.viewerRole || detail.user?.role || null;
   const output = {
     workorder: { ...pick(detail.workorder || {}, BASE_WORKORDER_KEYS), formData: {} },
     moduleAccess: {},
@@ -121,7 +151,7 @@ export function projectProtectedWorkorderDetail(detail, moduleDecisions) {
     const access = decision?.access || WORKORDER_ACCESS_MODES.HIDDEN;
     output.moduleAccess[moduleKey] = { access, source: decision?.source || "default" };
     if (access === WORKORDER_ACCESS_MODES.HIDDEN) continue;
-    const data = moduleData(detail, moduleKey);
+    const data = moduleData(detail, moduleKey, { viewerRole });
     output.modules[moduleKey] = { access, data };
     mergeCompatibility(output, moduleKey, data);
   }

@@ -145,8 +145,8 @@ Frontend:
 - `frontend/src/features/workorder-detail` - shared workorder detail page behavior.
 - `frontend/src/features/mechanic` - mechanic home and mechanic-specific work/progress UI.
 - `frontend/src/features/office` - office queue/home UI.
-- `frontend/src/features/inventory` - authenticated inventory scan surface for
-  confirmed serialized receipt units.
+- `frontend/src/features/inventory` - shared Office/Admin local-inventory
+  workspace, opening-count intake, scan surface, and exact-unit workflows.
 - `frontend/src/features/admin` - admin locations/users/templates/settings/integrations.
 - `frontend/src/features/surveillance` - completed/Odoo review flow.
 - `frontend/src/features/workorder-modules` - V2.0 frontend module filtering
@@ -168,9 +168,11 @@ Backend:
   connection, product/service-history import, outbound vehicle/warehouse/labor
   mapping, draft service-order creation, and inventory synchronization.
 - `src/server/modules/invoice-extraction` - encrypted invoice source handling,
-  provider adapters, reviewed drafts, correction history, and governed learning.
-- `src/server/modules/inventory` - confirmed serialized-invoice receipt,
-  provider-command reconciliation, QR labels, and scan resolution.
+  durable worker jobs, provider adapters, reviewed drafts, correction history,
+  and governed learning.
+- `src/server/modules/inventory` - atomic local invoice receipt posting,
+  append-only movements, current balances, serialized units, label batches,
+  opening-count imports, QR resolution, and exact workorder-unit lifecycle.
 - `src/server/services` - cross-domain services.
 - `src/server/print` - print/PDF behavior.
 - `src/server/security` - origin/rate-limit/security checks.
@@ -251,10 +253,16 @@ Attention signals are separate from lifecycle:
   draft Odoo service-order creation, and stored created-order tracking.
 - Office invoice extraction/review with encrypted source retention,
   confidence/evidence, optimistic review, and explicit learning opt-in.
-- Narrow serialized inventory receipt slice: a reviewed invoice can drive an
-  idempotent Odoo receipt; confirmed units receive encrypted QR labels and can
-  be resolved under company/location access. This is not a general warehouse
-  workflow.
+- Local inventory vertical: a reviewed invoice can become one idempotent,
+  operator-attested complete-delivery receipt without Odoo; it records receipt
+  lineage, append-only movements, current local balances, serialized units for
+  discrete quantities, and durable encrypted QR label batches. Office/Admin
+  use the shared Inventory workspace; mechanics resolve, issue, install, or
+  return exact units under company/location/workorder scope. A bounded,
+  attested opening-count import supports exact master-part matches. This is not
+  a general warehouse workflow: partial/damaged receipts, transfers,
+  purchasing, general cycle counts, valuation, warranty, and cores remain out
+  of scope.
 
 ## Good First Files To Read
 

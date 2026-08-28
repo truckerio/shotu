@@ -30,6 +30,11 @@ test("mechanic workorder mutations declare their canonical module actions", () =
   assert.match(mechanicSource, /patchModule\(requestContext, progressId, "diagnosisRepair", input\)/);
   assert.match(mechanicSource, /"chat", input\.attachment \? "attach" : "send"/);
   assert.match(mechanicSource, /createRuntime\(requestContext, input, rawInput\)/);
+  assert.match(
+    mechanicSource,
+    /projectProtectedWorkorderDetail\([\s\S]{0,180}?\{ viewerRole: requestContext\.actor\.role \}/,
+    "mechanic and kiosk detail must project from the authenticated request role",
+  );
 });
 
 test("office workorder mutations declare their canonical module actions", () => {

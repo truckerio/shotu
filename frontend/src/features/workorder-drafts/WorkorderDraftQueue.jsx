@@ -1,3 +1,4 @@
+import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useMemo, useState } from "react";
 import { ArrowRight, Clock, File02, SearchMd, Trash01, Users01 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
@@ -209,20 +210,20 @@ export function WorkorderDraftQueue({
         </label>
         <label className="workorder-drafts-filter">
           <span className="workorder-drafts-visually-hidden">Filter drafts</span>
-          <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <Dropdown value={filter} onChange={(event) => setFilter(event.target.value)}>
             <option value="all">All drafts</option>
             <option value="my">My drafts</option>
             <option value="team">Team drafts</option>
             <option value="needs_details">Needs details</option>
-          </select>
+          </Dropdown>
         </label>
         {!fixedLocationId && draftLocations.length > 1 ? (
           <label className="workorder-drafts-filter">
             <span className="workorder-drafts-visually-hidden">Filter drafts by location</span>
-            <select value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+            <Dropdown value={locationId} onChange={(event) => setLocationId(event.target.value)}>
               <option value="">All locations</option>
               {draftLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-            </select>
+            </Dropdown>
           </label>
         ) : null}
       </div>

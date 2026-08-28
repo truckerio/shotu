@@ -1,11 +1,22 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { resolveAuthConfig } from "../../auth/config.js";
 import { InventoryError } from "./inventory.errors.js";
 
-function signingKey(value = process.env.INVENTORY_QR_SIGNING_KEY) {
-  const raw = String(value || "").trim();
+function signingKey(options = {}) {
+  const explicitlyProvided = Object.hasOwn(options, "signingKey");
+  const configured = explicitlyProvided ? options.signingKey : process.env.INVENTORY_QR_SIGNING_KEY;
+  const raw = String(configured || "").trim();
   let key;
   if (/^[0-9a-f]{64}$/i.test(raw)) key = Buffer.from(raw, "hex");
   else key = Buffer.from(raw, "base64");
+  if (!explicitlyProvided && key.length === 0) {
+    try {
+      const rootSecret = options.authSecret || resolveAuthConfig().secret;
+      key = createHash("sha256").update(`inventory-qr-v1\0${rootSecret}`).digest();
+    } catch {
+      key = Buffer.alloc(0);
+    }
+  }
   if (key.length !== 32) {
     throw new InventoryError("Inventory QR signing is not configured.", {
       code: "inventory_qr_not_configured",
@@ -27,12 +38,12 @@ function bytesUuid(bytes) {
 }
 
 export function assertInventoryQrConfigured(options = {}) {
-  signingKey(options.signingKey);
+  signingKey(options);
 }
 
 export function createInventoryQrToken(unitId, options = {}) {
   const nonce = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", signingKey(options.signingKey), nonce);
+  const cipher = createCipheriv("aes-256-gcm", signingKey(options), nonce);
   cipher.setAAD(Buffer.from("inventory-unit-v1"));
   const ciphertext = Buffer.concat([cipher.update(uuidBytes(unitId)), cipher.final()]);
   return Buffer.concat([Buffer.from([1]), nonce, ciphertext, cipher.getAuthTag()]).toString("base64url");
@@ -47,7 +58,7 @@ export function readInventoryQrToken(token, options = {}) {
   }
   if (decoded.length !== 45 || decoded[0] !== 1) return null;
   try {
-    const decipher = createDecipheriv("aes-256-gcm", signingKey(options.signingKey), decoded.subarray(1, 13));
+    const decipher = createDecipheriv("aes-256-gcm", signingKey(options), decoded.subarray(1, 13));
     decipher.setAAD(Buffer.from("inventory-unit-v1"));
     decipher.setAuthTag(decoded.subarray(29));
     const plaintext = Buffer.concat([decipher.update(decoded.subarray(13, 29)), decipher.final()]);

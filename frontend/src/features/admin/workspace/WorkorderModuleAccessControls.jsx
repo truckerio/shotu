@@ -1,3 +1,4 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import {
   normalizeModuleAccessMap,
   WORKORDER_ACCESS_MODES,
@@ -38,11 +39,11 @@ export function ModuleAccessSelect({ label = "Access", value, onChange, includeI
   return (
     <label className="admin-module-select" role="cell">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <Dropdown value={value} onChange={(event) => onChange(event.target.value)}>
         {modes.map((mode) => (
           <option key={mode} value={mode}>{labels[mode]}</option>
         ))}
-      </select>
+      </Dropdown>
     </label>
   );
 }

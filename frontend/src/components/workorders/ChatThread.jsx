@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import { formatChatTime } from "../../lib/dates.js";
 import { shouldRenderMessageReceipt } from "../../lib/chat-receipts.js";
 import { visibleConversationMessages } from "./chat-messages.js";
@@ -9,7 +10,7 @@ import {
 import { MessageReceipt } from "./chat/MessageReceipt.jsx";
 import "./chat/chat.css";
 
-function getImageAttachments(message) {
+function getImageAttachments(message, fallbackName) {
   const attachments = Array.isArray(message.attachments)
     ? message.attachments
     : message.attachment
@@ -19,7 +20,7 @@ function getImageAttachments(message) {
   return attachments
     .map((attachment, index) => ({
       id: attachment.id || `${message.id}-attachment-${index}`,
-      fileName: attachment.fileName || attachment.filename || "Workorder photo",
+      fileName: attachment.fileName || attachment.filename || fallbackName,
       mimeType: attachment.mimeType || attachment.contentType || "",
       source: attachment.dataUrl || attachment.url || attachment.src || "",
     }))
@@ -33,10 +34,12 @@ export function ChatThread({
   messages,
   currentRole = "mechanic",
   currentUserId = "",
-  empty = "No messages yet.",
+  empty,
+  locale = "en",
   keyboardOpen = false,
   viewportHeight = 0,
 }) {
+  const t = (key) => interfaceText(locale, key);
   const visibleMessages = visibleConversationMessages(messages || []);
   const threadRef = useRef(null);
   const nearBottomRef = useRef(true);
@@ -66,7 +69,7 @@ export function ChatThread({
     <div
       ref={threadRef}
       className={`chat-thread ${visibleMessages.length ? "" : "is-empty"}`.trim()}
-      aria-label="Conversation"
+      aria-label={t("chat.conversation")}
       aria-live="polite"
       aria-relevant="additions text"
       role="log"
@@ -77,12 +80,12 @@ export function ChatThread({
         const mine = currentUserId
           ? message.senderUserId === currentUserId
           : message.senderRole === currentRole;
-        const senderName = mine ? "You" : message.senderName || message.senderRole || "Office";
-        const imageAttachments = getImageAttachments(message);
+        const senderName = mine ? t("chat.you") : message.senderName || message.senderRole || t("chat.office");
+        const imageAttachments = getImageAttachments(message, t("photos.workorderPhoto"));
         const requestLabel = message.messageType === "part_request"
-          ? "Part request"
+          ? t("chat.partRequest")
           : message.messageType === "help_request"
-            ? "Help request"
+            ? t("chat.helpRequest")
             : "";
         return (
           <div className={`chat-message ${mine ? "from-current-user" : "from-other-user"}`} key={message.id}>
@@ -90,9 +93,9 @@ export function ChatThread({
               <div className="chat-message-meta">
                 <strong>{senderName}</strong>
                 <span className="chat-message-delivery">
-                  {message.createdAt ? <time dateTime={message.createdAt}>{formatChatTime(message.createdAt)}</time> : null}
+                  {message.createdAt ? <time dateTime={message.createdAt}>{formatChatTime(message.createdAt, locale)}</time> : null}
                   {shouldRenderMessageReceipt({ currentUserId, message })
-                    ? <MessageReceipt receipt={message.receipt} />
+                    ? <MessageReceipt receipt={message.receipt} locale={locale} />
                     : null}
                 </span>
               </div>
@@ -100,7 +103,7 @@ export function ChatThread({
                 {requestLabel ? <span className="chat-request-label">{requestLabel}</span> : null}
                 {message.body ? <p>{message.body}</p> : null}
                 {imageAttachments.length ? (
-                  <div className="chat-attachments" aria-label={`${imageAttachments.length} image attachment${imageAttachments.length === 1 ? "" : "s"}`}>
+                  <div className="chat-attachments" aria-label={`${formatLocaleNumber(imageAttachments.length, locale)} ${t(imageAttachments.length === 1 ? "chat.imageAttachment" : "chat.imageAttachments")}`}>
                     {imageAttachments.map((attachment) => (
                       <figure className="chat-image-attachment" key={attachment.id}>
                         <a
@@ -108,12 +111,12 @@ export function ChatThread({
                           href={attachment.source}
                           target="_blank"
                           rel="noreferrer"
-                          aria-label={`Open ${attachment.fileName}`}
+                          aria-label={`${t("chat.openAttachment")}: ${attachment.fileName}`}
                         >
                           <img
                             className="chat-attachment-image"
                             src={attachment.source}
-                            alt={`${attachment.fileName} attached by ${senderName}`}
+                            alt={`${attachment.fileName} — ${t("chat.attachedBy")} ${senderName}`}
                             loading="lazy"
                           />
                         </a>
@@ -126,7 +129,7 @@ export function ChatThread({
             </div>
           </div>
         );
-      }) : <p className="chat-empty">{empty}</p>}
+      }) : <p className="chat-empty">{empty ?? t("chat.noMessages")}</p>}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
+import { interfaceText } from "../../i18n/index.js";
 
 const DETAIL_FORM_CONTROL_SELECTOR = [
   ".workorder-detail-page input",
@@ -66,10 +67,10 @@ export function mechanicChatRequest({
   };
 }
 
-export function mechanicFinishError(form) {
+export function mechanicFinishError(form, localeText = (key) => interfaceText("en", key)) {
   return resolveWorkPerformed(form)
     ? ""
-    : "Add repair details in Parts or Repair completed before marking Work done.";
+    : localeText("mechanic.repairRequiredBeforeDone");
 }
 
 export function shouldPreserveMechanicWorkorderForm({
@@ -112,6 +113,8 @@ export function createMechanicWorkorderActions({
   getActiveElement = browserActiveElement,
   isMechanicDetail,
   isOfficeDetail,
+  localeText = (key) => interfaceText("en", key),
+  localizedError = (error) => error?.message || interfaceText("en", "mechanic.requestFailed"),
   mechanicProgress,
   normalizeWorkorderForm,
   officeLocations,
@@ -132,13 +135,13 @@ export function createMechanicWorkorderActions({
 }) {
   async function returnToMyWork() {
     if (isMechanicDetail && mechanicProgress.hasUnsyncedChanges) {
-      setMechanicAction({ busy: "progress", message: "Saving progress before leaving..." });
+      setMechanicAction({ busy: "progress", message: localeText("mechanic.savingBeforeLeaving") });
       try {
         await mechanicProgress.flush({ recordActivity: true });
       } catch (error) {
         setMechanicAction({
           busy: "",
-          message: `${error.message} Your recovery copy is still on this device. Retry before leaving.`,
+          message: `${localizedError(error)} ${localeText("mechanic.recoveryPreserved")}`,
         });
         return false;
       }
@@ -180,7 +183,7 @@ export function createMechanicWorkorderActions({
       setMechanicAction({ busy: "", message: successMessage });
       return true;
     } catch (error) {
-      setMechanicAction({ busy: "", message: error.message });
+      setMechanicAction({ busy: "", message: localizedError(error) });
       return false;
     }
   }
@@ -223,7 +226,7 @@ export function createMechanicWorkorderActions({
       setMechanicAction({ busy: "", message: "" });
       return true;
     } catch (error) {
-      setMechanicAction({ busy: "", message: error.message });
+      setMechanicAction({ busy: "", message: localizedError(error) });
       return false;
     }
   }
@@ -257,11 +260,11 @@ export function createMechanicWorkorderActions({
       });
       setMechanicAction({
         busy: "",
-        message: "Work accepted. You can start recording progress.",
+        message: localeText("mechanic.workAccepted"),
       });
       return true;
     } catch (error) {
-      setMechanicAction({ busy: "", message: error.message });
+      setMechanicAction({ busy: "", message: localizedError(error) });
       return false;
     }
   }
@@ -270,7 +273,7 @@ export function createMechanicWorkorderActions({
     try {
       await mechanicProgress.flush({ recordActivity: true });
     } catch (error) {
-      setMechanicAction({ busy: "", message: error.message });
+      setMechanicAction({ busy: "", message: localizedError(error) });
       return false;
     }
 
@@ -283,13 +286,13 @@ export function createMechanicWorkorderActions({
           workPerformed: resolveWorkPerformed(form),
         }),
       }),
-      "Work sent to office for review.",
+      localeText("mechanic.sentForReview"),
     );
   }
 
   async function submitMechanicFinish(event) {
     event.preventDefault();
-    const validationError = mechanicFinishError(form);
+    const validationError = mechanicFinishError(form, localeText);
     if (validationError) {
       setMechanicFinish({ open: false, name: "", message: "" });
       selectDetailSection("diagnosisRepair");

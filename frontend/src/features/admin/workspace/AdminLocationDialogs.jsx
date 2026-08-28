@@ -1,3 +1,4 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { Copy01, XClose } from "@untitledui/icons";
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
@@ -69,7 +70,7 @@ export function AdminLocationDialogs({
         <Modal title="New location" onClose={() => setModal("")}>
           <form className="admin-modal-form" onSubmit={onCreateLocation}>
             <label><span>Name</span><input {...textEntryProps("name")} required value={locationDraft.name} onChange={(event) => setLocationDraft((current) => ({ ...current, name: event.target.value }))} /></label>
-            <label><span>Type</span><select value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></select></label>
+            <label><span>Type</span><Dropdown value={locationDraft.type} onChange={(event) => setLocationDraft((current) => ({ ...current, type: event.target.value }))}><option value="yard">Yard</option><option value="shop">Shop</option><option value="office">Office</option></Dropdown></label>
             <label><span>Address</span><NarrativeField singleLine value={locationDraft.address} onChange={(event) => setLocationDraft((current) => ({ ...current, address: event.target.value }))} /></label>
             <Button variant="primary" type="submit" disabled={busy}>Create location</Button>
           </form>
@@ -81,7 +82,7 @@ export function AdminLocationDialogs({
             {error ? <p className="admin-modal-error" role="alert">{error}</p> : null}
             <label><span>Name</span><input {...textEntryProps("name")} required value={inviteDraft.name} onChange={(event) => setInviteDraft((current) => ({ ...current, name: event.target.value }))} /></label>
             <label><span>Email</span><input {...textEntryProps("identifier")} required type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} /></label>
-            <label><span>Role</span><select value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option><option value="admin">Admin</option></select></label>
+            <label><span>Role</span><Dropdown value={inviteDraft.role} onChange={(event) => setInviteDraft((current) => ({ ...current, role: event.target.value }))}><option value="mechanic">Mechanic</option><option value="office">Office</option><option value="surveillance">Surveillance</option><option value="admin">Admin</option></Dropdown></label>
             {inviteDraft.role === "admin" ? <div className="admin-inherited-access"><strong>All locations</strong><p>Admins automatically inherit access to every current and future location in this company.</p></div> : <LocationSelector locations={companyLocations} value={inviteLocationIds} onChange={setInviteLocationIds} requiredIds={selectedId ? [selectedId] : []} />}
             <Button variant="primary" type="submit" disabled={busy || (inviteDraft.role !== "admin" && !inviteLocationIds.length)}>{busy ? "Creating" : "Create invite"}</Button>
           </form>

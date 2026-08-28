@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { samsaraCardState, samsaraPresentation } from "./samsara-status.js";
 
 const settingsUrl = new URL("./IntegrationsSettings.jsx", import.meta.url);
 const clientCardUrl = new URL("./IntegrationClientsCard.jsx", import.meta.url);
@@ -51,6 +52,22 @@ test("Samsara action errors render once inside the provider card", async () => {
   assert.match(card, /const error = actionError \|\| status\?\.error/);
 });
 
+test("failed Samsara sync overrides configured status and keeps recovery actions available", async () => {
+  const failedSync = { configured: true, latestSync: { status: "failed", hasError: true } };
+  assert.deepEqual(samsaraPresentation(failedSync), { label: "Needs attention", tone: "error" });
+  assert.equal(samsaraCardState(failedSync), "error");
+  assert.equal(samsaraCardState({ configured: true }), "connected");
+  const card = await readFile(new URL("./SamsaraIntegrationCard.jsx", import.meta.url), "utf8");
+  assert.match(card, /const connected = state !== "disconnected"/);
+  assert.match(card, /Reconnect/);
+});
+
+test("integration status load failure does not throw on an undefined action name", async () => {
+  const settings = await readFile(settingsUrl, "utf8");
+  assert.doesNotMatch(settings, /if \(name === "test"\)/);
+  assert.match(settings, /setNotice\(\{ message: "", error: error\.message, target: "samsara" \}\)/);
+});
+
 test("integration landing uses equal summary cards and mounts configuration only on detail pages", async () => {
   const [settings, summaryCard, styles] = await Promise.all([
     readFile(settingsUrl, "utf8"),
@@ -69,4 +86,16 @@ test("integration landing uses equal summary cards and mounts configuration only
   assert.match(summaryCard, />Manage</);
   assert.match(styles, /\.integration-summary-card[\s\S]*min-height:\s*260px/);
   assert.match(styles, /\.integration-detail-view > \.integration-card[\s\S]*max-width:\s*none/);
+});
+
+test("selected integration uses a contextual Settings breadcrumb while the landing stays flat", async () => {
+  const settings = await readFile(settingsUrl, "utf8");
+  assert.match(settings, /<ContextBreadcrumbs/);
+  assert.match(settings, /label: "Settings"/);
+  assert.match(settings, /href: "\/\?adminView=settings&settingsTab=integrations"/);
+  assert.match(settings, /isPlainPrimaryActivation\(event\)/);
+  assert.match(settings, /\.integration-summary-card/);
+  assert.match(settings, /focus\(\{ preventScroll: true \}\)/);
+  assert.match(settings, /current=\{detailTitle\}/);
+  assert.doesNotMatch(settings, /aria-label="Back to integrations"/);
 });

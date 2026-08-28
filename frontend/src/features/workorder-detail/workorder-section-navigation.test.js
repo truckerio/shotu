@@ -22,11 +22,11 @@ test("section navigation resolves icons from module-owned manifests", () => {
 
 test("More navigation keeps its stable visible label and exposes overflow selection", () => {
   assert.doesNotMatch(source, /DotsHorizontal/);
-  assert.equal((source.match(/<span>More<\/span>/g) || []).length, 3);
+  assert.equal((source.match(/<span>\{t\("detail\.more"\)\}<\/span>/g) || []).length, 3);
   assert.match(source, /ChevronDown aria-hidden="true"/);
   assert.match(source, /aria-current=\{desktopActiveOverflowSection \? "page" : undefined\}/);
   assert.match(source, /aria-current=\{phoneActiveOverflowSection \? "page" : undefined\}/);
-  assert.match(source, /`More sections, \$\{desktopActiveOverflowSection\.label\} selected`/);
+  assert.match(source, /t\("detail\.moreSections"\)[\s\S]*desktopActiveOverflowSection\.label[\s\S]*t\("detail\.selected"\)/);
 });
 
 test("desktop navigation measures its container and preserves phone four-plus-More behavior", () => {

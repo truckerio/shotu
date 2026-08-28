@@ -34,5 +34,5 @@ test("auth and account entry points use text or user identity instead of brandin
   assert.match(login, /auth-heading-text-only/);
   assert.match(invitation, /auth-heading-text-only/);
   assert.match(profile, /profile-menu-initials/);
-  assert.match(profile, /aria-label="Open account menu"/);
+  assert.match(profile, /aria-label=\{t\("account\.openAccountMenu"\)\}/);
 });

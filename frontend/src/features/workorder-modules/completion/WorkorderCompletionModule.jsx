@@ -5,6 +5,7 @@ import { WorkDoneButton } from "../../../components/workorders/WorkDoneButton.js
 import { Button } from "../../../components/ui/Button.jsx";
 import { WorkorderHandoffFacts } from "../WorkorderHandoffFacts.jsx";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
+import { interfaceText } from "../../../i18n/index.js";
 
 function writable(access) {
   return access === WORKORDER_MODULE_ACCESS.WRITE || access === WORKORDER_MODULE_ACCESS.REQUIRED;
@@ -17,6 +18,8 @@ export function WorkorderCompletionModule({
   busy,
   customerSignature,
   message,
+  locale = "en",
+  isMechanicDetail = false,
   onAccept,
   onApprove,
   onCancel,
@@ -26,6 +29,8 @@ export function WorkorderCompletionModule({
   workorder,
 }) {
   if (!access) return null;
+  const t = (key) => interfaceText(locale, key);
+  const text = (key, english) => isMechanicDetail ? t(key) : english;
   const canWrite = writable(access);
   // The API already filters markDone through lifecycle, assignment, role, and
   // module access. Keep that authoritative action visible even if a stale
@@ -39,19 +44,19 @@ export function WorkorderCompletionModule({
   ].some(Boolean);
   const hasActions = canMarkDone || hasWritableActions;
   return (
-    <ProgressiveWorkorderSection id="completion" title="Completion" summary={workorder?.endTime ? "Work completed" : "Completion and review"} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
-      <WorkorderHandoffFacts workorder={workorder} />
+    <ProgressiveWorkorderSection id="completion" title={text("completion.title", "Completion")} summary={workorder?.endTime ? text("completion.completed", "Work completed") : text("completion.review", "Completion and review")} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
+      <WorkorderHandoffFacts workorder={workorder} locale={isMechanicDetail ? locale : undefined} />
       <dl className="workorder-readonly-details">
-        <div><dt>Customer authorization</dt><dd>{customerSignature || "Pending"}</dd></div>
-        <div><dt>Authorized by</dt><dd>{workorder?.authorizedBy || workorder?.formData?.authorizedBy || "Pending Manager approval"}</dd></div>
+        <div><dt>{text("completion.customerAuthorization", "Customer authorization")}</dt><dd>{customerSignature || text("completion.pending", "Pending")}</dd></div>
+        <div><dt>{text("completion.authorizedBy", "Authorized by")}</dt><dd>{workorder?.authorizedBy || workorder?.formData?.authorizedBy || text("completion.pendingManager", "Pending Manager approval")}</dd></div>
       </dl>
       {hasActions ? (
-        <div className="office-handoff-actions" aria-label="Completion actions">
-          {canWrite && allowedActions.accept ? <Button type="button" onClick={onAccept} disabled={busy}><CheckCircle />Accept work</Button> : null}
-          {canMarkDone ? <WorkDoneButton type="button" onClick={onMarkDone} busy={busy} /> : null}
+        <div className="office-handoff-actions" aria-label={text("completion.actions", "Completion actions")}>
+          {canWrite && allowedActions.accept ? <Button type="button" onClick={onAccept} disabled={busy}><CheckCircle />{text("completion.acceptWork", "Accept work")}</Button> : null}
+          {canMarkDone ? <WorkDoneButton type="button" onClick={onMarkDone} busy={busy} label={text("completion.workDone", "Work done")} busyLabel={text("completion.submitting", "Submitting")} /> : null}
           {canWrite && allowedActions.approve ? <ApproveButton type="button" onClick={onApprove} busy={busy} /> : null}
-          {canWrite && allowedActions.returnToMechanic ? <Button type="button" onClick={onRequestChanges} disabled={busy}>Return to mechanic</Button> : null}
-          {canWrite && allowedActions.cancel ? <Button variant="danger" type="button" onClick={onCancel} disabled={busy}>Cancel workorder</Button> : null}
+          {canWrite && allowedActions.returnToMechanic ? <Button type="button" onClick={onRequestChanges} disabled={busy}>{text("completion.returnMechanic", "Return to mechanic")}</Button> : null}
+          {canWrite && allowedActions.cancel ? <Button variant="danger" type="button" onClick={onCancel} disabled={busy}>{text("completion.cancelWorkorder", "Cancel workorder")}</Button> : null}
         </div>
       ) : null}
       {message ? <p className="mechanic-action-message" role="status">{message}</p> : null}

@@ -31,6 +31,24 @@ const LEGACY_MIGRATION_CHECKSUMS = new Map([
       "5eab64bb6c8ec8411c6326957f1688e7b6b85b5bb8322a3c83eb4bae9736cdc1",
     ]),
   ],
+  [
+    "063_invoice_layout_templates.sql",
+    new Set([
+      // Early local installations applied the same table, constraints, and indexes
+      // from a differently formatted migration. Schema shape was reconciled before
+      // accepting this historical checksum.
+      "84f609a1dbb0ab97c4a1588789723e7ba3899db5f00b15a983f9f9d85c1db29f",
+    ]),
+  ],
+  [
+    "068_local_receipt_confirmation_labels.sql",
+    new Set([
+      // Early local development applied the legacy receipt backfill with a
+      // hard-coded version. The schema is identical; future installs derive
+      // the immutable reviewed version from the source invoice run.
+      "d1bd5898058e456e76d18ca5b461c179c7229aee83f5fcee77ea660d0571117e",
+    ]),
+  ],
 ]);
 
 function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {

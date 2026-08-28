@@ -9,6 +9,7 @@ function read(relativePath) {
 const controller = read("../AdminWorkspace.jsx");
 const shell = read("./AdminWorkspaceShell.jsx");
 const locations = read("./LocationsPage.jsx");
+const adminStyles = read("../admin.css");
 const users = read("./UsersPage.jsx");
 const template = read("./TemplatePage.jsx");
 
@@ -46,4 +47,17 @@ test("page owners retain their meaningful domain behavior", () => {
   assert.match(template, /Mechanics can record parts used/);
   assert.match(locations, /assigned_active_user_count/);
   assert.match(locations, /fixedLocationId=\{detail\.location\.id\}/);
+});
+
+test("location detail uses a contextual Locations breadcrumb without changing location tabs", () => {
+  assert.match(locations, /<ContextBreadcrumbs/);
+  assert.match(locations, /className="admin-location-detail-header"/);
+  assert.match(adminStyles, /\.admin-location-detail-header \.page-header-heading \{[^}]*flex-direction: column/);
+  assert.match(locations, /label: "Locations"/);
+  assert.match(locations, /href: "\/\?adminView=locations"/);
+  assert.match(locations, /isPlainPrimaryActivation\(event\)/);
+  assert.match(locations, /\.admin-location-row/);
+  assert.match(locations, /focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(locations, /aria-label="Back to locations"/);
+  assert.match(locations, /aria-label="Location settings"/);
 });

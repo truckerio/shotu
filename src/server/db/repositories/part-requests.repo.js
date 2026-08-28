@@ -101,6 +101,7 @@ export async function listWorkorderPartRequests(workorderId) {
             from inventory_items ii
             left join locations l on l.id = ii.location_id
             where ii.company_id = wo.company_id
+              and ii.source_provider = 'local'
               and ii.normalized_part_number = pr.normalized_part_number
               and ii.uom_code = pr.uom_code
               and pr.normalized_part_number <> ''
@@ -438,6 +439,7 @@ async function createAllocation(client, {
          from inventory_items
          where id = $1
            and company_id = $2
+           and source_provider = 'local'
            and normalized_part_number = $3
            and uom_code = $4
            and location_id = $5
@@ -456,6 +458,7 @@ async function createAllocation(client, {
         `select id, location_id
          from inventory_items
          where company_id = $1
+           and source_provider = 'local'
            and normalized_part_number = $2
            and uom_code = $4
            and location_id = $3

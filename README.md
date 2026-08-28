@@ -127,11 +127,18 @@ to using corrections as governed extraction-learning evidence. The encrypted
 source and reviewed record are application evidence; review itself does not
 change inventory or Odoo.
 
-Inventory movement is a separate, explicit operation. The current released
-slice supports idempotent, serial-tracked Odoo receipts only after a reviewed
-invoice and confirmed Odoo result, then provides authenticated QR labels and
-scan resolution. It does not establish physical count/condition, putaway,
-issue/install, returns, cores, or general serial/lot synchronization. Read the
+Inventory movement is a separate, explicit operation. After review, Office or
+Admin must attest that a complete delivery was received undamaged before one
+idempotent local receipt posts atomically: receipt lineage, append-only stock
+movements, location balances, exact identities for discrete units, and a
+durable QR-label batch. Local inventory is the source of truth for those rows;
+the retained Odoo receipt flow is optional compatibility behavior. Mechanics
+can resolve, issue, install, or return an exact scanned/manual unit against a
+workorder, and unresolved issued units block terminal workorder transitions.
+Inventory also supports a bounded, attested opening-count import that creates
+review evidence and only applies valid exact matches. These features do not
+implement partial/damaged receipt posting, transfers, purchasing, general
+cycle counts, valuation, warranty, cores, or a dedicated Parts role. Read the
 [inventory living record](docs/INVENTORY_ODOO_LIVING_RECORD.md) before changing
 this area.
 

@@ -15,8 +15,9 @@ export function integrationRetryDelaySeconds(attempt, {
 
 export async function runNextIntegrationJob({
   workerId = `integration-worker:${process.pid}:${crypto.randomUUID()}`,
+  claimOptions = {},
 } = {}) {
-  const job = await claimNextIntegrationJob(workerId);
+  const job = await claimNextIntegrationJob(workerId, claimOptions);
   if (!job) return null;
   try {
     const handler = getIntegrationJobHandler(job.provider, job.job_type);

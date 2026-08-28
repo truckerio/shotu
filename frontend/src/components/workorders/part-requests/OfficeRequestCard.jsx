@@ -1,3 +1,4 @@
+import { Dropdown } from "../../forms/Dropdown.jsx";
 import { SearchMd } from "@untitledui/icons";
 import { AnchoredSelect } from "../../forms/AnchoredSelect.jsx";
 import { NarrativeField } from "../../forms/NarrativeField.jsx";
@@ -15,6 +16,7 @@ import {
 import { RequestSummary } from "./RequestSummary.jsx";
 import { RepairHistorySuggestions } from "./RepairHistorySuggestions.jsx";
 import { useOfficeRequestReview } from "./useOfficeRequestReview.js";
+import { GetPartsFlow } from "../../../features/inventory/GetPartsFlow.jsx";
 
 export function OfficeRequestCard({ request, detail, onChanged }) {
   const review = useOfficeRequestReview({ request, detail, onChanged });
@@ -127,15 +129,29 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
         </>
       ) : (
         <>
+          {request.approvalStatus === "approved" && request.catalogPartId ? (
+            <details className="part-get-parts-flow">
+              <summary>Get parts</summary>
+              <GetPartsFlow
+                workorderId={detail.workorder.id}
+                catalogPartId={request.catalogPartId}
+                partLabel={request.partNumber || request.description || "Selected part"}
+                destinationLocationId={detail.workorder.locationId}
+                defaultQuantity={request.quantity}
+                defaultUomCode={request.uomCode}
+                onComplete={onChanged}
+              />
+            </details>
+          ) : null}
           {request.repairOrder ? <p className="part-repair-order">{request.repairOrder}</p> : null}
           {request.allocations.length ? (
             <div className="part-allocation-list office-allocation-list">
               {request.allocations.map((allocation) => (
                 <label key={allocation.id}>
                   <span>{SOURCE_LABELS[allocation.sourceType]} · {formatQuantityUnit(allocation.quantity, allocation.uomCode || request.uomCode)}</span>
-                  <select value={allocation.status} onChange={(event) => review.updateAllocation(allocation, event.target.value)} disabled={review.busy === allocation.id}>
+                  <Dropdown value={allocation.status} onChange={(event) => review.updateAllocation(allocation, event.target.value)} disabled={review.busy === allocation.id}>
                     {Object.entries(ALLOCATION_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-                  </select>
+                  </Dropdown>
                 </label>
               ))}
             </div>

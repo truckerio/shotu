@@ -1,6 +1,7 @@
-import { ArrowLeft } from "@untitledui/icons";
+import { ContextBreadcrumbs } from "../ui/ContextBreadcrumbs.jsx";
 import { WorkorderDetailLayout } from "./WorkorderDetailLayout.jsx";
 import { WorkorderObjectSummary, WorkorderSectionNav } from "./WorkorderObjectPage.jsx";
+import { interfaceText } from "../../i18n/index.js";
 
 export function WorkorderDetailSurface({
   previewOpen,
@@ -12,21 +13,15 @@ export function WorkorderDetailSurface({
   sections,
   supportingPane,
   children,
+  locale = "en",
 }) {
   const { children: summaryChildren, ...summaryProps } = summary;
 
   return (
-    <WorkorderDetailLayout detail previewOpen={previewOpen}>
+    <WorkorderDetailLayout detail previewOpen={previewOpen} locale={locale}>
       <aside className={`control-panel ${controlClassName}`.trim()} ref={controlRef}>
+        <ContextBreadcrumbs items={[context.parent]} current={context.current} ariaLabel={interfaceText(locale, "detail.breadcrumb")} />
         <div className="detail-context-bar">
-          <button
-            type="button"
-            onClick={context.onBack}
-            aria-label={context.backLabel}
-            title={context.backLabel}
-          >
-            <ArrowLeft />
-          </button>
           <div>
             <strong>{context.title}</strong>
             <span>{context.subtitle}</span>
@@ -39,13 +34,14 @@ export function WorkorderDetailSurface({
 
         {notice}
 
-        <WorkorderObjectSummary {...summaryProps}>
+        <WorkorderObjectSummary {...summaryProps} locale={locale}>
           {summaryChildren}
         </WorkorderObjectSummary>
         <WorkorderSectionNav
           sections={sections.items}
           activeSection={sections.activeId}
           onSelect={sections.onSelect}
+          locale={locale}
         />
         {children}
       </aside>

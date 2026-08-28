@@ -3,6 +3,7 @@ import {
   getUnitDefinition,
   normalizeQuantity,
 } from "../../../../shared/units-of-measure.js";
+import { interfaceText } from "../../i18n/index.js";
 
 export function mechanicPartsActionState(allowedActions = {}) {
   const canRecordUsedPart = allowedActions.recordUsedParts === true;
@@ -27,22 +28,22 @@ export function createMechanicPartRequestDraft() {
   };
 }
 
-export function validateMechanicPartRequest(draft) {
+export function validateMechanicPartRequest(draft, t = (key) => interfaceText("en", key)) {
   const query = String(draft?.query || "").trim();
   const uomCode = String(draft?.uomCode || "").trim().toLowerCase();
   const unit = getUnitDefinition(uomCode);
   const normalizedQuantity = unit ? normalizeQuantity(draft?.quantity, uomCode) : "";
   const errors = {};
 
-  if (query.length < 2) errors.query = "Describe the part using at least 2 characters.";
-  else if (query.length > 500) errors.query = "Keep the part description under 500 characters.";
+  if (query.length < 2) errors.query = t("parts.validation.descriptionShort");
+  else if (query.length > 500) errors.query = t("parts.validation.descriptionLong");
 
-  if (!unit) errors.uomCode = "Choose a valid unit.";
+  if (!unit) errors.uomCode = t("parts.validation.validUnit");
   else if (!normalizedQuantity) {
     const quantity = Number(draft?.quantity);
     errors.quantity = unit.decimalScale === 0 && Number.isFinite(quantity) && quantity > 0
-      ? "Use a whole number for this unit."
-      : "Enter a quantity greater than 0.";
+      ? t("parts.validation.wholeNumber")
+      : t("parts.validation.quantity");
   }
 
   return {

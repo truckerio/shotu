@@ -26,10 +26,17 @@ import {
 import { surveillanceMissingInfoHandoff } from "../surveillanceQueue.js";
 import { WorkorderDetailModuleHost } from "../../workorder-modules/WorkorderDetailModuleHost.jsx";
 import { useUnitServiceHistory } from "../../workorder-modules/unit/useUnitServiceHistory.js";
+import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
 import { localDate, missingFields, progressTimestamp } from "./surveillance-workspace-model.js";
 
 function valueOrDash(value) {
   return value || "-";
+}
+
+function surveillanceQueueHref() {
+  const url = new URL(window.location.href);
+  url.search = "";
+  return url.toString();
 }
 
 export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows }) {
@@ -124,6 +131,19 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     formData.model || workorder.asset?.model,
     formData.mileage ? `${formData.mileage} mi` : "",
   ].filter(Boolean).join(" · ");
+
+  function followSurveillanceParent(event) {
+    if (!isPlainPrimaryActivation(event)) return;
+    event.preventDefault();
+    const serial = workorder.serial;
+    closeDetail();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (!serial) return;
+      const origin = [...document.querySelectorAll("button[aria-label]")]
+        .find((element) => element.getAttribute("aria-label")?.includes(serial));
+      origin?.focus({ preventScroll: true });
+    }));
+  }
 
   const previewGrid = (
     <div className="preview-grid single mechanic-preview-grid">
@@ -243,8 +263,8 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
       <WorkorderDetailSurface
         previewOpen={!isPhone && canRead("preview") && previewOpen}
         context={{
-          onBack: closeDetail,
-          backLabel: "Back to surveillance queue",
+          parent: { label: "Surveillance", href: surveillanceQueueHref(), onClick: followSurveillanceParent },
+          current: workorder.serial || "Workorder",
           title: canRead("unit") ? valueOrDash(assetLabel || workorder.serial) : workorder.serial,
           subtitle: workorder.serial,
           status: <WorkorderStatusPill status={workorder.status} />,

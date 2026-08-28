@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
+import { interfaceText, normalizeLocale } from "../i18n/index.js";
 
 const EMPTY_PREFERENCES = {
   defaultLocationId: null,
@@ -15,13 +16,15 @@ export function useWorkorderPreferences(scope) {
   const [error, setError] = useState("");
   const saveTimer = useRef(null);
   const latest = useRef(EMPTY_PREFERENCES);
+  const localeSaveSequence = useRef(0);
+  const localeSavePromise = useRef(Promise.resolve());
 
   useEffect(() => {
     let active = true;
     api("/api/workorder-preferences")
       .then(({ preferences: next }) => {
         if (!active) return;
-        const value = { ...EMPTY_PREFERENCES, ...next };
+        const value = { ...EMPTY_PREFERENCES, ...next, locale: normalizeLocale(next?.locale) };
         latest.current = value;
         setPreferences(value);
       })
@@ -48,33 +51,50 @@ export function useWorkorderPreferences(scope) {
     setPreferences(next);
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
+      const { defaultLocationId, defaultView, savedFilters } = latest.current;
       api("/api/workorder-preferences", {
         method: "PUT",
-        body: JSON.stringify(next),
+        body: JSON.stringify({ defaultLocationId, defaultView, savedFilters }),
       }).catch(() => {});
     }, 350);
   }, [ready, scope]);
 
-  const saveLocale = useCallback(async (locale) => {
+  const saveLocale = useCallback(async (requestedLocale) => {
     if (!ready) return false;
+    const locale = normalizeLocale(requestedLocale);
+    const request = ++localeSaveSequence.current;
     const previous = latest.current;
     const next = { ...previous, locale };
     latest.current = next;
     setPreferences(next);
     setError("");
     try {
-      const result = await api("/api/workorder-preferences", {
-        method: "PUT",
-        body: JSON.stringify({ locale }),
-      });
-      const confirmed = { ...next, ...result.preferences };
+      const requestPromise = localeSavePromise.current
+        .catch(() => {})
+        .then(() => api("/api/workorder-preferences", {
+          method: "PUT",
+          // Locale is intentionally a narrow patch; do not overwrite saved
+          // filters or other preferences when a user changes language.
+          body: JSON.stringify({ locale }),
+        }));
+      localeSavePromise.current = requestPromise;
+      const result = await requestPromise;
+      if (request !== localeSaveSequence.current) return false;
+      const confirmed = {
+        ...latest.current,
+        locale: normalizeLocale(result.preferences?.locale ?? locale),
+      };
       latest.current = confirmed;
       setPreferences(confirmed);
       return true;
     } catch (saveError) {
-      latest.current = previous;
-      setPreferences(previous);
-      setError(saveError.message || "Language preference was not saved.");
+      if (request !== localeSaveSequence.current) return false;
+      const restored = { ...latest.current, locale: previous.locale };
+      latest.current = restored;
+      setPreferences(restored);
+      setError(locale === "en" && saveError?.message
+        ? saveError.message
+        : interfaceText(locale, "language.saveError"));
       return false;
     }
   }, [ready]);

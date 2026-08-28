@@ -5,6 +5,7 @@ import {
   applyRateLimitHeaders,
   createInMemoryRateLimiter,
   createSensitiveRouteRateLimiter,
+  deferSensitiveRateLimitUntilActor,
   requestRateLimitIdentity,
   sensitiveRateLimitPolicy,
   SENSITIVE_RATE_LIMIT_POLICIES,
@@ -57,6 +58,8 @@ test("sensitive route classification limits mutations and expensive OAuth start"
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/integrations/samsara/status"), null);
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/auth/kiosk/unlock"), "kiosk");
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/invoice-extractions"), "invoice");
+  assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/inventory/count-imports"), "inventoryUpload");
+  assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/inventory/parts/part-1/locations/location-1/units"), "inventoryUpload");
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/office/invoice-extractions/run-1"), null);
 });
 
@@ -65,6 +68,27 @@ test("auth limiter gives users a short typo-friendly retry window", () => {
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.auth.windowMs, 60_000);
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.kiosk.limit, 10);
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.invoice.limit, 10);
+  assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.inventoryUpload.limit, 5);
+});
+
+test("body-heavy uploads defer rate limiting until authenticated actor identity exists", () => {
+  assert.equal(deferSensitiveRateLimitUntilActor("POST", "/api/office/invoice-extractions"), true);
+  assert.equal(deferSensitiveRateLimitUntilActor("POST", "/api/office/inventory/count-imports"), true);
+  assert.equal(deferSensitiveRateLimitUntilActor("POST", "/api/office/inventory/parts/part-1/locations/location-1/units"), true);
+  assert.equal(deferSensitiveRateLimitUntilActor("GET", "/api/office/inventory/count-imports"), false);
+  assert.equal(deferSensitiveRateLimitUntilActor("POST", "/api/auth/sign-in/username"), false);
+});
+
+test("authenticated inventory upload limits isolate actors sharing one IP", () => {
+  const guard = createSensitiveRouteRateLimiter({
+    policies: { inventoryUpload: { limit: 1, windowMs: 60_000 } },
+    now: () => 1_000,
+  });
+  const req = { method: "POST", headers: {}, socket: { remoteAddress: "127.0.0.1" } };
+  const url = new URL("https://app.example.com/api/office/inventory/count-imports");
+  assert.equal(guard.check(req, url, { actorId: "actor-a" }).result.allowed, true);
+  assert.equal(guard.check(req, url, { actorId: "actor-b" }).result.allowed, true);
+  assert.throws(() => guard.check(req, url, { actorId: "actor-a" }), RateLimitExceededError);
 });
 
 test("sensitive guard uses independent policies and throws a stable 429 error", () => {

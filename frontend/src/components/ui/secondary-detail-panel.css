@@ -1,0 +1,223 @@
+.secondary-detail-overlay {
+  align-items: stretch;
+  background: rgb(16 24 40 / 42%);
+  display: flex;
+  inset: 0;
+  justify-content: flex-end;
+  position: fixed;
+  touch-action: pan-y;
+  z-index: 140;
+}
+
+.secondary-detail-overlay[data-entering] {
+  animation: secondary-detail-fade-in var(--motion-fast) var(--motion-ease-enter);
+}
+
+.secondary-detail-overlay[data-exiting] {
+  animation: secondary-detail-fade-out var(--motion-fast) var(--motion-ease-exit);
+}
+
+.secondary-detail-modal {
+  background: #fff;
+  border-left: 1px solid #e4e7ec;
+  box-shadow: -20px 0 48px rgb(16 24 40 / 18%);
+  height: 100dvh;
+  max-width: 100%;
+  outline: 0;
+  overflow: hidden;
+  width: min(680px, calc(100vw - 48px));
+}
+
+.secondary-detail-modal.is-compact {
+  width: min(500px, calc(100vw - 48px));
+}
+
+.secondary-detail-modal[data-entering] {
+  animation: secondary-detail-slide-in var(--motion-control) var(--motion-ease-enter);
+}
+
+.secondary-detail-modal[data-exiting] {
+  animation: secondary-detail-slide-out var(--motion-fast) var(--motion-ease-exit);
+}
+
+.secondary-detail-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-width: 0;
+  outline: 0;
+  overflow: hidden;
+}
+
+.secondary-detail-header {
+  align-items: flex-start;
+  border-bottom: 1px solid #e4e7ec;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 22px 24px 18px;
+}
+
+.secondary-detail-heading {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.secondary-detail-eyebrow {
+  color: #175cd3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.secondary-detail-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.secondary-detail-title-row h2 {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.secondary-detail-heading p {
+  color: #535862;
+  max-width: 62ch;
+}
+
+.secondary-detail-header > button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: #475467;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 44px;
+  justify-content: center;
+  margin: -8px -8px 0 0;
+  width: 44px;
+}
+
+.secondary-detail-header > button:hover {
+  background: #f2f4f7;
+  color: #101828;
+}
+
+.secondary-detail-header > button:focus-visible {
+  box-shadow: 0 0 0 3px #d1e9ff;
+  outline: 0;
+}
+
+.secondary-detail-header > button svg {
+  height: 20px;
+  width: 20px;
+}
+
+.secondary-detail-content {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 24px 28px;
+  scrollbar-gutter: stable;
+}
+
+.secondary-detail-section {
+  border-top: 1px solid #eaecf0;
+  display: grid;
+  gap: 14px;
+  padding: 22px 0;
+}
+
+.secondary-detail-section:first-child {
+  border-top: 0;
+}
+
+.secondary-detail-section > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.secondary-detail-section > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.secondary-detail-section h3 {
+  color: #181d27;
+  font-size: 16px;
+  margin: 0;
+}
+
+.secondary-detail-section p {
+  margin: 0;
+}
+
+.secondary-detail-section-body {
+  min-width: 0;
+}
+
+.secondary-detail-footer {
+  align-items: center;
+  background: #fff;
+  border-top: 1px solid #e4e7ec;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px 24px calc(14px + env(safe-area-inset-bottom));
+}
+
+@keyframes secondary-detail-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes secondary-detail-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes secondary-detail-slide-in {
+  from { transform: translateX(36px); }
+}
+
+@keyframes secondary-detail-slide-out {
+  to { transform: translateX(36px); }
+}
+
+@media (max-width: 700px) {
+  .secondary-detail-modal,
+  .secondary-detail-modal.is-compact {
+    border-left: 0;
+    width: 100%;
+  }
+
+  .secondary-detail-header {
+    padding: 18px 16px 14px;
+  }
+
+  .secondary-detail-content {
+    padding: 0 16px 22px;
+  }
+
+  .secondary-detail-footer {
+    padding-inline: 16px;
+  }
+
+  .secondary-detail-footer .button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .secondary-detail-overlay,
+  .secondary-detail-modal {
+    animation: none !important;
+  }
+}

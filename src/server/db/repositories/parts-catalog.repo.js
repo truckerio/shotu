@@ -203,6 +203,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
           and location.company_id = item.company_id
         where $8::uuid is not null
           and item.company_id = candidates.company_id
+          and item.source_provider = 'local'
           and item.catalog_part_id = candidates.id
           and item.location_id = $8::uuid
           and item.uom_code = candidates.uom_code

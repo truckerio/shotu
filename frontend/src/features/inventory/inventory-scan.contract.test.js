@@ -11,10 +11,12 @@ test("inventory scanner uses shared buttons and keeps camera failure on a manual
   assert.match(source, /\/api\/inventory\/resolve/);
 });
 
-test("admin can open the shared invoice workflow while scan links preempt role workspaces", async () => {
+test("admin opens invoice intake through Inventory while scan links preempt role workspaces", async () => {
   const shell = await readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8");
+  const inventory = await readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8");
   const outlet = await readFile(new URL("../../app/routes/RoleWorkspaceOutlet.jsx", import.meta.url), "utf8");
-  assert.match(shell, /<InvoiceExtractionWorkspace \/>/);
+  assert.match(shell, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} \/>/);
+  assert.match(inventory, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\}/);
   assert.match(outlet, /searchParams\(window\.location\.search\)\.has\("inventoryScan"\)/i);
   assert.match(outlet, /<InventoryScanWorkspace actor=\{actor\} \/>/);
 });

@@ -23,17 +23,17 @@ function phonePartsCss() {
 }
 
 test("shared parts editor uses one text remove action without duplicate icons", () => {
-  assert.match(editor, />Remove<\/button>/);
+  assert.match(editor, /\{t\("parts\.remove"\)\}<\/button>/);
   assert.doesNotMatch(editor, /Trash01/);
   assert.doesNotMatch(globalCss, /\.remove-row::before/);
   assert.doesNotMatch(css, /\.remove-row::before/);
 });
 
 test("repair order uses one visible column heading and an accessible row control", () => {
-  assert.match(editor, /<span>Repair order<\/span>/);
-  assert.doesNotMatch(editor, /<span className="used-part-label">Repair order<\/span>/);
-  assert.match(editor, /aria-label=\{`Repair order \$\{index \+ 1\}`\}/);
-  assert.match(editor, /placeholder="Describe repair for this part"/);
+  assert.match(editor, /<span>\{t\("parts\.repairOrder"\)\}<\/span>/);
+  assert.doesNotMatch(editor, /<span className="used-part-label">\{t\("parts\.repairOrder"\)\}<\/span>/);
+  assert.match(editor, /aria-label=\{`\$\{t\("parts\.repairOrder"\)\} \$\{index \+ 1\}`\}/);
+  assert.match(editor, /placeholder=\{t\("parts\.describeRepair"\)\}/);
   assert.doesNotMatch(editor, /aria-label=\{`Work performed \$\{index \+ 1\}`\}/);
   assert.match(globalCss, /\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
   assert.doesNotMatch(globalCss, /\.used-part-field\s*>\s*span\s*\{[^}]*display:\s*none;/s);

@@ -3,6 +3,7 @@ import { ProgressiveWorkorderSection } from "../../../components/workorders/Work
 import { Button } from "../../../components/ui/Button.jsx";
 import { Field } from "../../generator/GeneratorUi.jsx";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
+import { interfaceText } from "../../../i18n/index.js";
 
 function writable(access) {
   return access === WORKORDER_MODULE_ACCESS.WRITE || access === WORKORDER_MODULE_ACCESS.REQUIRED;
@@ -18,17 +19,19 @@ export function WorkorderAssignmentModule({
   assignableMechanics = [],
   busy,
   mechanicNames,
+  locale = "en",
   onAssignmentChange,
   onSave,
   onSelect,
 }) {
   if (!access) return null;
+  const t = (key) => interfaceText(locale, key);
   const canWrite = writable(access) && Boolean(allowedActions.assignMechanics);
   return (
     <ProgressiveWorkorderSection
       id="assignment"
-      title="Assignment"
-      summary={mechanicNames || "Unassigned"}
+      title={t("assignment.title")}
+      summary={mechanicNames || t("assignment.unassigned")}
       activeSection={activeSection}
       onSelect={onSelect}
       attention={!assignedIds.length}
@@ -37,7 +40,7 @@ export function WorkorderAssignmentModule({
       {canWrite ? (
         <div className="office-assignment-control">
           <fieldset className="office-mechanic-team">
-            <legend>Assigned mechanics</legend>
+            <legend>{t("assignment.assignedMechanics")}</legend>
             {assignableMechanics.map((mechanic) => {
               const checked = assignment.mechanicUserIds.includes(mechanic.id);
               return (
@@ -52,15 +55,15 @@ export function WorkorderAssignmentModule({
                 </label>
               );
             })}
-            {!assignableMechanics.length ? <p>No mechanics assigned to this location.</p> : null}
+            {!assignableMechanics.length ? <p>{t("assignment.noneAtLocation")}</p> : null}
           </fieldset>
-          <Field label="Assignment reason">
-            <NarrativeField singleLine value={assignment.reason} onChange={(event) => onAssignmentChange?.((current) => ({ ...current, reason: event.target.value }))} placeholder="Why is the team changing?" />
+          <Field label={t("assignment.reason")}>
+            <NarrativeField locale={locale} singleLine value={assignment.reason} onChange={(event) => onAssignmentChange?.((current) => ({ ...current, reason: event.target.value }))} placeholder={t("assignment.reasonPlaceholder")} />
           </Field>
-          <Button type="button" variant="secondary" disabled={busy || !assignmentChanged} onClick={onSave}>Update team</Button>
+          <Button type="button" variant="secondary" disabled={busy || !assignmentChanged} onClick={onSave}>{t("assignment.updateTeam")}</Button>
         </div>
       ) : null}
-      <dl className="workorder-assigned-mechanics"><div><dt>Assigned mechanics</dt><dd>{mechanicNames || "Unassigned"}</dd></div></dl>
+      <dl className="workorder-assigned-mechanics"><div><dt>{t("assignment.assignedMechanics")}</dt><dd>{mechanicNames || t("assignment.unassigned")}</dd></div></dl>
     </ProgressiveWorkorderSection>
   );
 }

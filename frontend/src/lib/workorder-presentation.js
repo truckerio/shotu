@@ -1,3 +1,5 @@
+import { intlLocale } from "../i18n/index.js";
+
 export const WORKORDER_LIFECYCLE_LABELS = Object.freeze({
   open: "Open",
   accepted: "Accepted",
@@ -40,7 +42,7 @@ function parseUiDate(value) {
 export function formatUiDate(value, { locale, ...options } = {}) {
   const date = parseUiDate(value);
   if (!date) return "";
-  return new Intl.DateTimeFormat(locale, {
+  return new Intl.DateTimeFormat(locale ? intlLocale(locale) : undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -51,7 +53,7 @@ export function formatUiDate(value, { locale, ...options } = {}) {
 export function formatUiDateTime(value, { locale, ...options } = {}) {
   const date = parseUiDate(value);
   if (!date) return "";
-  return new Intl.DateTimeFormat(locale, {
+  return new Intl.DateTimeFormat(locale ? intlLocale(locale) : undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",

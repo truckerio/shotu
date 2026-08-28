@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractInvoiceWithLocalOcr, ocrObservation } from "./local-ocr.provider.js";
+import { extractInvoiceWithLocalOcr, extractNativePdfText, ocrObservation } from "./local-ocr.provider.js";
 
 function response(overrides = {}) {
   return {
@@ -42,6 +42,43 @@ test("local OCR rejects malformed or empty provider output", async () => {
     config: { ocrBaseUrl: "http://127.0.0.1:8091", ocrTimeoutMs: 30_000, ocrMaxConcurrent: 1, ocrToken: "" },
     fetchFn: async () => ({ ok: true, status: 200, json: async () => response({ text: "", regions: [] }) }),
   }), (error) => error.code === "ocr_empty_result");
+});
+
+test("native PDF text uses the bounded fast endpoint without consuming OCR capacity", async () => {
+  let request;
+  const result = await extractNativePdfText({ bytes: Buffer.from("%PDF-safe"), mimeType: "application/pdf" }, {
+    production: false,
+    config: { ocrBaseUrl: "http://127.0.0.1:8091", ocrToken: "token" },
+    fetchFn: async (url, options) => {
+      request = { url, options };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          provider: "pdfium",
+          providerVersion: "4.30.0",
+          text: "INVOICE INV-10 TOTAL 22.00",
+          pageCount: 1,
+          characterCount: 27,
+          durationMs: 8,
+        }),
+      };
+    },
+  });
+  assert.equal(request.url, "http://127.0.0.1:8091/v1/native-text");
+  assert.equal(request.options.headers["x-ocr-token"], "token");
+  assert.equal(result.text, "INVOICE INV-10 TOTAL 22.00");
+});
+
+test("native PDF text rejects images and malformed provider output", async () => {
+  await assert.rejects(() => extractNativePdfText({ bytes: Buffer.from("safe"), mimeType: "image/png" }, {
+    config: { ocrBaseUrl: "http://127.0.0.1:8091", ocrToken: "" },
+  }), (error) => error.code === "native_pdf_required");
+  await assert.rejects(() => extractNativePdfText({ bytes: Buffer.from("%PDF-safe"), mimeType: "application/pdf" }, {
+    production: false,
+    config: { ocrBaseUrl: "http://127.0.0.1:8091", ocrToken: "" },
+    fetchFn: async () => ({ ok: true, status: 200, json: async () => ({ text: "unbounded shape" }) }),
+  }), (error) => error.code === "native_pdf_invalid_result");
 });
 
 test("production rejects an insecure non-loopback OCR endpoint", async () => {

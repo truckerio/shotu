@@ -12,6 +12,7 @@ export const PERMISSION = Object.freeze({
   INTEGRATION_ADMIN: "integration:admin",
   USER_ADMIN: "user:admin",
   LOCATION_ADMIN: "location:admin",
+  INVENTORY_COUNT_APPLY: "inventory:count-apply",
   ADMIN_MANAGE: "admin:manage",
 });
 

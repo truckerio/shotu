@@ -32,3 +32,10 @@ test("search groups are sourced from the shared UoM catalog", () => {
   assert.deepEqual(groups.flatMap((group) => group.units.map((unit) => unit.code)), ["gal"]);
   assert.equal(unitOptionGroups()[0].label, "Common");
 });
+
+test("unit search can match translated labels without changing stored unit codes", () => {
+  const groups = unitOptionGroups("galón", (kind, value, fallback) => (
+    kind === "unit" && value === "gal" ? "Galón" : fallback
+  ));
+  assert.deepEqual(groups.flatMap((group) => group.units.map((unit) => unit.code)), ["gal"]);
+});

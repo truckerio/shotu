@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { CheckCircle, ChevronLeft, ChevronRight, Printer, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { interfaceText } from "../../i18n/index.js";
 import { normalizePreviewZoom, PREVIEW_ZOOM_MAX, PREVIEW_ZOOM_MIN } from "./preview-zoom.js";
 import {
   paginateWorkorderParts,
@@ -48,8 +49,9 @@ export function BrowserPrintDocument({ payload }) {
   );
 }
 
-export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range, countLabel, actionLabel, onClose, onPageChange, onZoomChange, onPrint }) {
+export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range, countLabel, actionLabel, onClose, onPageChange, onZoomChange, onPrint, locale = "en" }) {
   if (!open) return null;
+  const t = (key) => interfaceText(locale, key);
   const normalizedZoom = normalizePreviewZoom(zoom);
   const physicalPages = serials.flatMap((serial) => {
     const pages = paginateWorkorderParts(form);
@@ -68,21 +70,21 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
   const canGoForward = safeIndex < physicalPages.length - 1;
 
   return (
-    <div className="preview-fullscreen" role="dialog" aria-modal="true" aria-label="Fullscreen workorder preview">
+    <div className="preview-fullscreen" role="dialog" aria-modal="true" aria-label={t("preview.fullscreenWorkorder")}>
       <div className="preview-fullscreen-toolbar">
-        <div className="fullscreen-title"><strong>Preview</strong><span>{countLabel} / {range}</span></div>
-        <div className="fullscreen-toolbox" aria-label="Preview tools">
-          <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex - 1)} disabled={!canGoBack} aria-label="Previous page" data-tooltip="Previous page"><ChevronLeft /></button>
+        <div className="fullscreen-title"><strong>{t("preview.title")}</strong><span>{countLabel} / {range}</span></div>
+        <div className="fullscreen-toolbox" aria-label={t("preview.tools")}>
+          <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex - 1)} disabled={!canGoBack} aria-label={t("preview.previousPage")} data-tooltip={t("preview.previousPage")}><ChevronLeft /></button>
           <span className="fullscreen-page-count">{safeIndex + 1} / {physicalPages.length}</span>
-          <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex + 1)} disabled={!canGoForward} aria-label="Next page" data-tooltip="Next page"><ChevronRight /></button>
-          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(normalizedZoom - 1)} disabled={normalizedZoom <= PREVIEW_ZOOM_MIN} aria-label="Zoom out" data-tooltip="Zoom out"><ZoomOut /></button>
-          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(normalizedZoom + 1)} disabled={normalizedZoom >= PREVIEW_ZOOM_MAX} aria-label="Zoom in" data-tooltip="Zoom in"><ZoomIn /></button>
+          <button className="icon-tooltip" type="button" onClick={() => onPageChange(safeIndex + 1)} disabled={!canGoForward} aria-label={t("preview.nextPage")} data-tooltip={t("preview.nextPage")}><ChevronRight /></button>
+          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(normalizedZoom - 1)} disabled={normalizedZoom <= PREVIEW_ZOOM_MIN} aria-label={t("location.zoomOut")} data-tooltip={t("location.zoomOut")}><ZoomOut /></button>
+          <button className="icon-tooltip" type="button" onClick={() => onZoomChange(normalizedZoom + 1)} disabled={normalizedZoom >= PREVIEW_ZOOM_MAX} aria-label={t("location.zoomIn")} data-tooltip={t("location.zoomIn")}><ZoomIn /></button>
           {onPrint ? <button className="fullscreen-print icon-tooltip" type="button" onClick={onPrint} aria-label={actionLabel} data-tooltip={actionLabel}><Printer /></button> : null}
-          <button className="icon-tooltip" type="button" onClick={onClose} aria-label="Close fullscreen preview" data-tooltip="Close"><XClose /></button>
+          <button className="icon-tooltip" type="button" onClick={onClose} aria-label={t("preview.closeFullscreen")} data-tooltip={t("preview.close")}><XClose /></button>
         </div>
       </div>
       <div className={`fullscreen-stage zoom-${normalizedZoom}`}>
-        <div className="fullscreen-page-meta"><span>Page {safeIndex + 1}</span><strong>{serial}</strong></div>
+        <div className="fullscreen-page-meta"><span>{t("preview.page")} {safeIndex + 1}</span><strong>{serial}</strong></div>
         <div className="fullscreen-page-wrap"><div className="workorder-preview-shell"><div dangerouslySetInnerHTML={{
           __html: renderWorkorderPageHtml(form, serial, physicalPage),
         }} /></div></div>
@@ -91,25 +93,26 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
   );
 }
 
-export function PrintModal({ state, range, onClose }) {
+export function PrintModal({ state, range, onClose, locale = "en" }) {
   if (!state.open) return null;
+  const t = (key) => interfaceText(locale, key);
   const isDone = state.stage === "done";
   const isError = state.stage === "error";
   const displayRange = state.range || range;
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="print-modal">
-        <button className="close-button" type="button" onClick={onClose} aria-label="Close print status"><XClose /></button>
+        <button className="close-button" type="button" onClick={onClose} aria-label={t("preview.closePrintStatus")}><XClose /></button>
         <div className={`modal-icon ${isDone ? "done" : isError ? "error" : ""}`}>{isDone ? <CheckCircle /> : <Printer />}</div>
-        <h2>{isDone ? "Print job ready" : isError ? "Print failed" : "Archiving print job"}</h2>
+        <h2>{isDone ? t("preview.printReady") : isError ? t("preview.printFailed") : t("preview.archiving")}</h2>
         <p>{state.message}</p>
         <div className="print-summary">
-          <div><span>{displayRange.includes(" to ") ? "Serial range" : "Workorder no."}</span><strong>{displayRange}</strong></div>
-          <div><span>Pages</span><strong>{state.pageCount || 1}</strong></div>
+          <div><span>{displayRange.includes(" to ") ? t("preview.serialRange") : t("preview.workorderNumber")}</span><strong>{displayRange}</strong></div>
+          <div><span>{t("preview.pages")}</span><strong>{state.pageCount || 1}</strong></div>
         </div>
         <div className="progress-track"><div className={`progress-fill ${isDone ? "complete" : isError ? "failed" : ""}`} /></div>
-        {isDone && state.downloadUrl ? <a className="button primary download-link" href={state.downloadUrl} target="_blank" rel="noreferrer">Download PDF</a> : null}
-        {isDone || isError ? <Button variant={isError ? "secondary" : "primary"} onClick={onClose}>Close</Button> : null}
+        {isDone && state.downloadUrl ? <a className="button primary download-link" href={state.downloadUrl} target="_blank" rel="noreferrer">{t("preview.downloadPdf")}</a> : null}
+        {isDone || isError ? <Button variant={isError ? "secondary" : "primary"} onClick={onClose}>{t("preview.close")}</Button> : null}
       </div>
     </div>
   );

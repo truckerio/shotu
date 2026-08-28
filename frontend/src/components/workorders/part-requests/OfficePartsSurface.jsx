@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { officeQueueText } from "./part-request-model.js";
 import { OfficeRequestCard } from "./OfficeRequestCard.jsx";
 import { OfficePartComposer } from "./OfficePartComposer.jsx";
@@ -19,6 +20,19 @@ export function OfficePartsSurface({
   usedPartsAccess,
 }) {
   const requests = detail.partRequests || [];
+  const focusedRequestId = typeof window === "undefined"
+    ? ""
+    : new URLSearchParams(window.location.search).get("partRequest") || "";
+  const focusedRequestRef = useRef(null);
+
+  useEffect(() => {
+    if (!focusedRequestId || !requests.some((request) => request.id === focusedRequestId)) return;
+    const frame = window.requestAnimationFrame(() => {
+      focusedRequestRef.current?.scrollIntoView?.({ block: "center" });
+      focusedRequestRef.current?.focus?.({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedRequestId, requests]);
 
   return (
     <>
@@ -46,7 +60,17 @@ export function OfficePartsSurface({
       </div>
       <div className="part-request-list">
         {requests.length ? requests.map((request) => (
-          <OfficeRequestCard request={request} detail={detail} onChanged={onChanged} key={request.id} />
+          <div
+            id={`part-request-${request.id}`}
+            className={`part-request-focus-target${request.id === focusedRequestId ? " is-selected" : ""}`}
+            ref={request.id === focusedRequestId ? focusedRequestRef : undefined}
+            tabIndex={request.id === focusedRequestId ? -1 : undefined}
+            aria-current={request.id === focusedRequestId ? "true" : undefined}
+            aria-label={request.id === focusedRequestId ? `Selected part request ${request.partNumber || request.description || ""}`.trim() : undefined}
+            key={request.id}
+          >
+            <OfficeRequestCard request={request} detail={detail} onChanged={onChanged} />
+          </div>
         )) : <p className="part-request-empty">No part requests yet.</p>}
       </div>
     </>

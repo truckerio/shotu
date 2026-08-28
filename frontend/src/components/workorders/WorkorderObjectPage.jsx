@@ -6,13 +6,14 @@ import {
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { workorderModuleDescriptor } from "../../features/workorder-modules/workorder-module-registry.js";
 import { fitWorkorderSections, splitWorkorderSections } from "./workorder-section-navigation.js";
+import { interfaceText } from "../../i18n/index.js";
 import "./workorder-object-page.css";
 
 function sectionIcon(sectionId) {
   return workorderModuleDescriptor(sectionId)?.icon || Tool02;
 }
 
-function compactValue(value, fallback = "Not listed") {
+function compactValue(value, fallback) {
   const text = String(value || "").trim();
   return text || fallback;
 }
@@ -27,44 +28,47 @@ export function WorkorderObjectSummary({
   unitType = "Unit",
   actions,
   children,
+  locale = "en",
 }) {
+  const t = (key) => interfaceText(locale, key);
   const headingId = useId();
 
   return (
     <section className="workorder-object-summary" aria-labelledby={headingId}>
       <div className="workorder-object-primary">
-        <span>Work to do</span>
-        <h1 id={headingId}>{compactValue(concern, "No repair concern listed")}</h1>
+        <span>{t("detail.workToDo")}</span>
+        <h1 id={headingId}>{compactValue(concern, t("detail.noRepairConcern"))}</h1>
       </div>
       <dl className="workorder-object-facts">
         <div>
-          <dt>{compactValue(unitType, "Unit")}</dt>
-          <dd>{compactValue(unit)}</dd>
+          <dt>{compactValue(unitType, t("detail.unit"))}</dt>
+          <dd>{compactValue(unit, t("detail.notListed"))}</dd>
         </div>
         <div>
-          <dt>Location</dt>
-          <dd>{compactValue(location)}</dd>
+          <dt>{t("location.title")}</dt>
+          <dd>{compactValue(location, t("detail.notListed"))}</dd>
         </div>
         <div>
-          <dt>Mechanics</dt>
-          <dd>{compactValue(mechanics, "Unassigned")}</dd>
+          <dt>{t("timeline.mechanics")}</dt>
+          <dd>{compactValue(mechanics, t("assignment.unassigned"))}</dd>
         </div>
         <div>
-          <dt>Customer</dt>
-          <dd>{compactValue(customer)}</dd>
+          <dt>{t("unit.customer")}</dt>
+          <dd>{compactValue(customer, t("detail.notListed"))}</dd>
         </div>
         <div>
-          <dt>Work dates</dt>
-          <dd>{compactValue(dates)}</dd>
+          <dt>{t("schedule.workDates")}</dt>
+          <dd>{compactValue(dates, t("detail.notListed"))}</dd>
         </div>
       </dl>
       {children}
-      {actions ? <div className="workorder-object-actions" aria-label="Workorder actions">{actions}</div> : null}
+      {actions ? <div className="workorder-object-actions" aria-label={t("detail.workorderActions")}>{actions}</div> : null}
     </section>
   );
 }
 
-export function WorkorderSectionNav({ sections, activeSection, onSelect, className = "" }) {
+export function WorkorderSectionNav({ sections, activeSection, onSelect, className = "", locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   const [visualActiveSection, setVisualActiveSection] = useState(activeSection);
   const [desktopLayout, setDesktopLayout] = useState(() => ({
     primarySections: sections,
@@ -131,7 +135,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
     <>
       <nav
         className={`workorder-section-nav workorder-section-nav-desktop ${className}`.trim()}
-        aria-label="Workorder sections"
+        aria-label={t("detail.workorderSections")}
         ref={desktopNavRef}
       >
         {desktopLayout.primarySections.map((section) => (
@@ -151,13 +155,13 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
             <Button
               className={`${desktopActiveOverflowSection ? "is-active" : ""} ${desktopActiveOverflowSection?.attention ? "has-attention" : ""}`.trim()}
               aria-current={desktopActiveOverflowSection ? "page" : undefined}
-              aria-label={desktopActiveOverflowSection ? `More sections, ${desktopActiveOverflowSection.label} selected` : "More workorder sections"}
+              aria-label={desktopActiveOverflowSection ? `${t("detail.moreSections")}, ${desktopActiveOverflowSection.label} ${t("detail.selected")}` : t("detail.moreWorkorderSections")}
             >
-              <span>More</span>
+              <span>{t("detail.more")}</span>
               <ChevronDown aria-hidden="true" />
             </Button>
             <Popover className="workorder-section-more-popover" placement="bottom end">
-              <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
+              <Menu className="workorder-section-more-menu" aria-label={t("detail.moreWorkorderSections")}>
                 {desktopLayout.overflowSections.map((section) => {
                   const Icon = sectionIcon(section.id);
                   return (
@@ -186,13 +190,13 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
             </span>
           ))}
           <span className="workorder-section-nav-measure-item" data-measure-more>
-            <span>More</span>
+            <span>{t("detail.more")}</span>
             <ChevronDown aria-hidden="true" />
           </span>
         </div>
       </nav>
 
-      <nav className={`workorder-section-nav-mobile ${className}`.trim()} aria-label="Workorder sections">
+      <nav className={`workorder-section-nav-mobile ${className}`.trim()} aria-label={t("detail.workorderSections")}>
         {phoneLayout.primarySections.map((section) => (
           <button
             className={`${visualActiveSection === section.id ? "is-active" : ""} ${section.attention ? "has-attention" : ""}`.trim()}
@@ -210,13 +214,13 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
             <Button
               className={`${phoneActiveOverflowSection ? "is-active" : ""} ${phoneActiveOverflowSection?.attention ? "has-attention" : ""}`.trim()}
               aria-current={phoneActiveOverflowSection ? "page" : undefined}
-              aria-label={phoneActiveOverflowSection ? `More sections, ${phoneActiveOverflowSection.label} selected` : "More workorder sections"}
+              aria-label={phoneActiveOverflowSection ? `${t("detail.moreSections")}, ${phoneActiveOverflowSection.label} ${t("detail.selected")}` : t("detail.moreWorkorderSections")}
             >
-              <span>More</span>
+              <span>{t("detail.more")}</span>
               {phoneActiveOverflowSection?.count !== undefined ? <small>{phoneActiveOverflowSection.count}</small> : null}
             </Button>
             <Popover className="workorder-section-more-popover" placement="top end">
-              <Menu className="workorder-section-more-menu" aria-label="More workorder sections">
+              <Menu className="workorder-section-more-menu" aria-label={t("detail.moreWorkorderSections")}>
                 {phoneLayout.overflowSections.map((section) => {
                   const Icon = sectionIcon(section.id);
                   return (

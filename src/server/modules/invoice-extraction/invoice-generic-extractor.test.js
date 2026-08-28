@@ -74,3 +74,22 @@ test("generic local extractor keeps same-row totals and ignores website vendor c
   assert.equal(draft.shipping.value, 0);
   assert.equal(draft.total.value, 409.4);
 });
+
+test("generic local extractor rejects bare invoice and date headings and accepts punctuated PO labels", () => {
+  const observation = {
+    width: 1,
+    height: 1,
+    regions: [
+      region("INVOICE", 0.55, 0.05, 0.12, 0.02),
+      region("date", 0.7, 0.05, 0.08, 0.02),
+      region("DATE", 0.55, 0.09, 0.08, 0.02),
+      region("POS", 0.7, 0.09, 0.08, 0.02),
+      region("PURCHASE ORDER NO.", 0.12, 0.18, 0.2, 0.02),
+      region("GN943202", 0.35, 0.18, 0.12, 0.02),
+    ],
+  };
+  const draft = extractGenericInvoiceDraft({ observation, ocrText: "INVOICE DATE POS" });
+  assert.equal(draft.invoiceNumber.value, "");
+  assert.equal(draft.invoiceDate.value, "");
+  assert.equal(draft.purchaseOrderNumber.value, "GN943202");
+});

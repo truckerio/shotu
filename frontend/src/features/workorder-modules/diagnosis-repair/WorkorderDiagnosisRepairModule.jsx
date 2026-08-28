@@ -12,6 +12,7 @@ export function WorkorderDiagnosisRepairModule({
   activeSection,
   allowedActions = {},
   diagnosis,
+  locale = "en",
   localeText = (value) => value,
   mechanicProgress,
   onChange,
@@ -26,8 +27,8 @@ export function WorkorderDiagnosisRepairModule({
   return (
     <ProgressiveWorkorderSection
       id="diagnosisRepair"
-      title="Diagnosis and repair"
-      summary={workPerformed ? "Repair details added" : "Inspection findings and completed repair"}
+      title={localeText("detail.diagnosisRepair")}
+      summary={workPerformed ? localeText("detail.repairDetailsAdded") : localeText("detail.inspectionAndRepair")}
       activeSection={activeSection}
       onSelect={onSelect}
       className="mechanic-work-section"
@@ -35,25 +36,25 @@ export function WorkorderDiagnosisRepairModule({
     >
       {canWrite ? (
         <div className="operational-form detail-workflow-fields">
-          <FormField id="mechanic-diagnosis" label={localeText("detail.diagnosis")} hint="What did you inspect or find?">
-            <NarrativeField rows="3" value={diagnosis || ""} onChange={(event) => onChange?.("diagnosis", event.target.value)} />
+          <FormField id="mechanic-diagnosis" label={localeText("detail.diagnosis")} hint={localeText("detail.diagnosisHint")}>
+            <NarrativeField locale={locale} rows="3" value={diagnosis || ""} onChange={(event) => onChange?.("diagnosis", event.target.value)} />
           </FormField>
           <FormField
             id="mechanic-work-performed"
             label={localeText("detail.repairCompleted")}
-            hint="Write what was repaired, replaced, adjusted, or checked."
+            hint={localeText("detail.repairHint")}
             required={repairRequired}
-            error={repairRequired ? "Required — add repair details here or in a part repair order." : ""}
+            error={repairRequired ? localeText("detail.repairRequired") : ""}
             className={repairRequired ? "is-completion-required" : ""}
           >
-            <NarrativeField id="mechanic-work-performed" rows="4" value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
+            <NarrativeField locale={locale} id="mechanic-work-performed" rows="4" value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
           </FormField>
-          {mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} /> : null}
+          {mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} localeText={localeText} /> : null}
         </div>
       ) : (
         <dl className="workorder-readonly-details">
-          <div><dt>Diagnosis</dt><dd>{diagnosis || "Not recorded"}</dd></div>
-          <div><dt>Work performed</dt><dd>{workPerformed || "Not recorded"}</dd></div>
+          <div><dt>{localeText("detail.diagnosis")}</dt><dd>{diagnosis || localeText("detail.notRecorded")}</dd></div>
+          <div><dt>{localeText("detail.workPerformed")}</dt><dd>{workPerformed || localeText("detail.notRecorded")}</dd></div>
         </dl>
       )}
     </ProgressiveWorkorderSection>

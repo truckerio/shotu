@@ -52,11 +52,12 @@ export function formatQuantityUnit(quantity, uomCode = DEFAULT_UOM_CODE) {
   return formatQuantity(value, code) || `${String(value)} ${definition.symbol}`;
 }
 
-export function unitOptionGroups(query = "") {
+export function unitOptionGroups(query = "", labelFor = (_kind, _value, fallback) => fallback) {
   const normalizedQuery = String(query || "").trim().toLowerCase();
   const matches = (definition) => !normalizedQuery
     || definition.code.includes(normalizedQuery)
     || definition.label.toLowerCase().includes(normalizedQuery)
+    || labelFor("unit", definition.code, definition.label).toLowerCase().includes(normalizedQuery)
     || definition.symbol.toLowerCase().includes(normalizedQuery);
   const commonCodes = new Set(COMMON_UOM_CODES);
   const common = COMMON_UOM_CODES
@@ -65,7 +66,7 @@ export function unitOptionGroups(query = "") {
   const categories = Object.entries(UOM_CATEGORIES)
     .map(([category, config]) => ({
       category,
-      label: config.label,
+      label: labelFor("category", category, config.label),
       units: UNITS_OF_MEASURE.filter((definition) => (
         definition.category === category
         && !commonCodes.has(definition.code)
@@ -75,7 +76,7 @@ export function unitOptionGroups(query = "") {
     .filter((group) => group.units.length);
 
   return [
-    ...(common.length ? [{ category: "common", label: "Common", units: common }] : []),
+    ...(common.length ? [{ category: "common", label: labelFor("category", "common", "Common"), units: common }] : []),
     ...categories,
   ];
 }

@@ -37,7 +37,7 @@ test("existing mechanic completion flow uses Work done language", () => {
   assert.match(detailPage, /is-validation-warning/);
   assert.match(detailPage, /role=\{validation \? "alert" : "status"\}/);
   assert.match(diagnosisRepairModule, /is-completion-required/);
-  assert.match(diagnosisRepairModule, /Required — add repair details here or in a part repair order/);
+  assert.match(diagnosisRepairModule, /localeText\("detail\.repairRequired"\)/);
   assert.match(detailToolbarCss, /\.mechanic-action-message\.is-validation-warning[\s\S]*#b42318/);
   assert.match(detailCss, /@keyframes mechanic-required-field-blink/);
   assert.match(detailCss, /\.operational-form-field\.is-completion-required/);
@@ -92,7 +92,7 @@ test("Work done visibility follows the server-authorized action for mechanic and
 });
 
 test("shared detail shows canonical read-only timing and separates authorization", () => {
-  assert.match(handoffFacts, /aria-label="Workorder timing"/);
+  assert.match(handoffFacts, /aria-label=\{locale \? t\("completion\.timing"\) : "Workorder timing"\}/);
   assert.match(completionModule, /Customer authorization/);
   assert.doesNotMatch(`${concernModule}\n${assignmentModule}\n${completionModule}\n${activityModule}`, /<input type="time"/);
   assert.match(lifecycleEffects, /canonicalPreviewTimes\(workorder\)/);

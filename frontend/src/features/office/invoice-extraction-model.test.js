@@ -5,8 +5,10 @@ import {
   confidenceState,
   invoiceFieldNeedsReview,
   invoiceReviewErrorMessage,
+  nextReviewableBatchIndex,
   parseReviewNumber,
   removeInvoiceLine,
+  shouldConfirmInvoiceReviewLeave,
   updateInvoiceField,
   updateInvoiceLineField,
   validateInvoiceSelection,
@@ -51,6 +53,12 @@ test("review validation exposes the actionable server issue", () => {
   assert.equal(invoiceReviewErrorMessage(new Error("Network unavailable")), "Network unavailable");
 });
 
+test("invoice review asks before discarding only unsaved editable changes", () => {
+  assert.equal(shouldConfirmInvoiceReviewLeave({ dirty: true, status: "needs_review" }), true);
+  assert.equal(shouldConfirmInvoiceReviewLeave({ dirty: false, status: "needs_review" }), false);
+  assert.equal(shouldConfirmInvoiceReviewLeave({ dirty: true, status: "reviewed" }), false);
+});
+
 test("invoice selection validates every file and caps a batch at ten", () => {
   const acceptedTypes = new Set(["image/png", "application/pdf"]);
   const valid = { name: "invoice.pdf", type: "application/pdf", size: 100 };
@@ -59,4 +67,18 @@ test("invoice selection validates every file and caps a batch at ten", () => {
   assert.match(validateInvoiceSelection([{ ...valid, name: "invoice.txt", type: "text/plain" }], { acceptedTypes, maxBytes: 1_000 }).error, /not a PNG/i);
   assert.match(validateInvoiceSelection([{ ...valid, size: 0 }], { acceptedTypes, maxBytes: 1_000 }).error, /empty/i);
   assert.match(validateInvoiceSelection([{ ...valid, size: 1_001 }], { acceptedTypes, maxBytes: 1_000 }).error, /smaller than 10 MB/i);
+});
+
+test("batch review advances to the next ready unreviewed invoice and wraps around", () => {
+  const entries = [
+    { run: { status: "reviewed", draft: {} } },
+    { run: { status: "processing", draft: null } },
+    { run: { status: "needs_review", draft: {} } },
+    { run: { status: "completed", draft: {} }, error: "stale failure" },
+    { run: { status: "completed", draft: {} } },
+  ];
+  assert.equal(nextReviewableBatchIndex(entries, 0), 2);
+  assert.equal(nextReviewableBatchIndex(entries, 2), 4);
+  assert.equal(nextReviewableBatchIndex(entries, 4), 2);
+  assert.equal(nextReviewableBatchIndex(entries.map((entry) => ({ ...entry, run: { ...entry.run, status: "reviewed" } })), 0), -1);
 });

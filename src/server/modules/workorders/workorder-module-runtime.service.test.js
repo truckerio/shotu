@@ -4,6 +4,7 @@ import {
   createWorkorderRuntime,
   patchWorkorderModule,
   patchWorkorderModules,
+  protectedWorkorderDetail,
   protectedWorkorderModule,
   readWorkorderUnitHistory,
   runWorkorderModuleAction,
@@ -19,6 +20,59 @@ test("protected module read never loads data before authorization", async () => 
     loadDetail: async () => { calls.push("load"); },
   }), /denied/);
   assert.deepEqual(calls, ["authorize"]);
+});
+
+test("generic mechanic and kiosk detail reads apply the restricted parts projection", async () => {
+  for (const role of ["mechanic", "kiosk"]) {
+    const result = await protectedWorkorderDetail({
+      actor: { id: `${role}-1`, role },
+    }, "wo-1", {
+      resolveModules: async () => ({ decisions: { parts: { access: "write", source: "default" } } }),
+      loadDetail: async () => ({
+        workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} },
+        partRequests: [{
+          id: "request-1",
+          partNumber: "LF9009",
+          rawContext: { private: true },
+          allocations: [{ vendor: "Private Vendor", sourceType: "purchase" }],
+          inventory: [
+            { locationId: "location-1", quantityAvailable: 2, quantityOnHand: 4, quantityReserved: 2 },
+            { locationId: "location-2", locationName: "Remote Yard", quantityAvailable: 10 },
+          ],
+        }],
+      }),
+    });
+
+    assert.equal(result.partRequests[0].partNumber, "LF9009");
+    assert.deepEqual(result.partRequests[0].inventory, [{ locationId: "location-1", quantityAvailable: 2 }]);
+    assert.deepEqual(result.partRequests[0].allocations, []);
+    assert.equal("rawContext" in result.partRequests[0], false);
+  }
+});
+
+test("generic mechanic and kiosk Parts module reads cannot bypass response redaction", async () => {
+  for (const role of ["mechanic", "kiosk"]) {
+    const result = await protectedWorkorderModule({
+      actor: { id: `${role}-1`, role },
+    }, "wo-1", "parts", {
+      authorize: async () => ({ access: "write", source: "default" }),
+      loadDetail: async () => ({
+        workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} },
+        partRequests: [{
+          id: "request-1",
+          partNumber: "LF9009",
+          sourceAttachmentId: "attachment-1",
+          allocations: [{ quoteUrl: "https://vendor.example/quote" }],
+          inventory: [{ locationId: "location-2", locationName: "Remote Yard", quantityAvailable: 10 }],
+        }],
+      }),
+    });
+
+    assert.equal(result.partRequests[0].partNumber, "LF9009");
+    assert.deepEqual(result.partRequests[0].inventory, []);
+    assert.deepEqual(result.partRequests[0].allocations, []);
+    assert.equal("sourceAttachmentId" in result.partRequests[0], false);
+  }
 });
 
 test("Unit history runtime forwards query input through the dedicated reader", async () => {

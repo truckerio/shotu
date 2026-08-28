@@ -3,6 +3,7 @@ import { Pin01 } from "@untitledui/icons";
 import { buildSatelliteTileLayer, MAX_SATELLITE_ZOOM } from "../../lib/maps/satellite-tiles.js";
 import { createMapVisibilityController } from "../../lib/maps/map-visibility-controller.js";
 import { MAP_SURFACE_TRANSITION_MS } from "../../lib/ui-timings.js";
+import { interfaceText, intlLocale } from "../../i18n/index.js";
 import "./asset-location-card.css";
 
 const DESKTOP_MAP_QUERY = "(min-width: 701px)";
@@ -40,8 +41,10 @@ export function AssetLocationCard({
   vehicle,
   location = getVehicleLocation(vehicle),
   mapsConfig,
+  locale = "en",
   showVehicleLabel = true,
 }) {
+  const t = (key) => interfaceText(locale, key);
   const cardRef = useRef(null);
   const mapControllerRef = useRef(null);
   const mapPanelId = useId();
@@ -59,7 +62,7 @@ export function AssetLocationCard({
       onUnmount: () => setMapContentMounted(false),
     });
   }
-  const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || "Vehicle";
+  const unitLabel = vehicle?.unitNo || vehicle?.unit_no || vehicle?.name || t("location.vehicle");
   const mapVisible = Boolean(location) && (desktopMapOpen || mapOpen || mapPinned);
   const mapContentVisible = desktopMapOpen || mapContentMounted;
   const tileLayer = mapContentVisible && location
@@ -69,7 +72,7 @@ export function AssetLocationCard({
     <>
       {showVehicleLabel ? <strong>{unitLabel}</strong> : null}
       <span className="asset-location-address">
-        {location ? (location.address || `${location.latitude}, ${location.longitude}`) : "Location not available yet"}
+        {location ? (location.address || `${location.latitude}, ${location.longitude}`) : t("location.unavailable")}
       </span>
     </>
   );
@@ -159,11 +162,11 @@ export function AssetLocationCard({
             <button
               className="map-hover-trigger map-pin-button icon-tooltip"
               type="button"
-              aria-label={mapPinned ? "Unpin satellite map" : "Pin satellite map open"}
+              aria-label={t(mapPinned ? "location.unpinSatellite" : "location.pinSatellite")}
               aria-controls={mapPanelId}
               aria-expanded={mapVisible}
               aria-pressed={mapPinned}
-              data-tooltip={mapPinned ? "Unpin map" : "Pin map open"}
+              data-tooltip={t(mapPinned ? "location.unpinMap" : "location.pinMap")}
               onClick={() => {
                 mapControllerRef.current.open({ immediate: true });
                 setMapPinned((pinned) => !pinned);
@@ -179,7 +182,7 @@ export function AssetLocationCard({
           className="asset-map-hover"
           id={mapPanelId}
           role="group"
-          aria-label="Satellite asset location"
+          aria-label={t("location.satelliteAsset")}
           aria-hidden={!mapVisible}
           onClick={(event) => {
             if (desktopMapOpen || mapPinned || event.target.closest?.("a, button")) return;
@@ -208,11 +211,11 @@ export function AssetLocationCard({
                   ))}
                 </div>
                 <span className="asset-map-pin" aria-hidden="true" />
-                <div className="asset-map-zoom-controls" role="group" aria-label="Map zoom controls">
+                <div className="asset-map-zoom-controls" role="group" aria-label={t("location.zoomControls")}>
                   <button
                     type="button"
-                    aria-label="Zoom in"
-                    title="Zoom in"
+                    aria-label={t("location.zoomIn")}
+                    title={t("location.zoomIn")}
                     disabled={mapZoom >= MAX_ASSET_LOCATION_ZOOM}
                     onClick={() => setMapZoom((current) => Math.min(MAX_ASSET_LOCATION_ZOOM, current + 1))}
                   >
@@ -220,8 +223,8 @@ export function AssetLocationCard({
                   </button>
                   <button
                     type="button"
-                    aria-label="Zoom out"
-                    title="Zoom out"
+                    aria-label={t("location.zoomOut")}
+                    title={t("location.zoomOut")}
                     disabled={mapZoom <= MIN_ASSET_LOCATION_ZOOM}
                     onClick={() => setMapZoom((current) => Math.max(MIN_ASSET_LOCATION_ZOOM, current - 1))}
                   >
@@ -231,7 +234,7 @@ export function AssetLocationCard({
               </div>
               <div className="asset-map-meta">
                 <div className="asset-map-meta-copy">
-                  <span>{location.time ? new Date(location.time).toLocaleString() : "Live GPS"}</span>
+                  <span>{location.time ? new Date(location.time).toLocaleString(intlLocale(locale)) : t("location.liveGps")}</span>
                   <small>{tileLayer.attribution}</small>
                 </div>
               </div>

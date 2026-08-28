@@ -1,4 +1,5 @@
 export const ADMIN_MOBILE_DESTINATIONS = [
+  { key: "inventory", label: "Inventory", view: "inventory" },
   { key: "locations", label: "Locations", view: "locations" },
   { key: "modules", label: "Modules", view: "modules" },
   { key: "settings", label: "System", view: "settings" },
@@ -7,9 +8,16 @@ export const ADMIN_MOBILE_DESTINATIONS = [
 
 export function canonicalAdminSearch(search = "") {
   const params = new URLSearchParams(search);
-  if (params.get("adminView") !== "surveillance") return search;
-  params.set("adminView", "operations");
-  params.set("category", "odoo_backlog");
+  const view = params.get("adminView");
+  if (view === "surveillance") {
+    params.set("adminView", "operations");
+    params.set("category", "odoo_backlog");
+  } else if (view === "invoices") {
+    params.set("adminView", "inventory");
+    params.set("view", "inventory");
+  } else {
+    return search;
+  }
   return `?${params.toString()}`;
 }
 
@@ -17,7 +25,8 @@ export function initialAdminView(search = "") {
   const params = new URLSearchParams(search);
   if (params.has("samsara") || params.get("adminView") === "settings") return "settings";
   if (params.get("adminView") === "modules") return "modules";
-  if (params.get("adminView") === "invoices") return "invoices";
+  if (params.get("adminView") === "invoices") return "inventory";
+  if (params.get("adminView") === "inventory") return "inventory";
   if (params.get("adminView") === "surveillance") return "operations";
   if (params.get("adminView") === "operations") return "operations";
   return "locations";

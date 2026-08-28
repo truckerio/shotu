@@ -6,8 +6,9 @@ const dialogSource = readFileSync(new URL("./ChangePasswordDialog.jsx", import.m
 const profileSource = readFileSync(new URL("./ProfileMenu.jsx", import.meta.url), "utf8");
 
 test("profile menu exposes shared self-service password management", () => {
-  assert.match(profileSource, /textValue="Change password"/);
+  assert.match(profileSource, /account\.changePassword/);
   assert.match(profileSource, /<ChangePasswordDialog/);
+  assert.match(profileSource, /locale=\{locale\}/);
 });
 
 test("password change verifies the current password and revokes other sessions", () => {

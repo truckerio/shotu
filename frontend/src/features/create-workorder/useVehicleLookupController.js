@@ -14,6 +14,11 @@ import {
   vehicleModelText,
   vehiclesForCompany,
 } from "./vehicle-lookup-model.js";
+import {
+  activeWorkorderUnavailableMessage,
+  vehicleCanBeSelected,
+  vehicleHasActiveWorkorder,
+} from "./vehicle-availability-model.js";
 import { selectedVehicleFromWorkorderDraft } from "../generator/workorder-draft.js";
 
 const EMPTY_LOOKUP = Object.freeze({ loading: false, status: "", results: [] });
@@ -79,6 +84,14 @@ export function useVehicleLookupController({
       });
       return false;
     }
+    if (!vehicleCanBeSelected(vehicle, activeWorkorderId)) {
+      setVehicleLookup({
+        loading: false,
+        status: activeWorkorderUnavailableMessage(vehicle),
+        results: [vehicle],
+      });
+      return false;
+    }
     const currentForm = formRef.current;
     const modelText = vehicleModelText(vehicle);
     clearCreateErrors("unitNo", ...(vehicle.owner_name ? ["customerCompanyName"] : []));
@@ -101,7 +114,7 @@ export function useVehicleLookupController({
     setSelectedVehicle(vehicle);
     refreshVehicleLocation(vehicle);
     return true;
-  }, [clearCreateErrors, refreshVehicleLocation, setForm, stageAutosave]);
+  }, [activeWorkorderId, clearCreateErrors, refreshVehicleLocation, setForm, stageAutosave]);
   applyVehicleRef.current = applyVehicle;
 
   useEffect(() => {
@@ -123,13 +136,15 @@ export function useVehicleLookupController({
           if (cancelled) return;
           const vehicles = vehiclesForCompany(result.vehicles || [], companyIdRef.current);
           const exactMatch = uniqueExactVehicleMatch(vehicles, query);
-          if (exactMatch) {
+          if (exactMatch && vehicleCanBeSelected(exactMatch, activeWorkorderId)) {
             applyVehicleRef.current(exactMatch);
             return;
           }
           setVehicleLookup({
             loading: false,
-            status: vehicles.length ? "Samsara vehicle data found." : "No vehicle match. Manual entry still works.",
+            status: vehicleHasActiveWorkorder(exactMatch)
+              ? activeWorkorderUnavailableMessage(exactMatch)
+              : vehicles.length ? "Samsara vehicle data found." : "No vehicle match. Manual entry still works.",
             results: vehicles,
           });
         })
@@ -141,7 +156,7 @@ export function useVehicleLookupController({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [form.unitNo, selectedVehicle]);
+  }, [activeWorkorderId, form.unitNo, selectedVehicle]);
 
   useEffect(() => {
     if (
@@ -195,12 +210,17 @@ export function useVehicleLookupController({
         });
         return;
       }
+      if (!vehicleCanBeSelected(result.vehicle, activeWorkorderId)) {
+        setSelectedVehicle(null);
+        setVehicleLookup({ loading: false, status: activeWorkorderUnavailableMessage(result.vehicle), results: [result.vehicle] });
+        return;
+      }
       setSelectedVehicle((current) => current?.id === snapshot.id ? result.vehicle : current);
       refreshVehicleLocation(result.vehicle);
     } catch (error) {
       setVehicleLookup((current) => ({ ...current, status: error.message }));
     }
-  }, [refreshVehicleLocation]);
+  }, [activeWorkorderId, refreshVehicleLocation]);
 
   const resetVehicleLookup = useCallback(() => {
     setSelectedVehicle(null);

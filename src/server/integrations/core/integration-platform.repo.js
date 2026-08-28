@@ -37,7 +37,11 @@ export async function enqueueIntegrationJob({
   return result.rows[0];
 }
 
-export async function claimNextIntegrationJob(workerId, { leaseMinutes = 5 } = {}) {
+export async function claimNextIntegrationJob(workerId, {
+  leaseMinutes = 5,
+  includeProviders = [],
+  excludeProviders = [],
+} = {}) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
@@ -46,10 +50,11 @@ export async function claimNextIntegrationJob(workerId, { leaseMinutes = 5 } = {
          select id
          from integration_jobs
          where (
-           status in ('queued', 'retry') and available_at <= now()
-         ) or (
-           status = 'running' and heartbeat_at < now() - ($2::text || ' minutes')::interval
+           (status in ('queued', 'retry') and available_at <= now())
+           or (status = 'running' and heartbeat_at < now() - ($2::text || ' minutes')::interval)
          )
+         and (cardinality($3::text[]) = 0 or provider = any($3::text[]))
+         and not (provider = any($4::text[]))
          order by available_at, created_at
          for update skip locked
          limit 1
@@ -64,7 +69,7 @@ export async function claimNextIntegrationJob(workerId, { leaseMinutes = 5 } = {
        from candidate
        where job.id = candidate.id
        returning job.*`,
-      [workerId, leaseMinutes],
+      [workerId, leaseMinutes, includeProviders, excludeProviders],
     );
     const job = result.rows[0] || null;
     if (job) {
@@ -117,7 +122,7 @@ export async function completeIntegrationJob(jobId, attempt) {
 }
 
 export async function failIntegrationJob(job, error, { retryDelaySeconds }) {
-  const terminal = Number(job.attempts) >= Number(job.max_attempts);
+  const terminal = error?.terminal === true || Number(job.attempts) >= Number(job.max_attempts);
   const client = await getPool().connect();
   try {
     await client.query("begin");

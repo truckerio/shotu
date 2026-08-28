@@ -39,7 +39,7 @@ test("Manager queue controls clear incompatible Unassigned filters", () => {
 test("every role exposes a recovery action when a narrowing filter hides its queue", () => {
   assert.match(workspace, /onClearFilters=\{clearOfficeFilters\}/);
   assert.match(workspace, /Current filters hide this queue/);
-  assert.match(mechanicWorkspace, /No matching jobs[\s\S]*Clear search/);
+  assert.match(mechanicWorkspace, /t\("mechanic\.noMatching"\)[\s\S]*t\("mechanic\.clearSearch"\)/);
   assert.match(surveillanceQueueView, /onClearFilters=\{clearFilters\}/);
   assert.match(surveillanceQueueView, /Current filters hide this queue/);
 });

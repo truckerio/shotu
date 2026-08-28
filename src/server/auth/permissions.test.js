@@ -16,6 +16,8 @@ test("role permission matrix keeps domain capabilities separate", () => {
   assert.equal(roleHasPermission("office", PERMISSION.PART_PRICE), true);
   assert.equal(roleHasPermission("surveillance", PERMISSION.WORKORDER_SURVEILLANCE), true);
   assert.equal(roleHasPermission("admin", PERMISSION.INTEGRATION_ADMIN), true);
+  assert.equal(roleHasPermission("admin", PERMISSION.INVENTORY_COUNT_APPLY), true);
+  assert.equal(roleHasPermission("office", PERMISSION.INVENTORY_COUNT_APPLY), false);
 });
 
 test("authorization rejects anonymous and wrong-role contexts", () => {

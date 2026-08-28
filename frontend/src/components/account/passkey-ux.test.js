@@ -28,13 +28,14 @@ test("profile menu exposes complete passkey management", async () => {
     readFile(profileUrl, "utf8"),
     readFile(accountUrl, "utf8"),
   ]);
-  assert.match(profile, /Manage passkeys/);
+  assert.match(profile, /account\.managePasskeys/);
   assert.match(profile, /<PasskeyManager/);
   assert.match(account, /passkey\.addPasskey/);
   assert.match(account, /passkey\.listUserPasskeys/);
   assert.match(account, /passkey\.updatePasskey/);
   assert.match(account, /passkey\.deletePasskey/);
-  assert.match(account, /Remove this passkey\?/);
+  assert.match(account, /account\.removePasskeyQuestion/);
+  assert.match(account, /intlLocale\(locale\)/);
   assert.match(account, /role=\{status\.kind === "error" \? "alert" : "status"\}/);
 });
 

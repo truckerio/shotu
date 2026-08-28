@@ -1,12 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
+import { formatLocaleNumber, interfaceText } from "../../../i18n/index.js";
 import { textEntryProps } from "../../forms/text-entry-policy.js";
 import {
   catalogInventoryText,
   catalogPartDetails,
   normalizeCatalogResponse,
 } from "./catalog-parts-model.js";
-import { catalogPopupWidth } from "./part-catalog-popup-model.js";
+import { catalogPopupWidth, catalogSearchPlan } from "./part-catalog-popup-model.js";
 import "./part-catalog-combobox.css";
 
 const MIN_QUERY_LENGTH = 2;
@@ -25,7 +26,13 @@ export function PartCatalogCombobox({
   inputAriaLabel,
   inputPolicy = "search",
   allowAiFallback = false,
+  catalogEndpoint = "/api/parts-helper/catalog",
+  resultLimit = 8,
+  popupAriaLabel = "Company parts",
+  suggestionQuery = "",
+  locale = "en",
 }) {
+  const t = (key) => interfaceText(locale, key);
   const reactId = useId();
   const inputId = `part-catalog-input-${reactId}`;
   const listboxId = `part-catalog-list-${reactId}`;
@@ -41,6 +48,11 @@ export function PartCatalogCombobox({
   const [popupWidth, setPopupWidth] = useState(null);
   const query = String(value || "");
   const normalizedQuery = query.trim();
+  const { query: lookupQuery, limit: boundedResultLimit } = catalogSearchPlan({
+    value: normalizedQuery,
+    suggestionQuery,
+    resultLimit,
+  });
 
   useEffect(() => {
     function closeFromOutside(event) {
@@ -71,7 +83,7 @@ export function PartCatalogCombobox({
     const controller = new AbortController();
     setActiveIndex(-1);
 
-    if (!interacting || disabled || (!workorderId && !locationId) || normalizedQuery.length < MIN_QUERY_LENGTH
+    if (!interacting || disabled || (!workorderId && !locationId) || lookupQuery.length < MIN_QUERY_LENGTH
       || selectedQueryRef.current === normalizedQuery) {
       setItems([]);
       setState("idle");
@@ -85,10 +97,10 @@ export function PartCatalogCombobox({
       try {
         const params = new URLSearchParams({
           ...(workorderId ? { workorderId } : { locationId }),
-          q: normalizedQuery,
-          limit: "8",
+          q: lookupQuery,
+          limit: String(boundedResultLimit),
         });
-        const payload = await api(`/api/parts-helper/catalog?${params}`, { signal: controller.signal });
+        const payload = await api(`${catalogEndpoint}?${params}`, { signal: controller.signal });
         if (controller.signal.aborted || sequence !== requestSequence.current) return;
         const result = normalizeCatalogResponse(payload);
         setItems(result.items);
@@ -106,7 +118,7 @@ export function PartCatalogCombobox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [disabled, interacting, locationId, normalizedQuery, workorderId]);
+  }, [boundedResultLimit, catalogEndpoint, disabled, interacting, locationId, lookupQuery, normalizedQuery, workorderId]);
 
   function select(part) {
     selectedQueryRef.current = part.partNumber.trim();
@@ -133,6 +145,7 @@ export function PartCatalogCombobox({
       return;
     }
     if (state !== "results" || !items.length || !["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
+    event.stopPropagation();
     if (event.key === "Enter") {
       if (open && activeIndex >= 0) {
         event.preventDefault();
@@ -148,7 +161,7 @@ export function PartCatalogCombobox({
     });
   }
 
-  const showPopup = open && normalizedQuery.length >= MIN_QUERY_LENGTH
+  const showPopup = open && lookupQuery.length >= MIN_QUERY_LENGTH
     && ["waiting", "loading", "results", "no-match", "empty", "error"].includes(state);
   const activeOptionId = activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined;
 
@@ -216,7 +229,7 @@ export function PartCatalogCombobox({
           className="part-catalog-popup"
           id={listboxId}
           role="listbox"
-          aria-label="Company parts"
+          aria-label={locale === "en" ? popupAriaLabel : t("parts.companyParts")}
           style={popupWidth ? { "--part-catalog-popup-width": `${popupWidth}px` } : undefined}
         >
           {state === "results" ? (
@@ -234,24 +247,24 @@ export function PartCatalogCombobox({
                 >
                   <span className="part-catalog-option-heading">
                     <strong>{part.partNumber}</strong>
-                    <small>{part.source === "odoo" ? "Odoo" : "Company"}</small>
+                    <small>{part.source === "odoo" ? "Odoo" : t("parts.company")}</small>
                   </span>
-                  <span>{catalogPartDetails(part)}</span>
-                  <small>{catalogInventoryText(part)}</small>
+                  <span>{catalogPartDetails(part, t)}</span>
+                  <small>{catalogInventoryText(part, t, (value) => formatLocaleNumber(value, locale))}</small>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="part-catalog-state" role="status">
+            <p className="part-catalog-state" role="status" aria-live="polite">
               {state === "waiting" || state === "loading"
-                ? "Searching company parts…"
+                ? t("parts.searchingCompanyParts")
                 : state === "empty"
-                  ? "No company parts imported. Ask an administrator to sync Odoo parts."
+                  ? t("parts.noCompanyParts")
                   : state === "error"
-                    ? "Parts lookup unavailable. Manual entry still works."
+                    ? t("parts.lookupUnavailable")
                     : allowAiFallback
-                      ? "No catalog match. Continue manually or use Find."
-                      : "No catalog match. Continue manually."}
+                      ? t("parts.noCatalogMatchFind")
+                      : t("parts.noCatalogMatch")}
             </p>
           )}
         </div>

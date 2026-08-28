@@ -1,5 +1,6 @@
 export { ActionFooter } from "./ActionFooter.jsx";
 export { CustomerCompanyField } from "./CustomerCompanyField.jsx";
+export { Dropdown } from "./Dropdown.jsx";
 export { FormCard } from "./FormCard.jsx";
 export { FormErrorSummary } from "./FormErrorSummary.jsx";
 export { FormField } from "./FormField.jsx";

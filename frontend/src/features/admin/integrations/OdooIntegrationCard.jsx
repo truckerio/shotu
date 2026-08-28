@@ -1,3 +1,4 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, ChevronDown, RefreshCw01, Settings01 } from "@untitledui/icons";
 import { Button } from "../../../components/ui/Button.jsx";
@@ -360,10 +361,10 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
             </summary>
             <div className="odoo-settings-section__body">
               <div className={`odoo-labor-row ${outbound.labor?.status === "ready" ? "" : "needs-review"}`}>
-                <select aria-label="Odoo labor product" value={laborProductDraft} disabled={busy === "labor-product"} onChange={(event) => setLaborProductDraft(event.target.value)}>
+                <Dropdown aria-label="Odoo labor product" value={laborProductDraft} disabled={busy === "labor-product"} onChange={(event) => setLaborProductDraft(event.target.value)}>
                   <option value="">Not selected</option>
                   {(outbound.labor?.products || outbound.laborProducts || []).map((product) => <option key={product.externalId} value={product.externalId}>{product.code ? `[${product.code}] ` : ""}{product.name} · {product.uomName || "Unknown UoM"}</option>)}
-                </select>
+                </Dropdown>
                 <Button onClick={confirmLaborProduct} disabled={!laborProductDraft || busy === "labor-product"}>Confirm labor product</Button>
               </div>
               {outbound.labor?.status === "uom_warning" ? <p className="odoo-outbound-warning" role="alert"><AlertCircle /> <span>{outbound.labor.warning || `The selected labor product uses ${outbound.labor.uomName || "an unknown unit"}, not a verified time UoM. Outbound entry remains disabled.`}</span></p> : null}
@@ -391,11 +392,11 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
               {mappingData.items.map((item) => (
                 <label key={item.externalId} className={item.status === "unmatched" ? "needs-review" : ""}>
                   <span><strong>{item.completeName || item.displayName}</strong><small>Odoo ID {item.externalId}</small></span>
-                  <select aria-label={`App location for ${item.completeName || item.displayName}`} value={mappingValue(item)} disabled={busy === `mapping-${item.externalId}`} onChange={(event) => changeMapping(item, event.target.value)}>
+                  <Dropdown aria-label={`App location for ${item.completeName || item.displayName}`} value={mappingValue(item)} disabled={busy === `mapping-${item.externalId}`} onChange={(event) => changeMapping(item, event.target.value)}>
                     <option value="">Unmatched</option>
                     {mappingData.appLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                     <option value="__ignored">Ignore this location</option>
-                  </select>
+                  </Dropdown>
                 </label>
               ))}
             </div>

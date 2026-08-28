@@ -1,0 +1,104 @@
+.operational-data-table-frame {
+  overflow-x: auto;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.operational-data-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: #344054;
+  font-size: 13px;
+}
+
+.operational-data-table [role="columnheader"] {
+  padding: 9px 10px;
+  color: #667085;
+  background: #f9fafb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.operational-data-table [role="row"]:not(:first-child) {
+  border-top: 1px solid #eaecf0;
+}
+
+.operational-data-table :is([role="gridcell"], [role="rowheader"]) {
+  padding: 10px;
+  vertical-align: top;
+}
+
+.operational-data-cell-content {
+  min-width: 0;
+}
+
+.operational-data-table [role="row"]:focus-visible {
+  outline: 3px solid #84caff;
+  outline-offset: -3px;
+}
+
+@media (max-width: 760px) {
+  .operational-data-table-frame {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .operational-data-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .operational-data-table [role="rowgroup"] {
+    display: grid;
+    gap: 8px;
+  }
+
+  .operational-data-table [role="rowgroup"]:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .operational-data-table [role="row"] {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid #e4e7ec;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .operational-data-table [role="row"]:not(:first-child) {
+    border-top: 1px solid #e4e7ec;
+  }
+
+  .operational-data-table :is([role="gridcell"], [role="rowheader"]) {
+    display: grid;
+    grid-template-columns: minmax(84px, .35fr) minmax(0, 1fr);
+    gap: 10px;
+    padding: 9px 10px;
+    border-top: 1px solid #eaecf0;
+  }
+
+  .operational-data-table :is([role="gridcell"], [role="rowheader"]):first-child {
+    border-top: 0;
+  }
+
+  .operational-data-table :is([role="gridcell"], [role="rowheader"])::before {
+    content: attr(data-label);
+    color: #667085;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+  }
+}

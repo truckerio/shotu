@@ -1,3 +1,4 @@
+import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { ChevronDown } from "@untitledui/icons";
 import { Button } from "../../../components/ui/Button.jsx";
 import "./odoo-progressive-mapping.css";
@@ -154,10 +155,10 @@ export function OdooProgressiveMapping({
               return (
                 <div className={`odoo-progressive-mapping__row ${(item.mappingStatus || item.status) === "mapped" ? "" : "needs-review"}`} key={location.id}>
                   <span><strong>{location.name}</strong><small>{[location.type, location.address].filter(Boolean).join(" · ") || "App location"}</small></span>
-                  <select aria-label={`Odoo warehouse for ${location.name}`} disabled={busyKey === `warehouse-${location.id}`} onChange={(event) => onWarehouseDraftChange?.(location.id, event.target.value)} value={currentValue}>
+                  <Dropdown aria-label={`Odoo warehouse for ${location.name}`} disabled={busyKey === `warehouse-${location.id}`} onChange={(event) => onWarehouseDraftChange?.(location.id, event.target.value)} value={currentValue}>
                     <option value="">Not mapped</option>
                     {choices.map((warehouse) => <option disabled={warehouse.assigned && warehouse.externalId !== item.mapping?.externalId} key={warehouse.externalId} value={warehouse.externalId}>{warehouseLabel(warehouse)}</option>)}
-                  </select>
+                  </Dropdown>
                   <Button aria-label={`Confirm Odoo warehouse for ${location.name}`} disabled={busyKey === `warehouse-${location.id}`} onClick={() => onConfirmWarehouse?.(item)}>Confirm</Button>
                 </div>
               );

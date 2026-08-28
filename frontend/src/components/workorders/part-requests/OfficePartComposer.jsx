@@ -1,3 +1,4 @@
+import { Dropdown } from "../../forms/Dropdown.jsx";
 import { useState } from "react";
 import { Plus, SearchMd } from "@untitledui/icons";
 import { api } from "../../../lib/api.js";
@@ -176,17 +177,17 @@ export function OfficePartComposer({ detail, onChanged }) {
           />
         </div>
         <label>Fitment
-          <select value={draft.fitmentStatus} onChange={(event) => update("fitmentStatus", event.target.value)}>
+          <Dropdown value={draft.fitmentStatus} onChange={(event) => update("fitmentStatus", event.target.value)}>
             <option value="unknown">Not verified</option>
             <option value="possible">Possible</option>
             <option value="confirmed">Confirmed</option>
             <option value="conflict">Conflict</option>
-          </select>
+          </Dropdown>
         </label>
         <label>Supply
-          <select value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
+          <Dropdown value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
             {Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </Dropdown>
         </label>
       </div>
       <Button variant="primary" onClick={addPart} disabled={draft.query.trim().length < 2 || Number(draft.quantity) < 1 || Boolean(busy)}>

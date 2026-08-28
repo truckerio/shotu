@@ -31,3 +31,16 @@ test("inventory QR is authenticated-encrypted, tamper-resistant, and decodes fro
   const decoded = jsQR(new Uint8ClampedArray(png.data), png.width, png.height);
   assert.equal(decoded?.data, url);
 });
+
+test("inventory QR derives a restart-stable domain key from the application auth secret", () => {
+  const options = { authSecret: "local-auth-root-secret-that-is-long-enough" };
+  const first = createInventoryQrToken(UNIT_ID, options);
+  const second = createInventoryQrToken(UNIT_ID, options);
+  assert.notEqual(first, second);
+  assert.equal(readInventoryQrToken(first, options), UNIT_ID);
+  assert.equal(readInventoryQrToken(second, options), UNIT_ID);
+  assert.throws(
+    () => createInventoryQrToken(UNIT_ID, { signingKey: "" }),
+    (error) => error.code === "inventory_qr_not_configured",
+  );
+});

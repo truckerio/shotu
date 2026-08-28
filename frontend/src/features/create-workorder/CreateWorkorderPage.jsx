@@ -8,6 +8,7 @@ import { CreateWorkorderForm } from "../generator/CreateWorkorderForm.jsx";
 import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
+import { interfaceText } from "../../i18n/index.js";
 import { CreateWorkorderShell } from "./CreateWorkorderShell.jsx";
 import {
   buildCreateWorkorderSections,
@@ -33,6 +34,7 @@ export function CreateWorkorderPage({
   fullscreenPageIndex,
   fullscreenZoom,
   isPhone,
+  locale = "en",
   lastPhysicalPageIndex,
   lastSerial,
   locationPolicy,
@@ -80,6 +82,7 @@ export function CreateWorkorderPage({
   applyVehicle,
 }) {
   const isMechanicCreate = actor.role === "mechanic";
+  const t = (key) => interfaceText(locale, key);
   const assignmentPolicy = useMemo(() => resolveWorkorderModulePolicy({
     moduleId: WORKORDER_MODULE_IDS.ASSIGNMENT,
     overrides: locationPolicy,
@@ -89,12 +92,12 @@ export function CreateWorkorderPage({
   }), [actor.id, actor.role, locationPolicy]);
   const canAssign = assignmentPolicy.canWrite;
   const backLabel = actor.role === "admin"
-    ? "Back to Operations"
+    ? t("create.backOperations")
     : actor.role === "surveillance"
-      ? "Back to Surveillance"
+      ? t("create.backSurveillance")
       : isMechanicCreate
-        ? "Back to My Work"
-        : "Back to Office";
+        ? t("create.backMyWork")
+        : t("create.backOffice");
   const [activeSection, setActiveSection] = useState("location");
   const mobileScrollRef = useRef(null);
   const viewport = useVisualViewport();
@@ -106,8 +109,11 @@ export function CreateWorkorderPage({
       policyOverrides: locationPolicy,
       role: actor.role,
       userId: actor.id,
-    }),
-    [actor.id, actor.role, canAssign, isPhone, locationPolicy],
+    }).map((section) => ({
+      ...section,
+      label: interfaceText(locale, `create.section.${section.id}`),
+    })),
+    [actor.id, actor.role, canAssign, isPhone, locale, locationPolicy],
   );
   const previewPolicy = useMemo(() => resolveWorkorderModulePolicy({
     moduleId: WORKORDER_MODULE_IDS.PREVIEW,
@@ -133,6 +139,15 @@ export function CreateWorkorderPage({
     activeSection,
     errors: officeCreateErrors,
   });
+  const createStatusMessage = isMechanicCreate && officeCreateState.message
+    ? officeCreateState.busy
+      ? t("create.creatingWorkorder")
+      : officeCreateState.error
+        ? Object.keys(officeCreateErrors).some((key) => officeCreateErrors[key])
+          ? t("create.fixHighlightedFields")
+          : t("create.failed")
+        : t("create.createdAssigned")
+    : officeCreateState.message;
 
   useLayoutEffect(() => {
     if (!isPhone || !officeCreateAttempt) return;
@@ -196,6 +211,7 @@ export function CreateWorkorderPage({
             form={form}
             isPhone={isPhone}
             keyboardOpen={keyboardOpen}
+            locale={locale}
             locations={officeLocations}
             officeCreateState={officeCreateState}
             onBack={openOfficeWorkspace}
@@ -208,13 +224,14 @@ export function CreateWorkorderPage({
           >
             {!createSections.length ? (
               <div className="mechanic-empty-state" role="status">
-                <strong>Create workorder is not available</strong>
-                <span>Your access does not include any writable create modules for this location.</span>
+                <strong>{t("create.unavailable")}</strong>
+                <span>{t("create.noWritableModules")}</span>
               </div>
             ) : null}
             <CreateWorkorderForm
               assignment={assignment}
               busy={officeCreateState.busy}
+              locale={isMechanicCreate ? locale : "en"}
               error={officeCreateState.error}
               errors={officeCreateErrors}
               errorFocusKey={officeCreateAttempt}
@@ -222,7 +239,7 @@ export function CreateWorkorderPage({
               form={form}
               locationLoadState={officeLocationsState}
               locations={officeLocations}
-              message={officeCreateState.message}
+              message={createStatusMessage}
               onAddPart={addPartRow}
               onAssignmentChange={(mechanicUserIds) => setCreateAssignment((current) => ({ ...current, mechanicUserIds }))}
               onFieldChange={updateField}
@@ -249,13 +266,14 @@ export function CreateWorkorderPage({
               range={range}
               printMenuOpen={printMenuOpen}
               onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
+              locale={locale}
               primaryActionLabel={primaryActionLabel}
               onFullscreen={openFullscreenPreview}
             >
               <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-                <WorkorderPreview label="First page" serial={firstSerial} form={previewForm} />
+                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={previewForm} />
                 {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label="Last page" serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
+                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
                   : null}
               </div>
             </CompactWorkorderPreview>
@@ -272,13 +290,14 @@ export function CreateWorkorderPage({
           range={range}
           printMenuOpen={printMenuOpen}
           onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
+          locale={locale}
           primaryActionLabel={primaryActionLabel}
           onFullscreen={openFullscreenPreview}
         >
           <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-            <WorkorderPreview label="First page" serial={firstSerial} form={previewForm} />
+            <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={previewForm} />
             {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-              ? <WorkorderPreview label="Last page" serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
+              ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
               : null}
           </div>
         </PreviewPane> : null}
@@ -296,8 +315,9 @@ export function CreateWorkorderPage({
         onClose={() => setPreviewFullscreen(false)}
         onPageChange={setFullscreenPageIndex}
         onZoomChange={setFullscreenZoom}
+        locale={locale}
       /> : null}
-      {previewPolicy.canRead ? <PrintModal state={printState} range={range} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
+      {previewPolicy.canRead ? <PrintModal state={printState} range={range} locale={locale} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
       {!isMechanicCreate ? (
         <DraftLeaveDialog
           open={draftLeaveOpen}

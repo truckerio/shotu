@@ -15,6 +15,7 @@ export function UsedPartsSection({
   editable,
   readonlyMessage,
   suggestionsEnabled,
+  locale,
   id,
   hidden,
 }) {
@@ -35,6 +36,7 @@ export function UsedPartsSection({
         disabled={!editable}
         readonlyMessage={readonlyMessage}
         suggestionsEnabled={suggestionsEnabled}
+        locale={locale}
       />
     </div>
   );

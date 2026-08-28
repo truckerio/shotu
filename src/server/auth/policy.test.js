@@ -16,7 +16,10 @@ test("route families map to domain permissions", () => {
   assert.equal(permissionForRequest("PATCH", "/api/office/workorders/1"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("GET", "/api/office/invoice-extractions/run-1/source"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("POST", "/api/office/invoice-extractions/run-1/receive"), PERMISSION.WORKORDER_OFFICE);
+  assert.equal(permissionForRequest("POST", "/api/office/invoice-extractions/run-1/post-inventory"), PERMISSION.WORKORDER_OFFICE);
+  assert.equal(permissionForRequest("GET", "/api/office/inventory/stock"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("GET", "/api/office/inventory/receipts/receipt-1/labels"), PERMISSION.WORKORDER_OFFICE);
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/count-imports/import-1/apply"), PERMISSION.INVENTORY_COUNT_APPLY);
   assert.equal(permissionForRequest("POST", "/api/inventory/resolve"), PERMISSION.AUTHENTICATED);
   assert.equal(permissionForRequest("GET", "/api/workorder-drafts"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("POST", "/api/workorder-drafts/1/takeover"), PERMISSION.WORKORDER_OFFICE);

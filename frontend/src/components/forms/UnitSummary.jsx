@@ -1,11 +1,13 @@
+import { Dropdown } from "./Dropdown.jsx";
 import { Edit05 } from "@untitledui/icons";
 import { Button } from "../ui/Button.jsx";
 import { joinClassNames } from "./form-utils.js";
 import { textEntryProps } from "./text-entry-policy.js";
+import { interfaceText } from "../../i18n/index.js";
 import "./operational-form.css";
 
-function displayValue(value) {
-  return value === null || value === undefined || value === "" ? "Not provided" : String(value);
+function displayValue(value, fallback) {
+  return value === null || value === undefined || value === "" ? fallback : String(value);
 }
 
 export function UnitSummary({
@@ -15,19 +17,22 @@ export function UnitSummary({
   onEdit,
   onFieldChange,
   editLabel = "Edit unit details",
+  locale = "en",
 }) {
-  const title = unit.unitNo || unit.name || unit.vin || "Selected unit";
-  const type = unit.unitType || unit.type || "Unit";
+  const t = (key) => interfaceText(locale, key);
+  const title = unit.unitNo || unit.name || unit.vin || t("unit.selected");
+  const typeValue = unit.unitType || unit.type || "Unit";
+  const type = ({ Unit: t("unit.title"), Truck: t("unit.truck"), Trailer: t("unit.trailer"), Other: t("unit.other") })[typeValue] || typeValue;
   const vehicle = unit.vehicle || [unit.year, unit.make, unit.model].filter(Boolean).join(" ");
   const details = [
-    { label: "Type", value: type, field: "unitType", control: "select" },
-    { label: "Vehicle", value: vehicle, field: "model" },
-    { label: "VIN", value: unit.vin, field: "vinNo" },
-    { label: "License", value: unit.license || unit.licensePlate, field: "licenseNo" },
+    { label: t("unit.type"), value: type, field: "unitType", control: "select" },
+    { label: t("unit.vehicle"), value: vehicle, field: "model" },
+    { label: t("unit.vin"), value: unit.vin, field: "vinNo" },
+    { label: t("unit.license"), value: unit.license || unit.licensePlate, field: "licenseNo" },
     {
-      label: "Mileage",
+      label: t("unit.mileage"),
       value: unit.mileage,
-      displayValue: unit.mileage ? `${unit.mileage} mi` : "",
+      displayValue: unit.mileage ? `${unit.mileage} ${t("unit.milesShort")}` : "",
       field: "mileage",
       inputMode: "numeric",
     },
@@ -36,7 +41,7 @@ export function UnitSummary({
   return (
     <section
       className={joinClassNames("operational-unit-summary", editing && "is-editing", className)}
-      aria-label={`${title} summary`}
+      aria-label={`${title} ${t("unit.summaryLabel")}`}
     >
       <div className="operational-unit-summary-header">
         <div>
@@ -53,16 +58,16 @@ export function UnitSummary({
               <dd>
                 {editing && onFieldChange ? (
                   control === "select" ? (
-                    <select
+                    <Dropdown
                       id={`selected-unit-${field}`}
-                      value={value === "Unit" ? "" : value}
+                      value={typeValue === "Unit" ? "" : typeValue}
                       onChange={(event) => onFieldChange(field, event.target.value)}
                     >
-                      <option value="">Select type</option>
-                      <option value="Truck">Truck</option>
-                      <option value="Trailer">Trailer</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      <option value="">{t("unit.selectType")}</option>
+                      <option value="Truck">{t("unit.truck")}</option>
+                      <option value="Trailer">{t("unit.trailer")}</option>
+                      <option value="Other">{t("unit.other")}</option>
+                    </Dropdown>
                   ) : (
                     <input
                       {...textEntryProps("identifier")}
@@ -72,7 +77,7 @@ export function UnitSummary({
                       onChange={(event) => onFieldChange(field, event.target.value)}
                     />
                   )
-                ) : displayValue(formattedValue || value)}
+                ) : displayValue(formattedValue || value, t("unit.notProvided"))}
               </dd>
             </div>
           ))}

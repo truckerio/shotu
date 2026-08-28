@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
+import { interfaceText } from "../../i18n/index.js";
 
 export const INITIAL_PRINT_STATE = Object.freeze({
   open: false,
@@ -78,16 +79,18 @@ export function createWorkorderPrintActions({
   setCreateState,
   setPrintMenuOpen,
   setPrintState,
+  locale = "en",
 }) {
   if (typeof request !== "function") throw new TypeError("request must be a function");
   if (typeof openPrintDialog !== "function") throw new TypeError("openPrintDialog must be a function");
 
+  const t = (key) => interfaceText(locale, key);
   return {
     async printWorkorders() {
       if (!activeWorkorderId) {
         setCreateState?.({
           busy: false,
-          message: "Create the workorder before printing. Drafts do not receive serial numbers.",
+          message: t("preview.createBeforePrint"),
         });
         return false;
       }
@@ -102,7 +105,7 @@ export function createWorkorderPrintActions({
         setPrintState({
           open: true,
           stage: "archiving",
-          message: "Saving an archived PDF copy.",
+          message: t("preview.savingArchive"),
           range,
           pageCount,
         });
@@ -131,19 +134,19 @@ export function createWorkorderPrintActions({
         setPrintState({
           ...commonState,
           stage: "printing",
-          message: "Opening your browser print dialog.",
+          message: t("preview.openingPrintDialog"),
         });
         setPrintState({
           ...commonState,
           stage: "done",
-          message: "Print dialog closed. The archived PDF is ready below.",
+          message: t("preview.printDialogClosed"),
         });
         return true;
       } catch (error) {
         setPrintState({
           open: true,
           stage: "error",
-          message: error instanceof Error ? error.message : "Print failed.",
+          message: locale === "en" && error instanceof Error ? error.message : t("preview.printFailedMessage"),
           pageCount,
         });
         return false;
@@ -164,6 +167,7 @@ export function useWorkorderPrintController({
   scheduleFrame,
   fontsReady,
   printBrowser,
+  locale = "en",
 }) {
   const [printState, setPrintState] = useState(INITIAL_PRINT_STATE);
   const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
@@ -189,6 +193,7 @@ export function useWorkorderPrintController({
     setCreateState,
     setPrintMenuOpen,
     setPrintState,
+    locale,
   }), [
     activeWorkorderId,
     activeWorkorderLocationId,
@@ -198,6 +203,7 @@ export function useWorkorderPrintController({
     previewSerials,
     range,
     request,
+    locale,
     setCreateState,
   ]);
 

@@ -24,8 +24,10 @@ test("proofreading requests cancel, respect IME composition, and check context o
 });
 
 test("spelling and grammar suggestions expose accessible correction actions without correction history", () => {
-  assert.match(narrativeField, /Ignore once/);
-  assert.match(narrativeField, /Add to my dictionary/);
+  assert.match(narrativeField, /narrative\.ignoreOnce/);
+  assert.match(narrativeField, /narrative\.addToDictionary/);
+  assert.match(narrativeField, /locale = "en"/);
+  assert.doesNotMatch(narrativeField, /setStatusMessage\(error\.message\)/);
   assert.match(narrativeField, /aria-live="polite"/);
   assert.doesNotMatch(narrativeField, />Undo</);
   assert.doesNotMatch(narrativeField, /Corrected “/);

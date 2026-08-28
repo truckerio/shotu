@@ -9,10 +9,11 @@ const surveillanceDetail = readFileSync(new URL("../../features/surveillance/wor
 test("shared activity surface has one hierarchy and retains actor, time, status, and mechanic context", () => {
   assert.doesNotMatch(component, /<h[1-6][^>]*>\s*Timeline/i);
   assert.doesNotMatch(component, />Mechanics involved</);
-  assert.match(component, /workorder-participants-label">Mechanics</);
-  assert.match(component, /event\.changed_by_name \|\| "System"/);
+  assert.match(component, /timeline\.mechanics/);
+  assert.match(component, /timeline\.system/);
   assert.match(component, /workorder-timeline-date/);
-  assert.match(component, /actorRoleLabel\(actorRole\)/);
+  assert.match(component, /actorRoleLabel\(actorRole, locale\)/);
+  assert.match(component, /timeline\.role\.\$\{normalized\}/);
   assert.match(component, /workorder-timeline-role/);
   assert.match(component, /<time dateTime=\{event\.created_at\}>/);
   assert.match(css, /\.workorder-timeline-date\s*\{[^}]*display:\s*inline-flex;[^}]*white-space:\s*nowrap;/s);
@@ -26,7 +27,7 @@ test("shared timeline list owns timeline structure and record details", () => {
   assert.match(component, /export function WorkorderTimelineList/);
   assert.match(component, /<ol className="workorder-timeline-list">/);
   assert.match(component, /<dl className="workorder-timeline-details">/);
-  assert.match(component, /return <WorkorderTimelineList items=\{items\} \/>/);
+  assert.match(component, /return <WorkorderTimelineList items=\{items\} locale=\{locale\} \/>/);
 });
 
 test("multi-change parents are collapsed by default with an accessible disclosure control", () => {
@@ -37,7 +38,7 @@ test("multi-change parents are collapsed by default with an accessible disclosur
   assert.match(component, /aria-controls=\{childrenId\}/);
   assert.match(component, /expandable && expanded \? \(/);
   assert.match(component, /<ol className="workorder-timeline-children" id=\{childrenId\}/);
-  assert.match(component, /group\.childCount} changes/);
+  assert.match(component, /formatLocaleNumber\(group\.childCount, locale\).*timeline\.changes/);
 });
 
 test("390px and 430px activity rail stays in a min-width-zero single content column", () => {

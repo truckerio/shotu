@@ -4,6 +4,7 @@ import { KeyboardAwareDock } from "../../components/layout/KeyboardAwareDock.jsx
 import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
+import { interfaceText, localizedUnitType } from "../../i18n/index.js";
 import { CREATE_WORKORDER_FORM_ID } from "../generator/CreateWorkorderForm.jsx";
 import { resolveCreateLocation, selectedCreateMechanicNames } from "./create-workorder-utils.js";
 
@@ -24,6 +25,7 @@ export function CreateWorkorderShell({
   form,
   isPhone,
   keyboardOpen,
+  locale = "en",
   locations,
   officeCreateState,
   onBack,
@@ -36,9 +38,10 @@ export function CreateWorkorderShell({
   assignment,
   children,
 }) {
-  const unit = createSummaryValue(form.unitNo, "No unit selected");
-  const concern = createSummaryValue(form.mechanicConcern, "Create workorder");
-  const dates = formatUiDateRange(form.workStartDate, form.workEndDate);
+  const t = (key) => interfaceText(locale, key);
+  const unit = createSummaryValue(form.unitNo, t("create.noUnitSelected"));
+  const concern = createSummaryValue(form.mechanicConcern, t("create.title"));
+  const dates = formatUiDateRange(form.workStartDate, form.workEndDate, { locale });
 
   return (
     <>
@@ -52,13 +55,13 @@ export function CreateWorkorderShell({
           <ArrowLeft />
         </button>
         <div>
-          <strong>Create workorder</strong>
+          <strong>{t("create.title")}</strong>
           {canSaveDraft ? (
             <DraftSaveStatus
               status={workorderDraft.status}
               error={workorderDraft.error}
               showPristine
-              labels={{ dirty: "Draft changed" }}
+              labels={{ dirty: t("create.draftChanged") }}
               className="office-create-draft-status"
             />
           ) : null}
@@ -72,7 +75,7 @@ export function CreateWorkorderShell({
               disabled={officeCreateState.busy || !canCreate}
             >
               <Plus />
-              <span>{officeCreateState.busy ? "Creating..." : "Create"}</span>
+              <span>{officeCreateState.busy ? t("create.creating") : t("create.create")}</span>
             </button>
           ) : null}
           {!isPhone && previewVisible ? (
@@ -80,6 +83,8 @@ export function CreateWorkorderShell({
               open={previewActive}
               onToggle={onTogglePreview}
               controls="workorder-preview-panel"
+              openLabel={t("create.openPreview")}
+              closeLabel={t("create.closePreview")}
             />
           ) : null}
         </div>
@@ -92,7 +97,8 @@ export function CreateWorkorderShell({
         location={form.locationName || locationName(locations, form.locationId)}
         mechanics={selectedCreateMechanicNames(assignment)}
         unit={unit}
-        unitType={form.unitType || "Unit"}
+        unitType={localizedUnitType(form.unitType, locale) || t("unit.title")}
+        locale={locale}
       />
 
       <WorkorderSectionNav
@@ -100,6 +106,7 @@ export function CreateWorkorderShell({
         sections={sections}
         activeSection={activeSection}
         onSelect={onSelectSection}
+        locale={locale}
       />
 
       {children}
@@ -117,7 +124,7 @@ export function CreateWorkorderShell({
               disabled={officeCreateState.busy || !canCreate}
             >
               <Plus aria-hidden="true" />
-              <span>{officeCreateState.busy ? "Creating..." : "Create workorder"}</span>
+              <span>{officeCreateState.busy ? t("create.creating") : t("create.title")}</span>
             </button>
           </div>
           <div className="create-workorder-mobile-nav">
@@ -126,6 +133,7 @@ export function CreateWorkorderShell({
               sections={sections}
               activeSection={activeSection}
               onSelect={onSelectSection}
+              locale={locale}
             />
           </div>
         </KeyboardAwareDock>

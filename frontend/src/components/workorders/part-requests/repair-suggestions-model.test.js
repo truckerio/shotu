@@ -49,3 +49,15 @@ test("formats usage, confidence, and available history context", () => {
     examples: [],
   }, "asset-1"), "Used 3 times · Confirmed link · Same unit");
 });
+
+test("localizes static repair metadata without changing operational context", () => {
+  const suggestion = {
+    usageCount: 2,
+    confidence: "high",
+    sameAsset: true,
+    context: "",
+    examples: [],
+    source: "service_history",
+  };
+  assert.equal(repairSuggestionMeta(suggestion, "", "es"), "Usado 2 veces · Confianza alta · Misma unidad");
+});

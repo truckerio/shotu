@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
+import { interfaceText } from "../../../i18n/index.js";
 import { normalizeServiceHistoryResponse } from "./service-history-model.js";
 
 function endpoint(workorderId, cursor = "") {
@@ -8,7 +9,7 @@ function endpoint(workorderId, cursor = "") {
   return `/api/workorders/${encodeURIComponent(workorderId)}/modules/unit/history?${params}`;
 }
 
-export function useUnitServiceHistory({ enabled, workorderId }) {
+export function useUnitServiceHistory({ enabled, workorderId, locale = "en" }) {
   const requestSequence = useRef(0);
   const controllerRef = useRef(null);
   const [history, setHistory] = useState(null);
@@ -32,7 +33,9 @@ export function useUnitServiceHistory({ enabled, workorderId }) {
       return response;
     } catch (cause) {
       if (controller.signal.aborted || request !== requestSequence.current) return null;
-      setError(cause?.message || "Service history could not be loaded.");
+      setError(locale === "en" && cause?.message
+        ? cause.message
+        : interfaceText(locale, "history.loadFailed"));
       return null;
     } finally {
       if (request === requestSequence.current) {
@@ -40,7 +43,7 @@ export function useUnitServiceHistory({ enabled, workorderId }) {
         setLoadingMore(false);
       }
     }
-  }, [enabled, workorderId]);
+  }, [enabled, locale, workorderId]);
 
   useEffect(() => {
     setHistory(null);

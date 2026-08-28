@@ -1413,27 +1413,18 @@ export async function importOdooInventory(companyId, { products, quants }) {
       const factor = 10 ** balance.decimalScale;
       const available = Math.round(balance.availableQuantity * factor) / factor;
       await client.query(
-        `insert into inventory_items (
+        `insert into odoo_inventory_balances (
            company_id, location_id, catalog_part_id, normalized_part_number, part_number,
-           description, quantity_on_hand, quantity_reserved, uom_code,
-           source_provider, external_id, provider_updated_at, last_seen_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, 0, $8, 'odoo', $9, $10, $11, now())
-         on conflict (
-           company_id,
-           (coalesce(location_id, '00000000-0000-0000-0000-000000000000'::uuid)),
-           normalized_part_number,
-           uom_code
-         )
+           description, quantity_on_hand, uom_code,
+           external_id, provider_updated_at, last_seen_at, updated_at
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+         on conflict (company_id, location_id, catalog_part_id, uom_code)
          do update set
-           location_id = excluded.location_id,
-           catalog_part_id = excluded.catalog_part_id,
            normalized_part_number = excluded.normalized_part_number,
            part_number = excluded.part_number,
            description = excluded.description,
-           uom_code = excluded.uom_code,
-           source_provider = excluded.source_provider,
            external_id = excluded.external_id,
-           quantity_on_hand = greatest(excluded.quantity_on_hand, inventory_items.quantity_reserved),
+           quantity_on_hand = excluded.quantity_on_hand,
            provider_updated_at = excluded.provider_updated_at,
            last_seen_at = excluded.last_seen_at,
            updated_at = now()`,
@@ -1454,15 +1445,11 @@ export async function importOdooInventory(companyId, { products, quants }) {
       changed += 1;
     }
     await client.query(
-      `update inventory_items
-       set quantity_on_hand = quantity_reserved,
-           source_provider = '',
-           external_id = '',
+      `update odoo_inventory_balances
+       set quantity_on_hand = 0,
            provider_updated_at = null,
-           last_seen_at = null,
            updated_at = now()
        where company_id = $1
-         and source_provider = 'odoo'
          and last_seen_at is distinct from $2`,
       [tenantId, syncMarker],
     );

@@ -54,8 +54,8 @@ coverage; a production build alone does not prove those paths execute.
 - Admin shell and data orchestration: `frontend/src/features/admin/AdminWorkspace.jsx`
 - Admin pages and dialogs: `frontend/src/features/admin/workspace/`
 - Office queues: `frontend/src/features/office/`
-- Invoice extraction/review and its source viewer: `frontend/src/features/office/InvoiceExtractionWorkspace.jsx`, `InvoiceDocumentViewer.jsx`, and their colocated model/CSS/test files.
-- Confirmed inventory scan surface: `frontend/src/features/inventory/InventoryScanWorkspace.jsx` and `inventory-scan.css`.
+- Invoice extraction/review, source viewer, and explicit physical-receipt attestation: `frontend/src/features/office/InvoiceExtractionWorkspace.jsx`, `InvoiceDocumentViewer.jsx`, `PhysicalReceiptConfirmation.jsx`, and their colocated model/CSS/test files.
+- Shared local-inventory workspace, count import, scan surface, and exact-unit workflows: `frontend/src/features/inventory/InventoryWorkspace.jsx`, `InventoryCountImportPanel.jsx`, `InventoryScanWorkspace.jsx`, `GetPartsFlow.jsx`, and colocated model/CSS/test files. The workspace is embedded by both Office and Admin; do not create separate role copies.
 - Office detail mutations and autosave: `frontend/src/features/office/useOfficeWorkorderActions.js`
 - Mechanic queues and mechanic-only behavior: `frontend/src/features/mechanic/`
 - Mechanic detail lifecycle, chat, and navigation actions: `frontend/src/features/mechanic/useMechanicWorkorderActions.js`

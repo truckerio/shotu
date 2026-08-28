@@ -23,7 +23,11 @@ import { handleKioskApi } from "./src/server/routes/kiosk.routes.js";
 import { handleProofreadingApi } from "./src/server/routes/proofreading.routes.js";
 import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extraction.routes.js";
 import { handleInventoryApi } from "./src/server/routes/inventory.routes.js";
+import { handlePartFulfillmentApi } from "./src/server/routes/part-fulfillment.routes.js";
+import { handleInventoryUnitWorkorderApi } from "./src/server/routes/inventory-unit-workorder.routes.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
+import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
+import { startInvoiceExtractionWorker, stopInvoiceExtractionWorker } from "./src/server/modules/invoice-extraction/invoice-extraction-background.worker.js";
 import { handleOdooIntegrationApi } from "./src/server/integrations/odoo/odoo.routes.js";
 import {
   isServiceIntegrationPath,
@@ -60,6 +64,7 @@ import {
   applySecurityHeaders,
   assertSameOriginMutation,
   createSensitiveRouteRateLimiter,
+  deferSensitiveRateLimitUntilActor,
   readJsonBody,
 } from "./src/server/security/index.js";
 
@@ -135,6 +140,7 @@ function requestBodyLimit(req) {
   if (pathname === "/api/upload") return 75_000_000;
   if (pathname.endsWith("/messages")) return 12_000_000;
   if (pathname === "/api/office/invoice-extractions") return 14_200_000;
+  if (pathname === "/api/office/inventory/count-imports") return 6_500_000;
   return 1_000_000;
 }
 
@@ -684,8 +690,8 @@ async function serveStatic(req, res) {
 
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const deferInvoiceRateLimit = req.method === "POST" && url.pathname === "/api/office/invoice-extractions";
-  const rateLimit = deferInvoiceRateLimit
+  const deferActorRateLimit = deferSensitiveRateLimitUntilActor(req.method, url.pathname);
+  const rateLimit = deferActorRateLimit
     ? { policy: null, result: null }
     : sensitiveRouteRateLimiter.check(req, url, { trustedIpHeaders });
   applyRateLimitHeaders(res, rateLimit.result);
@@ -722,7 +728,7 @@ async function handleApi(req, res) {
     requestContext = await resolveRequestContext(req);
     requirePermission(requestContext, requiredPermission);
   }
-  if (deferInvoiceRateLimit) {
+  if (deferActorRateLimit) {
     const actorRateLimit = sensitiveRouteRateLimiter.check(req, url, {
       actorId: requestContext?.actor?.id,
       trustedIpHeaders,
@@ -743,7 +749,9 @@ async function handleApi(req, res) {
   if (await handleVehiclesApi(req, res, url, helpers)) return;
   if (await handleIntegrationsApi(req, res, url, helpers)) return;
   if (await handleMechanicApi(req, res, url, helpers)) return;
+  if (await handleInventoryUnitWorkorderApi(req, res, url, helpers)) return;
   if (await handleOfficeApi(req, res, url, helpers)) return;
+  if (await handlePartFulfillmentApi(req, res, url, helpers)) return;
   if (await handleInventoryApi(req, res, url, helpers)) return;
   if (await handleInvoiceExtractionApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
@@ -912,6 +920,8 @@ server.listen(port, process.env.HOST || "0.0.0.0", () => {
   startIntegrationWorker();
   startSamsaraAutoSync();
   startInvoiceRetention();
+  startInventoryCountRetention();
+  startInvoiceExtractionWorker();
 });
 
 installGracefulShutdown(server, {
@@ -920,5 +930,7 @@ installGracefulShutdown(server, {
     stopSamsaraAutoSync();
     stopIntegrationWorker();
     stopInvoiceRetention();
+    stopInventoryCountRetention();
+    stopInvoiceExtractionWorker();
   },
 });

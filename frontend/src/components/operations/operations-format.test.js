@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   LIFECYCLE_OPTIONS,
+  buildPartRequestsQuery,
   buildOperationsQuery,
   operationLabel,
   normalizeOperationsCategoryFilters,
@@ -68,4 +69,41 @@ test("Admin category changes discard only incompatible lifecycle refinements", (
     normalizeOperationsCategoryFilters("all", { lifecycle: "closed" }).lifecycle,
     "closed",
   );
+});
+
+test("Part request query uses the shared Office queue contract", () => {
+  const query = buildPartRequestsQuery({
+    locationId: "location-1",
+    search: " brake pad ",
+    status: "requested",
+    supply: "partial",
+    sort: "waiting:desc",
+  }, 3);
+
+  assert.deepEqual(Object.fromEntries(query), {
+    page: "3",
+    pageSize: "50",
+    sort: "waiting:desc",
+    location: "location-1",
+    search: "brake pad",
+    status: "requested",
+    supply: "partial",
+  });
+  assert.equal(query.toString(), "page=3&pageSize=50&sort=waiting%3Adesc&location=location-1&search=brake+pad&status=requested&supply=partial");
+});
+
+test("Part request query can request a count-only page without adding filters", () => {
+  const query = buildPartRequestsQuery({
+    locationId: "",
+    search: "",
+    status: "",
+    supply: "",
+    sort: "waiting:desc",
+  }, 1, 1);
+
+  assert.deepEqual(Object.fromEntries(query), {
+    page: "1",
+    pageSize: "1",
+    sort: "waiting:desc",
+  });
 });

@@ -9,11 +9,11 @@
 
 ## Context
 
-The application has structured OpenAI Responses API patterns for part identification, company-scoped parts catalog memory, office authorization, and Odoo inventory projections. It has no invoice extraction workflow, no durable correction corpus, and no controlled mechanism for learning from reviewed invoices. Invoice data must therefore be re-entered manually, while a naive AI implementation would repeat mistakes or silently turn uncertain text into inventory truth.
+The application now has an invoice upload, encrypted source, local OCR/template extraction, optional OpenAI structured extraction, human review, and governed correction corpus. The remaining work is measured accuracy and latency improvement; extraction must not silently turn uncertain text into inventory truth.
 
 The attached product concept defines three memory layers: episodic memory records what happened, semantic memory records what is true, and procedural memory records what works. In this module, those become append-only human corrections, approved tenant/vendor facts, and versioned extraction playbooks. Learning is retrieval and governed promotion, not uncontrolled online model training.
 
-This vertical slice ends at a reviewed invoice draft and an explicitly approved, encrypted training example. Extraction and review deliberately do not create an Odoo receipt or mutate inventory. A later, separate receipt slice may be invoked only by an explicit post-review action; its confirmed Odoo receipt, QR-label, and reconciliation contract is maintained in `docs/INVENTORY_ODOO_LIVING_RECORD.md`. The hosted model's structured prediction is weak supervision; the human-reviewed draft is the gold label. The system records observable inputs, outputs, corrections, model/version, and token usage, but it neither receives nor claims to retain a provider's hidden chain-of-thought.
+This vertical slice ends at a reviewed invoice draft and an explicitly approved, encrypted training example. Extraction and review deliberately do not create an inventory receipt or mutate stock. A later, separate local-receipt action may be invoked only after review and physical complete-delivery attestation; its idempotency, local-movement, QR-label, and reconciliation contract is maintained in `docs/INVENTORY_ODOO_LIVING_RECORD.md`. The hosted model's structured prediction is weak supervision; the human-reviewed draft is the gold label. The system records observable inputs, outputs, corrections, model/version, and token usage, but it neither receives nor claims to retain a provider's hidden chain-of-thought.
 
 The resulting corpus is the product asset used to evaluate and eventually train a local extractor. Model training and automatic model promotion remain separate gated phases because a useful model requires enough diverse, reviewed invoices and an untouched evaluation set.
 
@@ -21,7 +21,7 @@ The resulting corpus is the product asset used to evaluate and eventually train 
 
 - FR-1: The system MUST allow an authenticated office or admin user to submit one PNG, JPEG, WebP, or PDF invoice of at most 10 MiB for a location they can access.
 - FR-2: The system MUST derive company ownership from the authorized location and MUST ignore client-supplied company identity.
-- FR-3: The system MUST send the document to the configured extraction provider with `store: false` and a strict structured-output schema.
+- FR-3: When OpenAI is configured, the system MUST send the document with `store: false` and a strict structured-output schema. A usable local OCR/template candidate MUST also be retained for field-level reconciliation and safe fallback.
 - FR-4: The extracted draft MUST contain vendor, invoice number/date, purchase-order number, currency, subtotal, tax, shipping, total, and zero or more line items.
 - FR-5: Every extracted scalar and every line item MUST include a confidence score from 0 through 100 and a short evidence string.
 - FR-6: The system MUST mark a draft `needs_review` when any required field has confidence below 90, any line has confidence below 90, totals do not reconcile within 0.02 currency units, or the provider reports uncertainty.
@@ -35,7 +35,7 @@ The resulting corpus is the product asset used to evaluate and eventually train 
 - FR-14: Reviewed corrections MUST create or reinforce tenant- and vendor-scoped semantic fact candidates; a fact MUST NOT influence extraction until the reviewer explicitly opts to approve learning and no contradictory approved fact exists.
 - FR-15: The extraction prompt MUST include at most 20 approved semantic facts and at most 5 active procedural playbooks scoped to the same company and matching vendor when known.
 - FR-16: Procedural playbooks MUST be immutable by version; activation of a later version MUST NOT rewrite historical extraction records.
-- FR-17: Provider failure, timeout, refusal, or invalid structured output MUST leave a durable failed run with a safe error code and retryable flag, without storing raw provider error bodies.
+- FR-17: Provider failure, timeout, refusal, or invalid structured output MUST fall back to a usable local-evidence draft marked `needs_review`; without usable local evidence it MUST leave a durable failed run with a safe error code and retryable flag. Raw provider error bodies MUST NOT be stored.
 - FR-18: The office UI MUST provide upload, progress, an in-session source preview beside the draft, extracted-field editing, line editing, confidence visibility, explicit approval, and clear success/error states.
 - FR-18a: Learning approval MUST default off and require an explicit reviewer opt-in on each draft.
 - FR-19: The UI MUST require a selected accessible location and supported file before enabling extraction.
@@ -92,8 +92,8 @@ And the low-confidence field remains visible with its evidence
 ### AC-4: Provider failure is durable (FR-17, NFR-R2, NFR-S4)
 Given the provider times out, refuses, or returns invalid structured output
 When extraction runs
-Then the API returns a safe retryable or non-retryable error
-And the failed run records only a bounded error code, not raw document or provider content
+Then a usable local OCR candidate completes as a review-required draft with an actionable warning
+And, if no usable local candidate exists, the API returns a safe retryable or non-retryable error and records only a bounded error code
 
 ### AC-5: Approve reviewed draft (FR-10–FR-11, NFR-R1)
 Given an extracted run at version 1 in the actor's tenant
@@ -172,7 +172,7 @@ And another tenant or mechanic receives no document bytes or metadata
 - EC-8: Handwritten, rotated, blurry, or cropped input → lower confidence and require review.
 - EC-9: Currency absent or conflicting → use `UNKNOWN`, require review, and never infer from company locale alone.
 - EC-10: Sum of line extensions differs from subtotal/total beyond tolerance → require review with reconciliation warning.
-- EC-11: Provider 429/5xx/timeout → safe retryable failure; user can retry explicitly.
+- EC-11: Provider 429/5xx/timeout → use a usable local-evidence draft with mandatory review; otherwise record a safe retryable failure so the user can retry explicitly.
 - EC-12: Provider 401 → configuration failure; no key or provider body exposed.
 - EC-13: Database failure after provider response → request fails; no success is shown; retry may create a new attempt using the document hash.
 - EC-14: Review contains zero lines → allowed only when explicitly confirmed as a non-item invoice; otherwise validation fails.
@@ -217,7 +217,7 @@ interface ExtractionRunResponse {
 }
 ```
 
-Success: `201`. Idempotent replay: `200`. Errors: `400`, `403`, `413`, `429`, `502`, `503`.
+Accepted for background extraction: `202` with a durable `processing` run. Idempotent replay: `200`. For a batch, the client submits documents through three bounded enqueue lanes and polls every accepted run independently until `completed`, `needs_review`, or `failed`. It opens the first reviewable draft immediately; later drafts continue processing without replacing an invoice the operator is actively editing. Errors before persistence: `400`, `403`, `413`, `429`, `502`, `503`.
 
 ### `GET /api/office/invoice-extractions/:runId`
 
@@ -401,12 +401,28 @@ The learned artifact excludes matched invoice numbers, part numbers, description
 ### Teaching loop
 
 1. The loopback-only Workorder OCR service runs PaddleOCR and returns text plus page-relative regions without retaining its own source copy.
-2. Local OCR is corroborating context for the configured OpenAI extraction path. When OpenAI is configured, OpenAI owns the extraction result; trusted local/template and generic results own extraction only when OpenAI is not configured.
+2. For images, local OCR and OpenAI run as independent parallel branches; OCR transcription is not fed into the OpenAI branch. When both candidates exist, agreement is recorded without boosting confidence; conflicts keep the OpenAI value below the review threshold with a warning, and missing OpenAI values may be filled locally only with confidence capped at 89 plus a warning. For PDFs, bounded native text-layer content may be supplied as untrusted provider context.
 3. The office reviewer corrects the draft and explicitly enables learning.
 4. The backend aligns approved values to OCR regions and creates or reinforces a company- and vendor-scoped candidate template.
 5. Candidate templates stay in shadow mode until they have multiple consistent approved examples and no unresolved contradictions.
 6. Without OpenAI configuration, a promoted template or generic local extractor creates the review draft. Arithmetic reconciliation, duplicate-invoice checks, low confidence, drift, or ambiguity still send the draft to review.
 7. Every approved correction becomes new evaluation data. Provider output by itself never becomes truth.
+
+### Candidate reconciliation and fallback evidence — 2026-08-26
+
+- The invoice service retains a learned-layout or generic local draft even when OpenAI is configured, reconciles scalar and matched line candidates, and preserves the existing draft/review API contract.
+- OpenAI timeout or unavailability now completes a usable local draft as `needs_review` instead of failing the whole run. If neither source has usable evidence, extraction still fails safely.
+- Focused reconciliation and invoice tests cover agreement, conflicts, local fills, empty remote line tables, stable line IDs, paid-zero handling, no mutation, and provider-timeout fallback.
+- Before the performance slice, a loopback PaddleOCR 2.10.0 run against the six supplied phone photos took 13.2–60.1 seconds per image; one image hit the 60-second timeout. Key Velocity headers/totals were recovered, while Rush/TEC header and line accuracy remained inconsistent. That baseline motivated the preprocessing, parallel-provider, native-PDF, and background-worker work documented below.
+- A direct `store: false` strict-schema OpenAI check on the difficult TEC invoice completed in 16.5 seconds and correctly returned vendor, invoice number/date, customer PO, subtotal, tax, shipping, total, and both line items. It created no local run or inventory record. This confirms the remote candidate quality for that sample, while its standalone latency remains above the 1–10 second target.
+
+### Background and preprocessing performance evidence — 2026-08-26
+
+- Upload now validates, encrypts, persists, and atomically enqueues the run in the existing PostgreSQL lease queue, returning `202` with `processing`. A dedicated two-lane invoice worker claims only `invoice_extraction` jobs, so long OCR work does not block Samsara or other integration jobs. Attempts default to two and stale leases are recoverable after process restart.
+- Camera images are EXIF-orientation corrected and downscaled to a maximum 2200-pixel side before PaddleOCR. Evidence coordinates remain page-normalized. The rebuilt local service processed the supplied Velocity photo in 18.47 seconds versus the prior 41.3-second baseline (about 55% lower) and still recovered `XC240109567:01`, `379.95`, `29.45`, and `409.40`.
+- A tested 1800-pixel experiment completed in 17.36 seconds but reduced mean OCR confidence from 0.9403 to 0.9279, so 2200 pixels remains the safer default.
+- Image OCR and OpenAI now start concurrently. On the measured samples the critical provider path is approximately the slower branch (18.5 seconds), rather than the earlier sequential OCR plus OpenAI path (about 57.8 seconds using the 41.3- and 16.5-second observations). This is a material improvement but still does not claim the 1–10 second target.
+- Text PDFs first use a PDFium native-text endpoint that does not load the PaddleOCR inference lock. A plausibly complete invoice text layer skips OCR; sparse/image-only PDFs fall back to parallel OCR and OpenAI. Native prompt context is capped at 30,000 characters.
 
 ### Promotion gates
 
@@ -423,7 +439,8 @@ The learned artifact excludes matched invoice numbers, part numbers, description
 - Migration 063 is applied locally. Candidate templates require three approved examples before activation and remain company/vendor scoped.
 - A fresh browser upload of the supplied Velocity invoice produced a `local_generic` review draft with vendor `Los Angeles Freightliner`, invoice `XC240109567:01`, date `7/30/2026`, subtotal `379.95`, tax `29.45`, shipping `0`, and total `409.40`.
 - PaddleOCR did not recover the printed quantity on that camera image. The draft correctly left quantity empty and required review instead of inventing stock.
-- The minimal upload control accepts up to ten files in one selection and processes them sequentially, keeping OCR concurrency bounded. Shared `Button`, `FormField`, and `OptionalSection` components own the interactive UI controls.
+- The minimal upload control accepts up to ten files in one selection. Upload requests return through the durable queue and poll their run state; worker concurrency is bounded independently from OCR and OpenAI provider capacity. Shared `Button`, `FormField`, and `OptionalSection` components own the interactive UI controls.
+- Inventory is the single operator surface for invoice intake and history. Its primary `Upload invoice` action opens the existing extraction/review workflow inline; the former standalone Invoices navigation is removed. Legacy invoice URLs preserve `invoiceRun` while canonicalizing into Inventory, and closing the workflow returns to the prior Inventory tab and refreshes its data.
 - The verified draft does not receive parts or mutate inventory/Odoo. Learning remains opt-in at review time.
 
 ## Out of Scope
@@ -433,6 +450,10 @@ The learned artifact excludes matched invoice numbers, part numbers, description
 - OS-3: Autonomous semantic-fact approval — one bad correction must not poison future extraction.
 - OS-4: Fine-tuning OCR/model weights and autonomously promoting a trained model — this slice deploys local PaddleOCR plus governed deterministic layout learning, but weight training remains a later gated phase.
 - OS-5: Permanent source retention — encrypted documents have bounded retention; extension or legal-hold behavior requires a separate policy decision.
-- OS-6: Email inbox ingestion and durable background batch queues — interactive multi-select is implemented, while unattended ingestion and worker queues remain deferred.
-- OS-7: QR, serialization, receiving, and workorder issue flows — separate vertical modules consuming reviewed invoice drafts later.
+- OS-6: Email inbox ingestion and unattended scheduled ingestion — durable interactive-upload workers are implemented, while inbox/source connectors remain deferred.
+- OS-7: Partial/damaged receipt posting, transfer execution, purchasing,
+  general cycle counts, valuation, warranty/problem reporting, and cores. Local
+  QR, serialization, complete-delivery receiving, opening-count intake, and
+  exact workorder issue/install/return are implemented as separate inventory
+  modules; this extraction specification does not define their contracts.
 - OS-8: Fleet, TMS, KPI, or predictive analytics — explicitly excluded from shop/workorder scope.

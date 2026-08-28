@@ -22,8 +22,12 @@ import {
 import "./used-parts-editor.css";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
 import { RepairHistorySuggestions } from "./part-requests/RepairHistorySuggestions.jsx";
-import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
+import {
+  catalogInventoryText,
+  repairOrderAfterCatalogSelection,
+} from "./part-requests/catalog-parts-model.js";
 import { laborProductLabel } from "../../../../shared/labor-product.js";
+import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 
 function vehicleInput(detail) {
   const asset = detail.workorder.asset || {};
@@ -68,8 +72,11 @@ export function UsedPartsEditor({
   disabled = false,
   defaultRows,
   suggestionsEnabled = true,
+  locale = "en",
   readonlyMessage = "Used parts are read-only for your role.",
 }) {
+  const t = (key) => interfaceText(locale, key);
+  const readOnlyText = locale === "en" ? readonlyMessage : t("parts.usedPartsReadOnly");
   const [visibleRowCount, setVisibleRowCount] = useState(() => initialUsedPartRows(parts, defaultRows).length);
   const rows = useMemo(
     () => normalizeUsedParts(parts, visibleRowCount),
@@ -115,7 +122,7 @@ export function UsedPartsEditor({
       setVisibleRowCount(recovered.length);
       if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
         onChange(recovered);
-        setMessage("Recovered your unsaved part entries.");
+        setMessage(t("parts.recoveredUnsavedEntries"));
       }
       if (recoveredLaborHours !== String(laborHours || "")) onLaborHoursChange(recoveredLaborHours);
     } catch {
@@ -127,16 +134,16 @@ export function UsedPartsEditor({
     if (!hydratedRef.current || disabled || !storageKey) return undefined;
     if (savePayload === persistedRef.current) return undefined;
     window.localStorage.setItem(storageKey, savePayload);
-    setSaveState("Saving...");
+    setSaveState(t("progress.saving"));
     const timer = window.setTimeout(async () => {
       try {
         await saveRef.current(rows, String(laborHours || ""));
         persistedRef.current = savePayload;
         window.localStorage.removeItem(storageKey);
-        setSaveState("Saved");
+        setSaveState(t("progress.saved"));
       } catch (error) {
-        setSaveState("Not saved");
-        setMessage(error.message);
+        setSaveState(t("progress.notSaved"));
+        setMessage(locale === "en" && error?.message ? error.message : t("parts.saveFailed"));
       }
     }, 500);
     return () => window.clearTimeout(timer);
@@ -193,9 +200,9 @@ export function UsedPartsEditor({
         uomCode: result.part.uomCode || row.uomCode,
       };
       onChange(next);
-      setMessage("Part details found. Choose a service-history suggestion or enter the repair order manually.");
-    } catch (error) {
-      setMessage(`${error.message} Manual entry is still available.`);
+      setMessage(t("parts.detailsFound"));
+    } catch {
+      setMessage(t("parts.detailsUnavailable"));
     } finally {
       setFindingRow(-1);
     }
@@ -204,8 +211,8 @@ export function UsedPartsEditor({
   if (disabled) {
     const savedParts = readonlyUsedParts(parts);
     return (
-      <div className="used-parts-editor is-readonly" aria-label="Used parts">
-        <p className="used-parts-readonly-state" role="status">{readonlyMessage}</p>
+      <div className="used-parts-editor is-readonly" aria-label={t("parts.usedTitle")}>
+        <p className="used-parts-readonly-state" role="status">{readOnlyText}</p>
         {laborHours || laborRepairOrder ? (
           <ul className="used-parts-readonly-list">
             <li>
@@ -219,13 +226,13 @@ export function UsedPartsEditor({
           <ul className="used-parts-readonly-list">
             {savedParts.map((part, index) => (
               <li key={`${part.partNo}-${index}`}>
-                <strong>{part.partNo || "Part number not recorded"}</strong>
+                <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
                 <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
                 {part.repairOrder ? <span>{part.repairOrder}</span> : null}
               </li>
             ))}
           </ul>
-        ) : <p className="used-parts-empty">No used parts recorded.</p>}
+        ) : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
       </div>
     );
   }
@@ -234,16 +241,16 @@ export function UsedPartsEditor({
     <div className="used-parts-editor">
       <div className="parts-editor">
         <div className="part-row part-row-head" aria-hidden="true">
-          <span>S.No</span>
-          <span>Part no.</span>
-          <span>Qty / unit</span>
-          <span>Repair order</span>
+          <span>{t("parts.serialNumber")}</span>
+          <span>{t("parts.partNumber")}</span>
+          <span>{t("parts.quantityUnit")}</span>
+          <span>{t("parts.repairOrder")}</span>
           <span></span>
         </div>
         <div className="part-row used-part-labor-row">
           <strong>1</strong>
           <div className="used-part-field">
-            <span className="used-part-label">Labor</span>
+            <span className="used-part-label">{t("parts.labor")}</span>
             <strong className="used-part-labor-name">{laborProductLabel(laborProduct)}</strong>
           </div>
           <div className="used-part-field used-part-quantity">
@@ -252,8 +259,8 @@ export function UsedPartsEditor({
               quantity={laborHours}
               uomCode="hr"
               onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
-              quantityLabel="Labor hours"
-              unitLabel="Unit"
+              quantityLabel={t("parts.laborHours")}
+              unitLabel={t("parts.unit")}
               disabled={disabled || laborRepairOrderDisabled}
               unitReadOnly
               compact
@@ -262,12 +269,13 @@ export function UsedPartsEditor({
           </div>
           <div className="used-part-field used-part-repair">
             <NarrativeField
+              locale={locale}
               singleLine
               value={laborRepairOrder}
               onChange={(event) => onLaborRepairOrderChange(event.target.value)}
-              aria-label="Labor repair order"
-              placeholder="Repair order"
-              disabled={disabled}
+              aria-label={t("parts.repairOrderWorkPerformed")}
+              placeholder={t("parts.repairOrderWorkPerformed")}
+              disabled={disabled || laborRepairOrderDisabled}
             />
           </div>
           <span aria-hidden="true"></span>
@@ -276,7 +284,7 @@ export function UsedPartsEditor({
           <div className="part-row" key={index}>
             <strong>{index + 2}</strong>
             <div className="used-part-field">
-              <span className="used-part-label">Part number</span>
+              <span className="used-part-label">{t("parts.partNumber")}</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
                 <PartCatalogCombobox
                   workorderId={detail.workorder.id}
@@ -294,17 +302,19 @@ export function UsedPartsEditor({
                       partNo: catalogPart.partNumber,
                       qty: defaultUsedPartQuantity(part.qty),
                       uomCode: catalogPart.uomCode || part.uomCode,
+                      repairOrder: repairOrderAfterCatalogSelection(part.repairOrder, catalogPart),
                     });
-                    setMessage(catalogInventoryText(catalogPart));
+                    setMessage(catalogInventoryText(catalogPart, t, (value) => formatLocaleNumber(value, locale)));
                   }}
-                  label={`Part number ${index + 1}`}
-                  inputAriaLabel={`Part number ${index + 1}`}
+                  label={`${t("parts.partNumber")} ${index + 1}`}
+                  inputAriaLabel={`${t("parts.partNumber")} ${index + 1}`}
                   inputPolicy="identifier"
-                  placeholder="Part number"
+                  placeholder={t("parts.partNumber")}
                   disabled={disabled}
+                  locale={locale}
                 />
                 {suggestionsEnabled ? (
-                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title="Find part details" aria-label={`Find details for part in row ${index + 1}`}>
+                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title={t("parts.findDetails")} aria-label={`${t("parts.findDetails")} ${index + 1}`}>
                     <SearchMd />
                   </button>
                 ) : null}
@@ -316,23 +326,24 @@ export function UsedPartsEditor({
                 quantity={part.qty}
                 uomCode={part.uomCode}
                 onValueChange={({ quantity, uomCode }) => updateFields(index, { qty: quantity, uomCode })}
-                quantityLabel={`Quantity ${index + 1}`}
-                unitLabel={`Unit ${index + 1}`}
+                quantityLabel={`${t("parts.quantity")} ${index + 1}`}
+                unitLabel={`${t("parts.unit")} ${index + 1}`}
                 disabled={disabled}
                 compact
               />
             </div>
             <div className="used-part-field used-part-repair">
               <NarrativeField
+                locale={locale}
                 singleLine
                 value={part.repairOrder}
                 onChange={(event) => update(index, "repairOrder", event.target.value)}
-                aria-label={`Repair order ${index + 1}`}
-                placeholder="Describe repair for this part"
+                aria-label={`${t("parts.repairOrder")} ${index + 1}`}
+                placeholder={t("parts.describeRepair")}
                 disabled={disabled}
               />
             </div>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`Remove part row ${index + 1}`}>Remove</button>
+            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`${t("parts.removePartRow")} ${index + 1}`}>{t("parts.remove")}</button>
             {selectedCatalogParts[index]?.id ? <div className="used-part-history">
               <RepairHistorySuggestions
                 workorderId={detail.workorder.id}
@@ -341,13 +352,14 @@ export function UsedPartsEditor({
                 assetId={detail.workorder.asset?.id || detail.workorder.assetId}
                 onApply={(text) => update(index, "repairOrder", text)}
                 disabled={disabled}
+                locale={locale}
               />
             </div> : null}
           </div>
         ))}
       </div>
       <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
-        {rows.length ? "Add another part" : "Record used part"}
+        {rows.length ? t("parts.addAnotherPart") : t("parts.recordUsedPart")}
       </Button>
       <div className="used-parts-feedback" aria-live="polite">
         {message ? <span>{message}</span> : <span></span>}

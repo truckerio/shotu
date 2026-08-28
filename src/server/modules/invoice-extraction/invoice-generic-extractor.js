@@ -78,9 +78,10 @@ function vendorCandidate(regions) {
       && !excluded.test(normalized(region.text)) && !/(?:https?:\/\/|www\.|\.[a-z]{2,}\b)/i.test(region.text))
     .map((region) => {
       const text = normalized(region.text);
-      const businessNameSignal = /\b(?:truck|freightliner|centers?|equipment|parts|automotive|volvo|mack|rush|velocity)\b/.test(text) ? 1.5 : 0;
+      const businessNameSignal = /\b(?:truck|freightliner|centers?|equipment|parts|automotive|rush|velocity)\b/.test(text) ? 1.5 : 0;
+      const standaloneBrandPenalty = /^(?:volvo|mack|wabash|autocar)$/.test(text) ? 2 : 0;
       const relationshipFragmentPenalty = /^(?:a )?(?:division|part|member|on) of\b/.test(text) ? 2 : 0;
-      return { region, score: (region.confidence * 3) + Math.min(1.5, region.text.length / 20) + businessNameSignal - relationshipFragmentPenalty - (center(region, "y") * 2) };
+      return { region, score: (region.confidence * 3) + Math.min(1.5, region.text.length / 20) + businessNameSignal - standaloneBrandPenalty - relationshipFragmentPenalty - (center(region, "y") * 2) };
     })
     .sort((left, right) => right.score - left.score)[0]?.region || null;
 }
@@ -184,9 +185,11 @@ export function extractGenericInvoiceDraft({ observation, ocrText = "" } = {}) {
   const regions = normalizedObservation.regions;
   const rows = groupRows(regions);
   const vendor = vendorCandidate(regions);
-  const invoiceNumber = valueRightOfLabel(regions, /^(?:parts )?invoice(?: number| no| #)?/);
-  const invoiceDate = valueRightOfLabel(regions, /^(?:date invoice|invoice date|date)$/);
-  const purchaseOrder = valueRightOfLabel(regions, /^(?:purchase order(?: no)?|po|po #)$/);
+  // Bare "INVOICE" and "DATE" headings are not labels: treating them as
+  // labels can pull unrelated nearby words such as payment terms or customer.
+  const invoiceNumber = valueRightOfLabel(regions, /^(?:parts )?invoice(?: number| no\.?|\s*#)/);
+  const invoiceDate = valueRightOfLabel(regions, /^(?:date invoice|invoice date)\b/);
+  const purchaseOrder = valueRightOfLabel(regions, /^(?:customer[ .-]*po|cust\.?[ .-]*po|purchase order(?: no\.?)?|po(?: #)?)(?=[:#\s]|$)/);
   const subtotal = valueRightOfLabel(regions, /^(?:sub ?total)(?:[:# -].*)?$/, { numeric: true });
   const tax = valueRightOfLabel(regions, /^(?:sales )?tax(?:[:# -].*)?$/, { numeric: true });
   const shipping = valueRightOfLabel(regions, /^(?:shipping|shipping & handling|freight)(?:[:# -].*)?$/, { numeric: true });

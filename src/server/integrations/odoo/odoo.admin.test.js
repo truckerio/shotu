@@ -175,9 +175,10 @@ test("Odoo inventory collapses provider locations and duplicate product identiti
 test("Odoo inventory import reconciles stale provider rows after canonical upserts", async () => {
   const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
   assert.match(repository, /buildOdooInventoryBalances\(\{ quants, mappedLocations, catalogIds \}\)/);
-  assert.match(repository, /source_provider = excluded\.source_provider[\s\S]*external_id = excluded\.external_id/);
-  assert.match(repository, /source_provider = 'odoo'[\s\S]*last_seen_at is distinct from \$2/);
-  assert.match(repository, /set quantity_on_hand = quantity_reserved[\s\S]*source_provider = ''[\s\S]*external_id = ''/);
+  assert.match(repository, /insert into odoo_inventory_balances/);
+  assert.match(repository, /external_id = excluded\.external_id[\s\S]*quantity_on_hand = excluded\.quantity_on_hand/);
+  assert.match(repository, /update odoo_inventory_balances[\s\S]*set quantity_on_hand = 0[\s\S]*last_seen_at is distinct from \$2/);
+  assert.doesNotMatch(repository.slice(repository.indexOf("export async function importOdooInventory")), /insert into inventory_items/);
 });
 
 test("Odoo repair text keeps work performed and does not treat generic labor product names as repairs", () => {
