@@ -87,12 +87,13 @@ can confirm a complete physical delivery from a reviewed invoice without Odoo,
 producing one idempotent receipt, durable lines, append-only stock movements,
 location balances, one application serial per discrete unit, and a durable
 printable-label batch. A shared Inventory workspace exposes bounded stock,
-invoice history, and a reusable right-side part detail surface. Mechanics can
-resolve an exact QR/manual code inside a workorder and record issue, install, or
-return with append-only unit history; terminal workorder transitions are blocked
-while an exact unit remains unresolved. Office can request and approve a local
-stock recommendation, but that approval intentionally does not reserve or move
-stock yet.
+invoice history, and a reusable right-side part detail surface. An authorized
+workorder actor can reserve an exact QR/manual unit without reducing on-hand,
+record installation pending Office approval, or explicitly return it to
+available stock. Office approval atomically consumes pending installed units;
+later removal is recorded in unit/workorder history without silently returning
+the used item to on-hand. Aggregate supply recommendations remain a separate
+legacy allocation path and are not bound to exact serialized reservations.
 
 The retained Odoo receipt path remains optional compatibility behavior. A
 bounded opening-count import now reuses Odoo-synchronized master identities,
@@ -114,8 +115,8 @@ reporting, cores, or a dedicated Parts role.
 | Mechanic part request | IMPLEMENTED | mechanic parts route, `MechanicPartRequestForm.jsx` | Mechanic submits structured request inside a workorder. |
 | Office review and supply recommendation | PARTIAL, LOCAL VERIFIED | `part-fulfillment.service.js`; `OfficeRequestCard.jsx`; `GetPartsFlow.jsx` | Office can ask the backend for a location-scoped local-stock recommendation and approve that recommendation. Approval is audit evidence only; it does not reserve or move stock. Legacy aggregate allocation remains separate. |
 | Local issue/return quantity updates | IMPLEMENTED, TEMPORARY ARCHITECTURE | `part-requests.repo.js` | Reserved→issued decrements local balance; issued→returned increments it. No Odoo stock command is made. |
-| Serialized-part workorder disposition | PARTIAL, EXACT-UNIT VERIFIED | `SerializedPartsScanner.jsx`; `inventory-unit-workorder.service.js` | Office/Admin can scan/enter one serialized local unit and record issue, install, or return against the current workorder and asset. Mechanics are denied by default and require an explicit Part scanning module grant plus active assignment. General damaged/not-used/warranty workflows remain absent. |
-| Workorder completion guard | PARTIAL, EXACT-UNIT VERIFIED | operational workorder repository lifecycle guards | Done, cancel, close, asset/location reassignment, mechanic reassignment, and mechanic self-release fail closed while an exact unit is issued but not finally installed or returned. Legacy aggregate requests retain their existing guards. |
+| Serialized-part workorder disposition | PARTIAL, EXACT-UNIT LOCAL VERIFIED | `SerializedPartsScanner.jsx`; `inventory-unit-workorder.service.js`; migration `087` | Exact local units move through reserved → installed pending approval → installed. Reservation affects reserved/available only; Office approval consumes on-hand. A pre-approval removal explicitly returns the unit and releases the reservation; a post-approval removal records used-part history without restoring stock. Mechanics remain denied by default and require an explicit Part scanning grant plus active assignment. Damaged/quarantine/core workflows remain absent. |
+| Workorder completion guard | PARTIAL, EXACT-UNIT LOCAL VERIFIED | operational workorder repository lifecycle guards | Work done continues to block unresolved reserved units but accepts an explicitly installed-pending-approval unit. Office close consumes every pending installed unit in the same transaction and records approval evidence. Cancel, reassignment, and self-release fail closed while exact reservations remain active. Legacy aggregate requests retain their existing guards. |
 | Odoo service-order export | IMPLEMENTED, SEPARATE DOMAIN | `odoo.outbound.*`; migrations `048`, `056`, `059` | Creates a draft Odoo Sales service order after readiness checks. It intentionally does not confirm orders, create invoices, post payments, or mutate stock. |
 | Dedicated Parts role and permissions | PARTIAL | shared `partsScanning` module policy; Admin Modules | Roles remain mechanic, office, surveillance, and admin. Exact workorder scan/issue has a dedicated role/named-user module permission; a standalone Parts role and broader inventory permission family remain absent. |
 | Parts inventory workspace | PARTIAL, LOCAL VERIFIED | `InventoryWorkspace.jsx`; Admin and Office navigation | Inventory is stock-only. Invoice upload, review, receipt actions, and receipt-enriched history are progressively grouped in Invoice Intake. Dedicated Parts role, movements UI, receiving tasks, and warehouse exception queues remain absent. |
@@ -719,3 +720,18 @@ Each implementation slice records applicable evidence:
 - Verification: The pre-review gate passed 70 focused tests, 1,372 full unit tests (1,363 pass, 9 opt-in skips, 0 fail), production check/build, and 2 real PostgreSQL integrations. Authenticated localhost proved Office defaults, the compact 44px scanner, exact resolve/issue, issued state after reload, Return unused, stock restoration, no phone-width overflow, focus restoration, and a clean fresh-page console. The temporary local workorder/asset and its usage/events/movements were removed after verification; the real serialized unit was confirmed `in_stock`. Independent review found and drove fixes for narrow-grant visibility and stale list-response ordering; final recheck evidence is recorded in the task state.
 - Release evidence: Local working tree only. No commit, push, deployment, production mutation, or Odoo write was authorized. One temporary local QA issue/return was explicitly performed for this localhost verification and fully cleaned up.
 - Remaining gaps: Automatic no-confirm issue, bulk scan, transfer receiving, damaged/core dispositions, and actual-device camera-permission proof remain outside this slice.
+
+### INV-20260829-03 — Approval-gated serialized-part reservation lifecycle
+
+- Status: LOCAL VERIFIED; RENDERED STAGING NOT VERIFIED
+- Decision/requirement: Keep an exact installed part reserved, not deducted, until Office approves the workorder; support explicit removal with durable timeline evidence and correct availability restoration.
+- Before: Exact-unit issue immediately decremented on-hand. Install was final before Office approval, and removal after install had no supported disposition or workorder timeline projection.
+- After: New local usages reserve one exact unit while on-hand stays unchanged. Install records `installed_pending_approval`; Office close consumes it atomically and records `installed`. Explicit pre-approval removal records `returned`, releases reserved quantity, and restores availability without inflating on-hand. Explicit post-approval removal records `removed` and does not put a used item back into sellable inventory.
+- Canonical owners: `inventory_serialized_units`; `inventory_unit_workorder_usage`; `inventory_unit_events`; `inventory_stock_movements`; `inventory_items`; inventory-unit workorder repository/service/routes; operational-workorder close transaction; shared workorder Parts scanner and Activity projection.
+- Data/API changes: Migration `087_workorder_serialized_part_reservation_lifecycle.sql` adds the reservation/pending/removal states, an active-unit uniqueness guard, and idempotent disposition commands. Existing issue/finalize endpoints retain their shape; `removed` is an added final disposition. Legacy already-issued rows preserve their original accounting and are never consumed twice.
+- User-experience changes: The operator sees Reserved, Installed — awaiting office approval, Installed, Returned, or Removed. Removing requires confirmation. Activity shows the part number and serialized identity for reserve/install/return/removal events; accounting transitions are not exposed as operator controls.
+- Authorization/security changes: Existing authenticated company, location, module, and assignment checks remain authoritative. Only local-authority stock can enter this lifecycle; Odoo/provider stock fails closed without a provider command. Idempotency keys and row locks prevent replay and concurrent double reservation/consumption.
+- Failure/reconciliation behavior: Work done blocks unresolved reservations. Office close and pending-install consumption share one transaction. A pre-approval return changes reserved/available only; a post-approval removal requires inspection/quarantine outside this slice and never silently increases on-hand. Aggregate request allocations are respected by the availability calculation but are not explicitly bound to a serialized unit.
+- Verification: Focused model, route, service, repository, lifecycle, timeline, and projection tests passed. A fresh disposable PostgreSQL database applies all migrations and exercises the exact reservation lifecycle; final full-suite and independent-review evidence is recorded in the task state.
+- Release evidence: Local verification is complete and Git delivery to `origin/staging` is authorized. No Railway deployment, database migration, production mutation, Odoo write, or staging data mutation is authorized.
+- Remaining gaps: Bind aggregate allocations to exact reserved identities; add damaged/quarantine/inspection disposition and restock approval for removed used parts; perform an authenticated rendered staging walkthrough after deployment is separately authorized.

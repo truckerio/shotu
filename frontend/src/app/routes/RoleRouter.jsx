@@ -10,7 +10,7 @@ import { RoleWorkspaceOutlet } from "./RoleWorkspaceOutlet.jsx";
 import { useInitialRoleRouteHydration, useWorkorderDetailRoute } from "./useWorkorderDetailRoute.js";
 import { useWorkorderDetailViewModel } from "./useWorkorderDetailViewModel.js";
 import { updateDetailDiagnosisRepair } from "./role-router-api.js";
-import { createDraftBaselineFromForm, createInitialDraftBaseline, createInitialWorkorderForm, workorderFormValues } from "./role-router-model.js";
+import { createDraftBaselineFromForm, createInitialDraftBaseline, createInitialWorkorderForm, workorderFormValues, workorderPreviewForm } from "./role-router-model.js";
 import { vehicleMileage, vehicleModelText } from "../../features/create-workorder/vehicle-lookup-model.js";
 import { useVehicleLookupController } from "../../features/create-workorder/useVehicleLookupController.js";
 import { useWorkorderDraftLifecycle } from "../../features/create-workorder/useWorkorderDraftLifecycle.js";
@@ -28,8 +28,7 @@ import { api } from "../../lib/api.js";
 import { workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
 export function RoleRouter({ actor }) {
   const capabilities = roleCapabilities(actor.role);
-  const formRef = useRef(null);
-  const previewRef = useRef(null);
+  const formRef = useRef(null); const previewRef = useRef(null);
   const previewGridRef = useRef(null);
   const mechanicProgressBackupRestoredRef = useRef("");
   const officeActionsRef = useRef(null);
@@ -58,13 +57,14 @@ export function RoleRouter({ actor }) {
   const [detailStatus, setDetailStatus] = useState("open");
   const [detailSource, setDetailSource] = useState(null);
   const [form, setForm] = useState(() => createInitialWorkorderForm(actor));
+  const previewForm = useMemo(() => workorderPreviewForm(form, activeWorkorder), [activeWorkorder, form]);
   const effectiveCopies = 1;
   const firstSerial = activeWorkorder?.workorder?.serial || "DRAFT";
   const previewSerials = useMemo(() => [firstSerial], [firstSerial]);
   const lastSerial = firstSerial;
   const range = firstSerial;
   const workorderCountLabel = actor.role === "mechanic" ? interfaceText(interfaceLocale, activeWorkorder ? "preview.oneWorkorder" : "preview.draftWorkorder") : (activeWorkorder ? "1 workorder" : "Draft workorder");
-  const lastPhysicalPageIndex = workorderPhysicalPageCount(form) - 1;
+  const lastPhysicalPageIndex = workorderPhysicalPageCount(previewForm) - 1;
   const primaryActionLabel = actor.role === "mechanic" ? interfaceText(interfaceLocale, "preview.printWorkorder") : "Print workorder";
   const canPrint = capabilities.canPrintWorkorder;
   const {
@@ -78,7 +78,7 @@ export function RoleRouter({ actor }) {
     activeWorkorderId: activeWorkorder?.workorder?.id,
     activeWorkorderLocationId: activeWorkorder?.workorder?.locationId,
     effectiveCopies,
-    form,
+    form: previewForm,
     previewSerials,
     range,
     request: api,
@@ -457,7 +457,7 @@ export function RoleRouter({ actor }) {
       detailPageProps={{
         ...detailViewModel,
         activeWorkorder, actor, browserPrintPayload, canPrint, detailSection, detailStatus,
-        effectiveCopies, firstSerial, form, formRef, fullscreenPageIndex, fullscreenZoom,
+        effectiveCopies, firstSerial, form, previewForm, formRef, fullscreenPageIndex, fullscreenZoom,
         isCompact, isMechanicDetail, isOfficeDetail, isPhone, locale: interfaceLocale,
         localeError: interfacePreferences.error, localeReady: interfacePreferences.ready, lastPhysicalPageIndex, lastSerial, mapsConfig,
         mechanicAction, mechanicFinish, mechanicProgress, officeAssignment, officeCancel,

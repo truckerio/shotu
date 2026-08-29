@@ -85,11 +85,17 @@ test("camera denial or unavailable support enters manual recovery", () => {
   assert.match(scanner, /catch[\s\S]*setMessage\(text\.cameraAccessUnavailable\)[\s\S]*setManualEntry\(true\)/);
 });
 
-test("authorized parts surfaces expose one exact issue action and explicit final dispositions", () => {
-  assert.match(surface, /t\("parts\.useOnWorkorder"\)/);
+test("authorized parts surfaces reserve exact units and expose explicit physical dispositions", () => {
+  assert.match(surface, /t\("parts\.reserveForWorkorder"\)/);
+  assert.match(surface, /t\("parts\.reservedForWorkorder"\)/);
   assert.match(surface, /t\("parts\.disposition"\)/);
-  assert.match(surface, /t\("parts\.installed"\)/);
+  assert.match(surface, /t\("parts\.markInstalled"\)/);
   assert.match(surface, /t\("parts\.returnUnused"\)/);
+  assert.match(surface, /t\("parts\.removeFromUnit"\)/);
+  assert.match(surface, /removeConfirmationId/);
+  assert.match(surface, /parts\.removePhysicalReturnConfirm/);
+  assert.match(surface, /inventory-unit-usages.*\/finalize/);
+  assert.match(surface, /disposition: usage\.status === "installed_pending_approval" \? "returned" : "removed"/);
   assert.match(surface, /inventory-unit-usages/);
   assert.doesNotMatch(surface, /\/api\/mechanic\//);
   assert.match(surface, /aria-live="polite"/);
@@ -201,6 +207,15 @@ test("drawer controls and result state have complete mechanic locale coverage", 
       "parts.expandDetails",
       "parts.readyToUse",
       "parts.unavailable",
+      "parts.reserveForWorkorder",
+      "parts.reservedForWorkorder",
+      "parts.markInstalled",
+      "parts.removeFromUnit",
+      "parts.removeReturnConfirm",
+      "parts.removeInspectionConfirm",
+      "parts.confirmRemove",
+      "parts.removedReturnedToStock",
+      "parts.removedInspectionRequired",
     ]) {
       assert.match(dictionary, new RegExp(`"${key}":\\s*"[^"\\n]+"`));
     }

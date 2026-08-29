@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   inventoryScannerAvailable,
+  inventoryUsageActions,
   inventoryUsageStatusLabel,
   enqueuePendingCandidate,
   mergeUsageSnapshot,
@@ -33,7 +34,35 @@ test("usage model replaces stable refresh rows without duplication", () => {
   const first = { id: "usage-1", status: "issued" };
   assert.deepEqual(replaceUsage([first], { ...first, status: "installed" }), [{ id: "usage-1", status: "installed" }]);
   assert.deepEqual(replaceUsage([], first), [first]);
+  assert.equal(inventoryUsageStatusLabel("reserved"), "Reserved — awaiting Office approval");
+  assert.equal(inventoryUsageStatusLabel("installed_pending_approval"), "Installed — awaiting Office approval");
   assert.equal(inventoryUsageStatusLabel("returned"), "Returned unused");
+});
+
+test("usage actions preserve server authority while supporting legacy reserved records", () => {
+  assert.deepEqual(inventoryUsageActions({ status: "reserved" }), {
+    install: true,
+    returnUnused: true,
+    remove: false,
+  });
+  assert.deepEqual(inventoryUsageActions({ status: "installed_pending_approval" }), {
+    install: false,
+    returnUnused: false,
+    remove: true,
+  });
+  assert.deepEqual(inventoryUsageActions({ status: "installed" }), {
+    install: false,
+    returnUnused: false,
+    remove: true,
+  });
+  assert.deepEqual(inventoryUsageActions({
+    status: "consumed",
+    allowedActions: { install: false, returnUnused: false, remove: true },
+  }), {
+    install: false,
+    returnUnused: false,
+    remove: true,
+  });
 });
 
 test("usage snapshots cannot overwrite a newer issue or finalization", () => {

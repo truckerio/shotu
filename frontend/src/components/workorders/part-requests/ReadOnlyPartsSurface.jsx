@@ -9,6 +9,7 @@ export function ReadOnlyPartsSurface({
   laborProduct,
   laborRepairOrder,
   laborRepairOrderDisabled,
+  installedParts = [],
   onLaborHoursChange,
   onLaborRepairOrderChange,
   onPartsChange,
@@ -27,6 +28,7 @@ export function ReadOnlyPartsSurface({
         laborProduct={laborProduct}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
+        installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onPartsChange={onPartsChange}

@@ -14,6 +14,7 @@ export function MechanicPartsSurface({
   laborProduct,
   laborRepairOrder,
   laborRepairOrderDisabled,
+  installedParts = [],
   onLaborHoursChange,
   onLaborRepairOrderChange,
   onPartsChange,
@@ -25,7 +26,7 @@ export function MechanicPartsSurface({
   const mechanicActions = mechanicPartsActionState(detail.allowedActions || {});
   const [activeAction, setActiveAction] = useState(() => mechanicActions.canRecordUsedPart ? "used" : "");
   const requests = detail.partRequests || [];
-  const hasRecordedUsedParts = Array.isArray(parts) && parts.some(usedPartHasValue);
+  const hasRecordedUsedParts = (Array.isArray(parts) && parts.some(usedPartHasValue)) || installedParts.length > 0;
   const showUsedParts = mechanicActions.canRecordUsedPart || hasRecordedUsedParts;
   const usedPartsPanelId = `used-parts-${detail.workorder.id}`;
   const requestPartPanelId = `request-part-${detail.workorder.id}`;
@@ -80,6 +81,7 @@ export function MechanicPartsSurface({
             laborProduct={laborProduct}
             laborRepairOrder={laborRepairOrder}
             laborRepairOrderDisabled={laborRepairOrderDisabled}
+            installedParts={installedParts}
             onLaborHoursChange={onLaborHoursChange}
             onLaborRepairOrderChange={onLaborRepairOrderChange}
             onPartsChange={onPartsChange}

@@ -61,6 +61,7 @@ test("parts projection returns persisted labor hours with used parts", () => {
         parts: [{ partNo: "P1", qty: "1", uomCode: "ea", repairOrder: "Installed" }],
       },
     },
+    installedSerializedParts: [{ catalogPartId: "catalog-1", partNumber: "P2", quantity: 1, uomCode: "ea" }],
   }, {
     parts: { access: "write", source: "default" },
   });
@@ -68,6 +69,20 @@ test("parts projection returns persisted labor hours with used parts", () => {
   assert.equal(projected.workorder.formData.laborHours, "2.5");
   assert.equal(projected.modules.parts.data.formData.laborHours, "2.5");
   assert.equal(projected.modules.parts.data.formData.laborProduct.code, "LAB200");
+  assert.deepEqual(projected.modules.parts.data.installedSerializedParts, [
+    { catalogPartId: "catalog-1", partNumber: "P2", quantity: 1, uomCode: "ea" },
+  ]);
+});
+
+test("installed serialized summaries stay hidden when Parts is hidden", () => {
+  const projected = projectProtectedWorkorderDetail({
+    workorder: { id: "wo-1", companyId: "company-1", formData: {} },
+    installedSerializedParts: [{ catalogPartId: "catalog-1", partNumber: "SECRET", quantity: 1, uomCode: "ea" }],
+  }, {
+    parts: { access: "hidden", source: "user" },
+    preview: { access: "read", source: "default" },
+  });
+  assert.equal(JSON.stringify(projected).includes("SECRET"), false);
 });
 
 test("mechanic parts projection exposes only local operational availability and safe request fields", () => {

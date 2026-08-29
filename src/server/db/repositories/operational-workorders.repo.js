@@ -6,6 +6,7 @@ import { OPERATIONS_ACTIVE_LIFECYCLES } from "../../modules/workorders/workorder
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 import { publicOdooRecordUrl } from "../../integrations/odoo/odoo.navigation.js";
+import { consumePendingSerializedInstallationsForApproval } from "./inventory-unit-workorder-usage.repo.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
   return `
@@ -216,15 +217,20 @@ function lifecycleConflict(code, message) {
   return new WorkorderLifecycleConflictError(code, message);
 }
 
-async function assertNoUnresolvedSerializedParts(client, workorderId, message) {
+async function assertNoUnresolvedSerializedParts(
+  client,
+  workorderId,
+  message,
+  statuses = ["issued", "reserved", "installed_pending_approval"],
+) {
   const pending = await client.query(
     `select id
      from workorder_serialized_part_usages
-     where workorder_id = $1 and status = 'issued'
+     where workorder_id = $1 and status = any($2::varchar[])
      order by id
      limit 1
      for update`,
-    [workorderId],
+    [workorderId, statuses],
   );
   if (pending.rows[0]) {
     throw lifecycleConflict(
@@ -1116,7 +1122,9 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as field_key,
           null::text as field_label,
           null::text as old_value,
-          null::text as new_value
+          null::text as new_value,
+          null::text as part_number,
+          null::text as serial_number
         from workorder_status_events se
         left join user_profiles u on u.id = se.changed_by_user_id
         where se.workorder_id = $1
@@ -1139,7 +1147,9 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as field_key,
           null::text as field_label,
           null::text as old_value,
-          null::text as new_value
+          null::text as new_value,
+          null::text as part_number,
+          null::text as serial_number
         from workorder_assignment_events ae
         left join user_profiles u on u.id = ae.changed_by_user_id
         left join user_profiles fm on fm.id = ae.from_mechanic_id
@@ -1164,7 +1174,9 @@ export async function getWorkorderTimeline(workorderId) {
           fe.field_key,
           fe.field_label,
           fe.old_value,
-          fe.new_value
+          fe.new_value,
+          null::text as part_number,
+          null::text as serial_number
         from workorder_field_events fe
         left join user_profiles u on u.id = fe.changed_by_user_id
         where fe.workorder_id = $1
@@ -1187,10 +1199,42 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as field_key,
           'Part request'::text as field_label,
           null::text as old_value,
-          null::text as new_value
+          null::text as new_value,
+          null::text as part_number,
+          null::text as serial_number
         from part_request_events pe
         left join user_profiles u on u.id = pe.actor_user_id
         where pe.workorder_id = $1
+        union all
+        select
+          inventory_event.id,
+          'part' as type,
+          null::text as from_status,
+          null::text as to_status,
+          null::uuid as from_mechanic_id,
+          null::uuid as to_mechanic_id,
+          inventory_event.event_type as action,
+          concat(line.part_number, ' · ', unit.serial_number, ': ',
+            replace(inventory_event.event_type, '_', ' '), '.') as note,
+          u.display_name as changed_by_name,
+          inventory_event.actor_id as actor_user_id,
+          (select role from v_user_primary_role where user_id = u.id) as actor_role,
+          null::text as from_mechanic_name,
+          null::text as to_mechanic_name,
+          inventory_event.created_at,
+          null::text as field_key,
+          'Serialized part'::text as field_label,
+          null::text as old_value,
+          null::text as new_value,
+          line.part_number,
+          unit.serial_number
+        from inventory_unit_events inventory_event
+        join inventory_serialized_units unit
+          on unit.company_id = inventory_event.company_id and unit.id = inventory_event.unit_id
+        join inventory_receipt_lines line
+          on line.company_id = unit.company_id and line.id = unit.receipt_line_id
+        left join user_profiles u on u.id = inventory_event.actor_id
+        where inventory_event.workorder_id = $1
         union all
         select
           attention.id,
@@ -1216,7 +1260,9 @@ export async function getWorkorderTimeline(workorderId) {
           attention.reason as field_key,
           'Attention'::text as field_label,
           null::text as old_value,
-          null::text as new_value
+          null::text as new_value,
+          null::text as part_number,
+          null::text as serial_number
         from workorder_attention_events attention
         left join user_profiles u on u.id = attention.actor_user_id
         where attention.workorder_id = $1
@@ -1239,7 +1285,9 @@ export async function getWorkorderTimeline(workorderId) {
           null::text as field_key,
           null::text as field_label,
           null::text as old_value,
-          null::text as new_value
+          null::text as new_value,
+          null::text as part_number,
+          null::text as serial_number
         from workorder_access_events access
         left join user_profiles u on u.id = access.user_id
         where access.workorder_id = $1
@@ -1533,7 +1581,7 @@ export async function markOperationalWorkorderDone(
       );
       if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
     }
-    await assertNoUnresolvedSerializedParts(client, workorderId);
+    await assertNoUnresolvedSerializedParts(client, workorderId, "", ["issued", "reserved"]);
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     const nextInput = {
@@ -1835,7 +1883,12 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
         "Review all pending part requests before approving this workorder.",
       );
     }
-    await assertNoUnresolvedSerializedParts(client, workorderId);
+    await assertNoUnresolvedSerializedParts(client, workorderId, "", ["issued", "reserved"]);
+    await consumePendingSerializedInstallationsForApproval(client, {
+      workorderId,
+      companyId: workorder.company_id,
+      officeUserId,
+    });
     const cancelledFulfillments = await client.query(
       `update part_fulfillment_requests
           set state = 'cancelled', cancelled_at = now(), updated_at = now()

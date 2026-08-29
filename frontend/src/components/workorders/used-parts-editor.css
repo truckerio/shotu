@@ -56,6 +56,25 @@
   background: var(--surface-subtle, #f9fafb);
 }
 
+.used-part-serialized-row {
+  background: var(--surface-subtle, #f9fafb);
+}
+
+.used-part-serialized-row small,
+.used-part-serialized-status {
+  color: var(--text-secondary, #475467);
+  font-size: var(--text-caption, 12px);
+}
+
+.used-part-serialized-value {
+  align-self: center;
+}
+
+.used-part-serialized-status {
+  align-self: center;
+  font-weight: 600;
+}
+
 .used-part-labor-name,
 .used-part-labor-repair {
   display: flex;

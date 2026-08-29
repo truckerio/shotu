@@ -119,3 +119,10 @@ test("inventory stock applies a whitelisted requested order before pagination", 
   assert.match(orderBy, /lower\(part_number\), catalog_part_id/i);
   assert.ok(orderBy.length > 0);
 });
+
+test("inventory stock projects the durable UOM lock marker without an activity scan", async () => {
+  const repository = await readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /catalog\.uom_locked_at/);
+  assert.match(repository, /uomLocked: row\.uom_locked_at !== null/);
+  assert.doesNotMatch(repository, /const catalogPartIds/);
+});

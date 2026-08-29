@@ -10,10 +10,26 @@ export function inventoryScannerAvailable(environment = globalThis) {
 
 export function inventoryUsageStatusLabel(status) {
   return {
-    issued: "Awaiting final disposition",
+    issued: "Reserved",
+    reserved: "Reserved — awaiting Office approval",
+    installed_pending_approval: "Installed — awaiting Office approval",
     installed: "Installed",
+    consumed: "Consumed after Office approval",
     returned: "Returned unused",
+    removed: "Removed — inspection required",
+    removed_inspection_required: "Removed — inspection required",
+    inspection_required: "Removed — inspection required",
   }[status] || String(status || "").replaceAll("_", " ");
+}
+
+export function inventoryUsageActions(usage) {
+  const status = String(usage?.status || "").trim();
+  const allowed = usage?.allowedActions || {};
+  return {
+    install: allowed.install ?? usage?.canInstall ?? ["issued", "reserved"].includes(status),
+    returnUnused: allowed.returnUnused ?? usage?.canReturnUnused ?? ["issued", "reserved"].includes(status),
+    remove: allowed.remove ?? usage?.canRemove ?? ["installed_pending_approval", "installed"].includes(status),
+  };
 }
 
 export function replaceUsage(usages, nextUsage) {

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync(new URL("../../db/migrations/069_inventory_unit_workorder_usage.sql", import.meta.url), "utf8");
+const reservationMigration = readFileSync(new URL("../../db/migrations/087_workorder_serialized_part_reservation_lifecycle.sql", import.meta.url), "utf8");
 const repository = readFileSync(new URL("../../db/repositories/inventory-unit-workorder-usage.repo.js", import.meta.url), "utf8");
 const workorders = readFileSync(new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url), "utf8");
 const server = readFileSync(new URL("../../../../server.js", import.meta.url), "utf8");
@@ -28,6 +29,29 @@ test("serialized usage evidence is append-only and stock movements link unit, us
   assert.doesNotMatch(repository, /update inventory_stock_movements/i);
 });
 
+test("reservation lifecycle preserves legacy issue while approval owns new consumption", () => {
+  assert.match(reservationMigration, /'reserved', 'installed_pending_approval'/i);
+  assert.match(reservationMigration, /workorder_serialized_part_usage_commands/i);
+  assert.match(reservationMigration, /'removed_returned_to_stock'/i);
+  assert.match(reservationMigration, /status in \('installed_pending_approval', 'installed', 'returned', 'removed'\)[\s\S]*finalized_by_user_id is not null[\s\S]*finalize_request_hash is not null/i);
+  assert.match(repository, /quantity_on_hand - quantity_reserved >= 1/i);
+  assert.match(repository, /quantity_reserved = quantity_reserved \+ 1/i);
+  assert.match(repository, /consumePendingSerializedInstallationsForApproval/i);
+  assert.match(repository, /quantity_on_hand = quantity_on_hand - 1,[\s\S]*quantity_reserved = quantity_reserved - 1/i);
+  assert.match(workorders, /consumePendingSerializedInstallationsForApproval\(client/i);
+  assert.match(workorders, /inventory_unit_events inventory_event[\s\S]*inventory_event\.workorder_id = \$1/i);
+  assert.match(workorders, /line\.part_number,[\s\S]*unit\.serial_number/i);
+  assert.match(repository, /pendingInstall[\s\S]*"removed_returned_to_stock"/i);
+});
+
+test("installed-part summaries are tenant scoped, finalized only, grouped, and bounded", () => {
+  assert.match(repository, /listWorkorderInstalledSerializedParts/);
+  assert.match(repository, /usage\.workorder_id = \$1[\s\S]*usage\.company_id = \$2[\s\S]*usage\.location_id = \$3/i);
+  assert.match(repository, /usage\.status in \('installed_pending_approval', 'installed'\)/i);
+  assert.match(repository, /group by usage\.catalog_part_id, line\.part_number, usage\.uom_code/i);
+  assert.match(repository, /limit \$4/i);
+});
+
 test("repository locks workorder, exact unit, usage, and local balance before mutation", () => {
   assert.match(repository, /for update of workorder/i);
   assert.match(repository, /for update of unit/i);
@@ -35,6 +59,7 @@ test("repository locks workorder, exact unit, usage, and local balance before mu
   assert.match(repository, /source_provider = 'local'/i);
   assert.match(repository, /receipt\.provider/i);
   assert.match(repository, /quantity_on_hand = quantity_on_hand - 1/i);
+  assert.match(repository, /quantity_reserved = quantity_reserved \+ 1/i);
   assert.match(repository, /quantity_on_hand = quantity_on_hand \+ 1/i);
   assert.match(repository, /isApplicationOwnedInventoryProvider\(unit\.provider\)/);
   assert.match(service, /isApplicationOwnedInventoryProvider\(unit\.provider\)/);

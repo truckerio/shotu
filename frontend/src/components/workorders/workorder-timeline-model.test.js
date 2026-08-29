@@ -106,6 +106,36 @@ test("used-parts activity formats quantity with its unit", () => {
   }), "Used parts: 2.5 gal × COOLANT, 1 pc × FILTER.");
 });
 
+test("serialized inventory activity keeps exact identity and approval semantics", () => {
+  const reserved = {
+    type: "part",
+    action: "reserved",
+    part_number: "FLT-22",
+    serial_number: "SN-007",
+  };
+  const returned = {
+    type: "part",
+    action: "returned",
+    partNumber: "FLT-22",
+    serialNumber: "SN-007",
+  };
+  const removed = {
+    type: "part",
+    action: "removed_returned_to_stock",
+    partNumber: "FLT-22",
+    serialNumber: "SN-007",
+  };
+  const consumed = { type: "part", action: "installed", part_number: "FLT-22" };
+
+  assert.equal(timelineEventTitle(reserved), "Part reserved");
+  assert.equal(timelineEventDescription(reserved), "FLT-22 · SN-007: Reserved for this workorder; inventory is pending Office approval.");
+  assert.equal(timelineEventTitle(returned), "Part returned unused");
+  assert.equal(timelineEventDescription(returned), "FLT-22 · SN-007: Returned unused to available stock.");
+  assert.equal(timelineEventTitle(removed), "Part removed from unit");
+  assert.equal(timelineEventDescription(removed), "FLT-22 · SN-007: Removed from unit and physically returned to available stock.");
+  assert.equal(timelineEventDescription(consumed), "FLT-22: Consumed after Office approval.");
+});
+
 test("same actor and event family group inside the inclusive two-minute activity window", () => {
   const events = [
     usedPartsEvent({

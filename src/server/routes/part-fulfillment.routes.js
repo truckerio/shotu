@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { InventoryError } from "../modules/inventory/inventory.errors.js";
+import { catalogUomConflictError, InventoryError } from "../modules/inventory/inventory.errors.js";
 import { approveRecommendedFulfillment, recommendPartFulfillment } from "../modules/parts/part-fulfillment.service.js";
 
 function approvalId(pathname) {
@@ -8,6 +8,7 @@ function approvalId(pathname) {
 }
 
 function sendError(sendJson, res, error) {
+  error = catalogUomConflictError(error) || error;
   if (error instanceof ZodError) return sendJson(res, 400, { error: "Invalid Get Parts request.", code: "validation_error", issues: error.issues });
   if (error instanceof InventoryError) return sendJson(res, error.statusCode, { error: error.message, code: error.code, retryable: error.retryable });
   throw error;

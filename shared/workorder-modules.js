@@ -119,7 +119,7 @@ export const WORKORDER_MODULES = Object.freeze([
     key: "partsScanning",
     owner: "inventory.serialized-parts",
     label: "Part scanning",
-    description: "Scan and issue exact serialized parts to a workorder.",
+    description: "Scan and reserve exact serialized parts, record installation or return, and remove installed parts.",
     surfaces: Object.freeze(["detail"]),
     capabilities: Object.freeze(["read", "write"]),
     actions: Object.freeze(["resolve", "issue", "finalize"]),

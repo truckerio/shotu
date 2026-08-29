@@ -45,6 +45,7 @@ export function createPartIdentityDraft(part = {}) {
     manufacturer: String(part.manufacturer || ""),
     category: String(part.category || ""),
     barcode: String(part.barcode || ""),
+    uomCode: String(part.uomCode || "ea"),
     referenceNumbers: (part.referenceNumbers || []).map((value) => ({
       id: crypto.randomUUID(),
       value: String(value || ""),
@@ -86,6 +87,7 @@ export function partIdentityPayload(draft, expectedVersion) {
     manufacturer: text(draft.manufacturer),
     category: text(draft.category),
     barcode: text(draft.barcode),
+    uomCode: text(draft.uomCode),
     referenceNumbers: (draft.referenceNumbers || []).map((reference) => text(reference.value)).filter(Boolean),
   };
 }

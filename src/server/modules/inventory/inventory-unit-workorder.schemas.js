@@ -13,6 +13,6 @@ export const issueWorkorderInventoryUnitSchema = z.object({
 }).strict();
 
 export const finalizeWorkorderInventoryUnitSchema = z.object({
-  disposition: z.enum(["installed", "returned"]),
+  disposition: z.enum(["installed", "returned", "removed"]),
   idempotencyKey,
 }).strict();

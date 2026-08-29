@@ -25,6 +25,7 @@ import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extracti
 import { handleInventoryApi } from "./src/server/routes/inventory.routes.js";
 import { handlePartFulfillmentApi } from "./src/server/routes/part-fulfillment.routes.js";
 import { handleInventoryUnitWorkorderApi } from "./src/server/routes/inventory-unit-workorder.routes.js";
+import { catalogUomConflictError } from "./src/server/modules/inventory/inventory.errors.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
 import { startInvoiceExtractionWorker, stopInvoiceExtractionWorker } from "./src/server/modules/invoice-extraction/invoice-extraction-background.worker.js";
@@ -880,6 +881,15 @@ const server = createServer(async (req, res) => {
       await serveStatic(req, res);
     }
   } catch (error) {
+    const catalogUomConflict = catalogUomConflictError(error);
+    if (catalogUomConflict) {
+      sendJson(res, catalogUomConflict.statusCode, {
+        error: catalogUomConflict.message,
+        code: catalogUomConflict.code,
+        retryable: catalogUomConflict.retryable,
+      });
+      return;
+    }
     if (error instanceof IntegrationHttpError) {
       sendJson(res, error.statusCode, {
         error: {

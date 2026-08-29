@@ -188,7 +188,12 @@
 .operations-pagination button:disabled { cursor: default; opacity: .45; }
 .operations-pagination svg { height: 15px; width: 15px; }
 
-.part-request-queue { min-width: 0; }
+.part-request-queue {
+  margin-inline: auto;
+  max-width: 1440px;
+  min-width: 0;
+  width: 100%;
+}
 .part-request-queue-toolbar {
   align-items: end;
   display: grid;
@@ -349,7 +354,15 @@
     width: 1px;
   }
   .part-request-queue-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; padding: 8px 0; }
-  .part-request-queue-cell { align-items: flex-start; border: 0; display: flex; padding: 7px 12px; }
+  .part-request-queue-cell {
+    align-items: flex-start;
+    border: 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    padding: 7px 12px;
+  }
   .part-request-queue-cell::before { color: #667085; content: attr(data-label); flex: 0 0 96px; font-size: var(--text-caption); font-weight: var(--weight-semibold); }
   .part-request-queue-loading span { height: 150px; }
 }

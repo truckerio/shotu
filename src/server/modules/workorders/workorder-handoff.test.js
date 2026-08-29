@@ -75,6 +75,7 @@ test("handoff migration and repository encode transactional lifecycle ownership"
   assert.match(repository, /mechanic_done_at = null/);
   assert.match(repository, /quantity_reserved = quantity_reserved - \$2/);
   assert.match(repository, /approved_by_user_id = \$3/);
+  assert.match(repository, /consumePendingSerializedInstallationsForApproval\(client/);
   assert.match(repository, /approval_status in \('submitted', 'needs_info'\)[\s\S]*for update/);
   assert.match(repository, /WORKORDER_PARTS_PENDING/);
   assert.match(repository, /Review all pending part requests before approving this workorder\./);

@@ -41,12 +41,14 @@ test("generic mechanic and kiosk detail reads apply the restricted parts project
           ],
         }],
       }),
+      listInstalledParts: async () => [{ catalogPartId: "catalog-1", partNumber: "LF9009", quantity: 1, uomCode: "ea" }],
     });
 
     assert.equal(result.partRequests[0].partNumber, "LF9009");
     assert.deepEqual(result.partRequests[0].inventory, [{ locationId: "location-1", quantityAvailable: 2 }]);
     assert.deepEqual(result.partRequests[0].allocations, []);
     assert.equal("rawContext" in result.partRequests[0], false);
+    assert.equal(result.modules.parts.data.installedSerializedParts[0].partNumber, "LF9009");
   }
 });
 
@@ -66,13 +68,31 @@ test("generic mechanic and kiosk Parts module reads cannot bypass response redac
           inventory: [{ locationId: "location-2", locationName: "Remote Yard", quantityAvailable: 10 }],
         }],
       }),
+      listInstalledParts: async () => [{ catalogPartId: "catalog-1", partNumber: "LF9009", quantity: 1, uomCode: "ea" }],
     });
 
     assert.equal(result.partRequests[0].partNumber, "LF9009");
     assert.deepEqual(result.partRequests[0].inventory, []);
     assert.deepEqual(result.partRequests[0].allocations, []);
     assert.equal("sourceAttachmentId" in result.partRequests[0], false);
+    assert.equal(result.modules.parts.data.installedSerializedParts[0].quantity, 1);
   }
+});
+
+test("hidden Parts access does not query or expose installed serialized summaries", async () => {
+  let queried = false;
+  const result = await protectedWorkorderDetail(context, "wo-1", {
+    resolveModules: async () => ({ decisions: {
+      parts: { access: "hidden", source: "user" },
+      preview: { access: "read", source: "default" },
+    } }),
+    loadDetail: async () => ({
+      workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} },
+    }),
+    listInstalledParts: async () => { queried = true; return []; },
+  });
+  assert.equal(queried, false);
+  assert.equal("parts" in result.modules, false);
 });
 
 test("Unit history runtime forwards query input through the dedicated reader", async () => {

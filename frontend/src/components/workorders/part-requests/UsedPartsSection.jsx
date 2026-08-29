@@ -8,6 +8,7 @@ export function UsedPartsSection({
   laborProduct,
   laborRepairOrder,
   laborRepairOrderDisabled,
+  installedParts,
   onLaborHoursChange,
   onLaborRepairOrderChange,
   onPartsChange,
@@ -29,6 +30,7 @@ export function UsedPartsSection({
         laborProduct={laborProduct}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
+        installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onChange={onPartsChange}

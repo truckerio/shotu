@@ -6,6 +6,7 @@ import { DraggableBottomSheet } from "../../ui/DraggableBottomSheet.jsx";
 import { InventoryCodeScanner } from "../../../features/inventory/InventoryCodeScanner.jsx";
 import {
   enqueuePendingCandidate,
+  inventoryUsageActions,
   inventoryUsageStatusLabel,
   mergeUsageSnapshot,
   removePendingCandidate,
@@ -35,6 +36,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
   const [scannerOpen, setScannerOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [drawerSnap, setDrawerSnap] = useState("peek");
+  const [removeConfirmationId, setRemoveConfirmationId] = useState("");
   const finalizeKeysRef = useRef(new Map());
   const usageRevisionRef = useRef(0);
   const usagesLoadedRef = useRef(false);
@@ -75,6 +77,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     setMessageTone("status");
     setScannerOpen(false);
     setUsages([]);
+    setRemoveConfirmationId("");
     usagesLoadedRef.current = true;
     setDrawerSnap("peek");
     drawerSnapRef.current = "peek";
@@ -136,7 +139,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
       } else {
         restartScannerAfterFinalIssue();
       }
-      setMessage(`${result.usage.partNumber} ${t("parts.issuedToWorkorder")}`);
+      setMessage(`${result.usage.partNumber} ${t("parts.reservedForWorkorder")}`);
       await onChanged?.();
     } catch (error) {
       if (generation !== workorderGenerationRef.current) return;
@@ -172,19 +175,67 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
       if (generation !== workorderGenerationRef.current) return;
       usageRevisionRef.current += 1;
       setUsages((current) => replaceUsage(current, result.usage));
-      setMessage(disposition === "installed" ? t("parts.installationRecorded") : t("parts.returnedToStock"));
+      setMessage(disposition === "installed" ? t("parts.installedPendingOffice") : t("parts.returnedToStock"));
       await onChanged?.();
     } catch (error) {
       if (generation !== workorderGenerationRef.current) return;
       setMessageTone("error");
       setMessage(errorText(error));
+      if (error?.status === 409 || error?.code === "INVENTORY_USAGE_STATE_CONFLICT") {
+        await onChanged?.().catch(() => {});
+      }
     } finally {
       if (generation === workorderGenerationRef.current) setBusy("");
     }
   }
 
-  const unresolved = usages.filter((usage) => usage.status === "issued");
-  const completed = usages.filter((usage) => usage.status !== "issued");
+  async function removeFromUnit(usage) {
+    if (busy) return;
+    const generation = workorderGenerationRef.current;
+    const requestedWorkorderId = workorderId;
+    const mapKey = `${usage.id}:remove`;
+    if (!finalizeKeysRef.current.has(mapKey)) {
+      finalizeKeysRef.current.set(mapKey, requestKey("serialized-remove"));
+    }
+    setBusy(mapKey);
+    setMessage("");
+    setMessageTone("status");
+    try {
+      const result = await api(
+        `/api/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-unit-usages/${encodeURIComponent(usage.id)}/finalize`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            disposition: usage.status === "installed_pending_approval" ? "returned" : "removed",
+            idempotencyKey: finalizeKeysRef.current.get(mapKey),
+          }),
+        },
+      );
+      if (generation !== workorderGenerationRef.current) return;
+      usageRevisionRef.current += 1;
+      setUsages((current) => replaceUsage(current, result.usage));
+      setRemoveConfirmationId("");
+      setMessage(["removed", "removed_inspection_required", "inspection_required"].includes(result.usage?.status)
+        ? t("parts.removedInspectionRequired")
+        : t("parts.removedReturnedToStock"));
+      await onChanged?.();
+    } catch (error) {
+      if (generation !== workorderGenerationRef.current) return;
+      setMessageTone("error");
+      setMessage(errorText(error));
+      if (error?.status === 409 || error?.code === "INVENTORY_USAGE_STATE_CONFLICT") {
+        await onChanged?.().catch(() => {});
+      }
+    } finally {
+      if (generation === workorderGenerationRef.current) setBusy("");
+    }
+  }
+
+  const actionable = usages.filter((usage) => {
+    const actions = inventoryUsageActions(usage);
+    return actions.install || actions.returnUnused || actions.remove;
+  });
+  const completed = usages.filter((usage) => !actionable.includes(usage));
   const collapsed = !scannerOpen && pendingCandidates.length === 0 && usages.length === 0 && !message;
 
   function closeScanner() {
@@ -335,7 +386,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
                     <div className="mechanic-scanner-result-actions">
                       {candidate.eligibility.canIssue ? (
                         <Button type="button" variant="primary" onClick={issue} disabled={busy === "issue"}>
-                          {busy === "issue" ? t("parts.using") : t("parts.useOnWorkorder")}
+                          {busy === "issue" ? t("parts.reserving") : t("parts.reserveForWorkorder")}
                         </Button>
                       ) : <p className="mechanic-serialized-blocked" role="alert" aria-live="assertive">{locale === "en" ? candidate.eligibility.message : t("parts.serializedUnavailable")}</p>}
                       <Button type="button" onClick={minimizeDrawer} disabled={Boolean(busy)}>
@@ -352,20 +403,40 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
         </ModalOverlay>
       ) : null}
 
-      {unresolved.map((usage) => (
+      {actionable.map((usage) => {
+        const actions = inventoryUsageActions(usage);
+        const removing = busy === `${usage.id}:remove`;
+        return (
         <article className="mechanic-serialized-usage is-issued" key={usage.id}>
           <div><strong>{usage.partNumber}</strong><code>{usage.serialNumber}</code><span>{usageStatus(usage.status)}</span></div>
           <fieldset disabled={Boolean(busy)}>
             <legend>{t("parts.disposition")}</legend>
-            <Button type="button" variant="primary" onClick={() => finalize(usage, "installed")}>
-              {t("parts.installed")}
-            </Button>
-            <Button type="button" onClick={() => finalize(usage, "returned")}>
+            {actions.install ? <Button type="button" variant="primary" onClick={() => finalize(usage, "installed")}>
+              {t("parts.markInstalled")}
+            </Button> : null}
+            {actions.returnUnused ? <Button type="button" onClick={() => finalize(usage, "returned")}>
               {t("parts.returnUnused")}
-            </Button>
+            </Button> : null}
+            {actions.remove && removeConfirmationId !== usage.id ? <Button type="button" onClick={() => setRemoveConfirmationId(usage.id)}>
+              {t("parts.removeFromUnit")}
+            </Button> : null}
           </fieldset>
+          {actions.remove && removeConfirmationId === usage.id ? (
+            <div className="mechanic-serialized-remove-confirmation" role="status" aria-live="polite">
+              <p>{usage.status === "installed_pending_approval" ? t("parts.removePhysicalReturnConfirm") : t("parts.removeInspectionConfirm")}</p>
+              <div>
+                <Button type="button" variant="primary" onClick={() => removeFromUnit(usage)} disabled={removing}>
+                  {removing ? t("parts.removing") : t("parts.confirmRemove")}
+                </Button>
+                <Button type="button" onClick={() => setRemoveConfirmationId("")} disabled={removing}>
+                  {t("parts.cancelRemove")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </article>
-      ))}
+        );
+      })}
 
       {completed.length ? (
         <ol className="mechanic-serialized-history" aria-label={t("parts.completedSerializedHistory")}>

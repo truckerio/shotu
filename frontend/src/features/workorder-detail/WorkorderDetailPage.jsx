@@ -78,6 +78,7 @@ export function WorkorderDetailPage({
   filledPartCount,
   firstSerial,
   form,
+  previewForm,
   formRef,
   fullscreenPageIndex,
   fullscreenZoom,
@@ -170,6 +171,7 @@ export function WorkorderDetailPage({
 }) {
   const viewport = useVisualViewport();
   const t = (key) => interfaceText(locale, key);
+  const renderedPreviewForm = previewForm || form;
   const modulePolicies = useMemo(() => Object.fromEntries([
     WORKORDER_MODULE_IDS.UNIT,
     WORKORDER_MODULE_IDS.LOCATION,
@@ -238,7 +240,7 @@ export function WorkorderDetailPage({
     ? markOfficeWorkorderDone
     : () => setMechanicFinish({ open: true, name: "", message: "" });
   const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
-  const compactPreviewState = workorderPreviewState(activeWorkorder, form);
+  const compactPreviewState = workorderPreviewState(activeWorkorder, renderedPreviewForm);
   const parent = detailParent(actor.role, isOfficeDetail, isMechanicDetail ? locale : "en");
 
   function followDetailParent(event) {
@@ -454,9 +456,9 @@ export function WorkorderDetailPage({
             locale={isMechanicDetail ? locale : "en"}
           >
             {previewPolicy.canRead ? <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-              <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={form} />
+              <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
               {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={renderedPreviewForm} pageIndex={lastPhysicalPageIndex} />
                 : null}
             </div> : null}
           </PreviewPane>
@@ -562,9 +564,9 @@ export function WorkorderDetailPage({
               locale={locale}
             >
               <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={form} />
+                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
                 {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={form} pageIndex={lastPhysicalPageIndex} />
+                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={renderedPreviewForm} pageIndex={lastPhysicalPageIndex} />
                   : null}
               </div>
             </CompactWorkorderPreview>
@@ -573,7 +575,7 @@ export function WorkorderDetailPage({
 
       {previewPolicy.canRead ? <PreviewFullscreen
         open={previewFullscreen}
-        form={form}
+        form={renderedPreviewForm}
         serials={previewSerials}
         pageIndex={fullscreenPageIndex}
         zoom={fullscreenZoom}

@@ -19,6 +19,8 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
   const partId = randomUUID();
   const conflictingPartId = randomUUID();
   const providerPartId = randomUUID();
+  const unusedPartId = randomUUID();
+  const historyPartId = randomUUID();
   const base = {
     actorId,
     companyIds: [companyId],
@@ -27,6 +29,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     manufacturer: "Bendix",
     category: "Air",
     barcode: `BAR-${suffix}`,
+    uomCode: "ea",
     referenceNumbers: [`BW-${suffix}`],
   };
 
@@ -41,8 +44,10 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       `insert into parts_catalog (id, company_id, normalized_part_number, part_number, description, uom_code)
        values ($1, $2, $3, $3, 'Original valve', 'ea'),
               ($4, $2, $5, $5, 'Conflict part', 'ea'),
-              ($6, $2, $7, $7, 'Provider part', 'ea')`,
-      [partId, companyId, `OLD${suffix}`.toUpperCase(), conflictingPartId, `USED${suffix}`.toUpperCase(), providerPartId, `ODOO${suffix}`.toUpperCase()],
+              ($6, $2, $7, $7, 'Provider part', 'ea'),
+              ($8, $2, $9, $9, 'Unused part', 'ea'),
+              ($10, $2, $11, $11, 'History part', 'ea')`,
+      [partId, companyId, `OLD${suffix}`.toUpperCase(), conflictingPartId, `USED${suffix}`.toUpperCase(), providerPartId, `ODOO${suffix}`.toUpperCase(), unusedPartId, `UNUSED${suffix}`.toUpperCase(), historyPartId, `HISTORY${suffix}`.toUpperCase()],
     );
     await query(
       `insert into inventory_items (
@@ -63,6 +68,8 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     assert.equal(updated.kind, "updated");
     assert.equal(updated.part.version, 2);
     assert.deepEqual(updated.part.referenceNumbers, [`BW-${suffix}`]);
+    assert.equal(updated.part.uomLocked, true);
+    assert.ok(!updated.part.editableFields.includes("uomCode"));
 
     const projection = await query(
       "select normalized_part_number, part_number, description, manufacturer from inventory_items where company_id = $1 and catalog_part_id = $2",
@@ -72,6 +79,31 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     assert.equal(projection.rows[0].description, "Air valve");
     assert.equal(projection.rows[0].manufacturer, "Bendix");
 
+    const unusedUpdated = await updateCompanyCatalogPart({
+      ...base, catalogPartId: unusedPartId, expectedVersion: 1, partNumber: `UNUSED-${suffix}`,
+      barcode: "", uomCode: "qt", referenceNumbers: [],
+    });
+    assert.equal(unusedUpdated.kind, "updated");
+    assert.equal(unusedUpdated.part.uomCode, "qt");
+    assert.ok(unusedUpdated.part.editableFields.includes("uomCode"));
+    const uomAudit = await query(
+      "select before_state, after_state from part_catalog_edit_events where company_id=$1 and catalog_part_id=$2",
+      [companyId, unusedPartId],
+    );
+    assert.equal(uomAudit.rows[0].before_state.uomCode, "ea");
+    assert.equal(uomAudit.rows[0].after_state.uomCode, "qt");
+
+    await query(
+      `insert into inventory_stock_movements (company_id, location_id, catalog_part_id, movement_type, quantity_delta, uom_code, actor_id, reason, idempotency_key)
+       values ($1, $2, $3, 'adjustment', 1, 'ea', $4, 'test history', $5)`,
+      [companyId, locationId, historyPartId, actorId, `history-${suffix}`],
+    );
+    const historyLocked = await updateCompanyCatalogPart({
+      ...base, catalogPartId: historyPartId, expectedVersion: 1, partNumber: `HISTORY-${suffix}`,
+      barcode: "", uomCode: "qt", referenceNumbers: [],
+    });
+    assert.equal(historyLocked.kind, "uom_locked");
+
     const conflict = await updateCompanyCatalogPart({ ...base, catalogPartId: partId, expectedVersion: 2, referenceNumbers: [`USED-${suffix}`] });
     assert.equal(conflict.kind, "identity_conflict");
 
@@ -80,6 +112,10 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       updateCompanyCatalogPart({ ...base, catalogPartId: partId, expectedVersion: 2, referenceNumbers: [`TWO-${suffix}`] }),
     ]);
     assert.deepEqual(concurrent.map((result) => result.kind).sort(), ["stale", "updated"]);
+    const stockLocked = await updateCompanyCatalogPart({
+      ...base, catalogPartId: partId, expectedVersion: concurrent.find((result) => result.kind === "updated").part.version, uomCode: "qt",
+    });
+    assert.equal(stockLocked.kind, "uom_locked");
 
     const providerManaged = await updateCompanyCatalogPart({
       ...base,
@@ -110,7 +146,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       "select count(*)::int as count, min(version_before)::int as first_version from part_catalog_edit_events where company_id = $1",
       [companyId],
     );
-    assert.equal(evidence.rows[0].count, 3);
+    assert.equal(evidence.rows[0].count, 4);
     assert.equal(evidence.rows[0].first_version, 1);
   } finally {
     await query("delete from companies where id in ($1, $2)", [companyId, otherCompanyId]).catch(() => {});

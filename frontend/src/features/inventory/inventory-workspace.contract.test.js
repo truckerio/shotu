@@ -114,6 +114,10 @@ test("part identity editing remains inside the part detail drawer", async () => 
   assert.match(editor, /Add reference number/);
   assert.match(editor, /Remove reference number \$\{index \+ 1\}/);
   assert.match(editor, /MAX_REFERENCE_NUMBERS/);
+  assert.match(editor, /UnitOfMeasurePicker/);
+  assert.match(editor, /fieldIsEditable\(part, "uomCode"\) && part\.uomLocked === false/);
+  assert.match(editor, /Unit is locked after inventory activity/);
+  assert.match(model, /uomCode/);
   assert.match(styles, /\.inventory-part-editor-reference-row/);
   assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) 44px/);
   assert.match(styles, /\.inventory-part-editor-remove/);

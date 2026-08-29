@@ -3,7 +3,12 @@ import { normalizePartNumber } from "../../modules/parts/part.constants.js";
 
 function state(row, references) {
   return { description: row.description, partNumber: row.part_number, manufacturer: row.manufacturer,
-    category: row.category, barcode: row.barcode, referenceNumbers: references };
+    category: row.category, barcode: row.barcode, uomCode: row.uom_code, referenceNumbers: references };
+}
+
+function editableFields(providerManaged, uomLocked) {
+  if (providerManaged) return ["manufacturer", "referenceNumbers"];
+  return ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers", ...(uomLocked ? [] : ["uomCode"])];
 }
 
 export async function lockCompanyPartIdentity(client, companyId) {
@@ -23,7 +28,7 @@ export async function assertPrimaryPartIdentityAvailable(client, companyId, norm
   }
 }
 
-export async function updateCompanyCatalogPart({ catalogPartId, companyIds, actorId, expectedVersion, description, partNumber, manufacturer, category, barcode, referenceNumbers }) {
+export async function updateCompanyCatalogPart({ catalogPartId, companyIds, actorId, expectedVersion, description, partNumber, manufacturer, category, barcode, uomCode, referenceNumbers }) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
@@ -38,9 +43,11 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     const current = selected.rows[0];
     if (!current) { await client.query("rollback"); return { kind: "not_found" }; }
     if (Number(current.version) !== Number(expectedVersion)) { await client.query("rollback"); return { kind: "stale" }; }
-    if (current.provider_managed && (description !== current.description || partNumber !== current.part_number || category !== current.category || barcode !== current.barcode)) {
+    if (current.provider_managed && (description !== current.description || partNumber !== current.part_number || category !== current.category || barcode !== current.barcode || uomCode !== current.uom_code)) {
       await client.query("rollback"); return { kind: "provider_managed" };
     }
+    const uomChanged = uomCode !== current.uom_code;
+    if (uomChanged && current.uom_locked_at) { await client.query("rollback"); return { kind: "uom_locked" }; }
     const normalizedPartNumber = normalizePartNumber(partNumber);
     const normalizedReferences = referenceNumbers.map(normalizePartNumber);
     const identities = [normalizedPartNumber, ...normalizedReferences];
@@ -61,9 +68,9 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     const oldRefs = await client.query("select reference_number from part_reference_numbers where company_id=$1 and catalog_part_id=$2 order by lower(reference_number), id", [current.company_id, catalogPartId]);
     const before = state(current, oldRefs.rows.map((row) => row.reference_number));
     const updated = await client.query(
-      `update parts_catalog set normalized_part_number=$3, part_number=$4, description=$5, manufacturer=$6, category=$7, barcode=$8, version=version+1, updated_at=now()
+      `update parts_catalog set normalized_part_number=$3, part_number=$4, description=$5, manufacturer=$6, category=$7, barcode=$8, uom_code=$9, version=version+1, updated_at=now()
        where company_id=$1 and id=$2 returning *`,
-      [current.company_id, catalogPartId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode],
+      [current.company_id, catalogPartId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode, uomCode],
     );
     await client.query("delete from part_reference_numbers where company_id=$1 and catalog_part_id=$2", [current.company_id, catalogPartId]);
     if (referenceNumbers.length) await client.query(
@@ -84,9 +91,10 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
       [current.company_id, catalogPartId, actorId, current.version, row.version, JSON.stringify(before), JSON.stringify(after)],
     );
     await client.query("commit");
-    return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: current.provider_managed ? ["manufacturer", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers"] } };
+    return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, uomCode: row.uom_code, uomLocked: row.uom_locked_at !== null, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: editableFields(current.provider_managed, row.uom_locked_at !== null) } };
   } catch (error) {
     await client.query("rollback").catch(() => {});
+    if (error?.constraint === "parts_catalog_uom_locked" || error?.constraint === "catalog_uom_activity_uom_mismatch") return { kind: "uom_locked" };
     if (error?.code === "23505") return { kind: "identity_conflict" };
     throw error;
   } finally { client.release(); }

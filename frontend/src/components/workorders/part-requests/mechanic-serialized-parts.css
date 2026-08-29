@@ -431,6 +431,30 @@
   border-top: 1px solid var(--border-secondary, #d0d5dd);
 }
 
+.mechanic-serialized-remove-confirmation {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-warning, #fdb022);
+  border-radius: 10px;
+  background: var(--surface-warning-subtle, #fffaeb);
+}
+
+.mechanic-serialized-remove-confirmation p {
+  margin: 0;
+}
+
+.mechanic-serialized-remove-confirmation > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mechanic-serialized-remove-confirmation .button {
+  min-height: 44px;
+}
+
 .mechanic-serialized-usage legend {
   width: 100%;
   margin-bottom: 8px;
@@ -474,6 +498,10 @@
   .mechanic-serialized-usage fieldset .button {
     width: 100%;
     min-height: 44px;
+  }
+
+  .mechanic-serialized-remove-confirmation > div .button {
+    flex: 1 1 140px;
   }
 
 }

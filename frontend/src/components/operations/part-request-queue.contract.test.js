@@ -25,7 +25,9 @@ test("shared part request queue uses the Office endpoint and request-level ident
 test("compact request cards preserve table headers for assistive technology", async () => {
   const css = await readFile(new URL("./operations.css", import.meta.url), "utf8");
 
+  assert.match(css, /\.part-request-queue \{[\s\S]*margin-inline: auto;[\s\S]*max-width: 1440px;[\s\S]*width: 100%;[\s\S]*\}/);
   assert.match(css, /@media \(max-width: 960px\)[\s\S]*\.part-request-queue-head \{[\s\S]*clip-path: inset\(50%\)/);
+  assert.match(css, /@media \(max-width: 960px\)[\s\S]*\.part-request-queue-cell \{[\s\S]*flex-direction: row;[\s\S]*flex-wrap: nowrap;[\s\S]*justify-content: flex-start;/);
   assert.doesNotMatch(css, /\.part-request-queue-head \{ display: none; \}/);
   assert.match(css, /\.part-request-queue-toolbar \.operations-input-with-icon input \{ padding-left: 34px; \}/);
   assert.match(css, /\.part-request-queue-toolbar input:focus,[\s\S]*\.part-request-queue-open:focus-visible \{ outline: 2px solid #2e6ee6;/);

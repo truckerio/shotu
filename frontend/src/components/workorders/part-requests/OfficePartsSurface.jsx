@@ -12,6 +12,7 @@ export function OfficePartsSurface({
   laborProduct,
   laborRepairOrder,
   laborRepairOrderDisabled,
+  installedParts = [],
   onLaborHoursChange,
   onLaborRepairOrderChange,
   onPartsChange,
@@ -47,6 +48,7 @@ export function OfficePartsSurface({
         laborProduct={laborProduct}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
+        installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onPartsChange={onPartsChange}

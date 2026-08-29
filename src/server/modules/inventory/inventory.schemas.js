@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { uomCodeSchema } from "../parts/quantity-uom.js";
 
 export const receiveInvoiceSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(120),
@@ -36,6 +37,7 @@ export const updateInventoryPartSchema = z.object({
   manufacturer: z.string().trim().max(240),
   category: z.string().trim().max(240),
   barcode: z.string().trim().max(200),
+  uomCode: uomCodeSchema.removeDefault(),
   referenceNumbers: z.array(z.string().trim().min(1).max(200).regex(/[A-Za-z0-9]/, "Reference number must contain a letter or number.")).max(20),
 }).strict().superRefine((value, context) => {
   const normalized = value.referenceNumbers.map((item) => item.toUpperCase().replace(/[^A-Z0-9]/g, ""));

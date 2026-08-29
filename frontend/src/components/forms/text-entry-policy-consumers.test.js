@@ -7,7 +7,7 @@ function source(relativePath) {
 }
 
 test("shared picker searches opt out of correction", () => {
-  for (const file of ["./MechanicMultiSelect.jsx", "./QuantityUnitInput.jsx"]) {
+  for (const file of ["./MechanicMultiSelect.jsx", "./UnitOfMeasurePicker.jsx"]) {
     assert.match(source(file), /textEntryProps\("search"\)/);
   }
 });

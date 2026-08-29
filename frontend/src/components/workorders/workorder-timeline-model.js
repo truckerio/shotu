@@ -10,6 +10,25 @@ const STATUS_KEYS = {
 
 const ACTIVITY_GROUP_WINDOW_MS = 2 * 60 * 1000;
 
+const SERIALIZED_PART_ACTIONS = {
+  reserved: { title: "timeline.partReserved", description: "timeline.partReservedDescription" },
+  installed_pending_approval: { title: "timeline.partInstalledPending", description: "timeline.partInstalledPendingDescription" },
+  returned: { title: "timeline.partReturnedUnused", description: "timeline.partReturnedUnusedDescription" },
+  installed: { title: "timeline.partConsumed", description: "timeline.partConsumedDescription" },
+  removed_returned_to_stock: { title: "timeline.partRemovedReturned", description: "timeline.partRemovedReturnedDescription" },
+  consumed_after_office_approval: { title: "timeline.partConsumed", description: "timeline.partConsumedDescription" },
+  removed: { title: "timeline.partRemovedInspection", description: "timeline.partRemovedInspectionDescription" },
+  removed_inspection_required: { title: "timeline.partRemovedInspection", description: "timeline.partRemovedInspectionDescription" },
+  inspection_required: { title: "timeline.partRemovedInspection", description: "timeline.partRemovedInspectionDescription" },
+};
+
+function serializedPartIdentity(event) {
+  const partNumber = String(event.part_number || event.partNumber || "").trim();
+  const serialNumber = String(event.serial_number || event.serialNumber || "").trim();
+  if (!partNumber) return "";
+  return serialNumber ? `${partNumber} · ${serialNumber}` : partNumber;
+}
+
 export function humanizeStatus(value, locale = "en") {
   const key = String(value || "").trim().toLowerCase();
   if (!key) return "";
@@ -24,7 +43,10 @@ function humanizeEventValue(value, fallback = "Updated") {
 export function timelineEventTitle(event, locale = "en") {
   const t = (key) => interfaceText(locale, key);
   if (event.type === "access") return t("timeline.opened");
-  if (event.type === "part") return `${t("timeline.part")} ${humanizeEventValue(event.action).toLowerCase()}`;
+  if (event.type === "part") {
+    const serializedAction = SERIALIZED_PART_ACTIONS[event.action];
+    return serializedAction ? t(serializedAction.title) : `${t("timeline.part")} ${humanizeEventValue(event.action).toLowerCase()}`;
+  }
   if (event.type === "attention") {
     const subject = event.field_key === "missing_info" ? t("timeline.informationRequest") : humanizeEventValue(event.field_key, t("timeline.attention"));
     return event.action === "resolved" ? `${subject} ${t("timeline.resolved")}` : subject;
@@ -48,6 +70,11 @@ export function timelineEventTitle(event, locale = "en") {
 
 export function timelineEventDescription(event, locale = "en") {
   const t = (key) => interfaceText(locale, key);
+  if (event.type === "part" && SERIALIZED_PART_ACTIONS[event.action]) {
+    const identity = serializedPartIdentity(event);
+    const message = t(SERIALIZED_PART_ACTIONS[event.action].description);
+    return identity ? `${identity}: ${message}` : event.note || message;
+  }
   if (event.type === "assignment") {
     const from = event.from_mechanic_name || t("timeline.unassigned");
     const to = event.to_mechanic_name || t("timeline.unassigned");

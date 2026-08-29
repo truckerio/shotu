@@ -10,6 +10,7 @@ import { buildWorkorderDetailSections } from "../../features/workorder-detail/wo
 import { formatLifecycleLabel } from "../../lib/workorder-presentation.js";
 import { timelineEventCount } from "../../components/workorders/workorder-timeline-model.js";
 import { interfaceText } from "../../i18n/index.js";
+import { installedSerializedUsedParts } from "../../components/workorders/used-parts-model.js";
 
 const ATTENTION_STATUS_LABELS = {
   waiting_office: "Needs office",
@@ -37,7 +38,9 @@ export function useWorkorderDetailViewModel({
     () => conversationMessagesFromDetail(activeWorkorder),
     [activeWorkorder],
   );
-  const filledPartCount = form.parts.filter((part) => part.partNo || part.qty || part.repairOrder).length;
+  const installedPartCount = installedSerializedUsedParts(activeWorkorder).length;
+  const filledPartCount = installedPartCount
+    + form.parts.filter((part) => part.partNo || part.qty || part.repairOrder).length;
   const mechanicAsset = activeWorkorder?.workorder?.asset || {};
   const t = (key) => interfaceText(interfaceLocale, key);
   const mechanicUnitType = form.unitType || mechanicAsset.unitType || t("location.vehicle");

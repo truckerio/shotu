@@ -5,11 +5,13 @@ import {
   canEditUsedParts,
   defaultUsedPartQuantity,
   initialUsedPartRows,
+  installedSerializedUsedParts,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
   usedPartQuantityAfterPartNumberChange,
   usedPartsAccessState,
+  workorderPreviewParts,
 } from "./used-parts-model.js";
 
 test("zero used parts stay empty until Add part", () => {
@@ -81,5 +83,39 @@ test("used parts preserve valid units and default old rows to piece", () => {
   ]), [
     { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refilled" },
     { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replaced" },
+  ]);
+});
+
+test("installed serialized parts become immutable display rows and preview parts", () => {
+  const detail = {
+    modules: {
+      parts: {
+        data: {
+          installedSerializedParts: [
+            { catalogPartId: "part-1", partNumber: "0000000002211", quantity: 2, uomCode: "ea" },
+            { catalogPartId: "part-2", partNumber: "", quantity: 1, uomCode: "ea" },
+          ],
+        },
+      },
+    },
+  };
+  const installed = installedSerializedUsedParts(detail);
+  assert.deepEqual(installed, [{
+    catalogPartId: "part-1",
+    partNo: "0000000002211",
+    qty: "2",
+    uomCode: "ea",
+    repairOrder: "Installed",
+  }]);
+  assert.deepEqual(workorderPreviewParts([
+    { partNo: "FILTER", qty: 1, uomCode: "pc", repairOrder: "Changed" },
+    { partNo: "", qty: "", repairOrder: "" },
+  ], installed), [
+    { partNo: "0000000002211", qty: "2", uomCode: "ea", repairOrder: "Installed" },
+    { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Changed" },
+  ]);
+  assert.deepEqual(detail.modules.parts.data.installedSerializedParts, [
+    { catalogPartId: "part-1", partNumber: "0000000002211", quantity: 2, uomCode: "ea" },
+    { catalogPartId: "part-2", partNumber: "", quantity: 1, uomCode: "ea" },
   ]);
 });

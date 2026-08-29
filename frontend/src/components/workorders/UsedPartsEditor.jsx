@@ -65,6 +65,7 @@ export function UsedPartsEditor({
   laborProduct = null,
   laborRepairOrder = "",
   laborRepairOrderDisabled = false,
+  installedParts = [],
   onLaborHoursChange = () => {},
   onLaborRepairOrderChange = () => {},
   onChange,
@@ -209,7 +210,7 @@ export function UsedPartsEditor({
   }
 
   if (disabled) {
-    const savedParts = readonlyUsedParts(parts);
+    const savedParts = [...installedParts, ...readonlyUsedParts(parts)];
     return (
       <div className="used-parts-editor is-readonly" aria-label={t("parts.usedTitle")}>
         <p className="used-parts-readonly-state" role="status">{readOnlyText}</p>
@@ -280,9 +281,29 @@ export function UsedPartsEditor({
           </div>
           <span aria-hidden="true"></span>
         </div>
+        {installedParts.map((part, index) => (
+          <div
+            className="part-row used-part-serialized-row"
+            key={`serialized-${part.catalogPartId || part.partNo}-${index}`}
+            aria-label={`${part.partNo}, ${formatQuantityUnit(part.qty, part.uomCode)}, ${t("parts.installed")}`}
+          >
+            <strong>{index + 2}</strong>
+            <div className="used-part-field">
+              <strong>{part.partNo}</strong>
+              <small>{t("parts.serialized")}</small>
+            </div>
+            <div className="used-part-field used-part-serialized-value">
+              <strong>{formatQuantityUnit(part.qty, part.uomCode)}</strong>
+            </div>
+            <div className="used-part-field used-part-serialized-value">
+              <strong>{t("parts.installed")}</strong>
+            </div>
+            <span className="used-part-serialized-status">{t("parts.installed")}</span>
+          </div>
+        ))}
         {rows.map((part, index) => (
           <div className="part-row" key={index}>
-            <strong>{index + 2}</strong>
+            <strong>{installedParts.length + index + 2}</strong>
             <div className="used-part-field">
               <span className="used-part-label">{t("parts.partNumber")}</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>

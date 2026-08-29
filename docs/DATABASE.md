@@ -141,6 +141,15 @@ Parts, office help, missing information, overdue, and unread activity are attent
 
 Manager approval writes `closed_at` and the approving user. Cancellation is a separate terminal path with its own actor, timestamp, and required reason; its transaction releases active assignments and cancels active parts allocations and requests.
 
+Exact local serialized parts reserve before approval. Reserving a unit increments
+`inventory_items.quantity_reserved` and leaves `quantity_on_hand` unchanged;
+recording installation moves the usage to `installed_pending_approval` without a
+stock movement. Manager approval atomically decrements both on-hand and reserved
+and records the unit as installed. A confirmed pre-approval removal releases the
+reservation without changing on-hand. Removing an already approved/consumed unit
+records append-only removal history and does not automatically restore sellable
+stock. Legacy `issued` usages retain their earlier accounting behavior.
+
 Mechanic ownership comes only from `workorder_mechanic_assignments`:
 
 - one active primary mechanic maximum;
@@ -203,6 +212,10 @@ the displaced provider snapshot, and rejects local/reserved stock conflicts.
   `inventory_provider_commands` records provider state; local receipt and unit
   rows become confirmed only after Odoo confirms the picking. They do not make
   PostgreSQL the inventory ledger.
+- Exact workorder reservations apply only to application-owned local stock.
+  Provider-projected/Odoo units fail closed because this flow does not issue an
+  Odoo stock command. Aggregate request allocations remain separate and exact
+  reservation availability is always computed after existing reserved quantity.
 - `odoo_outbound_orders` is the durable idempotency and reconciliation record
   for first-party draft creation. Successful creation also updates
   `odoo_entry_status`, `integration_mappings`, integration audit, and the

@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createPartIdentityDraft, hasRefreshedPartIdentityVersion, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, validatePartIdentityDraft } from "./part-identity-editor-model.js";
 
-const draft = (overrides = {}) => ({ description: "Oil filter", partNumber: "LF-1", manufacturer: "Fleet", category: "Filters", barcode: "123", referenceNumbers: [], ...overrides });
+const draft = (overrides = {}) => ({ description: "Oil filter", partNumber: "LF-1", manufacturer: "Fleet", category: "Filters", barcode: "123", uomCode: "ea", referenceNumbers: [], ...overrides });
 
 test("part identity payload trims optional metadata and removes blank reference rows", () => {
   assert.deepEqual(partIdentityPayload(draft({ description: " Oil filter ", referenceNumbers: [{ value: " WIX-1 " }, { value: " " }] }), 4), {
-    expectedVersion: 4, description: "Oil filter", partNumber: "LF-1", manufacturer: "Fleet", category: "Filters", barcode: "123", referenceNumbers: ["WIX-1"],
+    expectedVersion: 4, description: "Oil filter", partNumber: "LF-1", manufacturer: "Fleet", category: "Filters", barcode: "123", uomCode: "ea", referenceNumbers: ["WIX-1"],
   });
 });
 

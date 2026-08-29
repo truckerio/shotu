@@ -3,6 +3,8 @@ import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventor
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
 const FINALIZE_STATUSES = new Set(["accepted", "in_progress", "waiting_office", "parts_requested"]);
+const RETURN_STATUSES = new Set([...FINALIZE_STATUSES, "mechanic_done"]);
+const REMOVAL_STATUSES = new Set(["closed", "odoo_entered"]);
 
 function publicUsage(row) {
   if (!row) return null;
@@ -135,6 +137,37 @@ export async function listWorkorderSerializedUnitUsages({
   return result.rows.map(publicUsage);
 }
 
+export async function listWorkorderInstalledSerializedParts({
+  workorderId,
+  companyId,
+  locationId,
+  limit = 500,
+}) {
+  const result = await query(
+    `select usage.catalog_part_id, line.part_number, usage.uom_code,
+            count(*)::integer as quantity
+     from workorder_serialized_part_usages usage
+     join inventory_serialized_units unit
+       on unit.company_id = usage.company_id and unit.id = usage.unit_id
+     join inventory_receipt_lines line
+       on line.company_id = unit.company_id and line.id = unit.receipt_line_id
+     where usage.workorder_id = $1
+       and usage.company_id = $2
+       and usage.location_id = $3
+       and usage.status in ('installed_pending_approval', 'installed')
+     group by usage.catalog_part_id, line.part_number, usage.uom_code
+     order by min(usage.finalized_at), usage.catalog_part_id, line.part_number
+     limit $4`,
+    [workorderId, companyId, locationId, limit],
+  );
+  return result.rows.map((row) => ({
+    catalogPartId: row.catalog_part_id,
+    partNumber: row.part_number,
+    quantity: Number(row.quantity),
+    uomCode: row.uom_code,
+  }));
+}
+
 async function lockWorkorder(client, input) {
   const result = await client.query(
     `select workorder.id, workorder.company_id, workorder.location_id,
@@ -210,7 +243,7 @@ export async function issueSerializedUnitToWorkorder(input) {
       return { kind: "unit_state" };
     }
     const itemResult = await client.query(
-      `select id, quantity_on_hand
+      `select id, quantity_on_hand, quantity_reserved
        from inventory_items
        where company_id = $1 and location_id = $2 and catalog_part_id = $3
          and uom_code = $4 and source_provider = 'local'
@@ -219,15 +252,15 @@ export async function issueSerializedUnitToWorkorder(input) {
       [workorder.company_id, workorder.location_id, unit.catalog_part_id, unit.uom_code],
     );
     const item = itemResult.rows[0];
-    if (!item || Number(item.quantity_on_hand) < 1) {
+    if (!item || Number(item.quantity_on_hand) - Number(item.quantity_reserved) < 1) {
       await client.query("rollback");
       return { kind: "stock_mismatch" };
     }
     const inserted = await client.query(
       `insert into workorder_serialized_part_usages (
          company_id, workorder_id, asset_id, location_id, unit_id, catalog_part_id,
-         uom_code, issued_by_user_id, issue_idempotency_key, issue_request_hash
-       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         uom_code, status, issued_by_user_id, issue_idempotency_key, issue_request_hash
+       ) values ($1,$2,$3,$4,$5,$6,$7,'reserved',$8,$9,$10)
        returning id`,
       [workorder.company_id, workorder.id, workorder.asset_id, workorder.location_id,
         unit.id, unit.catalog_part_id, unit.uom_code, input.actorId,
@@ -235,35 +268,26 @@ export async function issueSerializedUnitToWorkorder(input) {
     );
     const usageId = inserted.rows[0].id;
     const updatedUnit = await client.query(
-      "update inventory_serialized_units set status = 'issued', updated_at = now() where company_id = $1 and id = $2 and status = 'in_stock' returning id",
+      "update inventory_serialized_units set status = 'reserved', updated_at = now() where company_id = $1 and id = $2 and status = 'in_stock' returning id",
       [workorder.company_id, unit.id],
     );
-    if (!updatedUnit.rows[0]) throw new Error("Serialized inventory unit changed while it was being issued.");
+    if (!updatedUnit.rows[0]) throw new Error("Serialized inventory unit changed while it was being reserved.");
     const updatedItem = await client.query(
-      `update inventory_items set quantity_on_hand = quantity_on_hand - 1, updated_at = now()
-       where id = $1 and quantity_on_hand >= 1 returning id`,
+      `update inventory_items set quantity_reserved = quantity_reserved + 1, updated_at = now()
+       where id = $1 and quantity_on_hand - quantity_reserved >= 1 returning id`,
       [item.id],
     );
-    if (!updatedItem.rows[0]) throw new Error("Serialized inventory balance changed while it was being issued.");
+    if (!updatedItem.rows[0]) throw new Error("Serialized inventory balance changed while it was being reserved.");
     await client.query(
       `insert into inventory_unit_events (
          company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
-       ) values ($1,$2,'issued',$3,$4,$5,$6,$7::jsonb)`,
+       ) values ($1,$2,'reserved',$3,$4,$5,$6,$7::jsonb)`,
       [workorder.company_id, unit.id, input.actorId, usageId, workorder.id,
         workorder.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole })],
     );
-    await client.query(
-      `insert into inventory_stock_movements (
-         company_id, location_id, catalog_part_id, movement_type, quantity_delta,
-         uom_code, actor_id, reason, idempotency_key, unit_id, usage_id, workorder_id, asset_id
-       ) values ($1,$2,$3,'issue',-1,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [workorder.company_id, workorder.location_id, unit.catalog_part_id, unit.uom_code,
-        input.actorId, `Issued serialized unit to workorder ${workorder.id}`,
-        `serialized-issue:${usageId}`, unit.id, usageId, workorder.id, workorder.asset_id],
-    );
     const usage = await loadUsage(client, workorder.company_id, usageId);
     await client.query("commit");
-    return { kind: "issued", usage };
+    return { kind: "reserved", usage };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     if (error?.code === "23505") {
@@ -310,11 +334,34 @@ export async function finalizeSerializedUnitUsage(input) {
       await client.query("commit");
       return { kind, usage: replayed };
     }
-    if (!FINALIZE_STATUSES.has(workorder.status)) {
+    const command = await client.query(
+      `select request_hash from workorder_serialized_part_usage_commands
+       where company_id = $1 and actor_id = $2 and idempotency_key = $3 limit 1`,
+      [workorder.company_id, input.actorId, input.idempotencyKey],
+    );
+    if (command.rows[0]) {
+      const kind = command.rows[0].request_hash === input.requestHash ? "replay" : "idempotency_conflict";
+      const replayed = kind === "replay" ? await loadUsage(client, workorder.company_id, usage.id) : null;
+      await client.query("commit");
+      return { kind, usage: replayed };
+    }
+    const removing = input.disposition === "removed";
+    const permittedStatuses = removing
+      ? REMOVAL_STATUSES
+      : input.disposition === "returned" ? RETURN_STATUSES : FINALIZE_STATUSES;
+    if (!permittedStatuses.has(workorder.status)) {
       await client.query("rollback");
       return { kind: "workorder_state" };
     }
-    if (usage.status !== "issued" || usage.unit_status !== "issued" || usage.finalize_idempotency_key) {
+    const legacy = usage.status === "issued" && usage.unit_status === "issued";
+    const reserving = usage.status === "reserved" && usage.unit_status === "reserved";
+    const pendingInstall = usage.status === "installed_pending_approval" && usage.unit_status === "installed_pending_approval";
+    const approvedInstall = usage.status === "installed" && usage.unit_status === "installed";
+    if (!(
+      input.disposition === "installed" && (legacy || reserving)
+      || input.disposition === "returned" && (legacy || reserving || pendingInstall)
+      || removing && approvedInstall
+    )) {
       await client.query("rollback");
       return { kind: "unit_state" };
     }
@@ -330,39 +377,65 @@ export async function finalizeSerializedUnitUsage(input) {
         await client.query("rollback");
         return { kind: "stock_mismatch" };
       }
-      await client.query(
-        "update inventory_items set quantity_on_hand = quantity_on_hand + 1, updated_at = now() where id = $1",
-        [item.rows[0].id],
-      );
-      await client.query(
-        `insert into inventory_stock_movements (
-           company_id, location_id, catalog_part_id, movement_type, quantity_delta,
-           uom_code, actor_id, reason, idempotency_key, unit_id, usage_id, workorder_id, asset_id
-         ) values ($1,$2,$3,'return',1,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [workorder.company_id, usage.location_id, usage.catalog_part_id, usage.uom_code,
-          input.actorId, `Returned unused serialized unit from workorder ${workorder.id}`,
-          `serialized-return:${usage.id}`, usage.unit_id, usage.id, workorder.id, usage.asset_id],
-      );
+      if (legacy) {
+        await client.query(
+          "update inventory_items set quantity_on_hand = quantity_on_hand + 1, updated_at = now() where id = $1",
+          [item.rows[0].id],
+        );
+        await client.query(
+          `insert into inventory_stock_movements (
+             company_id, location_id, catalog_part_id, movement_type, quantity_delta,
+             uom_code, actor_id, reason, idempotency_key, unit_id, usage_id, workorder_id, asset_id
+           ) values ($1,$2,$3,'return',1,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [workorder.company_id, usage.location_id, usage.catalog_part_id, usage.uom_code,
+            input.actorId, `Returned legacy issued unit from workorder ${workorder.id}`,
+            `serialized-return:${usage.id}`, usage.unit_id, usage.id, workorder.id, usage.asset_id],
+        );
+      } else {
+        const released = await client.query(
+          `update inventory_items set quantity_reserved = quantity_reserved - 1, updated_at = now()
+           where id = $1 and quantity_reserved >= 1 returning id`,
+          [item.rows[0].id],
+        );
+        if (!released.rows[0]) {
+          await client.query("rollback");
+          return { kind: "stock_mismatch" };
+        }
+      }
     }
-    const nextUnitStatus = input.disposition === "installed" ? "installed" : "in_stock";
+    const nextStatus = input.disposition === "installed" && !legacy
+      ? "installed_pending_approval"
+      : input.disposition;
+    const eventType = input.disposition === "returned" && pendingInstall
+      ? "removed_returned_to_stock"
+      : nextStatus;
+    const nextUnitStatus = nextStatus === "returned" ? "in_stock" : nextStatus;
     await client.query(
       `update inventory_serialized_units set status = $3, updated_at = now()
-       where company_id = $1 and id = $2 and status = 'issued'`,
-      [workorder.company_id, usage.unit_id, nextUnitStatus],
+       where company_id = $1 and id = $2 and status = $4`,
+      [workorder.company_id, usage.unit_id, nextUnitStatus, usage.unit_status],
     );
     await client.query(
       `update workorder_serialized_part_usages
        set status = $3, finalized_by_user_id = $4, finalized_at = now(),
            finalize_idempotency_key = $5, finalize_request_hash = $6, updated_at = now()
-       where company_id = $1 and id = $2 and status = 'issued'`,
-      [workorder.company_id, usage.id, input.disposition, input.actorId,
+       where company_id = $1 and id = $2 and status = $7`,
+      [workorder.company_id, usage.id, nextStatus, input.actorId,
+        input.idempotencyKey, input.requestHash, usage.status],
+    );
+    await client.query(
+      `insert into workorder_serialized_part_usage_commands (
+         company_id, usage_id, actor_id, action, idempotency_key, request_hash
+       ) values ($1,$2,$3,$4,$5,$6)`,
+      [workorder.company_id, usage.id, input.actorId,
+        input.disposition === "installed" ? "install" : input.disposition === "returned" ? "return" : "remove",
         input.idempotencyKey, input.requestHash],
     );
     await client.query(
       `insert into inventory_unit_events (
          company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
        ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
-      [workorder.company_id, usage.unit_id, input.disposition, input.actorId, usage.id,
+      [workorder.company_id, usage.unit_id, eventType, input.actorId, usage.id,
         workorder.id, usage.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole })],
     );
     const finalized = await loadUsage(client, workorder.company_id, usage.id);
@@ -375,4 +448,61 @@ export async function finalizeSerializedUnitUsage(input) {
   } finally {
     client.release();
   }
+}
+
+export async function consumePendingSerializedInstallationsForApproval(client, { workorderId, companyId, officeUserId }) {
+  const pending = await client.query(
+    `select usage.*, unit.status as unit_status
+     from workorder_serialized_part_usages usage
+     join inventory_serialized_units unit
+       on unit.company_id = usage.company_id and unit.id = usage.unit_id
+     where usage.company_id = $1 and usage.workorder_id = $2
+       and usage.status = 'installed_pending_approval'
+     order by usage.catalog_part_id, usage.uom_code, usage.id
+     for update of usage, unit`,
+    [companyId, workorderId],
+  );
+  for (const usage of pending.rows) {
+    if (usage.unit_status !== "installed_pending_approval") throw new Error("Serialized installation state does not match its exact unit.");
+    const item = await client.query(
+      `select id from inventory_items
+       where company_id = $1 and location_id = $2 and catalog_part_id = $3
+         and uom_code = $4 and source_provider = 'local'
+       order by updated_at desc, id limit 1 for update`,
+      [companyId, usage.location_id, usage.catalog_part_id, usage.uom_code],
+    );
+    if (!item.rows[0]) throw new Error("Serialized installation has no matching local inventory balance.");
+    const consumed = await client.query(
+      `update inventory_items set quantity_on_hand = quantity_on_hand - 1,
+           quantity_reserved = quantity_reserved - 1, updated_at = now()
+       where id = $1 and quantity_on_hand >= 1 and quantity_reserved >= 1 returning id`,
+      [item.rows[0].id],
+    );
+    if (!consumed.rows[0]) throw new Error("Serialized installation reservation does not match local inventory balance.");
+    await client.query(
+      "update inventory_serialized_units set status = 'installed', updated_at = now() where company_id = $1 and id = $2 and status = 'installed_pending_approval'",
+      [companyId, usage.unit_id],
+    );
+    await client.query(
+      "update workorder_serialized_part_usages set status = 'installed', finalized_by_user_id = $3, finalized_at = now(), updated_at = now() where company_id = $1 and id = $2 and status = 'installed_pending_approval'",
+      [companyId, usage.id, officeUserId],
+    );
+    await client.query(
+      `insert into inventory_stock_movements (
+         company_id, location_id, catalog_part_id, movement_type, quantity_delta,
+         uom_code, actor_id, reason, idempotency_key, unit_id, usage_id, workorder_id, asset_id
+       ) values ($1,$2,$3,'issue',-1,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [companyId, usage.location_id, usage.catalog_part_id, usage.uom_code,
+        officeUserId, `Consumed serialized reservation when workorder ${workorderId} was approved`,
+        `serialized-approval:${usage.id}`, usage.unit_id, usage.id, workorderId, usage.asset_id],
+    );
+    await client.query(
+      `insert into inventory_unit_events (
+         company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
+       ) values ($1,$2,'installed',$3,$4,$5,$6,$7::jsonb)`,
+      [companyId, usage.unit_id, officeUserId, usage.id, workorderId, usage.asset_id,
+        JSON.stringify({ source: "workorder_approval" })],
+    );
+  }
+  return pending.rows.length;
 }

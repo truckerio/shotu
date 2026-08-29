@@ -1,4 +1,4 @@
-import { normalizeUsedParts } from "../../components/workorders/used-parts-model.js";
+import { installedSerializedUsedParts, normalizeUsedParts, workorderPreviewParts } from "../../components/workorders/used-parts-model.js";
 import { resolveMechanicProgressFields } from "../../features/mechanic/progress/mechanic-progress-fields.js";
 import { splitSerial } from "../../features/create-workorder/create-workorder-utils.js";
 import { canonicalApprovalName, canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
@@ -24,6 +24,11 @@ export function createInitialDraftBaseline(actor) {
     workEndDate: date,
     formData: { ...DEFAULT_TEMPLATE },
   };
+}
+
+export function workorderPreviewForm(form, detail) {
+  if (!detail) return form;
+  return { ...form, parts: workorderPreviewParts(form.parts, installedSerializedUsedParts(detail)) };
 }
 
 export function createInitialWorkorderForm(actor) {

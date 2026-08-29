@@ -29,6 +29,21 @@ test("catalog edit repository locks scope and atomically cascades current projec
   assert.match(source, /insert into part_catalog_edit_events/i);
   assert.match(source, /update inventory_items set normalized_part_number/i);
   assert.match(source, /odoo_product_mappings/i);
+  assert.match(source, /uom_locked_at/i);
+  assert.match(source, /parts_catalog_uom_locked/i);
+});
+
+test("catalog UOM lock migration backfills activity and serializes parent and child writes", async () => {
+  const sql = await readFile(new URL("../../db/migrations/088_catalog_uom_activity_lock.sql", import.meta.url), "utf8");
+  assert.match(sql, /add column if not exists uom_locked_at timestamptz/i);
+  for (const table of ["inventory_items", "local_inventory_receipt_lines", "inventory_receipt_lines", "inventory_stock_movements", "inventory_serialization_batches", "inventory_count_import_lines", "workorder_part_requests", "part_fulfillment_requests", "workorder_serialized_part_usages", "service_history_lines", "part_repair_history", "part_allocations", "part_fulfillment_legs"]) assert.match(sql, new RegExp(table));
+  assert.match(sql, /for key share/i);
+  assert.match(sql, /parts_catalog_uom_locked/i);
+  assert.match(sql, /catalog_uom_activity_uom_mismatch/i);
+  assert.match(sql, /coalesce\(uom_locked_at, clock_timestamp\(\)\)/i);
+  assert.match(sql, /workorder_part_requests request[\s\S]*join operational_workorders workorder on workorder\.id = request\.workorder_id/i);
+  assert.doesNotMatch(sql, /workorder_part_requests_catalog_uom_activity_trigger before insert or update of company_id/i);
+  assert.match(sql, /tg_argv\[0\] in \('uom', 'workorder_request_uom'\)/i);
 });
 
 test("every catalog writer shares the reference identity lock and advances mutable versions", async () => {

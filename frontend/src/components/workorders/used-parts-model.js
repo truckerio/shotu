@@ -65,3 +65,27 @@ export function removeUsedPart(parts, index, minimumRows = 0) {
 export function readonlyUsedParts(parts) {
   return normalizeUsedParts(parts).filter(usedPartHasValue);
 }
+
+export function installedSerializedUsedParts(detail) {
+  const summaries = detail?.modules?.parts?.data?.installedSerializedParts;
+  if (!Array.isArray(summaries)) return [];
+  return summaries.flatMap((part) => {
+    const partNo = String(part?.partNumber || "").trim();
+    const quantity = Number(part?.quantity);
+    if (!partNo || !Number.isInteger(quantity) || quantity < 1) return [];
+    return [{
+      partNo,
+      qty: String(quantity),
+      uomCode: normalizeUomCode(part?.uomCode),
+      repairOrder: "Installed",
+      catalogPartId: part?.catalogPartId || null,
+    }];
+  });
+}
+
+export function workorderPreviewParts(manualParts, installedParts) {
+  return [
+    ...(Array.isArray(installedParts) ? installedParts : []),
+    ...normalizeUsedParts(manualParts).filter(usedPartHasValue),
+  ].map(({ catalogPartId: _catalogPartId, ...part }) => part);
+}

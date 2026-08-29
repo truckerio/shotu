@@ -33,6 +33,7 @@ import {
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
+import { listWorkorderInstalledSerializedParts } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import {
   authorizeWorkorderModule,
@@ -56,16 +57,29 @@ function resourceOptions(context) {
     : {};
 }
 
+async function withInstalledSerializedParts(detail, decisions, dependencies) {
+  if (!decisions?.parts || decisions.parts.access === "hidden") return detail;
+  const listInstalledParts = dependencies.listInstalledParts || listWorkorderInstalledSerializedParts;
+  const installedSerializedParts = await listInstalledParts({
+    workorderId: detail.workorder.id,
+    companyId: detail.workorder.companyId,
+    locationId: detail.workorder.locationId,
+    limit: 500,
+  });
+  return { ...detail, installedSerializedParts };
+}
+
 export async function protectedWorkorderDetail(context, workorderId, dependencies = {}) {
   const resolveModules = dependencies.resolveModules || resolveWorkorderModuleDecisions;
   const loadDetail = dependencies.loadDetail || loadWorkorderDetail;
   const { decisions } = await resolveModules(context, workorderId, {
     resourceAccess: resourceOptions(context),
   });
-  const detail = await loadDetail(workorderId, {
+  const loadedDetail = await loadDetail(workorderId, {
     viewerUserId: context.actor.id,
     participantChatOnly: context.actor.role === "mechanic",
   });
+  const detail = await withInstalledSerializedParts(loadedDetail, decisions, dependencies);
   return projectProtectedWorkorderDetail(detail, decisions, { viewerRole: context.actor.role });
 }
 
@@ -77,13 +91,13 @@ export async function protectedWorkorderModule(context, workorderId, moduleKey, 
     capability: "read",
     resourceAccess: resourceOptions(context),
   });
-  const detail = await loadDetail(workorderId, {
+  const loadedDetail = await loadDetail(workorderId, {
     viewerUserId: context.actor.id,
     participantChatOnly: context.actor.role === "mechanic",
   });
-  return projectProtectedWorkorderDetail(detail, {
-    [moduleKey]: { access: authorization.access, source: authorization.source },
-  }, { viewerRole: context.actor.role });
+  const decisions = { [moduleKey]: { access: authorization.access, source: authorization.source } };
+  const detail = await withInstalledSerializedParts(loadedDetail, decisions, dependencies);
+  return projectProtectedWorkorderDetail(detail, decisions, { viewerRole: context.actor.role });
 }
 
 export async function patchWorkorderModule(context, workorderId, moduleKey, input, dependencies = {}) {

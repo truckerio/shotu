@@ -1,6 +1,7 @@
 import { MinusCircle, Plus } from "@untitledui/icons";
 import { useEffect, useId, useMemo, useState } from "react";
 import { ActionFooter, FormErrorSummary, FormField, OperationalForm, textEntryProps } from "../../components/forms/index.js";
+import { UnitOfMeasurePicker } from "../../components/forms/UnitOfMeasurePicker.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import { createPartIdentityDraft, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, validatePartIdentityDraft } from "./part-identity-editor-model.js";
@@ -18,6 +19,8 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
   const [focusKey, setFocusKey] = useState(0);
   const referenceHintId = useId();
   const providerManaged = Boolean(part.providerManaged);
+  const uomEditable = fieldIsEditable(part, "uomCode") && part.uomLocked === false;
+  const uomHint = providerManaged ? "Managed in Odoo. Edit the unit in Odoo." : "Unit is locked after inventory activity.";
 
   useEffect(() => {
     onEditStateChange?.({ busy, dirty: true });
@@ -115,6 +118,9 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         </FormField>
         <FormField id="inventory-catalog-barcode" label="Catalog barcode">
           <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.barcode} onChange={(event) => update("barcode", event.target.value)} disabled={busy || !fieldIsEditable(part, "barcode")} />
+        </FormField>
+        <FormField id="inventory-unit" label="Unit" hint={!uomEditable ? uomHint : "Used for future inventory quantities."}>
+          <UnitOfMeasurePicker uomCode={draft.uomCode} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={!uomEditable} />
         </FormField>
       </div>
       <section className="inventory-part-editor-references" aria-labelledby="inventory-reference-numbers-title" aria-describedby={referenceHintId}>

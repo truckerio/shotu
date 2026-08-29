@@ -4,8 +4,13 @@ import { after, test } from "node:test";
 import {
   finalizeSerializedUnitUsage,
   issueSerializedUnitToWorkorder,
+  listWorkorderInstalledSerializedParts,
   listWorkorderSerializedUnitUsages,
 } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
+import {
+  closeOperationalWorkorder,
+  getWorkorderTimeline,
+} from "../../db/repositories/operational-workorders.repo.js";
 import { closePool, query } from "../../db/pool.js";
 
 const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
@@ -18,7 +23,7 @@ function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("real PostgreSQL serializes issue/install/return and replays without duplicate stock evidence", { skip: !runPostgres }, async () => {
+test("real PostgreSQL reserves until approval, releases preapproval returns, and records postapproval removal", { skip: !runPostgres }, async () => {
   const suffix = randomUUID().replaceAll("-", "");
   const actorId = randomUUID();
   const companyId = randomUUID();
@@ -120,8 +125,12 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
       issueSerializedUnitToWorkorder(replayCommand),
       issueSerializedUnitToWorkorder(replayCommand),
     ]);
-    assert.deepEqual(replays.map((result) => result.kind).sort(), ["issued", "replay"]);
+    assert.deepEqual(replays.map((result) => result.kind).sort(), ["replay", "reserved"]);
     const usageA = replays.find((result) => result.usage)?.usage;
+    assert.deepEqual((await query(
+      "select quantity_on_hand, quantity_reserved from inventory_items where company_id = $1 and location_id = $2 and catalog_part_id = $3",
+      [companyId, locationId, catalogPartId],
+    )).rows[0], { quantity_on_hand: "2.000", quantity_reserved: "1.000" });
 
     const returnCommand = {
       ...scope, usageId: usageA.id, disposition: "returned",
@@ -132,20 +141,57 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
       finalizeSerializedUnitUsage(returnCommand),
     ]);
     assert.deepEqual(returns.map((result) => result.kind).sort(), ["finalized", "replay"]);
+    assert.deepEqual((await query(
+      "select quantity_on_hand, quantity_reserved from inventory_items where company_id = $1 and location_id = $2 and catalog_part_id = $3",
+      [companyId, locationId, catalogPartId],
+    )).rows[0], { quantity_on_hand: "2.000", quantity_reserved: "0.000" });
+
+    const removedBeforeApproval = await issueSerializedUnitToWorkorder({
+      ...scope, unitId: unitA, idempotencyKey: `issue-a2-${suffix}`, requestHash: digest(`issue-a2-${suffix}`),
+    });
+    assert.equal(removedBeforeApproval.kind, "reserved");
+    assert.equal((await finalizeSerializedUnitUsage({
+      ...scope, usageId: removedBeforeApproval.usage.id, disposition: "installed",
+      idempotencyKey: `install-a2-${suffix}`, requestHash: digest(`install-a2-${suffix}`),
+    })).usage.status, "installed_pending_approval");
+    assert.equal((await finalizeSerializedUnitUsage({
+      ...scope, usageId: removedBeforeApproval.usage.id, disposition: "returned",
+      idempotencyKey: `remove-return-a2-${suffix}`, requestHash: digest(`remove-return-a2-${suffix}`),
+    })).kind, "finalized");
 
     const competing = await Promise.all([
       issueSerializedUnitToWorkorder({ ...scope, unitId: unitB, idempotencyKey: `issue-b1-${suffix}`, requestHash: digest("b1") }),
       issueSerializedUnitToWorkorder({ ...scope, unitId: unitB, idempotencyKey: `issue-b2-${suffix}`, requestHash: digest("b2") }),
     ]);
-    assert.deepEqual(competing.map((result) => result.kind).sort(), ["issued", "unit_state"]);
-    const usageB = competing.find((result) => result.kind === "issued").usage;
+    assert.deepEqual(competing.map((result) => result.kind).sort(), ["reserved", "unit_state"]);
+    const usageB = competing.find((result) => result.kind === "reserved").usage;
     const installCommand = {
       ...scope, usageId: usageB.id, disposition: "installed",
       idempotencyKey: `install-b-${suffix}`, requestHash: digest(`install-b-${suffix}`),
     };
     assert.equal((await finalizeSerializedUnitUsage(installCommand)).kind, "finalized");
+    assert.equal((await listWorkorderSerializedUnitUsages({ ...scope, limit: 100 }))
+      .find((usage) => usage.id === usageB.id).status, "installed_pending_approval");
+    assert.deepEqual((await query(
+      "select quantity_on_hand, quantity_reserved from inventory_items where company_id = $1 and location_id = $2 and catalog_part_id = $3",
+      [companyId, locationId, catalogPartId],
+    )).rows[0], { quantity_on_hand: "2.000", quantity_reserved: "1.000" });
     await query("update operational_workorders set status = 'mechanic_done' where id = $1", [workorderId]);
     assert.equal((await finalizeSerializedUnitUsage(installCommand)).kind, "replay");
+    await closeOperationalWorkorder(workorderId, actorId, "Approved serialized installation.");
+
+    assert.deepEqual(await listWorkorderInstalledSerializedParts({
+      workorderId, companyId, locationId, limit: 500,
+    }), [{
+      catalogPartId,
+      partNumber: `SERIAL-${suffix}`,
+      quantity: 1,
+      uomCode: "ea",
+    }]);
+    assert.equal((await finalizeSerializedUnitUsage({
+      ...scope, usageId: usageB.id, disposition: "removed",
+      idempotencyKey: `remove-b-${suffix}`, requestHash: digest(`remove-b-${suffix}`),
+    })).kind, "finalized");
 
     const snapshot = await query(
       `select
@@ -153,14 +199,24 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
          (select count(*)::integer from inventory_stock_movements where company_id = $1 and movement_type = 'issue') as issues,
          (select count(*)::integer from inventory_stock_movements where company_id = $1 and movement_type = 'return') as returns,
          (select count(*)::integer from inventory_unit_events where company_id = $1 and event_type = 'installed') as installed_events,
-         (select status from inventory_serialized_units where company_id = $1 and id = $4) as returned_unit_status`,
-      [companyId, catalogPartId, locationId, unitA],
+         (select quantity_reserved from inventory_items where company_id = $1 and catalog_part_id = $2 and location_id = $3) as reserved,
+         (select status from inventory_serialized_units where company_id = $1 and id = $4) as removed_unit_status`,
+      [companyId, catalogPartId, locationId, unitB],
     );
     assert.deepEqual(snapshot.rows[0], {
-      on_hand: "1.000", issues: 2, returns: 1, installed_events: 1, returned_unit_status: "in_stock",
+      on_hand: "1.000", issues: 1, returns: 0, installed_events: 1, reserved: "0.000", removed_unit_status: "removed",
     });
     const refreshed = await listWorkorderSerializedUnitUsages({ ...scope, limit: 100 });
-    assert.deepEqual(refreshed.map((usage) => usage.status).sort(), ["installed", "returned"]);
+    assert.deepEqual(refreshed.map((usage) => usage.status).sort(), ["removed", "returned", "returned"]);
+    const serializedTimeline = (await getWorkorderTimeline(workorderId)).filter((event) => event.type === "part");
+    assert.deepEqual(serializedTimeline.map((event) => event.action), [
+      "reserved", "returned", "reserved", "installed_pending_approval", "removed_returned_to_stock",
+      "reserved", "installed_pending_approval", "installed", "removed",
+    ]);
+    assert.equal(serializedTimeline[0].part_number, `SERIAL-${suffix}`);
+    assert.equal(serializedTimeline[0].serial_number, `WG-L-${suffix}-1`);
+    assert.ok(serializedTimeline.every((event) => event.note.includes(`SERIAL-${suffix}`)));
+    assert.ok(serializedTimeline.every((event) => event.note.includes("WG-L-")));
     await query(
       `insert into workorder_mechanic_assignments (
          workorder_id, mechanic_user_id, assignment_role, active, assigned_by_user_id
@@ -168,7 +224,7 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
       [workorderId, actorId],
     );
     const grantedMechanicView = await listWorkorderSerializedUnitUsages({ ...scope, actorRole: "mechanic", limit: 100 });
-    assert.equal(grantedMechanicView.length, 2);
+    assert.equal(grantedMechanicView.length, 3);
   } finally {
     await query("delete from inventory_unit_events where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_stock_movements where company_id = $1", [companyId]).catch(() => {});

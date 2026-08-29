@@ -512,7 +512,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
      ), stock as (
        select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
               catalog.normalized_part_number, catalog.description, catalog.manufacturer, catalog.category,
-              catalog.barcode, catalog.uom_code, catalog.version,
+              catalog.barcode, catalog.uom_code, catalog.uom_locked_at, catalog.version,
               coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id)
                 from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id), '[]'::jsonb) as reference_numbers,
               case when exists (
@@ -599,7 +599,8 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
     version: Number(row.version || 1),
     referenceNumbers: row.reference_numbers || [],
     providerManaged: row.provider_managed === true,
-    editableFields: row.provider_managed === true ? ["manufacturer", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers"],
+    uomLocked: row.uom_locked_at !== null,
+    editableFields: row.provider_managed === true ? ["manufacturer", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers", ...(row.uom_locked_at === null ? ["uomCode"] : [])],
     uomCode: row.uom_code,
     sourceProvider: row.source_provider || "",
     quantityOnHand: Number(row.quantity_on_hand),
