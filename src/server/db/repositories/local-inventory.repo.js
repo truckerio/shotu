@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch, loadReceiptLabelBatch } from "./inventory-labels.repo.js";
+import { assertPrimaryPartIdentityAvailable } from "./parts-catalog-edit.repo.js";
+import { normalizePartNumber } from "../../modules/parts/part.constants.js";
 
 function publicReceipt(row, lines = [], units = [], labelBatch = null) {
   if (!row) return null;
@@ -148,6 +150,7 @@ export async function postLocalInventoryReceipt({
 
     const preparedLines = [];
     for (const line of lines) {
+      await assertPrimaryPartIdentityAvailable(client, source.company_id, line.normalizedPartNumber);
       const catalog = await client.query(
         `insert into parts_catalog (
            company_id, normalized_part_number, part_number, description, uom_code, updated_at
@@ -155,6 +158,12 @@ export async function postLocalInventoryReceipt({
          on conflict (company_id, normalized_part_number) do update
          set part_number = case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
              description = case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end,
+             version = parts_catalog.version + case when
+               row(parts_catalog.part_number, parts_catalog.description)
+               is distinct from row(
+                 case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
+                 case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end
+               ) then 1 else 0 end,
              updated_at = now()
          returning id`,
         [source.company_id, line.normalizedPartNumber, line.partNumber, line.description, line.uomCode],
@@ -462,6 +471,7 @@ export async function listLocalInvoiceHistory({ companyIds, locationIds = [], is
 
 export async function listLocalInventoryStock({ companyIds, locationIds = [], isAdmin = false, locationId = null, scope = "all", availability = "all", sort = "available_desc", queryText = "", limit = 100, offset = 0 }) {
   const search = `%${String(queryText || "").trim().toLocaleLowerCase("en-US").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+  const normalizedReferencePrefix = `${normalizePartNumber(queryText)}%`;
   const result = await query(
     `with local_balances as (
        select item.company_id, item.catalog_part_id, item.location_id, location.name as location_name,
@@ -501,13 +511,16 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
         and odoo.location_id = local.location_id
      ), stock as (
        select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
-              catalog.normalized_part_number, catalog.description, catalog.manufacturer,
-              catalog.barcode, catalog.uom_code,
+              catalog.normalized_part_number, catalog.description, catalog.manufacturer, catalog.category,
+              catalog.barcode, catalog.uom_code, catalog.version,
+              coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id)
+                from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id), '[]'::jsonb) as reference_numbers,
               case when exists (
                 select 1 from odoo_product_mappings provider
                 where provider.company_id = catalog.company_id
                   and provider.catalog_part_id = catalog.id and provider.active = true
               ) then 'odoo' else catalog.source_provider end as source_provider,
+              exists (select 1 from odoo_product_mappings ownership where ownership.company_id=catalog.company_id and ownership.catalog_part_id=catalog.id) as provider_managed,
               coalesce(sum(balance.quantity_on_hand), 0) as quantity_on_hand,
               coalesce(sum(balance.quantity_reserved), 0) as quantity_reserved,
               coalesce(sum(balance.quantity_available), 0) as quantity_available,
@@ -543,6 +556,8 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
               )) or $8 <> 'master')
          and ($5 = '%%'
            or lower(concat_ws(' ', catalog.part_number, catalog.description, catalog.manufacturer, catalog.barcode)) like $5 escape '\\'
+           or exists (select 1 from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id and lower(reference.reference_number) like $5 escape '\\')
+           or exists (select 1 from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id and $11 <> '%' and reference.normalized_reference_number like $11)
            or exists (
              select 1 from odoo_product_mappings provider_search
              where provider_search.company_id = catalog.company_id
@@ -571,7 +586,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
        case when $10 in ('available_desc', 'reserved_desc', 'locations_desc') then quantity_available end desc,
        lower(part_number), catalog_part_id
      limit $6 offset $7`,
-    [companyIds, locationIds, isAdmin, locationId, search, limit, offset, scope, availability, sort],
+    [companyIds, locationIds, isAdmin, locationId, search, limit, offset, scope, availability, sort, normalizedReferencePrefix],
   );
   const items = result.rows.map((row) => ({
     companyId: row.company_id,
@@ -579,7 +594,12 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
     partNumber: row.part_number,
     description: row.description || "",
     manufacturer: row.manufacturer || "",
+    category: row.category || "",
     barcode: row.barcode || "",
+    version: Number(row.version || 1),
+    referenceNumbers: row.reference_numbers || [],
+    providerManaged: row.provider_managed === true,
+    editableFields: row.provider_managed === true ? ["manufacturer", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers"],
     uomCode: row.uom_code,
     sourceProvider: row.source_provider || "",
     quantityOnHand: Number(row.quantity_on_hand),

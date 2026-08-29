@@ -38,3 +38,9 @@ test("catalog search migration indexes partial text, barcode, and location inven
   assert.match(sql, /odoo_product_mappings_company_barcode_prefix_idx/i);
   assert.match(sql, /inventory_items_catalog_location_lookup_idx/i);
 });
+
+test("catalog search uses normalized reference identity so punctuation does not hide matches", async () => {
+  const source = await readFile(repositoryUrl, "utf8");
+  assert.match(source, /reference\.normalized_reference_number like \$4/);
+  assert.match(source, /then 'exact_reference_number'/);
+});

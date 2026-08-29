@@ -69,6 +69,52 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.match(panelStyles, /prefers-reduced-motion: reduce/);
 });
 
+test("part identity editing remains inside the part detail drawer", async () => {
+  const [workspace, editor, model, styles] = await Promise.all([
+    readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./PartIdentityEditor.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./part-identity-editor-model.js", import.meta.url), "utf8"),
+    readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(workspace, /<PartIdentityEditor/);
+  assert.match(workspace, /id="inventory-edit-part"/);
+  assert.match(workspace, /!partIdentityEditOpen && !partIdentityBusy/);
+  assert.match(workspace, /partIdentityRefreshPending/);
+  assert.match(workspace, /hasRefreshedPartIdentityVersion\(refreshedItem, partIdentityRefreshPending\)/);
+  assert.match(workspace, /disabled=\{Boolean\(partIdentityRefreshPending\)\}/);
+  assert.match(workspace, /dismissable=\{!partIdentityEditOpen\}/);
+  assert.match(workspace, /onClose=\{partIdentityEditOpen \? closePartIdentityEditor : null\}/);
+  assert.match(workspace, /closeDisabled=\{partIdentityBusy\}/);
+  assert.match(workspace, /Discard part identity edits/);
+  assert.match(workspace, /<SecondaryDetailSection\s+title="Part identity"/);
+  assert.match(workspace, /Reference numbers/);
+  assert.match(workspace, /Managed in Odoo/);
+  assert.match(editor, /\/api\/office\/inventory\/parts\/\$\{encodeURIComponent\(part\.catalogPartId\)\}/);
+  assert.match(editor, /method: "PATCH"/);
+  assert.match(editor, /partIdentityPayload\(draft, part\.version\)/);
+  assert.match(editor, /FormErrorSummary/);
+  assert.match(editor, /ActionFooter stickyOnMobile/);
+  assert.match(editor, /role="alert"/);
+  assert.match(editor, /Reload details/);
+  assert.match(editor, /partIdentityConflict\(error\)/);
+  assert.match(editor, /conflict\.kind === "stale"/);
+  assert.match(model, /INVENTORY_PART_STALE/);
+  assert.match(model, /INVENTORY_PART_IDENTITY_CONFLICT/);
+  assert.match(editor, /Add reference number/);
+  assert.match(editor, /Remove reference number \$\{index \+ 1\}/);
+  assert.match(editor, /MAX_REFERENCE_NUMBERS/);
+  assert.match(styles, /\.inventory-part-editor-reference-row/);
+  assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) 44px/);
+  assert.match(styles, /\.inventory-part-editor-remove/);
+  assert.match(styles, /@media \(max-width: 760px\)/);
+  const panel = await readFile(new URL("../../components/ui/SecondaryDetailPanel.jsx", import.meta.url), "utf8");
+  assert.match(panel, /onClose = null/);
+  assert.match(panel, /closeDisabled = false/);
+  assert.match(panel, /disabled=\{closeDisabled\}/);
+  assert.match(panel, /onClose \? onClose\(\) : close\(\)/);
+});
+
 test("inventory availability filters stay mounted for zero-result selections", async () => {
   const [workspace, styles] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),

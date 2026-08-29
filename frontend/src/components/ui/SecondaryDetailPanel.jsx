@@ -13,6 +13,8 @@ export function SecondaryDetailPanel({
   footer = null,
   size = "wide",
   dismissable = true,
+  onClose = null,
+  closeDisabled = false,
   closeLabel = "Close details",
 }) {
   return (
@@ -35,7 +37,7 @@ export function SecondaryDetailPanel({
                   </div>
                   {description ? <p>{description}</p> : null}
                 </div>
-                <button type="button" onClick={close} aria-label={closeLabel} title={closeLabel}>
+                <button type="button" onClick={() => onClose ? onClose() : close()} disabled={closeDisabled} aria-label={closeLabel} title={closeLabel}>
                   <XClose aria-hidden="true" />
                 </button>
               </header>

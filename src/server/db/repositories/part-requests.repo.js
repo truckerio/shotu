@@ -9,6 +9,7 @@ import {
 import { publicQuantity, quantityLabel } from "../../modules/parts/quantity-uom.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
+import { assertPrimaryPartIdentityAvailable } from "./parts-catalog-edit.repo.js";
 
 const TERMINAL_WORKORDER_STATUSES = [WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED, WORKORDER_STATUS.CANCELLED];
 
@@ -368,6 +369,7 @@ async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
   const normalized = normalizePartNumber(values.partNumber);
   if (!normalized) return null;
   const aliases = learnedAliases(values, rawQuery);
+  await assertPrimaryPartIdentityAvailable(client, companyId, normalized);
   const result = await client.query(
     `
       insert into parts_catalog (
@@ -375,10 +377,19 @@ async function upsertCatalogPart(client, companyId, values, rawQuery = "") {
         repair_template, aliases, uom_code
       ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
       on conflict (company_id, normalized_part_number) do update set
-        part_number = excluded.part_number,
-        manufacturer = excluded.manufacturer,
-        description = excluded.description,
-        category = excluded.category,
+        part_number = case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
+        manufacturer = case when btrim(parts_catalog.manufacturer) = '' then excluded.manufacturer else parts_catalog.manufacturer end,
+        description = case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end,
+        category = case when btrim(parts_catalog.category) = '' then excluded.category else parts_catalog.category end,
+        version = parts_catalog.version + case when
+          row(parts_catalog.part_number, parts_catalog.manufacturer, parts_catalog.description, parts_catalog.category, parts_catalog.repair_template)
+          is distinct from row(
+            case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
+            case when btrim(parts_catalog.manufacturer) = '' then excluded.manufacturer else parts_catalog.manufacturer end,
+            case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end,
+            case when btrim(parts_catalog.category) = '' then excluded.category else parts_catalog.category end,
+            excluded.repair_template
+          ) or not (parts_catalog.aliases @> excluded.aliases) then 1 else 0 end,
         repair_template = excluded.repair_template,
         aliases = (
           select coalesce(jsonb_agg(alias order by alias), '[]'::jsonb)

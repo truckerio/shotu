@@ -40,6 +40,8 @@ function publicCatalogPart(row) {
     uomCode: row.uom_code || DEFAULT_UOM_CODE,
     repairOrder: row.repair_template,
     aliases: Array.isArray(row.aliases) ? row.aliases : [],
+    referenceNumbers: Array.isArray(row.reference_numbers) ? row.reference_numbers : [],
+    version: Number(row.version || 1),
     matchType: row.match_type,
     matchRank: row.match_rank === undefined ? undefined : Number(row.match_rank),
     barcode: row.barcode || "",
@@ -47,6 +49,10 @@ function publicCatalogPart(row) {
     externalId: row.odoo_external_id || row.external_id || "",
     providerUpdatedAt: row.provider_updated_at || null,
     lastSeenAt: row.last_seen_at || null,
+    providerManaged: row.provider_managed === true || Boolean(row.odoo_external_id),
+    editableFields: row.provider_managed === true || row.odoo_external_id
+      ? ["manufacturer", "referenceNumbers"]
+      : ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers"],
     inventory: publicInventory(row),
   };
 }
@@ -90,10 +96,11 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
                 and exact_barcode.catalog_part_id = pc.id
                 and lower(exact_barcode.barcode) = $3
             ) then 1
+            when exists (select 1 from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id and reference.normalized_reference_number=$2) then 2
             when exists (
               select 1 from jsonb_array_elements_text(pc.aliases) alias
               where lower(alias) = $3
-            ) then 2
+            ) then 3
             when ($2 <> '' and pc.normalized_part_number like $4 escape '\\')
               or lower(pc.part_number) like $5 escape '\\' then 3
             when exists (
@@ -116,6 +123,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
                 and exact_barcode.catalog_part_id = pc.id
                 and lower(exact_barcode.barcode) = $3
             ) then 'exact_barcode'
+            when exists (select 1 from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id and reference.normalized_reference_number=$2) then 'exact_reference_number'
             when exists (
               select 1 from jsonb_array_elements_text(pc.aliases) alias
               where lower(alias) = $3
@@ -146,6 +154,8 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
                 and lower(matching_barcode.barcode) like $6 escape '\\'
             )
             or lower(pc.description) = $3
+            or exists (select 1 from part_reference_numbers reference where reference.company_id = pc.company_id and reference.catalog_part_id = pc.id and lower(reference.reference_number) like $6 escape '\\')
+            or exists (select 1 from part_reference_numbers reference where reference.company_id = pc.company_id and reference.catalog_part_id = pc.id and $2 <> '' and reference.normalized_reference_number like $4 escape '\\')
             or exists (
               select 1 from jsonb_array_elements_text(pc.aliases) alias
               where lower(alias) = $3
@@ -160,6 +170,8 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
       )
       select
         candidates.*,
+        coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id) from part_reference_numbers reference where reference.company_id=candidates.company_id and reference.catalog_part_id=candidates.id), '[]'::jsonb) as reference_numbers,
+        exists (select 1 from odoo_product_mappings ownership where ownership.company_id=candidates.company_id and ownership.catalog_part_id=candidates.id) as provider_managed,
         provider.external_id as odoo_external_id,
         provider.barcode,
         provider.active as provider_active,
@@ -246,9 +258,12 @@ export async function findCompanyCatalogPart(companyId, input) {
     `
       select
         pc.*,
+        coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id) from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id), '[]'::jsonb) as reference_numbers,
+        exists (select 1 from odoo_product_mappings ownership where ownership.company_id=pc.company_id and ownership.catalog_part_id=pc.id) as provider_managed,
         case
           when pc.normalized_part_number = $2 then 'exact_part_number'
           when lower(pc.part_number) = lower($3) then 'exact_part_number'
+          when exists (select 1 from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id and reference.normalized_reference_number=$2) then 'exact_reference_number'
           when exists (
             select 1 from jsonb_array_elements_text(pc.aliases) alias
             where lower(alias) = lower($3)
@@ -262,6 +277,7 @@ export async function findCompanyCatalogPart(companyId, input) {
           pc.normalized_part_number = $2
           or lower(pc.part_number) = lower($3)
           or lower(pc.description) = lower($3)
+          or exists (select 1 from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id and reference.normalized_reference_number=$2)
           or exists (
             select 1 from jsonb_array_elements_text(pc.aliases) alias
             where lower(alias) = lower($3)
@@ -271,6 +287,7 @@ export async function findCompanyCatalogPart(companyId, input) {
         case
           when pc.normalized_part_number = $2 then 0
           when lower(pc.part_number) = lower($3) then 1
+          when exists (select 1 from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id and reference.normalized_reference_number=$2) then 2
           when exists (
             select 1 from jsonb_array_elements_text(pc.aliases) alias
             where lower(alias) = lower($3)

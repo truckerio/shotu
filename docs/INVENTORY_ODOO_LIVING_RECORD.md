@@ -106,7 +106,7 @@ reporting, cores, or a dedicated Parts role.
 
 | Capability | State | Current owner/evidence | Meaning |
 |---|---|---|---|
-| Company part catalog | IMPLEMENTED | `parts_catalog`; `src/server/db/repositories/parts-catalog.repo.js` | Company-scoped part search with Odoo identity/barcode candidates and optional location availability. |
+| Company part catalog | IMPLEMENTED | `parts_catalog`; `part_reference_numbers`; catalog/inventory repositories | Company-scoped part search and audited Office/Admin editing. Odoo-managed identity fields remain provider-owned. |
 | Odoo location discovery/mapping | IMPLEMENTED | `src/server/db/migrations/042_odoo_inventory_sync.sql`; `odoo.admin.service.js` | Admin maps Odoo internal locations to app locations. |
 | Odoo product mapping | IMPLEMENTED | migrations `043` and `059` | Stable `product.product` mapping; explicit workorder-line choice when duplicate Odoo products map to one catalog part. |
 | Odoo inventory read sync | IMPLEMENTED, AGGREGATE ONLY | `syncOdooPartsAndInventory`; `importOdooInventory` | Reads active products and internal `stock.quant` balances, then projects aggregated availability locally. |
@@ -132,7 +132,9 @@ reporting, cores, or a dedicated Parts role.
 
 #### Aggregate catalog and availability
 
-- `parts_catalog` stores one canonical company part per normalized part number.
+- `parts_catalog` stores one stable canonical company part per normalized primary part number and carries an optimistic edit version.
+- `part_reference_numbers` stores operator-managed alternate numbers separately from learned search aliases; normalized identity is unique within one company.
+- `part_catalog_edit_events` stores append-only before/after evidence for each committed manual catalog edit.
 - `odoo_product_mappings` preserves stable Odoo `product.product` identities independently of mutable SKU text.
 - `odoo_inventory_locations` preserves Odoo stock-location identity and explicit app-location mapping status.
 - `inventory_items` stores one aggregate balance per company, app location, normalized part, and unit of measure.
@@ -546,7 +548,7 @@ Each implementation slice records applicable evidence:
 | Odoo configuration/read sync | `src/server/integrations/odoo/odoo.admin.service.js` and `.repo.js` | Preserve exact provider identity and reconciliation metadata. |
 | Odoo client | `src/server/integrations/odoo/odoo.client.js` | Inventory command adapter behind domain service; UI never calls provider directly. |
 | Odoo service-order export | `src/server/integrations/odoo/odoo.outbound.*` | Keep separate from inventory receipt/transfer commands. |
-| Catalog search | `src/server/db/repositories/parts-catalog.repo.js` | Read-only identity/availability projection search. |
+| Catalog search/edit | `src/server/db/repositories/parts-catalog.repo.js`; `parts-catalog-edit.repo.js` | Keep search bounded/indexed and manual edits tenant-scoped, versioned, audited, and provider-safe. |
 | Request/allocation workflow | `src/server/db/repositories/part-requests.repo.js` | Transition away from local quantity ownership. |
 | Parts domain validation | `src/server/modules/parts/*` | Add explicit workflow state machines and policies. |
 | Auth/route policy | `src/server/auth/roles.js`, `permissions.js`, `policy.js` | Add least-privilege Parts capabilities. |
@@ -687,3 +689,18 @@ Each implementation slice records applicable evidence:
 - Verification: Focused frontend/API/service/repository contracts passed 62/62; the full unit suite passed 1,259 with 7 opt-in tests skipped and 0 failures; focused real-PostgreSQL pagination/location isolation passed; build, structure, database health, and diff checks passed. Authenticated localhost verified stock-only Inventory, intake history/filter/actions, review-heading focus, exact-row focus return, no horizontal overflow in a narrow viewport, and an empty error console.
 - Release evidence: Local working tree and localhost only. No commit, push, deployment, Odoo write, or production mutation was authorized.
 - Remaining gaps: Search still uses bounded tenant-scoped wildcard matching over current JSON projections; dedicated searchable columns/indexes should be considered only when observed history volume warrants them.
+
+### INV-20260829-01 — Editable part identity and structured reference numbers
+
+- Status: LOCAL VERIFIED
+- Decision/requirement: Let Office/Admin correct local part identity inside existing part detail without creating another page or allowing local UI to overwrite Odoo-owned product truth.
+- Before: Part detail was read-only; alternate numbers were unavailable as structured data; learned `aliases` mixed only search phrases from approved requests; no catalog mutation version or durable manual-edit audit existed.
+- After: Existing secondary part detail opens one minimal editor for part name, primary number, manufacturer, category, catalog barcode, and up to 20 reference numbers. Local parts expose all fields. Any Odoo mapping makes provider-owned name, primary number, category, barcode, and UOM read-only while manufacturer and local reference numbers remain editable enrichment. Saved values survive the stock refresh and reference numbers participate in bounded catalog and inventory search.
+- Canonical owners: `src/server/db/repositories/parts-catalog-edit.repo.js`; `src/server/modules/inventory/inventory-part-details.service.js`; `PATCH /api/office/inventory/parts/:catalogPartId`; `frontend/src/features/inventory/PartIdentityEditor.jsx`; existing `InventoryWorkspace.jsx` detail panel.
+- Data/API changes: Migration `084_part_catalog_editing.sql` adds `parts_catalog.version`, tenant-scoped indexed `part_reference_numbers`, and transactional `part_catalog_edit_events`. PATCH requires the current version and a strict complete identity payload. Primary renames preserve `catalog_part_id`, update current local `inventory_items` projections atomically, and leave receipt, movement, request, and label history unchanged.
+- User-experience changes: One Edit part action, inline Save/Cancel, dynamic reference rows, client/server duplicate detection, busy/error states, and explicit stale-edit reload behavior. Duplicate-identity conflicts keep the fields editable and show the actionable server message; only stale versions offer Reload. Editing blocks silent drawer dismissal and location drilldown until Save or Cancel. Phone layout keeps 44px controls and sticky actions.
+- Authorization/security changes: Existing `WORKORDER_OFFICE` route permission covers Office/Admin; service and repository repeat role/company enforcement. Cross-tenant IDs return 404. Every runtime primary-catalog writer shares the company identity lock, rejects primary/reference collisions, and advances the optimistic version when it changes current catalog state. Row locks, deterministic normalized uniqueness, provider ownership checks, and atomic audit prevent lost updates, ambiguous exact identities, and partial writes.
+- Performance changes: Reference numbers use a child table with prefix/trigram indexes. Display and punctuation-normalized search use bounded `EXISTS` predicates and correlated aggregation, avoiding N+1 reads and stock/location row multiplication.
+- Verification: The final independent gate passed 65 focused tests with one opt-in PostgreSQL test skipped, plus production build and diff check. A fresh temporary PostgreSQL database applied all 84 migrations and passed database health. Real PostgreSQL passed local identity cascade, tenant isolation, conflict rollback, concurrent stale-write rejection, Odoo ownership, transactional audit, normalized reference lookup, Odoo writer versioning/collision rejection, invoice pagination, stock sorting, and concurrent receipt regression. Authenticated localhost saved and reloaded three reference numbers, found the part by a reference, had no console errors or horizontal overflow at 390/768/1440, and exposed accessible names for every reference input. Two skeptical review rounds found one high and five medium issues across cross-writer identity, versioning, normalized search, error copy, stale refresh, and drawer dismissal; all were corrected before the fingerprint-stable PASS recheck.
+- Release evidence: Local working tree only. No commit, push, deployment, production mutation, or Odoo write was authorized.
+- Remaining gaps: Dedicated Parts permission remains separate future work. Provider-managed product identity must still be changed in Odoo. Bulk editing and reference types/labels are intentionally outside this minimal slice.

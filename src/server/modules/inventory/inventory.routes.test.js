@@ -537,3 +537,20 @@ test("invoice history route returns server pagination inside authenticated scope
   assert.equal(input.offset, 20);
   assert.deepEqual(response.payload, { invoices: [{ id: RUN_ID }], page: 2, limit: 20, total: 21, pageCount: 2 });
 });
+
+test("part edit route returns the committed projection and emits supplemental audit", async () => {
+  const response = {};
+  const events = [];
+  const body = { expectedVersion: 2, description: "Air valve", partNumber: "A-1", manufacturer: "Bendix", category: "Air", barcode: "123", referenceNumbers: ["BW-1"] };
+  const routeHelpers = helpers(body);
+  routeHelpers.emitAdministrativeAuditEvent = async (event) => events.push(event);
+  const handled = await handleInventoryApi(
+    { method: "PATCH", requestId: "request-part-edit" }, response,
+    new URL("http://localhost/api/office/inventory/parts/33333333-3333-4333-8333-333333333333"), routeHelpers,
+    { updatePart: async () => ({ kind: "updated", part: { catalogPartId: "33333333-3333-4333-8333-333333333333", version: 3 } }) },
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 200);
+  assert.equal(response.payload.part.version, 3);
+  assert.deepEqual(events, [{ type: "inventory_part_updated", requestId: "request-part-edit", actorId: ACTOR_ID, catalogPartId: "33333333-3333-4333-8333-333333333333", version: 3 }]);
+});

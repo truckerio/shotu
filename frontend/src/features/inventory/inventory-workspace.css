@@ -63,6 +63,7 @@
 .inventory-detail-locations > button:first-child { border-top: 0; }
 .inventory-detail-locations > button:hover { background: #f9fafb; }
 .inventory-detail-locations > button:focus-visible { position: relative; outline: 3px solid #84caff; outline-offset: -3px; }
+.inventory-detail-locations > button:disabled { color: #98a2b3; background: #f9fafb; cursor: not-allowed; }
 .inventory-detail-locations > button > div { display: grid; gap: 3px; }
 .inventory-detail-locations > button > svg { grid-column: 2; grid-row: 1; align-self: center; width: 18px; height: 18px; color: #667085; }
 .inventory-detail-locations dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
@@ -145,6 +146,24 @@
 .inventory-detail-facts > div { display: flex; justify-content: space-between; gap: 20px; padding: 11px 13px; border-top: 1px solid #eaecf0; }
 .inventory-detail-facts > div:first-child { border-top: 0; }
 .inventory-detail-facts dd { margin: 0; overflow-wrap: anywhere; font-weight: 650; text-align: right; }
+.inventory-part-editor { display: grid; gap: 18px; }
+.inventory-part-editor-message { margin: 0; color: #b42318; font-size: 13px; font-weight: 600; }
+.inventory-part-editor-conflict { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #fecdca; border-radius: 8px; color: #912018; background: #fef3f2; font-size: 13px; font-weight: 600; }
+.inventory-part-editor-references { display: grid; gap: 12px; min-width: 0; }
+.inventory-part-editor-references > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inventory-part-editor-references > header > div { display: grid; gap: 3px; }
+.inventory-part-editor-references h4, .inventory-part-editor-references p { margin: 0; }
+.inventory-part-editor-references h4 { color: #181d27; font-size: 14px; }
+.inventory-part-editor-references p, .inventory-part-editor-managed, .inventory-part-editor-empty { color: #667085; font-size: 12px; line-height: 1.45; }
+.inventory-part-editor-reference-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; min-width: 0; }
+.inventory-part-editor-reference-row .operational-form-field { min-width: 0; }
+.inventory-part-editor-reference-row .inventory-part-editor-remove { align-self: end; }
+.inventory-part-editor-remove { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; padding: 0; border: 1px solid #d0d5dd; border-radius: 6px; color: #b42318; background: #fff; cursor: pointer; }
+.inventory-part-editor-remove:hover { border-color: #fecdca; background: #fef3f2; }
+.inventory-part-editor-remove:focus-visible { outline: 3px solid #fecdca; outline-offset: 1px; }
+.inventory-part-editor-remove:disabled { color: #98a2b3; background: #f2f4f7; cursor: not-allowed; }
+.inventory-part-editor-remove svg { width: 18px; height: 18px; }
+.inventory-part-editor-managed { margin: -4px 0 0; }
 .inventory-detail-planned { display: flex; flex-wrap: wrap; gap: 8px; }
 .inventory-detail-planned span { padding: 7px 9px; border: 1px solid #e4e7ec; border-radius: 7px; color: #535862; background: #f9fafb; font-size: 12px; font-weight: 650; }
 .inventory-count-start { display: grid; justify-items: start; gap: 16px; max-width: 620px; padding: 24px; border: 1px dashed #b2ccff; border-radius: 12px; background: #f5f8ff; }
@@ -243,6 +262,10 @@
   .inventory-detail-metrics { grid-template-columns: 1fr; }
   .inventory-detail-metrics > div { border-top: 1px solid #eaecf0; border-left: 0; }
   .inventory-detail-metrics > div:first-child { border-top: 0; }
+  .inventory-part-editor-references > header { align-items: stretch; flex-direction: column; }
+  .inventory-part-editor-references > header .button { justify-content: center; min-height: 44px; width: 100%; }
+  .inventory-part-editor-conflict { align-items: stretch; flex-direction: column; }
+  .inventory-part-editor-conflict .button { justify-content: center; min-height: 44px; width: 100%; }
   .inventory-count-summary > div { flex: 1 1 50%; border-top: 1px solid #e4e7ec; }
   .inventory-count-summary > div:nth-child(-n+2) { border-top: 0; }
   .inventory-count-summary > div:nth-child(odd) { border-left: 0; }

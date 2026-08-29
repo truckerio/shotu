@@ -31,6 +31,7 @@ import {
   searchInventoryMasterParts,
   uploadInventoryCount,
 } from "./inventory-count-imports.service.js";
+import { updateInventoryPart } from "./inventory-part-details.service.js";
 
 function inventoryDownloadDisposition(fileName) {
   const source = String(fileName || "inventory-count.xlsx").replace(/[\r\n]/g, "_");
@@ -194,6 +195,13 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
     }
     if (req.method === "GET" && url.pathname === "/api/office/inventory/stock") {
       helpers.sendJson(res, 200, await readLocalInventoryStock(url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    const editablePartId = pathId(url.pathname, /^\/api\/office\/inventory\/parts\/([^/]+)$/);
+    if (req.method === "PATCH" && editablePartId) {
+      const part = await updateInventoryPart(editablePartId, await helpers.readBody(req), helpers.requestContext, dependencies);
+      await emitInventoryAudit(helpers, { type: "inventory_part_updated", requestId: req.requestId || null, actorId: helpers.requestContext.actor.id, catalogPartId: editablePartId, version: part.version });
+      helpers.sendJson(res, 200, { part });
       return true;
     }
     const partLocationMatch = /^\/api\/office\/inventory\/parts\/([^/]+)\/locations\/([^/]+)\/units$/.exec(url.pathname);

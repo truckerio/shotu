@@ -9,6 +9,7 @@ import { SecondaryDetailPanel, SecondaryDetailSection } from "../../components/u
 import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
 import { InventoryCountImportPanel } from "./InventoryCountImportPanel.jsx";
+import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
 import {
   DEFAULT_STOCK_SORT,
@@ -16,6 +17,7 @@ import {
   stockState,
   stockStateLabel,
 } from "./inventory-workspace-model.js";
+import { hasRefreshedPartIdentityVersion } from "./part-identity-editor-model.js";
 import "./inventory-workspace.css";
 
 function quantity(value) {
@@ -68,6 +70,10 @@ export function InventoryWorkspace({ canApplyInventoryCount = false }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedStockKey, setSelectedStockKey] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState("");
+  const [partIdentityEditOpen, setPartIdentityEditOpen] = useState(false);
+  const [partIdentityBusy, setPartIdentityBusy] = useState(false);
+  const [partIdentityOverride, setPartIdentityOverride] = useState(null);
+  const [partIdentityRefreshPending, setPartIdentityRefreshPending] = useState(null);
   const [stockPage, setStockPage] = useState(1);
   const [stockMeta, setStockMeta] = useState({ pageCount: 1, total: 0, counts: { all: 0, available: 0, reserved: 0, out: 0 } });
 
@@ -116,13 +122,55 @@ export function InventoryWorkspace({ canApplyInventoryCount = false }) {
   const stockCounts = stockMeta.counts;
   const initialLoading = loading && !stockLoaded;
   const refreshing = loading && stockLoaded;
-  const selectedItem = useMemo(
-    () => items.find((item) => stockItemKey(item) === selectedStockKey) || null,
-    [items, selectedStockKey],
-  );
+  const selectedItem = useMemo(() => {
+    const item = items.find((entry) => stockItemKey(entry) === selectedStockKey) || null;
+    return item && partIdentityOverride?.catalogPartId === item.catalogPartId ? { ...item, ...partIdentityOverride } : item;
+  }, [items, partIdentityOverride, selectedStockKey]);
   const selectedLocation = selectedItem?.locations.find((location) => location.locationId === selectedLocationId) || null;
 
-  useEffect(() => setSelectedLocationId(""), [selectedStockKey]);
+  useEffect(() => {
+    setSelectedLocationId("");
+    setPartIdentityEditOpen(false);
+    setPartIdentityBusy(false);
+    setPartIdentityOverride(null);
+    setPartIdentityRefreshPending(null);
+  }, [selectedStockKey]);
+
+  useEffect(() => {
+    if (!partIdentityRefreshPending) return;
+    const refreshedItem = items.find((item) => item.catalogPartId === partIdentityRefreshPending.catalogPartId);
+    if (!hasRefreshedPartIdentityVersion(refreshedItem, partIdentityRefreshPending)) return;
+    setPartIdentityRefreshPending(null);
+    window.requestAnimationFrame(() => document.getElementById("inventory-edit-part")?.focus({ preventScroll: true }));
+  }, [items, partIdentityRefreshPending]);
+
+  const onPartIdentityEditStateChange = useCallback((state) => {
+    setPartIdentityBusy(Boolean(state?.busy));
+  }, []);
+
+  function closePartIdentityEditor() {
+    setPartIdentityEditOpen(false);
+    window.requestAnimationFrame(() => document.getElementById("inventory-edit-part")?.focus({ preventScroll: true }));
+  }
+
+  function handlePartIdentitySaved(part) {
+    setPartIdentityOverride((current) => ({ ...(selectedItem || current || {}), ...(part || {}) }));
+    setPartIdentityEditOpen(false);
+    setRefreshKey((value) => value + 1);
+    window.requestAnimationFrame(() => document.getElementById("inventory-edit-part")?.focus({ preventScroll: true }));
+  }
+
+  function reloadPartIdentity() {
+    if (!selectedItem) return;
+    setPartIdentityOverride(null);
+    setPartIdentityEditOpen(false);
+    setPartIdentityRefreshPending({ catalogPartId: selectedItem.catalogPartId, version: selectedItem.version });
+    setRefreshKey((value) => value + 1);
+  }
+
+  function openPartIdentityEditor() {
+    if (!partIdentityRefreshPending) setPartIdentityEditOpen(true);
+  }
 
   function openInvoiceWorkflow(invoiceRun = "") {
     window.history.replaceState({}, "", inventoryUrl({ invoiceRun, upload: !invoiceRun }));
@@ -271,14 +319,17 @@ export function InventoryWorkspace({ canApplyInventoryCount = false }) {
       <SecondaryDetailPanel
         open={Boolean(selectedItem)}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) setSelectedStockKey("");
+          if (!nextOpen && !partIdentityEditOpen && !partIdentityBusy) setSelectedStockKey("");
         }}
         eyebrow="Part details"
         title={selectedItem?.partNumber || "Part"}
         description={selectedItem?.description || "No description"}
         status={selectedItem ? <span className={`inventory-detail-status ${selectedItem.quantityAvailable > 0 ? "is-available" : "is-unavailable"}`}>{selectedItem.quantityAvailable > 0 ? "Our inventory available" : "Our inventory 0"}</span> : null}
-        footer={<Button type="button" onClick={() => setSelectedStockKey("")}>Close</Button>}
-        closeLabel="Close part details"
+        footer={!partIdentityEditOpen ? <Button type="button" onClick={() => setSelectedStockKey("")}>Close</Button> : null}
+        dismissable={!partIdentityEditOpen}
+        onClose={partIdentityEditOpen ? closePartIdentityEditor : null}
+        closeDisabled={partIdentityBusy}
+        closeLabel={partIdentityBusy ? "Saving part details" : partIdentityEditOpen ? "Discard part identity edits" : "Close part details"}
       >
         {selectedItem ? selectedLocation ? <PartSerializationPanel
           item={selectedItem}
@@ -296,20 +347,35 @@ export function InventoryWorkspace({ canApplyInventoryCount = false }) {
 
           <SecondaryDetailSection title="Locations">
             <div className="inventory-detail-locations">
-              {selectedItem.locations.map((location) => <button type="button" key={location.locationId} onClick={() => setSelectedLocationId(location.locationId)}>
+              {selectedItem.locations.map((location) => <button type="button" key={location.locationId} onClick={() => setSelectedLocationId(location.locationId)} disabled={partIdentityEditOpen}>
                 <div><strong>{location.locationName}</strong><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</small></div>
                 <ChevronRight aria-hidden="true" />
               </button>)}
             </div>
           </SecondaryDetailSection>
 
-          {(selectedItem.manufacturer || selectedItem.barcode) ? <SecondaryDetailSection title="Part identity">
-            <dl className="inventory-detail-facts">
-              {selectedItem.manufacturer ? <div><dt>Manufacturer</dt><dd>{selectedItem.manufacturer}</dd></div> : null}
-              {selectedItem.barcode ? <div><dt>Catalog barcode</dt><dd>{selectedItem.barcode}</dd></div> : null}
+          <SecondaryDetailSection
+            title="Part identity"
+            description={partIdentityRefreshPending ? "Reloading current details before editing can resume." : ""}
+            action={!partIdentityEditOpen ? <Button id="inventory-edit-part" type="button" onClick={openPartIdentityEditor} disabled={Boolean(partIdentityRefreshPending)}>{partIdentityRefreshPending ? "Refreshing details" : "Edit part"}</Button> : null}
+          >
+            {partIdentityEditOpen ? <PartIdentityEditor
+              part={selectedItem}
+              onCancel={closePartIdentityEditor}
+              onEditStateChange={onPartIdentityEditStateChange}
+              onReload={reloadPartIdentity}
+              onSaved={handlePartIdentitySaved}
+            /> : <dl className="inventory-detail-facts">
+              <div><dt>Part name</dt><dd>{selectedItem.description || "Not set"}</dd></div>
+              <div><dt>Primary part number</dt><dd>{selectedItem.partNumber || "Not set"}</dd></div>
+              <div><dt>Manufacturer</dt><dd>{selectedItem.manufacturer || "Not set"}</dd></div>
+              <div><dt>Category</dt><dd>{selectedItem.category || "Not set"}</dd></div>
+              <div><dt>Catalog barcode</dt><dd>{selectedItem.barcode || "Not set"}</dd></div>
+              <div><dt>Reference numbers</dt><dd>{selectedItem.referenceNumbers?.length ? selectedItem.referenceNumbers.join(", ") : "None"}</dd></div>
               <div><dt>Unit</dt><dd>{selectedItem.uomCode}</dd></div>
-            </dl>
-          </SecondaryDetailSection> : null}
+              {selectedItem.providerManaged ? <div><dt>Identity source</dt><dd>Managed in Odoo</dd></div> : null}
+            </dl>}
+          </SecondaryDetailSection>
 
         </> : null}
       </SecondaryDetailPanel>

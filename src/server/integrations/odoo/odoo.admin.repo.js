@@ -1,6 +1,7 @@
 import { getPool, query } from "../../db/pool.js";
 import { requireCompanyId } from "../../db/company.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
+import { assertPrimaryPartIdentityAvailable } from "../../db/repositories/parts-catalog-edit.repo.js";
 import {
   readIntegrationCredentialForProvider,
   saveIntegrationCredential,
@@ -1367,6 +1368,7 @@ export async function importOdooInventory(companyId, { products, quants }) {
       const partNumber = String(product.default_code || product.barcode || `ODOO-${product.id}`).trim();
       const normalized = normalizePartNumber(partNumber);
       const unit = unitCodes.get(relationName(product.uom_id).toLowerCase()) || { code: "ea", decimalScale: 0 };
+      await assertPrimaryPartIdentityAvailable(client, tenantId, normalized);
       const catalog = await client.query(
         `insert into parts_catalog (
            company_id, normalized_part_number, part_number, description, category,
@@ -1376,6 +1378,10 @@ export async function importOdooInventory(companyId, { products, quants }) {
          set description = excluded.description,
              category = excluded.category,
              uom_code = excluded.uom_code,
+             version = parts_catalog.version + case when
+               row(parts_catalog.description, parts_catalog.category, parts_catalog.uom_code)
+               is distinct from row(excluded.description, excluded.category, excluded.uom_code)
+               then 1 else 0 end,
              updated_at = now()
          returning id`,
         [tenantId, normalized, partNumber, product.name || partNumber, relationName(product.categ_id), unit.code],
