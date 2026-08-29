@@ -615,14 +615,14 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
 
   const reextractDialog = (
     <ModalOverlay className="invoice-upload-overlay" isOpen={reextractOpen} isDismissable={!busy} onOpenChange={(open) => { if (!busy) setReextractOpen(open); }}>
-      <Modal>
+      <Modal className="invoice-upload-modal">
         <Dialog className="invoice-upload-dialog invoice-review-leave-dialog" aria-labelledby="invoice-reextract-title">
-          <div className="invoice-upload-heading">
+          <div className="invoice-upload-dialog-heading">
             <div><Heading slot="title" id="invoice-reextract-title">Re-extract this invoice?</Heading><p>A new draft will be created from the original file. The current invoice stays in history and inventory will not change.</p></div>
             <button type="button" aria-label="Close re-extraction confirmation" onClick={() => setReextractOpen(false)} disabled={Boolean(busy)}><XClose aria-hidden="true" /></button>
           </div>
           {reviewDirty ? <p className="invoice-reextract-warning" role="alert">Unsaved edits are not copied into the new extraction.</p> : null}
-          <div className="invoice-leave-actions">
+          <div className="invoice-upload-dialog-actions">
             <Button type="button" onClick={() => setReextractOpen(false)}>Keep current extraction</Button>
             <Button type="button" variant="primary" icon={RefreshCw01} onClick={reextract}>Re-extract invoice</Button>
           </div>

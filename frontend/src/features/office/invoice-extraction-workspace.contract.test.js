@@ -178,9 +178,13 @@ test("reviewed invoice values are locked before physical confirmation", async ()
 
 test("completed invoice can be re-extracted from retained source without overwriting history or inventory", async () => {
   const source = await readFile(new URL("./InvoiceExtractionWorkspace.jsx", import.meta.url), "utf8");
+  const reextractDialog = source.slice(source.indexOf("const reextractDialog"), source.indexOf("if (draft)"));
   assert.match(source, /\/api\/office\/invoice-extractions\/\$\{encodeURIComponent\(run\.id\)\}\/reextract/);
   assert.match(source, /idempotencyKey: `reextract-\$\{crypto\.randomUUID\(\)\}`/);
   assert.match(source, /<Heading slot="title" id="invoice-reextract-title">Re-extract this invoice\?<\/Heading>/);
+  assert.match(reextractDialog, /<Modal className="invoice-upload-modal">/);
+  assert.match(reextractDialog, /<div className="invoice-upload-dialog-heading">/);
+  assert.match(reextractDialog, /<div className="invoice-upload-dialog-actions">/);
   assert.match(source, /The current invoice stays in history and inventory will not change\./);
   assert.match(source, /Unsaved edits are not copied into the new extraction\./);
   assert.match(source, /setBatchRuns\(\[entry\]\);[\s\S]*showBatchEntry\(entry, 0\);/);
