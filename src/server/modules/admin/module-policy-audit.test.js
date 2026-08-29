@@ -36,6 +36,20 @@ test("policy diff reports role and named-user changes without unchanged fields",
   ]);
 });
 
+test("part-scanning grants remain visible in the canonical audit diff", () => {
+  assert.deepEqual(modulePolicyChanges({}, {
+    moduleAccess: { mechanic: { detail: { partsScanning: "write" } } },
+    userModuleAccess: {},
+  }), [{
+    targetType: "role",
+    targetId: "mechanic",
+    moduleKey: "partsScanning",
+    surface: "detail",
+    before: "inherit",
+    after: "write",
+  }]);
+});
+
 test("audit adapter emits exactly one successful payload for a multi-change patch", async () => {
   const emitted = [];
   const payload = await emitModulePolicyAudit({

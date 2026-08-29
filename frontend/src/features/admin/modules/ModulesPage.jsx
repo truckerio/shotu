@@ -1,6 +1,6 @@
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SearchMd, Settings01, Shield03 } from "@untitledui/icons";
+import { ChevronDown, SearchMd, Settings01, Shield03 } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
@@ -127,7 +127,10 @@ function UserExceptions({ companyPolicy, module, policy, scopeType, setPolicy, s
           <strong>User exceptions</strong>
           <small>Override the {scopeType === "company" ? "company setting" : "location setting"} for one person.</small>
         </span>
-        <span>{configuredCount} configured</span>
+        <span className="admin-module-exception-status">
+          <span>{configuredCount} configured</span>
+          <ChevronDown aria-hidden="true" />
+        </span>
       </summary>
       <div className="admin-module-exception-body">
         <label className="admin-modules-user-picker">
@@ -207,6 +210,7 @@ function ModuleManager({
   }, [module, surface]);
 
   useEffect(() => titleRef.current?.focus(), [module.key]);
+  const scopeLabel = scopeType === "company" ? "Company default" : detail.location.name;
 
   function followModulesBreadcrumb(event) {
     if (!isPlainPrimaryActivation(event)) return;
@@ -230,14 +234,19 @@ function ModuleManager({
           }]}
           current={module.label}
         />
-        <div>
-          <span className="admin-module-card-icon" aria-hidden="true"><Shield03 /></span>
-          <span>
-            <h2 id="admin-module-manager-title" ref={titleRef} tabIndex="-1">{module.label}</h2>
-            <p>{module.description}</p>
-          </span>
+        <div className="admin-module-manager-heading-row">
+          <div className="admin-module-manager-identity">
+            <span className="admin-module-card-icon" aria-hidden="true"><Shield03 /></span>
+            <span className="admin-module-manager-copy">
+              <span className="admin-module-manager-title-row">
+                <h2 id="admin-module-manager-title" ref={titleRef} tabIndex="-1">{module.label}</h2>
+                <span className="admin-module-manager-scope">{scopeLabel}</span>
+              </span>
+              <p>{module.description}</p>
+            </span>
+          </div>
+          <Button variant="primary" onClick={onSave} disabled={saving}>{saving ? "Saving" : "Save access"}</Button>
         </div>
-        <Button variant="primary" onClick={onSave} disabled={saving}>{saving ? "Saving" : "Save access"}</Button>
       </header>
 
       {module.surfaces.length > 1 ? (
@@ -313,6 +322,11 @@ function ModuleManager({
         </div>
         {!moduleSupportsWrite(module) ? (
           <p className="admin-module-view-only">This module is view-only and has no edit actions.</p>
+        ) : null}
+        {module.key === "partsScanning" ? (
+          <p className="admin-module-permission-note">
+            Edit access opens exact scan and issue in Parts without granting broader Parts edits. Mechanics are off by default; grant only the role or named users who need it.
+          </p>
         ) : null}
       </section>
 

@@ -97,16 +97,18 @@ try {
     expectedVersion: 0,
     moduleAccess: {
       office: { detail: { odoo: "read" } },
-      mechanic: { detail: { odoo: "hidden" } },
+      mechanic: { detail: { odoo: "hidden", partsScanning: "write" } },
     },
     userModuleAccess: {
-      [companyUserId]: { detail: { odoo: "write" } },
+      [companyUserId]: { detail: { odoo: "write", partsScanning: "write" } },
       [locationUserId]: { detail: { odoo: "write" } },
     },
   });
   assert.equal(companyPolicy.version, 1);
   assert.equal(companyPolicy.moduleAccess.office.detail.odoo, "read");
+  assert.equal(companyPolicy.moduleAccess.mechanic.detail.partsScanning, "write");
   assert.equal(companyPolicy.userModuleAccess[companyUserId].detail.odoo, "write");
+  assert.equal(companyPolicy.userModuleAccess[companyUserId].detail.partsScanning, "write");
 
   const normalizedCompanyPolicy = await getNormalizedModulePolicy({ companyId });
   assert.deepEqual(normalizedCompanyPolicy.moduleAccess, companyPolicy.moduleAccess);
@@ -135,10 +137,10 @@ try {
     mechanicCanRecordParts: false,
     moduleAccess: {
       office: { detail: { odoo: "hidden" } },
-      mechanic: { detail: { odoo: "hidden" } },
+      mechanic: { detail: { odoo: "hidden", partsScanning: "hidden" } },
     },
     userModuleAccess: {
-      [locationUserId]: { detail: { odoo: "read" } },
+      [locationUserId]: { detail: { odoo: "read", partsScanning: "write" } },
     },
     expectedVersion: 0,
   });
@@ -155,7 +157,9 @@ try {
 
   const normalizedLocationPolicy = await getNormalizedModulePolicy({ companyId, locationId });
   assert.equal(normalizedLocationPolicy.moduleAccess.office.detail.odoo, "hidden");
+  assert.equal(normalizedLocationPolicy.moduleAccess.mechanic.detail.partsScanning, "hidden");
   assert.equal(normalizedLocationPolicy.userModuleAccess[locationUserId].detail.odoo, "read");
+  assert.equal(normalizedLocationPolicy.userModuleAccess[locationUserId].detail.partsScanning, "write");
 
   const persistedLocationPolicy = await getLocationWorkorderPolicy(locationId, [companyId]);
   assert.equal(persistedLocationPolicy.moduleAccessOverrides.office.detail.odoo, "hidden");
@@ -182,6 +186,13 @@ try {
     userId: locationUserId,
     ...effective,
   }), { access: "read", source: "user" });
+  assert.deepEqual(resolveEffectiveWorkorderModuleAccess({
+    role: "mechanic",
+    surface: "detail",
+    moduleKey: "partsScanning",
+    userId: locationUserId,
+    ...effective,
+  }), { access: "write", source: "user" });
 
   await query("delete from user_profiles where id = $1", [companyUserId]);
   const userRuleCleanup = await query(

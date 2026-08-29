@@ -1,4 +1,5 @@
 .mechanic-serialized-parts {
+  position: relative;
   display: grid;
   gap: 14px;
   padding: 14px;
@@ -6,8 +7,14 @@
   border-radius: 12px;
 }
 
-.mechanic-serialized-parts > header,
-.mechanic-serialized-parts > header > div,
+.mechanic-serialized-parts.is-collapsed {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0;
+  border: 0;
+}
+
+.mechanic-scanner-panel,
 .mechanic-serialized-candidate,
 .mechanic-serialized-usage,
 .inventory-code-scanner,
@@ -17,9 +24,68 @@
   gap: 8px;
 }
 
-.mechanic-serialized-parts > header {
-  grid-template-columns: 24px 1fr;
-  align-items: start;
+.mechanic-scan-trigger,
+.mechanic-scanner-close {
+  position: relative;
+  display: inline-grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--border-secondary, #d0d5dd);
+  border-radius: 10px;
+  color: var(--foreground-primary, #101828);
+  background: var(--background-primary, #fff);
+  cursor: pointer;
+}
+
+.mechanic-scan-trigger:hover,
+.mechanic-scan-trigger:focus-visible,
+.mechanic-scanner-close:hover,
+.mechanic-scanner-close:focus-visible {
+  border-color: var(--border-brand, #1570ef);
+  color: var(--foreground-brand-primary, #175cd3);
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 3px rgba(46, 144, 250, 0.18);
+}
+
+.mechanic-scan-trigger svg,
+.mechanic-scanner-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mechanic-scan-trigger::after,
+.mechanic-scanner-close::after {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 180px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #fff;
+  background: #101828;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.mechanic-scan-trigger:hover::after,
+.mechanic-scan-trigger:focus-visible::after,
+.mechanic-scanner-close:hover::after,
+.mechanic-scanner-close:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mechanic-scanner-close {
+  justify-self: end;
 }
 
 .mechanic-serialized-parts h3,
@@ -113,6 +179,11 @@
 }
 
 @media (max-width: 480px) {
+  .mechanic-scan-trigger::after,
+  .mechanic-scanner-close::after {
+    display: none;
+  }
+
   .mechanic-serialized-candidate dl > div {
     grid-template-columns: 1fr;
     gap: 2px;

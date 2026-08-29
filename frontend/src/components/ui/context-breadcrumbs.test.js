@@ -9,11 +9,14 @@ test("context breadcrumbs expose a calm accessible parent path", async () => {
     readFile(new URL("./context-breadcrumbs.css", import.meta.url), "utf8"),
   ]);
 
-  assert.match(component, /<nav className="context-breadcrumbs" aria-label="Breadcrumb">/);
+  assert.match(component, /ariaLabel = "Breadcrumb"/);
+  assert.match(component, /<nav className="context-breadcrumbs" aria-label=\{ariaLabel\}>/);
   assert.match(component, /<a href=\{item\.href\} onClick=\{item\.onClick\}>/);
   assert.match(component, /aria-current="page"/);
   assert.match(component, /aria-hidden="true"/);
   assert.match(styles, /min-height: 44px/);
+  assert.match(styles, /font-size: var\(--text-secondary\)/);
+  assert.match(styles, /\[aria-current="page"\] \{[^}]*color: #182230;[^}]*font-weight: var\(--weight-bold\)/);
   assert.match(styles, /:focus-visible/);
   assert.match(styles, /text-overflow: ellipsis/);
 });

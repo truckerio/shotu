@@ -51,8 +51,8 @@ test("page owners retain their meaningful domain behavior", () => {
 
 test("location detail uses a contextual Locations breadcrumb without changing location tabs", () => {
   assert.match(locations, /<ContextBreadcrumbs/);
-  assert.match(locations, /className="admin-location-detail-header"/);
-  assert.match(adminStyles, /\.admin-location-detail-header \.page-header-heading \{[^}]*flex-direction: column/);
+  assert.doesNotMatch(locations, /admin-location-detail-header/);
+  assert.doesNotMatch(adminStyles, /admin-location-detail-header/);
   assert.match(locations, /label: "Locations"/);
   assert.match(locations, /href: "\/\?adminView=locations"/);
   assert.match(locations, /isPlainPrimaryActivation\(event\)/);

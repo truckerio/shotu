@@ -83,7 +83,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
       policyOverrides: detail.policy || workorder.policy || workorder.location?.policy,
       userId: actor?.id || "",
     })
-    : baseDetailSections;
+    : baseDetailSections.filter(({ id }) => id !== "preview");
   const selectedSection = coerceAllowedDetailSection(detailSection, detailSections);
   const odooSection = detailSections.find((section) => section.id === "odoo");
   const unitSection = detailSections.find((section) => section.id === "unit");
@@ -153,7 +153,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
         : null}
     </div>
   );
-  const sectionAccess = (moduleId) => detailSections.find((section) => section.id === moduleId)?.access || null;
+  const sectionAccess = (moduleId) => baseDetailSections.find((section) => section.id === moduleId)?.access || null;
   const canRead = (moduleId) => Boolean(sectionAccess(moduleId));
   const moduleProps = {
     activity: {
@@ -182,6 +182,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
       isMechanicDetail: false,
       label: "Chat",
       onSelect: setDetailSection,
+      renderInDetail: true,
       content: <div className="chat-content"><ChatThread messages={detail.messages || []} currentRole="surveillance" currentUserId={actor?.id || ""} /></div>,
     },
     completion: {

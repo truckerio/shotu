@@ -55,6 +55,10 @@ import {
   moduleAccessRoleSchema,
   moduleAccessScopeSchema,
 } from "../modules/admin/module-access.schemas.js";
+import {
+  changeGlobalLayoutPolicy,
+  readGlobalLayoutPolicy,
+} from "../modules/invoice-extraction/invoice-global-learning.service.js";
 
 function locationPath(pathname, suffix = "") {
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -134,6 +138,8 @@ export async function handleAdminApi(req, res, url, helpers, dependencies = {}) 
   const readModuleAccess = dependencies.readModuleAccess || readCanonicalModuleAccess;
   const readUserModuleAccess = dependencies.readUserModuleAccess || readCanonicalUserModuleAccess;
   const patchModuleAccess = dependencies.patchModuleAccess || patchCanonicalModuleAccess;
+  const readInvoiceGlobalLearning = dependencies.readInvoiceGlobalLearning || readGlobalLayoutPolicy;
+  const changeInvoiceGlobalLearning = dependencies.changeInvoiceGlobalLearning || changeGlobalLayoutPolicy;
 
   if (url.pathname === "/api/admin/module-access" && req.method === "GET") {
     const scope = moduleAccessScopeSchema.parse({
@@ -199,6 +205,23 @@ export async function handleAdminApi(req, res, url, helpers, dependencies = {}) 
         },
       ),
     });
+    return true;
+  }
+
+  const companyInvoiceGlobalLearningId = companyPath(url.pathname, "/invoice-global-learning");
+  if (req.method === "GET" && companyInvoiceGlobalLearningId) {
+    sendJson(res, 200, {
+      policy: await readInvoiceGlobalLearning(companyInvoiceGlobalLearningId, requestContext),
+    });
+    return true;
+  }
+  if (req.method === "PATCH" && companyInvoiceGlobalLearningId) {
+    const result = await changeInvoiceGlobalLearning(
+      companyInvoiceGlobalLearningId,
+      await readBody(req),
+      requestContext,
+    );
+    sendJson(res, result?.consent?.state === "withdrawing" ? 202 : 200, result);
     return true;
   }
 

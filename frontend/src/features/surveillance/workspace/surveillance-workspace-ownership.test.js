@@ -47,8 +47,14 @@ test("queue, detail, and Odoo behavior have focused owners", () => {
 
 test("surveillance keeps shared preview and timeline implementations", () => {
   const detailPage = source("./SurveillanceDetailPage.jsx");
+  const chatModule = source("../../workorder-modules/chat/WorkorderChatModule.jsx");
   assert.match(detailPage, /<PreviewPane/);
   assert.match(detailPage, /<CompactWorkorderPreview/);
+  assert.match(detailPage, /baseDetailSections\.filter\(\(\{ id \}\) => id !== "preview"\)/);
+  assert.match(detailPage, /baseDetailSections\.find\(\(section\) => section\.id === moduleId\)/);
+  assert.match(detailPage, /renderInDetail: true/);
+  assert.match(chatModule, /renderInDetail = isCompact \|\| isMechanicDetail/);
+  assert.match(chatModule, /!renderInDetail/);
   assert.match(source("../../workorder-modules/activity/WorkorderActivityModule.jsx"), /<WorkorderTimelinePanel/);
   assert.doesNotMatch(detailPage, /(?:function|const)\s+(PreviewPane|CompactWorkorderPreview|WorkorderTimelinePanel)\b/);
 });

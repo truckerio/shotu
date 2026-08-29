@@ -79,7 +79,6 @@ export function LocationDetailPage({
   return (
     <section className="admin-content">
       <PageHeader
-        className="admin-location-detail-header"
         title={detail.location.name}
         subtitle={detail.location.address || detail.location.type}
         leading={<ContextBreadcrumbs

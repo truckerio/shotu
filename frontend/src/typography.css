@@ -2,6 +2,7 @@
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --font-display: var(--font-sans);
   --text-caption: 12px;
+  --text-navigation: 12px;
   --text-secondary: 13px;
   --text-body: 14px;
   --text-heading: 16px;

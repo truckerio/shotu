@@ -5,7 +5,6 @@ import { mechanicPartsActionState } from "../mechanic-part-request-model.js";
 import { usedPartHasValue } from "../used-parts-model.js";
 import { MechanicRequestCard } from "./MechanicRequestCard.jsx";
 import { UsedPartsSection } from "./UsedPartsSection.jsx";
-import { MechanicSerializedParts } from "./MechanicSerializedParts.jsx";
 
 export function MechanicPartsSurface({
   actorId,
@@ -73,9 +72,6 @@ export function MechanicPartsSurface({
 
       {showUsedParts ? (
         <div hidden={mechanicActions.canRecordUsedPart && activeAction !== "used"}>
-          {mechanicActions.canRecordUsedPart ? (
-            <MechanicSerializedParts workorderId={detail.workorder.id} onChanged={onChanged} locale={locale} />
-          ) : null}
           <UsedPartsSection
             actorId={actorId}
             detail={detail}

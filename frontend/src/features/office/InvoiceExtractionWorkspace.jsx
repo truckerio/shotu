@@ -53,9 +53,11 @@ function Confidence({ field, optional = false }) {
   const blankOptional = optional && !String(field.value ?? "").trim();
   if (blankOptional) return <span className="invoice-confidence is-optional" title={field.evidence}>Not provided</span>;
   const state = confidenceState(field.confidence);
+  const confidence = Number(field.confidence);
+  const level = confidence >= 90 ? "high" : confidence >= 70 ? "medium" : "low";
   return (
-    <span className={`invoice-confidence is-${state.toLowerCase()}`} title={field.evidence}>
-      {state} · {field.confidence}%
+    <span className="invoice-confidence" title={field.evidence}>
+      {state} · <span className={`invoice-confidence-value is-${level}`}>{field.confidence}%</span>
     </span>
   );
 }

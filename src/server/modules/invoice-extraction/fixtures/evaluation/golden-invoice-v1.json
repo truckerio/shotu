@@ -1,0 +1,6 @@
+{
+  "synthetic": true,
+  "caseId": "golden-credit-zero-tax",
+  "expectedOutcome": "needs_review",
+  "truth": {"documentType":"credit_memo","currency":"USD","subtotal":-12.5,"tax":0,"shipping":0,"total":-12.5,"lines":[{"partNumber":"SYN-001","quantity":-1,"unitPrice":12.5,"lineTotal":-12.5}]}
+}

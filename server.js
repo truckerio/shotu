@@ -28,6 +28,7 @@ import { handleInventoryUnitWorkorderApi } from "./src/server/routes/inventory-u
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
 import { startInvoiceExtractionWorker, stopInvoiceExtractionWorker } from "./src/server/modules/invoice-extraction/invoice-extraction-background.worker.js";
+import { startGlobalLayoutLearningWorker, stopGlobalLayoutLearningWorker } from "./src/server/modules/invoice-extraction/invoice-global-learning.worker.js";
 import { handleOdooIntegrationApi } from "./src/server/integrations/odoo/odoo.routes.js";
 import {
   isServiceIntegrationPath,
@@ -922,6 +923,7 @@ server.listen(port, process.env.HOST || "0.0.0.0", () => {
   startInvoiceRetention();
   startInventoryCountRetention();
   startInvoiceExtractionWorker();
+  startGlobalLayoutLearningWorker();
 });
 
 installGracefulShutdown(server, {
@@ -932,5 +934,6 @@ installGracefulShutdown(server, {
     stopInvoiceRetention();
     stopInventoryCountRetention();
     stopInvoiceExtractionWorker();
+    stopGlobalLayoutLearningWorker();
   },
 });

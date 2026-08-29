@@ -31,15 +31,11 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
   const catalogPartId = randomUUID();
   const unitA = randomUUID();
   const unitB = randomUUID();
-  const scope = { actorId, companyIds: [companyId], locationIds: [locationId], workorderId };
+  const scope = { actorId, actorRole: "office", companyId, locationId, workorderId };
   try {
     await query("insert into user_profiles (id, display_name) values ($1, $2)", [actorId, `Serialized mechanic ${suffix}`]);
     await query("insert into companies (id, slug, name) values ($1, $2, $3)", [companyId, `serialized-${suffix}`, "Serialized usage integration"]);
     await query("insert into locations (id, company_id, name) values ($1, $2, 'Serialized shop')", [locationId, companyId]);
-    await query(
-      "insert into location_workorder_policies (location_id, company_id, mechanic_can_record_parts) values ($1, $2, true)",
-      [locationId, companyId],
-    );
     await query(
       "insert into assets (id, company_id, location_id, provider, name, unit_no) values ($1, $2, $3, 'manual', 'Integration truck', $4)",
       [assetId, companyId, locationId, `T-${suffix.slice(0, 8)}`],
@@ -49,12 +45,6 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
          id, company_id, serial, asset_id, location_id, created_by_user_id, concern, status
        ) values ($1,$2,$3,$4,$5,$6,'Serialized part integration','in_progress')`,
       [workorderId, companyId, `WO-SERIAL-${suffix}`, assetId, locationId, actorId],
-    );
-    await query(
-      `insert into workorder_mechanic_assignments (
-         workorder_id, mechanic_user_id, assignment_role, active, assigned_by_user_id
-       ) values ($1,$2,'primary',true,$2)`,
-      [workorderId, actorId],
     );
     await query(
       `insert into parts_catalog (
@@ -115,6 +105,14 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
       [companyId, locationId, catalogPartId, `SERIAL${suffix}`, `SERIAL-${suffix}`, `local:${suffix}`],
     );
 
+    assert.equal((await issueSerializedUnitToWorkorder({
+      ...scope,
+      actorRole: "mechanic",
+      unitId: unitA,
+      idempotencyKey: `denied-mechanic-${suffix}`,
+      requestHash: digest("denied-mechanic"),
+    })).kind, "missing");
+
     const replayCommand = {
       ...scope, unitId: unitA, idempotencyKey: `issue-a-${suffix}`, requestHash: digest(`issue-a-${suffix}`),
     };
@@ -161,10 +159,16 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
     assert.deepEqual(snapshot.rows[0], {
       on_hand: "1.000", issues: 2, returns: 1, installed_events: 1, returned_unit_status: "in_stock",
     });
-    const refreshed = await listWorkorderSerializedUnitUsages({
-      workorderId, actorId, companyIds: [companyId], locationIds: [locationId], limit: 100,
-    });
+    const refreshed = await listWorkorderSerializedUnitUsages({ ...scope, limit: 100 });
     assert.deepEqual(refreshed.map((usage) => usage.status).sort(), ["installed", "returned"]);
+    await query(
+      `insert into workorder_mechanic_assignments (
+         workorder_id, mechanic_user_id, assignment_role, active, assigned_by_user_id
+       ) values ($1,$2,'primary',true,$2)`,
+      [workorderId, actorId],
+    );
+    const grantedMechanicView = await listWorkorderSerializedUnitUsages({ ...scope, actorRole: "mechanic", limit: 100 });
+    assert.equal(grantedMechanicView.length, 2);
   } finally {
     await query("delete from inventory_unit_events where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_stock_movements where company_id = $1", [companyId]).catch(() => {});
@@ -180,7 +184,6 @@ test("real PostgreSQL serializes issue/install/return and replays without duplic
     await query("delete from operational_workorders where id = $1", [workorderId]).catch(() => {});
     await query("delete from assets where id = $1", [assetId]).catch(() => {});
     await query("delete from invoice_extraction_runs where company_id = $1", [companyId]).catch(() => {});
-    await query("delete from location_workorder_policies where company_id = $1", [companyId]).catch(() => {});
     await query("delete from locations where company_id = $1", [companyId]).catch(() => {});
     await query("delete from companies where id = $1", [companyId]).catch(() => {});
     await query("delete from user_profiles where id = $1", [actorId]).catch(() => {});

@@ -13,6 +13,7 @@ import { diagnosisRepairModuleManifest } from "./diagnosis-repair/manifest.js";
 import { locationModuleManifest } from "./location/manifest.js";
 import { odooModuleManifest } from "./odoo/manifest.js";
 import { partsModuleManifest } from "./parts/manifest.js";
+import { partsScanningModuleManifest } from "./parts-scanning/manifest.js";
 import { photosModuleManifest } from "./photos/manifest.js";
 import { previewModuleManifest } from "./preview/manifest.js";
 import { scheduleModuleManifest } from "./schedule/manifest.js";
@@ -44,6 +45,7 @@ export const WORKORDER_MODULE_IDS = Object.freeze({
   DIAGNOSIS_REPAIR: "diagnosisRepair",
   PHOTOS: "photos",
   PARTS: "parts",
+  PARTS_SCANNING: "partsScanning",
   CHAT: "chat",
   ACTIVITY: "activity",
   PREVIEW: "preview",
@@ -62,6 +64,7 @@ const FRONTEND_MANIFESTS = [
   photosModuleManifest,
   chatModuleManifest,
   partsModuleManifest,
+  partsScanningModuleManifest,
   activityModuleManifest,
   previewModuleManifest,
   completionModuleManifest,

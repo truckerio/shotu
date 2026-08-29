@@ -35,6 +35,15 @@ import {
 import { extractInvoiceInputSchema, normalizeVendorKey, reviewInvoiceInputSchema } from "./invoice-extraction.schemas.js";
 import { extractInvoiceWithLocalOcr, extractNativePdfText, ocrObservation } from "./providers/local-ocr.provider.js";
 import { extractInvoiceWithOpenAI } from "./providers/openai-invoice.provider.js";
+import { classifyInvoiceAiContext } from "./invoice-ai-security.js";
+import {
+  capGlobalTemplateConfidence,
+  configuredGlobalLayoutKeyrings,
+  globalLayoutAsLocalTemplate,
+  globalObservationMarkerDigests,
+  matchGlobalInvoiceLayout,
+} from "./invoice-global-layout.js";
+import { contributeGlobalInvoiceLayout, findGovernedActiveGlobalLayouts } from "./invoice-global-learning.service.js";
 
 async function authorizedLocation(input, requestContext, dependencies) {
   const companyIds = [...(requestContext.companyIds || [])];
@@ -79,7 +88,64 @@ export function nativePdfTextIsUsable(value) {
   return invoiceSignal && identitySignal && amountSignal;
 }
 
-function localCandidateFromOcr(ocr, activeTemplates) {
+function globalKeyrings() {
+  return configuredGlobalLayoutKeyrings({
+    activeVersion: invoiceExtractionConfig.globalLayoutHmacKeyVersion,
+    serializedKeys: invoiceExtractionConfig.globalLayoutHmacKeys,
+  });
+}
+
+async function globalCandidateFromOcr(ocr, genericDraft, dependencies) {
+  if (!genericDraft) return null;
+  const observation = ocrObservation(ocr);
+  const keyrings = dependencies.globalLayoutKeyrings || globalKeyrings();
+  const loadGlobalTemplates = dependencies.loadGlobalTemplates || findGovernedActiveGlobalLayouts;
+  const candidates = [];
+  for (const keyring of keyrings) {
+    let markerDigests;
+    try {
+      markerDigests = globalObservationMarkerDigests(observation, keyring);
+    } catch {
+      continue;
+    }
+    if (markerDigests.length < 3) continue;
+    const templates = await loadGlobalTemplates({
+      markerDigests,
+      schemaVersion: 1,
+      hmacKeyVersion: keyring.version,
+      keyring,
+      limit: 10,
+    });
+    for (const template of templates || []) {
+      try {
+        const match = matchGlobalInvoiceLayout(observation, template.template_payload, keyring);
+        if (match.matched) candidates.push({ template, match });
+      } catch {
+        // Unknown or incompatible key/schema versions fail closed to generic extraction.
+      }
+    }
+  }
+  const best = candidates.sort((left, right) => right.match.score - left.match.score)[0];
+  if (!best) return null;
+  const structuralDraft = buildInvoiceDraftFromTemplate({
+    observation,
+    template: globalLayoutAsLocalTemplate(best.template.template_payload),
+  });
+  return {
+    draft: capGlobalTemplateConfidence(reconcileInvoiceDrafts({
+      primaryDraft: genericDraft,
+      localDraft: structuralDraft,
+      primarySource: "local_generic",
+      localSource: "global_layout",
+    })),
+    provider: "local_global_reconciled",
+    model: `${ocr.provider}:${ocr.providerVersion}+global-layout:${String(best.template.structural_fingerprint || "").slice(0, 12)}`,
+    promptVersion: "global-layout-v1+generic-reconciliation-v1",
+    usage: {},
+  };
+}
+
+async function localCandidateFromOcr(ocr, activeTemplates, dependencies = {}) {
   const observation = ocrObservation(ocr);
   const matches = activeTemplates
     .map((template) => ({ template, match: matchInvoiceTemplate(observation, template.template_payload) }))
@@ -99,6 +165,8 @@ function localCandidateFromOcr(ocr, activeTemplates) {
   }
   const genericDraft = extractGenericInvoiceDraft({ observation, ocrText: ocr.text });
   if (!genericDraftHasEvidence(genericDraft)) return null;
+  const globalCandidate = await globalCandidateFromOcr(ocr, genericDraft, dependencies);
+  if (globalCandidate) return globalCandidate;
   return {
     draft: genericDraft,
     provider: "local_generic",
@@ -126,6 +194,13 @@ export async function executeInvoiceExtractionRun({
 }, dependencies = {}) {
   const startedAt = performance.now();
   try {
+    if (invoiceExtractionConfig.remoteProviderEnabled && !invoiceExtractionConfig.openAiApiKey) {
+      throw new InvoiceExtractionError("Remote invoice extraction is enabled but not configured.", {
+        code: "provider_not_configured",
+        statusCode: 503,
+        retryable: false,
+      });
+    }
     let nativeDocumentText = "";
     if (parsed.mimeType === "application/pdf" && invoiceExtractionConfig.ocrBaseUrl) {
       const native = await settledResult((dependencies.extractNativeText || extractNativePdfText)({
@@ -155,7 +230,7 @@ export async function executeInvoiceExtractionRun({
     const [ocrResult, openAiSettled] = await Promise.all([ocrPromise, providerPromise]);
     if (ocrResult.error && !(ocrResult.error instanceof InvoiceExtractionError)) throw ocrResult.error;
     if (openAiSettled.error && !(openAiSettled.error instanceof InvoiceExtractionError)) throw openAiSettled.error;
-    const localCandidate = ocrResult.value ? localCandidateFromOcr(ocrResult.value, activeTemplates) : null;
+    const localCandidate = ocrResult.value ? await localCandidateFromOcr(ocrResult.value, activeTemplates, dependencies) : null;
     let providerResult = null;
     if (openAiSettled.value) {
       const openAiResult = openAiSettled.value;
@@ -200,7 +275,16 @@ export async function executeInvoiceExtractionRun({
       });
     }
     const draft = guardPaidBalanceAsInvoiceTotal(providerResult.draft || providerResult);
-    const warnings = [...new Set([...draft.warnings, ...reconciliationWarnings(draft)])];
+    const security = classifyInvoiceAiContext({
+      vendorHint: parsed.vendorHint,
+      localOcrText: ocrResult.value?.text || "",
+      nativeDocumentText,
+      approvedMemoryText: `${JSON.stringify(memory)}\n${JSON.stringify(draft)}`,
+    });
+    const securityWarnings = security.requiresReview
+      ? ["Potential instruction-like document content was detected; verify every extracted value and do not approve learning unless the document is trusted."]
+      : [];
+    const warnings = [...new Set([...draft.warnings, ...reconciliationWarnings(draft), ...securityWarnings])];
     const finalDraft = { ...draft, warnings };
     const status = extractionNeedsReview(finalDraft) ? "needs_review" : "completed";
     const completed = await (dependencies.completeRun || completeInvoiceExtractionRun)({
@@ -340,7 +424,7 @@ export async function reviewInvoice(runId, input, requestContext, dependencies =
   if (!row || (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(row.location_id))) throw invoiceNotFound();
   if (!row.extracted_draft) throw new InvoiceExtractionError("This extraction has no draft to review.", { code: "invoice_draft_unavailable", statusCode: 409 });
   const corrections = correctionEvents(row.extracted_draft, parsed.reviewedDraft);
-  const candidates = semanticCandidatesFromCorrections(row.extracted_draft, parsed.reviewedDraft, corrections);
+  let candidates = semanticCandidatesFromCorrections(row.extracted_draft, parsed.reviewedDraft, corrections);
   const trainingExample = {
     vendorKey: normalizeVendorKey(parsed.reviewedDraft.vendorName.value),
     qualityMetrics: {
@@ -352,7 +436,11 @@ export async function reviewInvoice(runId, input, requestContext, dependencies =
   };
   let layoutTemplateLearning = null;
   let layoutLearningStatus = parsed.approveLearning ? "skipped" : "not_requested";
-  if (parsed.approveLearning && row.status !== "reviewed" && invoiceExtractionConfig.ocrBaseUrl) {
+  let globalContributionStatus = parsed.approveGlobalStructureContribution ? "skipped" : "not_requested";
+  let globalContributionObservation = null;
+  let learningSecurity = null;
+  const learningRequested = parsed.approveLearning || parsed.approveGlobalStructureContribution;
+  if (learningRequested && row.status !== "reviewed" && invoiceExtractionConfig.ocrBaseUrl) {
     try {
       const source = await (dependencies.getLearningSource || getInvoiceSourceDocument)({
         runId,
@@ -373,8 +461,15 @@ export async function reviewInvoice(runId, input, requestContext, dependencies =
         fileName: row.file_name,
       }, dependencies.ocrOptions || {});
       const observation = ocrObservation(ocr);
+      learningSecurity = classifyInvoiceAiContext({
+        localOcrText: ocr.text,
+        approvedMemoryText: `${JSON.stringify(row.extracted_draft)}\n${JSON.stringify(parsed.reviewedDraft)}`,
+      });
+      globalContributionObservation = observation;
       const vendorKey = normalizeVendorKey(parsed.reviewedDraft.vendorName.value);
-      if (vendorKey) {
+      if (parsed.approveLearning && learningSecurity.blockLearning) {
+        layoutLearningStatus = "security_blocked";
+      } else if (parsed.approveLearning && vendorKey) {
         const existingTemplates = await (dependencies.loadTemplates || loadInvoiceLayoutTemplates)({
           companyId: row.company_id,
           vendorKey,
@@ -399,12 +494,34 @@ export async function reviewInvoice(runId, input, requestContext, dependencies =
         } else {
           layoutLearningStatus = "insufficient_layout_evidence";
         }
-      } else {
+      } else if (parsed.approveLearning) {
         layoutLearningStatus = "vendor_required";
       }
     } catch (error) {
       if (!(error instanceof InvoiceExtractionError)) throw error;
       layoutLearningStatus = error.code;
+    }
+  }
+  const effectiveApproveLearning = parsed.approveLearning && !learningSecurity?.blockLearning;
+  if (learningSecurity?.blockLearning) candidates = [];
+  const requestHash = reviewRequestHash(parsed);
+  if (parsed.approveGlobalStructureContribution) {
+    const keyring = (dependencies.globalLayoutKeyrings || globalKeyrings())[0];
+    if (learningSecurity?.blockLearning) globalContributionStatus = "security_blocked";
+    else if (!globalContributionObservation) globalContributionStatus = row.status === "reviewed" ? "queued" : "ocr_unavailable";
+    else if (!keyring) globalContributionStatus = "hmac_unavailable";
+    else {
+      const result = await (dependencies.contributeGlobalLayout || contributeGlobalInvoiceLayout)({
+        companyId: row.company_id,
+        runId,
+        reviewerConfirmed: true,
+        reviewRequestHash: requestHash,
+        observation: globalContributionObservation,
+        reviewedDraft: parsed.reviewedDraft,
+        keyring,
+        negativeObservations: [],
+      }, requestContext, dependencies.globalContributionDependencies || {});
+      globalContributionStatus = result.status;
     }
   }
   const reviewed = await (dependencies.reviewRun || reviewInvoiceExtractionRun)({
@@ -416,11 +533,16 @@ export async function reviewInvoice(runId, input, requestContext, dependencies =
     reviewedDraft: parsed.reviewedDraft,
     corrections,
     semanticCandidates: candidates,
-    approveLearning: parsed.approveLearning,
+    approveLearning: effectiveApproveLearning,
     trainingExample,
     layoutTemplateLearning,
-    requestHash: reviewRequestHash(parsed),
+    requestHash,
   });
   if (!reviewed) throw invoiceNotFound();
-  return { run: publicInvoiceExtractionRun(reviewed), correctionCount: corrections.length, layoutLearningStatus };
+  return {
+    run: publicInvoiceExtractionRun(reviewed),
+    correctionCount: corrections.length,
+    layoutLearningStatus,
+    globalContributionStatus,
+  };
 }

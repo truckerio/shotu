@@ -78,17 +78,15 @@ export async function resolveWorkorderSerializedUnit({
   workorderId,
   unitId,
   actorId,
-  companyIds,
-  locationIds = [],
+  actorRole,
+  companyId,
+  locationId,
 }) {
   const result = await query(
     `select unit.id, unit.serial_number, unit.status, unit.location_id, unit.updated_at,
             line.catalog_part_id, line.part_number, line.description, line.uom_code,
             receipt.provider, location.name as location_name
      from operational_workorders workorder
-     join workorder_mechanic_assignments assignment
-       on assignment.workorder_id = workorder.id
-      and assignment.mechanic_user_id = $3 and assignment.active = true
      join inventory_serialized_units unit
        on unit.company_id = workorder.company_id and unit.location_id = workorder.location_id
      join inventory_receipt_lines line
@@ -98,10 +96,15 @@ export async function resolveWorkorderSerializedUnit({
      join locations location
        on location.company_id = unit.company_id and location.id = unit.location_id
      where workorder.id = $1 and unit.id = $2
-       and workorder.company_id = any($4::uuid[])
-       and workorder.location_id = any($5::uuid[])
+       and workorder.company_id = $3
+       and workorder.location_id = $4
+       and ($6::text <> 'mechanic' or exists (
+         select 1 from workorder_mechanic_assignments assignment
+         where assignment.workorder_id = workorder.id
+           and assignment.mechanic_user_id = $5 and assignment.active = true
+       ))
      limit 1`,
-    [workorderId, unitId, actorId, companyIds, locationIds],
+    [workorderId, unitId, companyId, locationId, actorId, actorRole],
   );
   return publicCandidate(result.rows[0]);
 }
@@ -109,21 +112,24 @@ export async function resolveWorkorderSerializedUnit({
 export async function listWorkorderSerializedUnitUsages({
   workorderId,
   actorId,
-  companyIds,
-  locationIds = [],
+  actorRole,
+  companyId,
+  locationId,
   limit = 100,
 }) {
   const result = await query(
     `${USAGE_SELECT}
-     join workorder_mechanic_assignments assignment
-       on assignment.workorder_id = usage.workorder_id
-      and assignment.mechanic_user_id = $2 and assignment.active = true
      where usage.workorder_id = $1
-       and usage.company_id = any($3::uuid[])
-       and usage.location_id = any($4::uuid[])
+       and usage.company_id = $3
+       and usage.location_id = $4
+       and ($6::text <> 'mechanic' or exists (
+         select 1 from workorder_mechanic_assignments assignment
+         where assignment.workorder_id = usage.workorder_id
+           and assignment.mechanic_user_id = $2 and assignment.active = true
+       ))
      order by usage.issued_at desc, usage.id desc
      limit $5`,
-    [workorderId, actorId, companyIds, locationIds, limit],
+    [workorderId, actorId, companyId, locationId, limit, actorRole],
   );
   return result.rows.map(publicUsage);
 }
@@ -131,21 +137,18 @@ export async function listWorkorderSerializedUnitUsages({
 async function lockWorkorder(client, input) {
   const result = await client.query(
     `select workorder.id, workorder.company_id, workorder.location_id,
-            workorder.asset_id, workorder.status,
-            coalesce(policy.mechanic_can_record_parts, false) as mechanic_can_record_parts,
-            exists (
-              select 1 from workorder_mechanic_assignments assignment
-              where assignment.workorder_id = workorder.id
-                and assignment.mechanic_user_id = $2 and assignment.active = true
-            ) as mechanic_assigned
+            workorder.asset_id, workorder.status
      from operational_workorders workorder
-     left join location_workorder_policies policy
-       on policy.company_id = workorder.company_id and policy.location_id = workorder.location_id
      where workorder.id = $1
-       and workorder.company_id = any($3::uuid[])
-       and workorder.location_id = any($4::uuid[])
+       and workorder.company_id = $2
+       and workorder.location_id = $3
+       and ($5::text <> 'mechanic' or exists (
+         select 1 from workorder_mechanic_assignments assignment
+         where assignment.workorder_id = workorder.id
+           and assignment.mechanic_user_id = $4 and assignment.active = true
+       ))
      for update of workorder`,
-    [input.workorderId, input.actorId, input.companyIds, input.locationIds],
+    [input.workorderId, input.companyId, input.locationId, input.actorId, input.actorRole],
   );
   return result.rows[0] || null;
 }
@@ -155,7 +158,7 @@ export async function issueSerializedUnitToWorkorder(input) {
   try {
     await client.query("begin");
     const workorder = await lockWorkorder(client, input);
-    if (!workorder || !workorder.mechanic_assigned) {
+    if (!workorder) {
       await client.query("rollback");
       return { kind: "missing" };
     }
@@ -179,10 +182,6 @@ export async function issueSerializedUnitToWorkorder(input) {
     if (!workorder.asset_id) {
       await client.query("rollback");
       return { kind: "asset_required" };
-    }
-    if (!workorder.mechanic_can_record_parts) {
-      await client.query("rollback");
-      return { kind: "parts_disabled" };
     }
     const unitResult = await client.query(
       `select unit.id, unit.status, unit.location_id, line.catalog_part_id, line.uom_code,
@@ -250,7 +249,7 @@ export async function issueSerializedUnitToWorkorder(input) {
          company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
        ) values ($1,$2,'issued',$3,$4,$5,$6,$7::jsonb)`,
       [workorder.company_id, unit.id, input.actorId, usageId, workorder.id,
-        workorder.asset_id, JSON.stringify({ source: "mechanic_scan" })],
+        workorder.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole })],
     );
     await client.query(
       `insert into inventory_stock_movements (
@@ -285,7 +284,7 @@ export async function finalizeSerializedUnitUsage(input) {
   try {
     await client.query("begin");
     const workorder = await lockWorkorder(client, input);
-    if (!workorder || !workorder.mechanic_assigned) {
+    if (!workorder) {
       await client.query("rollback");
       return { kind: "missing" };
     }
@@ -363,7 +362,7 @@ export async function finalizeSerializedUnitUsage(input) {
          company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
        ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
       [workorder.company_id, usage.unit_id, input.disposition, input.actorId, usage.id,
-        workorder.id, usage.asset_id, JSON.stringify({ source: "mechanic_scan" })],
+        workorder.id, usage.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole })],
     );
     const finalized = await loadUsage(client, workorder.company_id, usage.id);
     await client.query("commit");

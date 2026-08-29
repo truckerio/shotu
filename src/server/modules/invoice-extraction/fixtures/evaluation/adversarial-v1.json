@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "cases": [
+    {"id":"rotated-90","mutation":"rotate_90","expectedOutcome":"needs_review","metamorphic":"semantic-values-equal"},
+    {"id":"paid-stamp","mutation":"add_paid_stamp","expectedOutcome":"needs_review","metamorphic":"invoice-total-unchanged"},
+    {"id":"page-reordered","mutation":"reorder_pages","expectedOutcome":"needs_review","metamorphic":"continuity-review"},
+    {"id":"prompt-injection","mutation":"hidden_instruction","expectedOutcome":"rejected","metamorphic":"policy-unchanged"},
+    {"id":"polyglot","mutation":"polyglot_file","expectedOutcome":"rejected"},
+    {"id":"decimal-comma-credit","mutation":"locale_decimal_comma","expectedOutcome":"needs_review"}
+  ]
+}

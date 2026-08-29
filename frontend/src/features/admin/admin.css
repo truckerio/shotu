@@ -12,7 +12,6 @@
 .admin-actions { display: flex; gap: 8px; }
 .admin-content > .page-header + .operations-workspace,
 .admin-content > .page-header + .admin-location-table { margin-top: 24px; }
-.admin-location-detail-header .page-header-heading { align-items: flex-start; flex-direction: column; gap: 0; }
 .admin-location-table, .admin-panel, .admin-template-form { background: #fff; border: 1px solid #e4e7ec; border-radius: 8px; margin-top: 24px; overflow: hidden; }
 .admin-table-head, .admin-location-row { align-items: center; display: grid; grid-template-columns: minmax(280px, 1fr) 100px 120px 110px 28px; min-height: 58px; padding: 0 18px; text-align: left; }
 .admin-table-head { background: #f9fafb; color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); min-height: 42px; }
@@ -271,7 +270,7 @@
     display: flex;
     flex-direction: column;
     font: inherit;
-    font-size: 11px;
+    font-size: var(--text-navigation);
     font-weight: var(--weight-semibold);
     gap: 2px;
     justify-content: center;

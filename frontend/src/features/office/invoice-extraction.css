@@ -120,9 +120,10 @@
 .invoice-field-heading>label { align-items:center; display:flex; gap:6px; min-width:0; }
 .invoice-field-heading>label>span { color:#667085; font-size:11px; font-weight:500; }
 .invoice-field-meta { align-items:center; display:flex; flex:0 0 auto; gap:8px; }
-.invoice-extraction-workspace .needs-review { background:#fffaeb; border-color:#fdb022; }
-.invoice-confidence { align-items:center; color:#067647; display:inline-flex; font-size:12px; gap:4px; }
-.invoice-confidence.is-review { color:#b54708; }
+.invoice-confidence { align-items:center; color:#475467; display:inline-flex; font-size:12px; gap:4px; }
+.invoice-confidence-value.is-high { color:#067647; }
+.invoice-confidence-value.is-medium { color:#b54708; }
+.invoice-confidence-value.is-low { color:#b42318; }
 .invoice-confidence.is-optional { color:#667085; }
 .invoice-confidence svg { height:14px; width:14px; }
 .invoice-field-evidence { position:relative; }

@@ -9,8 +9,8 @@ export function PageHeader({
 }) {
   return (
     <header className={`page-header ${className}`.trim()}>
+      {leading ? <div className="page-header-leading">{leading}</div> : null}
       <div className="page-header-heading">
-        {leading}
         <div className="page-header-copy">
           <h1>{title}</h1>
           {subtitle ? <p>{subtitle}</p> : null}

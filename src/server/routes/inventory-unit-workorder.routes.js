@@ -8,13 +8,13 @@ import {
 } from "../modules/inventory/inventory-unit-workorder.service.js";
 
 function matchPath(pathname) {
-  const resolve = /^\/api\/mechanic\/workorders\/([^/]+)\/inventory-units\/resolve$/.exec(pathname);
+  const resolve = /^\/api\/workorders\/([^/]+)\/inventory-units\/resolve$/.exec(pathname);
   if (resolve) return { action: "resolve", workorderId: decodeURIComponent(resolve[1]) };
-  const issue = /^\/api\/mechanic\/workorders\/([^/]+)\/inventory-units\/issue$/.exec(pathname);
+  const issue = /^\/api\/workorders\/([^/]+)\/inventory-units\/issue$/.exec(pathname);
   if (issue) return { action: "issue", workorderId: decodeURIComponent(issue[1]) };
-  const list = /^\/api\/mechanic\/workorders\/([^/]+)\/inventory-unit-usages$/.exec(pathname);
+  const list = /^\/api\/workorders\/([^/]+)\/inventory-unit-usages$/.exec(pathname);
   if (list) return { action: "list", workorderId: decodeURIComponent(list[1]) };
-  const finalize = /^\/api\/mechanic\/workorders\/([^/]+)\/inventory-unit-usages\/([^/]+)\/finalize$/.exec(pathname);
+  const finalize = /^\/api\/workorders\/([^/]+)\/inventory-unit-usages\/([^/]+)\/finalize$/.exec(pathname);
   return finalize ? {
     action: "finalize",
     workorderId: decodeURIComponent(finalize[1]),

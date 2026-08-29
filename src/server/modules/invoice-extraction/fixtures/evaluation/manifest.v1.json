@@ -1,0 +1,6 @@
+{
+  "fixtureVersion": "v1",
+  "syntheticOnly": true,
+  "capabilityRegistryHash": "fixture-registry-v1",
+  "cases": ["golden-invoice-v1.json", "adversarial-v1.json"]
+}

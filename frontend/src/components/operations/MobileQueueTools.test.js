@@ -37,7 +37,7 @@ test("phone queue toolbar keeps shared tabs and filter on one line", async () =>
   assert.match(adminWorkspace, /className="role-mobile-primary-queues"/);
   assert.match(phoneRules, /\.mobile-queue-toolbar\.mobile-queue-toolbar\s*\{[\s\S]*display: flex;[\s\S]*padding-right: 48px;[\s\S]*position: relative;/);
   assert.match(phoneRules, /\.mobile-queue-toolbar\.mobile-queue-toolbar \.mechanic-queue-tabs\s*\{[\s\S]*grid-template-columns: none;[\s\S]*justify-content: space-between;/);
-  assert.match(phoneRules, /\.mechanic-queue-tabs button\s*\{[\s\S]*font-size: 11px;[\s\S]*white-space: nowrap;/);
+  assert.match(phoneRules, /\.mechanic-queue-tabs button\s*\{[\s\S]*font-size: var\(--text-navigation\);[\s\S]*white-space: nowrap;/);
   assert.match(phoneRules, /\.mechanic-queue-tabs button strong\s*\{[\s\S]*height: 20px;[\s\S]*min-width: 20px;/);
   assert.match(phoneRules, /\.mobile-queue-toolbar > \.mobile-queue-tools\s*\{[\s\S]*position: absolute;[\s\S]*right: 0;[\s\S]*top: 50%;/);
   assert.match(css, /\.mobile-queue-tools-trigger\s*\{[\s\S]*background: transparent;[\s\S]*border: 0;/);

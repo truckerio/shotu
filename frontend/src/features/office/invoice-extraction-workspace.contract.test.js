@@ -103,12 +103,19 @@ test("batch extraction opens the first completed draft while independent pollers
 
 test("invoice review stays compact while confidence and evidence remain available", async () => {
   const source = await readFile(workspaceUrl, "utf8");
+  const styles = await readFile(new URL("./invoice-extraction.css", import.meta.url), "utf8");
   assert.match(source, /className="invoice-field-heading"/);
   assert.match(source, /<Confidence field=\{field\} optional=\{options\.optional\} \/>/);
   assert.match(source, /<details className="invoice-field-evidence">/);
   assert.match(source, /title="Additional details"/);
   assert.match(source, /PO number only if your company gave one to the seller\./);
   assert.match(source, /invoiceFieldNeedsReview\(candidate\.field, candidate\.options\)/);
+  assert.match(source, /confidence >= 90 \? "high" : confidence >= 70 \? "medium" : "low"/);
+  assert.match(source, /\{state\} · <span className=\{`invoice-confidence-value is-\$\{level\}`\}>\{field\.confidence\}%<\/span>/);
+  assert.match(styles, /\.invoice-confidence-value\.is-high\s*\{[^}]*color:#067647;/);
+  assert.match(styles, /\.invoice-confidence-value\.is-medium\s*\{[^}]*color:#b54708;/);
+  assert.match(styles, /\.invoice-confidence-value\.is-low\s*\{[^}]*color:#b42318;/);
+  assert.doesNotMatch(styles, /\.needs-review\s*\{/);
 });
 
 test("completed invoice status banners dismiss after 1.5 seconds without hiding review notes", async () => {

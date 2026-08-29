@@ -9,7 +9,7 @@ const UNIT_ID = "00000000-0000-4000-8000-000000000003";
 function helpers(body = null) {
   return {
     requestContext: {
-      actor: { id: "00000000-0000-4000-8000-000000000004", role: "mechanic" },
+      actor: { id: "00000000-0000-4000-8000-000000000004", role: "office" },
       companyIds: new Set(["00000000-0000-4000-8000-000000000005"]),
       locationIds: new Set(["00000000-0000-4000-8000-000000000006"]),
     },
@@ -21,6 +21,8 @@ function helpers(body = null) {
 function dependencies(overrides = {}) {
   return {
     authorize: async () => ({
+      companyId: "00000000-0000-4000-8000-000000000005",
+      locationId: "00000000-0000-4000-8000-000000000006",
       workorder: {
         id: WORKORDER_ID,
         serial: "WO-1",
@@ -36,7 +38,6 @@ function dependencies(overrides = {}) {
       id: UNIT_ID, provider: "local", status: "in_stock", partNumber: "P-1",
       locationName: "Shop", serialNumber: "SERIAL-1",
     }),
-    loadPartsPolicy: async () => ({ mechanicCanRecordParts: true }),
     ...overrides,
   };
 }
@@ -51,7 +52,7 @@ test("resolve, issue, list, and finalize routes cross the service boundary", asy
   const resolveResponse = {};
   await handleInventoryUnitWorkorderApi(
     { method: "POST" }, resolveResponse,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-units/resolve`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-units/resolve`),
     helpers({ code: "inventory-code" }), dependencies(),
   );
   assert.equal(resolveResponse.status, 200);
@@ -61,7 +62,7 @@ test("resolve, issue, list, and finalize routes cross the service boundary", asy
   const issueResponse = {};
   await handleInventoryUnitWorkorderApi(
     { method: "POST" }, issueResponse,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-units/issue`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-units/issue`),
     helpers({ code: "inventory-code", idempotencyKey: "issue-key-123" }),
     dependencies({ issueUnit: async () => ({ kind: "issued", usage }) }),
   );
@@ -71,7 +72,7 @@ test("resolve, issue, list, and finalize routes cross the service boundary", asy
   const listResponse = {};
   await handleInventoryUnitWorkorderApi(
     { method: "GET" }, listResponse,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-unit-usages`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-unit-usages`),
     helpers(), dependencies({ listUsages: async () => [usage] }),
   );
   assert.equal(listResponse.status, 200);
@@ -80,7 +81,7 @@ test("resolve, issue, list, and finalize routes cross the service boundary", asy
   const finalResponse = {};
   await handleInventoryUnitWorkorderApi(
     { method: "POST" }, finalResponse,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-unit-usages/${USAGE_ID}/finalize`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-unit-usages/${USAGE_ID}/finalize`),
     helpers({ disposition: "installed", idempotencyKey: "finish-key-123" }),
     dependencies({ finalizeUnit: async () => ({ kind: "finalized", usage: { ...usage, status: "installed" } }) }),
   );
@@ -92,7 +93,7 @@ test("handler returns stable validation and inventory errors", async () => {
   const invalid = {};
   await handleInventoryUnitWorkorderApi(
     { method: "POST" }, invalid,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-units/issue`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-units/issue`),
     helpers({ code: "x", idempotencyKey: "short" }), dependencies(),
   );
   assert.equal(invalid.status, 400);
@@ -101,7 +102,7 @@ test("handler returns stable validation and inventory errors", async () => {
   const conflict = {};
   await handleInventoryUnitWorkorderApi(
     { method: "POST" }, conflict,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-units/issue`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-units/issue`),
     helpers({ code: "inventory-code", idempotencyKey: "issue-key-123" }),
     dependencies({ issueUnit: async () => ({ kind: "provider_not_local", usage: null }) }),
   );
@@ -113,8 +114,16 @@ test("matched routes reject unsupported methods without reading a body", async (
   const response = {};
   await handleInventoryUnitWorkorderApi(
     { method: "DELETE" }, response,
-    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-unit-usages`),
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-unit-usages`),
     helpers(), dependencies(),
   );
   assert.equal(response.status, 405);
+});
+
+test("unshipped mechanic-prefixed scanner routes are not retained as an authorization bypass", async () => {
+  assert.equal(await handleInventoryUnitWorkorderApi(
+    { method: "POST" }, {},
+    new URL(`http://localhost/api/mechanic/workorders/${WORKORDER_ID}/inventory-units/issue`),
+    helpers({ code: "inventory-code", idempotencyKey: "issue-key-123" }), dependencies(),
+  ), false);
 });

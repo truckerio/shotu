@@ -59,6 +59,7 @@ export const reviewInvoiceInputSchema = z.object({
   reviewedDraft: invoiceDraftSchema,
   confirmNoLineItems: z.boolean().optional().default(false),
   approveLearning: z.boolean().optional().default(false),
+  approveGlobalStructureContribution: z.boolean().optional().default(false),
 }).strict().superRefine((value, context) => {
   if (!value.reviewedDraft.lines.length && !value.confirmNoLineItems) {
     context.addIssue({

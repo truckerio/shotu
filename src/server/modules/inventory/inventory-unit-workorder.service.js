@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
+import { requireLocationAccess } from "../../auth/authorize.js";
 import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
-import { getWorkorderMechanicPartsPolicy } from "../../db/repositories/workorder-policies.repo.js";
 import {
   finalizeSerializedUnitUsage,
   issueSerializedUnitToWorkorder,
@@ -26,27 +26,23 @@ function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-function actorScope(context) {
+function repositoryScope(context, authorization) {
+  requireLocationAccess(context, authorization.locationId);
   return {
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
+    companyId: authorization.companyId,
+    locationId: authorization.locationId,
+    actorRole: context.actor.role,
   };
 }
 
-function requireMechanic(context) {
-  if (context?.actor?.role !== "mechanic") {
-    throw failure("INVENTORY_UNIT_MECHANIC_REQUIRED", "Only a mechanic can use a serialized part on a workorder.", 403);
-  }
-}
-
-async function authorizePartsWrite(workorderId, context, dependencies) {
-  requireMechanic(context);
+async function authorizeScanning(workorderId, context, dependencies, capability, action = null) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
-  return authorize(context, workorderId, {
-    moduleKey: "parts",
-    capability: "write",
-    action: "record",
+  const authorization = await authorize(context, workorderId, {
+    moduleKey: "partsScanning",
+    capability,
+    action,
   });
+  return { authorization, scope: repositoryScope(context, authorization) };
 }
 
 function unitIdFromCode(code, dependencies) {
@@ -71,10 +67,9 @@ function workorderSummary(workorder) {
   };
 }
 
-function eligibility({ workorder, unit, mechanicCanRecordParts }) {
+function eligibility({ workorder, unit }) {
   if (!workorder.assetId) return { canIssue: false, code: "WORKORDER_ASSET_REQUIRED", message: "Link an exact unit to this workorder before using a serialized part." };
   if (!ISSUE_STATUSES.has(workorder.status)) return { canIssue: false, code: "WORKORDER_INVENTORY_NOT_ACTIVE", message: "Serialized parts can only be issued to active work." };
-  if (!mechanicCanRecordParts) return { canIssue: false, code: "MECHANIC_PARTS_ENTRY_DISABLED", message: "This shop requires office approval before a mechanic can record parts." };
   if (unit.provider !== "local") return { canIssue: false, code: "INVENTORY_UNIT_PROVIDER_NOT_LOCAL", message: "This label is managed by an external inventory provider and cannot be issued here." };
   if (unit.status !== "in_stock") return { canIssue: false, code: "INVENTORY_UNIT_NOT_AVAILABLE", message: "This serialized part is no longer available to issue." };
   return { canIssue: true, code: "", message: "Ready to use on this workorder." };
@@ -85,7 +80,6 @@ function mapMutationFailure(kind) {
   if (kind === "idempotency_conflict") throw failure("INVENTORY_UNIT_REPLAY_CONFLICT", "This request key was already used for a different serialized-part action.");
   if (kind === "workorder_state") throw failure("WORKORDER_INVENTORY_NOT_ACTIVE", "Serialized parts can only be changed while this workorder is active.");
   if (kind === "asset_required") throw failure("WORKORDER_ASSET_REQUIRED", "Link an exact unit to this workorder before using a serialized part.");
-  if (kind === "parts_disabled") throw failure("MECHANIC_PARTS_ENTRY_DISABLED", "This shop requires office approval before a mechanic can record parts.", 403);
   if (kind === "provider_not_local") throw failure("INVENTORY_UNIT_PROVIDER_NOT_LOCAL", "This label is managed by an external inventory provider and cannot be issued here.");
   if (kind === "unit_state") throw failure("INVENTORY_UNIT_NOT_AVAILABLE", "This serialized part changed or is no longer available for this action.");
   if (kind === "stock_mismatch") throw failure("INVENTORY_SERIAL_BALANCE_MISMATCH", "The serialized identity and local stock balance do not match. Inventory review is required.");
@@ -94,31 +88,26 @@ function mapMutationFailure(kind) {
 export async function resolveSerializedUnitForWorkorder(workorderId, rawInput, context, dependencies = {}) {
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
   const input = resolveWorkorderInventoryUnitSchema.parse(rawInput);
-  const authorization = await authorizePartsWrite(workorderId, context, dependencies);
+  const { authorization, scope } = await authorizeScanning(workorderId, context, dependencies, "write", "resolve");
   const unitId = unitIdFromCode(input.code, dependencies);
   const unit = await (dependencies.resolveUnit || resolveWorkorderSerializedUnit)({
     workorderId,
     unitId,
     actorId: context.actor.id,
-    ...actorScope(context),
+    ...scope,
   });
   if (!unit) throw inventoryNotFound();
-  const policy = await (dependencies.loadPartsPolicy || getWorkorderMechanicPartsPolicy)(workorderId);
   return {
     workorder: workorderSummary(authorization.workorder),
     unit,
-    eligibility: eligibility({
-      workorder: authorization.workorder,
-      unit,
-      mechanicCanRecordParts: policy?.mechanicCanRecordParts === true,
-    }),
+    eligibility: eligibility({ workorder: authorization.workorder, unit }),
   };
 }
 
 export async function issueSerializedUnitForWorkorder(workorderId, rawInput, context, dependencies = {}) {
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
   const input = issueWorkorderInventoryUnitSchema.parse(rawInput);
-  await authorizePartsWrite(workorderId, context, dependencies);
+  const { scope } = await authorizeScanning(workorderId, context, dependencies, "write", "issue");
   const unitId = unitIdFromCode(input.code, dependencies);
   const requestHash = hash({ action: "issue", workorderId, unitId });
   const result = await (dependencies.issueUnit || issueSerializedUnitToWorkorder)({
@@ -127,7 +116,7 @@ export async function issueSerializedUnitForWorkorder(workorderId, rawInput, con
     actorId: context.actor.id,
     idempotencyKey: input.idempotencyKey,
     requestHash,
-    ...actorScope(context),
+    ...scope,
   });
   mapMutationFailure(result.kind);
   return { usage: result.usage, replayed: result.kind === "replay" };
@@ -137,7 +126,7 @@ export async function finalizeSerializedUnitForWorkorder(workorderId, usageId, r
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
   usageId = inventoryWorkorderEntityIdSchema.parse(usageId);
   const input = finalizeWorkorderInventoryUnitSchema.parse(rawInput);
-  await authorizePartsWrite(workorderId, context, dependencies);
+  const { scope } = await authorizeScanning(workorderId, context, dependencies, "write", "finalize");
   const requestHash = hash({ action: "finalize", workorderId, usageId, disposition: input.disposition });
   const result = await (dependencies.finalizeUnit || finalizeSerializedUnitUsage)({
     workorderId,
@@ -146,7 +135,7 @@ export async function finalizeSerializedUnitForWorkorder(workorderId, usageId, r
     actorId: context.actor.id,
     idempotencyKey: input.idempotencyKey,
     requestHash,
-    ...actorScope(context),
+    ...scope,
   });
   mapMutationFailure(result.kind);
   return { usage: result.usage, replayed: result.kind === "replay" };
@@ -154,11 +143,11 @@ export async function finalizeSerializedUnitForWorkorder(workorderId, usageId, r
 
 export async function readSerializedUnitUsagesForWorkorder(workorderId, context, dependencies = {}) {
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
-  await authorizePartsWrite(workorderId, context, dependencies);
+  const { scope } = await authorizeScanning(workorderId, context, dependencies, "read");
   const usages = await (dependencies.listUsages || listWorkorderSerializedUnitUsages)({
     workorderId,
     actorId: context.actor.id,
-    ...actorScope(context),
+    ...scope,
     limit: 100,
   });
   return { usages };

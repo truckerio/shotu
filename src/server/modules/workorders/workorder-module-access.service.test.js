@@ -102,6 +102,33 @@ test("module actions always require write access", async () => {
   );
 });
 
+test("part scanning defaults to Office and supports a narrow named-Mechanic grant", async () => {
+  const dependencies = {
+    requireAccess: async () => workorder,
+    getEffectivePolicy: async () => ({ companyPolicy: null, locationPolicy: null }),
+  };
+  assert.equal((await authorizeWorkorderModule(context, workorder.id, {
+    moduleKey: "partsScanning", capability: "write", action: "issue",
+  }, dependencies)).access, "write");
+
+  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" } };
+  await assert.rejects(authorizeWorkorderModule(mechanicContext, workorder.id, {
+    moduleKey: "partsScanning", capability: "write", action: "issue",
+  }, dependencies), (error) => error.statusCode === 403);
+
+  const granted = await authorizeWorkorderModule(mechanicContext, workorder.id, {
+    moduleKey: "partsScanning", capability: "write", action: "issue",
+  }, {
+    ...dependencies,
+    getEffectivePolicy: async () => ({
+      companyPolicy: { userModuleAccess: { "mechanic-1": { detail: { partsScanning: "write" } } } },
+      locationPolicy: null,
+    }),
+  });
+  assert.equal(granted.access, "write");
+  assert.equal(granted.source, "company_user");
+});
+
 test("explicit policy grants are not blocked by legacy role ownership hints", async () => {
   const result = await authorizeWorkorderModule(
     { ...context, actor: { id: "user-1", role: "surveillance" } }, workorder.id, {

@@ -143,6 +143,21 @@ test("Admin keeps Odoo visible before lifecycle eligibility while role defaults 
   }
 });
 
+test("non-mechanic detail metadata preserves canonical navigation labels", () => {
+  const sections = buildWorkorderDetailSections({
+    activeWorkorder: { workorder: { id: "wo-1", status: "closed" } },
+    assignedMechanicCount: 1,
+    detailStatus: "closed",
+    isMechanicDetail: false,
+    isOfficeDetail: true,
+    role: "admin",
+  });
+
+  assert.equal(sections.find(({ id }) => id === "concern")?.label, "Concern");
+  assert.equal(sections.find(({ id }) => id === "assignment")?.label, "Assignment");
+  assert.equal(sections.every(({ label }) => Boolean(String(label || "").trim())), true);
+});
+
 test("compact attention status starts on chat and opens chat dock", () => {
   assert.equal(defaultDetailSection("mechanic", "parts_requested", true), "chat");
   assert.equal(defaultSupportingView("office", "waiting_office"), "chat");
@@ -254,4 +269,31 @@ test("detail navigation falls back to the first allowed module when requested se
 
   assert.equal(sections.some(({ id }) => id === "concern"), false);
   assert.equal(allowedDetailSection({ requestedSection: "concern", sections }), "diagnosisRepair");
+});
+
+test("a narrow scanning grant exposes a scanner-only Parts section without broad Parts access", () => {
+  const sections = buildWorkorderDetailSections({
+    activeWorkorder: { workorder: { id: "wo-1" } },
+    detailStatus: "accepted",
+    isMechanicDetail: false,
+    isOfficeDetail: false,
+    policyOverrides: {
+      moduleAccess: {
+        surveillance: {
+          detail: {
+            parts: "hidden",
+            partsScanning: "write",
+          },
+        },
+      },
+    },
+    role: "surveillance",
+  });
+
+  const parts = sections.find(({ id }) => id === "parts");
+  assert.equal(parts.access, "hidden");
+  assert.equal(parts.scanOnly, true);
+  assert.equal(parts.label, "Parts");
+  assert.equal(parts.count, undefined);
+  assert.equal(parts.attention, undefined);
 });

@@ -17,7 +17,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip setuptools wheel \
     && pip install -r /app/requirements.txt
 
-COPY app.py /app/app.py
+COPY app.py parser_worker.py /app/
 
 RUN adduser --disabled-password --gecos "" appuser \
     && mkdir -p /home/appuser/.paddleocr /home/appuser/.cache \
@@ -25,7 +25,7 @@ RUN adduser --disabled-password --gecos "" appuser \
 
 USER appuser
 
-RUN python -c "from app import _get_model; _get_model()"
+RUN python -c "from parser_worker import _get_model; _get_model()"
 
 EXPOSE 8091
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

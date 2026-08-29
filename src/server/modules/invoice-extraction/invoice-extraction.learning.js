@@ -99,8 +99,13 @@ export function semanticCandidatesFromCorrections(predicted, reviewed, events) {
   }));
 }
 
-export function reviewRequestHash({ reviewedDraft, approveLearning, confirmNoLineItems }) {
-  return crypto.createHash("sha256").update(JSON.stringify({ reviewedDraft, approveLearning, confirmNoLineItems })).digest("hex");
+export function reviewRequestHash({ reviewedDraft, approveLearning, approveGlobalStructureContribution, confirmNoLineItems }) {
+  return crypto.createHash("sha256").update(JSON.stringify({
+    reviewedDraft,
+    approveLearning,
+    approveGlobalStructureContribution,
+    confirmNoLineItems,
+  })).digest("hex");
 }
 
 export function memorySnapshot(memory) {

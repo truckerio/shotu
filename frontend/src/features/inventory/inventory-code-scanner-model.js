@@ -22,3 +22,19 @@ export function replaceUsage(usages, nextUsage) {
     ? current.map((usage) => (usage.id === nextUsage.id ? nextUsage : usage))
     : [nextUsage, ...current];
 }
+
+export function shouldApplyUsageSnapshot({
+  requestGeneration,
+  currentGeneration,
+  requestRevision,
+  currentRevision,
+}) {
+  return requestGeneration === currentGeneration && requestRevision === currentRevision;
+}
+
+export function mergeUsageSnapshot(currentUsages, snapshotUsages, limit = 100) {
+  const current = Array.isArray(currentUsages) ? currentUsages : [];
+  const snapshot = Array.isArray(snapshotUsages) ? snapshotUsages : [];
+  const currentIds = new Set(current.map((usage) => usage?.id).filter(Boolean));
+  return [...current, ...snapshot.filter((usage) => usage?.id && !currentIds.has(usage.id))].slice(0, limit);
+}

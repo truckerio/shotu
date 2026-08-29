@@ -9,12 +9,13 @@ export function WorkorderChatModule({
   detailSection,
   isCompact,
   isMechanicDetail,
+  renderInDetail = isCompact || isMechanicDetail,
   label,
   locale = "en",
   onSelect,
   content,
 }) {
-  if (!access || !activeWorkorder || (!isCompact && !isMechanicDetail)) return null;
+  if (!access || !activeWorkorder || !renderInDetail) return null;
   const t = (key) => interfaceText(locale, key);
   return (
     <ProgressiveWorkorderSection

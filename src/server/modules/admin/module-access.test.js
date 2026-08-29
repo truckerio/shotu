@@ -16,8 +16,9 @@ const context = {
 
 test("admin module catalog exposes stable owned module definitions", () => {
   const catalog = adminWorkorderModuleCatalog();
-  assert.equal(catalog.version, 1);
+  assert.equal(catalog.version, 2);
   assert.equal(catalog.modules.find(({ key }) => key === "odoo").owner, "integrations.odoo");
+  assert.deepEqual(catalog.modules.find(({ key }) => key === "partsScanning")?.writeRolesBySurface.detail, ["office", "admin"]);
 });
 
 test("company module policy is tenant scoped and returns sparse defaults", async () => {

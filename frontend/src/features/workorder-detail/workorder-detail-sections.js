@@ -3,6 +3,7 @@ import {
   orderWorkorderModules,
   resolveWorkorderModuleNavigation,
   resolveWorkorderModulePolicy,
+  WORKORDER_MODULE_ACCESS,
   WORKORDER_MODULE_IDS,
   WORKORDER_SURFACES,
   workorderModuleDescriptors,
@@ -99,17 +100,39 @@ export function buildWorkorderDetailSections({
     [WORKORDER_MODULE_IDS.PREVIEW]: { label: isMechanicDetail ? mechanicLabel("detail.preview") : undefined },
   };
   const sections = workorderModuleDescriptors(WORKORDER_SURFACES.DETAIL)
-    .map((descriptor) => ({
-      id: descriptor.routeBySurface.detail,
-      label: descriptor.label,
-      ...metadata[descriptor.id],
-    }));
-  return resolveWorkorderModuleNavigation(sections, {
+    .map((descriptor) => {
+      const sectionMetadata = metadata[descriptor.id] || {};
+      return {
+        id: descriptor.routeBySurface.detail,
+        ...sectionMetadata,
+        label: sectionMetadata.label || descriptor.label,
+      };
+    });
+  const navigationContext = {
     overrides: policyOverrides,
     role,
     surface: WORKORDER_SURFACES.DETAIL,
     userId,
+  };
+  const visibleSections = resolveWorkorderModuleNavigation(sections, navigationContext);
+  const scanningPolicy = resolveWorkorderModulePolicy({
+    ...navigationContext,
+    moduleId: WORKORDER_MODULE_IDS.PARTS_SCANNING,
   });
+  if (!scanningPolicy.canWrite || visibleSections.some(({ id }) => id === WORKORDER_MODULE_IDS.PARTS)) {
+    return visibleSections;
+  }
+  const hiddenPartsPolicy = resolveWorkorderModulePolicy({
+    ...navigationContext,
+    moduleId: WORKORDER_MODULE_IDS.PARTS,
+  });
+  return orderWorkorderModules([...visibleSections, {
+    id: WORKORDER_MODULE_IDS.PARTS,
+    label: metadata[WORKORDER_MODULE_IDS.PARTS].label || workorderModuleLabel(WORKORDER_MODULE_IDS.PARTS),
+    access: WORKORDER_MODULE_ACCESS.HIDDEN,
+    modulePolicy: hiddenPartsPolicy,
+    scanOnly: true,
+  }], navigationContext);
 }
 
 export function buildCompactPhoneDetailSections(sections, role, { locale = "en", policyOverrides = [], userId = "" } = {}) {

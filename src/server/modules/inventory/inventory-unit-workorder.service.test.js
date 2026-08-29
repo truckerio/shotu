@@ -15,11 +15,11 @@ const ASSET_ID = "00000000-0000-4000-8000-000000000005";
 const UNIT_ID = "00000000-0000-4000-8000-000000000006";
 const USAGE_ID = "00000000-0000-4000-8000-000000000007";
 
-function context(role = "mechanic") {
+function context(role = "office", locationIds = new Set([LOCATION_ID])) {
   return {
     actor: { id: ACTOR_ID, role },
     companyIds: new Set([COMPANY_ID]),
-    locationIds: new Set([LOCATION_ID]),
+    locationIds,
   };
 }
 
@@ -56,18 +56,17 @@ function dependencies(overrides = {}) {
   return {
     authorize: async (_context, id, request) => {
       assert.equal(id, WORKORDER_ID);
-      assert.deepEqual(request, { moduleKey: "parts", capability: "write", action: "record" });
-      return { workorder: workorder() };
+      assert.equal(request.moduleKey, "partsScanning");
+      return { workorder: workorder(), companyId: COMPANY_ID, locationId: LOCATION_ID };
     },
     tokenFromCode: (value) => value,
     readToken: () => UNIT_ID,
     resolveUnit: async () => unit(),
-    loadPartsPolicy: async () => ({ mechanicCanRecordParts: true }),
     ...overrides,
   };
 }
 
-test("contextual resolve re-derives workorder scope and returns one eligible local unit", async () => {
+test("Office resolve re-derives exact workorder scope and returns one eligible local unit", async () => {
   let received;
   const result = await resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({
     resolveUnit: async (input) => { received = input; return unit(); },
@@ -78,34 +77,39 @@ test("contextual resolve re-derives workorder scope and returns one eligible loc
     workorderId: WORKORDER_ID,
     unitId: UNIT_ID,
     actorId: ACTOR_ID,
-    companyIds: [COMPANY_ID],
-    locationIds: [LOCATION_ID],
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    actorRole: "office",
   });
 });
 
 test("resolve reports local-policy, workorder, provider, and stale-unit blocks without mutating", async () => {
   const cases = [
-    { workorder: workorder({ assetId: null, asset: null }), unit: unit(), policy: true, code: "WORKORDER_ASSET_REQUIRED" },
-    { workorder: workorder({ status: "mechanic_done" }), unit: unit(), policy: true, code: "WORKORDER_INVENTORY_NOT_ACTIVE" },
-    { workorder: workorder(), unit: unit(), policy: false, code: "MECHANIC_PARTS_ENTRY_DISABLED" },
-    { workorder: workorder(), unit: unit({ provider: "odoo" }), policy: true, code: "INVENTORY_UNIT_PROVIDER_NOT_LOCAL" },
-    { workorder: workorder(), unit: unit({ status: "issued" }), policy: true, code: "INVENTORY_UNIT_NOT_AVAILABLE" },
+    { workorder: workorder({ assetId: null, asset: null }), unit: unit(), code: "WORKORDER_ASSET_REQUIRED" },
+    { workorder: workorder({ status: "mechanic_done" }), unit: unit(), code: "WORKORDER_INVENTORY_NOT_ACTIVE" },
+    { workorder: workorder(), unit: unit({ provider: "odoo" }), code: "INVENTORY_UNIT_PROVIDER_NOT_LOCAL" },
+    { workorder: workorder(), unit: unit({ status: "issued" }), code: "INVENTORY_UNIT_NOT_AVAILABLE" },
   ];
   for (const example of cases) {
     const result = await resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({
-      authorize: async () => ({ workorder: example.workorder }),
+      authorize: async () => ({ workorder: example.workorder, companyId: COMPANY_ID, locationId: LOCATION_ID }),
       resolveUnit: async () => example.unit,
-      loadPartsPolicy: async () => ({ mechanicCanRecordParts: example.policy }),
     }));
     assert.equal(result.eligibility.canIssue, false);
     assert.equal(result.eligibility.code, example.code);
   }
 });
 
-test("non-mechanics, invalid identities, and cross-scope misses fail closed", async () => {
+test("module denial, empty location scope, invalid identities, and cross-scope misses fail closed", async () => {
   await assert.rejects(
-    resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context("office"), dependencies()),
-    (error) => error.statusCode === 403 && error.code === "INVENTORY_UNIT_MECHANIC_REQUIRED",
+    resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context("mechanic"), dependencies({
+      authorize: async () => { throw Object.assign(new Error("Forbidden"), { statusCode: 403 }); },
+    })),
+    (error) => error.statusCode === 403,
+  );
+  await assert.rejects(
+    resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context("office", new Set()), dependencies()),
+    (error) => error.statusCode === 403,
   );
   await assert.rejects(
     resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({ readToken: () => null })),
@@ -131,7 +135,10 @@ test("issue passes only server-derived identity and returns exact idempotent rep
   assert.equal(command.unitId, UNIT_ID);
   assert.equal(command.actorId, ACTOR_ID);
   assert.match(command.requestHash, /^[0-9a-f]{64}$/);
-  assert.equal("companyId" in command, false);
+  assert.equal(command.companyId, COMPANY_ID);
+  assert.equal(command.locationId, LOCATION_ID);
+  assert.equal("companyIds" in command, false);
+  assert.equal("locationIds" in command, false);
 });
 
 test("issue maps stale, Odoo, disabled-policy, balance, and changed-hash outcomes", async () => {
@@ -139,7 +146,6 @@ test("issue maps stale, Odoo, disabled-policy, balance, and changed-hash outcome
     idempotency_conflict: "INVENTORY_UNIT_REPLAY_CONFLICT",
     workorder_state: "WORKORDER_INVENTORY_NOT_ACTIVE",
     asset_required: "WORKORDER_ASSET_REQUIRED",
-    parts_disabled: "MECHANIC_PARTS_ENTRY_DISABLED",
     provider_not_local: "INVENTORY_UNIT_PROVIDER_NOT_LOCAL",
     unit_state: "INVENTORY_UNIT_NOT_AVAILABLE",
     stock_mismatch: "INVENTORY_SERIAL_BALANCE_MISMATCH",
@@ -171,11 +177,13 @@ test("finalization freezes usage, disposition, tenant scope, and request hash", 
   assert.equal(result.replayed, false);
   assert.equal(installed.disposition, "installed");
   assert.equal(installed.usageId, USAGE_ID);
-  assert.deepEqual(installed.companyIds, [COMPANY_ID]);
+  assert.equal(installed.companyId, COMPANY_ID);
+  assert.equal(installed.locationId, LOCATION_ID);
+  assert.equal(installed.actorRole, "office");
   assert.match(installed.requestHash, /^[0-9a-f]{64}$/);
 });
 
-test("stable refresh projection is bounded and scoped to the assigned mechanic", async () => {
+test("stable refresh projection is bounded and scoped to the authorized actor", async () => {
   let request;
   const usages = [{ id: USAGE_ID, status: "returned" }];
   const result = await readSerializedUnitUsagesForWorkorder(WORKORDER_ID, context(), dependencies({
@@ -183,5 +191,21 @@ test("stable refresh projection is bounded and scoped to the assigned mechanic",
   }));
   assert.equal(result.usages, usages);
   assert.equal(request.actorId, ACTOR_ID);
+  assert.equal(request.actorRole, "office");
+  assert.equal(request.companyId, COMPANY_ID);
+  assert.equal(request.locationId, LOCATION_ID);
   assert.equal(request.limit, 100);
+});
+
+test("a granted Mechanic carries a server-derived role for assignment revalidation", async () => {
+  let command;
+  await issueSerializedUnitForWorkorder(
+    WORKORDER_ID,
+    { code: "inventory-code", idempotencyKey: "mechanic-issue-key" },
+    context("mechanic"),
+    dependencies({ issueUnit: async (input) => { command = input; return { kind: "issued", usage: { id: USAGE_ID } }; } }),
+  );
+  assert.equal(command.actorRole, "mechanic");
+  assert.equal(command.companyId, COMPANY_ID);
+  assert.equal(command.locationId, LOCATION_ID);
 });

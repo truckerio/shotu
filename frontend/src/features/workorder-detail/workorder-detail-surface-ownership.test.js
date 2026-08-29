@@ -81,6 +81,19 @@ test("office/mechanic and surveillance details consume one structural surface", 
   assert.match(surveillance, /focus\(\{ preventScroll: true \}\)/);
 });
 
+test("shared detail header gives workorder identity the flexible grid track", () => {
+  const detailCss = source("../../styles/workorder-detail.css");
+
+  assert.match(
+    detailCss,
+    /\.workorder-detail-page \.detail-context-bar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s,
+  );
+  assert.doesNotMatch(
+    detailCss,
+    /\.workorder-detail-page \.detail-context-bar\s*\{[^}]*grid-template-columns:\s*(?:34px|44px)/s,
+  );
+});
+
 test("role actions remain outside the shared structural surface", () => {
   const detailPage = source("./WorkorderDetailPage.jsx");
   const detailSections = source("./WorkorderDetailSections.jsx");

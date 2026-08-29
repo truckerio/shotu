@@ -11,6 +11,45 @@ function requestTimeout(timeoutMs) {
   return { controller, timer };
 }
 
+async function boundedJson(response, maxBytes) {
+  const limit = Math.min(32 * 1024 * 1024, Math.max(64 * 1024, Number(maxBytes) || 16 * 1024 * 1024));
+  let total = 0;
+  const chunks = [];
+  const add = (value) => {
+    const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+    total += chunk.length;
+    if (total > limit) {
+      throw new InvoiceExtractionError("Local invoice OCR returned too much data.", {
+        code: "ocr_response_too_large",
+        statusCode: 502,
+        retryable: true,
+      });
+    }
+    chunks.push(chunk);
+  };
+  if (response.body?.getReader) {
+    const reader = response.body.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        add(value);
+      }
+    } finally {
+      reader.releaseLock?.();
+    }
+  } else if (response.body?.[Symbol.asyncIterator]) {
+    for await (const chunk of response.body) add(chunk);
+  } else if (typeof response.text === "function") add(await response.text());
+  else if (typeof response.json === "function") add(JSON.stringify(await response.json()));
+  try {
+    return JSON.parse(Buffer.concat(chunks, total).toString("utf8"));
+  } catch (error) {
+    if (error instanceof InvoiceExtractionError) throw error;
+    return {};
+  }
+}
+
 const ocrRegionSchema = z.object({
   text: z.string().max(1000),
   confidence: z.number().min(0).max(1),
@@ -119,7 +158,7 @@ export async function extractInvoiceWithLocalOcr(input, options = {}) {
     clearTimeout(timeout.timer);
     activeOcrRequests -= 1;
   }
-  const body = await response.json().catch(() => ({}));
+  const body = await boundedJson(response, config.ocrMaxResponseBytes);
   if (!response.ok) {
     throw new InvoiceExtractionError("Local invoice OCR could not process this document.", {
       code: response.status === 413 ? "document_too_large" : "ocr_failed",
@@ -173,7 +212,7 @@ export async function extractNativePdfText(input, options = {}) {
   } finally {
     clearTimeout(timeout.timer);
   }
-  const body = await response.json().catch(() => ({}));
+  const body = await boundedJson(response, config.ocrMaxResponseBytes);
   if (!response.ok) {
     throw new InvoiceExtractionError("Native PDF text extraction failed.", {
       code: response.status === 413 ? "document_too_large" : "native_pdf_failed",

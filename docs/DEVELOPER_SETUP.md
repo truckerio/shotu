@@ -90,7 +90,7 @@ data; never run it against shared or production data.
 | Samsara | Asset sync/search | Prefer OAuth variables below; temporary fallback: `SAMSARA_API_TOKEN`, `SAMSARA_API_BASE_URL` | Browser search reads PostgreSQL cache; it does not call Samsara per keystroke. |
 | Provider credential encryption | Samsara OAuth and Admin-managed provider credentials | `INTEGRATION_ENCRYPTION_KEY` (32 bytes, base64 or 64 hex chars), `INTEGRATION_ENCRYPTION_KEY_VERSION` | Required before credentials can be stored. Rotation changes version only through a planned key-rotation procedure. |
 | Odoo | Odoo master-data sync, history, and draft service orders | Configure Odoo URL, database, integration-user login, and API key in **Admin → Settings → Integrations → Odoo.sh** | Odoo is optional compatibility/integration software for local-inventory workflows. App production does not imply Odoo production. |
-| Invoice extraction | Invoice review and durable background extraction | `OPENAI_API_KEY`; optional `INVOICE_OCR_*`; `INVOICE_DOCUMENT_ENCRYPTION_KEY`, version, retention; optional worker attempts/concurrency/poll settings | Document encryption is required in production before upload. |
+| Invoice extraction | Invoice review and durable background extraction | Optional explicit remote policy plus `INVOICE_EXTRACTION_OPENAI_API_KEY`; optional `INVOICE_OCR_*`; `INVOICE_DOCUMENT_ENCRYPTION_KEY`, version/keyring, retention; optional global-layout HMAC version/keyring and worker settings | Document encryption is required in production before upload. Remote processing and global contribution default off. |
 | Local inventory security | Encrypted opening-count workbooks, labels, and exact-unit scan/issue/install/return | `INVENTORY_COUNT_FILE_ENCRYPTION_KEY`, version, historical keyring, retention; `INVENTORY_QR_SIGNING_KEY` | Workbook key may fall back to current invoice-document key. QR key is required before serialized identities are created. |
 | Maps | Map cards | `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY` and/or `NEXT_PUBLIC_HERE_API_KEY` | Browser keys must be restricted to approved origins. |
 | Proofreading | Optional narrative checking | `WPROOFREADER_SERVICE_ID` and optional explicit deep/context settings | Keep disabled until provider, privacy, and release gates are satisfied. |
@@ -154,8 +154,29 @@ npm run invoice-ocr:up
 ```
 
 Use `INVOICE_OCR_BASE_URL`, `INVOICE_OCR_TOKEN`, and timeout/concurrency values
-only when that service is intentionally available. `OPENAI_API_KEY` is
-server-only. Extraction and review do not move inventory.
+only when that service is intentionally available. Remote invoice transmission
+is disabled by default and does not inherit the shared `OPENAI_API_KEY`. To opt
+in, set `INVOICE_EXTRACTION_REMOTE_ENABLED=true` and provide a dedicated,
+server-only `INVOICE_EXTRACTION_OPENAI_API_KEY`; enabling the policy without
+that key fails the run instead of silently using a local-only path. The default approved endpoint
+is `https://api.openai.com/v1`; a different endpoint must still use HTTPS and
+also requires `INVOICE_EXTRACTION_ALLOW_CUSTOM_OPENAI_BASE_URL=true`. Provider
+redirects are rejected, response bodies are bounded by
+`INVOICE_EXTRACTION_MAX_PROVIDER_RESPONSE_BYTES`, and provider storage remains
+disabled. Extraction and review do not move inventory.
+
+Cross-company layout learning is separately default-off. Configure a dedicated
+`INVOICE_GLOBAL_LAYOUT_HMAC_KEY_VERSION` and JSON version-to-key map in
+`INVOICE_GLOBAL_LAYOUT_HMAC_KEYS`; each key must contain at least 32 bytes of
+secret material. A company admin must then enable the policy through
+`/api/admin/companies/:companyId/invoice-global-learning`, and a reviewer must
+separately approve structural contribution on the reviewed document. Global
+artifacts contain only a code-reviewed fixed geometry grammar and HMACs of an
+allowlisted generic label vocabulary; unsupported geometry stays tenant-local
+until a new grammar is reviewed and released in code. Policy withdrawal synchronously
+quarantines affected artifacts and queues deterministic rebuilds; the server
+runs that rebuild worker automatically. Never use document-encryption keys as
+layout-HMAC keys.
 
 A reviewed invoice can later start a separate, explicit local receipt. The
 operator must attest that the full delivery was received undamaged; only then
@@ -176,6 +197,9 @@ During rotation, retain old version-to-key mappings in
 `INVENTORY_COUNT_FILE_ENCRYPTION_KEYS` or `INVOICE_DOCUMENT_ENCRYPTION_KEYS` as a
 JSON object until all evidence encrypted with those versions expires. Never
 remove historical key material while retained rows still reference its version.
+Invoice source decryption selects the key by the row's stored `key_version` and
+fails closed when that version is missing or the authenticated ciphertext does
+not verify.
 
 The app starts the invoice-extraction worker with the server. Defaults are two
 concurrent lanes, two attempts per job, and a 1-second poll. Tune only with

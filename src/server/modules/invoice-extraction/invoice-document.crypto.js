@@ -44,6 +44,39 @@ function keyBytes(value = invoiceExtractionConfig.documentEncryptionKey || devel
   return key;
 }
 
+function unavailableSourceKey() {
+  return new InvoiceExtractionError("The encrypted invoice source is unavailable.", {
+    code: "invoice_source_key_unavailable",
+    statusCode: 503,
+  });
+}
+
+function historicalKeyring(value) {
+  if (!value) return {};
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw unavailableSourceKey();
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw unavailableSourceKey();
+  return parsed;
+}
+
+function decryptionKey(source, options) {
+  if (options.key !== undefined) return keyBytes(options.key);
+  const currentVersion = String(options.currentKeyVersion || invoiceExtractionConfig.documentEncryptionKeyVersion);
+  const sourceVersion = String(source.key_version || currentVersion);
+  if (sourceVersion === currentVersion) {
+    return keyBytes(options.currentKey ?? (invoiceExtractionConfig.documentEncryptionKey || developmentKey()));
+  }
+  const keys = historicalKeyring(options.keys ?? invoiceExtractionConfig.documentEncryptionKeys);
+  if (!Object.hasOwn(keys, sourceVersion)) throw unavailableSourceKey();
+  return keyBytes(keys[sourceVersion]);
+}
+
 export function invoiceDocumentAad({ companyId, runId, documentHash, mimeType }) {
   return Buffer.from(JSON.stringify({
     purpose: "invoice-source-v1",
@@ -70,7 +103,7 @@ export function encryptInvoiceDocument(bytes, metadata, options = {}) {
 
 export function decryptInvoiceDocument(source, options = {}) {
   try {
-    const key = keyBytes(options.key);
+    const key = decryptionKey(source, options);
     const decipher = createDecipheriv("aes-256-gcm", key, source.iv);
     decipher.setAAD(invoiceDocumentAad({
       companyId: source.company_id,

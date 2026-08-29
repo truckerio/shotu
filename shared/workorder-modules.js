@@ -6,7 +6,7 @@ export const WORKORDER_ACCESS_MODES = Object.freeze({
 });
 
 export const WORKORDER_INHERIT_ACCESS = "inherit";
-export const WORKORDER_MODULE_CATALOG_VERSION = 1;
+export const WORKORDER_MODULE_CATALOG_VERSION = 2;
 
 export const WORKORDER_SURFACES = Object.freeze({
   CREATE: "create",
@@ -116,6 +116,16 @@ export const WORKORDER_MODULES = Object.freeze([
     }),
   }),
   Object.freeze({
+    key: "partsScanning",
+    owner: "inventory.serialized-parts",
+    label: "Part scanning",
+    description: "Scan and issue exact serialized parts to a workorder.",
+    surfaces: Object.freeze(["detail"]),
+    capabilities: Object.freeze(["read", "write"]),
+    actions: Object.freeze(["resolve", "issue", "finalize"]),
+    writeRolesBySurface: Object.freeze({ detail: Object.freeze(["office", "admin"]) }),
+  }),
+  Object.freeze({
     key: "chat",
     owner: "workorders.chat",
     label: "Chat and office help",
@@ -200,6 +210,7 @@ const DEFAULT_ACCESS = Object.freeze({
       diagnosisRepair: "write",
       photos: "read",
       parts: "write",
+      partsScanning: "hidden",
       chat: "write",
       activity: "read",
       preview: "read",
@@ -226,6 +237,7 @@ const DEFAULT_ACCESS = Object.freeze({
       diagnosisRepair: "write",
       photos: "read",
       parts: "write",
+      partsScanning: "write",
       chat: "write",
       activity: "read",
       preview: "read",
@@ -252,6 +264,7 @@ const DEFAULT_ACCESS = Object.freeze({
       diagnosisRepair: "write",
       photos: "read",
       parts: "read",
+      partsScanning: "hidden",
       chat: "read",
       activity: "read",
       preview: "read",
@@ -278,6 +291,7 @@ const DEFAULT_ACCESS = Object.freeze({
       diagnosisRepair: "write",
       photos: "read",
       parts: "write",
+      partsScanning: "write",
       chat: "write",
       activity: "read",
       preview: "read",

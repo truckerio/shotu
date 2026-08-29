@@ -6,7 +6,8 @@ const migration = readFileSync(new URL("../../db/migrations/069_inventory_unit_w
 const repository = readFileSync(new URL("../../db/repositories/inventory-unit-workorder-usage.repo.js", import.meta.url), "utf8");
 const workorders = readFileSync(new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url), "utf8");
 const server = readFileSync(new URL("../../../../server.js", import.meta.url), "utf8");
-const mechanicSurface = readFileSync(new URL("../../../../frontend/src/components/workorders/part-requests/MechanicPartsSurface.jsx", import.meta.url), "utf8");
+const partsModule = readFileSync(new URL("../../../../frontend/src/features/workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
+const service = readFileSync(new URL("./inventory-unit-workorder.service.js", import.meta.url), "utf8");
 
 test("serialized usage migration enforces tenant FKs, one unresolved unit, and exact idempotency", () => {
   assert.match(migration, /foreign key \(company_id, workorder_id\) references operational_workorders\(company_id, id\)/i);
@@ -36,9 +37,15 @@ test("repository locks workorder, exact unit, usage, and local balance before mu
   assert.match(repository, /quantity_on_hand = quantity_on_hand \+ 1/i);
 });
 
-test("serialized workflow is wired into the mechanic route and canonical Parts surface", () => {
+test("serialized workflow is Office-owned, module-authorized, and mounted inside canonical Parts", () => {
   assert.match(server, /handleInventoryUnitWorkorderApi/);
-  assert.match(mechanicSurface, /<MechanicSerializedParts/);
+  assert.match(partsModule, /<SerializedPartsScanner/);
+  assert.match(partsModule, /partsVisible \? <PartRequestsPanel/);
+  assert.match(service, /moduleKey: "partsScanning"/);
+  assert.match(service, /requireLocationAccess/);
+  assert.doesNotMatch(service, /requireMechanic|mechanicCanRecordParts/);
+  assert.doesNotMatch(repository, /mechanic_can_record_parts/);
+  assert.match(repository, /workorder_parts_scan/);
 });
 
 test("workorder lifecycle blocks unresolved exact-unit issues", () => {

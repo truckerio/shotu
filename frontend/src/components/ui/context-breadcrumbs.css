@@ -1,8 +1,8 @@
-.context-breadcrumbs { min-width: 0; color: #667085; font-size: 12px; font-weight: 600; }
+.context-breadcrumbs { min-width: 0; color: #667085; font-size: var(--text-secondary); font-weight: var(--weight-semibold); line-height: 1.3; }
 .context-breadcrumbs ol { display: flex; min-width: 0; align-items: center; margin: 0; padding: 0; list-style: none; }
 .context-breadcrumbs li { display: inline-flex; min-width: 0; align-items: center; }
 .context-breadcrumbs a { display: inline-flex; min-height: 44px; align-items: center; margin-left: -5px; padding-inline: 5px; border-radius: 6px; color: #475467; text-decoration: none; }
 .context-breadcrumbs a:hover { color: #175cd3; text-decoration: underline; text-underline-offset: 3px; }
 .context-breadcrumbs a:focus-visible { outline: 3px solid #84caff; outline-offset: 1px; }
-.context-breadcrumbs svg { width: 14px; height: 14px; flex: 0 0 auto; margin-inline: 2px; color: #98a2b3; }
-.context-breadcrumbs [aria-current="page"] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-breadcrumbs svg { width: 15px; height: 15px; flex: 0 0 auto; margin-inline: 3px; color: #98a2b3; }
+.context-breadcrumbs [aria-current="page"] { color: #182230; font-weight: var(--weight-bold); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

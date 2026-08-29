@@ -73,6 +73,23 @@ test("Odoo detail defaults are writable only for Admin and Surveillance", () => 
   }
 });
 
+test("exact-part scanning is Office-owned by default and remains policy-only", () => {
+  const expectedByRole = {
+    admin: WORKORDER_MODULE_ACCESS.WRITE,
+    office: WORKORDER_MODULE_ACCESS.WRITE,
+    mechanic: WORKORDER_MODULE_ACCESS.HIDDEN,
+    surveillance: WORKORDER_MODULE_ACCESS.HIDDEN,
+  };
+  for (const [role, expected] of Object.entries(expectedByRole)) {
+    assert.equal(defaultWorkorderModuleAccess({
+      moduleId: WORKORDER_MODULE_IDS.PARTS_SCANNING,
+      role,
+      surface: WORKORDER_SURFACES.DETAIL,
+    }), expected, role);
+  }
+  assert.equal(workorderModuleDescriptor(WORKORDER_MODULE_IDS.PARTS_SCANNING).routeBySurface.detail, undefined);
+});
+
 test("Admin diagnosis and repair defaults resolve to write access", () => {
   const policy = resolveWorkorderModulePolicy({
     moduleId: WORKORDER_MODULE_IDS.DIAGNOSIS_REPAIR,

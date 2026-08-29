@@ -17,6 +17,9 @@ test("Modules page uses the canonical catalog and progressive module management"
   assert.match(page, /Required to create/);
   assert.match(page, /moduleSupportsWrite\(module\)/);
   assert.match(page, /This module is view-only and has no edit actions/);
+  assert.match(page, /module\.key === "partsScanning"/);
+  assert.match(page, /Mechanics are off by default/);
+  assert.match(page, /without granting broader Parts edits/);
   assert.match(page, /Use system default/);
   assert.match(page, /Use company default/);
   assert.match(page, /Use company role setting/);
@@ -60,6 +63,18 @@ test("Modules page keeps shared keyboard dropdowns and responsive containment co
 });
 
 test("back navigation styling does not override the primary save action", () => {
-  assert.match(styles, /admin-module-manager-header > button:first-child/);
-  assert.doesNotMatch(styles, /admin-module-manager-header > button \{/);
+  assert.match(page, /className="admin-module-manager-heading-row"/);
+  assert.match(page, /className="admin-module-manager-identity"/);
+  assert.match(styles, /\.admin-module-manager-heading-row > \.button/);
+  assert.doesNotMatch(styles, /admin-module-manager-header > button:first-child/);
+});
+
+test("module manager keeps a bounded premium layout for every module", () => {
+  assert.match(styles, /\.admin-module-manager \{[^}]*max-width: 1120px;/);
+  assert.match(styles, /\.admin-module-role-list \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.admin-module-role-control \{[^}]*border: 1px solid #e4e7ec;[^}]*border-radius: 8px;/);
+  assert.match(page, /className="admin-module-manager-scope"/);
+  assert.match(page, /className="admin-module-exception-status"/);
+  assert.match(page, /<ChevronDown aria-hidden="true"/);
+  assert.match(styles, /\.admin-module-manager \.dropdown-select-trigger \{ min-height: 44px; \}/);
 });

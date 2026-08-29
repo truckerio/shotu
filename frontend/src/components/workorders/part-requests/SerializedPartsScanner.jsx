@@ -1,8 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { CheckCircle, Tool02 } from "@untitledui/icons";
+import { CheckCircle, Scan, XClose } from "@untitledui/icons";
 import { Button } from "../../ui/Button.jsx";
 import { InventoryCodeScanner } from "../../../features/inventory/InventoryCodeScanner.jsx";
-import { inventoryUsageStatusLabel, replaceUsage } from "../../../features/inventory/inventory-code-scanner-model.js";
+import {
+  inventoryUsageStatusLabel,
+  mergeUsageSnapshot,
+  replaceUsage,
+  shouldApplyUsageSnapshot,
+} from "../../../features/inventory/inventory-code-scanner-model.js";
 import { api } from "../../../lib/api.js";
 import { interfaceText } from "../../../i18n/index.js";
 import "./mechanic-serialized-parts.css";
@@ -11,7 +16,7 @@ function requestKey(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" }) {
+export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }) {
   const t = (key) => interfaceText(locale, key);
   const errorText = (error) => locale === "en" && error?.message ? error.message : t("mechanic.requestFailed");
   const usageStatus = (status) => t(`parts.status.${status}`) === `parts.status.${status}`
@@ -22,17 +27,34 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("status");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const issueKeyRef = useRef("");
   const finalizeKeysRef = useRef(new Map());
+  const usageRevisionRef = useRef(0);
+  const usagesLoadedRef = useRef(false);
   const resultHeadingRef = useRef(null);
+  const scanTriggerRef = useRef(null);
+  const scannerCloseRef = useRef(null);
   const workorderGenerationRef = useRef(0);
-  const sectionTitleId = useId();
+  const scannerPanelId = useId();
 
   async function loadUsages(generation = workorderGenerationRef.current) {
     const requestedWorkorderId = workorderId;
-    const result = await api(`/api/mechanic/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-unit-usages`);
-    if (generation === workorderGenerationRef.current) setUsages(result.usages || []);
+    const revision = usageRevisionRef.current;
+    const result = await api(`/api/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-unit-usages`);
+    if (generation === workorderGenerationRef.current) {
+      usagesLoadedRef.current = true;
+      const snapshotIsCurrent = shouldApplyUsageSnapshot({
+        requestGeneration: generation,
+        currentGeneration: workorderGenerationRef.current,
+        requestRevision: revision,
+        currentRevision: usageRevisionRef.current,
+      });
+      setUsages((current) => snapshotIsCurrent
+        ? (result.usages || [])
+        : mergeUsageSnapshot(current, result.usages || []));
+    }
   }
 
   useEffect(() => {
@@ -42,24 +64,36 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
     setBusy("");
     setMessage("");
     setMessageTone("status");
+    setScannerOpen(false);
+    setUsages([]);
+    usagesLoadedRef.current = true;
     issueKeyRef.current = "";
+    usageRevisionRef.current = 0;
     finalizeKeysRef.current.clear();
     loadUsages(generation).catch((error) => {
-      if (generation === workorderGenerationRef.current) { setMessageTone("error"); setMessage(errorText(error)); }
+      if (generation !== workorderGenerationRef.current) return;
+      usagesLoadedRef.current = false;
+      setMessageTone("error");
+      setMessage(errorText(error));
     });
   }, [workorderId]);
+
+  useEffect(() => {
+    if (scannerOpen) scannerCloseRef.current?.focus();
+  }, [scannerOpen]);
 
   async function resolve(code) {
     const generation = workorderGenerationRef.current;
     const requestedWorkorderId = workorderId;
     setMessage("");
     setMessageTone("status");
-    const result = await api(`/api/mechanic/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-units/resolve`, {
+    const result = await api(`/api/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-units/resolve`, {
       method: "POST",
       body: JSON.stringify({ code }),
     });
     if (generation !== workorderGenerationRef.current) return;
     issueKeyRef.current = requestKey("serialized-issue");
+    setScannerOpen(false);
     setCandidate({ ...result, code });
     window.requestAnimationFrame(() => resultHeadingRef.current?.focus());
   }
@@ -72,13 +106,15 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
     setMessage("");
     setMessageTone("status");
     try {
-      const result = await api(`/api/mechanic/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-units/issue`, {
+      const result = await api(`/api/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-units/issue`, {
         method: "POST",
         body: JSON.stringify({ code: candidate.code, idempotencyKey: issueKeyRef.current }),
       });
       if (generation !== workorderGenerationRef.current) return;
+      usageRevisionRef.current += 1;
       setUsages((current) => replaceUsage(current, result.usage));
       setCandidate(null);
+      setScannerOpen(false);
       setResetKey((value) => value + 1);
       setMessage(`${result.usage.partNumber} ${t("parts.issuedToWorkorder")}`);
       await onChanged?.();
@@ -104,7 +140,7 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
     setMessageTone("status");
     try {
       const result = await api(
-        `/api/mechanic/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-unit-usages/${encodeURIComponent(usage.id)}/finalize`,
+        `/api/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-unit-usages/${encodeURIComponent(usage.id)}/finalize`,
         {
           method: "POST",
           body: JSON.stringify({
@@ -114,6 +150,7 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
         },
       );
       if (generation !== workorderGenerationRef.current) return;
+      usageRevisionRef.current += 1;
       setUsages((current) => replaceUsage(current, result.usage));
       setMessage(disposition === "installed" ? t("parts.installationRecorded") : t("parts.returnedToStock"));
       await onChanged?.();
@@ -128,13 +165,46 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
 
   const unresolved = usages.filter((usage) => usage.status === "issued");
   const completed = usages.filter((usage) => usage.status !== "issued");
+  const collapsed = !scannerOpen && !candidate && usages.length === 0 && !message;
+
+  function closeScanner() {
+    setScannerOpen(false);
+    setResetKey((value) => value + 1);
+    setMessage("");
+    setMessageTone("status");
+    window.requestAnimationFrame(() => scanTriggerRef.current?.focus());
+  }
+
+  function openScanner() {
+    setScannerOpen(true);
+    setMessage("");
+    setMessageTone("status");
+    if (usagesLoadedRef.current) return;
+    usagesLoadedRef.current = true;
+    loadUsages().catch((error) => {
+      usagesLoadedRef.current = false;
+      setMessageTone("error");
+      setMessage(errorText(error));
+    });
+  }
 
   return (
-    <section className="mechanic-serialized-parts" aria-labelledby={sectionTitleId}>
-      <header>
-        <Tool02 aria-hidden="true" />
-        <div><h3 id={sectionTitleId}>{t("parts.serialized")}</h3><p>{t("parts.serializedHelp")}</p></div>
-      </header>
+    <section className={`mechanic-serialized-parts${collapsed ? " is-collapsed" : ""}`} aria-label={t("parts.serialized")}>
+
+      {!scannerOpen && !candidate ? (
+        <button
+          type="button"
+          ref={scanTriggerRef}
+          className="mechanic-scan-trigger"
+          aria-label={t("parts.scanParts")}
+          aria-controls={scannerPanelId}
+          aria-expanded={scannerOpen}
+          data-tooltip={t("parts.scanParts")}
+          onClick={openScanner}
+        >
+          <Scan aria-hidden="true" focusable="false" />
+        </button>
+      ) : null}
 
       {candidate ? (
         <section className="mechanic-serialized-candidate" aria-live="polite">
@@ -149,30 +219,44 @@ export function MechanicSerializedParts({ workorderId, onChanged, locale = "en" 
             <Button type="button" variant="primary" onClick={issue} disabled={busy === "issue"}>
               {busy === "issue" ? t("parts.using") : t("parts.useOnWorkorder")}
             </Button>
-          ) : <p className="mechanic-serialized-blocked" role="alert">{locale === "en" ? candidate.eligibility.message : t("parts.serializedUnavailable")}</p>}
-          <Button type="button" onClick={() => { setCandidate(null); setResetKey((value) => value + 1); }} disabled={Boolean(busy)}>
+          ) : <p className="mechanic-serialized-blocked" role="alert" aria-live="assertive">{locale === "en" ? candidate.eligibility.message : t("parts.serializedUnavailable")}</p>}
+          <Button type="button" onClick={() => { setCandidate(null); setScannerOpen(true); setResetKey((value) => value + 1); }} disabled={Boolean(busy)}>
             {t("parts.scanDifferent")}
           </Button>
         </section>
-      ) : <InventoryCodeScanner
-        onScan={resolve}
-        resetKey={`${workorderId}:${resetKey}`}
-        disabled={Boolean(busy)}
-        title={t("parts.scanSerialized")}
-        labels={{
-          cameraLabel: t("parts.scannerCamera"),
-          stopCamera: t("parts.stopCamera"),
-          startingCamera: t("parts.startingCamera"),
-          useCamera: t("parts.useCamera"),
-          codeLabel: t("parts.codeLabel"),
-          codePlaceholder: t("parts.codePlaceholder"),
-          checking: t("parts.checking"),
-          openPart: t("parts.openPart"),
-          openError: t("parts.openError"),
-          cameraUnavailable: t("parts.cameraUnavailable"),
-          cameraAccessUnavailable: t("parts.cameraAccessUnavailable"),
-        }}
-      />}
+      ) : scannerOpen ? (
+        <div className="mechanic-scanner-panel" id={scannerPanelId}>
+          <button
+            type="button"
+            ref={scannerCloseRef}
+            className="mechanic-scanner-close"
+            aria-label={t("parts.closeScanner")}
+            data-tooltip={t("parts.closeScanner")}
+            onClick={closeScanner}
+          >
+            <XClose aria-hidden="true" focusable="false" />
+          </button>
+          <InventoryCodeScanner
+            onScan={resolve}
+            resetKey={`${workorderId}:${resetKey}`}
+            disabled={Boolean(busy)}
+            title={t("parts.scanSerialized")}
+            labels={{
+              cameraLabel: t("parts.scannerCamera"),
+              stopCamera: t("parts.stopCamera"),
+              startingCamera: t("parts.startingCamera"),
+              useCamera: t("parts.useCamera"),
+              codeLabel: t("parts.codeLabel"),
+              codePlaceholder: t("parts.codePlaceholder"),
+              checking: t("parts.checking"),
+              openPart: t("parts.openPart"),
+              openError: t("parts.openError"),
+              cameraUnavailable: t("parts.cameraUnavailable"),
+              cameraAccessUnavailable: t("parts.cameraAccessUnavailable"),
+            }}
+          />
+        </div>
+      ) : null}
 
       {unresolved.map((usage) => (
         <article className="mechanic-serialized-usage is-issued" key={usage.id}>

@@ -44,6 +44,20 @@ test("local OCR rejects malformed or empty provider output", async () => {
   }), (error) => error.code === "ocr_empty_result");
 });
 
+test("local OCR bounds a compromised service response before JSON parsing", async () => {
+  await assert.rejects(() => extractInvoiceWithLocalOcr({ bytes: Buffer.from("safe"), mimeType: "image/png" }, {
+    production: false,
+    config: {
+      ocrBaseUrl: "http://127.0.0.1:8091",
+      ocrTimeoutMs: 30_000,
+      ocrMaxConcurrent: 1,
+      ocrMaxResponseBytes: 64 * 1024,
+      ocrToken: "",
+    },
+    fetchFn: async () => ({ ok: true, status: 200, text: async () => "x".repeat(70 * 1024) }),
+  }), (error) => error.code === "ocr_response_too_large");
+});
+
 test("native PDF text uses the bounded fast endpoint without consuming OCR capacity", async () => {
   let request;
   const result = await extractNativePdfText({ bytes: Buffer.from("%PDF-safe"), mimeType: "application/pdf" }, {
