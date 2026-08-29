@@ -52,7 +52,7 @@ function countRow(sourceRow, partNumber, normalizedPartNumber, quantity, binLoca
   };
 }
 
-test("real PostgreSQL enforces encrypted count evidence, apply caps, separated Odoo reference balances, retention, and audit", { skip: !runPostgres }, async () => {
+test("real PostgreSQL batches an unbounded count apply, preserves evidence, and separates Odoo reference balances", { skip: !runPostgres }, async () => {
   const suffix = randomUUID().replaceAll("-", "");
   const actorId = randomUUID();
   const companyId = randomUUID();
@@ -61,8 +61,11 @@ test("real PostgreSQL enforces encrypted count evidence, apply caps, separated O
   const partB = randomUUID();
   const partC = randomUUID();
   const partD = randomUUID();
+  const partE = randomUUID();
+  const partF = randomUUID();
+  const partG = randomUUID();
   const importA = randomUUID();
-  const importOversize = randomUUID();
+  const importBatched = randomUUID();
   const importOdoo = randomUUID();
   const numberA = `COUNT-A-${suffix}`;
   const numberB = `COUNT-B-${suffix}`;
@@ -72,17 +75,31 @@ test("real PostgreSQL enforces encrypted count evidence, apply caps, separated O
   const normalizedB = `COUNTB${suffix}`;
   const normalizedC = `COUNTC${suffix}`;
   const normalizedD = `COUNTD${suffix}`;
+  const catalogParts = [
+    [partA, normalizedA, numberA, "A"],
+    [partB, normalizedB, numberB, "B"],
+    [partC, normalizedC, numberC, "C"],
+    [partD, normalizedD, numberD, "D"],
+    [partE, `COUNTE${suffix}`, `COUNT-E-${suffix}`, "E"],
+    [partF, `COUNTF${suffix}`, `COUNT-F-${suffix}`, "F"],
+    [partG, `COUNTG${suffix}`, `COUNT-G-${suffix}`, "G"],
+  ];
   try {
     await query("insert into user_profiles (id, display_name) values ($1, $2)", [actorId, `Count integration ${suffix}`]);
     await query("insert into companies (id, slug, name) values ($1, $2, $3)", [companyId, `count-${suffix}`, "Count integration"]);
     await query("insert into locations (id, company_id, name) values ($1, $2, 'Count shop')", [locationId, companyId]);
     await query(
       `insert into parts_catalog (id, company_id, normalized_part_number, part_number, description, uom_code)
-       values ($1,$5,$6,$7,'A','ea'), ($2,$5,$8,$9,'B','ea'),
-              ($3,$5,$10,$11,'C','ea'), ($4,$5,$12,$13,'D','ea')`,
-      [partA, partB, partC, partD, companyId,
-        normalizedA, numberA, normalizedB, numberB,
-        normalizedC, numberC, normalizedD, numberD],
+       select input.id, $1, input.normalized_part_number, input.part_number, input.description, 'ea'
+       from jsonb_to_recordset($2::jsonb) as input(
+         id uuid, normalized_part_number text, part_number text, description text
+       )`,
+      [companyId, JSON.stringify(catalogParts.map(([id, normalizedPartNumber, partNumber, description]) => ({
+        id,
+        normalized_part_number: normalizedPartNumber,
+        part_number: partNumber,
+        description,
+      })))],
     );
 
     const created = await createInventoryCountImport({
@@ -149,26 +166,54 @@ test("real PostgreSQL enforces encrypted count evidence, apply caps, separated O
     );
     assert.deepEqual(successEvidence.rows[0], { units: 5, bin_location: "REVIEWED-B2" });
 
-    const oversized = await createInventoryCountImport({
-      importId: importOversize,
+    const batched = await createInventoryCountImport({
+      importId: importBatched,
       companyIds: [companyId],
       locationIds: [locationId],
       actorId,
       locationId,
-      ...sourceEvidence(`oversize-${suffix}`, companyId, importOversize),
+      ...sourceEvidence(`batched-${suffix}`, companyId, importBatched),
       rows: [
         countRow(4, numberC, normalizedC, 500, "C1"),
-        countRow(5, numberD, normalizedD, 1, "D1"),
+        countRow(5, numberD, normalizedD, 500, "D1"),
+        countRow(6, catalogParts[4][2], catalogParts[4][1], 500, "E1"),
+        countRow(7, catalogParts[5][2], catalogParts[5][1], 500, "F1"),
+        countRow(8, catalogParts[6][2], catalogParts[6][1], 1, "G1"),
       ],
     });
-    const oversizeApply = await applyInventoryCountImport({
-      importId: importOversize,
+    const batchedApply = await applyInventoryCountImport({
+      importId: importBatched,
       companyIds: [companyId],
       locationIds: [locationId],
       actorId,
-      expectedVersion: oversized.import.version,
+      expectedVersion: batched.import.version,
     });
-    assert.deepEqual(oversizeApply, { kind: "unit_limit_exceeded", totalUnits: 501 });
+    assert.equal(batchedApply.kind, "applied");
+    const batchingEvidence = await query(
+      `select
+         (select count(*)::integer from inventory_receipts
+          where company_id=$1 and count_import_id=$2) as receipts,
+         (select count(*)::integer from inventory_label_batches batch
+          join inventory_receipts receipt on receipt.company_id=batch.company_id and receipt.id=batch.receipt_id
+          where receipt.company_id=$1 and receipt.count_import_id=$2) as label_batches,
+         (select count(*)::integer from inventory_serialized_units unit
+          join inventory_receipts receipt on receipt.company_id=unit.company_id and receipt.id=unit.receipt_id
+          where receipt.company_id=$1 and receipt.count_import_id=$2) as units,
+         (select max(receipt_units.units)::integer from (
+            select sum(line.quantity)::integer as units
+            from inventory_receipts receipt
+            join inventory_receipt_lines line on line.company_id=receipt.company_id and line.receipt_id=receipt.id
+            where receipt.company_id=$1 and receipt.count_import_id=$2
+            group by receipt.id
+          ) receipt_units) as max_batch_units`,
+      [companyId, importBatched],
+    );
+    assert.deepEqual(batchingEvidence.rows[0], {
+      receipts: 5,
+      label_batches: 5,
+      units: 2_001,
+      max_batch_units: 500,
+    });
 
     await query(
       `insert into odoo_product_mappings (company_id, external_id, catalog_part_id, default_code, display_name)
@@ -202,39 +247,36 @@ test("real PostgreSQL enforces encrypted count evidence, apply caps, separated O
     const separatedAuthorityEvidence = await query(
       `select
          (select count(*)::integer from inventory_receipts
-          where company_id=$1 and count_import_id=$2) as oversized_receipts,
-         (select count(*)::integer from inventory_receipts
-          where company_id=$1 and count_import_id=$3) as local_count_receipts,
+          where company_id=$1 and count_import_id=$2) as local_count_receipts,
          (select quantity_on_hand from inventory_items
-          where company_id=$1 and location_id=$4 and catalog_part_id=$5 and source_provider='local') as local_quantity,
+          where company_id=$1 and location_id=$3 and catalog_part_id=$4 and source_provider='local') as local_quantity,
          (select quantity_on_hand from odoo_inventory_balances
-          where company_id=$1 and location_id=$4 and catalog_part_id=$5) as odoo_quantity`,
-      [companyId, importOversize, importOdoo, locationId, partB],
+          where company_id=$1 and location_id=$3 and catalog_part_id=$4) as odoo_quantity`,
+      [companyId, importOdoo, locationId, partB],
     );
     assert.deepEqual(separatedAuthorityEvidence.rows[0], {
-      oversized_receipts: 0,
       local_count_receipts: 1,
       local_quantity: "1.000",
       odoo_quantity: "7.000",
     });
 
     const source = await getInventoryCountImportFile({
-      importId: importOversize,
+      importId: importBatched,
       companyIds: [companyId],
       locationIds: [locationId],
     });
     assert.equal(source.source_ciphertext.length, source.source_size_bytes);
-    await auditInventoryCountFileDownload({ companyId, importId: importOversize, actorId });
-    await query("update inventory_count_imports set source_retention_until=now()-interval '1 second' where company_id=$1 and id=$2", [companyId, importOversize]);
+    await auditInventoryCountFileDownload({ companyId, importId: importBatched, actorId });
+    await query("update inventory_count_imports set source_retention_until=now()-interval '1 second' where company_id=$1 and id=$2", [companyId, importBatched]);
     assert.equal(await deleteExpiredInventoryCountSources({ limit: 10 }), 1);
     assert.equal(await getInventoryCountImportFile({
-      importId: importOversize,
+      importId: importBatched,
       companyIds: [companyId],
       locationIds: [locationId],
     }), null);
     const access = await query(
       "select action, count(*)::integer as count from inventory_count_source_access_events where company_id=$1 and import_id=$2 group by action order by action",
-      [companyId, importOversize],
+      [companyId, importBatched],
     );
     assert.deepEqual(access.rows, [
       { action: "download", count: 1 },

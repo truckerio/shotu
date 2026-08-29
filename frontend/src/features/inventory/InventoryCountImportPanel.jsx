@@ -1,10 +1,11 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CheckCircle, FileCheck02, Package, SearchMd, UploadCloud02 } from "@untitledui/icons";
-import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
+import { AlertCircle, CheckCircle, FileCheck02, Package, SearchMd } from "@untitledui/icons";
+import ExcelJS from "exceljs/dist/exceljs.min.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from "../../components/ui/OperationalDataTable.jsx";
+import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { api } from "../../lib/api.js";
 
@@ -45,8 +46,7 @@ export async function readInventoryWorkbook(file) {
   if (!file || file.size > MAX_FILE_BYTES) throw new Error("Choose an XLSX file smaller than 2 MB.");
   if (!/\.xlsx$/i.test(file.name)) throw new Error("Choose the XLSX inventory workbook.");
   const buffer = await file.arrayBuffer();
-  const module = await import("exceljs/dist/exceljs.min.js");
-  const Workbook = module.Workbook || module.default?.Workbook || module.default;
+  const Workbook = ExcelJS.Workbook || ExcelJS.default?.Workbook || ExcelJS.default || ExcelJS;
   const workbook = new Workbook();
   await workbook.xlsx.load(buffer);
   const sheet = workbook.getWorksheet("Parts Inventory") || workbook.worksheets[0];
@@ -298,7 +298,6 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
       const result = await api(`/api/office/inventory/count-imports/${stocktake.id}/apply`, {
         method: "POST",
         body: JSON.stringify({ expectedVersion: stocktake.version, confirmation: "physically_counted" }),
-        timeoutMs: 30_000,
       });
       setStocktake(result.import);
       setConfirmed(false);
@@ -310,7 +309,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     }
   }
 
-  const uploadDialog = <ModalOverlay className="inventory-upload-overlay" isOpen={uploadOpen} onOpenChange={(open) => !uploading && onUploadOpenChange?.(open)} isDismissable={!uploading}><Modal className="inventory-upload-modal"><Dialog className="inventory-upload-dialog" aria-labelledby="inventory-upload-title"><div className="inventory-upload-heading"><Heading slot="title" id="inventory-upload-title">Add inventory</Heading><button type="button" aria-label="Close inventory upload" onClick={() => onUploadOpenChange?.(false)} disabled={uploading}>×</button></div><label htmlFor="inventory-count-location">Location</label><Dropdown id="inventory-count-location" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown><input id="inventory-count-file" ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={(event) => upload(event.target.files?.[0])} /><button type="button" className={`inventory-upload-dropzone${!locationId || uploading ? " is-disabled" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (locationId && !uploading) upload(event.dataTransfer.files?.[0]); }} onClick={() => fileInput.current?.click()} disabled={!locationId || uploading}><UploadCloud02 /><strong>{uploading ? "Uploading…" : "Drop file here or browse"}</strong></button><div className="inventory-upload-actions"><Button type="button" onClick={() => onUploadOpenChange?.(false)} disabled={uploading}>Cancel</Button></div>{error ? <p className="ops-error" role="alert" aria-live="assertive">{error}</p> : null}</Dialog></Modal></ModalOverlay>;
+  const uploadDialog = <UploadDialog title="Add inventory" closeLabel="Close inventory upload" isOpen={uploadOpen} onOpenChange={(open) => !uploading && onUploadOpenChange?.(open)} isDismissable={!uploading} closeDisabled={uploading} error={error}><label className="shared-upload-field" htmlFor="inventory-count-location"><span>Location</span><Dropdown id="inventory-count-location" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown></label><UploadDropzone inputId="inventory-count-file" inputRef={fileInput} accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={!locationId || uploading} onChange={(event) => upload(event.target.files?.[0])} onDrop={(event) => upload(event.dataTransfer.files?.[0])} text={uploading ? "Uploading…" : "Drop file here or browse"} hint="XLSX · 2 MB maximum" /></UploadDialog>;
 
   if (loading) return <div className="inventory-empty"><Package /><strong>Loading inventory count</strong></div>;
   if (!stocktake) return <>{uploadDialog}{error && !uploadOpen ? <p className="ops-error" role="alert">{error}</p> : null}{listLoading ? <div className="inventory-empty"><Package /><strong>Loading uploaded files</strong></div> : imports.length ? <><div className="inventory-file-list"><table className="inventory-file-table" aria-label="Uploaded inventory files"><thead><tr><th scope="col">File</th><th scope="col">Location</th><th scope="col">Uploaded</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead><tbody>{imports.map((entry) => <tr key={entry.id}><th scope="row"><span className="inventory-file-name"><FileCheck02 /><span><strong>{entry.sourceFileName}</strong><small>{entry.rowCount} inventory rows</small></span></span></th><td>{entry.locationName}</td><td>{new Date(entry.createdAt).toLocaleString()}</td><td><span className={`inventory-state is-${entry.status}`}>{entry.status}</span></td><td><div className="inventory-file-actions">{entry.downloadUrl ? <a href={entry.downloadUrl}>Download</a> : null}<Button type="button" data-inventory-import={entry.id} onClick={() => openImport(entry.id)}>Review</Button></div></td></tr>)}</tbody></table></div><Pagination currentPage={importPage} pageCount={importMeta.pageCount} setPage={setImportPage} total={importMeta.total} label="files" loading={listLoading} /></> : <div className="inventory-empty"><FileCheck02 /><strong>No inventory files uploaded</strong><p>Choose Add inventory to upload the first XLSX file.</p></div>}</>;

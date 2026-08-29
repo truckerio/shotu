@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch } from "./inventory-labels.repo.js";
 
+const INVENTORY_COUNT_BATCH_UNIT_LIMIT = 500;
+
 function publicLine(row) {
   return {
     id: row.id,
@@ -424,7 +426,7 @@ export async function resolveInventoryCountImportLine({
   }
 }
 
-function chunksByUnitLimit(lines, limit = 500) {
+function chunksByUnitLimit(lines, limit = INVENTORY_COUNT_BATCH_UNIT_LIMIT) {
   const chunks = [];
   let current = [];
   let total = 0;
@@ -496,11 +498,6 @@ export async function applyInventoryCountImport({
       });
       await client.query("commit");
       return { kind: "replay", import: value };
-    }
-    const totalUnits = ready.rows.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-    if (totalUnits > 500) {
-      await client.query("rollback");
-      return { kind: "unit_limit_exceeded", totalUnits };
     }
     for (const line of ready.rows) {
       const existing = await client.query(
@@ -643,6 +640,11 @@ export async function applyInventoryCountImport({
     client.release();
   }
 }
+
+export const inventoryCountImportInternals = {
+  batchUnitLimit: INVENTORY_COUNT_BATCH_UNIT_LIMIT,
+  chunksByUnitLimit,
+};
 
 export async function listInventoryCountImports({ companyIds, locationIds = [], isAdmin = false, limit = 20, offset = 0 }) {
   const [result, count] = await Promise.all([

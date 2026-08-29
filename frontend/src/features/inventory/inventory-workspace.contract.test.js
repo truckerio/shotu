@@ -35,6 +35,8 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, />Invoice<\/Button>/);
   assert.doesNotMatch(workspace, /<span>Local inventory<\/span>/);
   assert.match(workspace, /aria-label="Upload invoices" title="Upload invoices" aria-haspopup="dialog"/);
+  assert.match(workspace, /inventoryCountPanelPromise \|\|= import\("\.\/InventoryCountImportPanel\.jsx"\)[\s\S]*default: module\.InventoryCountImportPanel/);
+  assert.match(workspace, /<Suspense fallback=/);
   assert.match(workspace, /invoiceWorkflowOpen \? \(\s*!workflowDetail \? <Button/);
   assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
   assert.match(workspace, /inventoryAction", "upload-invoice"/);
@@ -165,13 +167,23 @@ test("part location drilldown creates and prints serialized child QR labels", as
 });
 
 test("inventory files use server pagination and accessible upload dialog", async () => {
-  const panel = await readFile(new URL("./InventoryCountImportPanel.jsx", import.meta.url), "utf8");
+  const [panel, sharedDialog, sharedStyles] = await Promise.all([
+    readFile(new URL("./InventoryCountImportPanel.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/ui/UploadDialog.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/ui/upload-dialog.css", import.meta.url), "utf8"),
+  ]);
   assert.match(panel, /count-imports\?page=\$\{importPage\}&pageSize=10/);
   assert.match(panel, /pageCount: Number\(result\.pageCount\) \|\| 1/);
-  assert.match(panel, /<ModalOverlay/);
+  assert.match(panel, /<UploadDialog title="Add inventory"/);
   assert.match(panel, /isDismissable=\{!uploading\}/);
-  assert.match(panel, /type="button" className=\{`inventory-upload-dropzone/);
-  assert.match(panel, /aria-label="Close inventory upload"/);
+  assert.match(panel, /<UploadDropzone inputId="inventory-count-file"/);
+  assert.match(panel, /closeLabel="Close inventory upload"/);
+  assert.match(sharedDialog, /<ModalOverlay/);
+  assert.match(sharedDialog, /aria-labelledby=\{titleId\}/);
+  assert.match(sharedDialog, /className="shared-upload-native-input"/);
+  assert.match(sharedDialog, /aria-live="assertive"/);
+  assert.match(sharedStyles, /\.shared-upload-dropzone/);
+  assert.match(sharedStyles, /@media \(max-width:700px\)/);
   assert.match(panel, /<Pagination currentPage=\{importPage\}/);
   assert.match(panel, /label: stocktake\.sourceFileName \|\| "Inventory file"/);
   assert.match(panel, /onBack: showFileList/);

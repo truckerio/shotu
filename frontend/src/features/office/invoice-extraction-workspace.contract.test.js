@@ -62,21 +62,25 @@ test("invoice upload returns through the background queue and polls durable run 
 });
 
 test("header upload control opens one compact dialog and leaves vendor identification to review", async () => {
-  const source = await readFile(workspaceUrl, "utf8");
-  assert.match(source, /locations\.length > 1/);
-  assert.match(source, /className="invoice-upload-context"/);
+  const [source, sharedDialog, sharedStyles] = await Promise.all([
+    readFile(workspaceUrl, "utf8"),
+    readFile(new URL("../../components/ui/UploadDialog.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/ui/upload-dialog.css", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /import \{ Dialog, Heading, Modal, ModalOverlay \} from "react-aria-components"/);
   assert.match(source, /import \{ Button \} from "\.\.\/\.\.\/components\/ui\/Button\.jsx"/);
+  assert.match(source, /import \{ UploadDialog, UploadDropzone \} from "\.\.\/\.\.\/components\/ui\/UploadDialog\.jsx"/);
   assert.match(source, /uploadOpen: controlledUploadOpen, onUploadOpenChange/);
   assert.match(source, /const uploadOpen = controlledUploadOpen \?\? internalUploadOpen/);
   assert.match(source, /onUploadOpenChange\?\.\(open\)/);
   assert.doesNotMatch(source, /invoice-upload-launcher/);
-  assert.match(source, /<ModalOverlay className="invoice-upload-overlay"/);
-  assert.match(source, /<Dialog className="invoice-upload-dialog" aria-labelledby="invoice-upload-title">/);
-  assert.match(source, /aria-label="Close invoice upload"/);
-  assert.doesNotMatch(source, />Cancel<\/Button>/);
-  assert.match(source, /onChange=\{chooseFiles\} multiple required disabled=\{busy === "extract"\}/);
-  assert.match(source, /onDragOver=\{\(event\) => event\.preventDefault\(\)\} onDrop=\{dropFiles\}/);
+  const uploadDialogSource = source.slice(source.indexOf("const uploadDialog"), source.indexOf("const leaveReviewDialog"));
+  assert.match(source, /<UploadDialog[\s\S]*?title="Upload invoices"/);
+  assert.match(source, /closeLabel="Close invoice upload"/);
+  assert.doesNotMatch(uploadDialogSource, />Cancel<\/Button>/);
+  assert.doesNotMatch(sharedDialog, />Cancel<\/Button>/);
+  assert.match(source, /<UploadDropzone[\s\S]*?onChange=\{chooseFiles\} onDrop=\{dropFiles\} multiple disabled=\{busy === "extract"\}/);
+  assert.doesNotMatch(source, /<UploadDropzone[^>]*required/);
   assert.match(source, /PDF or image · 10 MB each/);
   assert.match(source, /const MAX_ENQUEUE_CONCURRENCY = 3/);
   assert.match(source, /enqueueUploadsInLanes\(uploads, token\)/);
@@ -84,6 +88,10 @@ test("header upload control opens one compact dialog and leaves vendor identific
   assert.match(source, /Invoice \{batchIndex \+ 1\} of \{batchRuns\.length\} · \{batchProgress\.ready\} ready/);
   assert.match(source, /isDismissable=\{busy !== "extract"\}/);
   assert.match(source, /Encrypted · Training use requires your approval/);
+  assert.match(sharedDialog, /className="shared-upload-dialog"/);
+  assert.match(sharedDialog, /<UploadCloud02 aria-hidden="true"/);
+  assert.match(sharedStyles, /border:1\.5px dashed #b2ccff/);
+  assert.match(sharedStyles, /border-radius:24px/);
   assert.doesNotMatch(source, /More options/);
   assert.doesNotMatch(source, /vendorHint|Vendor name \(optional\)/);
   assert.doesNotMatch(source, /Extract a parts invoice/);

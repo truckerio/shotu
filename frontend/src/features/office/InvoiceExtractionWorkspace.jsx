@@ -1,9 +1,10 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { CheckCircle, File02, Plus, RefreshCw01, Trash01, UploadCloud02, XClose } from "@untitledui/icons";
+import { CheckCircle, File02, RefreshCw01, Trash01, UploadCloud02, XClose } from "@untitledui/icons";
 import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { OptionalSection } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
+import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { api } from "../../lib/api.js";
 import { InvoiceDocumentViewer } from "./InvoiceDocumentViewer.jsx";
 import { InvoiceHistoryPanel } from "./InvoiceHistoryPanel.jsx";
@@ -562,38 +563,24 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   }
 
   const uploadDialog = (
-    <ModalOverlay className="invoice-upload-overlay" isOpen={uploadOpen && !draft} isDismissable={busy !== "extract"} onOpenChange={(open) => { if (busy !== "extract") setUploadOpen(open); }}>
-      <Modal className="invoice-upload-modal">
-        <Dialog className="invoice-upload-dialog" aria-labelledby="invoice-upload-title">
-          <div className="invoice-upload-dialog-heading">
-            <div><Heading slot="title" id="invoice-upload-title">Upload invoices</Heading><p>Add files for extraction and review.</p></div>
-            <button type="button" aria-label="Close invoice upload" onClick={() => setUploadOpen(false)} disabled={busy === "extract"}><XClose aria-hidden="true" /></button>
-          </div>
-          <form onSubmit={extract}>
-            {locations.length > 1 ? (
-              <label><span>Shop</span><Dropdown value={locationId} onChange={(event) => setLocationId(event.target.value)} required><option value="">Select shop</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown></label>
-            ) : selectedLocation ? (
-              <p className="invoice-upload-context"><span>Shop</span><strong>{selectedLocation.name}</strong></p>
-            ) : (
-              <p className="invoice-upload-context" role="status">Loading shop…</p>
-            )}
-            <input ref={fileInputRef} id="invoice-file" className="invoice-file-native" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={chooseFiles} multiple required disabled={busy === "extract"} />
-            <label className={`invoice-file-picker${uploads.length ? " has-file" : ""}`} htmlFor="invoice-file" onDragOver={(event) => event.preventDefault()} onDrop={dropFiles}>
-              <span className="invoice-file-picker-icon"><Plus aria-hidden="true" /></span>
-              <span><strong>{uploads.length ? "Choose different invoices" : "Drop or click to upload"}</strong><small>PDF or image · 10 MB each</small></span>
-              <span className="invoice-file-picker-action">Browse</span>
-            </label>
+    <UploadDialog
+      title="Upload invoices"
+      closeLabel="Close invoice upload"
+      isOpen={uploadOpen && !draft}
+      isDismissable={busy !== "extract"}
+      closeDisabled={busy === "extract"}
+      onOpenChange={(open) => { if (busy !== "extract") setUploadOpen(open); }}
+      error={error}
+      status={message}
+      actions={uploads.length ? <Button form="invoice-upload-form" variant="primary" icon={busy === "extract" ? LoadingRefreshIcon : UploadCloud02} type="submit" disabled={!locationId || Boolean(busy)}>{busy === "extract" ? "Extracting…" : `Extract ${uploads.length} invoice${uploads.length === 1 ? "" : "s"}`}</Button> : null}
+      footer={<p>Encrypted · Training use requires your approval</p>}
+    >
+          <form id="invoice-upload-form" onSubmit={extract}>
+            <label className="shared-upload-field" htmlFor="invoice-upload-location"><span>Shop</span><Dropdown id="invoice-upload-location" value={locationId} onChange={(event) => setLocationId(event.target.value)} required disabled={!locations.length}><option value="">{selectedLocation ? "Select shop" : "Loading shop…"}</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown></label>
+            <UploadDropzone inputId="invoice-file" inputRef={fileInputRef} accept="image/png,image/jpeg,image/webp,application/pdf" onChange={chooseFiles} onDrop={dropFiles} multiple disabled={busy === "extract"} text={uploads.length ? "Choose different invoices" : "Drop files here or browse"} hint="PDF or image · 10 MB each" />
             {uploads.length ? <div className="invoice-selected-files"><div><strong>{uploads.length} invoice{uploads.length === 1 ? "" : "s"} selected</strong><Button type="button" onClick={clearBatch} disabled={busy === "extract"}>Clear</Button></div><ul>{uploads.map((upload) => <li key={upload.id}><File02 /><span><strong>{upload.file.name}</strong><small>{(upload.file.size / 1024 / 1024).toFixed(2)} MB</small></span></li>)}</ul></div> : null}
-            {error ? <p className="ops-error" role="alert">{error}</p> : null}
-            {message ? <p className="invoice-status" role="status">{message}</p> : null}
-            {uploads.length ? <div className="invoice-upload-dialog-actions">
-              <Button variant="primary" icon={busy === "extract" ? LoadingRefreshIcon : UploadCloud02} type="submit" disabled={!locationId || Boolean(busy)}>{busy === "extract" ? "Extracting…" : `Extract ${uploads.length} invoice${uploads.length === 1 ? "" : "s"}`}</Button>
-            </div> : null}
           </form>
-          <p className="invoice-privacy-note">Encrypted · Training use requires your approval</p>
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+    </UploadDialog>
   );
 
   const leaveReviewDialog = (

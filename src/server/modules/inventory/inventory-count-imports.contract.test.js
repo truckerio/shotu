@@ -46,7 +46,8 @@ test("stock count apply is scoped, locked, idempotent, serialized, and fails clo
   assert.match(repository, /count-import:\$\{stocktake\.id\}:row:/i);
   assert.match(repository, /source_provider = 'local'/i);
   assert.match(repository, /\) do nothing\s+returning id/i);
-  assert.match(repository, /totalUnits > 500/i);
+  assert.match(repository, /INVENTORY_COUNT_BATCH_UNIT_LIMIT = 500/i);
+  assert.doesNotMatch(repository, /unit_limit_exceeded/i);
   assert.match(repository, /> 100_000_000/i);
   assert.match(repository, /inventory_count_source_access_events/i);
   assert.match(repository, /source_retention_until <= now\(\)/i);
@@ -75,8 +76,11 @@ test("inventory UI keeps count upload inside Inventory and requires physical con
   assert.match(panel, /MAX_ROWS = 500/);
   assert.match(panel, /Counted at \{stocktake\.locationName\}/);
   assert.match(panel, /confirmation: "physically_counted"/);
+  const applySource = panel.slice(panel.indexOf("async function applyReady"), panel.indexOf("const uploadDialog"));
+  assert.doesNotMatch(applySource, /timeoutMs/);
   assert.match(panel, /setConfirmed\(false\);\s*\}, \[stocktake\?\.version\]\)/);
-  assert.match(panel, /import\("exceljs\/dist\/exceljs\.min\.js"\)/);
+  assert.match(panel, /import ExcelJS from "exceljs\/dist\/exceljs\.min\.js"/);
+  assert.doesNotMatch(panel, /await import\("exceljs/);
 });
 
 test("inventory count review uses the shared accessible table and canonical bin or shelf field", () => {

@@ -1,8 +1,5 @@
 .invoice-extraction-workspace { background:#fff; border:1px solid #e4e7ec; border-radius:12px; margin:16px; padding:20px; min-width:0; }
 .invoice-intake-home { display:grid; gap:24px; min-width:0; }
-.invoice-file-picker-icon { align-items:center; background:#101828; border-radius:9px; color:#fff; display:inline-flex; height:44px; justify-content:center; width:44px; }
-.invoice-file-picker-icon svg { height:18px; width:18px; }
-.invoice-file-picker-action { color:#475467; font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 .invoice-upload-overlay { align-items:center; background:rgb(16 24 40 / 54%); display:flex; inset:0; justify-content:center; padding:20px; position:fixed; z-index:1200; }
 .invoice-upload-modal { outline:none; width:min(560px,100%); }
 .invoice-upload-dialog { background:#fff; border-radius:18px; box-shadow:0 24px 48px rgb(16 24 40 / 24%); display:grid; gap:18px; max-height:min(780px,calc(100vh - 40px)); outline:none; overflow:auto; padding:22px; }
@@ -19,20 +16,11 @@
 .invoice-extraction-workspace form,.invoice-upload-dialog form { display:grid; gap:16px; }
 .invoice-extraction-workspace form { margin-top:24px; }
 .invoice-extraction-workspace label,.invoice-upload-dialog label { display:grid; gap:6px; min-width:0; }
-.invoice-extraction-workspace label>span,.invoice-upload-dialog label:not(.invoice-file-picker)>span,.invoice-line-card legend { color:#344054; font-size:14px; font-weight:600; }
+.invoice-extraction-workspace label>span,.invoice-upload-dialog label>span,.invoice-line-card legend { color:#344054; font-size:14px; font-weight:600; }
 .invoice-extraction-workspace input,.invoice-extraction-workspace select,.invoice-upload-dialog input,.invoice-upload-dialog select { background:#fff; border:1px solid #d0d5dd; border-radius:8px; box-sizing:border-box; font:inherit; min-height:44px; padding:9px 12px; width:100%; }
 .invoice-extraction-workspace input:focus,.invoice-extraction-workspace select:focus,.invoice-upload-dialog input:focus,.invoice-upload-dialog select:focus { border-color:#1570ef; outline:3px solid #d1e9ff; }
 .invoice-extraction-workspace button { align-items:center; display:inline-flex; gap:8px; justify-content:center; min-height:44px; }
 .invoice-extraction-workspace button svg { height:18px; width:18px; }
-.invoice-upload-context { align-items:center; color:#667085; display:flex; font-size:13px; gap:8px; min-height:24px; }
-.invoice-upload-context strong { color:#344054; font-size:14px; }
-.invoice-upload-dialog .invoice-file-native { height:1px; min-height:0; opacity:0; overflow:hidden; padding:0; position:absolute; width:1px; }
-.invoice-file-picker { align-items:center; background:#fff; border:1px solid #d0d5dd; border-radius:10px; cursor:pointer; display:grid!important; gap:12px!important; grid-template-columns:44px minmax(0,1fr) auto; min-height:72px; padding:12px; transition:border-color .15s ease,background .15s ease; }
-.invoice-file-picker:hover { background:#f5f8ff; border-color:#1570ef; }
-.invoice-file-native:focus-visible+.invoice-file-picker { border-color:#1570ef; outline:3px solid #d1e9ff; }
-.invoice-file-picker>span:nth-child(2) { display:grid; gap:2px; }
-.invoice-file-picker strong { color:#101828; }
-.invoice-file-picker small { color:#667085; font-weight:400; }
 .invoice-selected-files { background:#f9fafb; border:1px solid #eaecf0; border-radius:8px; padding:10px 12px; }
 .invoice-selected-files>div { align-items:center; display:flex; justify-content:space-between; }
 .invoice-selected-files>div>.button { background:transparent; border-color:transparent; color:#175cd3; min-height:44px; padding:4px 8px; }
@@ -43,7 +31,6 @@
 .invoice-selected-files li strong { overflow-wrap:anywhere; }
 .invoice-selected-files li small { color:#667085; }
 .invoice-upload-dialog-actions { align-items:center; display:flex; gap:8px; justify-content:flex-end; }
-.invoice-privacy-note { color:#667085; font-size:12px; margin:0!important; }
 .invoice-history { border-top:1px solid #eaecf0; display:grid; gap:14px; min-width:0; padding-top:20px; }
 .invoice-history-heading,.invoice-history-heading>div { display:grid; gap:3px; }
 .invoice-history-heading h3,.invoice-history-heading p { margin:0; }
@@ -175,8 +162,6 @@
   .invoice-upload-overlay { align-items:flex-end; padding:0; }
   .invoice-upload-modal { width:100%; }
   .invoice-upload-dialog { border-radius:16px 16px 0 0; max-height:min(88vh,760px); padding:18px 14px max(18px,env(safe-area-inset-bottom)); }
-  .invoice-file-picker-action { display:none; }
-  .invoice-file-picker { grid-template-columns:44px minmax(0,1fr); }
   .invoice-upload-dialog-actions .button { flex:1 1 0; }
   .invoice-fields-grid,.invoice-line-card { grid-template-columns:minmax(0,1fr); }
   .invoice-field-heading { align-items:flex-start; }

@@ -225,13 +225,6 @@ export async function confirmInventoryCount(importId, input, requestContext, dep
       409,
     );
   }
-  if (result.kind === "unit_limit_exceeded") {
-    throw inputError(
-      "INVENTORY_COUNT_UNIT_LIMIT_EXCEEDED",
-      `Opening count would create ${result.totalUnits} serialized units. Split and review count so each apply contains at most 500 units.`,
-      413,
-    );
-  }
   return { import: result.import, replayed: result.kind === "replay" };
 }
 

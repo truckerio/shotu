@@ -149,7 +149,7 @@ test("opening-count apply rejects office role before any repository write", asyn
   assert.equal(wrote, false);
 });
 
-test("opening-count apply blocks Odoo authority and oversized serialization", async () => {
+test("opening-count apply blocks Odoo authority", async () => {
   const admin = context({ actor: { role: "admin" } });
   const qrOptions = { signingKey: Buffer.alloc(32, 4).toString("base64") };
   await assert.rejects(
@@ -158,12 +158,5 @@ test("opening-count apply blocks Odoo authority and oversized serialization", as
       applyImport: async () => ({ kind: "odoo_authority_conflict", sourceRow: 8 }),
     }),
     (error) => error.code === "INVENTORY_COUNT_ODOO_AUTHORITY_CONFLICT" && /Odoo-managed/.test(error.message),
-  );
-  await assert.rejects(
-    confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, admin, {
-      qrOptions,
-      applyImport: async () => ({ kind: "unit_limit_exceeded", totalUnits: 501 }),
-    }),
-    (error) => error.code === "INVENTORY_COUNT_UNIT_LIMIT_EXCEEDED" && error.statusCode === 413,
   );
 });

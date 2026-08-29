@@ -207,20 +207,6 @@
 .inventory-file-table small { color: #667085; font-size: 12px; }
 .inventory-file-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .inventory-file-actions a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 8px; color: #175cd3; font-size: 13px; font-weight: 650; text-decoration: none; }
-.inventory-upload-overlay { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgb(16 24 40 / 54%); }
-.inventory-upload-modal { width: min(500px, 100%); outline: none; }
-.inventory-upload-dialog { display: grid; gap: 18px; padding: 26px; border-radius: 24px; background: #fff; box-shadow: 0 24px 48px rgb(16 24 40 / 24%); outline: none; }
-.inventory-upload-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.inventory-upload-heading h2 { margin: 0; font-size: 20px; }
-.inventory-upload-heading > button { width: 40px; height: 40px; border: 0; border-radius: 8px; color: #475467; background: transparent; font-size: 24px; cursor: pointer; }
-.inventory-upload-dialog > label { color: #175cd3; font-size: 13px; font-weight: 700; }
-.inventory-upload-dialog > select { min-height: 48px; margin-top: -12px; padding: 0 40px 0 13px; border: 1.5px solid #84adff; border-radius: 10px; color: #1849a9; background-color: #f5f8ff; font-weight: 650; }
-.inventory-upload-dropzone { display: grid; justify-items: center; gap: 9px; min-height: 168px; padding: 28px 24px; border: 1.5px dashed #b2ccff; border-radius: 18px; color: #1570ef; background: #f8faff; cursor: pointer; }
-.inventory-upload-dropzone:focus-visible, .inventory-upload-heading > button:focus-visible { outline: 3px solid #84caff; outline-offset: 2px; }
-.inventory-upload-dropzone.is-disabled { color: #98a2b3; border-color: #d0d5dd; background: #f9fafb; cursor: not-allowed; }
-.inventory-upload-dropzone svg { width: 34px; height: 34px; padding: 9px; box-sizing: content-box; border-radius: 12px; background: #eaf2ff; }
-.inventory-upload-dropzone strong { color: #344054; font-size: 15px; }
-.inventory-upload-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .inventory-state.is-ready, .inventory-state.is-applied { color: #067647; background: #ecfdf3; }
 .inventory-state.is-unmatched, .inventory-state.is-duplicate, .inventory-state.is-invalid_quantity, .inventory-state.is-draft, .inventory-state.is-partial { color: #b54708; background: #fffaeb; }
 @media (max-width: 760px) {
@@ -247,9 +233,6 @@
   .inventory-count-master-cell { min-width: 0; }
   .inventory-count-more { justify-content: space-between; }
   .inventory-count-review-toolbar { grid-template-columns: 1fr; }
-  .inventory-upload-overlay { align-items: flex-end; padding: 0; }
-  .inventory-upload-modal { width: 100%; }
-  .inventory-upload-dialog { border-radius: 16px 16px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .inventory-serial-create, .inventory-unit-detail { animation: none; }

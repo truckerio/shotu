@@ -1,5 +1,5 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, FileCheck02, Package, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
@@ -17,7 +17,6 @@ import {
 } from "../../components/operations/OperationalCollectionPage.jsx";
 import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
-import { InventoryCountImportPanel } from "./InventoryCountImportPanel.jsx";
 import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
 import {
@@ -28,6 +27,14 @@ import {
 } from "./inventory-workspace-model.js";
 import { hasRefreshedPartIdentityVersion } from "./part-identity-editor-model.js";
 import "./inventory-workspace.css";
+
+let inventoryCountPanelPromise;
+function loadInventoryCountPanel() {
+  inventoryCountPanelPromise ||= import("./InventoryCountImportPanel.jsx")
+    .then((module) => ({ default: module.InventoryCountImportPanel }));
+  return inventoryCountPanelPromise;
+}
+const InventoryCountImportPanel = lazy(loadInventoryCountPanel);
 
 function quantity(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(Number(value || 0));
@@ -272,7 +279,7 @@ export function InventoryWorkspace({ canApplyInventoryCount = false, presentatio
       actions={inventoryActions}
     >
 
-      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /> : <>
+      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading inventory files</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 
       <OperationalCollectionTabs
         className="inventory-stock-tabs"

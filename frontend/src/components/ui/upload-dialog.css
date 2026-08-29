@@ -1,0 +1,40 @@
+.shared-upload-overlay { align-items:center; background:rgb(16 24 40 / 54%); display:flex; inset:0; justify-content:center; padding:20px; position:fixed; z-index:1200; }
+.shared-upload-modal { outline:none; width:min(500px,100%); }
+.shared-upload-dialog { background:#fff; border-radius:24px; box-shadow:0 24px 48px rgb(16 24 40 / 24%); display:grid; gap:18px; max-height:min(780px,calc(100vh - 40px)); outline:none; overflow:auto; padding:26px; }
+.shared-upload-heading { align-items:flex-start; display:flex; gap:16px; justify-content:space-between; }
+.shared-upload-heading>div { display:grid; gap:3px; }
+.shared-upload-heading h2,.shared-upload-heading p { margin:0; }
+.shared-upload-heading h2 { color:#101828; font-size:20px; }
+.shared-upload-heading p { color:#667085; font-size:13px; }
+.shared-upload-heading>button { align-items:center; background:transparent; border:0; border-radius:8px; color:#475467; cursor:pointer; display:inline-flex; flex:0 0 auto; height:40px; justify-content:center; padding:10px; width:40px; }
+.shared-upload-heading>button:hover { background:#f2f4f7; }
+.shared-upload-heading>button:focus-visible { outline:3px solid #84caff; outline-offset:2px; }
+.shared-upload-heading>button:disabled { color:#98a2b3; cursor:not-allowed; }
+.shared-upload-heading svg { height:18px; width:18px; }
+.shared-upload-body { display:grid; gap:16px; }
+.shared-upload-body form { display:grid; gap:16px; }
+.shared-upload-field { color:#175cd3; display:grid; font-size:13px; font-weight:700; gap:8px; min-width:0; }
+.shared-upload-field>.dropdown-select { width:100%; }
+.shared-upload-field .dropdown-select-trigger { min-height:48px; width:100%; }
+.shared-upload-native-input { clip-path:inset(50%); height:1px; overflow:hidden; position:absolute; white-space:nowrap; width:1px; }
+.shared-upload-dropzone { align-items:center; background:#f8faff; border:1.5px dashed #b2ccff; border-radius:18px; cursor:pointer; display:grid; gap:12px; justify-items:center; min-height:168px; padding:28px 24px; text-align:center; }
+.shared-upload-dropzone:hover { background:#f5f8ff; border-color:#1570ef; }
+.shared-upload-native-input:focus-visible+.shared-upload-dropzone { outline:3px solid #84caff; outline-offset:2px; }
+.shared-upload-dropzone.is-disabled { background:#f9fafb; border-color:#d0d5dd; color:#98a2b3; cursor:not-allowed; }
+.shared-upload-dropzone-icon { align-items:center; background:#eaf2ff; border-radius:12px; color:#1570ef; display:inline-flex; height:52px; justify-content:center; width:52px; }
+.shared-upload-dropzone-icon svg { height:28px; width:28px; }
+.shared-upload-dropzone-copy { display:grid; gap:3px; }
+.shared-upload-dropzone strong { color:#344054; font-size:15px; }
+.shared-upload-dropzone small { color:#667085; font-size:12px; font-weight:400; }
+.shared-upload-actions { align-items:center; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.shared-upload-feedback { margin:0; }
+.shared-upload-status { color:#067647; margin:0; }
+.shared-upload-footer { color:#667085; font-size:12px; }
+.shared-upload-footer p { margin:0; }
+
+@media (max-width:700px) {
+  .shared-upload-overlay { align-items:flex-end; padding:0; }
+  .shared-upload-modal { width:100%; }
+  .shared-upload-dialog { border-radius:16px 16px 0 0; max-height:min(88vh,760px); padding:18px 14px max(18px,env(safe-area-inset-bottom)); }
+  .shared-upload-actions .button { flex:1 1 0; }
+}
