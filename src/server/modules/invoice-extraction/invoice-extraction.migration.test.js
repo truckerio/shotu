@@ -4,6 +4,7 @@ import test from "node:test";
 
 const migrationUrl = new URL("../../db/migrations/061_invoice_extraction_learning.sql", import.meta.url);
 const corpusMigrationUrl = new URL("../../db/migrations/062_invoice_training_corpus.sql", import.meta.url);
+const reextractionAuditMigrationUrl = new URL("../../db/migrations/086_invoice_source_reextraction_audit.sql", import.meta.url);
 
 test("invoice learning migration owns tenant identity, concurrency, memory governance, and lookup indexes", async () => {
   const sql = await readFile(migrationUrl, "utf8");
@@ -42,4 +43,11 @@ test("layout template migration is tenant scoped, privacy bounded, and requires 
   assert.match(sql, /evidence_count >= 3/i);
   assert.match(sql, /template_learn/i);
   assert.match(sql, /invoice_layout_templates_match_idx/i);
+});
+
+test("re-extraction source access has a dedicated durable audit action", async () => {
+  const sql = await readFile(reextractionAuditMigrationUrl, "utf8");
+  assert.match(sql, /drop constraint invoice_source_access_events_action_check/i);
+  assert.match(sql, /add constraint invoice_source_access_events_action_check/i);
+  assert.match(sql, /'view', 'training_export', 'retention_delete', 'reextract'/i);
 });

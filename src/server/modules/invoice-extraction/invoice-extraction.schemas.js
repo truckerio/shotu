@@ -53,6 +53,10 @@ export const extractInvoiceInputSchema = z.object({
   vendorHint: boundedText(180).optional().default(""),
 }).strict();
 
+export const reextractInvoiceInputSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(120),
+}).strict();
+
 export const reviewInvoiceInputSchema = z.object({
   expectedVersion: z.number().int().min(1),
   idempotencyKey: z.string().trim().min(8).max(120),

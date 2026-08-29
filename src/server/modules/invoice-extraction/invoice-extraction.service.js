@@ -32,7 +32,7 @@ import {
   localTemplateDraftIsUsable,
   matchInvoiceTemplate,
 } from "./invoice-template-learning.js";
-import { extractInvoiceInputSchema, normalizeVendorKey, reviewInvoiceInputSchema } from "./invoice-extraction.schemas.js";
+import { extractInvoiceInputSchema, normalizeVendorKey, reextractInvoiceInputSchema, reviewInvoiceInputSchema } from "./invoice-extraction.schemas.js";
 import { extractInvoiceWithLocalOcr, extractNativePdfText, ocrObservation } from "./providers/local-ocr.provider.js";
 import { extractInvoiceWithOpenAI } from "./providers/openai-invoice.provider.js";
 import { classifyInvoiceAiContext } from "./invoice-ai-security.js";
@@ -416,6 +416,55 @@ export async function readInvoiceExtraction(runId, requestContext, dependencies 
   if (!row) throw invoiceNotFound();
   if (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(row.location_id)) throw invoiceNotFound();
   return { run: publicInvoiceExtractionRun(row) };
+}
+
+export async function reextractInvoice(runId, input, requestContext, dependencies = {}) {
+  const parsed = reextractInvoiceInputSchema.parse(input);
+  const row = await (dependencies.getRun || getInvoiceExtractionRun)({
+    runId,
+    companyIds: [...requestContext.companyIds],
+  });
+  if (!row || (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(row.location_id))) throw invoiceNotFound();
+  if (row.status === "processing") {
+    throw new InvoiceExtractionError("This invoice is still extracting.", {
+      code: "invoice_extraction_in_progress",
+      statusCode: 409,
+      retryable: true,
+    });
+  }
+  if (row.local_receipt_status === "posted") {
+    throw new InvoiceExtractionError("Reverse the posted inventory receipt before re-extracting this invoice.", {
+      code: "invoice_receipt_reversal_required",
+      statusCode: 409,
+    });
+  }
+  const source = await (dependencies.getSource || getInvoiceSourceDocument)({
+    runId,
+    companyIds: [...requestContext.companyIds],
+    locationIds: [...requestContext.locationIds],
+    isAdmin: requestContext.actor.role === "admin",
+  });
+  if (!source) {
+    throw new InvoiceExtractionError("The original invoice file is no longer available for re-extraction.", {
+      code: "invoice_source_unavailable",
+      statusCode: 409,
+    });
+  }
+  const bytes = (dependencies.decryptDocument || decryptInvoiceDocument)(source);
+  await (dependencies.recordSourceAccess || recordInvoiceSourceAccess)({
+    source,
+    actorId: requestContext.actor.id,
+    action: "reextract",
+  });
+  const previousDraft = row.reviewed_draft || row.extracted_draft;
+  return (dependencies.extractInvoice || extractInvoice)({
+    locationId: row.location_id,
+    fileName: row.file_name,
+    mimeType: row.mime_type,
+    dataUrl: `data:${row.mime_type};base64,${Buffer.from(bytes).toString("base64")}`,
+    idempotencyKey: parsed.idempotencyKey,
+    vendorHint: String(previousDraft?.vendorName?.value || "").slice(0, 180),
+  }, requestContext, dependencies);
 }
 
 export async function reviewInvoice(runId, input, requestContext, dependencies = {}) {

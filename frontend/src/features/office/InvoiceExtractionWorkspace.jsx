@@ -117,6 +117,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const [internalUploadOpen, setInternalUploadOpen] = useState(false);
   const [reviewDirty, setReviewDirty] = useState(false);
   const [leaveReviewOpen, setLeaveReviewOpen] = useState(false);
+  const [reextractOpen, setReextractOpen] = useState(false);
   const fileInputRef = useRef(null);
   const reviewTitleRef = useRef(null);
   const reviewKeyRef = useRef("");
@@ -302,6 +303,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     setReceipt(null);
     setReviewDirty(false);
     setLeaveReviewOpen(false);
+    setReextractOpen(false);
     reviewKeyRef.current = "";
     rememberRun();
   }
@@ -498,6 +500,32 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     }
   }
 
+  async function reextract() {
+    if (!run?.id || busy) return;
+    setReextractOpen(false);
+    setBusy("reextract");
+    setError("");
+    setMessage("Re-extracting invoice from the original file…");
+    try {
+      const result = await api(`/api/office/invoice-extractions/${encodeURIComponent(run.id)}/reextract`, {
+        method: "POST",
+        body: JSON.stringify({ idempotencyKey: `reextract-${crypto.randomUUID()}` }),
+      });
+      const completedRun = await waitForCompletedRun(result.run);
+      const entry = { uploadId: "", fileName: completedRun.fileName, run: completedRun };
+      setUploads([]);
+      setBatchRuns([entry]);
+      batchRunsRef.current = [entry];
+      showBatchEntry(entry, 0);
+      setMessage("New extraction ready. The previous invoice record remains in history.");
+    } catch (nextError) {
+      setError(nextError.message);
+      setMessage("");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function confirmPhysicalReceipt() {
     setBusy("receive");
     setError("");
@@ -585,9 +613,27 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     </ModalOverlay>
   );
 
+  const reextractDialog = (
+    <ModalOverlay className="invoice-upload-overlay" isOpen={reextractOpen} isDismissable={!busy} onOpenChange={(open) => { if (!busy) setReextractOpen(open); }}>
+      <Modal>
+        <Dialog className="invoice-upload-dialog invoice-review-leave-dialog" aria-labelledby="invoice-reextract-title">
+          <div className="invoice-upload-heading">
+            <div><Heading slot="title" id="invoice-reextract-title">Re-extract this invoice?</Heading><p>A new draft will be created from the original file. The current invoice stays in history and inventory will not change.</p></div>
+            <button type="button" aria-label="Close re-extraction confirmation" onClick={() => setReextractOpen(false)} disabled={Boolean(busy)}><XClose aria-hidden="true" /></button>
+          </div>
+          {reviewDirty ? <p className="invoice-reextract-warning" role="alert">Unsaved edits are not copied into the new extraction.</p> : null}
+          <div className="invoice-leave-actions">
+            <Button type="button" onClick={() => setReextractOpen(false)}>Keep current extraction</Button>
+            <Button type="button" variant="primary" icon={RefreshCw01} onClick={reextract}>Re-extract invoice</Button>
+          </div>
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
+  );
+
   if (draft) {
     return (
-      <>{uploadDialog}{leaveReviewDialog}<section className="invoice-extraction-workspace" aria-labelledby="invoice-review-title">
+      <>{uploadDialog}{leaveReviewDialog}{reextractDialog}<section className="invoice-extraction-workspace" aria-labelledby="invoice-review-title">
         <header className="invoice-review-header">
           <div>
             <span className="invoice-draft-label">{receipt?.status === "posted" ? "Added · local inventory updated" : receipt?.status === "reversed" ? "Reversed · local inventory adjusted" : "Draft · inventory unchanged"}</span>
@@ -595,6 +641,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
             <h2 ref={reviewTitleRef} tabIndex={-1} id="invoice-review-title">Review {run.fileName}</h2>
             <p>{reviewCount ? `${reviewCount} values need attention.` : "No low-confidence values. Confirm before approval."}</p>
           </div>
+          {run.sourceAvailable ? <Button type="button" icon={busy === "reextract" ? LoadingRefreshIcon : RefreshCw01} onClick={() => setReextractOpen(true)} disabled={Boolean(busy) || receipt?.status === "posted"} title={receipt?.status === "posted" ? "Reverse the posted receipt before re-extracting" : "Create a new extraction from the original file"}>{busy === "reextract" ? "Re-extracting…" : "Re-extract"}</Button> : null}
         </header>
         {error ? <p className="ops-error" role="alert">{error}</p> : null}
         {message ? <p className="invoice-status" role="status">{message}</p> : null}

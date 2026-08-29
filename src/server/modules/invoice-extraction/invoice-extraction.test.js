@@ -9,7 +9,7 @@ import {
   reconciliationWarnings,
   semanticCandidatesFromCorrections,
 } from "./invoice-extraction.learning.js";
-import { extractInvoice, guardPaidBalanceAsInvoiceTotal, nativePdfTextIsUsable, readInvoiceExtraction, readInvoiceSource, reviewInvoice } from "./invoice-extraction.service.js";
+import { extractInvoice, guardPaidBalanceAsInvoiceTotal, nativePdfTextIsUsable, readInvoiceExtraction, readInvoiceSource, reextractInvoice, reviewInvoice } from "./invoice-extraction.service.js";
 import { InvoiceExtractionError } from "./invoice-extraction.errors.js";
 import { learnInvoiceTemplateCandidate } from "./invoice-template-learning.js";
 import { buildGlobalInvoiceLayoutContribution } from "./invoice-global-layout.js";
@@ -1018,6 +1018,83 @@ test("source read authorizes location, decrypts, and audits before returning byt
   await assert.rejects(() => readInvoiceSource(RUN_ID, context({ locationIds: [] }), {
     getSource: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID }),
   }), (error) => error.statusCode === 404);
+});
+
+test("re-extraction creates a new queued run from the authorized retained source", async () => {
+  const bytes = Buffer.from(pngDataUrl().split(",")[1], "base64");
+  const calls = [];
+  let createInput;
+  const result = await reextractInvoice(RUN_ID, { idempotencyKey: "reextract-12345678" }, context(), {
+    getRun: async () => ({
+      id: RUN_ID,
+      company_id: COMPANY_ID,
+      location_id: LOCATION_ID,
+      file_name: "invoice.png",
+      mime_type: "image/png",
+      status: "reviewed",
+      reviewed_draft: draft(),
+      local_receipt_status: null,
+    }),
+    getSource: async (input) => {
+      calls.push({ type: "source", input });
+      return { id: "source-1", company_id: COMPANY_ID, run_id: RUN_ID, location_id: LOCATION_ID };
+    },
+    decryptDocument: () => bytes,
+    recordSourceAccess: async (input) => calls.push({ type: "audit", input }),
+    getLocationById: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+    loadMemory: async () => ({ semanticFacts: [], playbooks: [] }),
+    loadTemplates: async () => [],
+    encryptDocument: encryptedSource,
+    createRun: async (input) => {
+      createInput = input;
+      return { ...input, id: "55555555-5555-4555-8555-555555555555", inserted: true, status: "processing", version: 1, created_at: "now" };
+    },
+    deferProcessing: true,
+  });
+  assert.equal(result.run.id, "55555555-5555-4555-8555-555555555555");
+  assert.equal(calls[1].input.action, "reextract");
+  assert.equal(createInput.locationId, LOCATION_ID);
+  assert.equal(createInput.fileName, "invoice.png");
+  assert.equal(createInput.vendorHint, "FleetPride");
+  assert.equal(createInput.documentHash.length, 64);
+  assert.equal(createInput.enqueueJob, true);
+});
+
+test("re-extraction hides cross-location runs and blocks posted inventory receipts", async () => {
+  await assert.rejects(() => reextractInvoice(RUN_ID, { idempotencyKey: "reextract-hidden" }, context({ locationIds: [] }), {
+    getRun: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID, status: "completed" }),
+  }), (error) => error.statusCode === 404);
+
+  await assert.rejects(() => reextractInvoice(RUN_ID, { idempotencyKey: "reextract-posted" }, context(), {
+    getRun: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID, status: "reviewed", local_receipt_status: "posted" }),
+  }), (error) => error.code === "invoice_receipt_reversal_required" && error.statusCode === 409);
+});
+
+test("re-extraction route queues through the background worker contract", async () => {
+  const response = {};
+  let extracted;
+  await handleInvoiceExtractionApi(
+    { method: "POST" }, response,
+    new URL(`http://localhost/api/office/invoice-extractions/${RUN_ID}/reextract`),
+    {
+      requestContext: context(),
+      readBody: async () => ({ idempotencyKey: "route-reextract-123" }),
+      sendJson: (res, status, body) => Object.assign(res, { status, body }),
+    },
+    {
+      getRun: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID, file_name: "invoice.png", mime_type: "image/png", status: "completed" }),
+      getSource: async () => ({ id: "source-1", company_id: COMPANY_ID, run_id: RUN_ID, location_id: LOCATION_ID }),
+      decryptDocument: () => Buffer.from(pngDataUrl().split(",")[1], "base64"),
+      recordSourceAccess: async () => {},
+      extractInvoice: async (input, requestContext, dependencies) => {
+        extracted = { input, requestContext, deferProcessing: dependencies.deferProcessing };
+        return { run: { id: "new-run", status: "processing" }, replayed: false };
+      },
+    },
+  );
+  assert.equal(response.status, 202);
+  assert.equal(response.body.run.id, "new-run");
+  assert.equal(extracted.deferProcessing, true);
 });
 
 test("source route returns only no-store, no-sniff binary after authorization and audit", async () => {

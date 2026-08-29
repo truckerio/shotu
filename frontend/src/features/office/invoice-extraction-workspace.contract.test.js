@@ -176,6 +176,18 @@ test("reviewed invoice values are locked before physical confirmation", async ()
   assert.doesNotMatch(source, /inventory\/receipts\/\$\{encodeURIComponent\(receipt\.id\)\}\/labels/);
 });
 
+test("completed invoice can be re-extracted from retained source without overwriting history or inventory", async () => {
+  const source = await readFile(new URL("./InvoiceExtractionWorkspace.jsx", import.meta.url), "utf8");
+  assert.match(source, /\/api\/office\/invoice-extractions\/\$\{encodeURIComponent\(run\.id\)\}\/reextract/);
+  assert.match(source, /idempotencyKey: `reextract-\$\{crypto\.randomUUID\(\)\}`/);
+  assert.match(source, /<Heading slot="title" id="invoice-reextract-title">Re-extract this invoice\?<\/Heading>/);
+  assert.match(source, /The current invoice stays in history and inventory will not change\./);
+  assert.match(source, /Unsaved edits are not copied into the new extraction\./);
+  assert.match(source, /setBatchRuns\(\[entry\]\);[\s\S]*showBatchEntry\(entry, 0\);/);
+  assert.match(source, /disabled=\{Boolean\(busy\) \|\| receipt\?\.status === "posted"\}/);
+  assert.match(source, /Reverse the posted receipt before re-extracting/);
+});
+
 test("invoice intake owns one bounded, abortable, server-paginated history surface", async () => {
   const [workspace, history, inventory] = await Promise.all([
     readFile(workspaceUrl, "utf8"),

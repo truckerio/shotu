@@ -82,6 +82,7 @@
 .invoice-reversed-status { background:#fef3f2; border:1px solid #fecdca; border-radius:8px; color:#b42318; margin-top:14px!important; padding:10px 12px; }
 .invoice-review-header { justify-content:space-between; }
 .invoice-review-header>div { display:grid; gap:4px; }
+.invoice-review-header>button { flex:0 0 auto; }
 .invoice-draft-label { color:#b54708; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .invoice-batch-position { color:#475467; font-size:13px; font-weight:600; }
 .invoice-status { background:#eff8ff; border-radius:8px; color:#175cd3; margin-top:14px!important; padding:10px 12px; }
@@ -151,6 +152,7 @@
 .invoice-learning-choice input { min-height:18px!important; width:18px!important; }
 .invoice-review-complete { color:#067647; font-weight:600; text-align:right; }
 .invoice-review-reversed { color:#b42318; font-weight:600; text-align:right; }
+.invoice-reextract-warning { background:#fffaeb; border:1px solid #fedf89; border-radius:8px; color:#b54708; padding:10px 12px; }
 .inventory-label-result { background:#f9fafb; border:1px solid #d0d5dd; border-radius:10px; display:grid; gap:12px; margin-top:14px; padding:14px; }
 .inventory-label-heading { align-items:center; display:flex; gap:12px; justify-content:space-between; }
 .inventory-label-heading>div { display:grid; gap:2px; }

@@ -1,6 +1,6 @@
 import { ZodError } from "zod";
 import { InvoiceExtractionError } from "./invoice-extraction.errors.js";
-import { extractInvoice, readInvoiceExtraction, readInvoiceSource, reviewInvoice } from "./invoice-extraction.service.js";
+import { extractInvoice, readInvoiceExtraction, readInvoiceSource, reextractInvoice, reviewInvoice } from "./invoice-extraction.service.js";
 
 function runPath(pathname, suffix = "") {
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -39,6 +39,15 @@ export async function handleInvoiceExtractionApi(req, res, url, helpers, depende
     const reviewId = runPath(url.pathname, "/review");
     if (req.method === "POST" && reviewId) {
       helpers.sendJson(res, 200, await reviewInvoice(reviewId, await helpers.readBody(req), helpers.requestContext, dependencies));
+      return true;
+    }
+    const reextractId = runPath(url.pathname, "/reextract");
+    if (req.method === "POST" && reextractId) {
+      const result = await reextractInvoice(reextractId, await helpers.readBody(req), helpers.requestContext, {
+        ...dependencies,
+        deferProcessing: dependencies.deferProcessing ?? true,
+      });
+      helpers.sendJson(res, result.replayed ? 200 : 202, result);
       return true;
     }
     const sourceId = runPath(url.pathname, "/source");
