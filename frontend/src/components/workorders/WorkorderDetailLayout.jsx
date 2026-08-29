@@ -2,20 +2,12 @@ import { Children, useEffect, useRef, useState } from "react";
 import { interfaceText } from "../../i18n/index.js";
 import "./workorder-detail-layout.css";
 
-const DETAIL_LAYOUT = Object.freeze({
-  defaultPreviewPercent: 40,
-  // Keep the detail editor usable when users drag the split. Below this
-  // width assignment controls and summary facts become clipped.
-  minControlWidth: 560,
-  minPreviewWidth: 680,
-  storageKey: "workorder.detailPreviewPercent.v2",
-});
-const CREATE_LAYOUT = Object.freeze({
+const WORKORDER_EDITOR_LAYOUT = Object.freeze({
   defaultPreviewPercent: 50,
   minControlWidth: 620,
   minPreviewWidth: 560,
   responsiveToLandscape: true,
-  storageKey: "workorder.createPreviewPercent.v3",
+  storageKey: "workorder.editorPreviewPercent.v1",
 });
 const RESIZER_WIDTH = 8;
 const WORKORDER_ASPECT_RATIO = 11 / 8.5;
@@ -54,7 +46,7 @@ function clamp(value, minimum, maximum) {
 
 export function WorkorderDetailLayout({ detail, previewOpen, children, locale = "en" }) {
   const shellRef = useRef(null);
-  const layout = detail ? DETAIL_LAYOUT : CREATE_LAYOUT;
+  const layout = WORKORDER_EDITOR_LAYOUT;
   const [previewPercent, setPreviewPercent] = useState(() => initialPreviewPercent(layout));
   const [resizing, setResizing] = useState(false);
   const userSizedRef = useRef(Boolean(savedPreviewPercent(layout)));

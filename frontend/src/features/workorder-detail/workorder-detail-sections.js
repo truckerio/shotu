@@ -11,10 +11,47 @@ import {
 } from "../workorder-modules/workorder-module-registry.js";
 
 const ATTENTION_STATUSES = new Set(["waiting_office", "parts_requested"]);
+const DEFAULT_DETAIL_SECTION_SEQUENCE = Object.freeze([
+  WORKORDER_MODULE_IDS.UNIT,
+  WORKORDER_MODULE_IDS.CONCERN,
+  WORKORDER_MODULE_IDS.SCHEDULE,
+  WORKORDER_MODULE_IDS.PARTS,
+  WORKORDER_MODULE_IDS.CHAT,
+  WORKORDER_MODULE_IDS.DIAGNOSIS_REPAIR,
+  WORKORDER_MODULE_IDS.COMPLETION,
+  WORKORDER_MODULE_IDS.ASSIGNMENT,
+  WORKORDER_MODULE_IDS.PHOTOS,
+  WORKORDER_MODULE_IDS.LOCATION,
+  WORKORDER_MODULE_IDS.ACTIVITY,
+  WORKORDER_MODULE_IDS.PREVIEW,
+]);
+const CORE_DETAIL_SECTIONS = new Set(DEFAULT_DETAIL_SECTION_SEQUENCE.slice(0, 4));
+
+function canonicalSectionProjection(sections) {
+  const rank = new Map(DEFAULT_DETAIL_SECTION_SEQUENCE.map((id, index) => [id, index]));
+  return sections
+    .map((section, index) => ({ section, index }))
+    .sort((left, right) => (
+      (rank.get(left.section.id) ?? Number.POSITIVE_INFINITY)
+      - (rank.get(right.section.id) ?? Number.POSITIVE_INFINITY)
+      || left.index - right.index
+    ))
+    .map(({ section }) => {
+      const sequenceIndex = rank.get(section.id);
+      return {
+        ...section,
+        alwaysPrimary: CORE_DETAIL_SECTIONS.has(section.id),
+        overflow: !CORE_DETAIL_SECTIONS.has(section.id) || undefined,
+        priority: Number.isFinite(sequenceIndex)
+          ? DEFAULT_DETAIL_SECTION_SEQUENCE.length - sequenceIndex
+          : 0,
+      };
+    });
+}
 
 export function defaultDetailSection(role, status, compact = false) {
   if (compact && ATTENTION_STATUSES.has(status)) return "chat";
-  if (role === "mechanic") return "diagnosisRepair";
+  if (role === "mechanic") return "unit";
   if (status === "open" && ["admin", "office", "manager"].includes(role)) return "assignment";
   return "concern";
 }
@@ -79,7 +116,6 @@ export function buildWorkorderDetailSections({
     [WORKORDER_MODULE_IDS.PHOTOS]: { label: isMechanicDetail ? mechanicLabel("detail.photos") : undefined },
     [WORKORDER_MODULE_IDS.COMPLETION]: {
       label: isMechanicDetail ? mechanicLabel("detail.completion") : undefined,
-      alwaysPrimary: isMechanicDetail,
     },
     [WORKORDER_MODULE_IDS.UNIT]: {
       label: unitType
@@ -120,19 +156,20 @@ export function buildWorkorderDetailSections({
     moduleId: WORKORDER_MODULE_IDS.PARTS_SCANNING,
   });
   if (!scanningPolicy.canWrite || visibleSections.some(({ id }) => id === WORKORDER_MODULE_IDS.PARTS)) {
-    return visibleSections;
+    return canonicalSectionProjection(visibleSections);
   }
   const hiddenPartsPolicy = resolveWorkorderModulePolicy({
     ...navigationContext,
     moduleId: WORKORDER_MODULE_IDS.PARTS,
   });
-  return orderWorkorderModules([...visibleSections, {
+  const scanEnabledSections = orderWorkorderModules([...visibleSections, {
     id: WORKORDER_MODULE_IDS.PARTS,
     label: metadata[WORKORDER_MODULE_IDS.PARTS].label || workorderModuleLabel(WORKORDER_MODULE_IDS.PARTS),
     access: WORKORDER_MODULE_ACCESS.HIDDEN,
     modulePolicy: hiddenPartsPolicy,
     scanOnly: true,
   }], navigationContext);
+  return canonicalSectionProjection(scanEnabledSections);
 }
 
 export function buildCompactPhoneDetailSections(sections, role, { locale = "en", policyOverrides = [], userId = "" } = {}) {
@@ -164,7 +201,7 @@ export function buildCompactPhoneDetailSections(sections, role, { locale = "en",
         userId,
       }).descriptor?.compactPlacement?.[normalizedRole]);
 
-  return orderWorkorderModules(compactModules, {
+  const orderedModules = orderWorkorderModules(compactModules, {
     compact: true,
     role,
     surface: WORKORDER_SURFACES.DETAIL,
@@ -180,6 +217,7 @@ export function buildCompactPhoneDetailSections(sections, role, { locale = "en",
     });
     return Boolean(policy.descriptor?.compactPlacement?.[normalizedRole]);
   });
+  return canonicalSectionProjection(orderedModules);
 }
 
 export function coerceAllowedDetailSection(requestedSection, sections = [], fallback = "work") {

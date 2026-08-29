@@ -29,14 +29,6 @@
   padding: 0;
 }
 
-.workorder-detail-layout:not(.has-preview) .control-panel {
-  border-left: 1px solid #eaecf0;
-  border-right: 1px solid #eaecf0;
-  margin: 0 auto;
-  max-width: 1280px;
-  width: 100%;
-}
-
 .workorder-detail-page .detail-context-bar {
   background: rgb(255 255 255 / 96%);
   border: 0;
@@ -875,7 +867,7 @@ fieldset.workorder-unit-content {
     padding: 7px 8px;
   }
 
-  .workorder-detail-page .detail-context-bar > button,
+  .workorder-detail-page .workorder-context-main > button,
   .workorder-detail-page .detail-save-button,
   .workorder-detail-page .preview-pane-toggle {
     height: 44px;

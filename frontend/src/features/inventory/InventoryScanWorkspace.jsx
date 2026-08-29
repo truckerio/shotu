@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Camera01, CheckCircle, Scan } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
+import { createInventoryFrameDetector, inventoryCameraAvailable } from "./inventory-camera-scanner.js";
+import { createInventoryCameraSession } from "./inventory-camera-session.js";
 import "./inventory-scan.css";
 
 function initialCode() {
@@ -24,17 +26,24 @@ export function InventoryScanWorkspace({ actor }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
   const resolveInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  const cameraSessionRef = useRef(createInventoryCameraSession());
 
   function stopCamera() {
+    cameraSessionRef.current.cancel();
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    setCameraActive(false);
+    if (mountedRef.current) {
+      setCameraActive(false);
+      setCameraStarting(false);
+    }
   }
 
   async function resolve(codeValue) {
@@ -48,51 +57,76 @@ export function InventoryScanWorkspace({ actor }) {
         method: "POST",
         body: JSON.stringify({ code: next }),
       });
+      if (!mountedRef.current) return;
       setUnit(result.unit);
       setCode(next);
       stopCamera();
     } catch (error) {
+      if (!mountedRef.current) return;
       setUnit(null);
       setMessage(error.message);
     } finally {
       resolveInFlightRef.current = false;
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     const saved = initialCode();
     if (saved) resolve(saved);
-    return stopCamera;
+    return () => {
+      mountedRef.current = false;
+      stopCamera();
+    };
   }, []);
 
   async function startCamera() {
+    const session = cameraSessionRef.current;
+    const token = session.begin();
+    if (!token) return;
     setMessage("");
-    if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
+    if (!inventoryCameraAvailable(window)) {
       setMessage("Camera scanning is not available here. Paste the label link or enter its code below.");
+      session.finish(token);
       return;
     }
+    setCameraStarting(true);
     try {
-      const detector = new window.BarcodeDetector({ formats: ["qr_code", "code_128"] });
+      const detector = createInventoryFrameDetector(window);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      if (!mountedRef.current || !session.isCurrent(token)) {
+        session.stopIfStale(token, stream);
+        return;
+      }
       streamRef.current = stream;
       setCameraActive(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      if (!mountedRef.current || !session.isCurrent(token)) {
+        if (streamRef.current === stream) streamRef.current = null;
+        session.stopIfStale(token, stream);
+        return;
+      }
       timerRef.current = window.setInterval(async () => {
-        if (!videoRef.current || resolveInFlightRef.current) return;
+        if (!session.isCurrent(token) || !videoRef.current || resolveInFlightRef.current) return;
         try {
           const [result] = await detector.detect(videoRef.current);
-          if (result?.rawValue) await resolve(result.rawValue);
+          if (session.isCurrent(token) && result?.rawValue) await resolve(result.rawValue);
         } catch {
           // A frame can fail while the camera focuses; the next frame remains safe to try.
         }
       }, 300);
     } catch {
-      stopCamera();
-      setMessage("Camera access was unavailable. Paste the label link or enter its code below.");
+      if (mountedRef.current && session.isCurrent(token)) {
+        stopCamera();
+        setMessage("Camera access was unavailable. Paste the label link or enter its code below.");
+      }
+    } finally {
+      if (mountedRef.current && session.isCurrent(token)) setCameraStarting(false);
+      session.finish(token);
     }
   }
 
@@ -119,8 +153,8 @@ export function InventoryScanWorkspace({ actor }) {
         ) : (
           <>
             <video ref={videoRef} className={`inventory-camera${cameraActive ? " is-active" : ""}`} muted playsInline aria-label="QR scanner camera" />
-            <Button type="button" variant="primary" icon={Camera01} onClick={cameraActive ? stopCamera : startCamera} disabled={busy}>
-              {cameraActive ? "Stop camera" : "Use camera"}
+            <Button type="button" variant="primary" icon={Camera01} onClick={cameraActive ? stopCamera : startCamera} disabled={busy || cameraStarting}>
+              {cameraActive ? "Stop camera" : cameraStarting ? "Starting camera…" : "Use camera"}
             </Button>
             <form onSubmit={(event) => { event.preventDefault(); resolve(code); }}>
               <label htmlFor="inventory-code"><span>Label link or code</span><input id="inventory-code" value={code} onChange={(event) => setCode(event.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck="false" placeholder="Paste or scan code" /></label>

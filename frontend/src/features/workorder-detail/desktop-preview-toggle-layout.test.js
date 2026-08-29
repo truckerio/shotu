@@ -6,18 +6,18 @@ const styles = fs.readFileSync(new URL("../../styles.css", import.meta.url), "ut
 const detailPage = fs.readFileSync(new URL("./WorkorderDetailPage.jsx", import.meta.url), "utf8");
 const previewController = fs.readFileSync(new URL("./useWorkorderPreviewController.js", import.meta.url), "utf8");
 
-test("closed desktop workorder tools collapse without relying on a transition", () => {
-  assert.match(
+test("desktop workorder tools use the shared animated full-width collapse", () => {
+  assert.doesNotMatch(
     styles,
-    /\.workorder-detail-layout:not\(\.has-preview\)\s*\{[\s\S]*--preview-pane-width:\s*0%\s*!important;[\s\S]*--detail-resizer-width:\s*0px\s*!important;[\s\S]*transition:\s*none;/,
+    /\.workorder-detail-layout:not\(\.has-preview\)\s*\{[^}]*(?:--preview-pane-width|--detail-resizer-width|transition:\s*none)/,
   );
   assert.match(
     styles,
     /\.workorder-detail-layout:not\(\.has-preview\) \.preview-panel\s*\{[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;[\s\S]*visibility:\s*hidden;/,
   );
-  assert.match(
+  assert.doesNotMatch(
     styles,
-    /\.workorder-detail-layout:not\(\.has-preview\) \.control-panel\s*\{[\s\S]*max-width:\s*1280px;[\s\S]*width:\s*100%;/,
+    /\.workorder-detail-layout:not\(\.has-preview\) \.control-panel\s*\{[^}]*max-width:/,
   );
 });
 

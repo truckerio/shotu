@@ -8,6 +8,10 @@ const router = readFileSync(new URL("../../app/routes/RoleRouter.jsx", import.me
 const outlet = readFileSync(new URL("../../app/routes/RoleWorkspaceOutlet.jsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const shell = readFileSync(new URL("./CreateWorkorderShell.jsx", import.meta.url), "utf8");
+const panelShell = readFileSync(
+  new URL("../../components/workorders/WorkorderPanelShell.jsx", import.meta.url),
+  "utf8",
+);
 
 test("mechanic locale reaches Create route, page, shell, navigation, dates, and preview surfaces", () => {
   assert.match(router, /locale: actor\.role === "mechanic" \? interfaceLocale : "en"/);
@@ -15,7 +19,9 @@ test("mechanic locale reaches Create route, page, shell, navigation, dates, and 
   assert.match(page, /locale=\{locale\}/);
   assert.match(page, /create\.section\.\$\{section\.id\}/);
   assert.match(shell, /formatUiDateRange\([\s\S]*\{ locale \}\)/);
-  assert.equal((shell.match(/locale=\{locale\}/g) || []).length, 3);
+  assert.equal((shell.match(/locale=\{locale\}/g) || []).length, 2);
+  assert.match(shell, /<WorkorderPanelShell[\s\S]*locale=\{locale\}/);
+  assert.match(panelShell, /<WorkorderSectionNav[\s\S]*locale=\{locale\}/);
 });
 
 test("Create route and shell static states use the shared interface dictionary", () => {

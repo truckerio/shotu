@@ -20,6 +20,13 @@ For this industrial operations product, “premium” means precise proportions,
 
 The shared system owns page geometry and interaction conventions. Each domain continues to own its data model, filters, columns, row actions, permissions, and API behavior.
 
+Two reference compositions lead adoption:
+
+- **Workorder workspace:** Create and Workorder detail use one outer frame, summary geometry, section navigation, supporting-pane behavior, and responsive transition. `create` and `detail` remain explicit modes because draft persistence, validation, refresh, permissions, and consequential actions differ.
+- **Operational collection page:** Operations establishes the page/header/toolbar/result/pagination/phone-disclosure composition. Inventory adopts that composition while retaining stock-specific filters, rows, workflows, APIs, and contextual detail.
+
+“Same template” means same compositional owner and behavior contract. It does not mean one universal row, form, or state controller.
+
 ## 2. Research basis
 
 This contract combines the existing product visual language with established system guidance:
@@ -151,7 +158,7 @@ The Inventory feature must remain one domain implementation. Admin and Office pa
 
 ## 5. Collection surfaces
 
-Operations, Inventory, and Locations share collection proportions but retain different columns, filters, and actions.
+Operations, Inventory, and Locations share the operational collection page frame and proportions but retain different columns, filters, actions, APIs, and permissions.
 
 Every collection shows `20` records by default. Additional records use pagination or progressive increments of `20`, following the collection and refresh contract. Fewer than `20` records render without empty filler rows.
 
@@ -178,7 +185,7 @@ Every collection shows `20` records by default. Additional records use paginatio
 
 Columns align by data type: text left, amounts and quantities right, compact status centered only when that improves scanning. Row selection, navigation, and inline buttons must not compete for the same click target.
 
-The first implementation pass must not force all domains into `OperationalDataTable`. Reuse a shared collection component only after the pages demonstrate genuinely identical structure and behavior.
+The first implementation pass must not force all domains into `OperationalDataTable`. Reuse the frame immediately; reuse row/table markup only after migrated pages demonstrate genuinely identical structure and behavior.
 
 ### 5.3 Phone collection
 

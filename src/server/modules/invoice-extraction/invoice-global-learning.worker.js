@@ -23,6 +23,7 @@ import {
 import { evaluateGlobalLayoutPromotion } from "./invoice-global-learning.service.js";
 
 const DEFAULT_POLL_MS = 30_000;
+const MAX_REBUILD_ATTEMPTS = 10;
 let pollTimer = null;
 let draining = false;
 
@@ -33,6 +34,25 @@ function safeErrorCode(error) {
 
 function retryableContributionError(error) {
   return ["invoice_global_layout_hmac_unavailable"].includes(safeErrorCode(error));
+}
+
+function retryableRebuildError(error) {
+  return ["invoice_global_layout_hmac_unavailable"].includes(safeErrorCode(error));
+}
+
+function rebuildIdentity(rebuild) {
+  return {
+    structuralFingerprint: rebuild.structural_fingerprint,
+    schemaVersion: Number(rebuild.schema_version),
+    hmacKeyVersion: rebuild.hmac_key_version,
+  };
+}
+
+async function completeRebuildWithdrawals(rebuild, dependencies, db) {
+  const companies = await (dependencies.withdrawingCompanies || withdrawingCompaniesForArtifact)(rebuildIdentity(rebuild), db);
+  for (const companyId of companies) {
+    await (dependencies.completeWithdrawal || completeGlobalLayoutWithdrawal)({ companyId }, db);
+  }
 }
 
 export function deterministicGlobalLayoutArtifact(contributions) {
@@ -117,11 +137,7 @@ export async function runNextGlobalLayoutContribution(dependencies = {}) {
 export async function rebuildGlobalLayout(rebuild, dependencies = {}) {
   const transact = dependencies.transaction || withGlobalLayoutTransaction;
   return transact(async (db) => {
-    const identity = {
-      structuralFingerprint: rebuild.structural_fingerprint,
-      schemaVersion: Number(rebuild.schema_version),
-      hmacKeyVersion: rebuild.hmac_key_version,
-    };
+    const identity = rebuildIdentity(rebuild);
     await (dependencies.lockHmacLifecycle || lockGlobalLayoutHmacLifecycle)(db);
     await (dependencies.lockArtifact || lockGlobalLayoutArtifact)(identity, db);
     const current = await (dependencies.getRebuildForUpdate || getGlobalLayoutRebuildForUpdate)({ id: rebuild.id }, db);
@@ -167,10 +183,7 @@ export async function rebuildGlobalLayout(rebuild, dependencies = {}) {
       }
     }
     await mark({ id: rebuild.id, status: "succeeded" }, db);
-    const companies = await (dependencies.withdrawingCompanies || withdrawingCompaniesForArtifact)(identity, db);
-    for (const companyId of companies) {
-      await (dependencies.completeWithdrawal || completeGlobalLayoutWithdrawal)({ companyId }, db);
-    }
+    await completeRebuildWithdrawals(rebuild, dependencies, db);
     return outcome;
   });
 }
@@ -179,12 +192,31 @@ export async function runNextGlobalLayoutRebuild(dependencies = {}) {
   const transact = dependencies.transaction || withGlobalLayoutTransaction;
   const rebuild = await transact((db) => (dependencies.claimRebuild || claimGlobalLayoutRebuild)(db));
   if (!rebuild) return null;
+  if (rebuild.terminal) {
+    return transact(async (db) => {
+      const marked = await (dependencies.markRebuild || markGlobalLayoutRebuild)({
+        id: rebuild.id, status: "failed", errorCode: rebuild.error_code,
+      }, db);
+      if (marked) await completeRebuildWithdrawals(rebuild, dependencies, db);
+      return { status: "failed", errorCode: rebuild.error_code };
+    });
+  }
   try {
     return await rebuildGlobalLayout(rebuild, dependencies);
   } catch (error) {
-    await (dependencies.markRebuild || markGlobalLayoutRebuild)({
-      id: rebuild.id, status: "failed", errorCode: safeErrorCode(error),
-    });
+    const retryable = retryableRebuildError(error) && Number(rebuild.attempts || 0) < MAX_REBUILD_ATTEMPTS;
+    if (retryable) {
+      await (dependencies.markRebuild || markGlobalLayoutRebuild)({
+        id: rebuild.id, status: "queued", errorCode: safeErrorCode(error),
+      });
+    } else {
+      await transact(async (db) => {
+        const marked = await (dependencies.markRebuild || markGlobalLayoutRebuild)({
+          id: rebuild.id, status: "failed", errorCode: safeErrorCode(error),
+        }, db);
+        if (marked) await completeRebuildWithdrawals(rebuild, dependencies, db);
+      });
+    }
     throw error;
   }
 }

@@ -24,7 +24,7 @@
   min-width: 0;
 }
 
-.page-header-copy h1 {
+.page-header-copy :is(h1, h2) {
   color: #182230;
   font-size: var(--text-page-title);
   font-weight: var(--weight-bold);
@@ -75,7 +75,7 @@
     grid-column: 1;
   }
 
-  .page-header-copy h1 {
+  .page-header-copy :is(h1, h2) {
     font-size: 22px;
   }
 

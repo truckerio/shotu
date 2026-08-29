@@ -6,13 +6,16 @@ export function PageHeader({
   leading = null,
   actions = null,
   className = "",
+  headingLevel = 1,
 }) {
+  const Heading = headingLevel === 2 ? "h2" : "h1";
+
   return (
     <header className={`page-header ${className}`.trim()}>
       {leading ? <div className="page-header-leading">{leading}</div> : null}
       <div className="page-header-heading">
         <div className="page-header-copy">
-          <h1>{title}</h1>
+          <Heading>{title}</Heading>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
       </div>

@@ -2,16 +2,16 @@
 
 @media (max-width: 700px) {
   .office-create-nav {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .office-create-nav > button,
+  .office-create-nav .workorder-context-main > button,
   .office-create-nav .detail-create-button,
   .office-create-nav .preview-pane-toggle {
     min-height: 44px;
   }
 
-  .office-create-nav > button,
+  .office-create-nav .workorder-context-main > button,
   .office-create-nav .preview-pane-toggle {
     width: 44px;
   }

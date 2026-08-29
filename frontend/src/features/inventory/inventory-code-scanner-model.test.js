@@ -3,16 +3,30 @@ import test from "node:test";
 import {
   inventoryScannerAvailable,
   inventoryUsageStatusLabel,
+  enqueuePendingCandidate,
   mergeUsageSnapshot,
   normalizeInventoryCode,
+  removePendingCandidate,
   replaceUsage,
   shouldApplyUsageSnapshot,
 } from "./inventory-code-scanner-model.js";
 
-test("scanner model normalizes manual input and requires both camera capabilities", () => {
+test("scanner model normalizes manual input and requires camera capture without native barcode detection", () => {
   assert.equal(normalizeInventoryCode("  label-code  "), "label-code");
-  assert.equal(inventoryScannerAvailable({ BarcodeDetector: class {}, navigator: { mediaDevices: { getUserMedia() {} } } }), true);
+  assert.equal(inventoryScannerAvailable({ navigator: { mediaDevices: { getUserMedia() {} } } }), true);
   assert.equal(inventoryScannerAvailable({ BarcodeDetector: class {}, navigator: {} }), false);
+});
+
+test("pending scanner candidates preserve each resolved unit and deduplicate by unit id", () => {
+  const first = { unit: { id: "unit-1" }, issueKey: "issue-1" };
+  const second = { unit: { id: "unit-2" }, issueKey: "issue-2" };
+  const initial = enqueuePendingCandidate([], first);
+  assert.deepEqual(initial, { candidates: [first], selectedId: "unit-1", added: true });
+  const appended = enqueuePendingCandidate(initial.candidates, second);
+  assert.deepEqual(appended, { candidates: [first, second], selectedId: "unit-2", added: true });
+  const duplicate = enqueuePendingCandidate(appended.candidates, { ...first, issueKey: "different-key" });
+  assert.deepEqual(duplicate, { candidates: [first, second], selectedId: "unit-1", added: false });
+  assert.deepEqual(removePendingCandidate(appended.candidates, "unit-2"), [first]);
 });
 
 test("usage model replaces stable refresh rows without duplication", () => {

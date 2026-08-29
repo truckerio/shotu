@@ -346,7 +346,7 @@ export function OfficeWorkspace({
           </div>
 
           {activeTab === "inventory" ? (
-            <InventoryWorkspace canApplyInventoryCount={false} />
+            <InventoryWorkspace canApplyInventoryCount={false} presentation="embedded" />
           ) : activeTab === "drafts" ? (
             <WorkorderDraftQueue
               role={actor.role}

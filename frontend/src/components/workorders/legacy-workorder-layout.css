@@ -58,7 +58,7 @@
   align-items: stretch;
   display: grid;
   height: 100%;
-  grid-template-columns: minmax(560px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
+  grid-template-columns: minmax(390px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
   min-height: 0;
   overflow: hidden;
   transition:
@@ -79,12 +79,6 @@
 
 .workorder-detail-layout .preview-panel {
   grid-column: 3;
-}
-
-.workorder-detail-layout:not(.has-preview) {
-  --preview-pane-width: 0% !important;
-  --detail-resizer-width: 0px !important;
-  transition: none;
 }
 
 .workorder-detail-layout.is-resizing {

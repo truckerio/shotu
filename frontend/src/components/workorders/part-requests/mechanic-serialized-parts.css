@@ -14,7 +14,6 @@
   border: 0;
 }
 
-.mechanic-scanner-panel,
 .mechanic-serialized-candidate,
 .mechanic-serialized-usage,
 .inventory-code-scanner,
@@ -84,8 +83,55 @@
   transform: translateY(0);
 }
 
+.mechanic-scanner-overlay {
+  background: #101828;
+  inset: 0;
+  position: fixed;
+  z-index: 1300;
+}
+
+.mechanic-scanner-modal {
+  background: #101828;
+  height: 100dvh;
+  max-width: none;
+  outline: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.mechanic-scanner-panel {
+  color: #fff;
+  display: grid;
+  height: 100%;
+  outline: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.mechanic-scanner-header {
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 2;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+}
+
 .mechanic-scanner-close {
-  justify-self: end;
+  background: rgb(16 24 40 / 86%);
+  border-color: rgb(255 255 255 / 78%);
+  color: #fff;
+  pointer-events: auto;
+}
+
+.mechanic-scanner-close:hover,
+.mechanic-scanner-close:focus-visible {
+  background: rgb(16 24 40 / 96%);
+  border-color: #fff;
+  color: #fff;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 40%);
 }
 
 .mechanic-serialized-parts h3,
@@ -95,20 +141,257 @@
 }
 
 .inventory-code-camera {
-  display: none;
+  height: 100%;
+  object-fit: cover;
   width: 100%;
-  max-height: 320px;
-  border-radius: 10px;
-  background: #101828;
 }
 
-.inventory-code-camera.is-active {
-  display: block;
+.inventory-code-scanner {
+  align-content: end;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  padding: max(72px, calc(env(safe-area-inset-top) + 60px)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.inventory-code-camera-stage {
+  align-items: center;
+  background: #182230;
+  display: none;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.inventory-code-camera-stage.is-active {
+  display: flex;
+}
+
+.inventory-code-camera-stage .inventory-code-camera {
+  inset: 0;
+  position: absolute;
+}
+
+.inventory-code-manual-action,
+.inventory-code-scanner form {
+  width: 100%;
+}
+
+.inventory-code-manual-action {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-decoration: underline;
+}
+
+.inventory-code-manual-action:focus-visible {
+  outline: 3px solid rgb(255 255 255 / 72%);
+  outline-offset: -3px;
+}
+
+.inventory-code-scanner form {
+  color: #fff;
+}
+
+.inventory-code-scanner form .button {
+  min-height: 44px;
 }
 
 .inventory-code-scanner input {
+  box-sizing: border-box;
   min-height: 44px;
   width: 100%;
+}
+
+.inventory-code-qr-note {
+  color: rgb(255 255 255 / 72%);
+  font-size: 13px;
+  margin: 0;
+}
+
+.inventory-code-message {
+  margin: 0;
+}
+
+.mechanic-scanner-panel .inventory-code-message {
+  color: #fecdca;
+}
+
+/* Active scan: camera is the entire surface. Only close and manual entry remain visible. */
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) {
+  overflow: hidden;
+}
+
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-scanner {
+  display: block;
+  height: 100%;
+  padding: 0;
+}
+
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-scanner h4,
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-scanner > .button,
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-qr-note,
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-message {
+  display: none;
+}
+
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-camera-stage {
+  display: block;
+  inset: 0;
+  position: fixed;
+}
+
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-manual-action {
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  width: auto;
+  z-index: 2;
+}
+
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-camera {
+  height: 100%;
+}
+
+.inventory-code-scanner:has(.inventory-code-camera-stage.is-active) .inventory-code-manual-action {
+  background: rgb(16 24 40 / 76%);
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+/* The shared sheet owns the overlay surface and motion. These rules only lay
+ * out the serialized-part result while the full-screen camera stays mounted. */
+.mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) {
+  overflow: hidden;
+}
+
+.mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) .mechanic-scanner-header {
+  z-index: 5;
+}
+
+.mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) .inventory-code-manual-action {
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  z-index: 4;
+}
+
+.mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) .inventory-code-scanner form {
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  left: max(16px, env(safe-area-inset-left));
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 196px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  width: auto;
+  z-index: 4;
+}
+
+.mechanic-scanner-result-drawer {
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.mechanic-scanner-result-summary,
+.mechanic-scanner-result-details {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mechanic-scanner-result-summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.mechanic-scanner-result-summary h4,
+.mechanic-scanner-result-summary p,
+.mechanic-scanner-result-details p {
+  margin: 0;
+}
+
+.mechanic-scanner-result-summary h4 {
+  color: var(--foreground-primary, #101828);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.mechanic-scanner-result-details dd {
+  color: var(--foreground-primary, #101828);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.mechanic-scanner-result-summary span,
+.mechanic-scanner-result-details dt,
+.mechanic-scanner-result-details dd span,
+.mechanic-scanner-pending-count {
+  color: var(--foreground-secondary, #475467);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mechanic-scanner-pending-count {
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mechanic-scanner-result-details {
+  min-height: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-secondary, #d0d5dd);
+}
+
+.mechanic-scanner-result-details {
+  margin: 0;
+}
+
+.mechanic-scanner-result-details > div {
+  display: grid;
+  gap: 2px;
+}
+
+.mechanic-scanner-result-details dt,
+.mechanic-scanner-result-details dd {
+  margin: 0;
+}
+
+.mechanic-scanner-result-details code {
+  overflow-wrap: anywhere;
+}
+
+.mechanic-scanner-result-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mechanic-scanner-result-actions .button,
+.mechanic-scanner-result-actions button {
+  min-height: 44px;
+}
+
+.mechanic-scanner-sr-status {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .mechanic-serialized-candidate dl {
@@ -179,8 +462,7 @@
 }
 
 @media (max-width: 480px) {
-  .mechanic-scan-trigger::after,
-  .mechanic-scanner-close::after {
+  .mechanic-scan-trigger::after {
     display: none;
   }
 
@@ -193,4 +475,24 @@
     width: 100%;
     min-height: 44px;
   }
+
+}
+
+@media (max-width: 360px), (max-height: 480px) {
+  .mechanic-scanner-result-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .mechanic-scanner-pending-count {
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mechanic-scanner-overlay,
+  .mechanic-scanner-modal,
+  .mechanic-scanner-result-drawer {
+  animation: none !important;
+  scroll-behavior: auto;
+}
 }

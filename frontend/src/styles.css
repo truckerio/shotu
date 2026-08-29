@@ -21,21 +21,10 @@
   display: none;
 }
 
-.workorder-detail-layout:not(.has-preview) {
-  --preview-pane-width: 0% !important;
-  --detail-resizer-width: 0px !important;
-  transition: none;
-}
-
 .workorder-detail-layout:not(.has-preview) .preview-panel {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-}
-
-.workorder-detail-layout:not(.has-preview) .control-panel {
-  max-width: 1280px;
-  width: 100%;
 }
 
 .workorder-detail-page .detail-context-actions .preview-pane-toggle::after {

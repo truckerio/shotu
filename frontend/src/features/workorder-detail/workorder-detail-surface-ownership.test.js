@@ -4,6 +4,7 @@ import test from "node:test";
 
 const featureUrl = new URL("./", import.meta.url);
 const surfaceUrl = new URL("../../components/workorders/WorkorderDetailSurface.jsx", featureUrl);
+const panelShellUrl = new URL("../../components/workorders/WorkorderPanelShell.jsx", featureUrl);
 const sharedOdooPanelUrl = new URL("../workorder-modules/odoo/WorkorderOdooPanel.jsx", featureUrl);
 const sharedOdooControllerUrl = new URL("../workorder-modules/odoo/useWorkorderOdooModule.js", featureUrl);
 
@@ -51,26 +52,29 @@ function assertUsesComponent(moduleSource, componentName, ownerName) {
 
 test("office/mechanic and surveillance details consume one structural surface", () => {
   assert.equal(existsSync(surfaceUrl), true, "WorkorderDetailSurface.jsx must be the shared frame owner");
+  assert.equal(existsSync(panelShellUrl), true, "WorkorderPanelShell.jsx must be the canonical panel owner");
 
   const detailPage = source("./WorkorderDetailPage.jsx");
   const surveillance = source("../surveillance/workspace/SurveillanceDetailPage.jsx");
   const surface = source("../../components/workorders/WorkorderDetailSurface.jsx");
+  const panelShell = source("../../components/workorders/WorkorderPanelShell.jsx");
 
   assertUsesComponent(detailPage, "WorkorderDetailSurface", "WorkorderDetailPage");
   assertUsesComponent(surveillance, "WorkorderDetailSurface", "SurveillanceDetailPage");
 
+  assertUsesComponent(surface, "WorkorderPanelShell", "WorkorderDetailSurface");
   for (const componentName of ["WorkorderDetailLayout", "WorkorderObjectSummary", "WorkorderSectionNav"]) {
-    assertUsesComponent(surface, componentName, "WorkorderDetailSurface");
+    assertUsesComponent(panelShell, componentName, "WorkorderPanelShell");
     assert.equal(importedComponentNames(detailPage).has(componentName), false, `WorkorderDetailPage must not import ${componentName} directly`);
     assert.equal(importedComponentNames(surveillance).has(componentName), false, `SurveillanceWorkspace must not import ${componentName} directly`);
     assert.equal(renderedComponentNames(detailPage).has(componentName), false, `WorkorderDetailPage must not compose ${componentName} directly`);
     assert.equal(renderedComponentNames(surveillance).has(componentName), false, `SurveillanceWorkspace must not compose ${componentName} directly`);
   }
 
-  assertUsesComponent(surface, "ContextBreadcrumbs", "WorkorderDetailSurface");
-  assert.match(surface, /items=\{\[context\.parent\]\}/);
-  assert.match(surface, /current=\{context\.current\}/);
-  assert.doesNotMatch(surface, /ArrowLeft|context\.onBack|context\.backLabel/);
+  assertUsesComponent(panelShell, "ArrowLeft", "WorkorderPanelShell");
+  assert.doesNotMatch(panelShell, /ContextBreadcrumbs|breadcrumbs/);
+  assert.match(surface, /back:\s*\{[\s\S]*label: context\.parent\.label,[\s\S]*onClick: context\.parent\.onClick/);
+  assert.match(panelShell, /context\.back[\s\S]*onClick=\{context\.back\.onClick\}[\s\S]*aria-label=\{context\.back\.label\}/);
   assert.match(detailPage, /label: actorRole === "admin" \? "Operations" : isOfficeDetail \? "Office" : interfaceText\(locale, "mechanic\.myWork"\)/);
   assert.match(detailPage, /isPlainPrimaryActivation\(event\)/);
   assert.match(detailPage, /\[role='row'\]\[aria-label\]/);
@@ -79,6 +83,37 @@ test("office/mechanic and surveillance details consume one structural surface", 
   assert.match(surveillance, /isPlainPrimaryActivation\(event\)/);
   assert.match(surveillance, /button\[aria-label\]/);
   assert.match(surveillance, /focus\(\{ preventScroll: true \}\)/);
+});
+
+test("Create and Detail cannot drift into separate workorder panel markup", () => {
+  const createShell = source("../create-workorder/CreateWorkorderShell.jsx");
+  const detailSurface = source("../../components/workorders/WorkorderDetailSurface.jsx");
+  const panelShell = source("../../components/workorders/WorkorderPanelShell.jsx");
+
+  assertUsesComponent(createShell, "WorkorderPanelShell", "CreateWorkorderShell");
+  assertUsesComponent(detailSurface, "WorkorderPanelShell", "WorkorderDetailSurface");
+  for (const owner of [createShell, detailSurface]) {
+    assert.doesNotMatch(owner, /<WorkorderDetailLayout|<WorkorderObjectSummary/);
+  }
+  assert.match(panelShell, /<WorkorderDetailLayout/);
+  assert.match(panelShell, /<WorkorderObjectSummary/);
+  assert.match(panelShell, /<WorkorderSectionNav/);
+  assert.match(panelShell, /supportingPane/);
+});
+
+test("canonical workorder header keeps context and actions in two grid columns", () => {
+  const panelShell = source("../../components/workorders/WorkorderPanelShell.jsx");
+  const toolbarCss = source("./workorder-detail-toolbar.css");
+  const createMobileCss = source("../create-workorder/legacy-mobile-create-controls.css");
+
+  assert.match(
+    panelShell,
+    /<div className=\{`detail-context-bar[^>]+>\s*<div className="workorder-context-main">[\s\S]*<div className="detail-context-actions">/,
+  );
+  assert.match(toolbarCss, /\.detail-context-bar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s);
+  assert.match(toolbarCss, /\.workorder-context-main\s*\{[^}]*display:\s*flex;/s);
+  assert.match(createMobileCss, /\.office-create-nav\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s);
+  assert.match(createMobileCss, /\.office-create-nav \.workorder-context-main > button/);
 });
 
 test("shared detail header gives workorder identity the flexible grid track", () => {

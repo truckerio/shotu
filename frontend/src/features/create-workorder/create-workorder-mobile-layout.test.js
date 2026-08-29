@@ -5,6 +5,10 @@ import test from "node:test";
 const createCss = readFileSync(new URL("./create-workorder-page.css", import.meta.url), "utf8");
 const createPage = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const createShell = readFileSync(new URL("./CreateWorkorderShell.jsx", import.meta.url), "utf8");
+const workorderPanelShell = readFileSync(
+  new URL("../../components/workorders/WorkorderPanelShell.jsx", import.meta.url),
+  "utf8",
+);
 const createSections = readFileSync(new URL("./create-workorder-sections.js", import.meta.url), "utf8");
 const createForm = readFileSync(new URL("../generator/CreateWorkorderForm.jsx", import.meta.url), "utf8");
 const createHost = readFileSync(new URL("../workorder-modules/WorkorderCreateModuleHost.jsx", import.meta.url), "utf8");
@@ -80,7 +84,7 @@ test("phone Create renders one form page and a contained compact Preview", () =>
   assert.match(createHost, /sections\.map/);
   assert.match(createUnit, /<ProgressiveWorkorderSection[\s\S]*displayMode="panel"[\s\S]*keepMounted/);
   assert.doesNotMatch(createForm, /<FormCard/);
-  assert.match(createPage, /<WorkorderDetailLayout previewOpen=\{previewPolicy\.canRead && showEmbeddedPreview\}>/);
+  assert.match(createPage, /<CreateWorkorderShell[\s\S]*previewOpen=\{previewPolicy\.canRead && showEmbeddedPreview\}/);
   assert.match(
     createCss,
     /\.create-workorder-page\.create-section-preview\s+\.create-workorder-form\s*\{[^}]*display:\s*none;/s,
@@ -103,13 +107,15 @@ test("phone Create renders one form page and a contained compact Preview", () =>
   );
 });
 
-test("Create shell owns shared summary and section navigation", () => {
-  assert.match(createShell, /<WorkorderObjectSummary/);
+test("Create shell uses the canonical workorder panel for summary and section navigation", () => {
+  assert.match(createShell, /<WorkorderPanelShell/);
+  assert.match(workorderPanelShell, /<WorkorderObjectSummary/);
+  assert.match(workorderPanelShell, /<WorkorderSectionNav/);
   assert.match(createShell, /<WorkorderSectionNav/);
   assert.match(createShell, /showPristine/);
   assert.doesNotMatch(createShell, /create-workorder-section-tabs/);
   assert.match(createPage, /<CreateWorkorderShell/);
-  assert.equal((createShell.match(/className="create-workorder-section-nav"/g) || []).length, 2);
+  assert.equal((createShell.match(/className="create-workorder-section-nav"/g) || []).length, 1);
   assert.match(
     createCss,
     /\.create-workorder-section-nav\.workorder-section-nav-desktop\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,

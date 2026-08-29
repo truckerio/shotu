@@ -2,11 +2,41 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   claimGlobalLayoutContributionCommand,
+  claimGlobalLayoutRebuild,
   createGlobalLayoutArtifact,
   findActiveGlobalLayoutTemplates,
   insertGlobalLayoutContribution,
+  markGlobalLayoutRebuild,
   retireGlobalLayoutHmacVersion,
 } from "./invoice-global-layouts.repo.js";
+
+test("rebuild claim recovers expired leases, respects retry backoff, and releases exhausted jobs", async () => {
+  let queryText = "";
+  await claimGlobalLayoutRebuild({
+    query: async (sql) => { queryText = sql; return { rows: [] }; },
+  });
+  assert.match(queryText, /status in \('running', 'validating'\)/i);
+  assert.match(queryText, /started_at <= now\(\) - interval '5 minutes'/i);
+  assert.match(queryText, /status = 'queued' and requested_at <= now\(\)/i);
+  assert.match(queryText, /attempts < 10/i);
+  assert.match(queryText, /global_layout_rebuild_attempts_exhausted/i);
+  assert.match(queryText, /set status = 'running'/i);
+  assert.doesNotMatch(queryText, /set status = 'failed'.*global_layout_rebuild_attempts_exhausted/is);
+  assert.match(queryText, /returning rebuild\.\*, true as terminal/i);
+  assert.match(queryText, /not exists \(select 1 from exhausted\)/i);
+  assert.match(queryText, /select \* from exhausted union all select \* from claimed/i);
+  assert.match(queryText, /for update skip locked/i);
+});
+
+test("retrying a rebuild clears its lease and schedules bounded exponential backoff", async () => {
+  let queryText = "";
+  await markGlobalLayoutRebuild({ id: "rebuild-1", status: "queued", errorCode: "invoice_global_layout_hmac_unavailable" }, {
+    query: async (sql) => { queryText = sql; return { rows: [] }; },
+  });
+  assert.match(queryText, /started_at = case when \$2 = 'queued' then null/i);
+  assert.match(queryText, /interval '5 seconds' \* power\(2, least\(6, greatest\(0, attempts - 1\)\)\)/i);
+  assert.match(queryText, /where id = \$1 and status in \('running', 'validating'\)/i);
+});
 
 test("artifact creation serializes behind HMAC retirement before taking its artifact lock", async () => {
   const calls = [];

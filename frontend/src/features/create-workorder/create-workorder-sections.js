@@ -15,18 +15,31 @@ const UNIT_FIELDS = new Set([
   "vinNo",
 ]);
 
-const CREATE_SECTION_PRIORITY = Object.freeze([
-  WORKORDER_MODULE_IDS.LOCATION,
-  WORKORDER_MODULE_IDS.SCHEDULE,
-  WORKORDER_MODULE_IDS.CONCERN,
+const DEFAULT_CREATE_SECTION_SEQUENCE = Object.freeze([
   WORKORDER_MODULE_IDS.UNIT,
-  WORKORDER_MODULE_IDS.ASSIGNMENT,
+  WORKORDER_MODULE_IDS.CONCERN,
+  WORKORDER_MODULE_IDS.SCHEDULE,
   WORKORDER_MODULE_IDS.PARTS,
+  WORKORDER_MODULE_IDS.LOCATION,
+  WORKORDER_MODULE_IDS.ASSIGNMENT,
+  WORKORDER_MODULE_IDS.PREVIEW,
 ]);
 
-const CREATE_SECTION_PRIORITY_BY_ID = new Map(
-  CREATE_SECTION_PRIORITY.map((id, index) => [id, CREATE_SECTION_PRIORITY.length - index]),
-);
+function orderBySequence(sections, sequence) {
+  const rank = new Map(sequence.map((id, index) => [id, index]));
+  return sections
+    .map((section, index) => ({ section, index }))
+    .sort((left, right) => (
+      (rank.get(left.section.id) ?? Number.POSITIVE_INFINITY)
+      - (rank.get(right.section.id) ?? Number.POSITIVE_INFINITY)
+      || left.index - right.index
+    ))
+    .map(({ section }) => section);
+}
+
+export function defaultCreateWorkorderSection() {
+  return WORKORDER_MODULE_IDS.UNIT;
+}
 
 export function buildCreateWorkorderSections({
   canAssign = true,
@@ -35,6 +48,9 @@ export function buildCreateWorkorderSections({
   role = canAssign ? "office" : "mechanic",
   userId = "",
 } = {}) {
+  const sequence = DEFAULT_CREATE_SECTION_SEQUENCE;
+  const priorityById = new Map(sequence.map((id, index) => [id, sequence.length - index]));
+  const coreSections = new Set(DEFAULT_CREATE_SECTION_SEQUENCE.slice(0, 4));
   const modules = workorderModuleDescriptors(WORKORDER_SURFACES.CREATE)
     .filter(({ id }) => includePreview || id !== WORKORDER_MODULE_IDS.PREVIEW)
     .filter(({ id }) => canAssign || id !== WORKORDER_MODULE_IDS.ASSIGNMENT)
@@ -43,18 +59,20 @@ export function buildCreateWorkorderSections({
       return {
         id,
         label: descriptor.label,
-        alwaysPrimary: CREATE_SECTION_PRIORITY_BY_ID.has(id),
-        priority: CREATE_SECTION_PRIORITY_BY_ID.get(id) || 0,
-        overflow: descriptor.placementBySurface?.create === "supporting",
+        alwaysPrimary: coreSections.has(id),
+        priority: priorityById.get(id) || 0,
+        overflow: !coreSections.has(id) || undefined,
       };
     });
 
-  return filterWorkorderModulesForPolicy(modules, {
+  const visibleModules = filterWorkorderModulesForPolicy(modules, {
     overrides: policyOverrides,
     role,
     surface: WORKORDER_SURFACES.CREATE,
     userId,
   }).filter((module) => module.id === WORKORDER_MODULE_IDS.PREVIEW || module.modulePolicy.canWrite);
+
+  return orderBySequence(visibleModules, DEFAULT_CREATE_SECTION_SEQUENCE);
 }
 
 export function createSectionForErrors(errors = {}) {

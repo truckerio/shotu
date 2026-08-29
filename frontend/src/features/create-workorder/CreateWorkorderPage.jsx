@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DraftLeaveDialog } from "../../components/drafts/index.js";
 import { PreviewPane } from "../../components/preview/PreviewPane.jsx";
 import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
-import { WorkorderDetailLayout } from "../../components/workorders/WorkorderDetailLayout.jsx";
 import { BrowserPrintDocument, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { CreateWorkorderForm } from "../generator/CreateWorkorderForm.jsx";
 import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
@@ -13,6 +12,7 @@ import { CreateWorkorderShell } from "./CreateWorkorderShell.jsx";
 import {
   buildCreateWorkorderSections,
   createSectionForErrors,
+  defaultCreateWorkorderSection,
   isCreateErrorSectionReady,
 } from "./create-workorder-sections.js";
 import { createWorkorderPreviewForm } from "./create-workorder-utils.js";
@@ -98,7 +98,7 @@ export function CreateWorkorderPage({
       : isMechanicCreate
         ? t("create.backMyWork")
         : t("create.backOffice");
-  const [activeSection, setActiveSection] = useState("location");
+  const [activeSection, setActiveSection] = useState(() => defaultCreateWorkorderSection(actor.role));
   const mobileScrollRef = useRef(null);
   const viewport = useVisualViewport();
   const keyboardOpen = viewport.keyboardOpen;
@@ -200,14 +200,13 @@ export function CreateWorkorderPage({
     >
       <style>{workorderTemplateStyles}</style>
       {previewPolicy.canRead ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
-      <WorkorderDetailLayout previewOpen={previewPolicy.canRead && showEmbeddedPreview}>
-        <aside className="control-panel" ref={formRef}>
-          <CreateWorkorderShell
+      <CreateWorkorderShell
             activeSection={activeSection}
             assignment={assignment}
             backLabel={backLabel}
             canCreate={canCreate}
             canSaveDraft={["admin", "office"].includes(actor.role)}
+            controlRef={formRef}
             form={form}
             isPhone={isPhone}
             keyboardOpen={keyboardOpen}
@@ -217,10 +216,32 @@ export function CreateWorkorderPage({
             onBack={openOfficeWorkspace}
             onSelectSection={selectMobileSection}
             onTogglePreview={jumpToPreview}
+            previewOpen={previewPolicy.canRead && showEmbeddedPreview}
             previewActive={showEmbeddedPreview || previewFullscreen}
             previewVisible={previewPolicy.canRead}
+            sectionPreferenceKey={`workorder.sectionOrder.v1:${actor.id}:${actor.role}:create`}
             sections={createSections}
             workorderDraft={workorderDraft}
+            supportingPane={!isPhone && previewPolicy.canRead ? <PreviewPane
+              id="workorder-preview-panel"
+              open={showEmbeddedPreview}
+              variant="full"
+              panelRef={previewRef}
+              countLabel={workorderCountLabel}
+              range={range}
+              printMenuOpen={printMenuOpen}
+              onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
+              locale={locale}
+              primaryActionLabel={primaryActionLabel}
+              onFullscreen={openFullscreenPreview}
+            >
+              <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
+                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={previewForm} />
+                {effectiveCopies > 1 || lastPhysicalPageIndex > 0
+                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
+                  : null}
+              </div>
+            </PreviewPane> : null}
           >
             {!createSections.length ? (
               <div className="mechanic-empty-state" role="status">
@@ -278,30 +299,7 @@ export function CreateWorkorderPage({
               </div>
             </CompactWorkorderPreview>
           ) : null}
-          </CreateWorkorderShell>
-        </aside>
-
-        {!isPhone && previewPolicy.canRead ? <PreviewPane
-          id="workorder-preview-panel"
-          open={showEmbeddedPreview}
-          variant="full"
-          panelRef={previewRef}
-          countLabel={workorderCountLabel}
-          range={range}
-          printMenuOpen={printMenuOpen}
-          onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-          locale={locale}
-          primaryActionLabel={primaryActionLabel}
-          onFullscreen={openFullscreenPreview}
-        >
-          <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-            <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={previewForm} />
-            {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-              ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
-              : null}
-          </div>
-        </PreviewPane> : null}
-      </WorkorderDetailLayout>
+      </CreateWorkorderShell>
 
       {previewPolicy.canRead ? <PreviewFullscreen
         open={previewFullscreen}

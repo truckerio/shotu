@@ -425,6 +425,7 @@ export function WorkorderDetailPage({
           items: visibleDetailSections,
           activeId: renderedDetailSection,
           onSelect: selectDetailSection,
+          preferenceKey: `workorder.sectionOrder.v1:${actor.id}:${actor.role}:detail`,
         }}
         supportingPane={!isCompact && supportingPaneVisible ? (
           <PreviewPane

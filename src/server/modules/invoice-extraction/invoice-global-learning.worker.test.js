@@ -134,9 +134,95 @@ test("failed rebuild records only a bounded safe error code", async () => {
     getRebuildForUpdate: async () => ({ status: "running" }),
     keyringForVersion: () => keyring,
     loadContributions: async () => { throw new Error("secret vendor payload: ACME"); },
-    markRebuild: async (input) => marks.push(input),
+    markRebuild: async (input) => { marks.push(input); return { status: input.status }; },
+    withdrawingCompanies: async () => ["company-withdrawing"],
+    completeWithdrawal: async ({ companyId }) => marks.push({ completed: companyId }),
   }), /secret vendor/);
   assert.equal(marks[0].errorCode, "global_layout_rebuild_failed");
+  assert.equal(marks[0].status, "failed");
+  assert.deepEqual(marks[1], { completed: "company-withdrawing" });
+});
+
+test("transient rebuild failure is requeued with bounded retry instead of becoming terminal", async () => {
+  const marks = [];
+  await assert.rejects(() => runNextGlobalLayoutRebuild({
+    transaction: async (operation) => operation({}),
+    claimRebuild: async () => ({
+      id: "reclaimed-r1", structural_fingerprint: "a".repeat(64), schema_version: 1,
+      hmac_key_version: "v1", attempts: 2,
+    }),
+    lockHmacLifecycle: async () => {},
+    lockArtifact: async () => {},
+    getRebuildForUpdate: async () => ({ status: "running" }),
+    keyringForVersion: () => null,
+    markRebuild: async (input) => marks.push(input),
+  }), /hmac_unavailable/);
+  assert.deepEqual(marks, [{
+    id: "reclaimed-r1", status: "queued", errorCode: "invoice_global_layout_hmac_unavailable",
+  }]);
+});
+
+test("reclaimed stale rebuild completes after a worker crash", async () => {
+  const marks = [];
+  const result = await runNextGlobalLayoutRebuild({
+    transaction: async (operation) => operation({}),
+    claimRebuild: async () => ({
+      id: "reclaimed-r2", structural_fingerprint: built.structuralFingerprint, schema_version: 1,
+      hmac_key_version: "v1", status: "validating", attempts: 2,
+    }),
+    lockHmacLifecycle: async () => {},
+    lockArtifact: async () => {},
+    getRebuildForUpdate: async () => ({ status: "validating" }),
+    keyringForVersion: () => keyring,
+    loadContributions: async () => [],
+    retireArtifacts: async () => {},
+    withdrawingCompanies: async () => [],
+    markRebuild: async (input) => marks.push(input.status),
+  });
+  assert.equal(result.status, "retired");
+  assert.deepEqual(marks, ["validating", "succeeded"]);
+});
+
+test("retryable rebuild errors become terminal at the attempt limit", async () => {
+  const marks = [];
+  await assert.rejects(() => runNextGlobalLayoutRebuild({
+    transaction: async (operation) => operation({}),
+    claimRebuild: async () => ({
+      id: "exhausted-r1", structural_fingerprint: "a".repeat(64), schema_version: 1,
+      hmac_key_version: "v1", attempts: 10,
+    }),
+    lockHmacLifecycle: async () => {},
+    lockArtifact: async () => {},
+    getRebuildForUpdate: async () => ({ status: "running" }),
+    keyringForVersion: () => null,
+    markRebuild: async (input) => { marks.push(input); return { status: input.status }; },
+    withdrawingCompanies: async () => ["company-withdrawing"],
+    completeWithdrawal: async ({ companyId }) => marks.push({ completed: companyId }),
+  }), /hmac_unavailable/);
+  assert.equal(marks[0].status, "failed");
+  assert.deepEqual(marks[1], { completed: "company-withdrawing" });
+});
+
+test("stale exhausted lease completes withdrawals without entering the rebuild path", async () => {
+  const completed = [];
+  const marks = [];
+  const result = await runNextGlobalLayoutRebuild({
+    transaction: async (operation) => operation({}),
+    claimRebuild: async () => ({
+      id: "stale-exhausted", structural_fingerprint: "a".repeat(64), schema_version: 1,
+      hmac_key_version: "v1", attempts: 10, terminal: true,
+      error_code: "global_layout_rebuild_attempts_exhausted",
+    }),
+    lockHmacLifecycle: async () => assert.fail("terminal job must not rebuild"),
+    markRebuild: async (input) => { marks.push(input); return { status: input.status }; },
+    withdrawingCompanies: async () => ["company-withdrawing"],
+    completeWithdrawal: async ({ companyId }) => completed.push(companyId),
+  });
+  assert.deepEqual(result, { status: "failed", errorCode: "global_layout_rebuild_attempts_exhausted" });
+  assert.deepEqual(marks, [{
+    id: "stale-exhausted", status: "failed", errorCode: "global_layout_rebuild_attempts_exhausted",
+  }]);
+  assert.deepEqual(completed, ["company-withdrawing"]);
 });
 
 test("drain stops at an empty queue and does not manufacture work", async () => {

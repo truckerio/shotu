@@ -11,6 +11,14 @@ import { progressiveQueueResetKey } from "../responsive/ProgressiveQueue.js";
 import { WorkorderQueueTabs } from "../workorders/WorkorderQueue.jsx";
 import { Pagination } from "../ui/Pagination.jsx";
 import { MobileQueueToolbar } from "./MobileQueueToolbar.jsx";
+import {
+  OperationalCollectionCell,
+  OperationalCollectionRow,
+  OperationalCollectionResultHeader,
+  OperationalCollectionTable,
+  OperationalCollectionTabs,
+  OperationalCollectionToolbar,
+} from "./OperationalCollectionPage.jsx";
 import { PartRequestQueue } from "./PartRequestQueue.jsx";
 import { usePartRequestQueueCount } from "./usePartRequestQueueCount.js";
 import {
@@ -121,45 +129,32 @@ function OperationRow({ item, onOpenWorkorder }) {
     missing_info: "Missing info",
     not_entered: "Not entered",
   }[odooStatus] || odooStatus.replaceAll("_", " ");
-  const interactive = typeof onOpenWorkorder === "function";
-
-  function open() {
-    if (interactive) onOpenWorkorder(item.id);
-  }
-
-  function handleKeyDown(event) {
-    if (!interactive || (event.key !== "Enter" && event.key !== " ")) return;
-    event.preventDefault();
-    open();
-  }
+  const open = typeof onOpenWorkorder === "function" ? () => onOpenWorkorder(item.id) : undefined;
 
   return (
-    <div
-      className={`operations-row lifecycle-tone-${item.lifecycle || "unknown"}${item.unread ? " is-unread" : ""}${overdue ? " is-overdue" : ""}${attentionTone ? ` has-attention attention-tone-${attentionTone}` : ""}${interactive ? " is-interactive" : ""}`}
-      role="row"
-      tabIndex={interactive ? 0 : undefined}
-      onClick={open}
-      onKeyDown={handleKeyDown}
-      aria-label={`${item.serial || "Workorder"}, ${unit}, ${location}`}
+    <OperationalCollectionRow
+      className={`operations-row lifecycle-tone-${item.lifecycle || "unknown"}${item.unread ? " is-unread" : ""}${overdue ? " is-overdue" : ""}${attentionTone ? ` has-attention attention-tone-${attentionTone}` : ""}`}
+      onAction={open}
+      ariaLabel={`${item.serial || "Workorder"}, ${unit}, ${location}`}
     >
-      <div className="operations-cell operations-location" role="cell" data-label="Location">
+      <OperationalCollectionCell className="operations-cell operations-location" label="Location">
         <strong>{location}</strong>
-      </div>
-      <div className="operations-cell operations-identity" role="cell" data-label="Unit / workorder">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-identity" label="Unit / workorder">
         <strong>{unit}</strong>
         <span>{item.serial || "No serial"}</span>
         <div className="operations-flags">
           {item.unread ? <span className="operations-flag unread"><Inbox01 />Unread</span> : null}
           {overdue ? <span className="operations-flag overdue"><Clock />Overdue</span> : null}
         </div>
-      </div>
-      <div className="operations-cell operations-concern" role="cell" data-label="Concern">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-concern" label="Concern">
         <span title={item.concern || ""}>{item.concern || "No concern entered"}</span>
-      </div>
-      <div className={`operations-cell operations-mechanic${item.mechanics?.length || item.mechanic ? "" : " is-unassigned"}`} role="cell" data-label="Mechanics">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className={`operations-cell operations-mechanic${item.mechanics?.length || item.mechanic ? "" : " is-unassigned"}`} label="Mechanics">
         {mechanic}
-      </div>
-      <div className="operations-cell operations-state" role="cell" data-label="Lifecycle / attention">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-state" label="Lifecycle / attention">
         <span className={`operations-lifecycle lifecycle-${item.lifecycle || "unknown"}`}>{operationLabel(item.lifecycle)}</span>
         {attentionReasons.length ? (
           <div className="operations-attention-list">
@@ -170,23 +165,23 @@ function OperationRow({ item, onOpenWorkorder }) {
             ))}
           </div>
         ) : <span className="operations-no-attention">No attention needed</span>}
-      </div>
-      <div className="operations-cell operations-wait" role="cell" data-label="Time waiting">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-wait" label="Time waiting">
         <strong>{formatDuration(item.timeInStatusSeconds)}</strong>
         <span>in status</span>
-      </div>
-      <div className="operations-cell operations-created" role="cell" data-label="Created / age" title={created.absolute}>
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-created" label="Created / age">
         <strong>{created.relative}</strong>
         <span>{created.absolute}</span>
-      </div>
-      <div className="operations-cell operations-odoo" role="cell" data-label="Odoo">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-odoo" label="Odoo">
         <span className={`operations-odoo-state odoo-${odooStatus}`}>{odooStatusLabel}</span>
-      </div>
-      <div className="operations-cell operations-activity" role="cell" data-label="Last activity" title={activity.absolute}>
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="operations-cell operations-activity" label="Last activity">
         <strong>{activity.relative}</strong>
         <span>{activity.absolute}</span>
-      </div>
-    </div>
+      </OperationalCollectionCell>
+    </OperationalCollectionRow>
   );
 }
 
@@ -309,7 +304,7 @@ export function OperationsWorkspace({
       });
       return () => controller.abort();
     }
-    const query = buildOperationsQuery(filters, page);
+    const query = buildOperationsQuery(filters, page, 20);
     setList((current) => ({ ...current, loading: !current.loaded, error: "" }));
     api(`/api/admin/operations/workorders?${query}`, { signal: controller.signal })
       .then((result) => setList({
@@ -396,25 +391,18 @@ export function OperationsWorkspace({
 
   return (
     <section className="operations-workspace" aria-label="Workorder operations">
-      <div className="operations-tabs-wrap role-desktop-queues">
-        <div className="operations-tabs" role="tablist" aria-label="Workorder categories">
-          {OPERATION_CATEGORIES.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              role="tab"
-              aria-selected={filters.category === category.id}
-              className={filters.category === category.id ? "active" : ""}
-              onClick={() => updateFilter("category", category.id)}
-            >
-              <span>{category.label}</span>
-              <strong aria-label={`${categoryCounts[category.countKey] ?? "Unavailable"} ${category.id === "parts" ? "part requests" : category.id === "drafts" ? "drafts" : "workorders"}`}>
-                {category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "-") : category.id !== "drafts" && summary.loading ? "-" : categoryCounts[category.countKey]}
-              </strong>
-            </button>
-          ))}
-        </div>
-      </div>
+      <OperationalCollectionTabs
+        className="role-desktop-queues"
+        ariaLabel="Workorder categories"
+        activeId={filters.category}
+        onChange={(category) => updateFilter("category", category)}
+        items={OPERATION_CATEGORIES.map((category) => ({
+          id: category.id,
+          label: category.label,
+          count: category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "-") : category.id !== "drafts" && summary.loading ? "-" : categoryCounts[category.countKey],
+          countLabel: `${categoryCounts[category.countKey] ?? "Unavailable"} ${category.id === "parts" ? "part requests" : category.id === "drafts" ? "drafts" : "workorders"}`,
+        }))}
+      />
       <MobileQueueToolbar
         className="role-mobile-primary-queues"
         tabs={mobilePrimaryCategories}
@@ -445,7 +433,7 @@ export function OperationsWorkspace({
           />
         </div>
         {filters.category !== "drafts" && filters.category !== "parts" ? (
-          <div className="operations-toolbar">
+          <OperationalCollectionToolbar className="operations-toolbar">
             <OperationsFilters
               filters={filters}
               fixedLocationId={fixedLocationId}
@@ -454,11 +442,11 @@ export function OperationsWorkspace({
               onUpdate={updateFilter}
               searchInput={searchInput}
             />
-          </div>
+          </OperationalCollectionToolbar>
         ) : null}
       </MobileQueueToolbar>
 
-      {filters.category !== "drafts" && filters.category !== "parts" ? <div className="operations-toolbar role-desktop-filters">
+      {filters.category !== "drafts" && filters.category !== "parts" ? <OperationalCollectionToolbar className="operations-toolbar role-desktop-filters">
         <OperationsFilters
           filters={filters}
           fixedLocationId={fixedLocationId}
@@ -467,13 +455,13 @@ export function OperationsWorkspace({
           onUpdate={updateFilter}
           searchInput={searchInput}
         />
-      </div> : null}
+      </OperationalCollectionToolbar> : null}
 
       {filters.category !== "drafts" && filters.category !== "parts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
-      <div className="operations-list-header">
+      <OperationalCollectionResultHeader className="operations-list-header">
         <span><strong>{activeCategory.label}</strong>{filters.category === "drafts" || filters.category === "parts" || !list.loading ? ` · ${filters.category === "drafts" ? visibleDraftCount : filters.category === "parts" ? categoryCounts.parts : list.total}` : ""}</span>
         {filters.category !== "drafts" && filters.category !== "parts" && filters.locationId && !fixedLocationId ? <span>{locations.find((location) => location.id === filters.locationId)?.name}</span> : null}
-      </div>
+      </OperationalCollectionResultHeader>
 
       {filters.category === "drafts" ? (
         <WorkorderDraftQueue
@@ -498,18 +486,22 @@ export function OperationsWorkspace({
           onOpenWorkorder={onOpenWorkorder}
           refreshKey={refreshKey}
         />
-      ) : <div className="operations-table" role="table" aria-label={`${activeCategory.label} workorders`} aria-busy={list.loading}>
-        <div className="operations-table-head" role="row">
-          <span role="columnheader">Location</span>
-          <span role="columnheader">Unit / workorder</span>
-          <span role="columnheader">Concern</span>
-          <span role="columnheader">Mechanics</span>
-          <span role="columnheader">Lifecycle / attention</span>
-          <span role="columnheader">Time waiting</span>
-          <span className="operations-created" role="columnheader">Created / age</span>
-          <span className="operations-odoo" role="columnheader">Odoo</span>
-          <span role="columnheader">Last activity</span>
-        </div>
+      ) : <OperationalCollectionTable
+        className="operations-table"
+        ariaLabel={`${activeCategory.label} workorders`}
+        busy={list.loading}
+        columns={[
+          { id: "location", label: "Location" },
+          { id: "identity", label: "Unit / workorder" },
+          { id: "concern", label: "Concern" },
+          { id: "mechanics", label: "Mechanics" },
+          { id: "state", label: "Lifecycle / attention" },
+          { id: "waiting", label: "Time waiting" },
+          { id: "created", label: "Created / age", className: "operations-created" },
+          { id: "odoo", label: "Odoo", className: "operations-odoo" },
+          { id: "activity", label: "Last activity" },
+        ]}
+      >
         {list.loading ? <LoadingRows /> : null}
         {!list.loading && list.error ? (
           <div className="operations-state-message error" role="alert">
@@ -544,7 +536,7 @@ export function OperationsWorkspace({
             renderItem={(item) => <OperationRow item={item} onOpenWorkorder={onOpenWorkorder} />}
           />
         ) : null}
-      </div>}
+      </OperationalCollectionTable>}
 
       {filters.category !== "drafts" && filters.category !== "parts" ? <Pagination currentPage={page} pageCount={list.pageCount} setPage={setPage} total={list.total} label="workorders" loading={list.loading} /> : null}
     </section>

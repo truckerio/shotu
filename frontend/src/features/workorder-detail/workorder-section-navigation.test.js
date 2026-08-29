@@ -31,7 +31,8 @@ test("More navigation keeps its stable visible label and exposes overflow select
 
 test("desktop navigation measures its container and preserves phone four-plus-More behavior", () => {
   assert.match(source, /new ResizeObserver\(measure\)/);
-  assert.match(source, /fitWorkorderSections\(sections, \{ availableWidth, sectionWidths, moreWidth \}\)/);
-  assert.match(source, /const phoneLayout = splitWorkorderSections\(sections\)/);
+  assert.match(source, /fitWorkorderSections\(orderedSections, \{ availableWidth, sectionWidths, moreWidth \}\)/);
+  assert.match(source, /const phoneLayout = splitWorkorderSections\(orderedSections\)/);
+  assert.match(source, /preferenceKey = ""/);
   assert.match(source, /className = ""/);
 });

@@ -20,6 +20,15 @@ Consistency applies to page geometry, hierarchy, controls, states, and navigatio
 
 The current delivery order is based on live Admin, Office, Mechanic, Surveillance, and access audits, not source structure alone. Operations phone cards and filter disclosure, Locations navigation, Inventory contextual detail, workorder section navigation, and the access-panel visual family are reference patterns to preserve. Kiosk, valid invitation/reset, destructive, offline, permission-failure, and accepted/completion states remain audit-gated rather than presumed complete.
 
+### Two leverage moves
+
+Two composition changes now lead the page migration because they remove the most visible inconsistency without creating new domain implementations:
+
+1. **One workorder workspace frame.** Create and Workorder detail already share `WorkorderDetailLayout`, `WorkorderObjectSummary`, and `WorkorderSectionNav`. Complete that partial convergence by extracting a neutrally named workorder workspace frame from the current detail surface and composing both flows through it. The frame owns breadcrumbs/back context, one heading strategy, object/draft summary, section navigation, supporting Preview/Chat pane, responsive collapse, and action placement. Create remains a draft-producing task; Detail remains a persisted-object workflow. They share geometry and navigation, not save semantics or permissions.
+2. **One operational collection page frame.** Use Admin Operations as the interaction and proportion reference for Inventory: `OperatorPage`, `PageHeader`, responsive actions, `CollectionToolbar`, result state, 20-item paging, collection surface, and phone filter disclosure. Inventory retains stock columns, counts, invoice/count/scan entry points, inventory APIs, and `SecondaryDetailPanel`. Reuse the page composition; do not force inventory records into the workorder row component.
+
+These are the first composed-page migrations after the foundation primitives. Other pages adopt one of the proven frames only when their operator task matches it.
+
 ## 2. Design-manager decisions
 
 These decisions apply across the complete frontend:
@@ -416,7 +425,7 @@ The following inventory distinguishes composed pages from embedded modules so ow
 
 **Operator job:** create a valid workorder with the minimum required information, then print or return to the correct role home.
 
-**Vision:** one task with progressive sections, not a long undifferentiated form. Location and unit establish context; concern and schedule capture the job; assignment and Parts appear only when policy permits; Preview supports confidence without dominating data entry.
+**Vision:** the draft mode of the canonical workorder workspace, not a separately styled creation window. Location and unit establish context; concern and schedule capture the job; assignment and Parts appear only when policy permits; Preview supports confidence without dominating data entry. The same frame, summary proportions, section navigation, supporting pane, and responsive transition used by Workorder detail remain visible as the draft becomes a persisted workorder.
 
 **Desktop:** structured form on the left and Preview/supporting pane on the right.
 **Tablet:** stacked or adjustable composition with action continuity.
@@ -424,9 +433,9 @@ The following inventory distinguishes composed pages from embedded modules so ow
 
 **Performance:** vehicle lookup and location-scoped data are cancellable and do not block unrelated fields; Preview updates without remounting the whole page; drafts preserve meaningful work for authorized roles.
 
-**Owner:** `frontend/src/features/create-workorder/CreateWorkorderPage.jsx`, `CreateWorkorderShell.jsx`, form/module owners, draft/vehicle/location controllers, and create CSS.
+**Owner:** shared workorder workspace frame extracted from `frontend/src/components/workorders/WorkorderDetailSurface.jsx` and `WorkorderDetailLayout.jsx`; `frontend/src/features/create-workorder/CreateWorkorderPage.jsx`, `CreateWorkorderShell.jsx`, form/module owners, draft/vehicle/location controllers, and create-only CSS.
 
-**Acceptance:** no role-specific duplicate form; permissions hide unavailable modules before interaction; create, save draft, leave, validation, print, and recovery are rendered at all target widths.
+**Acceptance:** Create and Detail have identical outer geometry, summary alignment, section-navigation behavior, Preview sizing, and phone transition rules; Create has one visible title; draft/saving/error state remains explicit; no role-specific duplicate form; permissions hide unavailable modules before interaction; create, save draft, leave, validation, print, and recovery are rendered at all target widths.
 
 ### 6.24 Shared workorder detail
 
@@ -441,7 +450,7 @@ The following inventory distinguishes composed pages from embedded modules so ow
 
 **Performance:** realtime updates merge without losing unsaved local edits; Chat and Activity append without remounting the object page; Preview is lazy enough not to block initial actionable content.
 
-**Owner:** `frontend/src/features/workorder-detail/WorkorderDetailPage.jsx`, `WorkorderDetailSections.jsx`, `WorkorderDetailSurface.jsx`, module registry/hosts, and their narrow CSS owners.
+**Owner:** the same shared workorder workspace frame used by Create; `frontend/src/features/workorder-detail/WorkorderDetailPage.jsx`, `WorkorderDetailSections.jsx`, module registry/hosts, and their narrow detail-only CSS owners.
 
 **Acceptance:** Admin, Office, and Mechanic share one detail composition; title/status/summary do not duplicate section content; focus returns to the originating queue row; all policy combinations preserve a valid heading and section order.
 
@@ -492,29 +501,32 @@ Each numbered item is a separate implementation and rendered-review unit. Do not
 5. Add composition-level `CollectionToolbar` and use the existing Operations phone filter disclosure as the interaction reference.
 6. Harden pagination and refresh owners: page reset/clamp, single-flight polling, stale-response protection, context preservation, and explicit background/stale/error states.
 7. Add `RowActionsMenu`, `CompactResourceList`, and `SettingsRow` for repeated resource/settings collections.
-8. Add `ObjectPageHeader`, `ObjectSummary`, and `TaskHeader` contracts that prevent title and fact duplication.
+8. Generalize the existing workorder detail surface into one neutrally named workorder workspace frame with explicit `create` and `detail` modes. Reuse the existing layout, object summary, section navigation, supporting pane, and responsive behavior; prevent title and fact duplication without merging draft and persisted-object state.
 9. Build a reusable rendered page harness at `390px`, `768px`, `1440px`, and `1920px`, plus `320px` reflow, `200%` text, reduced motion, and forced-colors checks.
 
-### Wave 1 — Largest verified Admin inconsistencies
+### Wave 1 — Two high-leverage composed-page migrations
 
-10. Admin Inventory in `page` and Office `embedded` modes: correct heading semantics, canonical shell, responsive actions, collapsed phone filters, minimum `12px` status text, approved radii, and truthful projection freshness.
-11. Location Users: search/filter, `88–104px` phone rows, one shared row-actions menu at every width, and removal of non-applicable placeholder noise.
-12. Settings index and integration detail: remove one-item tabs and repeated provider identity; use compact phone resources, sequential headings, and focused settings sections.
-13. Modules index and manager: compact the index and enter a focused object-detail mode after scope selection.
-14. Location Work: preserve Operations behavior while removing the redundant fixed-location column.
-15. Location Template: rebalance the desktop split and restore Preview access on phone.
-16. Location Rules and Kiosk: focused settings width, aligned controls, and compact device rows.
-17. Admin Operations and Locations index: adopt shared owners, minimum type size, approved radii/depth, and improved information priority only. Treat them as reference pages, not early redesign targets.
+10. Create and Workorder detail: route both through the shared workorder workspace frame, remove duplicated Create chrome, and prove draft/detail state and permissions remain separate.
+11. Admin Operations: adopt the shared `OperatorPage`, `PageHeader`, `CollectionToolbar`, and collection-state contracts while preserving the existing responsive interaction model as the reference implementation.
+12. Admin Inventory in `page` and Office `embedded` modes: compose the same operational collection frame and phone disclosure used by Operations; preserve inventory rows, counts, APIs, workflows, and contextual detail.
 
-### Wave 2 — Verified core workflow duplication
+### Wave 2 — Remaining verified Admin inconsistencies
 
-18. Create workorder: use one visible title through `TaskHeader`; preserve Preview and the phone action/section dock.
-19. Shared workorder detail for Admin and the currently reachable role composition: show concern/identity once, preserve section navigation, and prove `3s` detail refresh cannot overlap or overwrite edits.
+13. Location Users: search/filter, `88–104px` phone rows, one shared row-actions menu at every width, and removal of non-applicable placeholder noise.
+14. Settings index and integration detail: remove one-item tabs and repeated provider identity; use compact phone resources, sequential headings, and focused settings sections.
+15. Modules index and manager: compact the index and enter a focused object-detail mode after scope selection.
+16. Location Work: preserve Operations behavior while removing the redundant fixed-location column.
+17. Location Template: rebalance the desktop split and restore Preview access on phone.
+18. Location Rules and Kiosk: focused settings width, aligned controls, and compact device rows.
+19. Locations index: adopt shared owners, minimum type size, approved radii/depth, and improved information priority only.
+
+### Wave 3 — Remaining core workflow duplication
+
 20. Invoice intake: replace the long-page review with the bounded source canvas and guided review rail defined in Section 6.10; clarify immediate-upload language and preserve the separate receipt mutation.
 21. Inventory files/count and Inventory part detail: polish existing nested/detail patterns without replacing `SecondaryDetailPanel`.
 22. Inventory scan after its exact-unit live states are available.
 
-### Wave 3 — Role convergence and remaining state gates
+### Wave 4 — Role convergence and remaining state gates
 
 23. Preserve the completed local Admin, Office, Mechanic, Surveillance, sign-in, forgot-password, Odoo, and machine-client audit evidence; add exact viewport and state fixtures to the rendered harness.
 24. Mechanic queues: enforce `20` on desktop, retain phone progression, and live-audit accepted/in-progress, Waiting, History, completion, and recovery states.

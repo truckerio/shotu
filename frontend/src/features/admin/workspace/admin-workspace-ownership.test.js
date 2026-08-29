@@ -12,6 +12,9 @@ const locations = read("./LocationsPage.jsx");
 const adminStyles = read("../admin.css");
 const users = read("./UsersPage.jsx");
 const template = read("./TemplatePage.jsx");
+const operationsPage = read("./OperationsPage.jsx");
+const inventory = read("../../inventory/InventoryWorkspace.jsx");
+const collectionPage = read("../../../components/operations/OperationalCollectionPage.jsx");
 
 test("AdminWorkspace remains a controller with a stable public export", () => {
   assert.match(controller, /export function AdminWorkspace\(\{/);
@@ -37,6 +40,15 @@ test("admin pages are owned outside the controller", () => {
   assert.match(locations, /<TemplatePage/);
   assert.match(locations, /<WorkorderRulesPage/);
   assert.match(locations, /<KioskSettingsPanel/);
+});
+
+test("Operations and Inventory share the operational collection page composition", () => {
+  assert.match(operationsPage, /<OperationalCollectionPage/);
+  assert.match(inventory, /<OperationalCollectionPage/);
+  assert.match(inventory, /presentation=\{presentation\}/);
+  assert.match(inventory, /<OperationalCollectionTabs/);
+  assert.match(inventory, /<OperationalCollectionTable/);
+  assert.match(collectionPage, /headingLevel=\{embedded \? 2 : 1\}/);
 });
 
 test("page owners retain their meaningful domain behavior", () => {

@@ -2,6 +2,37 @@
   display: none;
 }
 
+.workorder-section-nav-desktop > button {
+  animation: workorder-section-enter var(--motion-fast) var(--motion-ease-enter) both;
+}
+
+.workorder-section-more-popover[data-entering] {
+  animation: workorder-more-enter var(--motion-fast) var(--motion-ease-enter) both;
+  transform-origin: top right;
+}
+
+@keyframes workorder-section-enter {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes workorder-more-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .workorder-section-more-popover {
   background: #fff;
   border: 1px solid #d5d7da;
@@ -64,9 +95,168 @@
   padding: 0 6px;
 }
 
+.workorder-section-arrange-trigger {
+  flex: 0 0 40px;
+  justify-content: center;
+  padding-inline: 10px !important;
+}
+
+.workorder-section-arrange-trigger svg {
+  height: 17px;
+  width: 17px;
+}
+
+.workorder-section-arrange-menu-item {
+  border-top: 1px solid #eaecf0;
+  margin-top: 4px;
+}
+
+.workorder-section-arrange-overlay {
+  align-items: center;
+  background: rgb(16 24 40 / 44%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 1000;
+}
+
+.workorder-section-arrange-modal {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgb(16 24 40 / 20%);
+  max-height: min(720px, calc(100dvh - 40px));
+  max-width: 440px;
+  overflow: auto;
+  width: 100%;
+}
+
+.workorder-section-arrange-dialog {
+  outline: 0;
+  padding: 20px;
+}
+
+.workorder-section-arrange-heading,
+.workorder-section-arrange-actions,
+.workorder-section-arrange-list li,
+.workorder-section-arrange-list li > div {
+  align-items: center;
+  display: flex;
+}
+
+.workorder-section-arrange-heading {
+  align-items: flex-start;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.workorder-section-arrange-heading h2 {
+  color: #101828;
+  font-size: 18px;
+  margin: 0;
+}
+
+.workorder-section-arrange-heading p {
+  color: #667085;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.workorder-section-arrange-heading button,
+.workorder-section-arrange-list button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 7px;
+  color: #475467;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.workorder-section-arrange-heading svg,
+.workorder-section-arrange-list svg {
+  height: 17px;
+  width: 17px;
+}
+
+.workorder-section-arrange-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 18px 0;
+  padding: 0;
+}
+
+.workorder-section-arrange-list li {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 7px 8px 7px 12px;
+}
+
+.workorder-section-arrange-list li > span {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.workorder-section-arrange-list li > div {
+  gap: 6px;
+}
+
+.workorder-section-arrange-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.workorder-section-arrange-actions {
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.workorder-section-arrange-actions button {
+  background: #fff;
+  border: 1px solid #d5d7da;
+  border-radius: 7px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 38px;
+  padding: 8px 13px;
+}
+
+.workorder-section-arrange-actions button.is-primary {
+  background: #1570ef;
+  border-color: #1570ef;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workorder-section-nav-desktop > button,
+  .workorder-section-more-popover[data-entering] {
+    animation: none;
+  }
+}
+
 @media (max-width: 700px) {
   .workorder-section-nav-desktop {
     display: none;
+  }
+
+  .workorder-section-arrange-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .workorder-section-arrange-modal {
+    border-radius: 14px 14px 0 0;
+    max-height: min(82dvh, 720px);
+    max-width: none;
   }
 
   .workorder-section-nav-mobile {

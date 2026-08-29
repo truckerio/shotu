@@ -20,3 +20,10 @@ test("shared page header owns balanced responsive proportions", () => {
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?\.page-header\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
   assert.match(styles, /\.page-header-actions \.button\.primary,[\s\S]*?\.page-header-actions \[role="combobox"\]\s*\{[^}]*min-height:\s*44px;/s);
 });
+
+test("shared page header supports embedded heading semantics", () => {
+  assert.match(component, /headingLevel = 1/);
+  assert.match(component, /headingLevel === 2 \? "h2" : "h1"/);
+  assert.match(component, /<Heading>\{title\}<\/Heading>/);
+  assert.match(styles, /\.page-header-copy :is\(h1, h2\)/);
+});

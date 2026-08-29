@@ -1,0 +1,220 @@
+.operational-collection-page {
+  min-width: 0;
+}
+
+.operational-collection-page-body {
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.operational-collection-page.is-embedded .operational-collection-page-body {
+  margin-top: 18px;
+}
+
+.operational-collection-tabs-wrap {
+  border-bottom: 1px solid #d0d5dd;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.operational-collection-tabs {
+  display: flex;
+  min-width: max-content;
+}
+
+.operational-collection-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #475467;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  gap: 7px;
+  min-height: 46px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.operational-collection-tabs button:first-child {
+  padding-left: 2px;
+}
+
+.operational-collection-tabs button:hover {
+  color: #182230;
+}
+
+.operational-collection-tabs button.active {
+  border-bottom-color: #1570ef;
+  color: #175cd3;
+}
+
+.operational-collection-tabs button:focus-visible,
+.operational-collection-row:focus-visible {
+  outline: 2px solid #2e6ee6;
+  outline-offset: 2px;
+}
+
+.operational-collection-tabs strong {
+  background: #f2f4f7;
+  border-radius: 10px;
+  color: #475467;
+  font-size: var(--text-caption);
+  min-width: 22px;
+  padding: 2px 6px;
+  text-align: center;
+}
+
+.operational-collection-tabs button.active strong {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.operational-collection-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  padding: 16px 0;
+}
+
+.operational-collection-result-header {
+  align-items: center;
+  border-top: 1px solid #d0d5dd;
+  color: #667085;
+  display: flex;
+  font-size: var(--text-caption);
+  justify-content: space-between;
+  min-height: 42px;
+}
+
+.operational-collection-result-header strong {
+  color: #344054;
+  font-weight: var(--weight-semibold);
+}
+
+.operational-collection-table {
+  --operational-collection-columns: minmax(220px, 2fr) repeat(3, minmax(110px, 1fr));
+  background: #fff;
+  border-bottom: 1px solid #d0d5dd;
+  border-top: 1px solid #d0d5dd;
+  min-width: 0;
+}
+
+.operational-collection-table-head,
+.operational-collection-row {
+  display: grid;
+  grid-template-columns: var(--operational-collection-columns);
+}
+
+.operational-collection-table-head {
+  background: #f9fafb;
+  color: #667085;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  min-height: 40px;
+}
+
+.operational-collection-table-head > span,
+.operational-collection-cell {
+  align-items: center;
+  border-right: 1px solid #eaecf0;
+  display: flex;
+  min-width: 0;
+  padding: 9px 10px;
+}
+
+.operational-collection-table-head > span:last-child,
+.operational-collection-cell:last-child {
+  border-right: 0;
+}
+
+.operational-collection-row {
+  border-top: 1px solid #eaecf0;
+  color: #344054;
+  font-size: var(--text-secondary);
+  min-height: 64px;
+  outline: none;
+  position: relative;
+}
+
+.operational-collection-row.is-interactive {
+  cursor: pointer;
+}
+
+.operational-collection-row.is-interactive:hover {
+  background: #f9fafb;
+}
+
+@media (max-width: 960px) {
+  .operational-collection-table-head {
+    display: none;
+  }
+
+  .operational-collection-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 0;
+    padding: 8px 0;
+  }
+
+  .operational-collection-cell {
+    align-items: flex-start;
+    border: 0;
+    padding: 7px 12px;
+  }
+
+  .operational-collection-cell::before {
+    color: #667085;
+    content: attr(data-label);
+    flex: 0 0 96px;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+  }
+}
+
+@media (max-width: 700px) {
+  .operational-collection-page-body,
+  .operational-collection-page.is-embedded .operational-collection-page-body {
+    margin-top: 18px;
+  }
+
+  .operational-collection-tabs button {
+    min-height: 44px;
+    padding: 0 10px;
+  }
+
+  .operational-collection-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .operational-collection-table {
+    background: transparent;
+    border: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  .operational-collection-result-header {
+    padding-inline: 2px;
+  }
+
+  .operational-collection-row {
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    gap: 10px 12px;
+    overflow: hidden;
+    padding: 14px;
+  }
+
+  .operational-collection-cell {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .operational-collection-cell::before {
+    display: none;
+  }
+}

@@ -1,11 +1,20 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, FileCheck02, Package, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import { SecondaryDetailPanel, SecondaryDetailSection } from "../../components/ui/SecondaryDetailPanel.jsx";
+import {
+  OperationalCollectionCell,
+  OperationalCollectionPage,
+  OperationalCollectionResultHeader,
+  OperationalCollectionRow,
+  OperationalCollectionTable,
+  OperationalCollectionTabs,
+  OperationalCollectionToolbar,
+} from "../../components/operations/OperationalCollectionPage.jsx";
 import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
 import { InventoryCountImportPanel } from "./InventoryCountImportPanel.jsx";
@@ -42,8 +51,7 @@ function stockItemKey(item) {
   return `${item.companyId}:${item.catalogPartId}:${item.uomCode}`;
 }
 
-export function InventoryWorkspace({ canApplyInventoryCount = false }) {
-  const titleId = useId();
+export function InventoryWorkspace({ canApplyInventoryCount = false, presentation = "page" }) {
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const [invoiceWorkflowOpen, setInvoiceWorkflowOpen] = useState(() => (
     initialParams.get("view") === "invoices"
@@ -223,97 +231,109 @@ export function InventoryWorkspace({ canApplyInventoryCount = false }) {
     setStockSort(DEFAULT_STOCK_SORT);
   }
 
+  const inventoryTitle = invoiceWorkflowOpen ? "Invoice intake" : countWorkflowOpen ? "Inventory files" : "Parts inventory";
+  const inventorySubtitle = invoiceWorkflowOpen
+    ? "Upload, review, and add parts without leaving inventory."
+    : countWorkflowOpen
+      ? "Review uploaded inventory files and their import status."
+      : "Owned by this system and organized by shop.";
+  const inventoryLeading = invoiceWorkflowOpen || countWorkflowOpen ? <ContextBreadcrumbs
+    items={[
+      {
+        label: "Inventory",
+        href: inventoryUrl().toString(),
+        onClick: followInventoryBreadcrumb,
+      },
+      ...(workflowDetail ? [{
+        label: invoiceWorkflowOpen ? "Invoice intake" : "Inventory files",
+        href: inventoryUrl(invoiceWorkflowOpen ? { upload: true } : { count: true }).toString(),
+        onClick: followWorkflowBreadcrumb,
+      }] : []),
+    ]}
+    current={workflowDetail?.label || inventoryTitle}
+  /> : null;
+  const inventoryActions = countWorkflowOpen ? (
+    <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Add inventory</Button>
+  ) : invoiceWorkflowOpen ? (
+    !workflowDetail ? <Button className="inventory-invoice-upload-button" type="button" icon={UploadCloud02} aria-label="Upload invoices" title="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} /> : null
+  ) : <>
+    <Button className="inventory-refresh-button" type="button" icon={RefreshCw01} aria-label="Refresh inventory" title="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
+    <Button id="inventory-count-action" type="button" icon={FileCheck02} onClick={openCountWorkflow}>Count</Button>
+    <Button id="inventory-invoice-action" type="button" variant="primary" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Invoice</Button>
+  </>;
+
   return (
-    <section className={`inventory-workspace${invoiceWorkflowOpen || countWorkflowOpen ? " is-invoice-workflow" : ""}`} aria-labelledby={titleId}>
-      <header className="inventory-workspace-header">
-        <div className="inventory-workspace-heading">
-          {invoiceWorkflowOpen || countWorkflowOpen ? <ContextBreadcrumbs
-            items={[
-              {
-                label: "Inventory",
-                href: inventoryUrl().toString(),
-                onClick: followInventoryBreadcrumb,
-              },
-              ...(workflowDetail ? [{
-                label: invoiceWorkflowOpen ? "Invoice intake" : "Inventory files",
-                href: inventoryUrl(invoiceWorkflowOpen ? { upload: true } : { count: true }).toString(),
-                onClick: followWorkflowBreadcrumb,
-              }] : []),
-            ]}
-            current={workflowDetail?.label || (invoiceWorkflowOpen ? "Invoice intake" : "Inventory files")}
-          /> : null}
-          <h2 id={titleId}>{invoiceWorkflowOpen ? "Invoice intake" : countWorkflowOpen ? "Inventory files" : "Parts inventory"}</h2>
-          <p>{invoiceWorkflowOpen ? "Upload, review, and add parts without leaving inventory." : countWorkflowOpen ? "Review uploaded inventory files and their import status." : "Owned by this system and organized by shop."}</p>
-        </div>
-        <div className="inventory-workspace-actions">
-          {countWorkflowOpen ? <>
-            <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Add inventory</Button>
-          </> : invoiceWorkflowOpen ? (
-            !workflowDetail ? <>
-              <Button className="inventory-invoice-upload-button" type="button" icon={UploadCloud02} aria-label="Upload invoices" title="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} />
-            </> : null
-          ) : <>
-            <Button className="inventory-refresh-button" type="button" icon={RefreshCw01} aria-label="Refresh inventory" title="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
-            <Button id="inventory-count-action" type="button" icon={FileCheck02} onClick={openCountWorkflow}>Count</Button>
-            <Button id="inventory-invoice-action" type="button" variant="primary" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Invoice</Button>
-          </>}
-        </div>
-      </header>
+    <OperationalCollectionPage
+      className={`${presentation === "page" ? "admin-content " : ""}inventory-workspace${invoiceWorkflowOpen || countWorkflowOpen ? " is-invoice-workflow" : ""}`}
+      presentation={presentation}
+      title={inventoryTitle}
+      subtitle={inventorySubtitle}
+      leading={inventoryLeading}
+      actions={inventoryActions}
+    >
 
       {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /> : <>
 
-      <div className="inventory-toolbar">
+      <OperationalCollectionTabs
+        className="inventory-stock-tabs"
+        ariaLabel="Filter stock by availability"
+        activeId={stockFilter}
+        onChange={setStockFilter}
+        items={STOCK_FILTER_OPTIONS.map((option) => ({
+          id: option.value,
+          label: option.label,
+          count: stockLoaded ? stockCounts[option.value] : "-",
+          countLabel: `${stockLoaded ? stockCounts[option.value] : "Unavailable"} parts`,
+        }))}
+      />
+
+      <OperationalCollectionToolbar className="inventory-toolbar">
         <label className="inventory-toolbar-field inventory-search-field"><span>Search</span><span className="inventory-search-control"><SearchMd /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Part number, description, manufacturer, or barcode" aria-label="Search inventory" /></span></label>
         <label className="inventory-toolbar-field inventory-scope-field"><span>Inventory view</span><Dropdown value={locationId} onChange={(event) => setLocationId(event.target.value)} aria-label="Inventory view"><option value="all">All locations</option><option value="master">Odoo master catalog</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>
-      </div>
+        <label className="inventory-toolbar-field inventory-stock-sort"><span>Sort</span><Dropdown value={stockSort} onChange={(event) => setStockSort(event.target.value)} aria-label="Sort inventory stock">
+          <option value="available_desc">Most available</option>
+          <option value="part_asc">Part number</option>
+          <option value="reserved_desc">Most reserved</option>
+          <option value="locations_desc">Most locations</option>
+        </Dropdown></label>
+      </OperationalCollectionToolbar>
 
       {error ? <p className="ops-error" role="alert">{error}</p> : null}
       {initialLoading ? <div className="inventory-empty"><RefreshCw01 className="loading-icon" /><strong>Loading inventory</strong></div> : null}
 
       {stockLoaded ? <>
-        <div className="inventory-stock-controls">
-          <div className="inventory-stock-filters" role="group" aria-label="Filter stock by availability">
-            {STOCK_FILTER_OPTIONS.map((option) => <button
-              type="button"
-              key={option.value}
-              className={stockFilter === option.value ? "active" : ""}
-              aria-pressed={stockFilter === option.value}
-              onClick={() => setStockFilter(option.value)}
-            ><span>{option.label}</span><strong>{stockCounts[option.value]}</strong></button>)}
-          </div>
-          <label className="inventory-stock-sort"><span>Sort</span><Dropdown value={stockSort} onChange={(event) => setStockSort(event.target.value)} aria-label="Sort inventory stock">
-            <option value="available_desc">Most available</option>
-            <option value="part_asc">Part number</option>
-            <option value="reserved_desc">Most reserved</option>
-            <option value="locations_desc">Most locations</option>
-          </Dropdown></label>
-        </div>
-        <div className="inventory-results-line" aria-live="polite">
+        <OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">
           <span>{refreshing ? <><RefreshCw01 className="inventory-results-progress" aria-hidden="true" />Updating results</> : <><strong>{stockMeta.total}</strong> part{stockMeta.total === 1 ? "" : "s"} · {locationId === "master" ? "Odoo master catalog" : locationId === "all" ? "All locations" : locations.find((location) => location.id === locationId)?.name || "Selected location"}</>}</span>
           {(query || locationId !== "all" || stockFilter !== "all" || stockSort !== DEFAULT_STOCK_SORT) ? <Button type="button" onClick={clearStockView}>Reset view</Button> : null}
-        </div>
-        <div className={`inventory-stock-results${refreshing ? " is-refreshing" : ""}`} aria-busy={refreshing}>
-        {items.length ? <div className="inventory-stock-list">
-          <div className="inventory-stock-head"><span>Part</span><span>Our on hand</span><span>Reserved</span><span>Our available</span></div>
+        </OperationalCollectionResultHeader>
+        {items.length ? <OperationalCollectionTable
+          className={`inventory-stock-table${refreshing ? " is-refreshing" : ""}`}
+          ariaLabel="Inventory parts"
+          busy={refreshing}
+          columns={[
+            { id: "part", label: "Part" },
+            { id: "on-hand", label: "Our on hand" },
+            { id: "reserved", label: "Reserved" },
+            { id: "available", label: "Our available" },
+          ]}
+        >
           {items.map((item) => {
             const state = stockState(item);
             const stateText = stockStateLabel(state);
-            return <button
+            return <OperationalCollectionRow
             className="inventory-stock-row"
             key={stockItemKey(item)}
-            type="button"
             aria-haspopup="dialog"
-            aria-label={`Open details for ${item.partNumber}, ${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
-            onClick={() => setSelectedStockKey(stockItemKey(item))}
+            ariaLabel={`Open details for ${item.partNumber}, ${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
+            onAction={() => setSelectedStockKey(stockItemKey(item))}
           >
-            <span className="inventory-part-cell"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span></span><small>{item.description || "No description"}</small></span>
-            <span>{quantity(item.quantityOnHand)} {item.uomCode}</span>
-            <span>{quantity(item.quantityReserved)} {item.uomCode}</span>
-            <span><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</small></span>
-          </button>})}
-        </div> : items.length || query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
-        <Pagination currentPage={stockPage} pageCount={stockMeta.pageCount} setPage={setStockPage} total={stockMeta.total} label="parts" />
-        </div>
+            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span></span><small>{item.description || "No description"}</small></OperationalCollectionCell>
+            <OperationalCollectionCell label="Our on hand">{quantity(item.quantityOnHand)} {item.uomCode}</OperationalCollectionCell>
+            <OperationalCollectionCell label="Reserved">{quantity(item.quantityReserved)} {item.uomCode}</OperationalCollectionCell>
+            <OperationalCollectionCell className="inventory-available-cell" label="Our available"><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</small></OperationalCollectionCell>
+          </OperationalCollectionRow>})}
+        </OperationalCollectionTable> : query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
+        <Pagination currentPage={stockPage} pageCount={stockMeta.pageCount} setPage={setStockPage} total={stockMeta.total} label="parts" loading={refreshing} />
       </> : null}
 
       <SecondaryDetailPanel
@@ -380,6 +400,6 @@ export function InventoryWorkspace({ canApplyInventoryCount = false }) {
         </> : null}
       </SecondaryDetailPanel>
       </>}
-    </section>
+    </OperationalCollectionPage>
   );
 }

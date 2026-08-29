@@ -19,7 +19,7 @@ test("detail route rejects unknown sections and uses the role default", () => {
     status: "in_progress",
     isCompact: true,
   });
-  assert.equal(section, "diagnosisRepair");
+  assert.equal(section, "unit");
 });
 
 test("office and admin detail routes preserve explicit shared sections", () => {
@@ -64,7 +64,7 @@ test("Admin Odoo route falls back when a named-user override hides the module", 
     userId: "admin-1",
   });
 
-  assert.equal(section, "concern");
+  assert.equal(section, "unit");
 });
 
 test("detail route redirects hidden requested sections to first allowed module", () => {
@@ -94,5 +94,5 @@ test("detail route redirects hidden requested sections to first allowed module",
     userId: "office-1",
   });
 
-  assert.equal(section, "diagnosisRepair");
+  assert.equal(section, "unit");
 });

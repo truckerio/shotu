@@ -1,11 +1,21 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
+  Settings01,
   Tool02,
+  XClose,
 } from "@untitledui/icons";
-import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import { Button, Dialog, Heading, Menu, MenuItem, MenuTrigger, Modal, ModalOverlay, Popover } from "react-aria-components";
 import { workorderModuleDescriptor } from "../../features/workorder-modules/workorder-module-registry.js";
-import { fitWorkorderSections, splitWorkorderSections } from "./workorder-section-navigation.js";
+import {
+  arrangeWorkorderSections,
+  fitWorkorderSections,
+  moveOptionalWorkorderSection,
+  optionalWorkorderSectionIds,
+  splitWorkorderSections,
+} from "./workorder-section-navigation.js";
 import { interfaceText } from "../../i18n/index.js";
 import "./workorder-object-page.css";
 
@@ -67,22 +77,46 @@ export function WorkorderObjectSummary({
   );
 }
 
-export function WorkorderSectionNav({ sections, activeSection, onSelect, className = "", locale = "en" }) {
+function readOptionalSectionOrder(preferenceKey) {
+  if (!preferenceKey || typeof window === "undefined") return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(preferenceKey) || "[]");
+    return Array.isArray(value) ? value.filter((id) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function WorkorderSectionNav({ sections, activeSection, onSelect, className = "", locale = "en", preferenceKey = "" }) {
   const t = (key) => interfaceText(locale, key);
   const [visualActiveSection, setVisualActiveSection] = useState(activeSection);
+  const [arrangeOpen, setArrangeOpen] = useState(false);
+  const [optionalOrder, setOptionalOrder] = useState(() => readOptionalSectionOrder(preferenceKey));
+  const orderedSections = useMemo(
+    () => arrangeWorkorderSections(sections, optionalOrder),
+    [optionalOrder, sections],
+  );
+  const optionalSections = useMemo(() => {
+    const optionalIds = new Set(optionalWorkorderSectionIds(orderedSections));
+    return orderedSections.filter(({ id }) => optionalIds.has(id));
+  }, [orderedSections]);
   const [desktopLayout, setDesktopLayout] = useState(() => ({
-    primarySections: sections,
+    primarySections: orderedSections,
     overflowSections: [],
   }));
   const desktopNavRef = useRef(null);
   const measurementRef = useRef(null);
-  const phoneLayout = splitWorkorderSections(sections);
+  const phoneLayout = splitWorkorderSections(orderedSections);
   const desktopActiveOverflowSection = desktopLayout.overflowSections.find(({ id }) => id === visualActiveSection);
   const phoneActiveOverflowSection = phoneLayout.overflowSections.find(({ id }) => id === visualActiveSection);
 
   useEffect(() => {
     setVisualActiveSection(activeSection);
   }, [activeSection]);
+
+  useEffect(() => {
+    setOptionalOrder(readOptionalSectionOrder(preferenceKey));
+  }, [preferenceKey]);
 
   useLayoutEffect(() => {
     const nav = desktopNavRef.current;
@@ -93,7 +127,8 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
       const style = window.getComputedStyle(nav);
       const availableWidth = nav.clientWidth
         - (Number.parseFloat(style.paddingLeft) || 0)
-        - (Number.parseFloat(style.paddingRight) || 0);
+        - (Number.parseFloat(style.paddingRight) || 0)
+        - (nav.querySelector("[data-arrange-tabs]")?.getBoundingClientRect().width || 0);
       const sectionWidths = Object.fromEntries(
         [...measurement.querySelectorAll("[data-measure-section-id]")].map((element) => [
           element.dataset.measureSectionId,
@@ -101,7 +136,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
         ]),
       );
       const moreWidth = measurement.querySelector("[data-measure-more]")?.getBoundingClientRect().width || 0;
-      setDesktopLayout(fitWorkorderSections(sections, { availableWidth, sectionWidths, moreWidth }));
+      setDesktopLayout(fitWorkorderSections(orderedSections, { availableWidth, sectionWidths, moreWidth }));
     }
 
     measure();
@@ -113,7 +148,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
     const observer = new ResizeObserver(measure);
     observer.observe(nav);
     return () => observer.disconnect();
-  }, [sections]);
+  }, [orderedSections]);
 
   function SectionContent({ section, showIcon = false }) {
     const Icon = sectionIcon(section.id);
@@ -129,6 +164,30 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
   function selectSection(sectionId) {
     setVisualActiveSection(sectionId);
     onSelect(sectionId);
+  }
+
+  function saveOptionalOrder(nextOrder) {
+    setOptionalOrder(nextOrder);
+    if (!preferenceKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(preferenceKey, JSON.stringify(nextOrder));
+    } catch {
+      // Keep the in-session order when private browsing or storage policy blocks persistence.
+    }
+  }
+
+  function moveOptionalSection(sectionId, direction) {
+    saveOptionalOrder(moveOptionalWorkorderSection(optionalWorkorderSectionIds(orderedSections), sectionId, direction));
+  }
+
+  function resetOptionalOrder() {
+    setOptionalOrder([]);
+    if (!preferenceKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(preferenceKey);
+    } catch {
+      // The in-session reset still succeeds when storage is unavailable.
+    }
   }
 
   return (
@@ -183,8 +242,20 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
             </Popover>
           </MenuTrigger>
         ) : null}
+        {optionalSections.length > 1 ? (
+          <button
+            className="workorder-section-arrange-trigger"
+            type="button"
+            data-arrange-tabs
+            aria-label={t("detail.arrangeTabs")}
+            title={t("detail.arrangeTabs")}
+            onClick={() => setArrangeOpen(true)}
+          >
+            <Settings01 aria-hidden="true" />
+          </button>
+        ) : null}
         <div className="workorder-section-nav-measurement" aria-hidden="true" ref={measurementRef}>
-          {sections.map((section) => (
+          {orderedSections.map((section) => (
             <span className="workorder-section-nav-measure-item" data-measure-section-id={section.id} key={section.id}>
               <SectionContent section={section} />
             </span>
@@ -238,11 +309,73 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
                     </MenuItem>
                   );
                 })}
+                {optionalSections.length > 1 ? (
+                  <MenuItem
+                    className="workorder-section-arrange-menu-item"
+                    id="arrange-tabs"
+                    textValue={t("detail.arrangeTabs")}
+                    onAction={() => setArrangeOpen(true)}
+                  >
+                    <Settings01 aria-hidden="true" />
+                    <span>{t("detail.arrangeTabs")}</span>
+                  </MenuItem>
+                ) : null}
               </Menu>
             </Popover>
           </MenuTrigger>
         ) : null}
       </nav>
+      <ModalOverlay
+        className="workorder-section-arrange-overlay"
+        isOpen={arrangeOpen}
+        isDismissable
+        onOpenChange={setArrangeOpen}
+      >
+        <Modal className="workorder-section-arrange-modal">
+          <Dialog className="workorder-section-arrange-dialog" aria-label={t("detail.arrangeTabs")}>
+            <div className="workorder-section-arrange-heading">
+              <div>
+                <Heading slot="title">{t("detail.arrangeTabs")}</Heading>
+                <p>{t("detail.coreTabsStayFirst")}</p>
+              </div>
+              <button type="button" aria-label={t("common.close")} onClick={() => setArrangeOpen(false)}>
+                <XClose aria-hidden="true" />
+              </button>
+            </div>
+            <ol className="workorder-section-arrange-list">
+              {optionalSections.map((section, index) => (
+                <li key={section.id}>
+                  <span>{section.label}</span>
+                  <div>
+                    <button
+                      type="button"
+                      aria-label={`${t("detail.moveEarlier")} ${section.label}`}
+                      title={t("detail.moveEarlier")}
+                      disabled={index === 0}
+                      onClick={() => moveOptionalSection(section.id, "earlier")}
+                    >
+                      <ArrowUp aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${t("detail.moveLater")} ${section.label}`}
+                      title={t("detail.moveLater")}
+                      disabled={index === optionalSections.length - 1}
+                      onClick={() => moveOptionalSection(section.id, "later")}
+                    >
+                      <ArrowDown aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <div className="workorder-section-arrange-actions">
+              <button type="button" onClick={resetOptionalOrder}>{t("detail.resetTabOrder")}</button>
+              <button type="button" className="is-primary" onClick={() => setArrangeOpen(false)}>{t("common.done")}</button>
+            </div>
+          </Dialog>
+        </Modal>
+      </ModalOverlay>
     </>
   );
 }

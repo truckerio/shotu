@@ -16,18 +16,26 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /No matching stock/);
   assert.match(workspace, /Reset view/);
   assert.match(workspace, /aria-live="polite"/);
-  assert.match(workspace, /aria-busy=\{refreshing\}/);
+  assert.match(workspace, /<OperationalCollectionPage/);
+  assert.match(workspace, /presentation=\{presentation\}/);
+  assert.match(workspace, /<OperationalCollectionTabs/);
+  assert.match(workspace, /<OperationalCollectionToolbar className="inventory-toolbar">/);
+  assert.match(workspace, /<OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">/);
+  assert.match(workspace, /<OperationalCollectionTable/);
+  assert.match(workspace, /<OperationalCollectionRow/);
+  assert.match(workspace, /<OperationalCollectionCell/);
+  assert.match(workspace, /busy=\{refreshing\}/);
   assert.match(workspace, /Updating results/);
   assert.match(workspace, /stockLoaded/);
   assert.doesNotMatch(workspace, /\/api\/office\/inventory\/invoices/);
   assert.doesNotMatch(workspace, /Invoice history/);
   assert.doesNotMatch(workspace, /Inventory views/);
-  assert.doesNotMatch(workspace, /\{items\.length \? <>\s*<div className="inventory-stock-controls">/);
+  assert.doesNotMatch(workspace, /inventory-workspace-header|inventory-workspace-heading|inventory-workspace-actions|inventory-stock-controls|inventory-stock-filters|inventory-stock-list|inventory-stock-head|inventory-stock-results/);
   assert.match(workspace, /stockStateLabel/);
   assert.match(workspace, />Invoice<\/Button>/);
   assert.doesNotMatch(workspace, /<span>Local inventory<\/span>/);
   assert.match(workspace, /aria-label="Upload invoices" title="Upload invoices" aria-haspopup="dialog"/);
-  assert.match(workspace, /invoiceWorkflowOpen \? \(\s*!workflowDetail \? <>/);
+  assert.match(workspace, /invoiceWorkflowOpen \? \(\s*!workflowDetail \? <Button/);
   assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
   assert.match(workspace, /inventoryAction", "upload-invoice"/);
   assert.match(workspace, /<ContextBreadcrumbs/);
@@ -39,8 +47,8 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /event\.preventDefault\(\)/);
   assert.match(workspace, /document\.getElementById\(returnFocusId\)\?\.focus/);
   assert.doesNotMatch(workspace, />Back to inventory<\/Button>/);
-  assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} \/>/);
-  assert.match(admin, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} \/>/);
+  assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
+  assert.match(admin, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} presentation="page" \/>/);
   assert.doesNotMatch(office, /<InvoiceExtractionWorkspace \/>/);
   assert.doesNotMatch(admin, />Invoices<\/button>/);
 });
@@ -115,7 +123,7 @@ test("part identity editing remains inside the part detail drawer", async () => 
   assert.match(panel, /onClose \? onClose\(\) : close\(\)/);
 });
 
-test("inventory availability filters stay mounted for zero-result selections", async () => {
+test("inventory availability filters use the shared collection template without legacy page geometry", async () => {
   const [workspace, styles] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
@@ -124,8 +132,10 @@ test("inventory availability filters stay mounted for zero-result selections", a
   assert.match(workspace, /Filter stock by availability/);
   assert.match(workspace, /No matching stock/);
   assert.match(workspace, /use Reset view above/);
-  assert.match(workspace, /inventory-stock-results\$\{refreshing \? " is-refreshing" : ""\}/);
-  assert.match(styles, /\.inventory-stock-results\.is-refreshing/);
+  assert.match(workspace, /className=\{`inventory-stock-table\$\{refreshing \? " is-refreshing" : ""\}`\}/);
+  assert.match(workspace, /<Pagination currentPage=\{stockPage\} pageCount=\{stockMeta\.pageCount\} setPage=\{setStockPage\} total=\{stockMeta\.total\} label="parts" loading=\{refreshing\} \/>/);
+  assert.match(styles, /\.inventory-stock-table\.is-refreshing/);
+  assert.doesNotMatch(styles, /\.inventory-workspace \{|\.inventory-workspace-header|\.inventory-workspace-heading|\.inventory-workspace-actions|\.inventory-stock-controls|\.inventory-stock-filters|\.inventory-stock-list|\.inventory-stock-head|\.inventory-stock-results|\.inventory-stock-row:hover|\.inventory-stock-row:focus-visible/);
   assert.match(styles, /\.inventory-results-progress/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
 });
@@ -178,8 +188,8 @@ test("only the admin workspace enables applying physically counted inventory", a
     readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8"),
     readFile(new URL("../office/OfficeWorkspace.jsx", import.meta.url), "utf8"),
   ]);
-  assert.match(admin, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} \/>/);
-  assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} \/>/);
+  assert.match(admin, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} presentation="page" \/>/);
+  assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
   assert.match(workspace, /canApplyInventoryCount=\{canApplyInventoryCount\}/);
   assert.match(panel, /stocktake\.readyCount && canApplyInventoryCount/);
   assert.match(panel, /An administrator must confirm the physical count before adding inventory/);

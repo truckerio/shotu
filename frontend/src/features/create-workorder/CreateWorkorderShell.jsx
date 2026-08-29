@@ -1,8 +1,9 @@
-import { ArrowLeft, Plus } from "@untitledui/icons";
+import { Plus } from "@untitledui/icons";
 import { DraftSaveStatus } from "../../components/drafts/index.js";
 import { KeyboardAwareDock } from "../../components/layout/KeyboardAwareDock.jsx";
 import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
-import { WorkorderObjectSummary, WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
+import { WorkorderPanelShell } from "../../components/workorders/WorkorderPanelShell.jsx";
+import { WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
 import { interfaceText, localizedUnitType } from "../../i18n/index.js";
 import { CREATE_WORKORDER_FORM_ID } from "../generator/CreateWorkorderForm.jsx";
@@ -33,10 +34,14 @@ export function CreateWorkorderShell({
   onTogglePreview,
   previewActive,
   previewVisible = true,
+  sectionPreferenceKey = "",
   sections,
   workorderDraft,
   assignment,
   children,
+  controlRef,
+  previewOpen,
+  supportingPane,
 }) {
   const t = (key) => interfaceText(locale, key);
   const unit = createSummaryValue(form.unitNo, t("create.noUnitSelected"));
@@ -44,29 +49,27 @@ export function CreateWorkorderShell({
   const dates = formatUiDateRange(form.workStartDate, form.workEndDate, { locale });
 
   return (
-    <>
-      <div className="detail-context-bar office-create-nav">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label={backLabel}
-          title={backLabel}
-        >
-          <ArrowLeft />
-        </button>
-        <div>
-          <strong>{t("create.title")}</strong>
-          {canSaveDraft ? (
-            <DraftSaveStatus
-              status={workorderDraft.status}
-              error={workorderDraft.error}
-              showPristine
-              labels={{ dirty: t("create.draftChanged") }}
-              className="office-create-draft-status"
-            />
-          ) : null}
-        </div>
-        <div className="detail-context-actions">
+    <WorkorderPanelShell
+      controlRef={controlRef}
+      context={{
+        className: "office-create-nav",
+        back: { label: backLabel, onClick: onBack },
+        content: (
+          <>
+            <strong>{t("create.title")}</strong>
+            {canSaveDraft ? (
+              <DraftSaveStatus
+                status={workorderDraft.status}
+                error={workorderDraft.error}
+                showPristine
+                labels={{ dirty: t("create.draftChanged") }}
+                className="office-create-draft-status"
+              />
+            ) : null}
+          </>
+        ),
+        actions: (
+          <>
           {!isPhone ? (
             <button
               className="detail-create-button"
@@ -87,31 +90,10 @@ export function CreateWorkorderShell({
               closeLabel={t("create.closePreview")}
             />
           ) : null}
-        </div>
-      </div>
-
-      <WorkorderObjectSummary
-        concern={concern}
-        customer={form.customerCompanyName}
-        dates={dates}
-        location={form.locationName || locationName(locations, form.locationId)}
-        mechanics={selectedCreateMechanicNames(assignment)}
-        unit={unit}
-        unitType={localizedUnitType(form.unitType, locale) || t("unit.title")}
-        locale={locale}
-      />
-
-      <WorkorderSectionNav
-        className="create-workorder-section-nav"
-        sections={sections}
-        activeSection={activeSection}
-        onSelect={onSelectSection}
-        locale={locale}
-      />
-
-      {children}
-
-      {isPhone ? (
+          </>
+        ),
+      }}
+      footer={isPhone ? (
         <KeyboardAwareDock
           className="create-workorder-mobile-dock"
           keyboardOpen={keyboardOpen}
@@ -134,10 +116,27 @@ export function CreateWorkorderShell({
               activeSection={activeSection}
               onSelect={onSelectSection}
               locale={locale}
+              preferenceKey={sectionPreferenceKey}
             />
           </div>
         </KeyboardAwareDock>
       ) : null}
-    </>
+      locale={locale}
+      previewOpen={previewOpen}
+      sectionClassName="create-workorder-section-nav"
+      sections={{ items: sections, activeId: activeSection, onSelect: onSelectSection, preferenceKey: sectionPreferenceKey }}
+      summary={{
+        concern,
+        customer: form.customerCompanyName,
+        dates,
+        location: form.locationName || locationName(locations, form.locationId),
+        mechanics: selectedCreateMechanicNames(assignment),
+        unit,
+        unitType: localizedUnitType(form.unitType, locale) || t("unit.title"),
+      }}
+      supportingPane={supportingPane}
+    >
+      {children}
+    </WorkorderPanelShell>
   );
 }

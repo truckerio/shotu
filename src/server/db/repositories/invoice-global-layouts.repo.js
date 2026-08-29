@@ -398,15 +398,34 @@ export async function completeGlobalLayoutWithdrawal(input, db = { query }) {
 
 export async function claimGlobalLayoutRebuild(db) {
   const result = await db.query(
-    `with next as (
+    `with exhausted as (
+       update invoice_global_layout_rebuilds rebuild
+       set status = 'running', error_code = 'global_layout_rebuild_attempts_exhausted',
+           started_at = now(), completed_at = null
+       where id in (
+         select id from invoice_global_layout_rebuilds
+         where status in ('running', 'validating') and attempts >= 10
+           and started_at <= now() - interval '5 minutes'
+         order by started_at, id
+         for update skip locked
+         limit 1
+       )
+       returning rebuild.*, true as terminal
+     ), next as (
        select id from invoice_global_layout_rebuilds
-       where status = 'queued' order by requested_at, id
+       where not exists (select 1 from exhausted) and attempts < 10 and (
+         (status = 'queued' and requested_at <= now())
+         or (status in ('running', 'validating') and started_at <= now() - interval '5 minutes')
+       )
+       order by requested_at, id
        for update skip locked limit 1
-     )
+     ), claimed as (
      update invoice_global_layout_rebuilds rebuild
      set status = 'running', attempts = attempts + 1, started_at = now(), error_code = null
      from next where rebuild.id = next.id
-     returning rebuild.*`,
+     returning rebuild.*, false as terminal
+     )
+     select * from exhausted union all select * from claimed`,
   );
   return result.rows[0] || null;
 }
@@ -434,10 +453,14 @@ export async function withdrawingCompaniesForArtifact(input, db = { query }) {
 }
 
 export async function markGlobalLayoutRebuild(input, db = { query }) {
-  if (!["validating", "succeeded", "failed"].includes(input.status)) throw new Error("invalid_global_layout_rebuild_status");
+  if (!["queued", "validating", "succeeded", "failed"].includes(input.status)) throw new Error("invalid_global_layout_rebuild_status");
   const result = await db.query(
     `update invoice_global_layout_rebuilds
      set status = $2, error_code = $3,
+         requested_at = case when $2 = 'queued'
+           then now() + interval '5 seconds' * power(2, least(6, greatest(0, attempts - 1)))
+           else requested_at end,
+         started_at = case when $2 = 'queued' then null else started_at end,
          completed_at = case when $2 in ('succeeded', 'failed') then now() else null end
      where id = $1 and status in ('running', 'validating') returning *`,
     [input.id, input.status, input.errorCode || null],

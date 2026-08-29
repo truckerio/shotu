@@ -3,47 +3,66 @@ import test from "node:test";
 import {
   buildCreateWorkorderSections,
   createSectionForErrors,
+  defaultCreateWorkorderSection,
   isCreateErrorSectionReady,
 } from "./create-workorder-sections.js";
 
 test("create workorder phone sections follow the shared detail navigation shape", () => {
   assert.deepEqual(
     buildCreateWorkorderSections().map(({ id }) => id),
-    ["location", "schedule", "concern", "unit", "assignment", "parts", "preview"],
+    ["unit", "concern", "schedule", "parts", "location", "assignment", "preview"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ canAssign: false }).map(({ id }) => id),
-    ["location", "schedule", "concern", "unit", "parts", "preview"],
+    ["unit", "concern", "schedule", "parts", "location", "preview"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ canAssign: false }).map(({ label }) => label),
-    ["Location", "Schedule", "Concern", "Unit", "Parts", "Preview"],
+    ["Unit", "Concern", "Schedule", "Parts", "Location", "Preview"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ includePreview: false }).map(({ id }) => id),
-    ["location", "schedule", "concern", "unit", "assignment", "parts"],
+    ["unit", "concern", "schedule", "parts", "location", "assignment"],
   );
 });
 
-test("create workorder navigation promotes every editable workflow section when width allows", () => {
+test("every Create role keeps four task steps primary and defers supporting destinations", () => {
+  const sections = buildCreateWorkorderSections({ canAssign: false, role: "mechanic" });
+
+  assert.deepEqual(
+    sections.map(({ id, alwaysPrimary, overflow }) => [id, alwaysPrimary, Boolean(overflow)]),
+    [
+      ["unit", true, false],
+      ["concern", true, false],
+      ["schedule", true, false],
+      ["parts", true, false],
+      ["location", false, true],
+      ["preview", false, true],
+    ],
+  );
+  assert.equal(defaultCreateWorkorderSection("mechanic"), "unit");
+  assert.equal(defaultCreateWorkorderSection("office"), "unit");
+});
+
+test("create workorder navigation uses the same core and optional placement for office", () => {
   const sections = buildCreateWorkorderSections({ includePreview: false });
 
   assert.deepEqual(
     sections.map(({ id, alwaysPrimary }) => [id, alwaysPrimary]),
     [
-      ["location", true],
-      ["schedule", true],
-      ["concern", true],
       ["unit", true],
-      ["assignment", true],
+      ["concern", true],
+      ["schedule", true],
       ["parts", true],
+      ["location", false],
+      ["assignment", false],
     ],
   );
   assert.deepEqual(
     [...sections].sort((left, right) => right.priority - left.priority).map(({ id }) => id),
-    ["location", "schedule", "concern", "unit", "assignment", "parts"],
+    ["unit", "concern", "schedule", "parts", "location", "assignment"],
   );
-  assert.equal(sections.some(({ overflow }) => overflow), false);
+  assert.deepEqual(sections.filter(({ overflow }) => overflow).map(({ id }) => id), ["location", "assignment"]);
 });
 
 test("compact Preview remains a supporting create destination", () => {
@@ -52,7 +71,7 @@ test("compact Preview remains a supporting create destination", () => {
 
   assert.deepEqual(
     { alwaysPrimary: preview.alwaysPrimary, overflow: preview.overflow, priority: preview.priority },
-    { alwaysPrimary: false, overflow: true, priority: 0 },
+    { alwaysPrimary: false, overflow: true, priority: 1 },
   );
 });
 
@@ -76,7 +95,7 @@ test("create workorder sections respect location module policy", () => {
     role: "office",
   });
 
-  assert.deepEqual(sections.map(({ id }) => id), ["location", "schedule", "concern", "unit"]);
+  assert.deepEqual(sections.map(({ id }) => id), ["unit", "concern", "schedule", "location"]);
 });
 
 test("create validation waits until the invalid phone section is active", () => {
@@ -115,7 +134,7 @@ test("create navigation filters modules by per-user location policy", () => {
       role: "surveillance",
       userId: "surv-1",
     }).map(({ id }) => id),
-    ["concern", "unit"],
+    ["unit", "concern"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { fitWorkorderSections, splitWorkorderSections } from "./workorder-section-navigation.js";
+import {
+  arrangeWorkorderSections,
+  fitWorkorderSections,
+  moveOptionalWorkorderSection,
+  optionalWorkorderSectionIds,
+  splitWorkorderSections,
+} from "./workorder-section-navigation.js";
+
+const navigationCss = readFileSync(new URL("./workorder-object-page.css", import.meta.url), "utf8");
+const navigationSource = readFileSync(new URL("./WorkorderObjectPage.jsx", import.meta.url), "utf8");
 
 const sections = [
   { id: "concern" },
@@ -78,4 +88,53 @@ test("desktop navigation treats explicit overflow as lower priority instead of f
   assert.ok(narrow.overflowSections.some(({ id }) => id === "activity"));
   assert.ok(narrow.primarySections.some(({ id }) => id === "assignment"));
   assert.ok(narrow.primarySections.some(({ id }) => id === "completion"));
+});
+
+test("mechanic task priority keeps four core destinations ahead of Help", () => {
+  const mechanicSections = [
+    { id: "unit", alwaysPrimary: true, priority: 12 },
+    { id: "concern", alwaysPrimary: true, priority: 11 },
+    { id: "schedule", alwaysPrimary: true, priority: 10 },
+    { id: "parts", alwaysPrimary: true, priority: 9 },
+    { id: "chat", overflow: true, priority: 8 },
+    { id: "completion", overflow: true, priority: 6 },
+  ];
+  const phone = splitWorkorderSections(mechanicSections);
+
+  assert.deepEqual(phone.primarySections.map(({ id }) => id), ["unit", "concern", "schedule", "parts"]);
+  assert.deepEqual(phone.overflowSections.map(({ id }) => id), ["chat", "completion"]);
+});
+
+test("every role uses the same fixed core order while optional sections remain rearrangeable", () => {
+  const visible = [
+    { id: "chat" },
+    { id: "parts" },
+    { id: "location" },
+    { id: "concern" },
+    { id: "unit" },
+    { id: "schedule" },
+    { id: "preview" },
+  ];
+  const arranged = arrangeWorkorderSections(visible, ["preview", "chat"]);
+
+  assert.deepEqual(arranged.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "preview", "chat", "location"]);
+  assert.deepEqual(arranged.filter(({ alwaysPrimary }) => alwaysPrimary).map(({ id }) => id), ["unit", "concern", "schedule", "parts"]);
+  assert.deepEqual(optionalWorkorderSectionIds(arranged), ["preview", "chat", "location"]);
+  assert.deepEqual(moveOptionalWorkorderSection(["preview", "chat", "location"], "chat", "earlier"), ["chat", "preview", "location"]);
+  assert.deepEqual(moveOptionalWorkorderSection(["preview", "chat", "location"], "preview", "earlier"), ["preview", "chat", "location"]);
+});
+
+test("desktop inline and More entry motion respects reduced-motion preference", () => {
+  assert.match(navigationCss, /\.workorder-section-nav-desktop > button\s*\{[^}]*animation:\s*workorder-section-enter/s);
+  assert.match(navigationCss, /\.workorder-section-more-popover\[data-entering\]\s*\{[^}]*animation:\s*workorder-more-enter/s);
+  assert.match(navigationCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation:\s*none;/);
+});
+
+test("optional tab arrangement is accessible, resettable, and safely persisted", () => {
+  assert.match(navigationSource, /preferenceKey/);
+  assert.match(navigationSource, /window\.localStorage\.setItem/);
+  assert.match(navigationSource, /window\.localStorage\.removeItem/);
+  assert.match(navigationSource, /aria-label=\{`\$\{t\("detail\.moveEarlier"\)\}/);
+  assert.match(navigationSource, /aria-label=\{`\$\{t\("detail\.moveLater"\)\}/);
+  assert.match(navigationSource, /<ModalOverlay[\s\S]*isDismissable/);
 });

@@ -27,15 +27,15 @@ test("workorder detail sections keep shared tab contract across roles", () => {
 
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false }).map((section) => section.id),
-    ["concern", "diagnosisRepair", "chat", "parts", "photos", "unit", "location", "assignment", "schedule", "activity", "preview", "completion"],
+    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"],
   );
   const mechanic = buildWorkorderDetailSections({ ...base, isMechanicDetail: true, isOfficeDetail: false });
   assert.equal(mechanic.find(({ id }) => id === "chat").label, "Help");
-  assert.equal(mechanic.find(({ id }) => id === "completion").alwaysPrimary, true);
-  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), []);
+  assert.deepEqual(mechanic.filter(({ alwaysPrimary }) => alwaysPrimary).map(({ id }) => id), ["unit", "concern", "schedule", "parts"]);
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
   assert.deepEqual(
     buildWorkorderDetailSections({ ...base, isMechanicDetail: false, isOfficeDetail: true }).map((section) => section.id),
-    ["concern", "diagnosisRepair", "chat", "parts", "photos", "unit", "location", "assignment", "schedule", "activity", "preview", "completion"],
+    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"],
   );
 });
 
@@ -83,7 +83,7 @@ test("eligible Admin detail exposes Odoo in manifest order with resolved write a
 
   assert.deepEqual(
     sections.map(({ id }) => id),
-    ["concern", "diagnosisRepair", "chat", "parts", "photos", "unit", "location", "assignment", "schedule", "activity", "preview", "completion", "odoo"],
+    ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview", "odoo"],
   );
   assert.equal(sections.find(({ id }) => id === "odoo")?.access, "write");
 });
@@ -114,7 +114,7 @@ test("Odoo read access remains visible while a named-user hidden override remove
     userId: "admin-1",
   });
   assert.equal(hiddenSections.some(({ id }) => id === "odoo"), false);
-  assert.equal(allowedDetailSection({ requestedSection: "odoo", sections: hiddenSections }), "concern");
+  assert.equal(allowedDetailSection({ requestedSection: "odoo", sections: hiddenSections }), "unit");
 });
 
 test("Admin keeps Odoo visible before lifecycle eligibility while role defaults can hide it", () => {
@@ -160,6 +160,8 @@ test("non-mechanic detail metadata preserves canonical navigation labels", () =>
 
 test("compact attention status starts on chat and opens chat dock", () => {
   assert.equal(defaultDetailSection("mechanic", "parts_requested", true), "chat");
+  assert.equal(defaultDetailSection("mechanic", "accepted", false), "unit");
+  assert.equal(defaultDetailSection("mechanic", "accepted", true), "unit");
   assert.equal(defaultSupportingView("office", "waiting_office"), "chat");
   assert.equal(workorderNeedsChatAttention("waiting_office"), true);
   assert.equal(workorderNeedsChatAttention("accepted"), false);
@@ -185,17 +187,18 @@ test("compact phone detail keeps role actions visible and moves supporting secti
   ];
 
   const office = buildCompactPhoneDetailSections(sections, "office");
-  assert.deepEqual(office.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "assignment", "preview", "completion", "photos", "unit", "location", "schedule", "activity"]);
-  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "schedule", "activity"]);
+  assert.deepEqual(office.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
+  assert.deepEqual(office.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
 
   const mechanic = buildCompactPhoneDetailSections(sections, "mechanic");
-  assert.deepEqual(mechanic.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "assignment", "preview", "completion", "photos", "unit", "location", "schedule", "activity"]);
-  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "schedule", "activity"]);
+  assert.deepEqual(mechanic.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
+  assert.deepEqual(mechanic.filter(({ alwaysPrimary }) => alwaysPrimary).map(({ id }) => id), ["unit", "concern", "schedule", "parts"]);
+  assert.deepEqual(mechanic.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
 
   const surveillance = buildCompactPhoneDetailSections(sections, "surveillance");
-  assert.deepEqual(surveillance.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "activity", "preview", "completion", "photos", "unit", "location", "assignment", "schedule"]);
-  assert.equal(surveillance[0].label, "Concern");
-  assert.deepEqual(surveillance.filter(({ overflow }) => overflow).map(({ id }) => id), ["photos", "unit", "location", "assignment", "schedule"]);
+  assert.deepEqual(surveillance.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
+  assert.equal(surveillance[0].label, "Truck");
+  assert.deepEqual(surveillance.filter(({ overflow }) => overflow).map(({ id }) => id), ["chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview"]);
 });
 
 test("compact detail keeps an eligible Odoo action in manifest order", () => {
@@ -208,7 +211,7 @@ test("compact detail keeps an eligible Odoo action in manifest order", () => {
     { id: "activity", label: "Activity" },
   ], "admin");
 
-  assert.equal(compact.findIndex(({ id }) => id === "odoo"), 4);
+  assert.equal(compact.findIndex(({ id }) => id === "odoo"), 6);
   assert.equal(compact.find(({ id }) => id === "odoo").access, "write");
 });
 
@@ -242,7 +245,7 @@ test("surveillance detail uses the same canonical registry modules", () => {
     usedPartCount: 2,
   });
 
-  assert.deepEqual(sections.map(({ id }) => id), ["concern", "diagnosisRepair", "chat", "parts", "photos", "unit", "location", "assignment", "schedule", "activity", "preview", "completion", "odoo"]);
+  assert.deepEqual(sections.map(({ id }) => id), ["unit", "concern", "schedule", "parts", "chat", "diagnosisRepair", "completion", "assignment", "photos", "location", "activity", "preview", "odoo"]);
   assert.equal(sections.find(({ id }) => id === "odoo").access, "write");
   assert.equal(sections.find(({ id }) => id === "odoo").label, "Odoo");
   assert.equal(sections.find(({ id }) => id === "odoo").attention, true);
@@ -268,7 +271,7 @@ test("detail navigation falls back to the first allowed module when requested se
   });
 
   assert.equal(sections.some(({ id }) => id === "concern"), false);
-  assert.equal(allowedDetailSection({ requestedSection: "concern", sections }), "diagnosisRepair");
+  assert.equal(allowedDetailSection({ requestedSection: "concern", sections }), "unit");
 });
 
 test("a narrow scanning grant exposes a scanner-only Parts section without broad Parts access", () => {

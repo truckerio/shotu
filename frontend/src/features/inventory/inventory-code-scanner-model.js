@@ -1,9 +1,11 @@
+import { inventoryCameraAvailable } from "./inventory-camera-scanner.js";
+
 export function normalizeInventoryCode(value) {
   return String(value || "").trim();
 }
 
 export function inventoryScannerAvailable(environment = globalThis) {
-  return Boolean(environment?.BarcodeDetector && environment?.navigator?.mediaDevices?.getUserMedia);
+  return inventoryCameraAvailable(environment);
 }
 
 export function inventoryUsageStatusLabel(status) {
@@ -37,4 +39,22 @@ export function mergeUsageSnapshot(currentUsages, snapshotUsages, limit = 100) {
   const snapshot = Array.isArray(snapshotUsages) ? snapshotUsages : [];
   const currentIds = new Set(current.map((usage) => usage?.id).filter(Boolean));
   return [...current, ...snapshot.filter((usage) => usage?.id && !currentIds.has(usage.id))].slice(0, limit);
+}
+
+export function enqueuePendingCandidate(currentCandidates, candidate) {
+  const current = Array.isArray(currentCandidates) ? currentCandidates : [];
+  const unitId = candidate?.unit?.id;
+  if (!unitId) return { candidates: current, selectedId: null, added: false };
+  const existing = current.find((item) => item?.unit?.id === unitId);
+  if (existing) return { candidates: current, selectedId: existing.unit.id, added: false };
+  return {
+    candidates: [...current, candidate],
+    selectedId: unitId,
+    added: true,
+  };
+}
+
+export function removePendingCandidate(currentCandidates, unitId) {
+  const current = Array.isArray(currentCandidates) ? currentCandidates : [];
+  return current.filter((candidate) => candidate?.unit?.id !== unitId);
 }

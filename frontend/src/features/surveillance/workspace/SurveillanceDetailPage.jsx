@@ -306,7 +306,12 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
             </> : null
           ),
         }}
-        sections={{ items: detailSections, activeId: selectedSection, onSelect: setDetailSection }}
+        sections={{
+          items: detailSections,
+          activeId: selectedSection,
+          onSelect: setDetailSection,
+          preferenceKey: `workorder.sectionOrder.v1:${actor?.id || "anonymous"}:${actor?.role || "surveillance"}:detail`,
+        }}
         supportingPane={!isPhone && canRead("preview") ? (
           <PreviewPane
             id="workorder-preview-panel"

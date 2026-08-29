@@ -47,6 +47,6 @@
   }
 
   .detail-context-bar {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
