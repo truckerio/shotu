@@ -9,7 +9,7 @@ export async function searchVehicles(searchText, limit = 12, companyIds = []) {
   const result = await query(
     `
       select a.id, a.company_id, a.provider, a.provider_vehicle_id, a.unit_type, a.owner_name, a.name, a.unit_no, a.vin, a.license_plate,
-             a.make, a.model, a.year, a.serial, a.last_odometer_meters, a.last_odometer_miles,
+             a.make, a.model, a.year, a.serial, a.tag_names, a.last_odometer_meters, a.last_odometer_miles,
              a.last_location, a.last_seen_at, a.synced_at,
              case when active_workorder.id is null then null else jsonb_build_object(
                'id', active_workorder.id,
@@ -58,7 +58,7 @@ export async function getVehicleById(id, companyIds = []) {
   const result = await query(
     `
       select a.id, a.company_id, a.provider, a.provider_vehicle_id, a.unit_type, a.owner_name, a.name, a.unit_no, a.vin, a.license_plate,
-             a.make, a.model, a.year, a.serial, a.last_odometer_meters, a.last_odometer_miles,
+             a.make, a.model, a.year, a.serial, a.tag_names, a.last_odometer_meters, a.last_odometer_miles,
              a.last_location, a.last_seen_at, a.synced_at,
              case when active_workorder.id is null then null else jsonb_build_object(
                'id', active_workorder.id,
@@ -93,7 +93,7 @@ export async function updateVehicleLocation(id, companyId, location, seenAt) {
       where id = $1
         and company_id = $2
       returning id, company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
-                make, model, year, serial, last_odometer_meters, last_odometer_miles,
+                make, model, year, serial, tag_names, last_odometer_meters, last_odometer_miles,
                 last_location, last_seen_at, synced_at
     `,
     [id, tenantId, JSON.stringify(location || {}), seenAt || null]
@@ -109,14 +109,14 @@ export async function upsertVehicles(vehicles, companyId) {
       `
         insert into assets (
           company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
-          make, model, year, serial, external_ids, raw_provider_data,
+          make, model, year, serial, tag_names, external_ids, raw_provider_data,
           last_odometer_meters, last_odometer_miles, last_location, last_seen_at,
           synced_at, updated_at
         )
         values (
           $1, $2, $3, $4, $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14::jsonb, $15::jsonb,
-          $16, $17, $18::jsonb, $19,
+          $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb,
+          $17, $18, $19::jsonb, $20,
           now(), now()
         )
         on conflict (company_id, provider, provider_vehicle_id)
@@ -132,6 +132,7 @@ export async function upsertVehicles(vehicles, companyId) {
           model = excluded.model,
           year = excluded.year,
           serial = excluded.serial,
+          tag_names = excluded.tag_names,
           external_ids = excluded.external_ids,
           raw_provider_data = excluded.raw_provider_data,
           last_odometer_meters = coalesce(excluded.last_odometer_meters, assets.last_odometer_meters),
@@ -156,6 +157,7 @@ export async function upsertVehicles(vehicles, companyId) {
         vehicle.model,
         vehicle.year,
         vehicle.serial,
+        JSON.stringify(vehicle.tagNames || []),
         JSON.stringify(vehicle.externalIds || {}),
         JSON.stringify(vehicle.raw || {}),
         vehicle.lastOdometerMeters,

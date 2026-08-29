@@ -6,9 +6,27 @@ import { ProgressiveWorkorderSection } from "../../../components/workorders/Work
 import { activeWorkorderForVehicle, vehicleCanBeSelected } from "../../create-workorder/vehicle-availability-model.js";
 import { interfaceText } from "../../../i18n/index.js";
 
+const MAX_VEHICLE_TAGS = 25;
+const MAX_VEHICLE_TAG_LENGTH = 120;
+
+export function normalizedVehicleTagNames(tagNames) {
+  if (!Array.isArray(tagNames)) return [];
+  const seen = new Set();
+  return tagNames.slice(0, MAX_VEHICLE_TAGS).reduce((tags, tag) => {
+    if (typeof tag !== "string") return tags;
+    const normalized = tag.trim();
+    const key = normalized.toLocaleLowerCase();
+    if (!normalized || normalized.length > MAX_VEHICLE_TAG_LENGTH || seen.has(key)) return tags;
+    seen.add(key);
+    tags.push(normalized);
+    return tags;
+  }, []);
+}
+
 export function CreateUnitModule({ access, activeSection, errors, form, locale = "en", onChange, onUnitChange, onVehicleSelect, selectedVehicle, vehicleLookup }) {
   const [unitDetailsOpen, setUnitDetailsOpen] = useState(false);
   const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
+  const vehicleTags = normalizedVehicleTagNames(selectedVehicle?.tag_names);
   const t = (key) => interfaceText(locale, key);
   useEffect(() => setUnitDetailsOpen(false), [selectedVehicleId]);
   if (!access) return null;
@@ -48,7 +66,15 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
           <FormField id="workorder-vin" label={t("create.unit.vin")}><input {...textEntryProps("identifier")} enterKeyHint="done" value={form.vinNo} onChange={(event) => onChange("vinNo", event.target.value)} /></FormField>
         </OptionalSection> : null}
       </FormSection>
-      <FormSection title={t("create.unit.customer")}><CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t("create.unit.customerCompany")} hint={t("create.unit.customerHint")} required requiredLabel={t("create.required")} /></FormSection>
+      <FormSection title={t("create.unit.customer")}>
+        <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t("create.unit.customerCompany")} hint={t("create.unit.customerHint")} required requiredLabel={t("create.required")} />
+        {vehicleTags.length ? <div className="operational-vehicle-tag-picker" aria-label={t("create.unit.vehicleTags")}>
+          <span>{t("create.unit.vehicleTags")}</span>
+          <div className="operational-vehicle-tag-list">
+            {vehicleTags.map((tag) => <button key={tag.toLocaleLowerCase()} type="button" onClick={() => onChange("customerCompanyName", tag)} aria-label={`${t("create.unit.useVehicleTag")} ${tag}`}>{tag}</button>)}
+          </div>
+        </div> : null}
+      </FormSection>
     </ProgressiveWorkorderSection>
   );
 }

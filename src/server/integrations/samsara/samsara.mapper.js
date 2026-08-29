@@ -8,26 +8,42 @@ function metersToMiles(value) {
   return Math.round((number / 1609.344) * 10) / 10;
 }
 
+const MAX_TAG_NAMES = 25;
+const MAX_TAG_NAME_LENGTH = 120;
+
+export function normalizeSamsaraTagNames(tags) {
+  if (!Array.isArray(tags)) return [];
+
+  const seen = new Set();
+  const tagNames = [];
+  for (const tag of tags) {
+    if (typeof tag?.name !== "string") continue;
+    const name = tag.name.trim().slice(0, MAX_TAG_NAME_LENGTH);
+    const key = name.toLocaleLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    tagNames.push(name);
+    if (tagNames.length === MAX_TAG_NAMES) break;
+  }
+  return tagNames;
+}
+
 function ownerNameFromAsset(asset) {
   const externalIds = asset.externalIds || {};
-  const externalOwner = firstValue(
+  const candidates = [
     externalIds.owner,
     externalIds.ownerName,
     externalIds.company,
     externalIds.companyName,
     externalIds.carrier,
     externalIds.carrierName,
-    externalIds.teamName
-  );
-  if (externalOwner) return externalOwner;
-
-  const tagNames = Array.isArray(asset.tags) ? asset.tags.map((tag) => tag?.name).filter(Boolean) : [];
-  const genericTags = new Set(["assets", "fleet", "trailers", "fleet trailers", "trucks", "fleet trucks", "deactivated trailers", "deactivated trucks"]);
-  const specificTag = tagNames.find((name) => !genericTags.has(String(name).trim().toLowerCase()));
-  if (specificTag) return specificTag;
-
-  const nameMatch = String(asset.name || "").match(/\(([^)]+)\)/);
-  return nameMatch?.[1]?.trim() || null;
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const ownerName = candidate.trim().slice(0, 300);
+    if (ownerName) return ownerName;
+  }
+  return null;
 }
 
 function statValue(statsByVehicleId, vehicleId, type) {
@@ -54,6 +70,7 @@ export function mapSamsaraVehicle(vehicle, statsByVehicleId = new Map()) {
     providerVehicleId,
     unitType: "Truck",
     ownerName: ownerNameFromAsset(vehicle),
+    tagNames: normalizeSamsaraTagNames(vehicle.tags),
     name: firstValue(vehicle.name, vehicle.externalIds?.["samsara.name"]),
     unitNo: firstValue(vehicle.name, vehicle.externalIds?.unit, vehicle.externalIds?.unitNo, vehicle.externalIds?.vehicleId),
     vin: firstValue(vehicle.vin),
@@ -81,6 +98,7 @@ export function mapSamsaraTrailer(trailer, statsByTrailerId = new Map()) {
     providerVehicleId,
     unitType: "Trailer",
     ownerName: ownerNameFromAsset(trailer),
+    tagNames: normalizeSamsaraTagNames(trailer.tags),
     name: firstValue(trailer.name),
     unitNo: firstValue(trailer.name, externalIds.unit, externalIds.unitNo, externalIds.trailerId),
     vin: firstValue(trailer.vin, externalIds["samsara.vin"], trailer.trailerSerialNumber),

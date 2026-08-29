@@ -376,6 +376,48 @@
   color: #b42318;
 }
 
+.operational-vehicle-tag-picker {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.operational-vehicle-tag-picker > span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+}
+
+.operational-vehicle-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.operational-vehicle-tag-list button {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  color: #344054;
+  max-width: 100%;
+  min-height: 44px;
+  overflow: hidden;
+  padding: 8px 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operational-vehicle-tag-list button:hover,
+.operational-vehicle-tag-list button:focus-visible {
+  background: #f9fafb;
+  border-color: #1570ef;
+  color: #175cd3;
+  outline: 2px solid #1570ef;
+  outline-offset: 2px;
+}
+
 .operational-parts-editor {
   container-type: inline-size;
   display: grid;
