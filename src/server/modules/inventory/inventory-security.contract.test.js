@@ -22,5 +22,7 @@ test("authenticated scan projection excludes invoice, vendor, price, and QR secr
   const projection = source.slice(start);
   assert.doesNotMatch(projection, /invoice_number|vendor_name|unit_price|line_total|qr_token/i);
   assert.match(projection, /provider_picking_name/);
+  assert.match(projection, /line\.catalog_part_id/);
+  assert.match(projection, /catalogPartId: row\.catalog_part_id/);
   assert.match(projection, /inventory_unit_events/);
 });

@@ -66,7 +66,7 @@ function dependencies(overrides = {}) {
   };
 }
 
-test("Office resolve re-derives exact workorder scope and returns one eligible local unit", async () => {
+test("Office resolve re-derives exact workorder scope and returns one eligible application-owned unit", async () => {
   let received;
   const result = await resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({
     resolveUnit: async (input) => { received = input; return unit(); },
@@ -81,6 +81,19 @@ test("Office resolve re-derives exact workorder scope and returns one eligible l
     locationId: LOCATION_ID,
     actorRole: "office",
   });
+});
+
+test("all application-owned receipt providers are eligible while Odoo remains blocked", async () => {
+  for (const provider of ["local", "local_count", "local_serialization"]) {
+    const result = await resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({
+      resolveUnit: async () => unit({ provider }),
+    }));
+    assert.equal(result.eligibility.canIssue, true, provider);
+  }
+  const external = await resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({
+    resolveUnit: async () => unit({ provider: "odoo" }),
+  }));
+  assert.equal(external.eligibility.code, "INVENTORY_UNIT_PROVIDER_NOT_LOCAL");
 });
 
 test("resolve reports local-policy, workorder, provider, and stale-unit blocks without mutating", async () => {

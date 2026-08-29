@@ -64,8 +64,23 @@ export function createRoleRouterFormController({
     }));
   }
 
-  function addPartRow() {
-    setForm((current) => ({ ...current, parts: [...current.parts, emptyPart()] }));
+  function addPartRow(part = null) {
+    setForm((current) => {
+      const nextPart = part ? { ...emptyPart(), ...part } : emptyPart();
+      if (part) {
+        const blankIndex = current.parts.findIndex((candidate) => (
+          !candidate.partNo && !candidate.qty && !candidate.repairOrder
+        ));
+        if (blankIndex >= 0) {
+          return {
+            ...current,
+            parts: current.parts.map((candidate, index) => index === blankIndex ? nextPart : candidate),
+          };
+        }
+      }
+      if (current.parts.length >= 18) return current;
+      return { ...current, parts: [...current.parts, nextPart] };
+    });
   }
 
   function removePartRow(index) {

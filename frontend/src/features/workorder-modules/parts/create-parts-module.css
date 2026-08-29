@@ -1,0 +1,40 @@
+.create-parts-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.create-parts-actions .create-parts-compact-action.button {
+  flex: 0 1 auto;
+  font-size: 12px;
+  min-height: 44px;
+  padding: 6px 10px;
+  width: auto;
+}
+
+.create-parts-actions .create-parts-compact-action.button > svg {
+  height: 16px;
+  width: 16px;
+}
+
+.create-parts-action-help,
+.create-parts-action-message {
+  color: #667085;
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.create-parts-action-message {
+  color: #175cd3;
+}
+
+@media (max-width: 420px) {
+  .create-parts-actions > .button {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+}

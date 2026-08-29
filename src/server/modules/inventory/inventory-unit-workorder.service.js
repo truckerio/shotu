@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventory-provider.js";
 import { requireLocationAccess } from "../../auth/authorize.js";
 import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
 import {
@@ -70,7 +71,7 @@ function workorderSummary(workorder) {
 function eligibility({ workorder, unit }) {
   if (!workorder.assetId) return { canIssue: false, code: "WORKORDER_ASSET_REQUIRED", message: "Link an exact unit to this workorder before using a serialized part." };
   if (!ISSUE_STATUSES.has(workorder.status)) return { canIssue: false, code: "WORKORDER_INVENTORY_NOT_ACTIVE", message: "Serialized parts can only be issued to active work." };
-  if (unit.provider !== "local") return { canIssue: false, code: "INVENTORY_UNIT_PROVIDER_NOT_LOCAL", message: "This label is managed by an external inventory provider and cannot be issued here." };
+  if (!isApplicationOwnedInventoryProvider(unit.provider)) return { canIssue: false, code: "INVENTORY_UNIT_PROVIDER_NOT_LOCAL", message: "This label is managed by an external inventory provider and cannot be issued here." };
   if (unit.status !== "in_stock") return { canIssue: false, code: "INVENTORY_UNIT_NOT_AVAILABLE", message: "This serialized part is no longer available to issue." };
   return { canIssue: true, code: "", message: "Ready to use on this workorder." };
 }

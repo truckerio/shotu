@@ -1,3 +1,4 @@
+import { Plus } from "@untitledui/icons";
 import { QuantityUnitInput } from "../../../components/forms/index.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
@@ -10,6 +11,8 @@ import { ProgressiveWorkorderSection } from "../../../components/workorders/Work
 import { Button } from "../../../components/ui/Button.jsx";
 import { laborProductLabel } from "../../../../../shared/labor-product.js";
 import { interfaceText } from "../../../i18n/index.js";
+import { CreatePartScanner } from "./CreatePartScanner.jsx";
+import "./create-parts-module.css";
 
 export function CreatePartsModule({
   access,
@@ -33,6 +36,7 @@ export function CreatePartsModule({
   const laborLabel = configuredLaborLabel === "Labor hours" && !laborProduct?.code
     ? t("create.parts.laborHours")
     : configuredLaborLabel;
+  const canAddPart = parts.length < 18 || parts.some((part) => !part.partNo && !part.qty && !part.repairOrder);
   return (
     <ProgressiveWorkorderSection id="parts" className="create-parts-card" title={t("create.parts.title")} summary={t("create.parts.summary")} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
       <div className="create-known-parts-content">
@@ -95,7 +99,24 @@ export function CreatePartsModule({
           </div>
           ))}
         </div>
-        <Button type="button" variant="secondary" onClick={onAdd}>{t("create.parts.add")}</Button>
+        <div className="create-parts-actions">
+          <Button type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={() => onAdd()} disabled={parts.length >= 18}>
+            {t("create.parts.add")}
+          </Button>
+          <CreatePartScanner
+            disabled={!canAddPart}
+            locationId={locationId}
+            locale={locale}
+            onScanned={(unit) => onAdd({
+              catalogPartId: unit.catalogPartId,
+              partNo: unit.partNumber,
+              qty: "1",
+              uomCode: unit.uomCode,
+              repairOrder: "",
+            })}
+          />
+          <p className="create-parts-action-help">{t("create.parts.scanDraftHelp")}</p>
+        </div>
       </div>
     </ProgressiveWorkorderSection>
   );

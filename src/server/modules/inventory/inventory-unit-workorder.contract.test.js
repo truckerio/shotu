@@ -8,6 +8,7 @@ const workorders = readFileSync(new URL("../../db/repositories/operational-worko
 const server = readFileSync(new URL("../../../../server.js", import.meta.url), "utf8");
 const partsModule = readFileSync(new URL("../../../../frontend/src/features/workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
 const service = readFileSync(new URL("./inventory-unit-workorder.service.js", import.meta.url), "utf8");
+const providerPolicy = readFileSync(new URL("../../../../shared/inventory-provider.js", import.meta.url), "utf8");
 
 test("serialized usage migration enforces tenant FKs, one unresolved unit, and exact idempotency", () => {
   assert.match(migration, /foreign key \(company_id, workorder_id\) references operational_workorders\(company_id, id\)/i);
@@ -35,6 +36,10 @@ test("repository locks workorder, exact unit, usage, and local balance before mu
   assert.match(repository, /receipt\.provider/i);
   assert.match(repository, /quantity_on_hand = quantity_on_hand - 1/i);
   assert.match(repository, /quantity_on_hand = quantity_on_hand \+ 1/i);
+  assert.match(repository, /isApplicationOwnedInventoryProvider\(unit\.provider\)/);
+  assert.match(service, /isApplicationOwnedInventoryProvider\(unit\.provider\)/);
+  assert.match(providerPolicy, /"local_count"/);
+  assert.match(providerPolicy, /"local_serialization"/);
 });
 
 test("serialized workflow is Office-owned, module-authorized, and mounted inside canonical Parts", () => {

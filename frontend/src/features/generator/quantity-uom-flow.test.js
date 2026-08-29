@@ -9,6 +9,8 @@ import { laborProductLabel } from "../../../../shared/labor-product.js";
 
 const createForm = readFileSync(new URL("./CreateWorkorderForm.jsx", import.meta.url), "utf8");
 const createPartsModule = readFileSync(new URL("../workorder-modules/parts/CreatePartsModule.jsx", import.meta.url), "utf8");
+const createPartScanner = readFileSync(new URL("../workorder-modules/parts/CreatePartScanner.jsx", import.meta.url), "utf8");
+const createPartsCss = readFileSync(new URL("../workorder-modules/parts/create-parts-module.css", import.meta.url), "utf8");
 const detailPartsModule = readFileSync(new URL("../workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
 const formController = readFileSync(new URL("../../app/routes/useRoleRouterFormController.js", import.meta.url), "utf8");
 const readOnlyParts = readFileSync(new URL("../../components/workorders/part-requests/ReadOnlyPartsSurface.jsx", import.meta.url), "utf8");
@@ -61,6 +63,20 @@ test("create workorder uses the location-scoped catalog selector and retains sel
   assert.match(createPartsModule, /qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
   assert.match(createPartsModule, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
   assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
+});
+
+test("create parts place compact approved and scan actions together without claiming exact issuance", () => {
+  assert.match(createPartsModule, /className="create-parts-actions"/);
+  assert.match(createPartsModule, /create\.parts\.add/);
+  assert.match(createPartsModule, /<CreatePartScanner/);
+  assert.match(createPartsModule, /create\.parts\.scanDraftHelp/);
+  assert.match(createPartScanner, /api\("\/api\/inventory\/resolve"/);
+  assert.match(createPartScanner, /isApplicationOwnedInventoryProvider\(unit\.receipt\?\.provider\)/);
+  assert.match(createPartScanner, /unit\.locationId !== locationId/);
+  assert.match(createPartScanner, /unit\.status !== "in_stock"/);
+  assert.doesNotMatch(createPartScanner, /inventory-units\/issue/);
+  assert.match(createPartsCss, /min-height:\s*44px/);
+  assert.match(createPartsCss, /@media \(max-width: 420px\)/);
 });
 
 test("create parts show configured labor first and avoid duplicate visible row numbering", () => {

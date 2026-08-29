@@ -39,7 +39,8 @@ test("Create interface translations are present in English, Spanish, and Punjabi
   assert.deepEqual(missingLocaleKeys("es"), []);
   assert.deepEqual(missingLocaleKeys("pa"), []);
   assert.equal(interfaceText("es", "create.unit.searching"), "Buscando unidades...");
-  assert.equal(interfaceText("pa", "create.parts.add"), "ਪਾਰਟ ਜੋੜੋ");
+  assert.equal(interfaceText("pa", "create.parts.add"), "ਮਨਜ਼ੂਰਸ਼ੁਦਾ ਪਾਰਟ ਜੋੜੋ");
+  assert.equal(interfaceText("es", "create.parts.scan"), "Escanear pieza");
   assert.equal(interfaceText("es", "uom.unit.gal"), "Galón");
   assert.equal(interfaceText("pa", "create.validation.unitNo"), "ਯੂਨਿਟ ਦਰਜ ਕਰੋ ਜਾਂ ਚੁਣੋ।");
 });

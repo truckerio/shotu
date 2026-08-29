@@ -1,4 +1,5 @@
 import { getPool, query } from "../pool.js";
+import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventory-provider.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
 const FINALIZE_STATUSES = new Set(["accepted", "in_progress", "waiting_office", "parts_requested"]);
@@ -200,7 +201,7 @@ export async function issueSerializedUnitToWorkorder(input) {
       await client.query("rollback");
       return { kind: "missing" };
     }
-    if (unit.provider !== "local") {
+    if (!isApplicationOwnedInventoryProvider(unit.provider)) {
       await client.query("rollback");
       return { kind: "provider_not_local" };
     }

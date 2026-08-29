@@ -76,6 +76,37 @@ test("diagnosis module changes do not race the administrative autosave", () => {
   assert.deepEqual(autosaveCalls, []);
 });
 
+test("scanned approved parts replace a blank draft row and preserve exact catalog identity", () => {
+  let update;
+  const controller = createRoleRouterFormController({
+    activeWorkorder: null,
+    actorId: "office-1",
+    form: { workEndDate: "" },
+    isOfficeDetail: false,
+    officeActionsRef: { current: null },
+    setActiveWorkorder: () => {},
+    setCreateErrors: () => {},
+    setForm: (next) => { update = next; },
+    setUsedPartsDirty: () => {},
+  });
+
+  controller.addPartRow({
+    catalogPartId: "part-1",
+    partNo: "FILTER-1",
+    qty: "1",
+    uomCode: "ea",
+    repairOrder: "",
+  });
+
+  assert.deepEqual(update({
+    concern: "Inspect",
+    parts: [{ partNo: "", qty: "", uomCode: "pc", repairOrder: "" }],
+  }), {
+    concern: "Inspect",
+    parts: [{ catalogPartId: "part-1", partNo: "FILTER-1", qty: "1", uomCode: "ea", repairOrder: "" }],
+  });
+});
+
 test("shared form callbacks remain stable across unrelated router renders", () => {
   assert.match(source, /return useMemo\(\(\) => createRoleRouterFormController/);
   assert.match(source, /form: \{ workEndDate: form\.workEndDate \}/);
