@@ -14,8 +14,48 @@ test("catalog lookup stays deterministic, bounded, debounced, and cancellable", 
   assert.match(source, /resultLimit = 8/);
   assert.match(source, /catalogSearchPlan/);
   assert.match(source, /limit: String\(boundedResultLimit\)/);
+  assert.match(source, /purpose = "issue"/);
+  assert.match(source, /purpose,/);
   assert.match(source, /api\(`\$\{catalogEndpoint\}\?\$\{params\}`/);
   assert.doesNotMatch(source, /parts-helper\/identify|live-prices/);
+});
+
+test("catalog popup presents locally backed identities as our inventory", () => {
+  assert.match(source, /popupAriaLabel = "Our inventory"/);
+  assert.match(source, /sourceLabel/);
+  assert.match(source, /parts\.ourInventory/);
+  assert.match(source, /parts\.masterCatalog/);
+  assert.match(source, /parts\.searchingOurInventory/);
+  assert.doesNotMatch(source, /part\.source === "odoo"/);
+  assert.doesNotMatch(source, />Odoo</);
+});
+
+test("master matching uses a neutral master catalog label", () => {
+  assert.match(source, /const masterMatch = purpose === "master_match"/);
+  assert.match(source, /parts\.masterCatalog/);
+  assert.match(source, /parts\.searchingMasterCatalog/);
+  assert.match(source, /parts\.noMasterCatalogParts/);
+  assert.match(source, /catalogPartDetails\(part, t, purpose\)/);
+});
+
+test("every catalog consumer declares its search purpose", () => {
+  const consumers = {
+    usedParts: readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8"),
+    mechanicRequest: readFileSync(new URL("../MechanicPartRequestForm.jsx", import.meta.url), "utf8"),
+    officeApproved: readFileSync(new URL("./OfficePartComposer.jsx", import.meta.url), "utf8"),
+    officeRequest: readFileSync(new URL("./OfficeRequestCard.jsx", import.meta.url), "utf8"),
+    createParts: readFileSync(new URL("../../../features/workorder-modules/parts/CreatePartsModule.jsx", import.meta.url), "utf8"),
+    inventoryCount: readFileSync(new URL("../../../features/inventory/InventoryCountImportPanel.jsx", import.meta.url), "utf8"),
+  };
+
+  for (const sourceText of [consumers.usedParts, consumers.officeApproved, consumers.createParts]) {
+    assert.match(sourceText, /<PartCatalogCombobox[\s\S]*?purpose="issue"/);
+  }
+  for (const sourceText of [consumers.mechanicRequest, consumers.officeRequest]) {
+    assert.match(sourceText, /<PartCatalogCombobox[\s\S]*?purpose="request"/);
+  }
+  assert.match(consumers.inventoryCount, /<PartCatalogCombobox[\s\S]*?purpose="master_match"/);
+  assert.match(consumers.inventoryCount, /catalogEndpoint="\/api\/office\/inventory\/catalog"/);
 });
 
 test("automatic catalog evidence produces one bounded ranked lookup plan", () => {
@@ -34,7 +74,7 @@ test("catalog lookup can reuse the accessible combobox with another ranked endpo
   assert.match(source, /resultLimit/);
   assert.match(source, /popupAriaLabel/);
   assert.match(source, /suggestionQuery/);
-  assert.match(source, /aria-label=\{locale === "en" \? popupAriaLabel : t\("parts\.companyParts"\)\}/);
+  assert.match(source, /aria-label=\{locale === "en" \? popupAriaLabel : sourceLabel\}/);
 });
 
 test("saved part values stay closed until the user interacts with the combobox", () => {
@@ -63,9 +103,9 @@ test("combobox exposes listbox semantics and complete keyboard selection", () =>
 
 test("manual entry remains available for empty, unmatched, and failed lookup", () => {
   assert.match(source, /role="status" aria-live="polite"/);
-  assert.match(source, /t\("parts\.noCompanyParts"\)/);
-  assert.match(source, /t\("parts\.noCatalogMatchFind"\)/);
-  assert.match(source, /t\("parts\.noCatalogMatch"\)/);
+  assert.match(source, /parts\.noCompanyParts/);
+  assert.match(source, /parts\.noCatalogMatchFind/);
+  assert.match(source, /parts\.noCatalogMatch/);
   assert.match(source, /t\("parts\.lookupUnavailable"\)/);
   assert.match(source, /onChange\(event\.target\.value\)/);
 });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   catalogInventoryText,
+  catalogPartDetails,
   normalizeCatalogResponse,
   repairOrderAfterCatalogSelection,
 } from "./catalog-parts-model.js";
@@ -52,4 +53,13 @@ test("catalog description fills only a blank repair order", () => {
 
 test("catalog description autofill respects the used-parts payload limit", () => {
   assert.equal(repairOrderAfterCatalogSelection("", { description: "x".repeat(2100) }).length, 2000);
+});
+
+test("master matching uses a neutral catalog fallback instead of operational stock wording", () => {
+  const text = (key) => ({
+    "parts.ourInventoryPart": "Our inventory part",
+    "parts.masterCatalogPart": "Master catalog part",
+  })[key];
+  assert.equal(catalogPartDetails({}, text), "Our inventory part");
+  assert.equal(catalogPartDetails({}, text, "master_match"), "Master catalog part");
 });

@@ -119,6 +119,7 @@ export function OfficePartComposer({ detail, onChanged }) {
       <div className="part-search-control">
         <PartCatalogCombobox
           workorderId={detail.workorder.id}
+          purpose="issue"
           value={draft.query}
           onChange={(value) => {
             update("query", value);

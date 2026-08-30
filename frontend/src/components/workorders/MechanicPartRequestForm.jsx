@@ -82,6 +82,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en" 
       </div>
       <PartCatalogCombobox
         workorderId={workorderId}
+        purpose="request"
         value={catalogQuery}
         onChange={(value) => {
           setCatalogQuery(value);

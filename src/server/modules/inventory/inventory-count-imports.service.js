@@ -240,6 +240,7 @@ export async function searchInventoryMasterParts(searchParams, requestContext, d
     text: parsed.q,
     locationId: parsed.locationId,
     limit: parsed.limit,
+    purpose: "master_match",
   });
 }
 

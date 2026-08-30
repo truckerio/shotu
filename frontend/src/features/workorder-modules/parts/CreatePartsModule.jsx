@@ -74,6 +74,7 @@ export function CreatePartsModule({
             <strong>{index + 2}</strong>
             <PartCatalogCombobox
               locationId={locationId}
+              purpose="issue"
               value={part.partNo}
               onChange={(value) => onChange(index, {
                 catalogPartId: null,

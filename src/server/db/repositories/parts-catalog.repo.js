@@ -45,7 +45,7 @@ function publicCatalogPart(row) {
     matchType: row.match_type,
     matchRank: row.match_rank === undefined ? undefined : Number(row.match_rank),
     barcode: row.barcode || "",
-    source: row.source_provider || (row.odoo_external_id ? "odoo" : "company"),
+    source: row.inventory_item_id ? "local" : (row.source_provider || (row.odoo_external_id ? "odoo" : "company")),
     externalId: row.odoo_external_id || row.external_id || "",
     providerUpdatedAt: row.provider_updated_at || null,
     lastSeenAt: row.last_seen_at || null,
@@ -78,6 +78,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
   const normalizedMatchPattern = allowBroadTextMatch ? `%${escapedNormalized}%` : `${escapedNormalized}%`;
   const limit = Math.min(MAX_SEARCH_LIMIT, Math.max(1, Number.parseInt(values.limit, 10) || DEFAULT_SEARCH_LIMIT));
   const locationId = values.locationId || null;
+  const purpose = ["issue", "request", "master_match"].includes(values.purpose) ? values.purpose : "request";
 
   const result = await query(
     `
@@ -177,7 +178,9 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         provider.active as provider_active,
         provider.provider_updated_at,
         provider.last_seen_at,
-        case when provider.external_id is not null then 'odoo' else candidates.source_provider end as source_provider,
+        case when inventory.id is not null then 'local'
+          when provider.external_id is not null then 'odoo'
+          else candidates.source_provider end as source_provider,
         inventory.id as inventory_item_id,
         inventory.location_id as inventory_location_id,
         inventory.location_name as inventory_location_name,
@@ -222,6 +225,12 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         order by (item.quantity_on_hand - item.quantity_reserved) desc, item.updated_at desc
         limit 1
       ) inventory on true
+      where candidates.id is null
+        or $11::text = 'master_match'
+        or (
+          inventory.id is not null
+          and ($11::text = 'request' or inventory.quantity_available > 0)
+        )
       order by
         candidates.match_rank,
         (coalesce(inventory.quantity_available, 0) > 0) desc,
@@ -241,6 +250,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
       locationId,
       limit,
       allowBroadTextMatch,
+      purpose,
     ],
   );
 

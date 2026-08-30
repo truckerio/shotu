@@ -27,12 +27,15 @@ export function PartCatalogCombobox({
   inputPolicy = "search",
   allowAiFallback = false,
   catalogEndpoint = "/api/parts-helper/catalog",
+  purpose = "issue",
   resultLimit = 8,
-  popupAriaLabel = "Company parts",
+  popupAriaLabel = "Our inventory",
   suggestionQuery = "",
   locale = "en",
 }) {
   const t = (key) => interfaceText(locale, key);
+  const masterMatch = purpose === "master_match";
+  const sourceLabel = t(masterMatch ? "parts.masterCatalog" : "parts.ourInventory");
   const reactId = useId();
   const inputId = `part-catalog-input-${reactId}`;
   const listboxId = `part-catalog-list-${reactId}`;
@@ -99,6 +102,7 @@ export function PartCatalogCombobox({
           ...(workorderId ? { workorderId } : { locationId }),
           q: lookupQuery,
           limit: String(boundedResultLimit),
+          purpose,
         });
         const payload = await api(`${catalogEndpoint}?${params}`, { signal: controller.signal });
         if (controller.signal.aborted || sequence !== requestSequence.current) return;
@@ -118,7 +122,7 @@ export function PartCatalogCombobox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [boundedResultLimit, catalogEndpoint, disabled, interacting, locationId, lookupQuery, normalizedQuery, workorderId]);
+  }, [boundedResultLimit, catalogEndpoint, disabled, interacting, locationId, lookupQuery, normalizedQuery, purpose, workorderId]);
 
   function select(part) {
     selectedQueryRef.current = part.partNumber.trim();
@@ -229,7 +233,7 @@ export function PartCatalogCombobox({
           className="part-catalog-popup"
           id={listboxId}
           role="listbox"
-          aria-label={locale === "en" ? popupAriaLabel : t("parts.companyParts")}
+          aria-label={locale === "en" ? popupAriaLabel : sourceLabel}
           style={popupWidth ? { "--part-catalog-popup-width": `${popupWidth}px` } : undefined}
         >
           {state === "results" ? (
@@ -247,9 +251,9 @@ export function PartCatalogCombobox({
                 >
                   <span className="part-catalog-option-heading">
                     <strong>{part.partNumber}</strong>
-                    <small>{part.source === "odoo" ? "Odoo" : t("parts.company")}</small>
+                    <small>{sourceLabel}</small>
                   </span>
-                  <span>{catalogPartDetails(part, t)}</span>
+                  <span>{catalogPartDetails(part, t, purpose)}</span>
                   <small>{catalogInventoryText(part, t, (value) => formatLocaleNumber(value, locale))}</small>
                 </li>
               ))}
@@ -257,14 +261,14 @@ export function PartCatalogCombobox({
           ) : (
             <p className="part-catalog-state" role="status" aria-live="polite">
               {state === "waiting" || state === "loading"
-                ? t("parts.searchingCompanyParts")
+                ? t(masterMatch ? "parts.searchingMasterCatalog" : "parts.searchingOurInventory")
                 : state === "empty"
-                  ? t("parts.noCompanyParts")
+                  ? t(masterMatch ? "parts.noMasterCatalogParts" : "parts.noCompanyParts")
                   : state === "error"
                     ? t("parts.lookupUnavailable")
                     : allowAiFallback
-                      ? t("parts.noCatalogMatchFind")
-                      : t("parts.noCatalogMatch")}
+                      ? t(masterMatch ? "parts.noMasterCatalogMatch" : "parts.noCatalogMatchFind")
+                      : t(masterMatch ? "parts.noMasterCatalogMatch" : "parts.noCatalogMatch")}
             </p>
           )}
         </div>

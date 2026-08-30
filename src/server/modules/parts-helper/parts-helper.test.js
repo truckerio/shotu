@@ -48,9 +48,13 @@ test("catalog search input requires one authorized scope and a bounded query", (
   const locationId = "22222222-2222-4222-8222-222222222222";
   assert.deepEqual(catalogSearchInputSchema.parse({ workorderId, q: "  LF9  " }), {
     workorderId,
+    purpose: "request",
     q: "LF9",
     limit: 8,
   });
+  assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "issue", q: "filter" }).purpose, "issue");
+  assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "master_match", q: "filter" }).purpose, "master_match");
+  assert.equal(catalogSearchInputSchema.safeParse({ workorderId, purpose: "all", q: "filter" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "x" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "filter", limit: 13 }).success, false);
   assert.equal(catalogSearchInputSchema.parse({ locationId, q: "filter" }).locationId, locationId);
@@ -73,7 +77,10 @@ test("catalog search derives company and location from authorized workorder", as
     },
     searchCatalogParts: async (companyId, options) => {
       calls.push({ type: "search", companyId, options });
-      return { catalogAvailable: true, items: [{ id: "part-1" }] };
+      return {
+        catalogAvailable: true,
+        items: [{ id: "part-1", source: "local", inventory: { locationId: "location-1", available: 0 } }],
+      };
     },
   });
 
@@ -85,12 +92,12 @@ test("catalog search derives company and location from authorized workorder", as
   assert.deepEqual(calls[1], {
     type: "search",
     companyId: "company-1",
-    options: { text: "LF90", locationId: "location-1", limit: 6 },
+    options: { text: "LF90", locationId: "location-1", limit: 6, purpose: "request" },
   });
   assert.deepEqual(result, {
     query: "LF90",
     catalogAvailable: true,
-    items: [{ id: "part-1" }],
+    items: [{ id: "part-1", source: "local", inventory: { locationId: "location-1", available: 0 } }],
   });
 });
 
@@ -111,13 +118,16 @@ test("catalog search derives company from an authorized create-workorder locatio
     },
     searchCatalogParts: async (scopedCompanyId, options) => {
       calls.push({ type: "search", companyId: scopedCompanyId, options });
-      return { catalogAvailable: true, items: [{ id: "part-1" }] };
+      return {
+        catalogAvailable: true,
+        items: [{ id: "part-1", source: "local", inventory: { locationId, available: 0 } }],
+      };
     },
   });
 
   assert.deepEqual(calls, [
     { type: "location", id: locationId, companyIds: [companyId] },
-    { type: "search", companyId, options: { text: "oil", locationId, limit: 8 } },
+    { type: "search", companyId, options: { text: "oil", locationId, limit: 8, purpose: "request" } },
   ]);
   assert.equal(result.items[0].id, "part-1");
 });
@@ -164,6 +174,91 @@ test("catalog search stops before repository lookup when workorder access fails"
   assert.equal(searched, false);
 });
 
+test("operational catalog purposes return only local inventory in the authorized location", async () => {
+  const localAvailable = {
+    id: "local-available",
+    source: "local",
+    providerManaged: true,
+    inventory: { locationId: "location-1", available: 3 },
+  };
+  const localZero = {
+    id: "local-zero",
+    source: "local",
+    inventory: { locationId: "location-1", available: 0 },
+  };
+  const candidates = [
+    { id: "odoo-only", source: "odoo", providerManaged: true, inventory: null },
+    localAvailable,
+    localZero,
+    { id: "other-location", source: "local", inventory: { locationId: "location-2", available: 9 } },
+  ];
+  const dependencies = {
+    requireWorkorderAccess: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    searchCatalogParts: async () => ({ catalogAvailable: true, items: candidates }),
+  };
+  const context = { actor: { id: "mechanic-1", role: "mechanic" } };
+  const requestResult = await searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    purpose: "request",
+    q: "filter",
+  }, context, dependencies);
+  const issueResult = await searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    purpose: "issue",
+    q: "filter",
+  }, context, dependencies);
+
+  assert.deepEqual(requestResult.items, [localAvailable, localZero]);
+  assert.deepEqual(issueResult.items, [localAvailable]);
+  assert.equal(issueResult.items[0].source, "local");
+  assert.equal(issueResult.items[0].providerManaged, true);
+});
+
+test("master-match catalog search requires inventory count apply permission", async () => {
+  const calls = [];
+  const catalogItems = [{ id: "odoo-only", source: "odoo", inventory: null }];
+  const context = { actor: { id: "admin-1", role: "admin" } };
+  const result = await searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    purpose: "master_match",
+    q: "filter",
+  }, context, {
+    requireWorkorderAccess: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    requirePermission: (receivedContext, permission) => calls.push({ receivedContext, permission }),
+    searchCatalogParts: async (companyId, options) => {
+      calls.push({ companyId, options });
+      return { catalogAvailable: true, items: catalogItems };
+    },
+  });
+
+  assert.equal(calls[0].receivedContext, context);
+  assert.equal(calls[0].permission, "inventory:count-apply");
+  assert.deepEqual(calls[1], {
+    companyId: "company-1",
+    options: { text: "filter", locationId: "location-1", limit: 8, purpose: "master_match" },
+  });
+  assert.deepEqual(result.items, catalogItems);
+});
+
+test("master-match permission denial stops before catalog lookup", async () => {
+  let searched = false;
+  await assert.rejects(() => searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    purpose: "master_match",
+    q: "filter",
+  }, { actor: { id: "mechanic-1", role: "mechanic" } }, {
+    requireWorkorderAccess: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    requirePermission: () => {
+      throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+    },
+    searchCatalogParts: async () => {
+      searched = true;
+      return { catalogAvailable: true, items: [] };
+    },
+  }), (error) => error.statusCode === 403);
+  assert.equal(searched, false);
+});
+
 test("catalog route forwards only URL search fields and request context", async () => {
   const requestContext = { actor: { id: "mechanic-1", role: "mechanic" } };
   const calls = [];
@@ -171,7 +266,7 @@ test("catalog route forwards only URL search fields and request context", async 
   const handled = await handlePartsHelperApi(
     { method: "GET" },
     response,
-    new URL("http://localhost/api/parts-helper/catalog?workorderId=11111111-1111-4111-8111-111111111111&q=oil%20filter&limit=4&companyId=other"),
+    new URL("http://localhost/api/parts-helper/catalog?workorderId=11111111-1111-4111-8111-111111111111&q=oil%20filter&limit=4&purpose=issue&companyId=other"),
     {
       requestContext,
       sendJson: (res, status, body) => Object.assign(res, { status, body }),
@@ -195,7 +290,7 @@ test("catalog route forwards only URL search fields and request context", async 
   assert.deepEqual(calls[1], {
     type: "search",
     companyId: "company-1",
-    options: { text: "oil filter", locationId: "location-1", limit: 4 },
+    options: { text: "oil filter", locationId: "location-1", limit: 4, purpose: "issue" },
   });
 });
 

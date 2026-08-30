@@ -37,6 +37,7 @@ export async function handlePartsHelperApi(req, res, url, helpers) {
       const input = {
         workorderId: url.searchParams.get("workorderId") || undefined,
         locationId: url.searchParams.get("locationId") || undefined,
+        purpose: url.searchParams.get("purpose") || undefined,
         q: url.searchParams.get("q"),
         limit: url.searchParams.get("limit") || undefined,
       };

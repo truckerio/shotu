@@ -23,8 +23,19 @@ test("catalog search scopes Odoo mappings and inventory to company and location"
   assert.match(source, /mapping\.company_id = candidates\.company_id/);
   assert.match(source, /item\.company_id = candidates\.company_id/);
   assert.match(source, /item\.location_id = \$8::uuid/);
+  assert.match(source, /item\.source_provider = 'local'/);
   assert.match(source, /item\.catalog_part_id = candidates\.id/);
   assert.match(source, /item\.uom_code = candidates\.uom_code/);
+});
+
+test("operational catalog search is purpose-gated by local availability", async () => {
+  const source = await readFile(repositoryUrl, "utf8");
+
+  assert.match(source, /\["issue", "request", "master_match"\]\.includes\(values\.purpose\)/);
+  assert.match(source, /\$11::text = 'master_match'/);
+  assert.match(source, /inventory\.id is not null[\s\S]*\$11::text = 'request'[\s\S]*inventory\.quantity_available > 0/);
+  assert.match(source, /case when inventory\.id is not null then 'local'/);
+  assert.match(source, /source: row\.inventory_item_id \? "local"/);
 });
 
 test("catalog search migration indexes partial text, barcode, and location inventory", async () => {

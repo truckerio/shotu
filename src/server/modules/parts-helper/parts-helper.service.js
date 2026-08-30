@@ -16,7 +16,8 @@ import { suggestCompanyPartRepairs } from "../../db/repositories/service-history
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import { normalizePartNumber } from "../parts/part.constants.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
-import { requireActor, requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { requireActor, requireCompanyAccess, requireLocationAccess, requirePermission } from "../../auth/authorize.js";
+import { PERMISSION } from "../../auth/permissions.js";
 import { resourceNotFound } from "../../auth/errors.js";
 
 const normalizedUrl = (value) => {
@@ -81,16 +82,27 @@ export async function searchPartCatalog(input, requestContext, dependencies = {}
     requireLocationAccess(requestContext, location.id);
     scope = { companyId: location.company_id, locationId: location.id };
   }
+  if (parsed.purpose === "master_match") {
+    (dependencies.requirePermission || requirePermission)(requestContext, PERMISSION.INVENTORY_COUNT_APPLY);
+  }
   const result = await searchCatalog(scope.companyId, {
     text: parsed.q,
     locationId: scope.locationId,
     limit: parsed.limit,
+    purpose: parsed.purpose,
   });
+
+  const items = Array.isArray(result?.items) ? result.items : [];
+  const scopedItems = parsed.purpose === "master_match"
+    ? items
+    : items.filter((item) => item?.source === "local"
+      && item.inventory?.locationId === scope.locationId
+      && (parsed.purpose !== "issue" || Number(item.inventory?.available) > 0));
 
   return {
     query: parsed.q,
     catalogAvailable: Boolean(result?.catalogAvailable),
-    items: Array.isArray(result?.items) ? result.items : [],
+    items: scopedItems,
   };
 }
 

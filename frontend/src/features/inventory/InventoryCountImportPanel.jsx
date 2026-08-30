@@ -147,6 +147,7 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
     <OperationalDataCell label="Master part" className="inventory-count-master-cell">
       <PartCatalogCombobox
         locationId={stocktake.locationId}
+        purpose="master_match"
         value={query}
         onChange={(nextQuery) => { setQuery(nextQuery); setUseSpreadsheetSuggestions(false); }}
         onSelect={(part) => update("match", part)}

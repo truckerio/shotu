@@ -108,4 +108,5 @@ export const inventoryCatalogSearchSchema = z.object({
   q: z.string().trim().min(2).max(200),
   locationId: z.string().uuid(),
   limit: z.coerce.number().int().min(1).max(12).optional().default(8),
+  purpose: z.literal("master_match").optional(),
 }).strict();

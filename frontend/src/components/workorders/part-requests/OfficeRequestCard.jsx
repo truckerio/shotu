@@ -43,6 +43,7 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
           <div className="part-office-fields">
             <PartCatalogCombobox
               workorderId={detail.workorder.id}
+              purpose="request"
               value={review.form.partNumber}
               onChange={review.updatePartNumber}
               onSelect={review.selectCatalogPart}

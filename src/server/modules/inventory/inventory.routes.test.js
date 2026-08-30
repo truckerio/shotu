@@ -287,6 +287,55 @@ test("part-location routes read company-wide details and create auditable serial
   }]);
 });
 
+test("inventory master route accepts only master-match purpose and preserves authorized scope", async () => {
+  const response = {};
+  let locationScope;
+  let catalogSearch;
+  const handled = await handleInventoryApi(
+    { method: "GET" },
+    response,
+    new URL(`http://localhost/api/office/inventory/catalog?q=filter&locationId=${LOCATION_ID}&purpose=master_match`),
+    helpers(null),
+    {
+      findLocation: async (scope) => {
+        locationScope = scope;
+        return { id: LOCATION_ID, company_id: COMPANY_ID };
+      },
+      searchCatalog: async (companyId, input) => {
+        catalogSearch = { companyId, input };
+        return { catalogAvailable: true, items: [{ id: "catalog-part-1" }] };
+      },
+    },
+  );
+
+  assert.equal(handled, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(locationScope.companyIds, [COMPANY_ID]);
+  assert.deepEqual(locationScope.locationIds, [LOCATION_ID]);
+  assert.deepEqual(catalogSearch, {
+    companyId: COMPANY_ID,
+    input: { text: "filter", locationId: LOCATION_ID, limit: 8, purpose: "master_match" },
+  });
+
+  const invalidResponse = {};
+  let invalidSearched = false;
+  await handleInventoryApi(
+    { method: "GET" },
+    invalidResponse,
+    new URL(`http://localhost/api/office/inventory/catalog?q=filter&locationId=${LOCATION_ID}&purpose=request`),
+    helpers(null),
+    {
+      findLocation: async () => {
+        invalidSearched = true;
+        return { id: LOCATION_ID, company_id: COMPANY_ID };
+      },
+    },
+  );
+  assert.equal(invalidResponse.status, 400);
+  assert.equal(invalidResponse.payload.code, "validation_error");
+  assert.equal(invalidSearched, false);
+});
+
 test("serialized-child detail route returns the canonical timeline projection", async () => {
   const response = {};
   let readInput;

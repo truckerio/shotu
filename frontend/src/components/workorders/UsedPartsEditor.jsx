@@ -309,6 +309,7 @@ export function UsedPartsEditor({
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
                 <PartCatalogCombobox
                   workorderId={detail.workorder.id}
+                  purpose="issue"
                   value={part.partNo}
                   onChange={(value) => {
                     setSelectedCatalogPart(index, null);

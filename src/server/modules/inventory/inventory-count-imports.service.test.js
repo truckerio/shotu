@@ -92,7 +92,7 @@ test("upload rejects client hash mismatch before parsing or persistence", async 
   assert.equal(wrote, false);
 });
 
-test("master search derives company only from an authorized location", async () => {
+test("inventory master endpoint derives scope and always requests full catalog matching", async () => {
   let searched;
   const result = await searchInventoryMasterParts(new URLSearchParams({ q: "filter", locationId: LOCATION_ID }), context(), {
     findLocation: async (scope) => {
@@ -106,8 +106,15 @@ test("master search derives company only from an authorized location", async () 
     },
   });
   assert.deepEqual(result, { catalogAvailable: true, items: [] });
-  assert.equal(searched.companyId, COMPANY_ID);
-  assert.equal(searched.input.locationId, LOCATION_ID);
+  assert.deepEqual(searched, {
+    companyId: COMPANY_ID,
+    input: {
+      text: "filter",
+      locationId: LOCATION_ID,
+      limit: 8,
+      purpose: "master_match",
+    },
+  });
 });
 
 test("inventory count browser returns server pagination metadata", async () => {

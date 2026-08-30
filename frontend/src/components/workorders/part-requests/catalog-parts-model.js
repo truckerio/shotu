@@ -52,9 +52,11 @@ export function normalizeCatalogResponse(payload = {}) {
   };
 }
 
-export function catalogPartDetails(part, localeText = null) {
+export function catalogPartDetails(part, localeText = null, purpose = "issue") {
   return [part.manufacturer, part.description].filter(Boolean).join(" · ")
-    || (localeText ? localeText("parts.companyCatalogPart") : "Company catalog part");
+    || (localeText
+      ? localeText(purpose === "master_match" ? "parts.masterCatalogPart" : "parts.ourInventoryPart")
+      : purpose === "master_match" ? "Master catalog part" : "Our inventory part");
 }
 
 export function repairOrderAfterCatalogSelection(currentRepairOrder, catalogPart = {}) {
