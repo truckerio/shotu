@@ -115,6 +115,33 @@ async function assertCreateSectionNavigation(page, baseUrl) {
   }
 }
 
+async function assertCreatePartsTyping(page, baseUrl) {
+  await page.goto(new URL("/?view=create", baseUrl).href, { waitUntil: "domcontentloaded" });
+  await page.locator(".create-workorder-page").waitFor({ state: "visible", timeout: 15_000 });
+  await selectWorkorderSection(page, "parts");
+
+  const partNumber = page.getByRole("combobox", { name: "Part number 1" });
+  const repairOrder = page.getByRole("textbox", { name: "Repair order 1" });
+  const laborRepairOrder = page.getByRole("textbox", { name: "Repair order / work performed" });
+  const exactValues = [
+    [partNumber, "FILTER 2000"],
+    [repairOrder, "Replace  filter housing"],
+    [laborRepairOrder, "Inspect  and repair"],
+  ];
+
+  for (const [field, expected] of exactValues) {
+    await field.focus();
+    await page.keyboard.type(expected, { delay: 0 });
+    assert.equal(await field.inputValue(), expected, `Expected rapid typing to preserve ${JSON.stringify(expected)}.`);
+  }
+
+  await page.waitForTimeout(400);
+  assert.equal(await partNumber.inputValue(), "FILTER 2000", "Catalog lookup must not replace manual text.");
+  const quantity = page.locator("#known-part-quantity-0");
+  await quantity.fill("2");
+  assert.equal(await quantity.inputValue(), "2", "Quantity editing must remain functional.");
+}
+
 async function assertCreateOnscreenKeyboardVisibility(page, baseUrl) {
   const results = [];
   for (const viewport of ONSCREEN_KEYBOARD_VIEWPORTS) {
@@ -248,6 +275,7 @@ async function assertRoleSurface({ browser, config, role, workflow }) {
     if (role === "admin") {
       await assertRapidSectionNavigation(page);
       await assertCreateSectionNavigation(page, config.baseUrl);
+      await assertCreatePartsTyping(page, config.baseUrl);
       await assertCreateOnscreenKeyboardVisibility(page, config.baseUrl);
     }
 

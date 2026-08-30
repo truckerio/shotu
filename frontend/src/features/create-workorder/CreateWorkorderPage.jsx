@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DraftLeaveDialog } from "../../components/drafts/index.js";
 import { PreviewPane } from "../../components/preview/PreviewPane.jsx";
 import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
@@ -123,9 +123,10 @@ export function CreateWorkorderPage({
     userId: actor.id,
   }), [actor.id, actor.role, locationPolicy]);
   const canCreate = createSections.some((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW && section.modulePolicy?.canWrite);
+  const deferredPreviewSource = useDeferredValue(form);
   const previewForm = useMemo(
-    () => createWorkorderPreviewForm(form, assignment),
-    [assignment, form],
+    () => createWorkorderPreviewForm(deferredPreviewSource, assignment),
+    [assignment, deferredPreviewSource],
   );
 
   const ensureFocusedFieldVisible = useFocusedFieldVisibility({

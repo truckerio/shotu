@@ -107,6 +107,15 @@ test("phone Create renders one form page and a contained compact Preview", () =>
   );
 });
 
+test("Create keeps text entry responsive by deferring only live preview work", () => {
+  assert.match(createPage, /const deferredPreviewSource = useDeferredValue\(form\);/);
+  assert.match(
+    createPage,
+    /createWorkorderPreviewForm\(deferredPreviewSource, assignment\)/,
+  );
+  assert.doesNotMatch(createPage, /useDeferredValue\(form\)[\s\S]*?<CreateWorkorderForm[\s\S]*?form=\{deferredPreviewSource\}/);
+});
+
 test("Create shell uses the canonical workorder panel for summary and section navigation", () => {
   assert.match(createShell, /<WorkorderPanelShell/);
   assert.match(workorderPanelShell, /<WorkorderObjectSummary/);
