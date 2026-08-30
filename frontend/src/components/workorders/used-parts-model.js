@@ -92,6 +92,34 @@ export function installedSerializedUsedParts(detail) {
   });
 }
 
+export function serializedUsageTableState(usages, actionsFor) {
+  if (!Array.isArray(usages) || typeof actionsFor !== "function") {
+    return { active: [], completed: [] };
+  }
+  const active = [];
+  const completed = [];
+  for (const usage of usages) {
+    const actions = actionsFor(usage) || {};
+    if (!actions.install && !actions.returnUnused && !actions.remove) {
+      completed.push(usage);
+      continue;
+    }
+    active.push({
+      usage,
+      usageId: usage.id,
+      catalogPartId: usage.catalogPartId,
+      partNo: usage.partNumber,
+      qty: "1",
+      uomCode: usage.uomCode,
+      serialNumber: usage.serialNumber,
+      description: usage.description || "",
+      repairOrder: usage.repairOrder || "",
+      status: usage.status,
+    });
+  }
+  return { active, completed };
+}
+
 export function workorderPreviewParts(manualParts, installedParts) {
   return [
     ...(Array.isArray(installedParts) ? installedParts : []),

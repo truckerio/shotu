@@ -30,6 +30,30 @@ export function WorkorderPartsModule({
   if (!partsVisible && !canScanSerializedParts) return null;
   const canWrite = access === WORKORDER_MODULE_ACCESS.WRITE || access === WORKORDER_MODULE_ACCESS.REQUIRED;
   const t = (key) => interfaceText(locale, key);
+  function renderPartsPanel(serializedParts = null) {
+    if (!partsVisible) return null;
+    return (
+      <PartRequestsPanel
+        key={activeWorkorder.workorder.id}
+        actorId={actorId}
+        role={canWrite ? (isOfficeDetail ? "office" : "mechanic") : "read"}
+        detail={activeWorkorder}
+        parts={form.parts}
+        laborHours={form.laborHours || ""}
+        laborProduct={form.laborProduct || null}
+        laborRepairOrder={form.workPerformed || ""}
+        laborRepairOrderDisabled={!activeWorkorder.allowedActions?.saveNotes}
+        onLaborHoursChange={onLaborHoursChange}
+        onLaborRepairOrderChange={onLaborRepairOrderChange}
+        onPartsChange={onPartsChange}
+        onSaveParts={onSaveParts}
+        onChanged={onChanged}
+        onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
+        serializedParts={serializedParts}
+        locale={locale}
+      />
+    );
+  }
   return (
     <ProgressiveWorkorderSection
       id="parts"
@@ -51,26 +75,10 @@ export function WorkorderPartsModule({
             workorderId={activeWorkorder.workorder.id}
             onChanged={onChanged}
             locale={locale}
-          />
-        ) : null}
-        {partsVisible ? <PartRequestsPanel
-          key={activeWorkorder.workorder.id}
-          actorId={actorId}
-          role={canWrite ? (isOfficeDetail ? "office" : "mechanic") : "read"}
-          detail={activeWorkorder}
-          parts={form.parts}
-          laborHours={form.laborHours || ""}
-          laborProduct={form.laborProduct || null}
-          laborRepairOrder={form.workPerformed || ""}
-          laborRepairOrderDisabled={!activeWorkorder.allowedActions?.saveNotes}
-          onLaborHoursChange={onLaborHoursChange}
-          onLaborRepairOrderChange={onLaborRepairOrderChange}
-          onPartsChange={onPartsChange}
-          onSaveParts={onSaveParts}
-          onChanged={onChanged}
-          onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
-          locale={locale}
-        /> : null}
+          >
+            {partsVisible ? renderPartsPanel : null}
+          </SerializedPartsScanner>
+        ) : renderPartsPanel()}
       </div>
     </ProgressiveWorkorderSection>
   );

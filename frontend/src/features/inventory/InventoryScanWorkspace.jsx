@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Camera01, CheckCircle, Scan } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
-import { createInventoryFrameDetector, inventoryCameraAvailable } from "./inventory-camera-scanner.js";
+import {
+  createInventoryFrameDetector,
+  enableInventoryCameraContinuousAutofocus,
+  inventoryCameraAvailable,
+} from "./inventory-camera-scanner.js";
 import { createInventoryCameraSession } from "./inventory-camera-session.js";
 import "./inventory-scan.css";
 
@@ -95,6 +99,11 @@ export function InventoryScanWorkspace({ actor }) {
     try {
       const detector = createInventoryFrameDetector(window);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      if (!mountedRef.current || !session.isCurrent(token)) {
+        session.stopIfStale(token, stream);
+        return;
+      }
+      await enableInventoryCameraContinuousAutofocus(stream);
       if (!mountedRef.current || !session.isCurrent(token)) {
         session.stopIfStale(token, stream);
         return;

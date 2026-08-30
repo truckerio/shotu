@@ -118,6 +118,33 @@ test("workorder preview keeps a labor repair order visible before hours are ente
   assert.match(html, />Diagnose intermittent no-start</);
 });
 
+test("part repair orders stay on their own rows instead of duplicating onto labor", () => {
+  const repairOrder = "HEX SCREW MBN 10105-M14X1,";
+  const html = renderWorkorderPagesHtml({
+    laborHours: "1.5",
+    laborProduct: { externalId: "91", code: "PTR001", name: "LABOR HOURS", uomCode: "hr" },
+    workPerformed: repairOrder,
+    parts: [{ partNo: "0000000002211", qty: "1", uomCode: "ea", repairOrder }],
+  }, "WO-000129");
+
+  const renderedRows = [...html.matchAll(/<div class="wo-part-row">([\s\S]*?)<\/div>\s*<\/div>/g)]
+    .map((match) => match[1]);
+  assert.doesNotMatch(renderedRows[0], /HEX SCREW/);
+  assert.match(renderedRows[1], /HEX SCREW MBN 10105-M14X1,/);
+  assert.equal((html.match(/HEX SCREW MBN 10105-M14X1,/g) || []).length, 1);
+});
+
+test("distinct labor repair text remains while a duplicated part line is filtered", () => {
+  const html = renderWorkorderPagesHtml({
+    laborHours: "2",
+    workPerformed: "Diagnosed wiring fault\nReplace failed sensor",
+    parts: [{ partNo: "SENSOR", qty: "1", uomCode: "ea", repairOrder: "Replace failed sensor" }],
+  }, "WO-000130");
+
+  assert.match(html, />Diagnosed wiring fault</);
+  assert.equal((html.match(/Replace failed sensor/g) || []).length, 1);
+});
+
 test("parts overflow creates numbered continuation pages without shrinking the workorder", () => {
   const parts = Array.from({ length: 14 }, (_, index) => ({
     partNo: `PART-${index + 1}`,

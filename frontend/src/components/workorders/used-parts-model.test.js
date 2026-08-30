@@ -6,6 +6,7 @@ import {
   defaultUsedPartQuantity,
   initialUsedPartRows,
   installedSerializedUsedParts,
+  serializedUsageTableState,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
@@ -205,4 +206,33 @@ test("an explicitly cleared serialized repair order stays blank after refresh", 
   });
 
   assert.equal(installed[0].repairOrder, "");
+});
+
+test("serialized usage table state keeps actionable rows active and completed rows in history", () => {
+  const usages = [
+    { id: "issued", partNumber: "P-1", serialNumber: "SER-1", uomCode: "ea", status: "issued" },
+    { id: "installed", catalogPartId: "catalog-2", partNumber: "P-2", serialNumber: "SER-2", uomCode: "pc", status: "installed", repairOrder: "Installed sensor" },
+    { id: "returned", partNumber: "P-3", serialNumber: "SER-3", uomCode: "ea", status: "returned" },
+  ];
+  const actionsFor = (usage) => ({
+    install: usage.status === "issued",
+    returnUnused: usage.status === "issued",
+    remove: usage.status === "installed",
+  });
+
+  const state = serializedUsageTableState(usages, actionsFor);
+
+  assert.deepEqual(state.active.map((part) => ({
+    id: part.usageId,
+    partNo: part.partNo,
+    qty: part.qty,
+    uomCode: part.uomCode,
+    status: part.status,
+    repairOrder: part.repairOrder,
+  })), [
+    { id: "issued", partNo: "P-1", qty: "1", uomCode: "ea", status: "issued", repairOrder: "" },
+    { id: "installed", partNo: "P-2", qty: "1", uomCode: "pc", status: "installed", repairOrder: "Installed sensor" },
+  ]);
+  assert.deepEqual(state.completed, [usages[2]]);
+  assert.deepEqual(serializedUsageTableState(null, actionsFor), { active: [], completed: [] });
 });

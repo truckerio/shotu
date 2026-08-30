@@ -13,3 +13,18 @@ test("serialized-part scanner shares the synchronous camera session lifecycle", 
   assert.match(source, /function stopCamera\(\) \{\s*cameraSessionRef\.current\.cancel\(\);/s);
   assert.match(source, /mountedRef\.current = false;\s*scanGenerationRef\.current \+= 1;\s*stopCamera\(\);/s);
 });
+
+test("both inventory camera consumers enable autofocus only after a current stream is confirmed", async () => {
+  const sources = await Promise.all([
+    readFile(new URL("./InventoryCodeScanner.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./InventoryScanWorkspace.jsx", import.meta.url), "utf8"),
+  ]);
+
+  for (const source of sources) {
+    assert.match(source, /enableInventoryCameraContinuousAutofocus/);
+    assert.match(
+      source,
+      /if \(!mountedRef\.current \|\| !session\.isCurrent\(token\)\) \{\s*session\.stopIfStale\(token, stream\);\s*return;\s*\}\s*await enableInventoryCameraContinuousAutofocus\(stream\);\s*if \(!mountedRef\.current \|\| !session\.isCurrent\(token\)\)/s,
+    );
+  }
+});

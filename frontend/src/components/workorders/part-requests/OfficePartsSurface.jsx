@@ -19,6 +19,7 @@ export function OfficePartsSurface({
   onSaveParts,
   onChanged,
   onRegisterSerializedRepairFlush,
+  serializedParts,
   usedPartsAccess,
 }) {
   const requests = detail.partRequests || [];
@@ -56,6 +57,7 @@ export function OfficePartsSurface({
         onSaveParts={onSaveParts}
         onChanged={onChanged}
         onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
+        serializedParts={serializedParts}
         editable={usedPartsAccess.editable}
         readonlyMessage={usedPartsAccess.message}
         suggestionsEnabled

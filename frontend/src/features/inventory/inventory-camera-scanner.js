@@ -7,6 +7,21 @@ export function inventoryCameraAvailable(environment = globalThis) {
   return Boolean(environment?.navigator?.mediaDevices?.getUserMedia);
 }
 
+export async function enableInventoryCameraContinuousAutofocus(stream) {
+  try {
+    const track = stream?.getVideoTracks?.().find((candidate) => candidate?.readyState !== "ended");
+    if (!track?.getCapabilities || !track?.applyConstraints) return false;
+
+    const focusModes = track.getCapabilities()?.focusMode;
+    if (!Array.isArray(focusModes) || !focusModes.includes("continuous")) return false;
+
+    await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function createNativeDetector(BarcodeDetector) {
   try {
     return new BarcodeDetector({ formats: NATIVE_FORMATS });

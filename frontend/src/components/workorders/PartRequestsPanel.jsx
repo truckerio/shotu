@@ -19,6 +19,7 @@ export function PartRequestsPanel({
   onSaveParts,
   onChanged,
   onRegisterSerializedRepairFlush,
+  serializedParts = null,
   locale = "en",
 }) {
   const usedPartsAccess = usedPartsAccessState(role, detail.allowedActions || {});
@@ -38,6 +39,7 @@ export function PartRequestsPanel({
     onSaveParts,
     onChanged,
     onRegisterSerializedRepairFlush,
+    serializedParts,
     usedPartsAccess,
   };
 

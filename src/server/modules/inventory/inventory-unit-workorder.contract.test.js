@@ -84,7 +84,9 @@ test("repository locks workorder, exact unit, usage, and local balance before mu
 test("serialized workflow is Office-owned, module-authorized, and mounted inside canonical Parts", () => {
   assert.match(server, /handleInventoryUnitWorkorderApi/);
   assert.match(partsModule, /<SerializedPartsScanner/);
-  assert.match(partsModule, /partsVisible \? <PartRequestsPanel/);
+  assert.match(partsModule, /function renderPartsPanel\(serializedParts = null\)/);
+  assert.match(partsModule, /partsVisible \? renderPartsPanel : null/);
+  assert.match(partsModule, /serializedParts=\{serializedParts\}/);
   assert.match(service, /moduleKey: "partsScanning"/);
   assert.match(service, /requireLocationAccess/);
   assert.match(service, /getWorkorderMechanicPartsPolicy/);

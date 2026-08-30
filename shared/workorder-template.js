@@ -55,10 +55,28 @@ function escapeHtml(value) {
 
 export const WORKORDER_PART_ROWS_PER_PAGE = 6;
 
+function normalizedRepairOrderLine(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+export function printableLaborRepairOrder(workPerformed, parts = []) {
+  const partRepairOrders = new Set(
+    (Array.isArray(parts) ? parts : [])
+      .map((part) => normalizedRepairOrderLine(part?.repairOrder))
+      .filter(Boolean),
+  );
+
+  return String(workPerformed || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !partRepairOrders.has(normalizedRepairOrderLine(line)))
+    .join("\n");
+}
+
 function inputPartRows(form) {
   const inputParts = Array.isArray(form.parts) ? form.parts : [];
   const laborHours = String(form.laborHours || "").trim();
-  const workPerformed = String(form.workPerformed || "").trim();
+  const workPerformed = printableLaborRepairOrder(form.workPerformed, inputParts);
   const rows = laborHours || workPerformed ? [{
     partNo: laborProductLabel(form.laborProduct),
     qty: laborHours,

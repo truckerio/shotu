@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import QRCode from "qrcode";
-import { createInventoryFrameDetector, inventoryCameraAvailable } from "./inventory-camera-scanner.js";
+import {
+  createInventoryFrameDetector,
+  enableInventoryCameraContinuousAutofocus,
+  inventoryCameraAvailable,
+} from "./inventory-camera-scanner.js";
 
 function qrImageData(value, scale = 6, margin = 4) {
   const qr = QRCode.create(value, { errorCorrectionLevel: "M" });
@@ -33,6 +37,50 @@ function qrImageData(value, scale = 6, margin = 4) {
 test("camera availability depends on capture support rather than BarcodeDetector", () => {
   assert.equal(inventoryCameraAvailable({ navigator: { mediaDevices: { getUserMedia() {} } } }), true);
   assert.equal(inventoryCameraAvailable({ BarcodeDetector: class {}, navigator: {} }), false);
+});
+
+test("camera autofocus enables continuous focus on an active supported video track", async () => {
+  let constraints = null;
+  const track = {
+    readyState: "live",
+    getCapabilities: () => ({ focusMode: ["manual", "continuous"] }),
+    async applyConstraints(value) {
+      constraints = value;
+    },
+  };
+
+  assert.equal(await enableInventoryCameraContinuousAutofocus({ getVideoTracks: () => [track] }), true);
+  assert.deepEqual(constraints, { advanced: [{ focusMode: "continuous" }] });
+});
+
+test("camera autofocus skips unsupported focus modes", async () => {
+  let constraintsApplied = false;
+  const track = {
+    getCapabilities: () => ({ focusMode: ["manual", "single-shot"] }),
+    async applyConstraints() {
+      constraintsApplied = true;
+    },
+  };
+
+  assert.equal(await enableInventoryCameraContinuousAutofocus({ getVideoTracks: () => [track] }), false);
+  assert.equal(constraintsApplied, false);
+});
+
+test("camera autofocus safely handles missing stream and track APIs", async () => {
+  assert.equal(await enableInventoryCameraContinuousAutofocus(), false);
+  assert.equal(await enableInventoryCameraContinuousAutofocus({}), false);
+  assert.equal(await enableInventoryCameraContinuousAutofocus({ getVideoTracks: () => [{}] }), false);
+});
+
+test("camera autofocus safely handles rejected constraints", async () => {
+  const track = {
+    getCapabilities: () => ({ focusMode: ["continuous"] }),
+    applyConstraints: async () => {
+      throw new Error("constraints rejected");
+    },
+  };
+
+  assert.equal(await enableInventoryCameraContinuousAutofocus({ getVideoTracks: () => [track] }), false);
 });
 
 test("frame detector prefers native barcode detection when available", async () => {

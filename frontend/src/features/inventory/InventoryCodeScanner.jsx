@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Scan } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
-import { createInventoryFrameDetector } from "./inventory-camera-scanner.js";
+import { createInventoryFrameDetector, enableInventoryCameraContinuousAutofocus } from "./inventory-camera-scanner.js";
 import { createInventoryCameraSession } from "./inventory-camera-session.js";
 import { inventoryScannerAvailable, normalizeInventoryCode } from "./inventory-code-scanner-model.js";
 
@@ -94,6 +94,11 @@ export function InventoryCodeScanner({
         video: { facingMode: { ideal: "environment" } },
         audio: false,
       });
+      if (!mountedRef.current || !session.isCurrent(token)) {
+        session.stopIfStale(token, stream);
+        return;
+      }
+      await enableInventoryCameraContinuousAutofocus(stream);
       if (!mountedRef.current || !session.isCurrent(token)) {
         session.stopIfStale(token, stream);
         return;

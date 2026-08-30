@@ -21,7 +21,7 @@ function requestKey(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }) {
+export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", children = null }) {
   const t = (key) => interfaceText(locale, key);
   const errorText = (error) => locale === "en" && error?.message ? error.message : t("mechanic.requestFailed");
   const usageStatus = (status) => t(`parts.status.${status}`) === `parts.status.${status}`
@@ -30,6 +30,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
   const [pendingCandidates, setPendingCandidates] = useState([]);
   const [selectedCandidateId, setSelectedCandidateId] = useState(null);
   const [usages, setUsages] = useState([]);
+  const [usageSnapshotReady, setUsageSnapshotReady] = useState(false);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("status");
@@ -37,6 +38,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
   const [resetKey, setResetKey] = useState(0);
   const [drawerSnap, setDrawerSnap] = useState("peek");
   const [removeConfirmationId, setRemoveConfirmationId] = useState("");
+  const [focusUsageId, setFocusUsageId] = useState("");
   const finalizeKeysRef = useRef(new Map());
   const usageRevisionRef = useRef(0);
   const usagesLoadedRef = useRef(false);
@@ -64,6 +66,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
       setUsages((current) => snapshotIsCurrent
         ? (result.usages || [])
         : mergeUsageSnapshot(current, result.usages || []));
+      setUsageSnapshotReady(true);
     }
   }
 
@@ -77,7 +80,9 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     setMessageTone("status");
     setScannerOpen(false);
     setUsages([]);
+    setUsageSnapshotReady(false);
     setRemoveConfirmationId("");
+    setFocusUsageId("");
     usagesLoadedRef.current = true;
     setDrawerSnap("peek");
     drawerSnapRef.current = "peek";
@@ -87,6 +92,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     loadUsages(generation).catch((error) => {
       if (generation !== workorderGenerationRef.current) return;
       usagesLoadedRef.current = false;
+      setUsageSnapshotReady(false);
       setMessageTone("error");
       setMessage(errorText(error));
     });
@@ -130,6 +136,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
       if (generation !== workorderGenerationRef.current) return;
       usageRevisionRef.current += 1;
       setUsages((current) => replaceUsage(current, result.usage));
+      setUsageSnapshotReady(true);
       const nextCandidates = removePendingCandidate(pendingCandidates, candidate.unit.id);
       setPendingCandidates(nextCandidates);
       setSelectedCandidateId(nextCandidates.at(-1)?.unit?.id || null);
@@ -137,7 +144,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
         setDrawerSnap("expanded");
         drawerSnapRef.current = "expanded";
       } else {
-        restartScannerAfterFinalIssue();
+        finishScannerAfterFinalIssue(result.usage.id);
       }
       setMessage(`${result.usage.partNumber} ${t("parts.reservedForWorkorder")}`);
       await onChanged?.();
@@ -175,6 +182,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
       if (generation !== workorderGenerationRef.current) return;
       usageRevisionRef.current += 1;
       setUsages((current) => replaceUsage(current, result.usage));
+      setUsageSnapshotReady(true);
       setMessage(disposition === "installed" ? t("parts.installedPendingOffice") : t("parts.returnedToStock"));
       await onChanged?.();
     } catch (error) {
@@ -214,6 +222,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
       if (generation !== workorderGenerationRef.current) return;
       usageRevisionRef.current += 1;
       setUsages((current) => replaceUsage(current, result.usage));
+      setUsageSnapshotReady(true);
       setRemoveConfirmationId("");
       setMessage(["removed", "removed_inspection_required", "inspection_required"].includes(result.usage?.status)
         ? t("parts.removedInspectionRequired")
@@ -252,6 +261,16 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     window.requestAnimationFrame(() => scanTriggerRef.current?.focus());
   }
 
+  function finishScannerAfterFinalIssue(usageId) {
+    setScannerOpen(false);
+    setSelectedCandidateId(null);
+    setDrawerSnap("peek");
+    drawerSnapRef.current = "peek";
+    restartAfterPeekRef.current = false;
+    setResetKey((value) => value + 1);
+    setFocusUsageId(usageId);
+  }
+
   function openScanner() {
     setScannerOpen(true);
     setMessage("");
@@ -260,6 +279,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     usagesLoadedRef.current = true;
     loadUsages().catch((error) => {
       usagesLoadedRef.current = false;
+      setUsageSnapshotReady(false);
       setMessageTone("error");
       setMessage(errorText(error));
     });
@@ -270,13 +290,6 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     drawerSnapRef.current = "peek";
     restartAfterPeekRef.current = true;
     setDrawerSnap("peek");
-  }
-
-  function restartScannerAfterFinalIssue() {
-    drawerSnapRef.current = "peek";
-    restartAfterPeekRef.current = false;
-    setDrawerSnap("peek");
-    if (scannerOpen) setResetKey((value) => value + 1);
   }
 
   function minimizeDrawer() {
@@ -302,25 +315,23 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
     setResetKey((value) => value + 1);
   }
 
-  return (
-    <section className={`mechanic-serialized-parts${collapsed ? " is-collapsed" : ""}`} aria-label={t("parts.serialized")}>
-
-      {!scannerOpen ? (
-        <button
-          type="button"
-          ref={scanTriggerRef}
-          className="mechanic-scan-trigger"
-          aria-label={t("parts.scanParts")}
-          aria-controls={scannerPanelId}
-          aria-expanded={scannerOpen}
-          data-tooltip={t("parts.scanParts")}
-          onClick={openScanner}
-        >
-          <Scan aria-hidden="true" focusable="false" />
-        </button>
-      ) : null}
-
-      {scannerOpen ? (
+  const tablePresentation = typeof children === "function";
+  const scanControl = !scannerOpen ? (
+    <button
+      type="button"
+      ref={scanTriggerRef}
+      className={`mechanic-scan-trigger${tablePresentation ? " is-table-action" : ""}`}
+      aria-label={t("parts.scanParts")}
+      aria-controls={scannerPanelId}
+      aria-expanded={scannerOpen}
+      data-tooltip={tablePresentation ? undefined : t("parts.scanParts")}
+      onClick={openScanner}
+    >
+      <Scan aria-hidden="true" focusable="false" />
+      {tablePresentation ? <span>{t("parts.scanParts")}</span> : null}
+    </button>
+  ) : null;
+  const scannerOverlay = scannerOpen ? (
         <ModalOverlay
           className="mechanic-scanner-overlay"
           isOpen={scannerOpen}
@@ -401,7 +412,37 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en" }
             </Dialog>
           </Modal>
         </ModalOverlay>
-      ) : null}
+  ) : null;
+
+  if (tablePresentation) {
+    return (
+      <>
+        {scannerOverlay}
+        {children({
+          scanControl,
+          usages,
+          usageSnapshotReady,
+          busy,
+          message,
+          messageTone,
+          focusUsageId,
+          onUsageFocused: () => setFocusUsageId(""),
+          actionsFor: inventoryUsageActions,
+          statusLabel: usageStatus,
+          finalize,
+          requestRemove: (usageId) => setRemoveConfirmationId(usageId),
+          cancelRemove: () => setRemoveConfirmationId(""),
+          removeFromUnit,
+          removeConfirmationId,
+        })}
+      </>
+    );
+  }
+
+  return (
+    <section className={`mechanic-serialized-parts${collapsed ? " is-collapsed" : ""}`} aria-label={t("parts.serialized")}>
+      {scanControl}
+      {scannerOverlay}
 
       {actionable.map((usage) => {
         const actions = inventoryUsageActions(usage);

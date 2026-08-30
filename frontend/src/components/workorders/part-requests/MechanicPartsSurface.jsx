@@ -21,6 +21,7 @@ export function MechanicPartsSurface({
   onSaveParts,
   onChanged,
   onRegisterSerializedRepairFlush,
+  serializedParts,
   locale,
   usedPartsAccess,
 }) {
@@ -89,6 +90,7 @@ export function MechanicPartsSurface({
             onSaveParts={onSaveParts}
             onChanged={onChanged}
             onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
+            serializedParts={serializedParts}
             editable={usedPartsAccess.editable}
             readonlyMessage={usedPartsAccess.message}
             suggestionsEnabled

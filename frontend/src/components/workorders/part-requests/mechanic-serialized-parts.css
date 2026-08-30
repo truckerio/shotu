@@ -54,6 +54,16 @@
   height: 20px;
 }
 
+.mechanic-scan-trigger.is-table-action {
+  display: inline-flex;
+  width: auto;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--foreground-brand-primary, #175cd3);
+  font: inherit;
+  font-weight: 600;
+}
+
 .mechanic-scan-trigger::after,
 .mechanic-scanner-close::after {
   position: absolute;
@@ -73,6 +83,10 @@
   pointer-events: none;
   transform: translateY(3px);
   transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.mechanic-scan-trigger.is-table-action::after {
+  display: none;
 }
 
 .mechanic-scan-trigger:hover::after,

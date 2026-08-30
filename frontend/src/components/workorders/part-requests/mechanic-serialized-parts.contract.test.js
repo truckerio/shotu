@@ -5,6 +5,7 @@ import test from "node:test";
 const scanner = readFileSync(new URL("../../../features/inventory/InventoryCodeScanner.jsx", import.meta.url), "utf8");
 const surface = readFileSync(new URL("./SerializedPartsScanner.jsx", import.meta.url), "utf8");
 const partsModule = readFileSync(new URL("../../../features/workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
+const usedPartsEditor = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./mechanic-serialized-parts.css", import.meta.url), "utf8");
 const mechanicLocales = ["en", "es", "pa"].map((locale) => readFileSync(new URL(`../../../i18n/locales/${locale}.js`, import.meta.url), "utf8"));
 
@@ -32,9 +33,9 @@ test("shared scanner has camera-first auto-start and manual fallback", () => {
 });
 
 test("parts surface opens a dedicated, accessible scanner overlay", () => {
-  assert.match(surface, /className="mechanic-scan-trigger"/);
+  assert.match(surface, /className=\{`mechanic-scan-trigger/);
   assert.match(surface, /aria-label=\{t\("parts\.scanParts"\)\}/);
-  assert.match(surface, /data-tooltip=\{t\("parts\.scanParts"\)\}/);
+  assert.match(surface, /data-tooltip=\{tablePresentation \? undefined : t\("parts\.scanParts"\)\}/);
   assert.match(surface, /aria-controls=\{scannerPanelId\}/);
   assert.match(surface, /aria-expanded=\{scannerOpen\}/);
   assert.match(surface, /<ModalOverlay/);
@@ -105,10 +106,35 @@ test("authorized parts surfaces reserve exact units and expose explicit physical
 test("canonical scan access mounts independently from broad Parts editing", () => {
   assert.match(partsModule, /activeWorkorder\.moduleAccess\?\.partsScanning\?\.access/);
   assert.match(partsModule, /<SerializedPartsScanner/);
-  assert.match(partsModule, /partsVisible \? <PartRequestsPanel/);
+  assert.match(partsModule, /function renderPartsPanel\(serializedParts = null\)/);
+  assert.match(partsModule, /serializedParts=\{serializedParts\}/);
+  assert.match(partsModule, /\{partsVisible \? renderPartsPanel : null\}/);
+  assert.match(partsModule, /\) : renderPartsPanel\(\)\}/);
   assert.match(partsModule, /if \(!partsVisible && !canScanSerializedParts\) return null/);
   assert.match(partsModule, /: "Scan exact serialized parts"/);
   assert.match(partsModule, /attention=\{partsVisible && pendingPartCount > 0\}/);
+});
+
+test("parts-visible scanning projects usage state and actions into the canonical table", () => {
+  assert.match(surface, /const tablePresentation = typeof children === "function"/);
+  assert.match(surface, /children\(\{[\s\S]*scanControl,[\s\S]*usages,[\s\S]*usageSnapshotReady/);
+  assert.match(surface, /finishScannerAfterFinalIssue\(result\.usage\.id\)/);
+  assert.match(surface, /focusUsageId/);
+  assert.match(usedPartsEditor, /activeSerializedParts/);
+  assert.match(usedPartsEditor, /serializedParts\.finalize\(usage, "installed"\)/);
+  assert.match(usedPartsEditor, /serializedParts\.finalize\(usage, "returned"\)/);
+  assert.match(usedPartsEditor, /serializedParts\.requestRemove\(usage\.id\)/);
+  assert.match(usedPartsEditor, /serializedParts\.removeFromUnit\(usage\)/);
+  assert.match(usedPartsEditor, /className="used-parts-serialized-history"/);
+  assert.match(usedPartsEditor, /<details/);
+});
+
+test("scanner-only access retains its compact standalone lifecycle surface", () => {
+  assert.match(partsModule, /\{partsVisible \? renderPartsPanel : null\}/);
+  assert.match(surface, /if \(tablePresentation\)[\s\S]*return \([\s\S]*children\(\{/);
+  assert.match(surface, /<section className=\{`mechanic-serialized-parts/);
+  assert.match(surface, /actionable\.map/);
+  assert.match(surface, /completed\.map/);
 });
 
 test("scanner keeps persisted usages visible while opening camera from the compact trigger", () => {
@@ -216,6 +242,9 @@ test("drawer controls and result state have complete mechanic locale coverage", 
       "parts.confirmRemove",
       "parts.removedReturnedToStock",
       "parts.removedInspectionRequired",
+      "parts.previousScannedParts",
+      "parts.repairAfterInstalled",
+      "parts.statusAction",
     ]) {
       assert.match(dictionary, new RegExp(`"${key}":\\s*"[^"\\n]+"`));
     }

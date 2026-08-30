@@ -57,6 +57,9 @@ test("phone parts editor removes desktop labels", () => {
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-status\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*flex:\s*1 1 140px;/s);
+  assert.match(mobileCss, /\.used-part-serialized-confirmation\s*\{[^}]*margin-left:\s*0;/s);
 });
 
 test("phone parts row fits 390px and 430px viewports without control overlap", () => {

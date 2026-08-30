@@ -13,6 +13,7 @@ import {
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
+  serializedUsageTableState,
   usedPartQuantityAfterPartNumberChange,
 } from "./used-parts-model.js";
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
@@ -73,6 +74,7 @@ export function UsedPartsEditor({
   onSave,
   onChanged = () => {},
   onRegisterSerializedRepairFlush = () => {},
+  serializedParts = null,
   disabled = false,
   defaultRows,
   suggestionsEnabled = true,
@@ -102,6 +104,7 @@ export function UsedPartsEditor({
   const [selectedCatalogParts, setSelectedCatalogParts] = useState([]);
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
   const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
+  const focusedSerializedUsageId = serializedParts?.focusUsageId || "";
   const serializedRepairContextRef = useRef(null);
   const serializedRepairAutosaveRef = useRef(null);
   serializedRepairContextRef.current = { detail, locale, onChanged };
@@ -141,6 +144,17 @@ export function UsedPartsEditor({
   useEffect(() => {
     saveRef.current = onSave;
   }, [onSave]);
+
+  useEffect(() => {
+    if (!focusedSerializedUsageId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const row = document.getElementById(`serialized-part-${focusedSerializedUsageId}`);
+      row?.scrollIntoView?.({ block: "nearest" });
+      row?.focus?.({ preventScroll: true });
+      serializedParts?.onUsageFocused?.();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedSerializedUsageId, serializedParts]);
 
   useEffect(() => {
     onRegisterSerializedRepairFlush(serializedRepairAutosave.flushAll);
@@ -270,11 +284,140 @@ export function UsedPartsEditor({
     }
   }
 
+  const serializedUsageState = serializedParts?.usageSnapshotReady
+    ? serializedUsageTableState(serializedParts.usages, serializedParts.actionsFor)
+    : { active: installedParts.map((part) => ({ ...part, status: "installed" })), completed: [] };
+  const activeSerializedParts = serializedUsageState.active;
+  const completedSerializedUsages = serializedUsageState.completed;
+
+  function renderSerializedPartRow(part, index) {
+    const usage = part.usage;
+    const actions = usage && serializedParts ? serializedParts.actionsFor(usage) : {};
+    const installed = ["installed_pending_approval", "installed"].includes(part.status);
+    const status = usage && serializedParts ? serializedParts.statusLabel(usage.status) : t("parts.installed");
+    const confirmingRemoval = usage && serializedParts?.removeConfirmationId === usage.id;
+    const removing = usage && serializedParts?.busy === `${usage.id}:remove`;
+    const rowBusy = Boolean(serializedParts?.busy);
+    const rowId = usage?.id ? `serialized-part-${usage.id}` : undefined;
+    return (
+      <div className="used-part-serialized-group" key={`serialized-${part.usageId || part.catalogPartId || part.partNo}-${index}`}>
+        <div
+          id={rowId}
+          className="part-row used-part-serialized-row"
+          tabIndex={rowId ? -1 : undefined}
+          aria-label={`${part.partNo}, ${formatQuantityUnit(part.qty, part.uomCode)}, ${status}`}
+        >
+          <strong>{index + 2}</strong>
+          <div className="used-part-field used-part-serialized-identity">
+            <strong>{part.partNo}</strong>
+            {part.serialNumber ? <small className="used-part-serialized-serial">{part.serialNumber}</small> : null}
+            <small className="used-part-serialized-kind">{t("parts.serialized")}</small>
+          </div>
+          <div className="used-part-field used-part-serialized-value">
+            <strong>{formatQuantityUnit(part.qty, part.uomCode)}</strong>
+          </div>
+          <div className="used-part-field used-part-repair">
+            {installed ? (
+              <>
+                <NarrativeField
+                  locale={locale}
+                  singleLine
+                  value={serializedRepairOrder(part)}
+                  onChange={(event) => updateSerializedRepairOrder(part, event.target.value)}
+                  onBlur={() => serializedRepairAutosave.flushOne(part)}
+                  aria-label={`${t("parts.repairOrder")} ${index + 2}`}
+                  placeholder={t("parts.describeRepair")}
+                  disabled={disabled || !part.usageId}
+                />
+                {suggestionsEnabled && part.catalogPartId && part.usageId ? <RepairHistorySuggestions
+                  workorderId={detail.workorder.id}
+                  catalogPartId={part.catalogPartId}
+                  partNumber={part.partNo}
+                  assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                  onApply={(text) => updateSerializedRepairOrder(part, text)}
+                  disabled={disabled || !part.usageId || savingSerializedUsageId === part.usageId}
+                  locale={locale}
+                /> : null}
+              </>
+            ) : <span className="used-part-pending-repair">{t("parts.repairAfterInstalled")}</span>}
+          </div>
+          <div className="used-part-serialized-actions">
+            <span className="used-part-serialized-status">
+              {savingSerializedUsageId === part.usageId ? t("progress.saving") : status}
+            </span>
+            {actions.install ? <Button type="button" variant="primary" onClick={() => serializedParts.finalize(usage, "installed")} disabled={rowBusy}>
+              {t("parts.markInstalled")}
+            </Button> : null}
+            {actions.returnUnused ? <Button type="button" onClick={() => serializedParts.finalize(usage, "returned")} disabled={rowBusy}>
+              {t("parts.returnUnused")}
+            </Button> : null}
+            {actions.remove && !confirmingRemoval ? <Button type="button" onClick={() => serializedParts.requestRemove(usage.id)} disabled={rowBusy}>
+              {t("parts.removeFromUnit")}
+            </Button> : null}
+          </div>
+        </div>
+        {actions.remove && confirmingRemoval ? (
+          <div className="used-part-serialized-confirmation" role="status" aria-live="polite">
+            <p>{usage.status === "installed_pending_approval" ? t("parts.removePhysicalReturnConfirm") : t("parts.removeInspectionConfirm")}</p>
+            <div>
+              <Button type="button" variant="primary" onClick={() => serializedParts.removeFromUnit(usage)} disabled={rowBusy}>
+                {removing ? t("parts.removing") : t("parts.confirmRemove")}
+              </Button>
+              <Button type="button" onClick={serializedParts.cancelRemove} disabled={rowBusy}>
+                {t("parts.cancelRemove")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const serializedToolbar = serializedParts?.scanControl ? (
+    <div className="used-parts-toolbar">{serializedParts.scanControl}</div>
+  ) : null;
+  const serializedFeedback = serializedParts?.message ? (
+    <p
+      className="used-parts-serialized-feedback"
+      role={serializedParts.messageTone === "error" ? "alert" : "status"}
+      aria-live={serializedParts.messageTone === "error" ? "assertive" : "polite"}
+    >
+      {serializedParts.message}
+    </p>
+  ) : null;
+  const serializedHistory = completedSerializedUsages.length ? (
+    <details className="used-parts-serialized-history">
+      <summary>{t("parts.previousScannedParts")} ({completedSerializedUsages.length})</summary>
+      <ol aria-label={t("parts.completedSerializedHistory")}>
+        {completedSerializedUsages.map((usage) => (
+          <li key={usage.id}>
+            <span><strong>{usage.partNumber}</strong><code>{usage.serialNumber}</code></span>
+            <small>{serializedParts.statusLabel(usage.status)}</small>
+          </li>
+        ))}
+      </ol>
+    </details>
+  ) : null;
+
   if (disabled) {
-    const savedParts = [...installedParts, ...readonlyUsedParts(parts)];
+    const savedParts = [...(serializedParts ? [] : installedParts), ...readonlyUsedParts(parts)];
     return (
       <div className="used-parts-editor is-readonly" aria-label={t("parts.usedTitle")}>
+        {serializedToolbar}
+        {serializedFeedback}
         <p className="used-parts-readonly-state" role="status">{readOnlyText}</p>
+        {activeSerializedParts.length ? (
+          <div className="parts-editor">
+            <div className="part-row part-row-head" aria-hidden="true">
+              <span>{t("parts.serialNumber")}</span>
+              <span>{t("parts.partNumber")}</span>
+              <span>{t("parts.quantityUnit")}</span>
+              <span>{t("parts.repairOrder")}</span>
+              <span>{t("parts.statusAction")}</span>
+            </div>
+            {activeSerializedParts.map(renderSerializedPartRow)}
+          </div>
+        ) : null}
         {laborHours || laborRepairOrder ? (
           <ul className="used-parts-readonly-list">
             <li>
@@ -294,20 +437,23 @@ export function UsedPartsEditor({
               </li>
             ))}
           </ul>
-        ) : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
+        ) : activeSerializedParts.length ? null : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
+        {serializedHistory}
       </div>
     );
   }
 
   return (
     <div className="used-parts-editor">
+      {serializedToolbar}
+      {serializedFeedback}
       <div className="parts-editor">
         <div className="part-row part-row-head" aria-hidden="true">
           <span>{t("parts.serialNumber")}</span>
           <span>{t("parts.partNumber")}</span>
           <span>{t("parts.quantityUnit")}</span>
           <span>{t("parts.repairOrder")}</span>
-          <span></span>
+          <span>{t("parts.statusAction")}</span>
         </div>
         <div className="part-row used-part-labor-row">
           <strong>1</strong>
@@ -342,48 +488,10 @@ export function UsedPartsEditor({
           </div>
           <span aria-hidden="true"></span>
         </div>
-        {installedParts.map((part, index) => (
-          <div
-            className="part-row used-part-serialized-row"
-            key={`serialized-${part.catalogPartId || part.partNo}-${index}`}
-            aria-label={`${part.partNo}, ${formatQuantityUnit(part.qty, part.uomCode)}, ${t("parts.installed")}`}
-          >
-            <strong>{index + 2}</strong>
-            <div className="used-part-field used-part-serialized-identity">
-              <strong>{part.partNo}</strong>
-              {part.serialNumber ? <small className="used-part-serialized-serial">{part.serialNumber}</small> : null}
-              <small className="used-part-serialized-kind">{t("parts.serialized")}</small>
-            </div>
-            <div className="used-part-field used-part-serialized-value">
-              <strong>{formatQuantityUnit(part.qty, part.uomCode)}</strong>
-            </div>
-            <div className="used-part-field used-part-repair">
-              <NarrativeField
-                locale={locale}
-                singleLine
-                value={serializedRepairOrder(part)}
-                onChange={(event) => updateSerializedRepairOrder(part, event.target.value)}
-                onBlur={() => serializedRepairAutosave.flushOne(part)}
-                aria-label={`${t("parts.repairOrder")} ${index + 2}`}
-                placeholder={t("parts.describeRepair")}
-                disabled={disabled || !part.usageId}
-              />
-              {suggestionsEnabled && part.catalogPartId && part.usageId ? <RepairHistorySuggestions
-                workorderId={detail.workorder.id}
-                catalogPartId={part.catalogPartId}
-                partNumber={part.partNo}
-                assetId={detail.workorder.asset?.id || detail.workorder.assetId}
-                onApply={(text) => updateSerializedRepairOrder(part, text)}
-                disabled={disabled || !part.usageId || savingSerializedUsageId === part.usageId}
-                locale={locale}
-              /> : null}
-            </div>
-            <span className="used-part-serialized-status">{savingSerializedUsageId === part.usageId ? t("progress.saving") : t("parts.installed")}</span>
-          </div>
-        ))}
+        {activeSerializedParts.map(renderSerializedPartRow)}
         {rows.map((part, index) => (
           <div className="part-row" key={index}>
-            <strong>{installedParts.length + index + 2}</strong>
+            <strong>{activeSerializedParts.length + index + 2}</strong>
             <div className="used-part-field">
               <span className="used-part-label">{t("parts.partNumber")}</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
@@ -460,6 +568,7 @@ export function UsedPartsEditor({
           </div>
         ))}
       </div>
+      {serializedHistory}
       <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
         {rows.length ? t("parts.addAnotherPart") : t("parts.recordUsedPart")}
       </Button>
