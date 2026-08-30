@@ -30,6 +30,7 @@ test("compact request cards preserve table headers for assistive technology", as
   assert.match(css, /@media \(max-width: 960px\)[\s\S]*\.part-request-queue-cell \{[\s\S]*flex-direction: row;[\s\S]*flex-wrap: nowrap;[\s\S]*justify-content: flex-start;/);
   assert.doesNotMatch(css, /\.part-request-queue-head \{ display: none; \}/);
   assert.match(css, /\.part-request-queue-toolbar \.operations-input-with-icon input \{ padding-left: 34px; \}/);
+  assert.match(css, /\.part-request-queue-open \{[^}]*text-align: left;[^}]*width: 100%;[^}]*\}/);
   assert.match(css, /\.part-request-queue-toolbar input:focus,[\s\S]*\.part-request-queue-open:focus-visible \{ outline: 2px solid #2e6ee6;/);
   assert.doesNotMatch(css, /#84adff/);
 });

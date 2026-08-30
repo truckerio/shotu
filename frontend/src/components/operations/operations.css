@@ -232,7 +232,7 @@
 .part-request-queue-cell { align-content: center; flex-direction: column; flex-wrap: wrap; gap: 3px; justify-content: center; overflow: hidden; overflow-wrap: anywhere; }
 .part-request-queue-cell strong { color: #182230; font-weight: var(--weight-semibold); }
 .part-request-queue-cell > span { color: #667085; font-size: var(--text-caption); overflow-wrap: anywhere; }
-.part-request-queue-open { align-items: flex-start; background: transparent; border: 0; color: #182230; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0; text-align: left; }
+.part-request-queue-open { align-items: flex-start; background: transparent; border: 0; color: #182230; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0; text-align: left; width: 100%; }
 .part-request-queue-open:hover strong { color: #175cd3; text-decoration: underline; text-underline-offset: 2px; }
 .part-request-queue-open span { color: #667085; font-size: var(--text-caption); }
 .part-request-queue-supply,
