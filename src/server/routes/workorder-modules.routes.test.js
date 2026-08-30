@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { handleWorkorderModulesApi } from "./workorder-modules.routes.js";
+import { runWorkorderModuleAction } from "../modules/workorders/workorder-module-runtime.service.js";
 
 const WORKORDER_ID = "11111111-1111-4111-8111-111111111111";
 const requestContext = { actor: { id: "admin-one", role: "admin" } };
@@ -198,6 +199,54 @@ test("canonical generic module routes expose protected reads and allowlisted mut
   assert.deepEqual(calls.map(([kind]) => kind), ["detail", "read", "patch", "action"]);
   assert.equal(calls[2][3], "concern");
   assert.equal(calls[3][4], "close");
+});
+
+test("canonical Parts action validates and forwards serialized repair wording", async () => {
+  const calls = [];
+  const dependencies = {
+    runAction: (...args) => runWorkorderModuleAction(...args, {
+      authorize: async () => ({ companyId: WORKORDER_ID, locationId: WORKORDER_ID }),
+      updateRepairOrder: async (input) => {
+        calls.push(input);
+        return { kind: "updated", usage: { id: input.usageId, repairOrder: input.repairOrder } };
+      },
+    }),
+  };
+  const body = {
+    operation: "serializedUsageRepairOrder",
+    usageId: WORKORDER_ID,
+    repairOrder: "  Install sensor and verify operation  ",
+  };
+  const target = await runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body,
+    dependencies,
+  });
+
+  assert.equal(target.responses[0].status, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].workorderId, WORKORDER_ID);
+  assert.equal(calls[0].usageId, WORKORDER_ID);
+  assert.equal(calls[0].repairOrder, "Install sensor and verify operation");
+  assert.equal(calls[0].companyId, WORKORDER_ID);
+  assert.equal(calls[0].locationId, WORKORDER_ID);
+
+  await runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body: { ...body, repairOrder: " " },
+    dependencies,
+  });
+  assert.equal(calls[1].repairOrder, "");
+
+  await assert.rejects(runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body: { ...body, repairOrder: "x".repeat(2001) },
+    dependencies,
+  }), (error) => error.statusCode === 400);
+  assert.equal(calls.length, 2);
 });
 
 test("canonical generic module routes default-deny unregistered mutations", async () => {

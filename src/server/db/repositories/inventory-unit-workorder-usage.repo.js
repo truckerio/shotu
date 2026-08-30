@@ -24,6 +24,7 @@ function publicUsage(row) {
     serialNumber: row.serial_number,
     partNumber: row.part_number,
     description: row.description || "",
+    repairOrder: row.repair_order || "",
     locationName: row.location_name || "",
     workorderSerial: row.workorder_serial || "",
     asset: {
@@ -141,11 +142,11 @@ export async function listWorkorderInstalledSerializedParts({
   workorderId,
   companyId,
   locationId,
-  limit = 500,
+  limit = 2000,
 }) {
   const result = await query(
-    `select usage.catalog_part_id, line.part_number, usage.uom_code,
-            count(*)::integer as quantity
+    `select usage.id as usage_id, usage.catalog_part_id, usage.repair_order,
+            unit.serial_number, line.part_number, line.description, usage.uom_code
      from workorder_serialized_part_usages usage
      join inventory_serialized_units unit
        on unit.company_id = usage.company_id and unit.id = usage.unit_id
@@ -155,17 +156,87 @@ export async function listWorkorderInstalledSerializedParts({
        and usage.company_id = $2
        and usage.location_id = $3
        and usage.status in ('installed_pending_approval', 'installed')
-     group by usage.catalog_part_id, line.part_number, usage.uom_code
-     order by min(usage.finalized_at), usage.catalog_part_id, line.part_number
+     order by usage.finalized_at, usage.issued_at, usage.id
      limit $4`,
     [workorderId, companyId, locationId, limit],
   );
   return result.rows.map((row) => ({
+    usageId: row.usage_id,
     catalogPartId: row.catalog_part_id,
+    serialNumber: row.serial_number,
     partNumber: row.part_number,
-    quantity: Number(row.quantity),
+    description: row.description || "",
+    repairOrder: row.repair_order,
+    quantity: 1,
     uomCode: row.uom_code,
   }));
+}
+
+export async function updateSerializedUsageRepairOrder(input) {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    const workorder = await lockWorkorder(client, input);
+    if (!workorder) {
+      await client.query("rollback");
+      return { kind: "missing" };
+    }
+    if (!input.allowedWorkorderStatuses?.includes(workorder.status)) {
+      await client.query("rollback");
+      return { kind: "workorder_state" };
+    }
+    const usageResult = await client.query(
+      `select usage.*, unit.serial_number, line.part_number
+       from workorder_serialized_part_usages usage
+       join inventory_serialized_units unit
+         on unit.company_id = usage.company_id and unit.id = usage.unit_id
+       join inventory_receipt_lines line
+         on line.company_id = unit.company_id and line.id = unit.receipt_line_id
+       where usage.company_id = $1 and usage.workorder_id = $2 and usage.id = $3
+         and usage.location_id = $4 and usage.asset_id = $5
+       for update of usage`,
+      [workorder.company_id, workorder.id, input.usageId, workorder.location_id, workorder.asset_id],
+    );
+    const usage = usageResult.rows[0];
+    if (!usage) {
+      await client.query("rollback");
+      return { kind: "missing" };
+    }
+    if (!['installed_pending_approval', 'installed'].includes(usage.status)) {
+      await client.query("rollback");
+      return { kind: "usage_state" };
+    }
+    if (usage.repair_order === input.repairOrder) {
+      const unchanged = await loadUsage(client, workorder.company_id, usage.id);
+      await client.query("commit");
+      return { kind: "unchanged", usage: unchanged };
+    }
+    await client.query(
+      `update workorder_serialized_part_usages
+       set repair_order = $3, updated_at = now()
+       where company_id = $1 and id = $2`,
+      [workorder.company_id, usage.id, input.repairOrder],
+    );
+    await client.query(
+      `insert into workorder_field_events (
+         workorder_id, field_key, field_label, old_value, new_value, changed_by_user_id
+       ) values ($1, 'serialized_usage_repair_order', 'Serialized part repair order', $2, $3, $4)`,
+      [
+        workorder.id,
+        JSON.stringify({ usageId: usage.id, serialNumber: usage.serial_number, partNumber: usage.part_number, repairOrder: usage.repair_order || "" }),
+        JSON.stringify({ usageId: usage.id, serialNumber: usage.serial_number, partNumber: usage.part_number, repairOrder: input.repairOrder }),
+        input.actorId,
+      ],
+    );
+    const updated = await loadUsage(client, workorder.company_id, usage.id);
+    await client.query("commit");
+    return { kind: "updated", usage: updated };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function lockWorkorder(client, input) {
@@ -218,7 +289,7 @@ export async function issueSerializedUnitToWorkorder(input) {
       return { kind: "asset_required" };
     }
     const unitResult = await client.query(
-      `select unit.id, unit.status, unit.location_id, line.catalog_part_id, line.uom_code,
+      `select unit.id, unit.status, unit.location_id, line.catalog_part_id, line.uom_code, line.description,
               receipt.provider
        from inventory_serialized_units unit
        join inventory_receipt_lines line
@@ -259,11 +330,11 @@ export async function issueSerializedUnitToWorkorder(input) {
     const inserted = await client.query(
       `insert into workorder_serialized_part_usages (
          company_id, workorder_id, asset_id, location_id, unit_id, catalog_part_id,
-         uom_code, status, issued_by_user_id, issue_idempotency_key, issue_request_hash
-       ) values ($1,$2,$3,$4,$5,$6,$7,'reserved',$8,$9,$10)
+         uom_code, repair_order, status, issued_by_user_id, issue_idempotency_key, issue_request_hash
+       ) values ($1,$2,$3,$4,$5,$6,$7,$8,'reserved',$9,$10,$11)
        returning id`,
       [workorder.company_id, workorder.id, workorder.asset_id, workorder.location_id,
-        unit.id, unit.catalog_part_id, unit.uom_code, input.actorId,
+        unit.id, unit.catalog_part_id, unit.uom_code, String(unit.description || "").trim().slice(0, 2000), input.actorId,
         input.idempotencyKey, input.requestHash],
     );
     const usageId = inserted.rows[0].id;

@@ -37,7 +37,7 @@ export function WorkorderDetailSections({
   visibleTimeline,
   workorderChatContent,
   applyVehicle,
-  reloadActiveWorkorder,
+  reloadActiveWorkorder, onRegisterSerializedRepairFlush,
   saveActiveUsedParts,
   saveOfficeWorkorder,
   openOfficeCancel,
@@ -179,6 +179,7 @@ export function WorkorderDetailSections({
       onChanged: () => reloadActiveWorkorder({
         preserveForm: Boolean(isMechanicDetail && mechanicProgress?.hasUnsyncedChanges),
       }),
+      onRegisterSerializedRepairFlush,
       onPartsChange: updateActiveUsedParts,
       onLaborHoursChange: updateActiveLaborHours,
       onLaborRepairOrderChange: (value) => updateField("workPerformed", value),

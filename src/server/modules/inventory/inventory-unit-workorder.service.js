@@ -7,7 +7,9 @@ import {
   issueSerializedUnitToWorkorder,
   listWorkorderSerializedUnitUsages,
   resolveWorkorderSerializedUnit,
+  updateSerializedUsageRepairOrder,
 } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
+import { getWorkorderMechanicPartsPolicy } from "../../db/repositories/workorder-policies.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { inventoryTokenFromCode, readInventoryQrToken } from "./inventory-qr.js";
 import {
@@ -15,6 +17,7 @@ import {
   inventoryWorkorderEntityIdSchema,
   issueWorkorderInventoryUnitSchema,
   resolveWorkorderInventoryUnitSchema,
+  updateSerializedUsageRepairOrderSchema,
 } from "./inventory-unit-workorder.schemas.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
@@ -84,7 +87,11 @@ function mapMutationFailure(kind) {
   if (kind === "provider_not_local") throw failure("INVENTORY_UNIT_PROVIDER_NOT_LOCAL", "This label is managed by an external inventory provider and cannot be issued here.");
   if (kind === "unit_state") throw failure("INVENTORY_UNIT_NOT_AVAILABLE", "This serialized part changed or is no longer available for this action.");
   if (kind === "stock_mismatch") throw failure("INVENTORY_SERIAL_BALANCE_MISMATCH", "The serialized identity and local stock balance do not match. Inventory review is required.");
+  if (kind === "usage_state") throw failure("SERIALIZED_PART_REPAIR_ORDER_LOCKED", "The repair order can only be changed while this serialized part is installed on the workorder.");
 }
+
+const OFFICE_PARTS_EDIT_STATUSES = new Set(["open", "accepted", "in_progress", "mechanic_done"]);
+const MECHANIC_PARTS_EDIT_STATUSES = new Set(["accepted", "in_progress"]);
 
 export async function resolveSerializedUnitForWorkorder(workorderId, rawInput, context, dependencies = {}) {
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
@@ -152,4 +159,33 @@ export async function readSerializedUnitUsagesForWorkorder(workorderId, context,
     limit: 100,
   });
   return { usages };
+}
+
+export async function updateSerializedUsageRepairOrderForWorkorder(workorderId, rawInput, context, dependencies = {}) {
+  workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
+  const input = updateSerializedUsageRepairOrderSchema.parse(rawInput);
+  const authorize = dependencies.authorization ? null : (dependencies.authorizeParts || authorizeWorkorderModule);
+  const authorization = dependencies.authorization || await authorize(context, workorderId, {
+    moduleKey: "parts", capability: "write", action: "record",
+  });
+  const scope = repositoryScope(context, authorization);
+  if (context.actor.role === "mechanic") {
+    const policy = await (dependencies.getMechanicPartsPolicy || getWorkorderMechanicPartsPolicy)(workorderId);
+    if (!policy?.mechanicCanRecordParts) {
+      throw failure("MECHANIC_PARTS_ENTRY_DISABLED", "Mechanics cannot record used parts at this location. Send a part request to the office instead.", 403);
+    }
+  }
+  const allowedWorkorderStatuses = context.actor.role === "mechanic"
+    ? [...MECHANIC_PARTS_EDIT_STATUSES]
+    : [...OFFICE_PARTS_EDIT_STATUSES];
+  const result = await (dependencies.updateRepairOrder || updateSerializedUsageRepairOrder)({
+    workorderId,
+    usageId: input.usageId,
+    repairOrder: input.repairOrder,
+    actorId: context.actor.id,
+    allowedWorkorderStatuses,
+    ...scope,
+  });
+  mapMutationFailure(result.kind);
+  return { usage: result.usage, unchanged: result.kind === "unchanged" };
 }

@@ -16,3 +16,9 @@ export const finalizeWorkorderInventoryUnitSchema = z.object({
   disposition: z.enum(["installed", "returned", "removed"]),
   idempotencyKey,
 }).strict();
+
+export const updateSerializedUsageRepairOrderSchema = z.object({
+  operation: z.literal("serializedUsageRepairOrder"),
+  usageId: inventoryWorkorderEntityIdSchema,
+  repairOrder: z.string().trim().max(2000),
+}).strict();

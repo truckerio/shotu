@@ -1541,6 +1541,19 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
   }
 }
 
+async function activeSerializedRepairOrders(client, workorderId) {
+  const result = await client.query(
+    `select repair_order
+     from workorder_serialized_part_usages
+     where workorder_id = $1
+       and status in ('installed_pending_approval', 'installed')
+       and btrim(repair_order) <> ''
+     order by finalized_at, issued_at, id`,
+    [workorderId],
+  );
+  return result.rows.map((row) => ({ repairOrder: row.repair_order }));
+}
+
 export function updateMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours) {
   return updateOperationalUsedParts(workorderId, mechanicUserId, parts, laborHours, {
     requireAssignedMechanic: true,
@@ -1584,11 +1597,12 @@ export async function markOperationalWorkorderDone(
     await assertNoUnresolvedSerializedParts(client, workorderId, "", ["issued", "reserved"]);
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
+    const serializedParts = await activeSerializedRepairOrders(client, workorderId);
     const nextInput = {
       diagnosis: input.diagnosis || "",
       workPerformed: resolveWorkPerformed({
         workPerformed: input.workPerformed || before.work_performed,
-        parts: before.form_data?.parts,
+        parts: [...(before.form_data?.parts || []), ...serializedParts],
       }),
     };
     if (!nextInput.workPerformed) {

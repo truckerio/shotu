@@ -13,6 +13,8 @@ export function UsedPartsSection({
   onLaborRepairOrderChange,
   onPartsChange,
   onSaveParts,
+  onChanged,
+  onRegisterSerializedRepairFlush,
   editable,
   readonlyMessage,
   suggestionsEnabled,
@@ -35,6 +37,8 @@ export function UsedPartsSection({
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onChange={onPartsChange}
         onSave={onSaveParts}
+        onChanged={onChanged}
+        onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
         disabled={!editable}
         readonlyMessage={readonlyMessage}
         suggestionsEnabled={suggestionsEnabled}

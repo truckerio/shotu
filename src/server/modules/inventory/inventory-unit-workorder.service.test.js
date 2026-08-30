@@ -5,6 +5,7 @@ import {
   issueSerializedUnitForWorkorder,
   readSerializedUnitUsagesForWorkorder,
   resolveSerializedUnitForWorkorder,
+  updateSerializedUsageRepairOrderForWorkorder,
 } from "./inventory-unit-workorder.service.js";
 
 const COMPANY_ID = "00000000-0000-4000-8000-000000000001";
@@ -221,4 +222,72 @@ test("a granted Mechanic carries a server-derived role for assignment revalidati
   assert.equal(command.actorRole, "mechanic");
   assert.equal(command.companyId, COMPANY_ID);
   assert.equal(command.locationId, LOCATION_ID);
+});
+
+test("serialized repair wording is scoped to the authorized installed usage and validates before mutation", async () => {
+  let command;
+  const usage = { id: USAGE_ID, status: "installed_pending_approval", repairOrder: "Replace filter" };
+  const result = await updateSerializedUsageRepairOrderForWorkorder(
+    WORKORDER_ID,
+    { operation: "serializedUsageRepairOrder", usageId: USAGE_ID, repairOrder: "Install and inspect for leaks" },
+    context(),
+    dependencies({
+      authorizeParts: async () => ({ workorder: workorder(), companyId: COMPANY_ID, locationId: LOCATION_ID }),
+      updateRepairOrder: async (input) => { command = input; return { kind: "updated", usage }; },
+    }),
+  );
+  assert.equal(result.usage, usage);
+  assert.deepEqual(command, {
+    workorderId: WORKORDER_ID,
+    usageId: USAGE_ID,
+    repairOrder: "Install and inspect for leaks",
+    actorId: ACTOR_ID,
+    allowedWorkorderStatuses: ["open", "accepted", "in_progress", "mechanic_done"],
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    actorRole: "office",
+  });
+  await updateSerializedUsageRepairOrderForWorkorder(
+    WORKORDER_ID,
+    { operation: "serializedUsageRepairOrder", usageId: USAGE_ID, repairOrder: " " },
+    context(),
+    dependencies({
+      authorizeParts: async () => ({ workorder: workorder(), companyId: COMPANY_ID, locationId: LOCATION_ID }),
+      updateRepairOrder: async (input) => { command = input; return { kind: "updated", usage }; },
+    }),
+  );
+  assert.equal(command.repairOrder, "");
+  await assert.rejects(updateSerializedUsageRepairOrderForWorkorder(
+    WORKORDER_ID,
+    { operation: "serializedUsageRepairOrder", usageId: USAGE_ID, repairOrder: "x".repeat(2001) },
+    context(),
+    dependencies(),
+  ));
+});
+
+test("mechanic serialized repair wording preserves the mechanic parts policy and active lifecycle", async () => {
+  let command;
+  await updateSerializedUsageRepairOrderForWorkorder(
+    WORKORDER_ID,
+    { operation: "serializedUsageRepairOrder", usageId: USAGE_ID, repairOrder: "Install filter" },
+    context("mechanic"),
+    dependencies({
+      authorizeParts: async () => ({ workorder: workorder(), companyId: COMPANY_ID, locationId: LOCATION_ID }),
+      getMechanicPartsPolicy: async () => ({ mechanicCanRecordParts: true }),
+      updateRepairOrder: async (input) => { command = input; return { kind: "unchanged", usage: { id: USAGE_ID } }; },
+    }),
+  );
+  assert.deepEqual(command.allowedWorkorderStatuses, ["accepted", "in_progress"]);
+  await assert.rejects(
+    updateSerializedUsageRepairOrderForWorkorder(
+      WORKORDER_ID,
+      { operation: "serializedUsageRepairOrder", usageId: USAGE_ID, repairOrder: "Install filter" },
+      context("mechanic"),
+      dependencies({
+        authorizeParts: async () => ({ workorder: workorder(), companyId: COMPANY_ID, locationId: LOCATION_ID }),
+        getMechanicPartsPolicy: async () => ({ mechanicCanRecordParts: false }),
+      }),
+    ),
+    (error) => error.code === "MECHANIC_PARTS_ENTRY_DISABLED",
+  );
 });

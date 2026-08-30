@@ -133,6 +133,19 @@ test("finish validation accepts repair-completed text or part repair orders", ()
     workPerformed: "",
     parts: [{ partNo: "46305", repairOrder: "Put new hub seal, adjust brakes" }],
   }), "");
+  assert.equal(mechanicFinishError(
+    { workPerformed: "", parts: [] },
+    { modules: { parts: { data: { installedSerializedParts: [{
+      usageId: "usage-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea", repairOrder: "Replace failed sensor",
+    }] } } } },
+  ), "");
+  assert.match(mechanicFinishError(
+    { workPerformed: "", parts: [] },
+    { modules: { parts: { data: { installedSerializedParts: [{
+      usageId: "usage-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea",
+      description: "Fuel level sensor", repairOrder: "",
+    }] } } } },
+  ), /repair/i);
 });
 
 test("returnToMyWork blocks navigation when the unsynced progress flush fails", async () => {
@@ -267,6 +280,25 @@ test("mark done reuses part repair orders when repair completed is blank", async
   assert.deepEqual(JSON.parse(apiCall[2].body), {
     diagnosis: "Hub seal leaking",
     workPerformed: "Put new hub seal, adjust brakes",
+  });
+});
+
+test("mark done reuses persisted serialized repair orders when manual parts are blank", async () => {
+  const detail = {
+    user: { name: "Mechanic One" },
+    messages: [],
+    modules: { parts: { data: { installedSerializedParts: [{
+      usageId: "usage-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea", repairOrder: "Replace failed sensor",
+    }] } } },
+    workorder: { id: "workorder-1", diagnosis: "Sensor fault", workPerformed: "", status: "open" },
+  };
+  const { actions, calls } = actionHarness({ activeWorkorder: detail, form: { diagnosis: "Sensor fault", workPerformed: "", parts: [] } });
+
+  assert.equal(await actions.markMechanicWorkDone(), true);
+  const apiCall = calls.find(([name, path]) => name === "api" && path.endsWith("/mark-done"));
+  assert.deepEqual(JSON.parse(apiCall[2].body), {
+    diagnosis: "Sensor fault",
+    workPerformed: "Replace failed sensor",
   });
 });
 

@@ -73,11 +73,20 @@ export function installedSerializedUsedParts(detail) {
     const partNo = String(part?.partNumber || "").trim();
     const quantity = Number(part?.quantity);
     if (!partNo || !Number.isInteger(quantity) || quantity < 1) return [];
+    const usageId = String(part?.usageId || part?.id || "").trim();
+    const serialNumber = String(part?.serialNumber || "").trim();
+    const description = String(part?.description || part?.catalogDescription || "").trim();
+    const repairOrder = Object.hasOwn(part || {}, "repairOrder")
+      ? String(part.repairOrder || "").trim()
+      : description;
     return [{
+      ...(usageId ? { usageId } : {}),
       partNo,
       qty: String(quantity),
       uomCode: normalizeUomCode(part?.uomCode),
-      repairOrder: "Installed",
+      ...(serialNumber ? { serialNumber } : {}),
+      ...(description ? { description } : {}),
+      repairOrder,
       catalogPartId: part?.catalogPartId || null,
     }];
   });
@@ -87,5 +96,11 @@ export function workorderPreviewParts(manualParts, installedParts) {
   return [
     ...(Array.isArray(installedParts) ? installedParts : []),
     ...normalizeUsedParts(manualParts).filter(usedPartHasValue),
-  ].map(({ catalogPartId: _catalogPartId, ...part }) => part);
+  ].map(({
+    catalogPartId: _catalogPartId,
+    usageId: _usageId,
+    serialNumber: _serialNumber,
+    description: _description,
+    ...part
+  }) => part);
 }

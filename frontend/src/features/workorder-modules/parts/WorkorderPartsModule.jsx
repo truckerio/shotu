@@ -16,6 +16,7 @@ export function WorkorderPartsModule({
   locale,
   pendingPartCount,
   onChanged,
+  onRegisterSerializedRepairFlush,
   onLaborHoursChange,
   onLaborRepairOrderChange,
   onPartsChange,
@@ -67,6 +68,7 @@ export function WorkorderPartsModule({
           onPartsChange={onPartsChange}
           onSaveParts={onSaveParts}
           onChanged={onChanged}
+          onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
           locale={locale}
         /> : null}
       </div>

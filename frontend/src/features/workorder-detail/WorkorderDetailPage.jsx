@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -170,6 +170,10 @@ export function WorkorderDetailPage({
   vehicleModelText,
 }) {
   const viewport = useVisualViewport();
+  const serializedRepairFlushRef = useRef(async () => true);
+  const registerSerializedRepairFlush = useCallback((flush) => {
+    serializedRepairFlushRef.current = typeof flush === "function" ? flush : async () => true;
+  }, []);
   const t = (key) => interfaceText(locale, key);
   const renderedPreviewForm = previewForm || form;
   const modulePolicies = useMemo(() => Object.fromEntries([
@@ -236,17 +240,22 @@ export function WorkorderDetailPage({
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
     && !resolveWorkPerformed(form);
   const canMarkWorkDone = (isMechanicDetail || isOfficeDetail) && activeWorkorder.allowedActions?.markDone === true;
-  const markWorkDone = isOfficeDetail
+  async function runAfterSerializedRepairFlush(action) {
+    if (!await serializedRepairFlushRef.current()) return false;
+    return action();
+  }
+  const markWorkDone = () => runAfterSerializedRepairFlush(isOfficeDetail
     ? markOfficeWorkorderDone
-    : () => setMechanicFinish({ open: true, name: "", message: "" });
+    : () => setMechanicFinish({ open: true, name: "", message: "" }));
   const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
   const compactPreviewState = workorderPreviewState(activeWorkorder, renderedPreviewForm);
   const parent = detailParent(actor.role, isOfficeDetail, isMechanicDetail ? locale : "en");
 
-  function followDetailParent(event) {
+  async function followDetailParent(event) {
     if (!isPlainPrimaryActivation(event)) return;
     event.preventDefault();
     const serial = activeWorkorder.workorder.serial;
+    if (!await serializedRepairFlushRef.current()) return;
     returnToRoleWorkspace();
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       if (!serial) return;
@@ -522,6 +531,7 @@ export function WorkorderDetailPage({
             workorderChatContent={workorderChatContent}
             applyVehicle={applyVehicle}
             reloadActiveWorkorder={reloadActiveWorkorder}
+            onRegisterSerializedRepairFlush={registerSerializedRepairFlush}
             saveActiveUsedParts={saveActiveUsedParts}
             saveOfficeWorkorder={saveOfficeWorkorder}
             openOfficeCancel={openOfficeCancel}
@@ -539,8 +549,10 @@ export function WorkorderDetailPage({
             vehicleMileage={vehicleMileage}
             vehicleModelText={vehicleModelText}
             acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
-            openMechanicFinish={() => setMechanicFinish({ open: true, name: "", message: "" })}
-            markOfficeWorkorderDone={markOfficeWorkorderDone}
+            openMechanicFinish={() => runAfterSerializedRepairFlush(
+              () => setMechanicFinish({ open: true, name: "", message: "" }),
+            )}
+            markOfficeWorkorderDone={() => runAfterSerializedRepairFlush(markOfficeWorkorderDone)}
             openOfficeClose={() => {
               setOfficeDetailState((current) => ({ ...current, message: "" }));
               setOfficeCloseOpen(true);

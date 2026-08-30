@@ -14,5 +14,19 @@ test("runtime registry owns stable route action allowlists", () => {
   assert.deepEqual(registry.actions.assignment, ["accept", "release", "assign", "reassign"]);
   assert.deepEqual(registry.actions.chat, ["send", "attach", "acknowledge"]);
   assert.equal(moduleActionSchema("completion", "markWorkDone").safeParse({ workPerformed: "Fixed" }).success, true);
+  assert.equal(moduleActionSchema("parts", "record").safeParse({
+    operation: "serializedUsageRepairOrder",
+    usageId: "00000000-0000-4000-8000-000000000001",
+    repairOrder: "Install and test",
+  }).success, true);
+  assert.equal(moduleActionSchema("parts", "record").safeParse({
+    operation: "serializedUsageRepairOrder",
+    usageId: "00000000-0000-4000-8000-000000000001",
+    repairOrder: "",
+  }).success, true);
+  assert.equal(moduleActionSchema("parts", "record").safeParse({
+    operation: "serializedUsageRepairOrder",
+    usageId: "00000000-0000-4000-8000-000000000001",
+    repairOrder: "x".repeat(2001),
+  }).success, false);
 });
-

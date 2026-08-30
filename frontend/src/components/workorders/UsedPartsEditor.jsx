@@ -15,6 +15,7 @@ import {
   removeUsedPart,
   usedPartQuantityAfterPartNumberChange,
 } from "./used-parts-model.js";
+import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
 import {
   mechanicWorkStorageKey,
   removeLegacyMechanicWorkStorage,
@@ -70,6 +71,8 @@ export function UsedPartsEditor({
   onLaborRepairOrderChange = () => {},
   onChange,
   onSave,
+  onChanged = () => {},
+  onRegisterSerializedRepairFlush = () => {},
   disabled = false,
   defaultRows,
   suggestionsEnabled = true,
@@ -97,10 +100,55 @@ export function UsedPartsEditor({
   const [saveState, setSaveState] = useState("");
   const [message, setMessage] = useState("");
   const [selectedCatalogParts, setSelectedCatalogParts] = useState([]);
+  const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
+  const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
+  const serializedRepairContextRef = useRef(null);
+  const serializedRepairAutosaveRef = useRef(null);
+  serializedRepairContextRef.current = { detail, locale, onChanged };
+  if (!serializedRepairAutosaveRef.current) {
+    serializedRepairAutosaveRef.current = createSerializedRepairAutosave({
+      save: async (part, repairOrder) => {
+        const context = serializedRepairContextRef.current;
+        await api(`/api/workorders/${encodeURIComponent(context.detail.workorder.id)}/modules/parts/actions/record`, {
+          method: "POST",
+          body: JSON.stringify({
+            operation: "serializedUsageRepairOrder",
+            usageId: part.usageId,
+            repairOrder,
+          }),
+        });
+        await context.onChanged();
+      },
+      onSaving: (usageId, saving) => setSavingSerializedUsageId((current) => (
+        saving ? usageId : current === usageId ? "" : current
+      )),
+      onSaved: (usageId, repairOrder) => setSerializedRepairOrders((current) => {
+        if (current[usageId] !== repairOrder) return current;
+        const next = { ...current };
+        delete next[usageId];
+        return next;
+      }),
+      onError: (error) => {
+        const context = serializedRepairContextRef.current;
+        setMessage(context.locale === "en" && error?.message
+          ? error.message
+          : interfaceText(context.locale, "parts.saveFailed"));
+      },
+    });
+  }
+  const serializedRepairAutosave = serializedRepairAutosaveRef.current;
 
   useEffect(() => {
     saveRef.current = onSave;
   }, [onSave]);
+
+  useEffect(() => {
+    onRegisterSerializedRepairFlush(serializedRepairAutosave.flushAll);
+    return () => {
+      onRegisterSerializedRepairFlush(null);
+      serializedRepairAutosave.dispose();
+    };
+  }, [onRegisterSerializedRepairFlush, serializedRepairAutosave]);
 
   useEffect(() => {
     const currentRows = initialUsedPartRows(parts, defaultRows);
@@ -177,6 +225,19 @@ export function UsedPartsEditor({
       next[index] = part;
       return next;
     });
+  }
+
+  function serializedRepairOrder(part) {
+    return Object.hasOwn(serializedRepairOrders, part.usageId)
+      ? serializedRepairOrders[part.usageId]
+      : part.repairOrder;
+  }
+
+  function updateSerializedRepairOrder(part, repairOrder) {
+    if (!part.usageId) return;
+    setSerializedRepairOrders((current) => ({ ...current, [part.usageId]: repairOrder }));
+    setMessage("");
+    serializedRepairAutosave.update(part, repairOrder);
   }
 
   async function suggestRepair(index) {
@@ -290,15 +351,34 @@ export function UsedPartsEditor({
             <strong>{index + 2}</strong>
             <div className="used-part-field">
               <strong>{part.partNo}</strong>
+              {part.serialNumber ? <small>{part.serialNumber}</small> : null}
               <small>{t("parts.serialized")}</small>
             </div>
             <div className="used-part-field used-part-serialized-value">
               <strong>{formatQuantityUnit(part.qty, part.uomCode)}</strong>
             </div>
-            <div className="used-part-field used-part-serialized-value">
-              <strong>{t("parts.installed")}</strong>
+            <div className="used-part-field used-part-repair">
+              <NarrativeField
+                locale={locale}
+                singleLine
+                value={serializedRepairOrder(part)}
+                onChange={(event) => updateSerializedRepairOrder(part, event.target.value)}
+                onBlur={() => serializedRepairAutosave.flushOne(part)}
+                aria-label={`${t("parts.repairOrder")} ${index + 2}`}
+                placeholder={t("parts.describeRepair")}
+                disabled={disabled || !part.usageId}
+              />
+              {suggestionsEnabled && part.catalogPartId && part.usageId ? <RepairHistorySuggestions
+                workorderId={detail.workorder.id}
+                catalogPartId={part.catalogPartId}
+                partNumber={part.partNo}
+                assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                onApply={(text) => updateSerializedRepairOrder(part, text)}
+                disabled={disabled || !part.usageId || savingSerializedUsageId === part.usageId}
+                locale={locale}
+              /> : null}
             </div>
-            <span className="used-part-serialized-status">{t("parts.installed")}</span>
+            <span className="used-part-serialized-status">{savingSerializedUsageId === part.usageId ? t("progress.saving") : t("parts.installed")}</span>
           </div>
         ))}
         {rows.map((part, index) => (

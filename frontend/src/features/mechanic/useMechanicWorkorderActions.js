@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 import { interfaceText } from "../../i18n/index.js";
+import { installedSerializedUsedParts } from "../../components/workorders/used-parts-model.js";
 
 const DETAIL_FORM_CONTROL_SELECTOR = [
   ".workorder-detail-page input",
@@ -67,8 +68,12 @@ export function mechanicChatRequest({
   };
 }
 
-export function mechanicFinishError(form, localeText = (key) => interfaceText("en", key)) {
-  return resolveWorkPerformed(form)
+export function mechanicFinishError(form, detail, localeText = (key) => interfaceText("en", key)) {
+  if (typeof detail === "function") return mechanicFinishError(form, null, detail);
+  return resolveWorkPerformed({
+    ...form,
+    parts: [...(form?.parts || []), ...installedSerializedUsedParts(detail)],
+  })
     ? ""
     : localeText("mechanic.repairRequiredBeforeDone");
 }
@@ -283,7 +288,10 @@ export function createMechanicWorkorderActions({
         method: "POST",
         body: JSON.stringify({
           diagnosis: form.diagnosis,
-          workPerformed: resolveWorkPerformed(form),
+          workPerformed: resolveWorkPerformed({
+            ...form,
+            parts: [...(form.parts || []), ...installedSerializedUsedParts(detail)],
+          }),
         }),
       }),
       localeText("mechanic.sentForReview"),
@@ -292,7 +300,7 @@ export function createMechanicWorkorderActions({
 
   async function submitMechanicFinish(event) {
     event.preventDefault();
-    const validationError = mechanicFinishError(form, localeText);
+    const validationError = mechanicFinishError(form, activeWorkorder, localeText);
     if (validationError) {
       setMechanicFinish({ open: false, name: "", message: "" });
       selectDetailSection("diagnosisRepair");

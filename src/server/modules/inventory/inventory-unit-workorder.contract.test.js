@@ -4,6 +4,7 @@ import test from "node:test";
 
 const migration = readFileSync(new URL("../../db/migrations/069_inventory_unit_workorder_usage.sql", import.meta.url), "utf8");
 const reservationMigration = readFileSync(new URL("../../db/migrations/087_workorder_serialized_part_reservation_lifecycle.sql", import.meta.url), "utf8");
+const repairOrderMigration = readFileSync(new URL("../../db/migrations/089_serialized_usage_repair_order.sql", import.meta.url), "utf8");
 const repository = readFileSync(new URL("../../db/repositories/inventory-unit-workorder-usage.repo.js", import.meta.url), "utf8");
 const workorders = readFileSync(new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url), "utf8");
 const server = readFileSync(new URL("../../../../server.js", import.meta.url), "utf8");
@@ -44,12 +45,25 @@ test("reservation lifecycle preserves legacy issue while approval owns new consu
   assert.match(repository, /pendingInstall[\s\S]*"removed_returned_to_stock"/i);
 });
 
-test("installed-part summaries are tenant scoped, finalized only, grouped, and bounded", () => {
+test("installed-part summaries are tenant scoped, per usage, repair-order aware, and bounded", () => {
   assert.match(repository, /listWorkorderInstalledSerializedParts/);
   assert.match(repository, /usage\.workorder_id = \$1[\s\S]*usage\.company_id = \$2[\s\S]*usage\.location_id = \$3/i);
   assert.match(repository, /usage\.status in \('installed_pending_approval', 'installed'\)/i);
-  assert.match(repository, /group by usage\.catalog_part_id, line\.part_number, usage\.uom_code/i);
+  assert.match(repository, /usage\.id as usage_id/i);
+  assert.match(repository, /repairOrder: row\.repair_order/i);
+  assert.doesNotMatch(repository, /group by usage\.catalog_part_id, line\.part_number, usage\.uom_code/i);
   assert.match(repository, /limit \$4/i);
+  assert.match(repository, /limit = 2000/i);
+});
+
+test("serialized repair wording snapshots receipt description and keeps a field-event audit", () => {
+  assert.match(repairOrderMigration, /add column repair_order text not null default ''/i);
+  assert.match(repairOrderMigration, /inventory_receipt_lines/i);
+  assert.match(repository, /line\.description/i);
+  assert.match(repository, /serialized_usage_repair_order/i);
+  assert.match(repository, /update workorder_serialized_part_usages[\s\S]*set repair_order/i);
+  assert.match(workorders, /activeSerializedRepairOrders/);
+  assert.match(workorders, /\[\.\.\.\(before\.form_data\?\.parts \|\| \[\]\), \.\.\.serializedParts\]/);
 });
 
 test("repository locks workorder, exact unit, usage, and local balance before mutation", () => {
@@ -73,7 +87,7 @@ test("serialized workflow is Office-owned, module-authorized, and mounted inside
   assert.match(partsModule, /partsVisible \? <PartRequestsPanel/);
   assert.match(service, /moduleKey: "partsScanning"/);
   assert.match(service, /requireLocationAccess/);
-  assert.doesNotMatch(service, /requireMechanic|mechanicCanRecordParts/);
+  assert.match(service, /getWorkorderMechanicPartsPolicy/);
   assert.doesNotMatch(repository, /mechanic_can_record_parts/);
   assert.match(repository, /workorder_parts_scan/);
 });

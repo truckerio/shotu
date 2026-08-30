@@ -105,13 +105,13 @@ test("installed serialized parts become immutable display rows and preview parts
     partNo: "0000000002211",
     qty: "2",
     uomCode: "ea",
-    repairOrder: "Installed",
+    repairOrder: "",
   }]);
   assert.deepEqual(workorderPreviewParts([
     { partNo: "FILTER", qty: 1, uomCode: "pc", repairOrder: "Changed" },
     { partNo: "", qty: "", repairOrder: "" },
   ], installed), [
-    { partNo: "0000000002211", qty: "2", uomCode: "ea", repairOrder: "Installed" },
+    { partNo: "0000000002211", qty: "2", uomCode: "ea", repairOrder: "" },
     { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Changed" },
   ]);
   assert.deepEqual(detail.modules.parts.data.installedSerializedParts, [
@@ -130,7 +130,15 @@ test("refreshed serialized summaries add one immutable row then remove it withou
       parts: {
         data: {
           installedSerializedParts: [
-            { catalogPartId: "part-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea" },
+            {
+              usageId: "usage-1",
+              catalogPartId: "part-1",
+              partNumber: "0000000002211",
+              serialNumber: "WG-S-F06752C6AA1D48E7-1",
+              quantity: 1,
+              uomCode: "ea",
+              description: "Fuel level sensor",
+            },
           ],
         },
       },
@@ -146,14 +154,17 @@ test("refreshed serialized summaries add one immutable row then remove it withou
 
   const installedRows = installedSerializedUsedParts(installedDetail);
   assert.deepEqual(installedRows, [{
+    usageId: "usage-1",
     catalogPartId: "part-1",
     partNo: "0000000002211",
     qty: "1",
     uomCode: "ea",
-    repairOrder: "Installed",
+    serialNumber: "WG-S-F06752C6AA1D48E7-1",
+    description: "Fuel level sensor",
+    repairOrder: "Fuel level sensor",
   }]);
   assert.deepEqual(workorderPreviewParts(manualParts, installedRows), [
-    { partNo: "0000000002211", qty: "1", uomCode: "ea", repairOrder: "Installed" },
+    { partNo: "0000000002211", qty: "1", uomCode: "ea", repairOrder: "Fuel level sensor" },
     { partNo: "FUEL", qty: "1", uomCode: "gal", repairOrder: "Refilled" },
   ]);
 
@@ -162,4 +173,36 @@ test("refreshed serialized summaries add one immutable row then remove it withou
   assert.deepEqual(workorderPreviewParts(manualParts, removedRows), [
     { partNo: "FUEL", qty: "1", uomCode: "gal", repairOrder: "Refilled" },
   ]);
+});
+
+test("serialized repair wording from the refreshed detail overrides its description snapshot", () => {
+  const installed = installedSerializedUsedParts({
+    modules: { parts: { data: { installedSerializedParts: [{
+      usageId: "usage-1",
+      catalogPartId: "part-1",
+      partNumber: "0000000002211",
+      quantity: 1,
+      uomCode: "ea",
+      description: "Fuel level sensor",
+      repairOrder: "Replace failed sensor",
+    }] } } },
+  });
+
+  assert.equal(installed[0].usageId, "usage-1");
+  assert.equal(installed[0].repairOrder, "Replace failed sensor");
+});
+
+test("an explicitly cleared serialized repair order stays blank after refresh", () => {
+  const installed = installedSerializedUsedParts({
+    modules: { parts: { data: { installedSerializedParts: [{
+      usageId: "usage-1",
+      partNumber: "0000000002211",
+      quantity: 1,
+      uomCode: "ea",
+      description: "Fuel level sensor",
+      repairOrder: "",
+    }] } } },
+  });
+
+  assert.equal(installed[0].repairOrder, "");
 });

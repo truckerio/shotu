@@ -176,6 +176,26 @@ test("parts action persists labor hours with goods through the authenticated rol
   assert.equal(result[1].parts[0].partNo, "46305");
 });
 
+test("parts record routes serialized repair wording through the scoped inventory owner", async () => {
+  const usage = { id: "usage-1", repairOrder: "Install and test" };
+  const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", {
+    operation: "serializedUsageRepairOrder",
+    usageId: "usage-1",
+    repairOrder: "Install and test",
+  }, {
+    authorize: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    updateSerializedRepairOrderForWorkorder: async (...args) => {
+      assert.equal(args[0], "wo-1");
+      assert.equal(args[1].usageId, "usage-1");
+      assert.deepEqual(Object.keys(args[1]).sort(), ["operation", "repairOrder", "usageId"]);
+      assert.equal(args[2].actor.id, "actor-1");
+      assert.equal(args[3].authorization.companyId, "company-1");
+      return { usage };
+    },
+  });
+  assert.equal(result.usage, usage);
+});
+
 test("office Work done uses the shared completion transition with the authenticated office actor", async () => {
   const calls = [];
   const result = await runWorkorderModuleAction(context, "wo-1", "completion", "markWorkDone", {

@@ -19,6 +19,7 @@ import {
   updateMechanicUsedPartsSchema,
 } from "./workorder.schemas.js";
 import { mechanicProgressSchema } from "../mechanic/mechanic-progress.schemas.js";
+import { updateSerializedUsageRepairOrderSchema } from "../inventory/inventory-unit-workorder.schemas.js";
 import {
   createOdooDraftSchema,
   mapOdooWorkorderPartSchema,
@@ -83,6 +84,7 @@ const ACTIONS = Object.freeze({
       z.object({ operation: z.literal("usedParts"), ...updateMechanicUsedPartsSchema.shape }),
       z.object({ operation: z.literal("usage"), requestId: id, ...updatePartUsageSchema.shape }),
       z.object({ operation: z.literal("officePart"), ...createOfficePartSchema.shape }),
+      updateSerializedUsageRepairOrderSchema,
     ]),
     approve: partDecision,
     decline: partDecision,

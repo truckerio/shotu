@@ -6,6 +6,7 @@ import {
   issueSerializedUnitToWorkorder,
   listWorkorderInstalledSerializedParts,
   listWorkorderSerializedUnitUsages,
+  updateSerializedUsageRepairOrder,
 } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 import {
   closeOperationalWorkorder,
@@ -172,6 +173,12 @@ test("real PostgreSQL reserves until approval, releases preapproval returns, and
     assert.equal((await finalizeSerializedUnitUsage(installCommand)).kind, "finalized");
     assert.equal((await listWorkorderSerializedUnitUsages({ ...scope, limit: 100 }))
       .find((usage) => usage.id === usageB.id).status, "installed_pending_approval");
+    assert.equal((await updateSerializedUsageRepairOrder({
+      ...scope,
+      usageId: usageB.id,
+      repairOrder: "Install serialized integration filter and inspect for leaks.",
+      allowedWorkorderStatuses: ["open", "accepted", "in_progress", "mechanic_done"],
+    })).kind, "updated");
     assert.deepEqual((await query(
       "select quantity_on_hand, quantity_reserved from inventory_items where company_id = $1 and location_id = $2 and catalog_part_id = $3",
       [companyId, locationId, catalogPartId],
@@ -183,11 +190,20 @@ test("real PostgreSQL reserves until approval, releases preapproval returns, and
     assert.deepEqual(await listWorkorderInstalledSerializedParts({
       workorderId, companyId, locationId, limit: 500,
     }), [{
+      usageId: usageB.id,
       catalogPartId,
+      serialNumber: `WG-L-${suffix}-2`,
       partNumber: `SERIAL-${suffix}`,
+      description: "Serialized integration filter",
+      repairOrder: "Install serialized integration filter and inspect for leaks.",
       quantity: 1,
       uomCode: "ea",
     }]);
+    assert.equal((await query(
+      `select count(*)::integer as count from workorder_field_events
+       where workorder_id = $1 and field_key = 'serialized_usage_repair_order'`,
+      [workorderId],
+    )).rows[0].count, 1);
     assert.equal((await finalizeSerializedUnitUsage({
       ...scope, usageId: usageB.id, disposition: "removed",
       idempotencyKey: `remove-b-${suffix}`, requestHash: digest(`remove-b-${suffix}`),

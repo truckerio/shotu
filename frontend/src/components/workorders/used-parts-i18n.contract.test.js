@@ -22,11 +22,20 @@ test("mechanic used-parts interface text is owned by the selected locale", () =>
   assert.match(editor, /progress\.notSaved/);
 });
 
-test("installed serialized summaries render as locked part rows and feed every preview", () => {
+test("installed serialized summaries keep identity locked, edit only repair wording, and feed every preview", () => {
   assert.match(editor, /installedParts\.map/);
   assert.match(editor, /className="part-row used-part-serialized-row"/);
   assert.match(editor, /<strong>\{part\.partNo\}<\/strong>/);
+  assert.match(editor, /value=\{serializedRepairOrder\(part\)\}/);
+  assert.match(editor, /operation: "serializedUsageRepairOrder"/);
+  assert.match(editor, /usageId: part\.usageId/);
+  assert.match(editor, /await context\.onChanged\(\)/);
+  assert.match(editor, /onBlur=\{\(\) => serializedRepairAutosave\.flushOne\(part\)\}/);
+  assert.match(detailPage, /serializedRepairFlushRef\.current\(\)/);
+  assert.match(detailPage, /runAfterSerializedRepairFlush/);
+  assert.match(editor, /<RepairHistorySuggestions[\s\S]*catalogPartId=\{part\.catalogPartId\}/);
   assert.doesNotMatch(editor, /used-part-serialized-row[\s\S]{0,800}<PartCatalogCombobox/);
+  assert.doesNotMatch(editor, /used-part-serialized-row[\s\S]{0,800}<QuantityUnitInput/);
   assert.match(roleRouter, /workorderPreviewForm\(form, activeWorkorder\)/);
   assert.match(roleRouterModel, /parts: workorderPreviewParts\(form\.parts, installedSerializedUsedParts\(detail\)\)/);
   assert.match(roleRouter, /useWorkorderPrintController\([\s\S]*form: previewForm/);

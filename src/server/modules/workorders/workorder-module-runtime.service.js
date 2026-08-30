@@ -50,6 +50,7 @@ import {
   workorderOdooReadiness,
 } from "./workorder-odoo-module.service.js";
 import { readUnitServiceHistory } from "./unit-service-history.service.js";
+import { updateSerializedUsageRepairOrderForWorkorder } from "../inventory/inventory-unit-workorder.service.js";
 
 function resourceOptions(context) {
   return context.actor.role === "mechanic"
@@ -64,7 +65,7 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
     workorderId: detail.workorder.id,
     companyId: detail.workorder.companyId,
     locationId: detail.workorder.locationId,
-    limit: 500,
+    limit: 2000,
   });
   return { ...detail, installedSerializedParts };
 }
@@ -157,7 +158,7 @@ export async function runWorkorderModuleAction(
   dependencies = {},
 ) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
-  await authorize(context, workorderId, {
+  const authorization = await authorize(context, workorderId, {
     moduleKey,
     capability: "write",
     action,
@@ -191,6 +192,18 @@ export async function runWorkorderModuleAction(
     }
     if (action === "record" && input.operation === "officePart" && ["office", "admin"].includes(context.actor.role)) {
       return (dependencies.addOfficePart || addOfficePart)(workorderId, { ...input, officeUserId: actorId });
+    }
+    if (action === "record" && input.operation === "serializedUsageRepairOrder") {
+      return (dependencies.updateSerializedRepairOrderForWorkorder || updateSerializedUsageRepairOrderForWorkorder)(
+        workorderId,
+        {
+          operation: input.operation,
+          usageId: input.usageId,
+          repairOrder: input.repairOrder,
+        },
+        context,
+        { ...dependencies, authorization },
+      );
     }
     if (["approve", "decline"].includes(action)) {
       const decision = action === "approve" ? "approved" : (input.decision === "needs_info" ? "needs_info" : "rejected");
