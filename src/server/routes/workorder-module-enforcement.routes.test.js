@@ -32,7 +32,7 @@ test("mechanic workorder mutations declare their canonical module actions", () =
   assert.match(mechanicSource, /createRuntime\(requestContext, input, rawInput\)/);
   assert.match(
     mechanicSource,
-    /projectProtectedWorkorderDetail\([\s\S]{0,180}?\{ viewerRole: requestContext\.actor\.role \}/,
+    /projectLoadedProtectedWorkorderDetail\([\s\S]{0,180}?\{ viewerRole: requestContext\.actor\.role \}/,
     "mechanic and kiosk detail must project from the authenticated request role",
   );
 });

@@ -69,6 +69,16 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
   return { ...detail, installedSerializedParts };
 }
 
+export async function projectLoadedProtectedWorkorderDetail(
+  detail,
+  decisions,
+  options = {},
+  dependencies = {},
+) {
+  const enriched = await withInstalledSerializedParts(detail, decisions, dependencies);
+  return projectProtectedWorkorderDetail(enriched, decisions, options);
+}
+
 export async function protectedWorkorderDetail(context, workorderId, dependencies = {}) {
   const resolveModules = dependencies.resolveModules || resolveWorkorderModuleDecisions;
   const loadDetail = dependencies.loadDetail || loadWorkorderDetail;
@@ -79,8 +89,12 @@ export async function protectedWorkorderDetail(context, workorderId, dependencie
     viewerUserId: context.actor.id,
     participantChatOnly: context.actor.role === "mechanic",
   });
-  const detail = await withInstalledSerializedParts(loadedDetail, decisions, dependencies);
-  return projectProtectedWorkorderDetail(detail, decisions, { viewerRole: context.actor.role });
+  return projectLoadedProtectedWorkorderDetail(
+    loadedDetail,
+    decisions,
+    { viewerRole: context.actor.role },
+    dependencies,
+  );
 }
 
 export async function protectedWorkorderModule(context, workorderId, moduleKey, dependencies = {}) {
@@ -96,8 +110,12 @@ export async function protectedWorkorderModule(context, workorderId, moduleKey, 
     participantChatOnly: context.actor.role === "mechanic",
   });
   const decisions = { [moduleKey]: { access: authorization.access, source: authorization.source } };
-  const detail = await withInstalledSerializedParts(loadedDetail, decisions, dependencies);
-  return projectProtectedWorkorderDetail(detail, decisions, { viewerRole: context.actor.role });
+  return projectLoadedProtectedWorkorderDetail(
+    loadedDetail,
+    decisions,
+    { viewerRole: context.actor.role },
+    dependencies,
+  );
 }
 
 export async function patchWorkorderModule(context, workorderId, moduleKey, input, dependencies = {}) {

@@ -119,3 +119,47 @@ test("installed serialized parts become immutable display rows and preview parts
     { catalogPartId: "part-2", partNumber: "", quantity: 1, uomCode: "ea" },
   ]);
 });
+
+test("refreshed serialized summaries add one immutable row then remove it without duplicating manual parts", () => {
+  const manualParts = [
+    { partNo: "FUEL", qty: "1", uomCode: "gal", repairOrder: "Refilled" },
+    { partNo: "", qty: "", repairOrder: "" },
+  ];
+  const installedDetail = {
+    modules: {
+      parts: {
+        data: {
+          installedSerializedParts: [
+            { catalogPartId: "part-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea" },
+          ],
+        },
+      },
+    },
+  };
+  const removedDetail = {
+    modules: {
+      parts: {
+        data: { installedSerializedParts: [] },
+      },
+    },
+  };
+
+  const installedRows = installedSerializedUsedParts(installedDetail);
+  assert.deepEqual(installedRows, [{
+    catalogPartId: "part-1",
+    partNo: "0000000002211",
+    qty: "1",
+    uomCode: "ea",
+    repairOrder: "Installed",
+  }]);
+  assert.deepEqual(workorderPreviewParts(manualParts, installedRows), [
+    { partNo: "0000000002211", qty: "1", uomCode: "ea", repairOrder: "Installed" },
+    { partNo: "FUEL", qty: "1", uomCode: "gal", repairOrder: "Refilled" },
+  ]);
+
+  const removedRows = installedSerializedUsedParts(removedDetail);
+  assert.deepEqual(removedRows, []);
+  assert.deepEqual(workorderPreviewParts(manualParts, removedRows), [
+    { partNo: "FUEL", qty: "1", uomCode: "gal", repairOrder: "Refilled" },
+  ]);
+});

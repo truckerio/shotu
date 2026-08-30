@@ -24,10 +24,10 @@ import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.serv
 import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
 import { normalizeModuleAccessMap, normalizeUserModuleAccessMap } from "../../../shared/workorder-modules.js";
 import { resolveWorkorderModuleDecisions } from "../modules/workorders/workorder-module-access.service.js";
-import { projectProtectedWorkorderDetail } from "../modules/workorders/workorder-module-projection.js";
 import {
   createWorkorderRuntime,
   patchWorkorderModules,
+  projectLoadedProtectedWorkorderDetail,
   runWorkorderModuleAction,
 } from "../modules/workorders/workorder-module-runtime.service.js";
 
@@ -84,6 +84,7 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   const patchModules = dependencies.patchModules || patchWorkorderModules;
   const runAction = dependencies.runAction || runWorkorderModuleAction;
   const loadPartRequestQueue = dependencies.loadPartRequestQueue || loadUnresolvedPartRequestQueue;
+  const loadDetail = dependencies.loadDetail || officeWorkorderDetail;
 
   if (req.method === "GET" && url.pathname === "/api/office/template") {
     const rows = await loadOfficeLocationTemplates(requestContext);
@@ -143,9 +144,11 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   const detailId = workorderIdFrom(url.pathname);
   if (req.method === "GET" && detailId) {
     const { decisions } = await resolveModules(requestContext, detailId);
-    sendJson(res, 200, projectProtectedWorkorderDetail(
-      await officeWorkorderDetail(detailId, officeUserId),
+    sendJson(res, 200, await projectLoadedProtectedWorkorderDetail(
+      await loadDetail(detailId, officeUserId),
       decisions,
+      { viewerRole: requestContext.actor.role },
+      dependencies,
     ));
     return true;
   }

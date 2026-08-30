@@ -23,10 +23,10 @@ import { normalizeModuleAccessMap, normalizeUserModuleAccessMap } from "../../..
 import {
   resolveWorkorderModuleDecisions,
 } from "../modules/workorders/workorder-module-access.service.js";
-import { projectProtectedWorkorderDetail } from "../modules/workorders/workorder-module-projection.js";
 import {
   createWorkorderRuntime,
   patchWorkorderModule,
+  projectLoadedProtectedWorkorderDetail,
   runWorkorderModuleAction,
 } from "../modules/workorders/workorder-module-runtime.service.js";
 
@@ -63,6 +63,7 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
   const createRuntime = dependencies.createRuntime || createWorkorderRuntime;
   const patchModule = dependencies.patchModule || patchWorkorderModule;
   const runAction = dependencies.runAction || runWorkorderModuleAction;
+  const loadDetail = dependencies.loadDetail || mechanicWorkorderDetail;
 
   const mediaId = chatMediaIdFrom(url.pathname);
   if (req.method === "GET" && mediaId) {
@@ -141,10 +142,11 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
     const { decisions } = await resolveModules(requestContext, detailId, {
       resourceAccess: { allowAvailable: true, allowActiveAtLocation: true },
     });
-    sendJson(res, 200, projectProtectedWorkorderDetail(
-      await mechanicWorkorderDetail(detailId, mechanicUserId),
+    sendJson(res, 200, await projectLoadedProtectedWorkorderDetail(
+      await loadDetail(detailId, mechanicUserId),
       decisions,
       { viewerRole: requestContext.actor.role },
+      dependencies,
     ));
     return true;
   }
