@@ -16,6 +16,12 @@ test("provider failures expose safe and actionable connection errors", () => {
   assert.equal(rejected.code, "INTEGRATION_AUTHENTICATION_REQUIRED");
   assert.match(rejected.message, /Reconnect Samsara/i);
 
+  const missingScope = samsaraConnectionError({ status: 403, message: "private provider detail" });
+  assert.equal(missingScope.statusCode, 403);
+  assert.equal(missingScope.code, "INTEGRATION_PERMISSION_DENIED");
+  assert.match(missingScope.message, /Read Vehicles and Read Tags/i);
+  assert.doesNotMatch(missingScope.message, /private provider detail/i);
+
   const unavailable = samsaraConnectionError(new Error("private upstream detail"));
   assert.equal(unavailable.statusCode, 502);
   assert.equal(unavailable.code, "SAMSARA_UNAVAILABLE");

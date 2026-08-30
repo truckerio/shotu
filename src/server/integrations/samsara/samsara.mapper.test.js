@@ -58,3 +58,11 @@ test("Samsara tag normalization trims, deduplicates case-insensitively, and boun
   assert.equal(tagNames.length, 25);
   assert.equal(tagNames.filter((name) => name.toLowerCase() === "spg").length, 1);
 });
+
+test("Samsara serialNumber is preserved for trucks and trailers", () => {
+  const truck = mapSamsaraVehicle({ id: "truck-assets-1", serialNumber: "TRUCK-SERIAL" });
+  const trailer = mapSamsaraTrailer({ id: "trailer-assets-1", serialNumber: "TRAILER-SERIAL" });
+
+  assert.equal(truck.serial, "TRUCK-SERIAL");
+  assert.equal(trailer.serial, "TRAILER-SERIAL");
+});

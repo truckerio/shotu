@@ -61,6 +61,14 @@ export class SamsaraClient {
     return this.request("/fleet/trailers", { after, limit });
   }
 
+  async listTagsPage({ after = "", limit = 512 } = {}) {
+    const requestedLimit = Number(limit);
+    const boundedLimit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(Math.floor(requestedLimit), 512))
+      : 512;
+    return this.request("/tags", { after, limit: boundedLimit });
+  }
+
   async listVehicleStats({ vehicleIds, types }) {
     return this.request("/fleet/vehicles/stats", {
       vehicleIds: vehicleIds.join(","),

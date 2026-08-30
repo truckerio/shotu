@@ -10,7 +10,7 @@ import {
 } from "../../db/repositories/integrations.repo.js";
 import { env } from "../../config/env.js";
 import { isRejectedSamsaraApiCredential } from "./samsara.client.js";
-import { mapSamsaraTrailer, mapSamsaraVehicle } from "./samsara.mapper.js";
+import { mapSamsaraTrailer, mapSamsaraVehicle, normalizeSamsaraTagNames } from "./samsara.mapper.js";
 import { applyVinDecodes, decodeVinValuesBatch } from "../vin/vpic.client.js";
 import { withSamsaraClient } from "./samsara.oauth.service.js";
 import { recordSamsaraConnectionFailure } from "./samsara.connection-health.js";
@@ -74,11 +74,16 @@ export async function disconnectSamsara(companyId = DEFAULT_COMPANY_ID) {
   return samsaraStatus(companyId);
 }
 
+export async function testSamsaraClientCapabilities(client) {
+  await client.listVehiclesPage({ limit: 1 });
+  await client.listTagsPage({ limit: 1 });
+}
+
 export async function testSamsaraConnection(companyId = DEFAULT_COMPANY_ID) {
   await migrate();
   try {
     const { auth } = await withSamsaraClient(
-      (client) => client.listVehiclesPage({ limit: 1 }),
+      (client) => testSamsaraClientCapabilities(client),
       { companyId },
     );
     return upsertIntegrationStatus("samsara", {
@@ -90,12 +95,46 @@ export async function testSamsaraConnection(companyId = DEFAULT_COMPANY_ID) {
   }
 }
 
-async function fetchSamsaraFleet(client) {
+export function attachSamsaraTags({ tags = [], trailers = [], vehicles = [] } = {}) {
+  const vehicleTags = new Map(vehicles.map((vehicle) => [String(vehicle.id), [...(vehicle.tags || [])]]));
+  const trailerTags = new Map(trailers.map((trailer) => [String(trailer.id), [...(trailer.tags || [])]]));
+
+  for (const tag of tags) {
+    for (const member of tag?.vehicles || []) {
+      const memberTags = vehicleTags.get(String(member?.id || ""));
+      if (memberTags) memberTags.push({ name: tag?.name });
+    }
+    for (const member of tag?.assets || []) {
+      const memberTags = trailerTags.get(String(member?.id || ""));
+      if (memberTags) memberTags.push({ name: tag?.name });
+    }
+  }
+
+  const withTags = (asset, tagMap) => ({
+    ...asset,
+    tags: normalizeSamsaraTagNames(tagMap.get(String(asset.id))).map((name) => ({ name })),
+  });
+  return {
+    trailers: trailers.map((trailer) => withTags(trailer, trailerTags)),
+    vehicles: vehicles.map((vehicle) => withTags(vehicle, vehicleTags)),
+  };
+}
+
+export async function fetchSamsaraFleet(client) {
   const vehicles = [];
   let after = "";
   for (let page = 0; page < 50; page += 1) {
     const body = await client.listVehiclesPage({ after, limit: 512 });
     vehicles.push(...(body.data || []));
+    after = body.pagination?.endCursor || "";
+    if (!body.pagination?.hasNextPage || !after) break;
+  }
+
+  const tags = [];
+  after = "";
+  for (let page = 0; page < 50; page += 1) {
+    const body = await client.listTagsPage({ after, limit: 512 });
+    tags.push(...(body.data || []));
     after = body.pagination?.endCursor || "";
     if (!body.pagination?.hasNextPage || !after) break;
   }
@@ -109,9 +148,11 @@ async function fetchSamsaraFleet(client) {
     if (!body.pagination?.hasNextPage || !after) break;
   }
 
+  const tagged = attachSamsaraTags({ tags, trailers, vehicles });
+
   const statsByVehicleId = new Map();
-  for (let index = 0; index < vehicles.length; index += 50) {
-    const chunk = vehicles.slice(index, index + 50);
+  for (let index = 0; index < tagged.vehicles.length; index += 50) {
+    const chunk = tagged.vehicles.slice(index, index + 50);
     if (!chunk.length) continue;
     try {
       const statsBody = await client.listVehicleStats({
@@ -126,8 +167,8 @@ async function fetchSamsaraFleet(client) {
   }
 
   const statsByTrailerId = new Map();
-  for (let index = 0; index < trailers.length; index += 50) {
-    const chunk = trailers.slice(index, index + 50);
+  for (let index = 0; index < tagged.trailers.length; index += 50) {
+    const chunk = tagged.trailers.slice(index, index + 50);
     if (!chunk.length) continue;
     try {
       const statsBody = await client.listTrailerStats({
@@ -141,7 +182,7 @@ async function fetchSamsaraFleet(client) {
     }
   }
 
-  return { statsByTrailerId, statsByVehicleId, trailers, vehicles };
+  return { statsByTrailerId, statsByVehicleId, trailers: tagged.trailers, vehicles: tagged.vehicles };
 }
 
 async function runSamsaraSync({

@@ -2,6 +2,7 @@ import { upsertIntegrationStatus } from "../../db/repositories/integrations.repo
 import {
   IntegrationHttpError,
   integrationAuthenticationRequired,
+  integrationPermissionDenied,
 } from "../core/integration-errors.js";
 import { isRejectedSamsaraApiCredential } from "./samsara.client.js";
 
@@ -10,6 +11,11 @@ export function samsaraConnectionError(error) {
   if (isRejectedSamsaraApiCredential(error)) {
     return integrationAuthenticationRequired(
       "Samsara rejected the saved credential. Reconnect Samsara in Settings.",
+    );
+  }
+  if (Number(error?.status) === 403) {
+    return integrationPermissionDenied(
+      "Samsara needs Read Vehicles and Read Tags access. Update the Samsara app permissions, then reconnect.",
     );
   }
   return new IntegrationHttpError(
