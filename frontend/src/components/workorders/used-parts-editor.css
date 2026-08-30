@@ -57,7 +57,29 @@
 }
 
 .used-part-serialized-row {
+  align-items: start;
   background: var(--surface-subtle, #f9fafb);
+  column-gap: 12px;
+  padding-block: 10px;
+}
+
+.used-part-serialized-identity {
+  align-content: start;
+  display: grid;
+  gap: 2px;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.used-part-serialized-identity > strong {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.used-part-serialized-identity > small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .used-part-serialized-row small,
@@ -67,12 +89,16 @@
 }
 
 .used-part-serialized-value {
-  align-self: center;
+  align-items: center;
+  display: flex;
+  min-height: 34px;
 }
 
 .used-part-serialized-status {
-  align-self: center;
+  align-items: center;
+  display: flex;
   font-weight: 600;
+  min-height: 34px;
 }
 
 .used-part-labor-name,
@@ -141,6 +167,15 @@
 
   .used-parts-editor .used-part-history {
     grid-column: 1 / -1;
+  }
+
+  .used-parts-editor .used-part-serialized-row {
+    column-gap: 8px;
+  }
+
+  .used-parts-editor .used-part-serialized-status {
+    grid-column: 1 / -1;
+    min-height: 0;
   }
 
   .used-parts-editor .used-part-repair .narrative-field-control {

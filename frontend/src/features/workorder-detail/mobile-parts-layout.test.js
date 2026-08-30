@@ -40,12 +40,23 @@ test("repair order uses one visible column heading and an accessible row control
   assert.match(css, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*34px;[^}]*padding:\s*6px 8px;/s);
 });
 
+test("serialized part identity uses separate wrapping lines and top-aligned row fields", () => {
+  assert.match(editor, /className="used-part-field used-part-serialized-identity"/);
+  assert.match(editor, /className="used-part-serialized-serial"/);
+  assert.match(editor, /className="used-part-serialized-kind"/);
+  assert.match(css, /\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;[^}]*column-gap:\s*12px;/s);
+  assert.match(css, /\.used-part-serialized-identity\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;[^}]*min-width:\s*0;/s);
+  assert.match(css, /\.used-part-serialized-identity\s*>\s*strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*left;/s);
+  assert.match(css, /\.used-part-serialized-identity\s*>\s*small\s*\{[^}]*display:\s*block;[^}]*overflow-wrap:\s*anywhere;/s);
+});
+
 test("phone parts editor removes desktop labels", () => {
   const mobileCss = phonePartsCss();
 
   assert.match(mobileCss, /\.used-parts-editor\s+\.part-row\.part-row-head\s*\{[^}]*display:\s*none;/s);
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*44px;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-status\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
 });
 
 test("phone parts row fits 390px and 430px viewports without control overlap", () => {

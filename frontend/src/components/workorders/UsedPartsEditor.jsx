@@ -349,10 +349,10 @@ export function UsedPartsEditor({
             aria-label={`${part.partNo}, ${formatQuantityUnit(part.qty, part.uomCode)}, ${t("parts.installed")}`}
           >
             <strong>{index + 2}</strong>
-            <div className="used-part-field">
+            <div className="used-part-field used-part-serialized-identity">
               <strong>{part.partNo}</strong>
-              {part.serialNumber ? <small>{part.serialNumber}</small> : null}
-              <small>{t("parts.serialized")}</small>
+              {part.serialNumber ? <small className="used-part-serialized-serial">{part.serialNumber}</small> : null}
+              <small className="used-part-serialized-kind">{t("parts.serialized")}</small>
             </div>
             <div className="used-part-field used-part-serialized-value">
               <strong>{formatQuantityUnit(part.qty, part.uomCode)}</strong>
