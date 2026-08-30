@@ -44,10 +44,10 @@ test("serialized part identity uses separate wrapping lines and top-aligned row 
   assert.match(editor, /className="used-part-field used-part-serialized-identity"/);
   assert.match(editor, /className="used-part-serialized-serial"/);
   assert.match(editor, /className="used-part-serialized-kind"/);
-  assert.match(css, /\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;[^}]*column-gap:\s*12px;/s);
-  assert.match(css, /\.used-part-serialized-identity\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;[^}]*min-width:\s*0;/s);
-  assert.match(css, /\.used-part-serialized-identity\s*>\s*strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*left;/s);
-  assert.match(css, /\.used-part-serialized-identity\s*>\s*small\s*\{[^}]*display:\s*block;[^}]*overflow-wrap:\s*anywhere;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;[^}]*column-gap:\s*12px;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;[^}]*min-width:\s*0;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*left;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*small\s*\{[^}]*display:\s*block;[^}]*overflow-wrap:\s*anywhere;/s);
 });
 
 test("phone parts editor removes desktop labels", () => {

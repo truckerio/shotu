@@ -56,14 +56,14 @@
   background: var(--surface-subtle, #f9fafb);
 }
 
-.used-part-serialized-row {
+.used-parts-editor .used-part-serialized-row {
   align-items: start;
   background: var(--surface-subtle, #f9fafb);
   column-gap: 12px;
   padding-block: 10px;
 }
 
-.used-part-serialized-identity {
+.used-parts-editor .used-part-serialized-identity {
   align-content: start;
   display: grid;
   gap: 2px;
@@ -71,12 +71,12 @@
   min-width: 0;
 }
 
-.used-part-serialized-identity > strong {
+.used-parts-editor .used-part-serialized-identity > strong {
   overflow-wrap: anywhere;
   text-align: left;
 }
 
-.used-part-serialized-identity > small {
+.used-parts-editor .used-part-serialized-identity > small {
   display: block;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -88,13 +88,13 @@
   font-size: var(--text-caption, 12px);
 }
 
-.used-part-serialized-value {
+.used-parts-editor .used-part-serialized-value {
   align-items: center;
   display: flex;
   min-height: 34px;
 }
 
-.used-part-serialized-status {
+.used-parts-editor .used-part-serialized-status {
   align-items: center;
   display: flex;
   font-weight: 600;
