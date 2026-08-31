@@ -14,15 +14,16 @@ test("vehicle tags accept only bounded, unique strings", () => {
   assert.doesNotMatch(source, /MAX_VISIBLE_VEHICLE_TAGS/);
 });
 
-test("vehicle tags set one customer company through the existing form contract", () => {
+test("vehicle tags become editable customer company suggestions", () => {
   assert.match(source, /normalizedVehicleTagNames\(selectedVehicle\?\.tag_names\)/);
-  assert.match(source, /vehicleTags\.length \? <div className="operational-vehicle-tag-picker"/);
-  assert.match(source, /onClick=\{\(\) => onChange\("customerCompanyName", tag\)\}/);
+  assert.match(source, /suggestions=\{vehicleTags\}/);
+  assert.match(source, /suggestionsLabel=\{t\("create\.unit\.vehicleTags"\)\}/);
+  assert.doesNotMatch(source, /operational-vehicle-tag-picker/);
   assert.doesNotMatch(source, /customerCompanyName", vehicleTags\.join/);
 });
 
-test("vehicle tag chips wrap and retain phone-sized tap targets", () => {
-  assert.match(formCss, /\.operational-vehicle-tag-list \{[\s\S]*flex-wrap: wrap;/);
-  assert.match(formCss, /\.operational-vehicle-tag-list button \{[\s\S]*max-width: 100%;[\s\S]*min-height: 44px;/);
-  assert.match(formCss, /text-overflow: ellipsis/);
+test("customer company combobox retains touch and responsive popup geometry", () => {
+  assert.match(formCss, /\.customer-company-combobox-trigger \{[\s\S]*min-width: 44px;/);
+  assert.match(formCss, /\.customer-company-combobox-popover \{[\s\S]*max-height: min\(320px,[\s\S]*position: absolute;[\s\S]*width: 100%;/);
+  assert.match(formCss, /\.customer-company-combobox-option \{[\s\S]*min-height: 40px;/);
 });

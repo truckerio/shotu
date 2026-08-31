@@ -67,13 +67,7 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
         </OptionalSection> : null}
       </FormSection>
       <FormSection title={t("create.unit.customer")}>
-        <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t("create.unit.customerCompany")} hint={t("create.unit.customerHint")} required requiredLabel={t("create.required")} />
-        {vehicleTags.length ? <div className="operational-vehicle-tag-picker" aria-label={t("create.unit.vehicleTags")}>
-          <span>{t("create.unit.vehicleTags")}</span>
-          <div className="operational-vehicle-tag-list">
-            {vehicleTags.map((tag) => <button key={tag.toLocaleLowerCase()} type="button" onClick={() => onChange("customerCompanyName", tag)} aria-label={`${t("create.unit.useVehicleTag")} ${tag}`}>{tag}</button>)}
-          </div>
-        </div> : null}
+        <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t("create.unit.customerCompany")} hint={t("create.unit.customerHint")} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required requiredLabel={t("create.required")} />
       </FormSection>
     </ProgressiveWorkorderSection>
   );
