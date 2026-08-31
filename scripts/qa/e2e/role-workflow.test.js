@@ -150,7 +150,7 @@ test("browser workflow measures real role workorders at release viewports and ca
   assert.match(source, /restricted workorder response must fail closed/);
   assert.match(source, /denied response must be the only new browser error/);
   assert.match(source, /empty Parts fixture must render without request cards/);
-  assert.match(source, /"Used parts"/);
+  assert.match(source, /"Parts used"/);
   assert.match(source, /assertPermissionDeniedThenRecovered/);
   assert.match(source, /assertEmptyParts/);
   assert.match(source, /assertOfficeBrowserPrint/);
@@ -158,8 +158,8 @@ test("browser workflow measures real role workorders at release viewports and ca
   assert.match(source, /closed workorders must not expose a mechanic part-request action/);
   assert.match(source, /assertActivePartsWalkthrough/);
   assert.match(source, /Mechanic request UI must create a canonical part request/);
-  assert.match(source, /Mechanic manual used-part entry must remain visible after its saved API response/);
-  assert.match(source, /Manual-entry errors must map to an optional catalog or proofreading helper/);
+  assert.match(source, /Parts View must not expose actual-part entry to a mechanic/);
+  assert.match(source, /Office actual-part entry must remain visible after its saved API response/);
   assert.match(source, /Mechanic text-entry errors must map only to optional helpers/);
   assert.match(source, /Office text-entry errors must map only to optional helpers/);
   assert.match(source, /failed response outside the exact optional-helper allowlist/);

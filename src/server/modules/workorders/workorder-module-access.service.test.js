@@ -85,7 +85,7 @@ test("module authorization denies actions not owned by the module", async () => 
   );
 });
 
-test("module actions always require write access", async () => {
+test("module actions require their declared capability and Parts requests remain available in View", async () => {
   await assert.rejects(
     authorizeWorkorderModule(context, workorder.id, {
       moduleKey: "odoo",
@@ -100,6 +100,29 @@ test("module actions always require write access", async () => {
     }),
     (error) => error.statusCode === 403,
   );
+
+  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" } };
+  const request = await authorizeWorkorderModule(mechanicContext, workorder.id, {
+    moduleKey: "parts",
+    capability: "read",
+    action: "request",
+  }, {
+    requireAccess: async () => workorder,
+    getEffectivePolicy: async () => ({
+      companyPolicy: { moduleAccess: { mechanic: { detail: { parts: "read" } } } },
+      locationPolicy: null,
+    }),
+  });
+  assert.equal(request.access, "read");
+
+  await assert.rejects(authorizeWorkorderModule(mechanicContext, workorder.id, {
+    moduleKey: "parts",
+    capability: "read",
+    action: "record",
+  }, {
+    requireAccess: async () => workorder,
+    getEffectivePolicy: async () => ({ companyPolicy: null, locationPolicy: null }),
+  }), (error) => error.statusCode === 403);
 });
 
 test("part scanning defaults to Office and supports a narrow named-Mechanic grant", async () => {

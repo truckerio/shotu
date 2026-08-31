@@ -94,7 +94,7 @@ test("Parts View and Diagnosis Edit expose labor editing without actual-part mut
       companyId: "company-1",
       formData: { laborHours: "1.5", parts: [{ partNo: "LOCKED", qty: "1", uomCode: "ea" }] },
     },
-    allowedActions: { saveNotes: true, recordUsedParts: true },
+    allowedActions: { saveNotes: true, recordUsedParts: true, requestParts: true },
   }, {
     diagnosisRepair: { access: "write", source: "location" },
     parts: { access: "read", source: "location" },
@@ -102,6 +102,7 @@ test("Parts View and Diagnosis Edit expose labor editing without actual-part mut
 
   assert.equal(projected.allowedActions.saveNotes, true);
   assert.equal(projected.allowedActions.recordUsedParts, false);
+  assert.equal(projected.allowedActions.requestParts, true);
   assert.equal(projected.workorder.formData.laborHours, "1.5");
   assert.equal(projected.workorder.formData.parts[0].partNo, "LOCKED");
 });

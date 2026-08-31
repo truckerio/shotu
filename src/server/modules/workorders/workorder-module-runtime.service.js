@@ -159,9 +159,11 @@ export async function runWorkorderModuleAction(
   dependencies = {},
 ) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
+  const isMechanicPartRequest = moduleKey === "parts" && action === "request";
+  if (isMechanicPartRequest && context.actor.role !== "mechanic") throw permissionDenied();
   const authorization = await authorize(context, workorderId, {
     moduleKey,
-    capability: "write",
+    capability: isMechanicPartRequest ? "read" : "write",
     action,
     resourceAccess: action === "accept" ? resourceOptions(context) : {},
   });

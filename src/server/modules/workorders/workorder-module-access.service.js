@@ -40,12 +40,15 @@ export async function authorizeWorkorderModule(
 
 function requireRegisteredAction({ moduleKey, capability, action, surface }) {
   const module = getWorkorderModule(moduleKey);
+  const actionCapability = action === null
+    ? null
+    : module?.actionCapabilities?.[action] || "write";
   if (
     !module
     || !module.surfaces.includes(surface)
     || !module.capabilities.includes(capability)
     || (action !== null && !module.actions.includes(action))
-    || (action !== null && capability !== "write")
+    || (action !== null && capability !== actionCapability)
   ) {
     throw permissionDenied();
   }

@@ -45,6 +45,11 @@ function canWrite(decisions, moduleKey) {
     .includes(decisions?.[moduleKey]?.access);
 }
 
+function canRead(decisions, moduleKey) {
+  return decisions?.[moduleKey]?.access !== undefined
+    && decisions[moduleKey].access !== WORKORDER_ACCESS_MODES.HIDDEN;
+}
+
 function filterAllowedActions(actions, decisions) {
   const output = {};
   for (const [action, enabled] of Object.entries(actions || {})) {
@@ -54,7 +59,8 @@ function filterAllowedActions(actions, decisions) {
       continue;
     }
     const moduleKey = ALLOWED_ACTION_MODULES[action];
-    output[action] = Boolean(enabled) && Boolean(moduleKey) && canWrite(decisions, moduleKey);
+    output[action] = Boolean(enabled) && Boolean(moduleKey)
+      && (action === "requestParts" ? canRead(decisions, moduleKey) : canWrite(decisions, moduleKey));
   }
   return output;
 }

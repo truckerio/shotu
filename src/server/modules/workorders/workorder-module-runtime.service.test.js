@@ -161,6 +161,32 @@ test("generic action routes assignment through authenticated actor after module 
   assert.equal(result[1].officeUserId, "actor-1");
 });
 
+test("mechanic part requests use Parts read access without granting actual-part writes", async () => {
+  const authorizations = [];
+  const result = await runWorkorderModuleAction(
+    { actor: { id: "mechanic-1", role: "mechanic" } },
+    "wo-1",
+    "parts",
+    "request",
+    { description: "Oil filter", quantity: 1, uomCode: "ea" },
+    {
+      authorize: async (_context, _workorderId, request) => { authorizations.push(request); },
+      requestPart: async (...args) => args,
+    },
+  );
+  assert.equal(result[1].mechanicUserId, "mechanic-1");
+  assert.equal(authorizations[0].capability, "read");
+  assert.equal(authorizations[0].action, "request");
+
+  await assert.rejects(
+    runWorkorderModuleAction(context, "wo-1", "parts", "request", {}, {
+      authorize: async () => assert.fail("non-mechanics must be denied before authorization"),
+      requestPart: async () => assert.fail("non-mechanics must not create mechanic requests"),
+    }),
+    (error) => error.statusCode === 403,
+  );
+});
+
 test("parts action persists labor hours with goods through the authenticated role", async () => {
   const authorizations = [];
   const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", {

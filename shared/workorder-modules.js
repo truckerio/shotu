@@ -106,6 +106,7 @@ export const WORKORDER_MODULES = Object.freeze([
     surfaces: Object.freeze(["create", "detail"]),
     capabilities: Object.freeze(["read", "write"]),
     actions: Object.freeze(["request", "record", "approve", "decline", "allocate"]),
+    actionCapabilities: Object.freeze({ request: "read" }),
     writeRolesBySurface: Object.freeze({ create: Object.freeze(["mechanic", "office", "admin"]), detail: Object.freeze(["mechanic", "office", "admin"]) }),
     actionRoles: Object.freeze({
       request: Object.freeze(["mechanic"]),
