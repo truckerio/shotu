@@ -115,10 +115,10 @@ export async function runOfficeWorkorderAction({ request, workorderId, action, b
   });
 }
 
-export async function saveOfficeUsedPartsRequest({ request, workorderId, parts, laborHours }) {
+export async function saveOfficeUsedPartsRequest({ request, workorderId, parts }) {
   return requireDependency(request, "request")(workorderPath(workorderId, "/used-parts"), {
     method: "PATCH",
-    body: JSON.stringify({ parts, laborHours }),
+    body: JSON.stringify({ parts }),
   });
 }
 
@@ -434,14 +434,13 @@ export function useOfficeWorkorderActions({
     setOfficeDetailState,
   ]);
 
-  const saveActiveUsedParts = useCallback(async (parts, laborHours) => {
+  const saveActiveUsedParts = useCallback(async (parts) => {
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId) throw new Error("Open a workorder before saving parts.");
-    const result = await saveOfficeUsedPartsRequest({ request, workorderId, parts, laborHours });
+    const result = await saveOfficeUsedPartsRequest({ request, workorderId, parts });
     const detail = await reloadOfficeWorkorder(result.workorder.id, { refreshForm: false });
     const savedParts = detail.workorder.formData?.parts || [];
-    const savedLaborHours = detail.workorder.formData?.laborHours || "";
-    setForm((current) => ({ ...current, parts: savedParts, laborHours: savedLaborHours }));
+    setForm((current) => ({ ...current, parts: savedParts }));
     setUsedPartsDirty(false);
     return savedParts;
   }, [activeWorkorder?.workorder?.id, reloadOfficeWorkorder, request, setForm, setUsedPartsDirty]);

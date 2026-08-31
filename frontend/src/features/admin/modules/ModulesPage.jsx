@@ -328,6 +328,11 @@ function ModuleManager({
             Edit access opens exact scan and issue in Parts without granting broader Parts edits. Mechanics are off by default; grant only the role or named users who need it.
           </p>
         ) : null}
+        {module.key === "parts" && surface === WORKORDER_SURFACES.DETAIL ? (
+          <p className="admin-module-permission-note">
+            Parts edit access is required for actual part entry; mechanic entry can still be restricted by location policy. Labor hours and work performed follow Diagnosis and repair access, so mechanics can update labor while Parts remains View.
+          </p>
+        ) : null}
       </section>
 
       {detail || scopeType === "company" ? (

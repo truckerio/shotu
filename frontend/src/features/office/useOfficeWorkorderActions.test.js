@@ -157,7 +157,7 @@ test("lifecycle and assignment helpers preserve action endpoints and request bod
   ]);
 });
 
-test("parts helper saves labor and goods together and detail loader reads canonical office truth", async () => {
+test("actual-parts persistence cannot write labor through the Parts endpoint", async () => {
   const recorder = requestRecorder({ workorder: { id: "wo-3" } });
   const parts = [{ partNo: "OIL", qty: "2", uomCode: "qt", repairOrder: "Refill" }];
   await saveOfficeUsedPartsRequest({ request: recorder.request, workorderId: "wo-3", parts, laborHours: "2.5" });
@@ -166,7 +166,7 @@ test("parts helper saves labor and goods together and detail loader reads canoni
   assert.deepEqual(recorder.calls, [
     ["/api/office/workorders/wo-3/used-parts", {
       method: "PATCH",
-      body: JSON.stringify({ parts, laborHours: "2.5" }),
+      body: JSON.stringify({ parts }),
     }],
     ["/api/office/workorders/wo-3"],
   ]);

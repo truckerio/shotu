@@ -76,6 +76,8 @@ export function UsedPartsEditor({
   onRegisterSerializedRepairFlush = () => {},
   serializedParts = null,
   disabled = false,
+  partsEditable = !disabled,
+  laborEditable = !disabled,
   defaultRows,
   suggestionsEnabled = true,
   locale = "en",
@@ -89,8 +91,8 @@ export function UsedPartsEditor({
     [parts, visibleRowCount],
   );
   const savePayload = useMemo(
-    () => JSON.stringify({ parts: rows, laborHours: String(laborHours || "") }),
-    [laborHours, rows],
+    () => JSON.stringify({ parts: rows }),
+    [rows],
   );
   const storageKey = actorId
     ? mechanicWorkStorageKey("used-parts", actorId, detail.workorder.id)
@@ -168,39 +170,37 @@ export function UsedPartsEditor({
     const currentRows = initialUsedPartRows(parts, defaultRows);
     setVisibleRowCount(currentRows.length);
     hydratedRef.current = false;
-    persistedRef.current = JSON.stringify({ parts: currentRows, laborHours: String(laborHours || "") });
+    persistedRef.current = JSON.stringify({ parts: currentRows });
     setSaveState("");
     setMessage("");
     setSelectedCatalogParts([]);
 
     hydratedRef.current = true;
     removeLegacyMechanicWorkStorage();
-    if (!storageKey) return;
+    if (!storageKey || !partsEditable) return;
     try {
       const stored = window.localStorage.getItem(storageKey);
       if (!stored) return;
       const storedValue = JSON.parse(stored);
       const recovered = initialUsedPartRows(Array.isArray(storedValue) ? storedValue : storedValue.parts, defaultRows);
-      const recoveredLaborHours = Array.isArray(storedValue) ? laborHours : String(storedValue.laborHours || "");
       setVisibleRowCount(recovered.length);
       if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
         onChange(recovered);
         setMessage(t("parts.recoveredUnsavedEntries"));
       }
-      if (recoveredLaborHours !== String(laborHours || "")) onLaborHoursChange(recoveredLaborHours);
     } catch {
       window.localStorage.removeItem(storageKey);
     }
-  }, [storageKey]);
+  }, [partsEditable, storageKey]);
 
   useEffect(() => {
-    if (!hydratedRef.current || disabled || !storageKey) return undefined;
+    if (!hydratedRef.current || !partsEditable || !storageKey) return undefined;
     if (savePayload === persistedRef.current) return undefined;
     window.localStorage.setItem(storageKey, savePayload);
     setSaveState(t("progress.saving"));
     const timer = window.setTimeout(async () => {
       try {
-        await saveRef.current(rows, String(laborHours || ""));
+        await saveRef.current(rows);
         persistedRef.current = savePayload;
         window.localStorage.removeItem(storageKey);
         setSaveState(t("progress.saved"));
@@ -210,7 +210,7 @@ export function UsedPartsEditor({
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [disabled, laborHours, rows, savePayload, storageKey]);
+  }, [partsEditable, rows, savePayload, storageKey]);
 
   function update(index, field, value) {
     onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
@@ -399,7 +399,7 @@ export function UsedPartsEditor({
     </details>
   ) : null;
 
-  if (disabled) {
+  if (!partsEditable && !laborEditable) {
     const savedParts = [...(serializedParts ? [] : installedParts), ...readonlyUsedParts(parts)];
     return (
       <div className="used-parts-editor is-readonly" aria-label={t("parts.usedTitle")}>
@@ -469,7 +469,7 @@ export function UsedPartsEditor({
               onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
               quantityLabel={t("parts.laborHours")}
               unitLabel={t("parts.unit")}
-              disabled={disabled || laborRepairOrderDisabled}
+              disabled={!laborEditable || laborRepairOrderDisabled}
               unitReadOnly
               compact
               max={9999}
@@ -483,13 +483,13 @@ export function UsedPartsEditor({
               onChange={(event) => onLaborRepairOrderChange(event.target.value)}
               aria-label={t("parts.repairOrderWorkPerformed")}
               placeholder={t("parts.repairOrderWorkPerformed")}
-              disabled={disabled || laborRepairOrderDisabled}
+              disabled={!laborEditable || laborRepairOrderDisabled}
             />
           </div>
           <span aria-hidden="true"></span>
         </div>
         {activeSerializedParts.map(renderSerializedPartRow)}
-        {rows.map((part, index) => (
+        {partsEditable ? rows.map((part, index) => (
           <div className="part-row" key={index}>
             <strong>{activeSerializedParts.length + index + 2}</strong>
             <div className="used-part-field">
@@ -520,11 +520,11 @@ export function UsedPartsEditor({
                   inputAriaLabel={`${t("parts.partNumber")} ${index + 1}`}
                   inputPolicy="identifier"
                   placeholder={t("parts.partNumber")}
-                  disabled={disabled}
+                  disabled={!partsEditable}
                   locale={locale}
                 />
                 {suggestionsEnabled ? (
-                  <button type="button" onClick={() => suggestRepair(index)} disabled={disabled || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title={t("parts.findDetails")} aria-label={`${t("parts.findDetails")} ${index + 1}`}>
+                  <button type="button" onClick={() => suggestRepair(index)} disabled={!partsEditable || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title={t("parts.findDetails")} aria-label={`${t("parts.findDetails")} ${index + 1}`}>
                     <SearchMd />
                   </button>
                 ) : null}
@@ -538,7 +538,7 @@ export function UsedPartsEditor({
                 onValueChange={({ quantity, uomCode }) => updateFields(index, { qty: quantity, uomCode })}
                 quantityLabel={`${t("parts.quantity")} ${index + 1}`}
                 unitLabel={`${t("parts.unit")} ${index + 1}`}
-                disabled={disabled}
+                disabled={!partsEditable}
                 compact
               />
             </div>
@@ -550,10 +550,10 @@ export function UsedPartsEditor({
                 onChange={(event) => update(index, "repairOrder", event.target.value)}
                 aria-label={`${t("parts.repairOrder")} ${index + 1}`}
                 placeholder={t("parts.describeRepair")}
-                disabled={disabled}
+                disabled={!partsEditable}
               />
             </div>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={disabled} aria-label={`${t("parts.removePartRow")} ${index + 1}`}>{t("parts.remove")}</button>
+            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={!partsEditable} aria-label={`${t("parts.removePartRow")} ${index + 1}`}>{t("parts.remove")}</button>
             {selectedCatalogParts[index]?.id ? <div className="used-part-history">
               <RepairHistorySuggestions
                 workorderId={detail.workorder.id}
@@ -561,17 +561,35 @@ export function UsedPartsEditor({
                 partNumber={selectedCatalogParts[index]?.partNumber}
                 assetId={detail.workorder.asset?.id || detail.workorder.assetId}
                 onApply={(text) => update(index, "repairOrder", text)}
-                disabled={disabled}
+                disabled={!partsEditable}
                 locale={locale}
               />
             </div> : null}
           </div>
-        ))}
+        )) : null}
       </div>
+      {!partsEditable ? (
+        <div className="used-parts-locked-list">
+          <p className="used-parts-readonly-state" role="status">{readOnlyText}</p>
+          {readonlyUsedParts(parts).length ? (
+            <ul className="used-parts-readonly-list">
+              {readonlyUsedParts(parts).map((part, index) => (
+                <li key={`${part.partNo}-${index}`}>
+                  <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
+                  <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
+                  {part.repairOrder ? <span>{part.repairOrder}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
+        </div>
+      ) : null}
       {serializedHistory}
-      <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
-        {rows.length ? t("parts.addAnotherPart") : t("parts.recordUsedPart")}
-      </Button>
+      {partsEditable ? (
+        <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
+          {rows.length ? t("parts.addAnotherPart") : t("parts.recordUsedPart")}
+        </Button>
+      ) : null}
       <div className="used-parts-feedback" aria-live="polite">
         {message ? <span>{message}</span> : <span></span>}
         {saveState ? <strong>{saveState}</strong> : null}

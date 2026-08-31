@@ -5,7 +5,8 @@ const FORM_KEYS = Object.freeze({
   schedule: Object.freeze(["workStartDate", "workEndDate", "startTime", "endTime"]),
   assignment: Object.freeze(["mechanicName", "customerSignature", "authorizedBy"]),
   concern: Object.freeze(["mechanicConcern"]),
-  parts: Object.freeze(["parts", "laborHours", "laborProduct"]),
+  diagnosisRepair: Object.freeze(["laborHours", "laborProduct"]),
+  parts: Object.freeze(["parts"]),
 });
 
 const BASE_WORKORDER_KEYS = Object.freeze([
@@ -99,7 +100,10 @@ function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
       assignableMechanics: detail.assignableMechanics || [],
     };
     case "concern": return { ...pick(workorder, ["concern", "officeNotes"]), formData: formSlice(workorder, moduleKey) };
-    case "diagnosisRepair": return pick(workorder, ["diagnosis", "workPerformed"]);
+    case "diagnosisRepair": return {
+      ...pick(workorder, ["diagnosis", "workPerformed"]),
+      formData: formSlice(workorder, moduleKey),
+    };
     case "photos": return {
       attachments: (detail.messages || []).filter((message) => message.attachment).map((message) => ({
         id: message.id,

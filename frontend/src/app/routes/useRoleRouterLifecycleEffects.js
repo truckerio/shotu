@@ -31,11 +31,14 @@ export function useRoleRouterLifecycleEffects({
       || mechanicProgressBackupRestoredRef.current === workorderId
     ) return;
     mechanicProgressBackupRestoredRef.current = workorderId;
-    if (backup.diagnosis === form.diagnosis && backup.workPerformed === form.workPerformed) return;
+    if (backup.diagnosis === form.diagnosis
+      && backup.workPerformed === form.workPerformed
+      && (backup.laborHours === null || backup.laborHours === form.laborHours)) return;
     setForm((current) => ({
       ...current,
       diagnosis: backup.diagnosis,
       workPerformed: backup.workPerformed,
+      ...(backup.laborHours === null ? {} : { laborHours: backup.laborHours }),
     }));
     setMechanicAction({
       busy: "",
@@ -46,6 +49,7 @@ export function useRoleRouterLifecycleEffects({
     activeWorkorder?.workorder?.id,
     form.diagnosis,
     form.workPerformed,
+    form.laborHours,
     isMechanicDetail,
     mechanicProgress.backup,
     mechanicProgressBackupRestoredRef,

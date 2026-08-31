@@ -23,6 +23,7 @@ export function PartRequestsPanel({
   locale = "en",
 }) {
   const usedPartsAccess = usedPartsAccessState(role, detail.allowedActions || {});
+  const laborEditable = detail.allowedActions?.saveNotes === true;
   const installedParts = installedSerializedUsedParts(detail);
   const commonProps = {
     actorId,
@@ -41,6 +42,7 @@ export function PartRequestsPanel({
     onRegisterSerializedRepairFlush,
     serializedParts,
     usedPartsAccess,
+    laborEditable,
   };
 
   return (

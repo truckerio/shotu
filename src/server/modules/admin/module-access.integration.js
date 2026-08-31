@@ -145,6 +145,28 @@ try {
     expectedVersion: 0,
   });
   assert.equal(locationPolicy.version, 1);
+  const updatedLocationPolicy = await saveLocationWorkorderPolicy({
+    locationId,
+    companyId,
+    actorId,
+    mechanicCanRecordParts: false,
+    moduleAccess: {
+      office: { detail: { odoo: "hidden" } },
+      mechanic: { detail: {
+        odoo: "hidden",
+        partsScanning: "hidden",
+        parts: "read",
+        diagnosisRepair: "write",
+      } },
+    },
+    userModuleAccess: {
+      [locationUserId]: { detail: { odoo: "read", partsScanning: "write" } },
+    },
+    expectedVersion: locationPolicy.version,
+  });
+  assert.equal(updatedLocationPolicy.version, 2);
+  assert.equal(updatedLocationPolicy.moduleAccessOverrides.mechanic.detail.parts, "read");
+  assert.equal(updatedLocationPolicy.moduleAccessOverrides.mechanic.detail.diagnosisRepair, "write");
   await assert.rejects(saveLocationWorkorderPolicy({
     locationId,
     companyId,
@@ -152,7 +174,7 @@ try {
     mechanicCanRecordParts: false,
     moduleAccess: {},
     userModuleAccess: {},
-    expectedVersion: 0,
+    expectedVersion: locationPolicy.version,
   }), (error) => error.statusCode === 409 && error.code === "WORKORDER_MODULE_POLICY_CONFLICT");
 
   const normalizedLocationPolicy = await getNormalizedModulePolicy({ companyId, locationId });

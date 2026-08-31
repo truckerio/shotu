@@ -165,6 +165,16 @@ export async function runWorkorderModuleAction(
     action,
     resourceAccess: action === "accept" ? resourceOptions(context) : {},
   });
+  if (moduleKey === "parts"
+    && action === "record"
+    && input.operation === "usedParts"
+    && Object.prototype.hasOwnProperty.call(input, "laborHours")) {
+    await authorize(context, workorderId, {
+      moduleKey: "diagnosisRepair",
+      capability: "write",
+      action: "update",
+    });
+  }
   const actorId = context.actor.id;
 
   if (moduleKey === "assignment") {

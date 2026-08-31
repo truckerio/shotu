@@ -18,6 +18,7 @@ export function ReadOnlyPartsSurface({
   onRegisterSerializedRepairFlush,
   serializedParts,
   usedPartsAccess,
+  laborEditable,
 }) {
   const requests = detail.partRequests || [];
   return (
@@ -39,6 +40,7 @@ export function ReadOnlyPartsSurface({
         onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
         serializedParts={serializedParts}
         editable={usedPartsAccess.editable}
+        laborEditable={laborEditable}
         readonlyMessage={usedPartsAccess.message}
         suggestionsEnabled
       />

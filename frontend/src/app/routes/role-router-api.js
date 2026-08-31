@@ -10,6 +10,7 @@ export function updateMechanicProgress({
   workorderId,
   diagnosis,
   workPerformed,
+  laborHours,
   expectedVersion,
   recordActivity,
 }) {
@@ -18,6 +19,7 @@ export function updateMechanicProgress({
     body: JSON.stringify({
       diagnosis,
       workPerformed,
+      laborHours,
       expectedVersion,
       recordActivity,
     }),
@@ -29,6 +31,7 @@ export async function updateDetailDiagnosisRepair({
   workorderId,
   diagnosis,
   workPerformed,
+  laborHours,
   expectedVersion,
   recordActivity,
 }, request = api) {
@@ -37,6 +40,7 @@ export async function updateDetailDiagnosisRepair({
       workorderId,
       diagnosis,
       workPerformed,
+      laborHours,
       expectedVersion,
       recordActivity,
     });
@@ -49,6 +53,7 @@ export async function updateDetailDiagnosisRepair({
       body: JSON.stringify({
         diagnosis,
         workPerformed,
+        laborHours,
         expectedVersion,
         recordActivity,
       }),

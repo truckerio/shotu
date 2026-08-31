@@ -105,16 +105,24 @@ test("company policy save emits one audit envelope only after persistence succee
 
 test("failed company policy persistence emits no audit event", async () => {
   let emitted = 0;
-  await assert.rejects(saveAdminCompanyWorkorderModulePolicy(
-    context,
-    COMPANY_ID,
-    { moduleAccess: {}, userModuleAccess: {}, expectedVersion: 2 },
-    "admin-1",
-    {
-      getPolicy: async () => ({ moduleAccess: {}, userModuleAccess: {}, version: 2 }),
-      savePolicy: async () => { throw Object.assign(new Error("conflict"), { statusCode: 409 }); },
-      emitAuditEvent: async () => { emitted += 1; },
-    },
-  ));
+  await assert.rejects(
+    saveAdminCompanyWorkorderModulePolicy(
+      context,
+      COMPANY_ID,
+      { moduleAccess: {}, userModuleAccess: {}, expectedVersion: 2 },
+      "admin-1",
+      {
+        getPolicy: async () => ({ moduleAccess: {}, userModuleAccess: {}, version: 2 }),
+        savePolicy: async () => {
+          throw Object.assign(new Error("Module access changed elsewhere. Reload and try again."), {
+            statusCode: 409,
+            code: "WORKORDER_MODULE_POLICY_CONFLICT",
+          });
+        },
+        emitAuditEvent: async () => { emitted += 1; },
+      },
+    ),
+    (error) => error.statusCode === 409 && error.code === "WORKORDER_MODULE_POLICY_CONFLICT",
+  );
   assert.equal(emitted, 0);
 });

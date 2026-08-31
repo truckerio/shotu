@@ -20,6 +20,7 @@ test("Modules page uses the canonical catalog and progressive module management"
   assert.match(page, /module\.key === "partsScanning"/);
   assert.match(page, /Mechanics are off by default/);
   assert.match(page, /without granting broader Parts edits/);
+  assert.match(page, /mechanics can update labor while Parts remains View/);
   assert.match(page, /Use system default/);
   assert.match(page, /Use company default/);
   assert.match(page, /Use company role setting/);

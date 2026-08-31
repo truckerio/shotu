@@ -44,11 +44,11 @@ test("input ownership decomposes broad updates into touched modules", () => {
     assetId: null,
     officeNotes: "call customer",
     formData: { workStartDate: "2026-08-08", parts: [], laborHours: "2.5" },
-  }).sort(), ["concern", "parts", "schedule", "unit"]);
+  }).sort(), ["concern", "diagnosisRepair", "parts", "schedule", "unit"]);
   assert.deepEqual(workorderInputModules({ concern: "inspect", formData: {} }, { create: true }), ["concern"]);
 });
 
-test("parts projection returns persisted labor hours with used parts", () => {
+test("labor belongs to diagnosis and repair while actual rows belong to Parts", () => {
   const projected = projectProtectedWorkorderDetail({
     workorder: {
       id: "wo-1",
@@ -63,12 +63,14 @@ test("parts projection returns persisted labor hours with used parts", () => {
     },
     installedSerializedParts: [{ catalogPartId: "catalog-1", partNumber: "P2", quantity: 1, uomCode: "ea" }],
   }, {
+    diagnosisRepair: { access: "write", source: "default" },
     parts: { access: "write", source: "default" },
   });
 
   assert.equal(projected.workorder.formData.laborHours, "2.5");
-  assert.equal(projected.modules.parts.data.formData.laborHours, "2.5");
-  assert.equal(projected.modules.parts.data.formData.laborProduct.code, "LAB200");
+  assert.equal(projected.modules.diagnosisRepair.data.formData.laborHours, "2.5");
+  assert.equal(projected.modules.diagnosisRepair.data.formData.laborProduct.code, "LAB200");
+  assert.equal(Object.hasOwn(projected.modules.parts.data.formData, "laborHours"), false);
   assert.deepEqual(projected.modules.parts.data.installedSerializedParts, [
     { catalogPartId: "catalog-1", partNumber: "P2", quantity: 1, uomCode: "ea" },
   ]);
@@ -83,6 +85,25 @@ test("parts planning action follows the same Parts module visibility boundary", 
   const hidden = projectProtectedWorkorderDetail(detail, { parts: { access: "hidden", source: "user" } });
   assert.deepEqual(writable.allowedActions, { addApprovedParts: true, planParts: true });
   assert.deepEqual(hidden.allowedActions, { addApprovedParts: false, planParts: false });
+});
+
+test("Parts View and Diagnosis Edit expose labor editing without actual-part mutation", () => {
+  const projected = projectProtectedWorkorderDetail({
+    workorder: {
+      id: "wo-labor",
+      companyId: "company-1",
+      formData: { laborHours: "1.5", parts: [{ partNo: "LOCKED", qty: "1", uomCode: "ea" }] },
+    },
+    allowedActions: { saveNotes: true, recordUsedParts: true },
+  }, {
+    diagnosisRepair: { access: "write", source: "location" },
+    parts: { access: "read", source: "location" },
+  });
+
+  assert.equal(projected.allowedActions.saveNotes, true);
+  assert.equal(projected.allowedActions.recordUsedParts, false);
+  assert.equal(projected.workorder.formData.laborHours, "1.5");
+  assert.equal(projected.workorder.formData.parts[0].partNo, "LOCKED");
 });
 
 test("installed serialized summaries stay hidden when Parts is hidden", () => {

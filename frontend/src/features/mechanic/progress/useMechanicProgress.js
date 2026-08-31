@@ -11,12 +11,13 @@ export function normalizedMechanicProgress(value) {
   return {
     diagnosis: String(value?.diagnosis || ""),
     workPerformed: String(value?.workPerformed || ""),
+    laborHours: String(value?.laborHours ?? value?.formData?.laborHours ?? ""),
   };
 }
 
 function fingerprint(value) {
   const progress = normalizedMechanicProgress(value);
-  return JSON.stringify([progress.diagnosis, progress.workPerformed]);
+  return JSON.stringify([progress.diagnosis, progress.workPerformed, progress.laborHours]);
 }
 
 export function mechanicProgressRequest({

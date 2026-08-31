@@ -22,6 +22,7 @@ export function OfficePartsSurface({
   onRegisterSerializedRepairFlush,
   serializedParts,
   usedPartsAccess,
+  laborEditable,
 }) {
   const locale = "en";
   const t = (key) => interfaceText(locale, key);
@@ -59,6 +60,7 @@ export function OfficePartsSurface({
         onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
         serializedParts={serializedParts}
         editable={usedPartsAccess.editable}
+        laborEditable={laborEditable}
         readonlyMessage={usedPartsAccess.message}
         suggestionsEnabled
       />

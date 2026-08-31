@@ -34,7 +34,7 @@ import {
 } from "../../db/repositories/users.repo.js";
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { requireCompanyAccess } from "../../auth/authorize.js";
-import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
+import { AuthError, invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import { sendInvitationEmail } from "../../email/invitation.js";
 import { buildInvitationUrl } from "./invitation-link.js";
 import { emitModulePolicyAudit } from "./module-policy-audit.js";
@@ -133,13 +133,21 @@ export async function saveAdminCompanyWorkorderModulePolicy(
   const beforePolicy = typeof dependencies.emitAuditEvent === "function"
     ? await getPolicy(companyId)
     : null;
-  const savedPolicy = await savePolicy({
-    companyId,
-    moduleAccess: input.moduleAccess,
-    userModuleAccess: input.userModuleAccess,
-    expectedVersion: input.expectedVersion,
-    actorId,
-  });
+  let savedPolicy;
+  try {
+    savedPolicy = await savePolicy({
+      companyId,
+      moduleAccess: input.moduleAccess,
+      userModuleAccess: input.userModuleAccess,
+      expectedVersion: input.expectedVersion,
+      actorId,
+    });
+  } catch (error) {
+    if (error?.code === "WORKORDER_MODULE_POLICY_CONFLICT") {
+      throw new AuthError(error.statusCode || 409, error.code, error.message);
+    }
+    throw error;
+  }
   await emitModulePolicyAudit(dependencies, {
     actorId,
     companyId,
@@ -400,15 +408,23 @@ export async function saveAdminLocationWorkorderPolicy(context, locationId, inpu
   const beforePolicy = typeof dependencies.emitAuditEvent === "function"
     ? await getPolicy(locationId, authorizedCompanyIds(context))
     : null;
-  const savedPolicy = await savePolicy({
-    locationId,
-    companyId: location.company_id,
-    mechanicCanRecordParts: input.mechanicCanRecordParts,
-    moduleAccess: input.moduleAccess,
-    userModuleAccess: input.userModuleAccess,
-    expectedVersion: input.expectedVersion,
-    actorId,
-  });
+  let savedPolicy;
+  try {
+    savedPolicy = await savePolicy({
+      locationId,
+      companyId: location.company_id,
+      mechanicCanRecordParts: input.mechanicCanRecordParts,
+      moduleAccess: input.moduleAccess,
+      userModuleAccess: input.userModuleAccess,
+      expectedVersion: input.expectedVersion,
+      actorId,
+    });
+  } catch (error) {
+    if (error?.code === "WORKORDER_MODULE_POLICY_CONFLICT") {
+      throw new AuthError(error.statusCode || 409, error.code, error.message);
+    }
+    throw error;
+  }
   await emitModulePolicyAudit(dependencies, {
     actorId,
     companyId: location.company_id,

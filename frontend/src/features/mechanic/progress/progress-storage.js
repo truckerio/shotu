@@ -14,6 +14,7 @@ export function readProgressBackup(actorId, workorderId) {
     return {
       diagnosis: String(value.diagnosis || ""),
       workPerformed: String(value.workPerformed || ""),
+      laborHours: Object.hasOwn(value, "laborHours") ? String(value.laborHours || "") : null,
       savedAt: value.savedAt || null,
     };
   } catch {
@@ -27,6 +28,7 @@ export function writeProgressBackup(actorId, workorderId, value) {
   window.localStorage.setItem(mechanicWorkStorageKey("progress", actorId, workorderId), JSON.stringify({
     diagnosis: String(value.diagnosis || ""),
     workPerformed: String(value.workPerformed || ""),
+    laborHours: String(value.laborHours || ""),
     savedAt: new Date().toISOString(),
   }));
 }

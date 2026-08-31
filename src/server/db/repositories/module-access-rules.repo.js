@@ -145,22 +145,46 @@ export async function saveNormalizedModulePolicy({
       }
     }
     const scopeType = locationId ? "location" : "company";
-    const scope = await client.query(
-      `insert into workorder_module_policy_scopes (
-         scope_type, company_id, location_id, version, updated_by_user_id
-       )
-       select $1, $2, $3, 1, $4
-       where $5::bigint is null or $5::bigint = 0
-       on conflict ${locationId
+    let scope;
+    if (expectedVersion === null || expectedVersion === undefined) {
+      scope = await client.query(
+        `insert into workorder_module_policy_scopes (
+           scope_type, company_id, location_id, version, updated_by_user_id
+         ) values ($1, $2, $3, 1, $4)
+         on conflict ${locationId
     ? "(location_id) where scope_type = 'location'"
     : "(company_id) where scope_type = 'company'"} do update
-       set version = workorder_module_policy_scopes.version + 1,
-           updated_by_user_id = excluded.updated_by_user_id,
-           updated_at = now()
-       where $5::bigint is null or workorder_module_policy_scopes.version = $5::bigint
-       returning *`,
-      [scopeType, companyId, locationId, actorId, expectedVersion],
-    );
+         set version = workorder_module_policy_scopes.version + 1,
+             updated_by_user_id = excluded.updated_by_user_id,
+             updated_at = now()
+         returning *`,
+        [scopeType, companyId, locationId, actorId],
+      );
+    } else if (expectedVersion === 0) {
+      scope = await client.query(
+        `insert into workorder_module_policy_scopes (
+           scope_type, company_id, location_id, version, updated_by_user_id
+         ) values ($1, $2, $3, 1, $4)
+         on conflict ${locationId
+    ? "(location_id) where scope_type = 'location'"
+    : "(company_id) where scope_type = 'company'"} do nothing
+         returning *`,
+        [scopeType, companyId, locationId, actorId],
+      );
+    } else {
+      scope = await client.query(
+        `update workorder_module_policy_scopes
+         set version = version + 1,
+             updated_by_user_id = $4,
+             updated_at = now()
+         where scope_type = $1
+           and company_id = $2
+           and ${locationId ? "location_id = $3" : "location_id is null and $3::uuid is null"}
+           and version = $5
+         returning *`,
+        [scopeType, companyId, locationId, actorId, expectedVersion],
+      );
+    }
     if (!scope.rows[0]) throw new WorkorderModulePolicyConflictError();
     const scopeId = scope.rows[0].id;
     await client.query("delete from workorder_module_access_rules where scope_id = $1", [scopeId]);

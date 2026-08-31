@@ -99,6 +99,6 @@ test("detail parts use the same configured labor product label as create and pri
   assert.match(usedPartsEditor, /onLaborRepairOrderChange\(event\.target\.value\)/);
   assert.match(usedPartsEditor, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
   assert.match(detailPartsModule, /laborRepairOrderDisabled=\{!activeWorkorder\.allowedActions\?\.saveNotes\}/);
-  assert.equal(usedPartsEditor.match(/disabled=\{disabled \|\| laborRepairOrderDisabled\}/g)?.length, 2);
+  assert.equal(usedPartsEditor.match(/disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/g)?.length, 2);
   assert.doesNotMatch(usedPartsEditor, /\[PTR001\] LABOR HOURS/);
 });

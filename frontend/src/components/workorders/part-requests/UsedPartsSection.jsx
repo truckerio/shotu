@@ -17,6 +17,7 @@ export function UsedPartsSection({
   onRegisterSerializedRepairFlush,
   serializedParts,
   editable,
+  laborEditable,
   readonlyMessage,
   suggestionsEnabled,
   locale,
@@ -42,6 +43,8 @@ export function UsedPartsSection({
         onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
         serializedParts={serializedParts}
         disabled={!editable}
+        partsEditable={editable}
+        laborEditable={laborEditable}
         readonlyMessage={readonlyMessage}
         suggestionsEnabled={suggestionsEnabled}
         locale={locale}

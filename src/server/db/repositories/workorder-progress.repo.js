@@ -16,7 +16,7 @@ function textValue(value) {
 }
 
 function changedDetails(before, next) {
-  return ["diagnosis", "workPerformed"]
+  return ["diagnosis", "workPerformed", "laborHours"]
     .filter((field) => before[field] !== next[field])
     .map((field) => ({
       field,
@@ -29,6 +29,7 @@ function publicProgress(row) {
   return {
     diagnosis: row.diagnosis || "",
     workPerformed: row.work_performed || "",
+    laborHours: String(row.form_data?.laborHours || ""),
     version: row.progress_version,
     savedAt: row.updated_at,
   };
@@ -39,6 +40,7 @@ export async function saveMechanicWorkorderProgress({
   mechanicUserId,
   diagnosis,
   workPerformed,
+  laborHours,
   expectedVersion,
   recordActivity = false,
 }) {
@@ -53,6 +55,7 @@ export async function saveMechanicWorkorderProgress({
           wo.status,
           wo.diagnosis,
           wo.work_performed,
+          wo.form_data,
           wo.progress_version,
           wo.progress_activity_version,
           wo.progress_pending_fields,
@@ -88,10 +91,12 @@ export async function saveMechanicWorkorderProgress({
     const before = {
       diagnosis: current.diagnosis || "",
       workPerformed: current.work_performed || "",
+      laborHours: String(current.form_data?.laborHours || ""),
     };
     const next = {
       diagnosis: textValue(diagnosis),
       workPerformed: textValue(workPerformed),
+      laborHours: laborHours === undefined ? before.laborHours : textValue(laborHours),
     };
     const changes = changedDetails(before, next);
     const existingPendingFields = Array.isArray(current.progress_pending_fields)
@@ -112,6 +117,7 @@ export async function saveMechanicWorkorderProgress({
         update operational_workorders
         set diagnosis = $3,
             work_performed = $4,
+            form_data = $9::jsonb,
             progress_version = progress_version + $6,
             progress_activity_version = case when $7::boolean then progress_version + $6 else progress_activity_version end,
             progress_pending_fields = case when $7::boolean then '[]'::jsonb else $8::jsonb end,
@@ -127,7 +133,7 @@ export async function saveMechanicWorkorderProgress({
               and assignment.mechanic_user_id = $2
               and assignment.active = true
           )
-        returning diagnosis, work_performed, progress_version, updated_at
+        returning diagnosis, work_performed, form_data, progress_version, updated_at
       `,
       [
         workorderId,
@@ -138,6 +144,7 @@ export async function saveMechanicWorkorderProgress({
         changes.length ? 1 : 0,
         shouldRecordActivity,
         JSON.stringify(pendingFields),
+        JSON.stringify({ ...(current.form_data || {}), laborHours: next.laborHours }),
       ],
     );
     const updated = updatedResult.rows[0];
@@ -158,6 +165,7 @@ export async function saveMechanicWorkorderProgress({
             fieldsChanged: pendingFields,
             diagnosis: next.diagnosis,
             workPerformed: next.workPerformed,
+            laborHours: next.laborHours,
           }),
           mechanicUserId,
         ],

@@ -635,11 +635,15 @@ export async function updateOperationalWorkorder(workorderId, input) {
         [nextAssetId, before.company_id],
       )
       : { rows: [] };
-    const normalizedInput = input.formData === undefined
+    const laborHoursIncluded = Object.prototype.hasOwnProperty.call(input, "laborHours");
+    const requestedFormData = laborHoursIncluded
+      ? { ...(input.formData || before.form_data || {}), laborHours: input.laborHours ?? "" }
+      : input.formData;
+    const normalizedInput = requestedFormData === undefined
       ? input
       : {
         ...input,
-        formData: normalizeWorkorderFormData(preserveMechanicOwnedFormData(before.form_data, input.formData), {
+        formData: normalizeWorkorderFormData(preserveMechanicOwnedFormData(before.form_data, requestedFormData), {
           assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
         }),
       };
@@ -654,7 +658,7 @@ export async function updateOperationalWorkorder(workorderId, input) {
             form_data = coalesce($8::jsonb, form_data),
             diagnosis = case when $9::boolean then $10 else diagnosis end,
             work_performed = case when $11::boolean then $12 else work_performed end,
-            progress_version = progress_version + case when $9::boolean or $11::boolean then 1 else 0 end,
+            progress_version = progress_version + case when $9::boolean or $11::boolean or $13::boolean then 1 else 0 end,
             updated_at = now()
         where id = $1
       `,
@@ -671,6 +675,7 @@ export async function updateOperationalWorkorder(workorderId, input) {
         input.diagnosis ?? "",
         Object.prototype.hasOwnProperty.call(input, "workPerformed"),
         input.workPerformed ?? "",
+        laborHoursIncluded,
       ]
     );
     await addFieldEvents(client, { workorderId, changes, changedByUserId: input.changedByUserId });

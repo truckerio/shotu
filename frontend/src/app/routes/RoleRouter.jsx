@@ -293,7 +293,7 @@ export function RoleRouter({ actor }) {
     actorId: actor.id,
     workorderId: activeWorkorder?.allowedActions?.saveNotes
       ? activeWorkorder?.workorder?.id : null,
-    value: { diagnosis: form.diagnosis, workPerformed: form.workPerformed },
+    value: { diagnosis: form.diagnosis, workPerformed: form.workPerformed, laborHours: form.laborHours },
     initialVersion: activeWorkorder?.workorder?.progressVersion || 1,
     saveProgress: saveDiagnosisRepair,
   });

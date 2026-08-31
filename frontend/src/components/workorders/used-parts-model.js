@@ -11,7 +11,7 @@ export function canEditUsedParts(role, allowedActions = {}) {
 export function usedPartsAccessState(role, allowedActions = {}) {
   return canEditUsedParts(role, allowedActions)
     ? { editable: true, message: "" }
-    : { editable: false, message: "Used parts are read-only for your role." };
+    : { editable: false, message: "Actual parts are read-only. Office or a user with Parts edit access can add them." };
 }
 
 export function emptyUsedPart() {

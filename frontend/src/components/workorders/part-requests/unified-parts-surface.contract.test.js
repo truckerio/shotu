@@ -27,6 +27,20 @@ test("mechanic parts keeps actual use visible and makes requesting a single perm
   assert.doesNotMatch(mechanicSurface, /usedPartAction|needPartAction|activeAction|aria-pressed/);
 });
 
+test("labor editing remains separate from actual-part editing when Parts is View", () => {
+  const panel = source("../PartRequestsPanel.jsx");
+  const section = source("./UsedPartsSection.jsx");
+  const editor = source("../UsedPartsEditor.jsx");
+  const accessModel = source("../used-parts-model.js");
+  assert.match(panel, /laborEditable = detail\.allowedActions\?\.saveNotes === true/);
+  assert.match(section, /partsEditable=\{editable\}/);
+  assert.match(section, /laborEditable=\{laborEditable\}/);
+  assert.match(editor, /!partsEditable && !laborEditable/);
+  assert.match(editor, /disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
+  assert.match(editor, /\{partsEditable \? rows\.map/);
+  assert.match(accessModel, /Actual parts are read-only/);
+});
+
 test("mechanic requests preserve exceptions while collapsing only conservative terminal outcomes", () => {
   assert.match(mechanicSurface, /\["rejected", "cancelled"\]/);
   assert.match(mechanicSurface, /\["installed", "returned"\]/);

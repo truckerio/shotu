@@ -162,18 +162,38 @@ test("generic action routes assignment through authenticated actor after module 
 });
 
 test("parts action persists labor hours with goods through the authenticated role", async () => {
+  const authorizations = [];
   const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", {
     operation: "usedParts",
     laborHours: "2.5",
     parts: [{ partNo: "46305", qty: "1", uomCode: "ea", repairOrder: "Replace seal" }],
   }, {
-    authorize: async () => {},
+    authorize: async (...args) => authorizations.push(args[2]),
     saveOfficeParts: async (...args) => args,
   });
 
   assert.equal(result[1].officeUserId, "actor-1");
   assert.equal(result[1].laborHours, "2.5");
   assert.equal(result[1].parts[0].partNo, "46305");
+  assert.deepEqual(authorizations.map(({ moduleKey, action }) => [moduleKey, action]), [
+    ["parts", "record"],
+    ["diagnosisRepair", "update"],
+  ]);
+});
+
+test("Parts write alone cannot mutate labor through the combined compatibility action", async () => {
+  let saved = false;
+  await assert.rejects(runWorkorderModuleAction(context, "wo-1", "parts", "record", {
+    operation: "usedParts",
+    laborHours: "3",
+    parts: [],
+  }, {
+    authorize: async (_context, _workorderId, request) => {
+      if (request.moduleKey === "diagnosisRepair") throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+    },
+    saveOfficeParts: async () => { saved = true; },
+  }), (error) => error.statusCode === 403);
+  assert.equal(saved, false);
 });
 
 test("office part planning uses the authenticated Office actor without recording a used part", async () => {

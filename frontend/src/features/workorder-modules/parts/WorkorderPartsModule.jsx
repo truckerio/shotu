@@ -28,7 +28,6 @@ export function WorkorderPartsModule({
     || scanningAccess === WORKORDER_MODULE_ACCESS.REQUIRED;
   const partsVisible = access && access !== WORKORDER_MODULE_ACCESS.HIDDEN;
   if (!partsVisible && !canScanSerializedParts) return null;
-  const canWrite = access === WORKORDER_MODULE_ACCESS.WRITE || access === WORKORDER_MODULE_ACCESS.REQUIRED;
   const t = (key) => interfaceText(locale, key);
   function renderPartsPanel(serializedParts = null) {
     if (!partsVisible) return null;
@@ -36,7 +35,7 @@ export function WorkorderPartsModule({
       <PartRequestsPanel
         key={activeWorkorder.workorder.id}
         actorId={actorId}
-        role={canWrite && isOfficeDetail ? "office" : canWrite && isMechanicDetail ? "mechanic" : "read"}
+        role={isOfficeDetail ? "office" : isMechanicDetail ? "mechanic" : "read"}
         detail={activeWorkorder}
         parts={form.parts}
         laborHours={form.laborHours || ""}

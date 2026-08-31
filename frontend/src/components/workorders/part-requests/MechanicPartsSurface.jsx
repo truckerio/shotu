@@ -29,6 +29,7 @@ export function MechanicPartsSurface({
   serializedParts,
   locale,
   usedPartsAccess,
+  laborEditable,
 }) {
   const mechanicActions = mechanicPartsActionState(detail.allowedActions || {});
   const [requestFormOpen, setRequestFormOpen] = useState(false);
@@ -57,6 +58,7 @@ export function MechanicPartsSurface({
         onRegisterSerializedRepairFlush={onRegisterSerializedRepairFlush}
         serializedParts={serializedParts}
         editable={usedPartsAccess.editable}
+        laborEditable={laborEditable}
         readonlyMessage={usedPartsAccess.message}
         suggestionsEnabled
         locale={locale}

@@ -15,6 +15,7 @@ test("manual save request sends cleared Diagnosis and Repair completed values", 
   const renderedValue = normalizedMechanicProgress({
     diagnosis: "",
     workPerformed: "",
+    laborHours: "",
   });
 
   await saveProgress(mechanicProgressRequest({
@@ -29,6 +30,7 @@ test("manual save request sends cleared Diagnosis and Repair completed values", 
     expectedVersion: 8,
     diagnosis: "",
     workPerformed: "",
+    laborHours: "",
     recordActivity: true,
   }]);
 });
