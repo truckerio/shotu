@@ -81,7 +81,7 @@ export class OdooClient {
     ]);
   }
 
-  async searchReadAll(model, domain, fields) {
+  async searchReadAll(model, domain, fields, { context } = {}) {
     const records = [];
     for (let offset = 0; offset < MAX_RECORDS; offset += PAGE_SIZE) {
       const page = await this.execute(model, "search_read", [domain], {
@@ -89,6 +89,7 @@ export class OdooClient {
         limit: PAGE_SIZE,
         offset,
         order: "id asc",
+        ...(context ? { context } : {}),
       });
       records.push(...page);
       if (page.length < PAGE_SIZE) return records;

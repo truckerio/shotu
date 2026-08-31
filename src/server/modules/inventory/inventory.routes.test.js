@@ -10,6 +10,7 @@ const RUN_ID = "00000000-0000-4000-8000-000000000004";
 const BATCH_ID = "00000000-0000-4000-8000-000000000007";
 const COUNT_ID = "00000000-0000-4000-8000-000000000008";
 const COUNT_LINE_ID = "00000000-0000-4000-8000-000000000009";
+const AUTHORITY_EXCEPTION_ID = "00000000-0000-4000-8000-000000000010";
 
 function context() {
   return {
@@ -27,7 +28,7 @@ function helpers(body, requestContext = context()) {
   };
 }
 
-test("receive route crosses the real handler boundary and returns a confirmed receipt", async () => {
+test.skip("legacy: receive route crosses the real handler boundary and returns a confirmed receipt", async () => {
   const response = {};
   const handled = await handleInventoryApi(
     { method: "POST" },
@@ -119,6 +120,20 @@ test("receive route crosses the real handler boundary and returns a confirmed re
   assert.equal(response.payload.receipt.providerPickingName, "CHI/IN/QA");
 });
 
+test("retired receive route exposes the stable 410 inventory error", async () => {
+  const response = {};
+  const handled = await handleInventoryApi(
+      { method: "POST" },
+      response,
+      new URL(`http://localhost/api/office/invoice-extractions/${RUN_ID}/receive`),
+      helpers({ idempotencyKey: "retired-route" }),
+      { loadInvoice: async () => assert.fail("retired route must not read receipt state") },
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 410);
+  assert.equal(response.payload.code, "LEGACY_ODOO_RECEIPT_INGRESS_RETIRED");
+});
+
 test("scan route hides malformed or tampered identities behind a stable 404", async () => {
   const response = {};
   await handleInventoryApi(
@@ -134,6 +149,39 @@ test("scan route hides malformed or tampered identities behind a stable 404", as
     code: "inventory_not_found",
     retryable: false,
   });
+});
+
+test("Admin authority queue routes bounded reads and no-stock-change acknowledgement", async () => {
+  const denied = {};
+  await handleInventoryApi(
+    { method: "GET" }, denied,
+    new URL("http://localhost/api/office/inventory/authority-exceptions"),
+    helpers(null),
+    { listAuthorityExceptions: async () => assert.fail("Office request reached repository") },
+  );
+  assert.equal(denied.status, 403);
+  assert.equal(denied.payload.code, "INVENTORY_AUTHORITY_ADMIN_REQUIRED");
+
+  const admin = { ...context(), actor: { id: ACTOR_ID, role: "admin" } };
+  const listed = {};
+  await handleInventoryApi(
+    { method: "GET" }, listed,
+    new URL("http://localhost/api/office/inventory/authority-exceptions?page=1&limit=25"),
+    helpers(null, admin),
+    { listAuthorityExceptions: async () => ({ items: [], total: 0 }) },
+  );
+  assert.equal(listed.status, 200);
+  assert.deepEqual(listed.payload, { items: [], total: 0, page: 1, limit: 25 });
+
+  const resolved = {};
+  await handleInventoryApi(
+    { method: "POST", requestId: "authority-route" }, resolved,
+    new URL(`http://localhost/api/office/inventory/authority-exceptions/${AUTHORITY_EXCEPTION_ID}/resolve`),
+    helpers({ action: "acknowledge", reason: "Evidence reviewed", idempotencyKey: "authority-route-1" }, admin),
+    { acknowledgeAuthorityException: async () => ({ kind: "resolved", exceptionId: AUTHORITY_EXCEPTION_ID, outcome: "resolved_without_stock_mutation" }) },
+  );
+  assert.equal(resolved.status, 200);
+  assert.equal(resolved.payload.outcome, "resolved_without_stock_mutation");
 });
 
 test("physical confirmation route returns an application-owned receipt without an Odoo call", async () => {

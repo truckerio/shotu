@@ -93,7 +93,7 @@ export async function searchPartCatalog(input, requestContext, dependencies = {}
   });
 
   const items = Array.isArray(result?.items) ? result.items : [];
-  const scopedItems = parsed.purpose === "master_match"
+  const scopedItems = ["master_match", "workorder_assignment"].includes(parsed.purpose)
     ? items
     : items.filter((item) => item?.source === "local"
       && item.inventory?.locationId === scope.locationId

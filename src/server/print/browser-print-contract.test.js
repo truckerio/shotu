@@ -18,26 +18,41 @@ test("browser print backend has no server printer discovery or physical print co
 });
 
 test("print endpoint returns the persisted browser-print job contract", () => {
-  assert.match(serverSource, /status:\s*"generated"/);
-  assert.match(serverSource, /message:\s*"PDF generated and saved\. Open it to print with your browser\."/);
-  assert.match(serverSource, /jobId:\s*allocation\.job\.id/);
-  assert.match(serverSource, /serials:\s*allocation\.serials/);
-  assert.match(serverSource, /nextNumber:\s*allocation\.company\.nextNumber/);
-  assert.match(serverSource, /downloadUrl:\s*`\/api\/jobs\/\$\{encodeURIComponent\(allocation\.job\.id\)\}\/pdf`/);
-  assert.match(serverSource, /printForm:\s*form/);
+  assert.match(serverSource, /createArchivedWorkorderPrint\(input, requestContext/);
+  assert.match(serverSource, /status:\s*result\.replayed \? "existing" : "generated"/);
+  assert.match(serverSource, /jobId:\s*result\.archive\.id/);
+  assert.match(serverSource, /serials:\s*Array\.from\(\{ length: result\.archive\.snapshot\.copyCount \}/);
+  assert.match(serverSource, /downloadUrl:\s*`\/api\/jobs\/\$\{encodeURIComponent\(result\.archive\.id\)\}\/pdf`/);
+  assert.match(serverSource, /printForm:\s*result\.form/);
   assert.doesNotMatch(serverSource, /status:\s*"printed"|print_failed_serials_consumed/);
 });
 
 test("print downloads and operational reprints are resource scoped", () => {
-  assert.match(serverSource, /requestContext\.companyIds\?\.has\(job\.companyId\)/);
+  assert.match(serverSource, /canReadArchiveJob\(requestContext, job\)/);
   assert.match(serverSource, /requireWorkorderAccess\(requestContext,\s*job\.workorderId\)/);
   assert.match(serverSource, /requestContext\.locationIds\?\.has\(job\.locationId\)/);
-  assert.match(serverSource, /form = operationalWorkorderPrintForm\(workorder\)/);
+  assert.match(serverSource, /readArchivedPdf\(jobId, requestContext/);
+  assert.match(serverSource, /requireWorkorderAccess,/);
+  assert.match(serverSource, /listOfficialWorkorderInventoryParts\(\{/);
+  assert.match(serverSource, /mergeOfficialWorkorderParts\(manualParts, serializedParts, aggregateParts\)/);
+  assert.match(serverSource, /applyManualPartEvidence\(saved\.parts, manualEvidence\)/);
+});
+
+test("archive list surfaces scope server-side and redact storage paths", () => {
+  assert.match(serverSource, /scopeArchiveLedger\(normalizeLedger\(await loadLedger\(\)\), requestContext\)/);
+  assert.match(serverSource, /\.map\(safeArchiveJob\)/);
+  assert.match(serverSource, /\.map\(safeArchiveShare\)/);
+  assert.match(serverSource, /filteredWorkorders\(ledger, url\.searchParams\)/);
+  assert.match(serverSource, /includeStoragePath \? \{ uploadedFilePath:/);
+});
+
+test("original archive discovery uses the scoped workorder and artifact-kind endpoint", () => {
+  assert.match(serverSource, /findArchivedPrintForWorkorder\(workorderId, artifactKind, requestContext/);
 });
 
 test("print requires a persisted workorder and never allocates a draft serial", () => {
-  assert.match(serverSource, /if \(!input\.workorderId\) throw invalidRequest\("Create the workorder before printing\."\)/);
-  assert.match(serverSource, /serials:\s*\[workorder\.serial\]/);
+  assert.match(serverSource, /createArchivedWorkorderPrint\(input, requestContext/);
+  assert.match(serverSource, /serials:\s*Array\.from\(\{ length: result\.archive\.snapshot\.copyCount \}/);
   assert.doesNotMatch(
     serverSource,
     /url\.pathname === "\/api\/print"[\s\S]*?reserveWorkorderSerials\([\s\S]*?\n\s*}\n\s*const allocation/,
@@ -91,6 +106,16 @@ test("workorder preview renders labor first without treating it as inventory", (
   assert.match(html, />Replace hub seal</);
   assert.match(html, /Total Labor:<strong>2\.5 hr<\/strong>/);
   assert.match(html, /Total Parts:<strong>1<\/strong>/);
+});
+
+test("workorder print renders and escapes exact serialized identity below part number", () => {
+  const html = renderWorkorderPagesHtml({
+    parts: [{ partNo: "FILTER-1", serialNumber: "SER-<1>", qty: "1", uomCode: "ea", repairOrder: "Replace" }],
+  }, "WO-000104");
+
+  assert.match(html, /FILTER-1/);
+  assert.match(html, /Serial: SER-&lt;1&gt;/);
+  assert.match(workorderTemplateStyles, /\.wo-part-serial/);
 });
 
 test("workorder quantity totals add used parts without counting labor or blank rows", () => {
@@ -191,9 +216,10 @@ test("frontend browser print contract does not depend on enumerating printers", 
   assert.match(printControllerSource, /printBrowser = \(\) => window\.print\(\)/);
   assert.match(`${createSource}\n${detailSource}`, /BrowserPrintDocument/);
   assert.ok(
-    printControllerSource.indexOf("await openPrintDialog") < printControllerSource.indexOf('await request("/api/print"'),
-    "the browser print dialog must open before the slower archived PDF request",
+    printControllerSource.indexOf('await request("/api/print"') < printControllerSource.indexOf("await openPrintDialog"),
+    "the immutable archive must be created before the browser prints its returned snapshot",
   );
+  assert.match(printControllerSource, /\/api\/workorders\/\$\{encodeURIComponent\(activeWorkorderId\)\}\/print-archives\?artifactKind=original/);
   assert.doesNotMatch(`${routeSource}\n${printControllerSource}\n${createSource}\n${detailSource}`, /\/api\/printers|printerName|refreshPrinters/);
   assert.doesNotMatch(previewSource, /Use printer|Save PDF only|onSelectPrintDestination/);
   assert.match(previewSource, /t\("preview\.uniqueSerial"\)/);

@@ -1341,19 +1341,13 @@ export async function importOdooServiceHistory(companyId, {
   }
 }
 
-export async function importOdooInventory(companyId, { products, quants }) {
+export async function importOdooInventory(companyId, { products }) {
   const tenantId = requireCompanyId(companyId);
   const client = await getPool().connect();
   const syncMarker = new Date();
   let changed = 0;
   try {
     await client.query("begin");
-    const mappedResult = await client.query(
-      `select external_id, app_location_id from odoo_inventory_locations
-       where company_id = $1 and mapping_status = 'mapped' and app_location_id is not null`,
-      [tenantId],
-    );
-    const mappedLocations = new Map(mappedResult.rows.map((row) => [row.external_id, row.app_location_id]));
     const unitsResult = await client.query(
       `select code, odoo_name, decimal_scale from units_of_measure where active = true`,
     );
@@ -1363,37 +1357,45 @@ export async function importOdooInventory(companyId, { products, quants }) {
       unitCodes.set(String(unit.code).toLowerCase(), definition);
       if (unit.odoo_name) unitCodes.set(String(unit.odoo_name).toLowerCase(), definition);
     }
-    const catalogIds = new Map();
     for (const product of products) {
       const partNumber = String(product.default_code || product.barcode || `ODOO-${product.id}`).trim();
       const normalized = normalizePartNumber(partNumber);
       const unit = unitCodes.get(relationName(product.uom_id).toLowerCase()) || { code: "ea", decimalScale: 0 };
-      await assertPrimaryPartIdentityAvailable(client, tenantId, normalized);
-      const catalog = await client.query(
-        `insert into parts_catalog (
-           company_id, normalized_part_number, part_number, description, category,
-           uom_code, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, now())
-         on conflict (company_id, normalized_part_number) do update
-         set description = excluded.description,
-             category = excluded.category,
-             uom_code = excluded.uom_code,
-             version = parts_catalog.version + case when
-               row(parts_catalog.description, parts_catalog.category, parts_catalog.uom_code)
-               is distinct from row(excluded.description, excluded.category, excluded.uom_code)
-               then 1 else 0 end,
-             updated_at = now()
-         returning id`,
-        [tenantId, normalized, partNumber, product.name || partNumber, relationName(product.categ_id), unit.code],
+      const existingMapping = await client.query(
+        `select catalog_part_id from odoo_product_mappings
+         where company_id = $1 and external_id = $2
+         for update`,
+        [tenantId, String(product.id)],
       );
+      let catalogPartId = existingMapping.rows[0]?.catalog_part_id || null;
+      if (!catalogPartId) {
+        const existingCatalog = await client.query(
+          `select id from parts_catalog
+           where company_id = $1 and normalized_part_number = $2
+           limit 1`,
+          [tenantId, normalized],
+        );
+        catalogPartId = existingCatalog.rows[0]?.id || null;
+      }
+      if (!catalogPartId) {
+        await assertPrimaryPartIdentityAvailable(client, tenantId, normalized);
+        const catalog = await client.query(
+          `insert into parts_catalog (
+             company_id, normalized_part_number, part_number, description, category,
+             uom_code, updated_at
+           ) values ($1, $2, $3, $4, $5, $6, now())
+           returning id`,
+          [tenantId, normalized, partNumber, product.name || partNumber, relationName(product.categ_id), unit.code],
+        );
+        catalogPartId = catalog.rows[0].id;
+      }
       await client.query(
         `insert into odoo_product_mappings (
            company_id, external_id, catalog_part_id, barcode, default_code, display_name, active,
            provider_updated_at, last_seen_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
          on conflict (company_id, external_id) do update
-         set catalog_part_id = excluded.catalog_part_id,
-             barcode = excluded.barcode,
+         set barcode = excluded.barcode,
              default_code = excluded.default_code,
              display_name = excluded.display_name,
              active = excluded.active,
@@ -1403,69 +1405,24 @@ export async function importOdooInventory(companyId, { products, quants }) {
         [
           tenantId,
           String(product.id),
-          catalog.rows[0].id,
+          catalogPartId,
           product.barcode || "",
           product.default_code || "",
           product.name || product.display_name || partNumber,
           product.active !== false,
           product.write_date || null,
-        ],
-      );
-      catalogIds.set(String(product.id), { id: catalog.rows[0].id, partNumber, normalized, description: product.name || partNumber, uomCode: unit.code, decimalScale: unit.decimalScale });
-      changed += 1;
-    }
-    const balances = buildOdooInventoryBalances({ quants, mappedLocations, catalogIds });
-    for (const balance of balances.values()) {
-      const factor = 10 ** balance.decimalScale;
-      const available = Math.round(balance.availableQuantity * factor) / factor;
-      await client.query(
-        `insert into odoo_inventory_balances (
-           company_id, location_id, catalog_part_id, normalized_part_number, part_number,
-           description, quantity_on_hand, uom_code,
-           external_id, provider_updated_at, last_seen_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
-         on conflict (company_id, location_id, catalog_part_id, uom_code)
-         do update set
-           normalized_part_number = excluded.normalized_part_number,
-           part_number = excluded.part_number,
-           description = excluded.description,
-           external_id = excluded.external_id,
-           quantity_on_hand = excluded.quantity_on_hand,
-           provider_updated_at = excluded.provider_updated_at,
-           last_seen_at = excluded.last_seen_at,
-           updated_at = now()`,
-        [
-          tenantId,
-          balance.locationId,
-          balance.catalogPartId,
-          balance.normalized,
-          balance.partNumber,
-          balance.description,
-          available,
-          balance.uomCode,
-          balance.externalId,
-          balance.providerUpdatedAt,
           syncMarker,
         ],
       );
       changed += 1;
     }
     await client.query(
-      `update odoo_inventory_balances
-       set quantity_on_hand = 0,
-           provider_updated_at = null,
-           updated_at = now()
-       where company_id = $1
-         and last_seen_at is distinct from $2`,
-      [tenantId, syncMarker],
-    );
-    await client.query(
       `update integration_accounts set status = 'connected', last_full_sync_at = now(), updated_at = now()
        where company_id = $1 and provider = 'odoo'`,
       [tenantId],
     );
     await client.query("commit");
-    return { fetchedCount: products.length + quants.length, changedCount: changed, skippedUnmappedCount: quants.filter((quant) => !mappedLocations.has(relationId(quant.location_id))).length };
+    return { fetchedCount: products.length, changedCount: changed, skippedUnmappedCount: 0 };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;

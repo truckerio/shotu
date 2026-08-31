@@ -218,10 +218,17 @@ export async function confirmInventoryCount(importId, input, requestContext, dep
       409,
     );
   }
-  if (result.kind === "odoo_authority_conflict") {
+  if (result.kind === "authority_conflict") {
     throw inputError(
-      "INVENTORY_COUNT_ODOO_AUTHORITY_CONFLICT",
-      `Spreadsheet row ${result.sourceRow} is Odoo-managed. Reconcile quantity in Odoo; local opening count was not applied.`,
+      "INVENTORY_COUNT_AUTHORITY_CONFLICT",
+      `Spreadsheet row ${result.sourceRow} has an active legacy reservation. Release it before applying the opening count.`,
+      409,
+    );
+  }
+  if (result.kind === "authority_unmatched") {
+    throw inputError(
+      "INVENTORY_COUNT_AUTHORITY_IDENTITY_UNMATCHED",
+      `Spreadsheet row ${result.sourceRow} conflicts with a legacy inventory identity or unit. Reconcile it before applying the opening count.`,
       409,
     );
   }

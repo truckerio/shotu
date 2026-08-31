@@ -1,12 +1,24 @@
+import { randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { reserveWorkorderSerials } from "./serial-counters.repo.js";
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 import { OPERATIONS_ACTIVE_LIFECYCLES } from "../../modules/workorders/workorder-lifecycle-policy.js";
 import { normalizeWorkorderFormData } from "../../../../shared/workorder-template.js";
+import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 import { publicOdooRecordUrl } from "../../integrations/odoo/odoo.navigation.js";
 import { consumePendingSerializedInstallationsForApproval } from "./inventory-unit-workorder-usage.repo.js";
+import {
+  consumeAggregateUsagesForApproval,
+  markAggregateUsagesPending,
+  releaseAggregateUsagesForCancelledWorkorder,
+  resetAggregateUsagesForRevision,
+} from "./inventory-aggregate-workorder-usage.repo.js";
+import {
+  applyManualPartEvidence,
+  listLockedWorkorderManualPartEvidence,
+} from "./workorder-manual-part-evidence.repo.js";
 
 function publicAssetSelect(alias = "a", workorderAlias = "wo") {
   return `
@@ -1510,13 +1522,71 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
     }
 
     const formData = before.form_data || {};
+    const priorParts = Array.isArray(formData.parts) ? formData.parts : [];
+    const manualEvidence = priorParts.some((part) => part?.evidenceId)
+      ? await listLockedWorkorderManualPartEvidence(client, {
+        workorderId,
+        companyId: before.company_id,
+        locationId: before.location_id,
+        limit: Math.max(priorParts.length, 1),
+      })
+      : [];
+    const effectivePriorParts = applyManualPartEvidence(priorParts, manualEvidence);
+    const uomCodes = [...new Set([...effectivePriorParts, ...parts].map((part) => part?.uomCode).filter(Boolean))];
+    const uoms = uomCodes.length ? await client.query(
+      `select code, category from units_of_measure where code=any($1::text[])`,
+      [uomCodes],
+    ) : { rows: [] };
+    const categoryByCode = new Map(uoms.rows.map((row) => [row.code, row.category]));
+    const signature = (part) => JSON.stringify({
+      partNo: String(part?.partNo || "").trim(),
+      qty: String(part?.qty || ""),
+      uomCode: String(part?.uomCode || DEFAULT_UOM_CODE),
+      repairOrder: String(part?.repairOrder || "").trim(),
+    });
+    const hasPartValue = (part) => Boolean(
+      String(part?.partNo || "").trim()
+      || String(part?.qty ?? "").trim()
+      || String(part?.repairOrder || "").trim(),
+    );
+    const remainingPrior = effectivePriorParts.map((part) => ({ part, signature: signature(part), used: false }));
+    const evidencePrior = new Map(effectivePriorParts.filter((part) => part?.evidenceId).map((part) => [part.evidenceId, part]));
+    const validatedParts = parts.map((part) => {
+      if (!hasPartValue(part)) return part;
+      const category = categoryByCode.get(part.uomCode);
+      if (String(part.qty ?? "").trim() && category === "time") {
+        throw lifecycleConflict("WORKORDER_PART_UOM_INVALID", "Time belongs in labor, not used parts.");
+      }
+      const byEvidence = part.evidenceId ? evidencePrior.get(part.evidenceId) : null;
+      const match = byEvidence
+        ? remainingPrior.find((entry) => !entry.used && entry.part === byEvidence && entry.signature === signature(part))
+        : remainingPrior.find((entry) => !entry.used && entry.signature === signature(part));
+      if (!match) {
+        const countable = ["count", "packaging"].includes(category);
+        throw lifecycleConflict(
+          countable ? "WORKORDER_COUNTABLE_PART_REQUIRES_SERIAL" : "WORKORDER_MEASURED_PART_REQUIRES_AGGREGATE_USAGE",
+          countable
+            ? "New countable or packaged actual parts must use an exact serialized inventory unit."
+            : "New measured actual parts must use canonical aggregate inventory usage.",
+        );
+      }
+      match.used = true;
+      return { ...part, evidenceId: match.part.evidenceId || randomUUID() };
+    });
+    if (remainingPrior.some((entry) => !entry.used && hasPartValue(entry.part))) {
+      throw lifecycleConflict(
+        "WORKORDER_LEGACY_PART_EVIDENCE_IMMUTABLE",
+        "Historical manual part evidence cannot be edited or removed.",
+      );
+    }
+    const persistedParts = manualEvidence.length ? priorParts : validatedParts;
     const nextFormData = {
       ...formData,
-      parts,
+      parts: persistedParts,
       ...(laborHours !== undefined ? { laborHours } : {}),
     };
     const nextInput = { formData: nextFormData };
-    const partsChanged = JSON.stringify(canonicalJson(formData.parts || [])) !== JSON.stringify(canonicalJson(nextFormData.parts));
+    const partsChanged = JSON.stringify(canonicalJson(formData.parts || [])) !== JSON.stringify(canonicalJson(persistedParts));
     const laborChanged = laborHours !== undefined && String(formData.laborHours || "") !== String(laborHours || "");
     const changes = partsChanged || laborChanged ? changedFields(before, nextInput) : [];
 
@@ -1580,7 +1650,7 @@ export async function markOperationalWorkorderDone(
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status from operational_workorders where id = $1 for update",
+      "select id, company_id, status from operational_workorders where id = $1 for update",
       [workorderId]
     );
     const workorder = current.rows[0];
@@ -1600,6 +1670,11 @@ export async function markOperationalWorkorderDone(
       if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can mark this workorder done.");
     }
     await assertNoUnresolvedSerializedParts(client, workorderId, "", ["issued", "reserved"]);
+    await markAggregateUsagesPending(client, {
+      workorderId,
+      companyId: workorder.company_id,
+      actorId: completedByUserId,
+    });
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     const serializedParts = await activeSerializedRepairOrders(client, workorderId);
@@ -1687,7 +1762,7 @@ export async function returnOperationalWorkorder(workorderId, officeUserId, { re
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status, mechanic_done_at from operational_workorders where id = $1 for update",
+      "select id, company_id, status, mechanic_done_at from operational_workorders where id = $1 for update",
       [workorderId],
     );
     const workorder = current.rows[0];
@@ -1695,6 +1770,11 @@ export async function returnOperationalWorkorder(workorderId, officeUserId, { re
     if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
       throw lifecycleConflict("WORKORDER_RETURN_NOT_ALLOWED", "Only work ready for Manager review can be returned.");
     }
+    await resetAggregateUsagesForRevision(client, {
+      workorderId,
+      companyId: workorder.company_id,
+      actorId: officeUserId,
+    });
     await client.query(
       `update operational_workorders
        set status = $2, mechanic_done_at = null, updated_at = now()
@@ -1734,7 +1814,7 @@ export async function cancelOperationalWorkorder(workorderId, officeUserId, reas
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status from operational_workorders where id = $1 for update",
+      "select id, company_id, status from operational_workorders where id = $1 for update",
       [workorderId],
     );
     const workorder = current.rows[0];
@@ -1747,6 +1827,12 @@ export async function cancelOperationalWorkorder(workorderId, officeUserId, reas
       workorderId,
       "Install or return every issued serialized part before cancelling this workorder.",
     );
+    await releaseAggregateUsagesForCancelledWorkorder(client, {
+      workorderId,
+      companyId: workorder.company_id,
+      actorId: officeUserId,
+      reason,
+    });
 
     const assignments = await client.query(
       `select mechanic_user_id from workorder_mechanic_assignments
@@ -1907,6 +1993,11 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
       workorderId,
       companyId: workorder.company_id,
       officeUserId,
+    });
+    await consumeAggregateUsagesForApproval(client, {
+      workorderId,
+      companyId: workorder.company_id,
+      actorId: officeUserId,
     });
     const cancelledFulfillments = await client.query(
       `update part_fulfillment_requests

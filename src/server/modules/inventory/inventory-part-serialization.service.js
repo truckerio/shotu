@@ -70,6 +70,7 @@ export async function createSerializedUnitsForPart(catalogPartId, locationId, in
     catalogPartId: partId,
     locationId: shopId,
     ...parsed,
+    workorderId: dependencies.workorderId || null,
     actorId: requestContext.actor.id,
     ...locationWriteScope(requestContext),
   });
@@ -79,6 +80,15 @@ export async function createSerializedUnitsForPart(catalogPartId, locationId, in
   }
   if (result.kind === "unsupported_unit") {
     throw publicError("INVENTORY_SERIALIZATION_UNIT_UNSUPPORTED", "Only whole count or package quantities can create one serialized QR per physical unit.");
+  }
+  if (result.kind === "workorder_state") {
+    throw publicError("WORKORDER_INVENTORY_NOT_ACTIVE", "Physical units can only be added while this workorder is open or active.", 409);
+  }
+  if (result.kind === "authority_conflict") {
+    throw publicError("INVENTORY_AUTHORITY_CONFLICT", "Legacy provider inventory still has an active reservation. Inventory review is required.", 409);
+  }
+  if (result.kind === "authority_unmatched") {
+    throw publicError("INVENTORY_AUTHORITY_IDENTITY_UNMATCHED", "Provider inventory identity does not match this catalog part. Inventory review is required.", 409);
   }
   return result;
 }

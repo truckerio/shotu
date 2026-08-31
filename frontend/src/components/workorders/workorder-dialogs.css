@@ -21,6 +21,46 @@
   width: 100%;
 }
 
+.print-revision-form {
+  display: grid;
+  gap: 10px;
+}
+
+.print-revision-form label {
+  color: #344054;
+  display: grid;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.print-revision-form textarea {
+  border: 1px solid #98a2b3;
+  border-radius: 8px;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 88px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.print-revision-form textarea:focus-visible {
+  border-color: #1570ef;
+  outline: 3px solid rgb(21 112 239 / 20%);
+  outline-offset: 1px;
+}
+
+.print-revision-form p {
+  color: #667085;
+  font-size: 13px;
+  margin: 0;
+}
+
+.print-revision-form .button {
+  min-height: 44px;
+}
+
 .mechanic-completion-modal {
   background: #fff;
   border-radius: 8px;

@@ -290,15 +290,10 @@ export async function configureOdooOutboundLaborProduct(companyId, input, actor)
 export async function syncOdooPartsAndInventory(companyId) {
   const client = await configuredClient(companyId);
   await discoverOdooLocations(companyId);
-  const [products, quants] = await Promise.all([
-    client.searchReadAll("product.product", [["active", "=", true]], [
-      "id", "default_code", "barcode", "name", "categ_id", "uom_id", "write_date",
-    ]),
-    client.searchReadAll("stock.quant", [["location_id.usage", "=", "internal"]], [
-      "id", "product_id", "location_id", "quantity", "reserved_quantity", "write_date",
-    ]),
-  ]);
-  const inventoryResult = await importOdooInventory(companyId, { products, quants });
+  const products = await client.searchReadAll("product.product", [], [
+    "id", "default_code", "barcode", "name", "categ_id", "uom_id", "active", "write_date",
+  ], { context: { active_test: false } });
+  const inventoryResult = await importOdooInventory(companyId, { products });
   const syncStartedAt = new Date();
   try {
     await markServiceHistorySyncAttempted(companyId, "odoo", syncStartedAt);
@@ -329,7 +324,7 @@ export async function syncOdooPartsAndInventory(companyId) {
       historyLineCount: 0,
       historyContextCount: 0,
       historyRemovedCount: 0,
-      historyWarning: "Parts and inventory synced, but service history could not be read. Verify read-only Sales permissions in Odoo.",
+      historyWarning: "Part catalog synced, but service history could not be read. Verify read-only Sales permissions in Odoo.",
     };
   }
 }

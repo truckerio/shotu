@@ -78,7 +78,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
   const normalizedMatchPattern = allowBroadTextMatch ? `%${escapedNormalized}%` : `${escapedNormalized}%`;
   const limit = Math.min(MAX_SEARCH_LIMIT, Math.max(1, Number.parseInt(values.limit, 10) || DEFAULT_SEARCH_LIMIT));
   const locationId = values.locationId || null;
-  const purpose = ["issue", "request", "master_match"].includes(values.purpose) ? values.purpose : "request";
+  const purpose = ["issue", "request", "master_match", "workorder_assignment"].includes(values.purpose) ? values.purpose : "request";
 
   const result = await query(
     `
@@ -226,7 +226,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         limit 1
       ) inventory on true
       where candidates.id is null
-        or $11::text = 'master_match'
+        or $11::text in ('master_match', 'workorder_assignment')
         or (
           inventory.id is not null
           and ($11::text = 'request' or inventory.quantity_available > 0)

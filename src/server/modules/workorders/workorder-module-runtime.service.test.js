@@ -42,6 +42,7 @@ test("generic mechanic and kiosk detail reads apply the restricted parts project
         }],
       }),
       listInstalledParts: async () => [{ catalogPartId: "catalog-1", partNumber: "LF9009", quantity: 1, uomCode: "ea" }],
+      listAggregateUsages: async () => [{ evidenceId: "evidence-1", partNumber: "Coolant", effectiveQuantity: 1.25, uomCode: "gal", status: "reserved" }],
     });
 
     assert.equal(result.partRequests[0].partNumber, "LF9009");
@@ -49,6 +50,7 @@ test("generic mechanic and kiosk detail reads apply the restricted parts project
     assert.deepEqual(result.partRequests[0].allocations, []);
     assert.equal("rawContext" in result.partRequests[0], false);
     assert.equal(result.modules.parts.data.installedSerializedParts[0].partNumber, "LF9009");
+    assert.equal(result.modules.parts.data.aggregatePartUsages[0].evidenceId, "evidence-1");
   }
 });
 
@@ -69,6 +71,7 @@ test("generic mechanic and kiosk Parts module reads cannot bypass response redac
         }],
       }),
       listInstalledParts: async () => [{ catalogPartId: "catalog-1", partNumber: "LF9009", quantity: 1, uomCode: "ea" }],
+      listAggregateUsages: async () => [],
     });
 
     assert.equal(result.partRequests[0].partNumber, "LF9009");
@@ -90,6 +93,7 @@ test("hidden Parts access does not query or expose installed serialized summarie
       workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} },
     }),
     listInstalledParts: async () => { queried = true; return []; },
+    listAggregateUsages: async () => { queried = true; return []; },
   });
   assert.equal(queried, false);
   assert.equal("parts" in result.modules, false);
@@ -205,6 +209,38 @@ test("parts action persists labor hours with goods through the authenticated rol
     ["parts", "record"],
     ["diagnosisRepair", "update"],
   ]);
+});
+
+test("legacy manual amendments are Office-owned and carry server-derived scope", async () => {
+  let command;
+  const input = {
+    operation: "legacyManualPartAmendment",
+    evidenceId: "00000000-0000-4000-8000-000000000011",
+    action: "voided",
+    reason: "Duplicate historical row",
+    idempotencyKey: "manual-evidence-void-1",
+  };
+  const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", input, {
+    authorize: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    amendManualPartEvidence: async (...args) => { command = args; return { amended: true }; },
+  });
+  assert.deepEqual(result, { amended: true });
+  assert.equal(command[0], "wo-1");
+  assert.equal(command[1].officeUserId, "actor-1");
+  assert.equal(command[1].companyId, "company-1");
+  assert.equal(command[1].locationId, "location-1");
+
+  await assert.rejects(runWorkorderModuleAction(
+    { actor: { id: "mechanic-1", role: "mechanic" } },
+    "wo-1",
+    "parts",
+    "record",
+    input,
+    {
+      authorize: async () => ({ companyId: "company-1", locationId: "location-1" }),
+      amendManualPartEvidence: async () => assert.fail("mechanic reached amendment owner"),
+    },
+  ), (error) => error.statusCode === 403);
 });
 
 test("Parts write alone cannot mutate labor through the combined compatibility action", async () => {

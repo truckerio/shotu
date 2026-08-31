@@ -17,6 +17,7 @@ import {
   returnWorkorderSchema,
   sendMessageSchema,
   updateMechanicUsedPartsSchema,
+  amendLegacyManualPartEvidenceSchema,
 } from "./workorder.schemas.js";
 import { mechanicProgressSchema } from "../mechanic/mechanic-progress.schemas.js";
 import { updateSerializedUsageRepairOrderSchema } from "../inventory/inventory-unit-workorder.schemas.js";
@@ -82,10 +83,27 @@ const ACTIONS = Object.freeze({
     request: createPartRequestSchema,
     record: z.discriminatedUnion("operation", [
       z.object({ operation: z.literal("usedParts"), ...updateMechanicUsedPartsSchema.shape }),
+      amendLegacyManualPartEvidenceSchema,
       z.object({ operation: z.literal("usage"), requestId: id, ...updatePartUsageSchema.shape }),
       z.object({ operation: z.literal("officePart"), ...createOfficePartSchema.shape }),
       z.object({ operation: z.literal("officePartPlan"), ...createOfficePartSchema.shape }),
       updateSerializedUsageRepairOrderSchema,
+      z.object({
+        operation: z.literal("aggregateUsageReserve"),
+        catalogPartId: id,
+        quantity: z.coerce.number().positive().max(999999.999).multipleOf(0.001),
+        uomCode: z.string().trim().min(1).max(32),
+        repairOrder: z.string().trim().max(2000).default(""),
+        idempotencyKey: z.string().trim().min(8).max(160),
+      }),
+      z.object({
+        operation: z.literal("aggregateUsageLifecycle"),
+        usageId: id,
+        action: z.enum(["release", "reverse", "adjust"]),
+        targetQuantity: z.coerce.number().positive().max(999999.999).multipleOf(0.001).optional(),
+        reason: z.string().trim().min(2).max(500),
+        idempotencyKey: z.string().trim().min(8).max(160),
+      }),
     ]),
     approve: partDecision,
     decline: partDecision,

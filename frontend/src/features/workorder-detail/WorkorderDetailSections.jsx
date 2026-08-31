@@ -169,6 +169,7 @@ export function WorkorderDetailSections({
     parts: {
       activeWorkorder,
       actorId,
+      actorRole,
       detailSection,
       filledPartCount,
       form,
@@ -214,6 +215,5 @@ export function WorkorderDetailSections({
       vehicleModelText,
     },
   };
-
   return <WorkorderDetailModuleHost sections={detailSections} moduleProps={moduleProps} />;
 }

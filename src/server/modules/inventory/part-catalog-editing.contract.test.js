@@ -54,7 +54,7 @@ test("inventory display UOM migration permits only exact quantity-equivalent ali
   assert.match(sql, /new\.uom_code is distinct from old\.uom_code[\s\S]*inventory_display_uom_code := null/i);
 });
 
-test("every catalog writer shares the reference identity lock and advances mutable versions", async () => {
+test("catalog mutations share the identity lock while Odoo remains insert-only for local catalog truth", async () => {
   const [edit, requests, local, odoo] = await Promise.all([
     readFile(new URL("../../db/repositories/parts-catalog-edit.repo.js", import.meta.url), "utf8"),
     readFile(new URL("../../db/repositories/part-requests.repo.js", import.meta.url), "utf8"),
@@ -62,9 +62,14 @@ test("every catalog writer shares the reference identity lock and advances mutab
     readFile(new URL("../../integrations/odoo/odoo.admin.repo.js", import.meta.url), "utf8"),
   ]);
   assert.match(edit, /export async function assertPrimaryPartIdentityAvailable/);
-  for (const source of [requests, local, odoo]) {
+  for (const source of [requests, local]) {
     assert.match(source, /assertPrimaryPartIdentityAvailable\(client,/);
     assert.match(source, /version = parts_catalog\.version \+ case when/);
   }
+  const importer = odoo.slice(odoo.indexOf("export async function importOdooInventory"));
+  assert.match(importer, /assertPrimaryPartIdentityAvailable\(client,/);
+  assert.match(importer, /insert into parts_catalog/);
+  assert.doesNotMatch(importer, /on conflict \(company_id, normalized_part_number\) do update/);
+  assert.doesNotMatch(importer, /version = parts_catalog\.version|update parts_catalog/i);
   assert.match(local, /normalized_reference_number like \$11/);
 });

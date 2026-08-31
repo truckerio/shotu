@@ -50,7 +50,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /document\.getElementById\(returnFocusId\)\?\.focus/);
   assert.doesNotMatch(workspace, />Back to inventory<\/Button>/);
   assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
-  assert.match(admin, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} presentation="page" \/>/);
+  assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
   assert.doesNotMatch(office, /<InvoiceExtractionWorkspace \/>/);
   assert.doesNotMatch(admin, />Invoices<\/button>/);
 });
@@ -212,7 +212,7 @@ test("only the admin workspace enables applying physically counted inventory", a
     readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8"),
     readFile(new URL("../office/OfficeWorkspace.jsx", import.meta.url), "utf8"),
   ]);
-  assert.match(admin, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} presentation="page" \/>/);
+  assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
   assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
   assert.match(workspace, /canApplyInventoryCount=\{canApplyInventoryCount\}/);
   assert.match(panel, /stocktake\.readyCount && canApplyInventoryCount/);

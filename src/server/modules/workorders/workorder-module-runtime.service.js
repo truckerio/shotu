@@ -12,6 +12,7 @@ import {
 } from "../mechanic/mechanic.service.js";
 import {
   addOfficePart,
+  amendOfficeManualPartEvidence,
   assignOfficeWorkorderMechanics,
   cancelOfficeWorkorder,
   changeOfficePartAllocation,
@@ -34,7 +35,7 @@ import {
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
-import { listWorkorderInstalledSerializedParts } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
+import { listOfficialInstalledSerializedParts } from "../../print/workorder-print-projection.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import {
   authorizeWorkorderModule,
@@ -52,6 +53,15 @@ import {
 } from "./workorder-odoo-module.service.js";
 import { readUnitServiceHistory } from "./unit-service-history.service.js";
 import { updateSerializedUsageRepairOrderForWorkorder } from "../inventory/inventory-unit-workorder.service.js";
+import {
+  releaseOrReverseMeasuredUsageForWorkorder,
+  reserveMeasuredUsageForWorkorder,
+} from "../inventory/inventory-aggregate-workorder.service.js";
+import { listAggregateWorkorderUsages } from "../../db/repositories/inventory-aggregate-workorder-usage.repo.js";
+import {
+  applyManualPartEvidence,
+  listWorkorderManualPartEvidence,
+} from "../../db/repositories/workorder-manual-part-evidence.repo.js";
 
 function resourceOptions(context) {
   return context.actor.role === "mechanic"
@@ -61,14 +71,44 @@ function resourceOptions(context) {
 
 async function withInstalledSerializedParts(detail, decisions, dependencies) {
   if (!decisions?.parts || decisions.parts.access === "hidden") return detail;
-  const listInstalledParts = dependencies.listInstalledParts || listWorkorderInstalledSerializedParts;
-  const installedSerializedParts = await listInstalledParts({
-    workorderId: detail.workorder.id,
-    companyId: detail.workorder.companyId,
-    locationId: detail.workorder.locationId,
-    limit: 2000,
-  });
-  return { ...detail, installedSerializedParts };
+  const listInstalledParts = dependencies.listInstalledParts || listOfficialInstalledSerializedParts;
+  const listMeasuredParts = dependencies.listAggregateUsages || listAggregateWorkorderUsages;
+  const listManualEvidence = dependencies.listManualPartEvidence || listWorkorderManualPartEvidence;
+  const formData = detail.workorder.formData || {};
+  const hasManualEvidence = Array.isArray(formData.parts)
+    && formData.parts.some((part) => part?.evidenceId);
+  const [installedSerializedParts, aggregatePartUsages, manualPartEvidence] = await Promise.all([
+    listInstalledParts({
+      workorderId: detail.workorder.id,
+      companyId: detail.workorder.companyId,
+      locationId: detail.workorder.locationId,
+      limit: 2000,
+    }),
+    listMeasuredParts({
+      workorderId: detail.workorder.id,
+      companyId: detail.workorder.companyId,
+      locationId: detail.workorder.locationId,
+      limit: 200,
+    }),
+    hasManualEvidence ? listManualEvidence({
+      workorderId: detail.workorder.id,
+      companyId: detail.workorder.companyId,
+      locationId: detail.workorder.locationId,
+      limit: 100,
+    }) : [],
+  ]);
+  return {
+    ...detail,
+    workorder: {
+      ...detail.workorder,
+      formData: {
+        ...formData,
+        parts: applyManualPartEvidence(formData.parts, manualPartEvidence),
+      },
+    },
+    installedSerializedParts,
+    aggregatePartUsages,
+  };
 }
 
 export async function projectLoadedProtectedWorkorderDetail(
@@ -200,6 +240,19 @@ export async function runWorkorderModuleAction(
           officeUserId: actorId,
         });
     }
+    if (action === "record" && input.operation === "legacyManualPartAmendment") {
+      if (!["office", "admin"].includes(context.actor.role)) throw permissionDenied();
+      return (dependencies.amendManualPartEvidence || amendOfficeManualPartEvidence)(workorderId, {
+        evidenceId: input.evidenceId,
+        action: input.action,
+        replacementPart: input.replacementPart,
+        reason: input.reason,
+        idempotencyKey: input.idempotencyKey,
+        officeUserId: actorId,
+        companyId: authorization.companyId,
+        locationId: authorization.locationId,
+      });
+    }
     if (action === "record" && input.operation === "usage" && context.actor.role === "mechanic") {
       return (dependencies.updateUsage || updateMechanicPartUsage)(workorderId, input.requestId, { ...input, mechanicUserId: actorId });
     }
@@ -220,6 +273,12 @@ export async function runWorkorderModuleAction(
         context,
         { ...dependencies, authorization },
       );
+    }
+    if (action === "record" && input.operation === "aggregateUsageReserve") {
+      return (dependencies.reserveMeasuredUsage || reserveMeasuredUsageForWorkorder)(workorderId, input, context, dependencies);
+    }
+    if (action === "record" && input.operation === "aggregateUsageLifecycle") {
+      return (dependencies.releaseMeasuredUsage || releaseOrReverseMeasuredUsageForWorkorder)(workorderId, input, context, dependencies);
     }
     if (["approve", "decline"].includes(action)) {
       const decision = action === "approve" ? "approved" : (input.decision === "needs_info" ? "needs_info" : "rejected");

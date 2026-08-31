@@ -110,3 +110,14 @@ export const inventoryCatalogSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(12).optional().default(8),
   purpose: z.literal("master_match").optional(),
 }).strict();
+
+export const inventoryAuthorityExceptionListSchema = z.object({
+  page: z.coerce.number().int().min(1).max(100_000).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(25),
+}).strict();
+
+export const acknowledgeInventoryAuthorityExceptionSchema = z.object({
+  action: z.literal("acknowledge"),
+  reason: z.string().trim().min(2).max(1000),
+  idempotencyKey: z.string().trim().min(8).max(160),
+}).strict();

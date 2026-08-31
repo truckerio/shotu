@@ -23,13 +23,14 @@ import {
 } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import "./used-parts-editor.css";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
+import { WorkorderSerializedPartDialog } from "./part-requests/WorkorderSerializedPartDialog.jsx";
+import { AggregatePartUsageRows, MeasuredPartUsageDialog } from "./part-requests/MeasuredPartUsageDialog.jsx";
 import { RepairHistorySuggestions } from "./part-requests/RepairHistorySuggestions.jsx";
-import {
-  catalogInventoryText,
-  repairOrderAfterCatalogSelection,
-} from "./part-requests/catalog-parts-model.js";
 import { laborProductLabel } from "../../../../shared/labor-product.js";
-import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
+import { interfaceText } from "../../i18n/index.js";
+import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
+
+const MEASURED_UOM_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 
 function vehicleInput(detail) {
   const asset = detail.workorder.asset || {};
@@ -59,8 +60,13 @@ function looksLikePartNumber(value) {
   return text.length >= 3 && /\d/.test(text) && !/\s/.test(text) && /^[a-z0-9._/-]+$/i.test(text);
 }
 
+function partFingerprint(part) {
+  return [part?.partNo || "", part?.qty || "", part?.uomCode || "", part?.repairOrder || ""].join("\u001f");
+}
+
 export function UsedPartsEditor({
   actorId,
+  role = "read",
   detail,
   parts,
   laborHours = "",
@@ -104,6 +110,13 @@ export function UsedPartsEditor({
   const [saveState, setSaveState] = useState("");
   const [message, setMessage] = useState("");
   const [selectedCatalogParts, setSelectedCatalogParts] = useState([]);
+  const [serializedDialogPart, setSerializedDialogPart] = useState(null);
+  const [measuredDialogPart, setMeasuredDialogPart] = useState(null);
+  const serializedDialogOriginRef = useRef(-1);
+  const measuredDialogOriginRef = useRef(-1);
+  const legacyManualRowsRef = useRef(new Set(normalizeUsedParts(parts)
+    .filter((part) => part.partNo || part.qty || part.repairOrder)
+    .map(partFingerprint)));
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
   const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
   const focusedSerializedUsageId = serializedParts?.focusUsageId || "";
@@ -174,6 +187,8 @@ export function UsedPartsEditor({
     setSaveState("");
     setMessage("");
     setSelectedCatalogParts([]);
+    setSerializedDialogPart(null);
+    setMeasuredDialogPart(null);
 
     hydratedRef.current = true;
     removeLegacyMechanicWorkStorage();
@@ -192,6 +207,12 @@ export function UsedPartsEditor({
       window.localStorage.removeItem(storageKey);
     }
   }, [partsEditable, storageKey]);
+
+  useEffect(() => {
+    legacyManualRowsRef.current = new Set(normalizeUsedParts(parts)
+      .filter((part) => part.partNo || part.qty || part.repairOrder)
+      .map(partFingerprint));
+  }, [detail.workorder.id]);
 
   useEffect(() => {
     if (!hydratedRef.current || !partsEditable || !storageKey) return undefined;
@@ -289,6 +310,7 @@ export function UsedPartsEditor({
     : { active: installedParts.map((part) => ({ ...part, status: "installed" })), completed: [] };
   const activeSerializedParts = serializedUsageState.active;
   const completedSerializedUsages = serializedUsageState.completed;
+  const aggregatePartUsages = detail?.modules?.parts?.data?.aggregatePartUsages || detail?.aggregatePartUsages || [];
 
   function renderSerializedPartRow(part, index) {
     const usage = part.usage;
@@ -399,6 +421,41 @@ export function UsedPartsEditor({
     </details>
   ) : null;
 
+  function closeSerializedDialog() {
+    const origin = serializedDialogOriginRef.current;
+    setSerializedDialogPart(null);
+    window.requestAnimationFrame(() => document.querySelector(`[aria-label="${t("parts.partNumber")} ${origin + 1}"]`)?.focus());
+  }
+
+  function closeMeasuredDialog() {
+    const origin = measuredDialogOriginRef.current;
+    setMeasuredDialogPart(null);
+    window.requestAnimationFrame(() => document.querySelector(`[aria-label="${t("parts.partNumber")} ${origin + 1}"]`)?.focus());
+  }
+
+  const serializedDialog = serializedDialogPart ? <WorkorderSerializedPartDialog
+    open
+    actorId={actorId}
+    workorderId={detail.workorder.id}
+    catalogPart={serializedDialogPart}
+    locale={locale}
+    onClose={closeSerializedDialog}
+    onReserved={async (usage) => {
+      try {
+        await serializedParts?.recordUsage?.(usage);
+      } catch {
+        // Reservation already succeeded. Keep the canonical row and offer a
+        // recoverable refresh state rather than inviting a duplicate scan.
+        setMessage("Part added; refresh the workorder if the serialized row is not visible.");
+      }
+      setSerializedDialogPart(null);
+    }}
+  /> : null;
+  const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
+    open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart} locale={locale}
+    onClose={closeMeasuredDialog} onReserved={onChanged}
+  /> : null;
+
   if (!partsEditable && !laborEditable) {
     const savedParts = [...(serializedParts ? [] : installedParts), ...readonlyUsedParts(parts)];
     return (
@@ -434,11 +491,15 @@ export function UsedPartsEditor({
                 <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
                 <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
                 {part.repairOrder ? <span>{part.repairOrder}</span> : null}
+                {(part.evidenceId || legacyManualRowsRef.current.has(partFingerprint(part))) ? <small>{t("parts.legacyManualEvidence")}</small> : null}
               </li>
             ))}
           </ul>
         ) : activeSerializedParts.length ? null : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
         {serializedHistory}
+        <AggregatePartUsageRows actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} locale={locale} onChanged={onChanged} />
+        {serializedDialog}
+        {measuredDialog}
       </div>
     );
   }
@@ -490,16 +551,19 @@ export function UsedPartsEditor({
         </div>
         {activeSerializedParts.map(renderSerializedPartRow)}
         {partsEditable ? rows.map((part, index) => (
-          <div className="part-row" key={index}>
+          (() => {
+            const legacyManual = Boolean(part.evidenceId) || legacyManualRowsRef.current.has(partFingerprint(part));
+            return <div className="part-row" key={index}>
             <strong>{activeSerializedParts.length + index + 2}</strong>
             <div className="used-part-field">
               <span className="used-part-label">{t("parts.partNumber")}</span>
               <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
                 <PartCatalogCombobox
                   workorderId={detail.workorder.id}
-                  purpose="issue"
+                  purpose="workorder_assignment"
                   value={part.partNo}
                   onChange={(value) => {
+                    if (part.evidenceId) return;
                     setSelectedCatalogPart(index, null);
                     updateFields(index, {
                       partNo: value,
@@ -507,24 +571,23 @@ export function UsedPartsEditor({
                     });
                   }}
                   onSelect={(catalogPart) => {
-                    setSelectedCatalogPart(index, catalogPart);
-                    updateFields(index, {
-                      partNo: catalogPart.partNumber,
-                      qty: defaultUsedPartQuantity(part.qty),
-                      uomCode: catalogPart.uomCode || part.uomCode,
-                      repairOrder: repairOrderAfterCatalogSelection(part.repairOrder, catalogPart),
-                    });
-                    setMessage(catalogInventoryText(catalogPart, t, (value) => formatLocaleNumber(value, locale)));
+                    setSelectedCatalogPart(index, null);
+                    serializedDialogOriginRef.current = index;
+                    const category = getUnitDefinition(catalogPart.uomCode)?.category;
+                    setMessage("");
+                    if (MEASURED_UOM_CATEGORIES.has(category)) { measuredDialogOriginRef.current = index; setMeasuredDialogPart(catalogPart); }
+                    else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
+                    else setSerializedDialogPart(catalogPart);
                   }}
                   label={`${t("parts.partNumber")} ${index + 1}`}
                   inputAriaLabel={`${t("parts.partNumber")} ${index + 1}`}
                   inputPolicy="identifier"
                   placeholder={t("parts.partNumber")}
-                  disabled={!partsEditable}
+                  disabled={!partsEditable || legacyManual}
                   locale={locale}
                 />
                 {suggestionsEnabled ? (
-                  <button type="button" onClick={() => suggestRepair(index)} disabled={!partsEditable || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title={t("parts.findDetails")} aria-label={`${t("parts.findDetails")} ${index + 1}`}>
+                  <button type="button" onClick={() => suggestRepair(index)} disabled={!partsEditable || legacyManual || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title={t("parts.findDetails")} aria-label={`${t("parts.findDetails")} ${index + 1}`}>
                     <SearchMd />
                   </button>
                 ) : null}
@@ -538,7 +601,7 @@ export function UsedPartsEditor({
                 onValueChange={({ quantity, uomCode }) => updateFields(index, { qty: quantity, uomCode })}
                 quantityLabel={`${t("parts.quantity")} ${index + 1}`}
                 unitLabel={`${t("parts.unit")} ${index + 1}`}
-                disabled={!partsEditable}
+                disabled={!partsEditable || legacyManual}
                 compact
               />
             </div>
@@ -550,10 +613,10 @@ export function UsedPartsEditor({
                 onChange={(event) => update(index, "repairOrder", event.target.value)}
                 aria-label={`${t("parts.repairOrder")} ${index + 1}`}
                 placeholder={t("parts.describeRepair")}
-                disabled={!partsEditable}
+                disabled={!partsEditable || legacyManual}
               />
             </div>
-            <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={!partsEditable} aria-label={`${t("parts.removePartRow")} ${index + 1}`}>{t("parts.remove")}</button>
+            <div className="used-part-row-action">{legacyManual ? <small>{t("parts.legacyManualEvidence")}</small> : <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={!partsEditable} aria-label={`${t("parts.removePartRow")} ${index + 1}`}>{t("parts.remove")}</button>}</div>
             {selectedCatalogParts[index]?.id ? <div className="used-part-history">
               <RepairHistorySuggestions
                 workorderId={detail.workorder.id}
@@ -565,7 +628,8 @@ export function UsedPartsEditor({
                 locale={locale}
               />
             </div> : null}
-          </div>
+          </div>;
+          })()
         )) : null}
       </div>
       {!partsEditable ? (
@@ -578,6 +642,7 @@ export function UsedPartsEditor({
                   <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
                   <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
                   {part.repairOrder ? <span>{part.repairOrder}</span> : null}
+                  {(part.evidenceId || legacyManualRowsRef.current.has(partFingerprint(part))) ? <small>{t("parts.legacyManualEvidence")}</small> : null}
                 </li>
               ))}
             </ul>
@@ -585,6 +650,7 @@ export function UsedPartsEditor({
         </div>
       ) : null}
       {serializedHistory}
+      <AggregatePartUsageRows actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} locale={locale} onChanged={onChanged} />
       {partsEditable ? (
         <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
           {rows.length ? t("parts.addAnotherPart") : t("parts.recordUsedPart")}
@@ -594,6 +660,8 @@ export function UsedPartsEditor({
         {message ? <span>{message}</span> : <span></span>}
         {saveState ? <strong>{saveState}</strong> : null}
       </div>
+      {serializedDialog}
+      {measuredDialog}
     </div>
   );
 }

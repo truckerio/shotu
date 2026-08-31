@@ -7,8 +7,22 @@ export const resolveWorkorderInventoryUnitSchema = z.object({
   code: z.string().trim().min(8).max(2000),
 }).strict();
 
-export const issueWorkorderInventoryUnitSchema = z.object({
-  code: z.string().trim().min(8).max(2000),
+export const issueWorkorderInventoryUnitSchema = z.union([
+  z.object({ code: z.string().trim().min(8).max(2000), idempotencyKey }).strict(),
+  z.object({ unitId: inventoryWorkorderEntityIdSchema, idempotencyKey }).strict(),
+]);
+
+export const listWorkorderInventoryUnitsSchema = z.object({
+  catalogPartId: inventoryWorkorderEntityIdSchema,
+  q: z.string().trim().max(120).optional().default(""),
+  after: z.string().trim().max(200).optional().default(""),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(25),
+}).strict();
+
+export const createWorkorderInventoryUnitsSchema = z.object({
+  catalogPartId: inventoryWorkorderEntityIdSchema,
+  quantity: z.coerce.number().int().min(1).max(25),
+  confirmation: z.literal("physically_present_at_location"),
   idempotencyKey,
 }).strict();
 

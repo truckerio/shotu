@@ -40,6 +40,7 @@ export function normalizeUsedParts(parts, minimumRows = 0) {
     uomCode: normalizeUomCode(part?.uomCode),
     repairOrder: String(part?.repairOrder || ""),
     ...(part?.requestId ? { requestId: part.requestId } : {}),
+    ...(part?.evidenceId ? { evidenceId: String(part.evidenceId) } : {}),
   })) : [];
   const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
   while (rows.length > minimum && !usedPartHasValue(rows.at(-1))) rows.pop();
@@ -120,15 +121,21 @@ export function serializedUsageTableState(usages, actionsFor) {
   return { active, completed };
 }
 
-export function workorderPreviewParts(manualParts, installedParts) {
+export function workorderPreviewParts(manualParts, installedParts, aggregateParts = []) {
+  const aggregateEvidence = new Set((Array.isArray(aggregateParts) ? aggregateParts : [])
+    .map((part) => part?.evidenceId)
+    .filter(Boolean));
   return [
     ...(Array.isArray(installedParts) ? installedParts : []),
-    ...normalizeUsedParts(manualParts).filter(usedPartHasValue),
+    ...normalizeUsedParts(manualParts).filter((part) => usedPartHasValue(part) && !aggregateEvidence.has(part.evidenceId)),
+    ...(Array.isArray(aggregateParts) ? aggregateParts : []),
   ].map(({
     catalogPartId: _catalogPartId,
     usageId: _usageId,
-    serialNumber: _serialNumber,
     description: _description,
+    evidenceId: _evidenceId,
+    status: _status,
+    pendingApproval,
     ...part
-  }) => part);
+  }) => ({ ...part, ...(pendingApproval ? { pendingApproval: true } : {}) }));
 }

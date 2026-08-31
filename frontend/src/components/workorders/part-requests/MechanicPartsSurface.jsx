@@ -43,6 +43,7 @@ export function MechanicPartsSurface({
     <>
       <UsedPartsSection
         actorId={actorId}
+        role="mechanic"
         detail={detail}
         parts={parts}
         laborHours={laborHours}

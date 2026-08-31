@@ -37,7 +37,8 @@ test("installed serialized summaries keep identity locked, edit only repair word
   assert.doesNotMatch(editor, /used-part-serialized-row[\s\S]{0,800}<PartCatalogCombobox/);
   assert.doesNotMatch(editor, /used-part-serialized-row[\s\S]{0,800}<QuantityUnitInput/);
   assert.match(roleRouter, /workorderPreviewForm\(form, activeWorkorder\)/);
-  assert.match(roleRouterModel, /parts: workorderPreviewParts\(form\.parts, installedSerializedUsedParts\(detail\)\)/);
+  assert.match(roleRouterModel, /parts: workorderPreviewParts\(form\.parts, installedSerializedUsedParts\(detail\), aggregateParts\.filter\(\(usage\) => \["consumed", "installed_pending_approval"\]\.includes\(usage\.status\)\)\.map/);
+  assert.match(roleRouterModel, /aggregatePartUsages/);
   assert.match(roleRouter, /useWorkorderPrintController\([\s\S]*form: previewForm/);
   assert.equal((detailPage.match(/form=\{renderedPreviewForm\}/g) || []).length, 5);
 });

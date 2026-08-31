@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch } from "./inventory-labels.repo.js";
+import {
+  inspectInventoryAuthority,
+  recordInventoryAuthorityCutover,
+  recordInventoryAuthorityException,
+} from "./inventory-authority.repo.js";
 
 const INVENTORY_COUNT_BATCH_UNIT_LIMIT = 500;
 
@@ -499,6 +504,7 @@ export async function applyInventoryCountImport({
       await client.query("commit");
       return { kind: "replay", import: value };
     }
+    const authorityClaims = new Map();
     for (const line of ready.rows) {
       const existing = await client.query(
         `select id, source_provider, external_id, quantity_on_hand, quantity_reserved,
@@ -516,6 +522,29 @@ export async function applyInventoryCountImport({
           sourceRow: Number(line.source_row),
         };
       }
+      const claim = await inspectInventoryAuthority(client, {
+        companyId: stocktake.company_id,
+        locationId: stocktake.location_id,
+        catalogPartId: line.catalog_part_id,
+        normalizedPartNumber: line.normalized_part_number,
+        uomCode: line.uom_code,
+      });
+      if (claim.kind !== "claimable") {
+        await recordInventoryAuthorityException(client, {
+          claim,
+          companyId: stocktake.company_id,
+          locationId: stocktake.location_id,
+          catalogPartId: line.catalog_part_id,
+          normalizedPartNumber: line.normalized_part_number,
+          uomCode: line.uom_code,
+        });
+        await client.query("commit");
+        return {
+          kind: claim.kind === "reservation_blocked" ? "authority_conflict" : "authority_unmatched",
+          sourceRow: Number(line.source_row),
+        };
+      }
+      authorityClaims.set(line.id, claim);
     }
     const chunks = chunksByUnitLimit(ready.rows);
     for (const [chunkIndex, lines] of chunks.entries()) {
@@ -544,6 +573,14 @@ export async function applyInventoryCountImport({
             line.catalog_description || line.source_part_name || line.source_description || "",
             line.quantity, line.uom_code],
         );
+        await recordInventoryAuthorityCutover(client, {
+          claim: authorityClaims.get(line.id),
+          companyId: stocktake.company_id,
+          locationId: stocktake.location_id,
+          catalogPartId: line.catalog_part_id,
+          receiptId,
+          receiptLineId,
+        });
         await client.query(
           `insert into inventory_stock_movements (
              company_id, location_id, catalog_part_id, receipt_id, receipt_line_id,

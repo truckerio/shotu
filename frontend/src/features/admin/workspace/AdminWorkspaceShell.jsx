@@ -51,7 +51,7 @@ export function AdminWorkspaceShell({
       {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
       {view === "operations" ? <OperationsPage actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
-      {view === "inventory" ? <InventoryWorkspace canApplyInventoryCount={actor?.role === "admin"} presentation="page" /> : null}
+      {view === "inventory" ? <InventoryWorkspace actorId={actor?.id} canApplyInventoryCount={actor?.role === "admin"} canReconcileAuthority={actor?.role === "admin"} presentation="page" /> : null}
       {view === "settings" ? <IntegrationsSettings /> : null}
       {view === "modules" ? <ModulesPage {...modulePageProps} /> : null}
       {view === "locations" && selectedId && detail ? <LocationDetailPage {...locationDetailProps} /> : null}

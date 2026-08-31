@@ -123,7 +123,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
         const historySummary = result.historyWarning
           ? result.historyWarning
           : `Imported ${result.historyOrderCount || 0} service orders and ${result.historyLineCount || 0} ordered history lines.`;
-        setNotice({ error: "", message: `Imported ${result.changedCount} catalog and inventory records. ${historySummary} ${result.skippedUnmappedCount} inventory rows were skipped because their locations are not mapped.` });
+        setNotice({ error: "", message: `Imported ${result.changedCount} catalog records. ${historySummary}` });
       } else {
         setNotice({ error: "", message: "Odoo.sh connection verified." });
       }
@@ -299,7 +299,7 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
           <div className="integration-card-actions">
             <Button icon={Settings01} onClick={() => setEditing(true)} disabled={Boolean(busy)}>Connection</Button>
             <Button icon={RefreshCw01} onClick={() => runAction("discover", "/api/integrations/odoo/discover-locations")} disabled={Boolean(busy)}>{busy === "discover" ? "Refreshing" : "Refresh locations"}</Button>
-            <Button variant="primary" onClick={() => runAction("sync", "/api/integrations/odoo/sync")} disabled={Boolean(busy)}>{busy === "sync" ? "Syncing" : "Sync parts, inventory & history"}</Button>
+            <Button variant="primary" onClick={() => runAction("sync", "/api/integrations/odoo/sync")} disabled={Boolean(busy)}>{busy === "sync" ? "Syncing" : "Sync catalog & history"}</Button>
           </div>
         </>
       )}

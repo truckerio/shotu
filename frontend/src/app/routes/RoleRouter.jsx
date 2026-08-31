@@ -67,14 +67,7 @@ export function RoleRouter({ actor }) {
   const lastPhysicalPageIndex = workorderPhysicalPageCount(previewForm) - 1;
   const primaryActionLabel = actor.role === "mechanic" ? interfaceText(interfaceLocale, "preview.printWorkorder") : "Print workorder";
   const canPrint = capabilities.canPrintWorkorder;
-  const {
-    browserPrintPayload,
-    printMenuOpen,
-    printState,
-    printWorkorders,
-    setPrintMenuOpen,
-    setPrintState,
-  } = useWorkorderPrintController({
+  const { browserPrintPayload, printMenuOpen, printState, printWorkorders, printRevisedCopy, setPrintMenuOpen, setPrintState } = useWorkorderPrintController({
     activeWorkorderId: activeWorkorder?.workorder?.id,
     activeWorkorderLocationId: activeWorkorder?.workorder?.locationId,
     effectiveCopies,
@@ -82,6 +75,7 @@ export function RoleRouter({ actor }) {
     previewSerials,
     range,
     request: api,
+    actorId: actor.id,
     setCreateState: setOfficeCreateState,
     locale: actor.role === "mechanic" ? interfaceLocale : "en",
   });
@@ -467,7 +461,7 @@ export function RoleRouter({ actor }) {
         supportingView, vehicleLookup, workorderCountLabel, applyVehicle,
         acceptOpenedMechanicWorkorder, cancelOfficeWorkorder, closeOfficeWorkorder, markOfficeWorkorderDone,
         jumpToPreview, openFullscreenPreview, openOfficeCancel, openOfficeReturn,
-        onLocaleChange: interfacePreferences.saveLocale, printWorkorders, reloadActiveWorkorder,
+        onLocaleChange: interfacePreferences.saveLocale, printWorkorders, printRevisedCopy, reloadActiveWorkorder,
         returnOfficeWorkorder, returnToRoleWorkspace, saveActiveUsedParts, saveOfficeWorkorder,
         selectDetailSection, selectOfficeLocation, sendWorkorderChat, setDetailSection,
         setFullscreenPageIndex, setFullscreenZoom, setMechanicFinish, setOfficeAssignment,

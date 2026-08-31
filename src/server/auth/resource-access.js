@@ -14,7 +14,11 @@ export async function requireWorkorderAccess(context, workorderId, options = {})
   if (!context.companyIds?.has(workorder.companyId)) throw resourceNotFound("Workorder");
 
   if (actor.role !== "admin") {
-    if (context.locationIds?.size && workorder.locationId && !context.locationIds.has(workorder.locationId)) {
+    const requireLocationMembership = options.requireLocationMembership === true;
+    const lacksRequiredLocation = requireLocationMembership
+      && (!workorder.locationId || !context.locationIds?.has(workorder.locationId));
+    if (lacksRequiredLocation
+      || (context.locationIds?.size && workorder.locationId && !context.locationIds.has(workorder.locationId))) {
       throw resourceNotFound("Workorder");
     }
   }

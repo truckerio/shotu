@@ -251,13 +251,18 @@ test("real PostgreSQL batches an unbounded count apply, preserves evidence, and 
          (select quantity_on_hand from inventory_items
           where company_id=$1 and location_id=$3 and catalog_part_id=$4 and source_provider='local') as local_quantity,
          (select quantity_on_hand from odoo_inventory_balances
-          where company_id=$1 and location_id=$3 and catalog_part_id=$4) as odoo_quantity`,
+          where company_id=$1 and location_id=$3 and catalog_part_id=$4) as odoo_quantity,
+         (select count(*)::integer from inventory_authority_cutovers cutover
+          join inventory_receipts receipt on receipt.company_id=cutover.company_id and receipt.id=cutover.receipt_id
+          where cutover.company_id=$1 and receipt.count_import_id=$2
+            and cutover.source_kind='odoo_balance') as authority_snapshots`,
       [companyId, importOdoo, locationId, partB],
     );
     assert.deepEqual(separatedAuthorityEvidence.rows[0], {
       local_count_receipts: 1,
       local_quantity: "1.000",
       odoo_quantity: "7.000",
+      authority_snapshots: 1,
     });
 
     const source = await getInventoryCountImportFile({

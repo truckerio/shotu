@@ -54,6 +54,8 @@ test("catalog search input requires one authorized scope and a bounded query", (
   });
   assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "issue", q: "filter" }).purpose, "issue");
   assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "master_match", q: "filter" }).purpose, "master_match");
+  assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "workorder_assignment", q: "filter" }).purpose, "workorder_assignment");
+  assert.equal(catalogSearchInputSchema.safeParse({ locationId, purpose: "workorder_assignment", q: "filter" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, purpose: "all", q: "filter" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "x" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "filter", limit: 13 }).success, false);
@@ -212,6 +214,22 @@ test("operational catalog purposes return only local inventory in the authorized
   assert.deepEqual(issueResult.items, [localAvailable]);
   assert.equal(issueResult.items[0].source, "local");
   assert.equal(issueResult.items[0].providerManaged, true);
+});
+
+test("workorder assignment includes zero-stock and catalog-only parents", async () => {
+  const candidates = [
+    { id: "catalog-only", source: "company", inventory: null },
+    { id: "local-zero", source: "local", inventory: { locationId: "location-1", available: 0 } },
+  ];
+  const result = await searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    purpose: "workorder_assignment",
+    q: "filter",
+  }, { actor: { id: "office-1", role: "office" } }, {
+    requireWorkorderAccess: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    searchCatalogParts: async () => ({ catalogAvailable: true, items: candidates }),
+  });
+  assert.deepEqual(result.items, candidates);
 });
 
 test("master-match catalog search requires inventory count apply permission", async () => {

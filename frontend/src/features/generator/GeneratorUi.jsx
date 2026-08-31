@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { CheckCircle, ChevronLeft, ChevronRight, Printer, XClose, ZoomIn, ZoomOut } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { interfaceText } from "../../i18n/index.js";
@@ -93,7 +93,13 @@ export function PreviewFullscreen({ open, form, serials, pageIndex, zoom, range,
   );
 }
 
-export function PrintModal({ state, range, onClose, locale = "en" }) {
+export function PrintModal({ state, range, onClose, onCreateRevision = null, locale = "en" }) {
+  const [revisionReason, setRevisionReason] = useState("");
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  useEffect(() => {
+    setRevisionReason("");
+    setRevisionOpen(false);
+  }, [state.archive?.id, state.open]);
   if (!state.open) return null;
   const t = (key) => interfaceText(locale, key);
   const isDone = state.stage === "done";
@@ -111,7 +117,14 @@ export function PrintModal({ state, range, onClose, locale = "en" }) {
           <div><span>{t("preview.pages")}</span><strong>{state.pageCount || 1}</strong></div>
         </div>
         <div className="progress-track"><div className={`progress-fill ${isDone ? "complete" : isError ? "failed" : ""}`} /></div>
-        {isDone && state.downloadUrl ? <a className="button primary download-link" href={state.downloadUrl} target="_blank" rel="noreferrer">{t("preview.downloadPdf")}</a> : null}
+        {isDone && state.downloadUrl ? <a className="button primary download-link" href={state.downloadUrl} target="_blank" rel="noreferrer">{state.archive?.artifactKind === "revised" ? t("preview.downloadRevisedCopy") : t("preview.downloadArchivedOriginal")}</a> : null}
+        {isDone && state.archive?.id && onCreateRevision ? <>
+          {!revisionOpen ? <Button variant="secondary" onClick={() => setRevisionOpen(true)}>{t("preview.createRevisedCopy")}</Button> : <form className="print-revision-form" onSubmit={(event) => { event.preventDefault(); if (revisionReason.trim()) onCreateRevision(state.archive.id, revisionReason.trim()); }}>
+            <label>{t("preview.revisionReason")}<textarea aria-describedby="print-revision-help" value={revisionReason} onChange={(event) => setRevisionReason(event.target.value)} required maxLength="1000" /></label>
+            <p id="print-revision-help">{t("preview.revisionReasonHelp")} {state.archive.id}</p>
+            <Button type="submit" variant="primary" disabled={!revisionReason.trim()}>{t("preview.createRevisedCopy")}</Button>
+          </form>}
+        </> : null}
         {isDone || isError ? <Button variant={isError ? "secondary" : "primary"} onClick={onClose}>{t("preview.close")}</Button> : null}
       </div>
     </div>

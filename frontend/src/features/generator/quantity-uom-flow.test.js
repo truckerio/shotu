@@ -47,8 +47,10 @@ test("AI part suggestions retain quantity and unit in the shared used-parts row"
   assert.match(usedPartsEditor, /uomCode:\s*result\.part\.uomCode \|\| row\.uomCode/);
 });
 
-test("catalog selections default blank used-part quantities to one", () => {
-  assert.match(usedPartsEditor, /partNo:\s*catalogPart\.partNumber,[\s\S]*qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
+test("detail catalog parent selection waits for an exact serialized child", () => {
+  assert.match(usedPartsEditor, /purpose="workorder_assignment"/);
+  assert.match(usedPartsEditor, /setSerializedDialogPart\(catalogPart\)/);
+  assert.doesNotMatch(usedPartsEditor, /partNo:\s*catalogPart\.partNumber,[\s\S]*qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
 });
 
 test("typed part numbers default blank quantities before autosave", () => {
@@ -97,7 +99,7 @@ test("detail parts use the same configured labor product label as create and pri
   assert.match(usedPartsEditor, /laborProductLabel\(laborProduct\)/);
   assert.match(usedPartsEditor, /aria-label=\{t\("parts\.repairOrderWorkPerformed"\)\}/);
   assert.match(usedPartsEditor, /onLaborRepairOrderChange\(event\.target\.value\)/);
-  assert.match(usedPartsEditor, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
+  assert.match(usedPartsEditor, /<WorkorderSerializedPartDialog/);
   assert.match(detailPartsModule, /laborRepairOrderDisabled=\{!activeWorkorder\.allowedActions\?\.saveNotes\}/);
   assert.equal(usedPartsEditor.match(/disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/g)?.length, 2);
   assert.doesNotMatch(usedPartsEditor, /\[PTR001\] LABOR HOURS/);

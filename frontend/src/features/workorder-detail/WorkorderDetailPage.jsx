@@ -133,6 +133,7 @@ export function WorkorderDetailPage({
   jumpToPreview,
   openFullscreenPreview,
   printWorkorders,
+  printRevisedCopy,
   openOfficeCancel,
   openOfficeReturn,
   onLocaleChange,
@@ -603,7 +604,7 @@ export function WorkorderDetailPage({
         } : undefined}
         locale={isMechanicDetail ? locale : "en"}
       /> : null}
-      {previewPolicy.canRead ? <PrintModal state={printState} range={range} locale={isMechanicDetail ? locale : "en"} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
+      {previewPolicy.canRead ? <PrintModal state={printState} range={range} locale={isMechanicDetail ? locale : "en"} onCreateRevision={printRevisedCopy} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
 
       {completionPolicy.canWrite && mechanicFinish.open ? (
         <div

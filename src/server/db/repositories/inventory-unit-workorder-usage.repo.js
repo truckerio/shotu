@@ -138,6 +138,87 @@ export async function listWorkorderSerializedUnitUsages({
   return result.rows.map(publicUsage);
 }
 
+export async function listAvailableSerializedUnitsForWorkorder({
+  workorderId,
+  companyId,
+  locationId,
+  catalogPartId,
+  queryText = "",
+  after = "",
+  limit = 50,
+}) {
+  const result = await query(
+    `with selected_part as (
+       select part.id, part.part_number, part.description, part.uom_code,
+              location.id as location_id, location.name as location_name,
+              uom.category as uom_category, uom.decimal_scale
+       from operational_workorders workorder
+       join parts_catalog part on part.company_id = workorder.company_id
+       join locations location on location.company_id = workorder.company_id and location.id = workorder.location_id
+       join units_of_measure uom on uom.code = part.uom_code
+       where workorder.id = $1 and workorder.company_id = $2
+         and workorder.location_id = $3 and part.id = $4
+     )
+     select selected_part.id as selected_part_id,
+            selected_part.part_number as selected_part_number,
+            selected_part.description as selected_part_description,
+            selected_part.uom_code as selected_part_uom_code,
+            selected_part.location_id, selected_part.location_name,
+            selected_part.uom_category, selected_part.decimal_scale,
+            child.id, child.serial_number, child.status, child.updated_at,
+            child.catalog_part_id, child.part_number, child.description, child.uom_code
+     from selected_part
+     left join lateral (
+       select unit.id, unit.serial_number, unit.status, unit.updated_at,
+              line.catalog_part_id, line.part_number, line.description, line.uom_code
+       from inventory_serialized_units unit
+       join inventory_receipt_lines line
+         on line.company_id = unit.company_id and line.id = unit.receipt_line_id
+       join inventory_receipts receipt
+         on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
+        and receipt.provider in ('local', 'local_count', 'local_serialization')
+       where unit.company_id = $2 and unit.location_id = $3
+         and line.catalog_part_id = selected_part.id and unit.status = 'in_stock'
+         and ($5::text = '' or unit.serial_number ilike '%' || replace(replace(replace($5, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' escape '\\')
+         and ($6::text = '' or unit.serial_number > $6)
+       order by unit.serial_number, unit.id
+       limit $7
+     ) child on true
+     order by child.serial_number, child.id`,
+    [workorderId, companyId, locationId, catalogPartId, queryText, after, limit + 1],
+  );
+  if (!result.rows.length) return { kind: "missing", units: [] };
+  const selected = result.rows[0];
+  const candidates = result.rows.filter((row) => row.id);
+  const hasMore = candidates.length > limit;
+  const page = candidates.slice(0, limit);
+  return {
+    kind: "found",
+    part: {
+      catalogPartId: selected.selected_part_id,
+      partNumber: selected.selected_part_number,
+      description: selected.selected_part_description || "",
+      uomCode: selected.selected_part_uom_code,
+    },
+    location: { locationId: selected.location_id, name: selected.location_name || "" },
+    canCreateSerializedUnits: ["count", "packaging"].includes(selected.uom_category)
+      && Number(selected.decimal_scale) === 0,
+    units: page.map((row) => ({
+      id: row.id,
+      serialNumber: row.serial_number,
+      status: row.status,
+      catalogPartId: row.catalog_part_id,
+      partNumber: row.part_number,
+      description: row.description || "",
+      uomCode: row.uom_code,
+      locationName: row.location_name || "",
+      eligible: true,
+      updatedAt: row.updated_at,
+    })),
+    nextCursor: hasMore ? page.at(-1)?.serial_number || null : null,
+  };
+}
+
 export async function listWorkorderInstalledSerializedParts({
   workorderId,
   companyId,

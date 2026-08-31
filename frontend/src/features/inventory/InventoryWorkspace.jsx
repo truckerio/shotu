@@ -19,6 +19,7 @@ import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
 import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
+import { InventoryAuthorityExceptionsPanel } from "./InventoryAuthorityExceptionsPanel.jsx";
 import {
   DEFAULT_STOCK_SORT,
   STOCK_FILTER_OPTIONS,
@@ -58,7 +59,7 @@ function stockItemKey(item) {
   return `${item.companyId}:${item.catalogPartId}`;
 }
 
-export function InventoryWorkspace({ canApplyInventoryCount = false, presentation = "page" }) {
+export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = false, canReconcileAuthority = false, presentation = "page" }) {
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const [invoiceWorkflowOpen, setInvoiceWorkflowOpen] = useState(() => (
     initialParams.get("view") === "invoices"
@@ -342,6 +343,7 @@ export function InventoryWorkspace({ canApplyInventoryCount = false, presentatio
         </OperationalCollectionTable> : query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
         <Pagination currentPage={stockPage} pageCount={stockMeta.pageCount} setPage={setStockPage} total={stockMeta.total} label="parts" loading={refreshing} />
       </> : null}
+      {canReconcileAuthority ? <InventoryAuthorityExceptionsPanel actorId={actorId} /> : null}
 
       <SecondaryDetailPanel
         open={Boolean(selectedItem)}

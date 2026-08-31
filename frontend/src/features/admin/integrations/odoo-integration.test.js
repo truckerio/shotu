@@ -12,7 +12,10 @@ test("Odoo settings separates inbound stock locations from explicit outbound set
   assert.match(source, /Ignore this location/);
   assert.match(source, /<option value="">Unmatched<\/option>/);
   assert.match(source, /encodeURIComponent\(item\.externalId\)/);
-  assert.match(source, /Sync parts, inventory & history/);
+  assert.match(source, /Sync catalog & history/);
+  assert.doesNotMatch(source, /Sync parts, inventory & history/);
+  assert.match(source, /Imported \$\{result\.changedCount\} catalog records/);
+  assert.doesNotMatch(source, /catalog and inventory records/);
   assert.match(source, /historyOrderCount/);
   assert.match(source, /historyWarning/);
   assert.match(source, /least-privilege Odoo user/);

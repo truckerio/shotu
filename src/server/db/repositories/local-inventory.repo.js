@@ -3,6 +3,11 @@ import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch, loadReceiptLabelBatch } from "./inventory-labels.repo.js";
 import { assertPrimaryPartIdentityAvailable } from "./parts-catalog-edit.repo.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
+import {
+  inspectInventoryAuthority,
+  recordInventoryAuthorityCutover,
+  recordInventoryAuthorityException,
+} from "./inventory-authority.repo.js";
 
 function publicReceipt(row, lines = [], units = [], labelBatch = null) {
   if (!row) return null;
@@ -169,37 +174,29 @@ export async function postLocalInventoryReceipt({
         [source.company_id, line.normalizedPartNumber, line.partNumber, line.description, line.uomCode],
       );
       const catalogPartId = catalog.rows[0].id;
-      const existingBalance = await client.query(
-        `select id, catalog_part_id, source_provider, external_id,
-                quantity_on_hand, quantity_reserved,
-                provider_updated_at, last_seen_at
-         from inventory_items
-         where company_id = $1 and location_id = $2
-           and normalized_part_number = $3 and uom_code = $4
-         limit 1 for update`,
-        [source.company_id, source.location_id, line.normalizedPartNumber, line.uomCode],
-      );
-      if (existingBalance.rows[0]
-        && existingBalance.rows[0].source_provider !== "local"
-        && Number(existingBalance.rows[0].quantity_reserved) > 0) {
-        await client.query("rollback");
-        return { kind: "authority_conflict" };
+      const authorityClaim = await inspectInventoryAuthority(client, {
+        companyId: source.company_id,
+        locationId: source.location_id,
+        catalogPartId,
+        normalizedPartNumber: line.normalizedPartNumber,
+        uomCode: line.uomCode,
+      });
+      if (authorityClaim.kind !== "claimable") {
+        await recordInventoryAuthorityException(client, {
+          claim: authorityClaim,
+          companyId: source.company_id,
+          locationId: source.location_id,
+          catalogPartId,
+          normalizedPartNumber: line.normalizedPartNumber,
+          uomCode: line.uomCode,
+        });
+        await client.query("commit");
+        return { kind: authorityClaim.kind === "reservation_blocked" ? "authority_conflict" : "authority_unmatched" };
       }
-      const previousBalance = existingBalance.rows[0] || null;
       preparedLines.push({
         ...line,
         catalogPartId,
-        authorityCutover: previousBalance && previousBalance.source_provider !== "local"
-          ? {
-            inventoryItemId: previousBalance.id,
-            previousSourceProvider: previousBalance.source_provider,
-            previousExternalId: previousBalance.external_id,
-            previousQuantityOnHand: previousBalance.quantity_on_hand,
-            previousQuantityReserved: previousBalance.quantity_reserved,
-            previousProviderUpdatedAt: previousBalance.provider_updated_at,
-            previousLastSeenAt: previousBalance.last_seen_at,
-          }
-          : null,
+        authorityClaim,
       });
     }
 
@@ -245,25 +242,14 @@ export async function postLocalInventoryReceipt({
           `local:${catalogPartId}`, line.partNumber, line.description,
           line.quantity, line.uomCode, line.serializedUnits?.length ? "serial" : "aggregate"],
       );
-      if (line.authorityCutover) {
-        await client.query(
-          `insert into inventory_authority_cutovers (
-             company_id, location_id, catalog_part_id, inventory_item_id,
-             receipt_id, receipt_line_id, previous_source_provider,
-             previous_external_id, previous_quantity_on_hand,
-             previous_quantity_reserved, previous_provider_updated_at,
-             previous_last_seen_at
-           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [source.company_id, source.location_id, catalogPartId,
-            line.authorityCutover.inventoryItemId, receiptId, line.id,
-            line.authorityCutover.previousSourceProvider,
-            line.authorityCutover.previousExternalId,
-            line.authorityCutover.previousQuantityOnHand,
-            line.authorityCutover.previousQuantityReserved,
-            line.authorityCutover.previousProviderUpdatedAt,
-            line.authorityCutover.previousLastSeenAt],
-        );
-      }
+      await recordInventoryAuthorityCutover(client, {
+        claim: line.authorityClaim,
+        companyId: source.company_id,
+        locationId: source.location_id,
+        catalogPartId,
+        receiptId,
+        receiptLineId: line.id,
+      });
       await client.query(
         `insert into inventory_stock_movements (
            company_id, location_id, catalog_part_id, receipt_id, receipt_line_id,

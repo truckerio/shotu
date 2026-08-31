@@ -48,6 +48,13 @@ test("company and location membership hide inaccessible workorders", async () =>
     requireWorkorderAccess(context("office", { locationIds: new Set(["location-b"]) }), workorder.id, { getWorkorder }),
     (error) => error.statusCode === 404,
   );
+  await assert.rejects(
+    requireWorkorderAccess(context("office", { locationIds: new Set() }), workorder.id, {
+      getWorkorder,
+      requireLocationMembership: true,
+    }),
+    (error) => error.statusCode === 404 && error.code === "RESOURCE_NOT_FOUND",
+  );
 });
 
 test("admin access is still limited to assigned companies", async () => {

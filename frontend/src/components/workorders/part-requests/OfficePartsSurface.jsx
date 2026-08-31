@@ -45,6 +45,7 @@ export function OfficePartsSurface({
     <>
       <UsedPartsSection
         actorId={actorId}
+        role="office"
         detail={detail}
         parts={parts}
         laborHours={laborHours}

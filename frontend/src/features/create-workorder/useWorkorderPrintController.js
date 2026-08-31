@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { workorderPhysicalPageCount } from "../../../../shared/workorder-template.js";
 import { interfaceText } from "../../i18n/index.js";
@@ -40,6 +40,29 @@ function positivePrintCount(value) {
   return Number.isFinite(count) && count > 0 ? count : 1;
 }
 
+export function printRequestIdentity({ actorId, workorderId, artifactKind, predecessorArchiveId, count, revisionReason }) {
+  const payload = `${actorId || "session"}:${workorderId}:${artifactKind}:${predecessorArchiveId || ""}:${count}:${revisionReason || ""}`;
+  let hash = 2166136261;
+  for (let index = 0; index < payload.length; index += 1) {
+    hash ^= payload.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${actorId || "session"}:${workorderId}:${artifactKind}:${predecessorArchiveId || ""}:${count}:${(hash >>> 0).toString(36)}`;
+}
+
+function printKeyStorageName(input) {
+  return ["workorder-print", printRequestIdentity(input)].join(":");
+}
+
+export function latestReadyWorkorderArchive(jobs, workorderId) {
+  return (Array.isArray(jobs) ? jobs : [])
+    .filter((job) => job?.workorderId === workorderId
+      && job.artifactKind === "original"
+      && job.status === "ready"
+      && job.downloadUrl)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0] || null;
+}
+
 export function buildPrintableWorkorderForm(form = {}) {
   const printableForm = {
     companyName: form.customerCompanyName,
@@ -79,6 +102,10 @@ export function createWorkorderPrintActions({
   setCreateState,
   setPrintMenuOpen,
   setPrintState,
+  getIdempotencyKey = () => `print-${crypto.randomUUID()}`,
+  findExistingArchive = null,
+  getKnownArchive = () => null,
+  onArchivePersisted = () => {},
   locale = "en",
 }) {
   if (typeof request !== "function") throw new TypeError("request must be a function");
@@ -86,7 +113,7 @@ export function createWorkorderPrintActions({
 
   const t = (key) => interfaceText(locale, key);
   return {
-    async printWorkorders() {
+    async printWorkorders({ artifactKind = "original", predecessorArchiveId = null, revisionReason = "" } = {}) {
       if (!activeWorkorderId) {
         setCreateState?.({
           busy: false,
@@ -96,12 +123,10 @@ export function createWorkorderPrintActions({
       }
 
       const count = positivePrintCount(effectiveCopies);
-      const printableForm = buildPrintableWorkorderForm(form);
       const pageCount = count * workorderPhysicalPageCount(form);
 
       try {
         setPrintMenuOpen(false);
-        await openPrintDialog({ form: printableForm, serials: previewSerials });
         setPrintState({
           open: true,
           stage: "archiving",
@@ -110,6 +135,24 @@ export function createWorkorderPrintActions({
           pageCount,
         });
 
+        const knownArchive = getKnownArchive();
+        if (artifactKind === "original" && !knownArchive?.canBrowserReprint && typeof findExistingArchive === "function") {
+          const existingArchive = await findExistingArchive();
+          if (existingArchive) {
+            onArchivePersisted(existingArchive, false);
+            setPrintState({
+              open: true,
+              stage: "done",
+              message: t("preview.existingArchiveReady"),
+              archive: existingArchive,
+              downloadUrl: existingArchive.downloadUrl,
+              range: existingArchive.workorderSerial || range,
+              pageCount: (existingArchive.copyCount || count) * workorderPhysicalPageCount(form),
+            });
+            return true;
+          }
+        }
+
         const result = await request("/api/print", {
           method: "POST",
           body: JSON.stringify({
@@ -117,16 +160,28 @@ export function createWorkorderPrintActions({
             locationId: form.locationId || activeWorkorderLocationId || null,
             companyName: form.customerCompanyName,
             count,
-            form: printableForm,
+            artifactKind,
+            predecessorArchiveId,
+            revisionReason,
+            idempotencyKey: getIdempotencyKey({ artifactKind, predecessorArchiveId, count, revisionReason }),
           }),
         });
         const serials = Array.isArray(result.serials) ? result.serials : [];
+        if (!result.printForm || serials.length === 0) {
+          throw new Error("The archived print snapshot is unavailable. Try again.");
+        }
+        const archivePrintForm = result.printForm;
+        // A later click uses the immutable archived download. Re-posting an edited form
+        // as an "original" would correctly conflict, but would be a misleading reprint UX.
+        onArchivePersisted(result.archive || null, false);
+        await openPrintDialog({ form: archivePrintForm, serials });
         const resolvedRange = printedSerialRange(serials, range);
         const resolvedPageCount = (serials.length || count)
-          * workorderPhysicalPageCount(result.printForm || printableForm);
+          * workorderPhysicalPageCount(archivePrintForm);
         const commonState = {
           open: true,
           downloadUrl: result.downloadUrl,
+          archive: result.archive || null,
           range: resolvedRange,
           pageCount: resolvedPageCount,
         };
@@ -168,10 +223,25 @@ export function useWorkorderPrintController({
   fontsReady,
   printBrowser,
   locale = "en",
+  actorId = "",
 }) {
   const [printState, setPrintState] = useState(INITIAL_PRINT_STATE);
   const [browserPrintPayload, setBrowserPrintPayload] = useState(null);
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
+  const idempotencyKeysRef = useRef(new Map());
+  const knownArchiveRef = useRef(null);
+  const getIdempotencyKey = useCallback(({ artifactKind, predecessorArchiveId, count, revisionReason }) => {
+    const identity = printRequestIdentity({ actorId, workorderId: activeWorkorderId, artifactKind, predecessorArchiveId, count, revisionReason });
+    if (!idempotencyKeysRef.current.has(identity)) {
+      const storageName = printKeyStorageName({ actorId, workorderId: activeWorkorderId, artifactKind, predecessorArchiveId, count, revisionReason });
+      let stored = "";
+      try { stored = window.sessionStorage.getItem(storageName) || ""; } catch { /* in-memory retry remains available */ }
+      const next = stored || `print-${crypto.randomUUID()}`;
+      try { window.sessionStorage.setItem(storageName, next); } catch { /* in-memory retry remains available */ }
+      idempotencyKeysRef.current.set(identity, next);
+    }
+    return idempotencyKeysRef.current.get(identity);
+  }, [actorId, activeWorkorderId]);
 
   const openPrintDialog = useCallback((payload) => openBrowserPrintDialog({
     payload,
@@ -180,6 +250,15 @@ export function useWorkorderPrintController({
     fontsReady,
     printBrowser,
   }), [fontsReady, printBrowser, scheduleFrame]);
+
+  const findExistingArchive = useCallback(async () => {
+    const result = await request(`/api/workorders/${encodeURIComponent(activeWorkorderId)}/print-archives?artifactKind=original`);
+    return result?.archive || null;
+  }, [activeWorkorderId, request]);
+
+  const onArchivePersisted = useCallback((archive, canBrowserReprint) => {
+    knownArchiveRef.current = archive ? { archive, canBrowserReprint } : null;
+  }, []);
 
   const actions = useMemo(() => createWorkorderPrintActions({
     activeWorkorderId,
@@ -193,6 +272,10 @@ export function useWorkorderPrintController({
     setCreateState,
     setPrintMenuOpen,
     setPrintState,
+    getIdempotencyKey,
+    findExistingArchive,
+    getKnownArchive: () => knownArchiveRef.current,
+    onArchivePersisted,
     locale,
   }), [
     activeWorkorderId,
@@ -203,7 +286,10 @@ export function useWorkorderPrintController({
     previewSerials,
     range,
     request,
+    getIdempotencyKey,
+    findExistingArchive,
     locale,
+    onArchivePersisted,
     setCreateState,
   ]);
 
@@ -216,6 +302,7 @@ export function useWorkorderPrintController({
     printMenuOpen,
     printState,
     printWorkorders: actions.printWorkorders,
+    printRevisedCopy: (predecessorArchiveId, revisionReason) => actions.printWorkorders({ artifactKind: "revised", predecessorArchiveId, revisionReason }),
     setPrintMenuOpen,
     setPrintState,
     togglePrintMenu,

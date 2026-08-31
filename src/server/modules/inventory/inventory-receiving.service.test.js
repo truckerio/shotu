@@ -34,7 +34,7 @@ function context(role = "office") {
   };
 }
 
-test("reviewed invoice waits for Odoo confirmation before returning encrypted labels", async () => {
+test.skip("legacy: reviewed invoice waits for Odoo confirmation before returning encrypted labels", async () => {
   let stagedInput;
   let providerContext;
   const result = await receiveReviewedInvoice(RUN_ID, { idempotencyKey: "receive-test-1" }, context(), {
@@ -101,7 +101,7 @@ test("reviewed invoice waits for Odoo confirmation before returning encrypted la
   assert.equal(result.receipt.units[0].scanUrl.includes("QA-QR-001"), false);
 });
 
-test("fractional invoice quantity is rejected before any provider write", async () => {
+test.skip("legacy: fractional invoice quantity is rejected before any provider write", async () => {
   let providerInspected = false;
   await assert.rejects(
     receiveReviewedInvoice(RUN_ID, { idempotencyKey: "receive-test-2" }, context(), {
@@ -123,7 +123,7 @@ test("fractional invoice quantity is rejected before any provider write", async 
   assert.equal(providerInspected, false);
 });
 
-test("receipt-wide serialized-unit cap rejects an RPC and database amplification attempt", async () => {
+test.skip("legacy: receipt-wide serialized-unit cap rejects an RPC and database amplification attempt", async () => {
   let staged = false;
   let providerInspected = false;
   await assert.rejects(
@@ -148,7 +148,7 @@ test("receipt-wide serialized-unit cap rejects an RPC and database amplification
   assert.equal(providerInspected, false);
 });
 
-test("QR configuration is preflighted before receipt staging or provider activity", async () => {
+test.skip("legacy: QR configuration is preflighted before receipt staging or provider activity", async () => {
   let staged = false;
   let providerInspected = false;
   let reconciled = false;
@@ -167,7 +167,7 @@ test("QR configuration is preflighted before receipt staging or provider activit
   assert.equal(reconciled, false);
 });
 
-test("a conflicting staged receipt stops before any provider write", async () => {
+test.skip("legacy: a conflicting staged receipt stops before any provider write", async () => {
   let providerInspected = false;
   let providerWritten = false;
   await assert.rejects(
@@ -194,6 +194,18 @@ test("a conflicting staged receipt stops before any provider write", async () =>
   );
   assert.equal(providerInspected, true);
   assert.equal(providerWritten, false);
+});
+
+test("legacy Odoo receipt ingress returns one stable retirement response without dependencies", async () => {
+  await assert.rejects(
+    receiveReviewedInvoice(RUN_ID, { idempotencyKey: "retired" }, context(), {
+      loadInvoice: async () => assert.fail("retired ingress must not load or mutate receipt state"),
+      ensureProviderReceipt: async () => assert.fail("retired ingress must not call Odoo"),
+    }),
+    (error) => error.code === "LEGACY_ODOO_RECEIPT_INGRESS_RETIRED"
+      && error.statusCode === 410
+      && error.message === "This Odoo receipt path is retired. Confirm delivery through the local inventory receipt workflow.",
+  );
 });
 
 test("scan resolution requires a valid token and location scope", async () => {

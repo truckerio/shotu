@@ -32,6 +32,11 @@ import {
   uploadInventoryCount,
 } from "./inventory-count-imports.service.js";
 import { updateInventoryPart } from "./inventory-part-details.service.js";
+import {
+  readInventoryAuthorityException,
+  readInventoryAuthorityExceptions,
+  resolveInventoryAuthorityException,
+} from "./inventory-authority-reconciliation.service.js";
 
 function inventoryDownloadDisposition(fileName) {
   const source = String(fileName || "inventory-count.xlsx").replace(/[\r\n]/g, "_");
@@ -84,6 +89,34 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
   try {
     if (req.method === "GET" && url.pathname === "/api/office/inventory/catalog") {
       helpers.sendJson(res, 200, await searchInventoryMasterParts(url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    if (req.method === "GET" && url.pathname === "/api/office/inventory/authority-exceptions") {
+      helpers.sendJson(res, 200, await readInventoryAuthorityExceptions(url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    const authorityExceptionId = pathId(url.pathname, /^\/api\/office\/inventory\/authority-exceptions\/([^/]+)$/);
+    if (req.method === "GET" && authorityExceptionId) {
+      helpers.sendJson(res, 200, await readInventoryAuthorityException(authorityExceptionId, helpers.requestContext, dependencies));
+      return true;
+    }
+    const resolveAuthorityExceptionId = pathId(url.pathname, /^\/api\/office\/inventory\/authority-exceptions\/([^/]+)\/resolve$/);
+    if (req.method === "POST" && resolveAuthorityExceptionId) {
+      const result = await resolveInventoryAuthorityException(
+        resolveAuthorityExceptionId,
+        await helpers.readBody(req),
+        helpers.requestContext,
+        dependencies,
+      );
+      await emitInventoryAudit(helpers, {
+        type: "inventory_authority_exception_acknowledged",
+        requestId: req.requestId || null,
+        actorId: helpers.requestContext.actor.id,
+        exceptionId: resolveAuthorityExceptionId,
+        outcome: result.outcome,
+        replayed: result.replayed,
+      });
+      helpers.sendJson(res, 200, result);
       return true;
     }
     if (req.method === "POST" && url.pathname === "/api/office/inventory/count-imports") {

@@ -100,6 +100,22 @@ const usedPartQuantitySchema = z.union([
     .refine((value) => Number(value) > 0 && Number(value) <= MAX_QUANTITY, "Quantity is outside the supported range."),
 ]);
 
+const manualUsedPartValueSchema = z.object({
+  partNo: z.string().trim().max(200).default(""),
+  qty: usedPartQuantitySchema.refine((value) => value !== "", "Corrected quantity is required."),
+  uomCode: uomCodeSchema,
+  repairOrder: z.string().trim().max(2000).default(""),
+}).strict().superRefine((part, context) => {
+  if (part.qty === "") return;
+  validateQuantityUnit({
+    qty: Number(part.qty),
+    uomCode: part.uomCode,
+  }, context, ["qty"]);
+}).transform((part) => ({
+  ...part,
+  qty: part.qty === "" ? "" : String(Number(part.qty)),
+}));
+
 export const updateMechanicUsedPartsSchema = z.object({
   laborHours: z.union([
     z.literal(""),
@@ -109,6 +125,7 @@ export const updateMechanicUsedPartsSchema = z.object({
       .refine((value) => Number(value) > 0 && Number(value) <= 9999, "Labor hours must be greater than zero and within the supported range."),
   ]).optional().transform((value) => value === undefined || value === "" ? value : String(Number(value))),
   parts: z.array(z.object({
+    evidenceId: z.string().uuid().optional(),
     partNo: z.string().trim().max(200).default(""),
     qty: usedPartQuantitySchema.default(""),
     uomCode: uomCodeSchema,
@@ -123,6 +140,22 @@ export const updateMechanicUsedPartsSchema = z.object({
     ...part,
     qty: part.qty === "" ? "" : String(Number(part.qty)),
   }))).max(18, "A workorder can contain at most 18 used-part rows."),
+});
+
+export const amendLegacyManualPartEvidenceSchema = z.object({
+  operation: z.literal("legacyManualPartAmendment"),
+  evidenceId: z.string().uuid(),
+  action: z.enum(["corrected", "voided"]),
+  replacementPart: manualUsedPartValueSchema.optional(),
+  reason: z.string().trim().min(2, "Amendment reason is required.").max(1000),
+  idempotencyKey: z.string().trim().min(8).max(160),
+}).strict().superRefine((value, context) => {
+  if (value.action === "corrected" && !value.replacementPart) {
+    context.addIssue({ code: "custom", path: ["replacementPart"], message: "A corrected part value is required." });
+  }
+  if (value.action === "voided" && value.replacementPart) {
+    context.addIssue({ code: "custom", path: ["replacementPart"], message: "A void amendment cannot include replacement values." });
+  }
 });
 
 export const markDoneSchema = z.object({

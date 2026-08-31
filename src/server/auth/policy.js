@@ -22,6 +22,7 @@ export function permissionForRequest(method, pathname) {
   if (pathname.startsWith("/api/surveillance/")) return PERMISSION.WORKORDER_SURVEILLANCE;
   if (pathname === "/api/workorders" && method === "POST") return PERMISSION.AUTHENTICATED;
   if (pathname === "/api/workorders/create-context" && method === "GET") return PERMISSION.AUTHENTICATED;
+  if (method === "GET" && /^\/api\/workorders\/[^/]+\/print-archives$/.test(pathname)) return PERMISSION.PRINT_MANAGE;
   if (pathname === "/api/parts-helper/live-prices") return PERMISSION.PART_PRICE;
   if (pathname.startsWith("/api/parts-helper/")) return PERMISSION.PART_IDENTIFY;
   if (pathname.startsWith("/api/vehicles/")) return pathname.endsWith("/live-location")

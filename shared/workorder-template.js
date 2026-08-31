@@ -336,6 +336,21 @@ export const workorderTemplateStyles = `
   border-right: 0;
 }
 
+.wo-part-identity {
+  align-items: flex-start !important;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.wo-part-serial {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.wo-part-pending { display: block; color: #b54708; font-size: 9px; font-weight: 700; }
+
 .wo-part-head > div {
   font-weight: 800;
 }
@@ -481,7 +496,7 @@ export function renderWorkorderPageHtml(form, serial, {
             (row, index) => `
               <div class="wo-part-row">
                 <div>${rowOffset + index + 1}</div>
-                <div>${escapeHtml(row.partNo)}</div>
+                <div class="wo-part-identity"><span>${escapeHtml(row.partNo)}</span>${row.serialNumber ? `<small class="wo-part-serial">Serial: ${escapeHtml(row.serialNumber)}</small>` : ""}${row.pendingApproval ? '<small class="wo-part-pending">Pending Office approval</small>' : ""}</div>
                 <div>${escapeHtml(row.qty ? formatQuantity(row.qty, normalizeUomCode(row.uomCode)) : "")}</div>
                 <div>${escapeHtml(row.repairOrder)}</div>
               </div>

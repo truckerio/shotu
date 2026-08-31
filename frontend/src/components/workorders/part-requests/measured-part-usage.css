@@ -1,0 +1,21 @@
+.measured-part-dialog-overlay { align-items: center; background: rgb(12 17 29 / 58%); display: flex; inset: 0; justify-content: center; padding: 16px; position: fixed; z-index: 130; }
+.measured-part-dialog-modal { width: min(100%, 460px); }
+.measured-part-dialog { background: #fff; border-radius: 12px; display: grid; gap: 16px; max-height: calc(100dvh - 32px); overflow: auto; padding: 20px; }
+.measured-part-dialog header { align-items: start; display: flex; justify-content: space-between; gap: 12px; }
+.measured-part-dialog header p, .measured-part-dialog header h2, .measured-part-dialog header span { margin: 0; }
+.measured-part-dialog header p, .measured-part-dialog header span { color: #667085; font-size: 13px; }
+.measured-part-dialog header button { min-height: 44px; min-width: 44px; }
+.measured-part-dialog form { display: grid; gap: 12px; }
+.measured-part-dialog label { color: #344054; display: grid; font-weight: 700; gap: 6px; }
+.measured-part-dialog input, .measured-part-dialog textarea { border: 1px solid #98a2b3; border-radius: 8px; box-sizing: border-box; font: inherit; min-height: 44px; padding: 10px 12px; width: 100%; }
+.measured-part-dialog textarea { min-height: 84px; resize: vertical; }
+.measured-part-dialog footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.measured-part-dialog footer .button { min-height: 44px; }
+.measured-part-message { color: #b42318; margin: 0; }
+.aggregate-part-usages { display: grid; gap: 8px; }
+.used-parts-editor .used-part-aggregate-row { align-items: start; background: #f9fafb; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding: 10px 12px; }
+.used-part-aggregate-row > div:first-child { display: grid; gap: 2px; }
+.used-part-aggregate-row small { color: #667085; }
+.aggregate-part-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.aggregate-part-actions .button { min-height: 44px; }
+@media (max-width: 420px) { .measured-part-dialog { padding: 16px; } .measured-part-dialog footer .button { flex: 1 1 120px; } .aggregate-part-actions { width: 100%; } .aggregate-part-actions .button { flex: 1 1 130px; } }

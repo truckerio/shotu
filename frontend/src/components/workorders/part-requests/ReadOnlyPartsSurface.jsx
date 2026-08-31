@@ -3,6 +3,7 @@ import { UsedPartsSection } from "./UsedPartsSection.jsx";
 
 export function ReadOnlyPartsSurface({
   actorId,
+  role = "read",
   detail,
   parts,
   laborHours,
@@ -25,6 +26,7 @@ export function ReadOnlyPartsSurface({
     <>
       <UsedPartsSection
         actorId={actorId}
+        role={role}
         detail={detail}
         parts={parts}
         laborHours={laborHours}

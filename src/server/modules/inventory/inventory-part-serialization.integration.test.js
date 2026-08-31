@@ -22,6 +22,7 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
   const locationId = randomUUID();
   const emptyLocationId = randomUUID();
   const partId = randomUUID();
+  const staleWorkorderId = randomUUID();
   const idempotencyKey = `serialize-${suffix}`;
   try {
     await query("insert into user_profiles (id, display_name) values ($1,$2)", [actorId, `Serialization ${suffix}`]);
@@ -36,12 +37,35 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
       [partId, companyId, `SERIAL${suffix}`, `SERIAL-${suffix}`],
     );
     await query(
+      `insert into operational_workorders (id, company_id, serial, location_id, status)
+       values ($1,$2,$3,$4,'mechanic_done')`,
+      [staleWorkorderId, companyId, `WO-SERIAL-${suffix}`, locationId],
+    );
+    await query(
       `insert into odoo_inventory_balances (
          company_id, location_id, catalog_part_id, normalized_part_number,
          part_number, description, uom_code, quantity_on_hand, external_id
        ) values ($1,$2,$3,$4,$5,'Serialized integration part','ea',4,$6)`,
       [companyId, locationId, partId, `SERIAL${suffix}`, `SERIAL-${suffix}`, `odoo-${suffix}`],
     );
+
+    const stale = await createPartSerializedUnits({
+      workorderId: staleWorkorderId,
+      catalogPartId: partId,
+      locationId,
+      quantity: 1,
+      confirmation: "physically_present_at_location",
+      idempotencyKey: `stale-${suffix}`,
+      actorId,
+      companyIds: [companyId],
+      locationIds: [locationId],
+    });
+    assert.equal(stale.kind, "workorder_state");
+    const staleEvidence = await query(
+      "select count(*)::integer as batches from inventory_serialization_batches where company_id=$1",
+      [companyId],
+    );
+    assert.equal(staleEvidence.rows[0].batches, 0);
 
     const command = () => createPartSerializedUnits({
       catalogPartId: partId,
@@ -138,6 +162,7 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
     await query("delete from inventory_items where company_id=$1", [companyId]).catch(() => {});
     await query("delete from odoo_inventory_balances where company_id=$1", [companyId]).catch(() => {});
     await query("delete from parts_catalog where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from operational_workorders where company_id=$1", [companyId]).catch(() => {});
     await query("delete from locations where company_id=$1", [companyId]).catch(() => {});
     await query("delete from companies where id=$1", [companyId]).catch(() => {});
     await query("delete from user_profiles where id=$1", [actorId]).catch(() => {});

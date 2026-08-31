@@ -2,11 +2,32 @@ import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import { renderWorkorderDocument } from "./shared/workorder-template.js";
+import {
+  listOfficialWorkorderInventoryParts,
+  mergeOfficialWorkorderParts,
+} from "./src/server/print/workorder-print-projection.js";
+import {
+  applyManualPartEvidence,
+  listWorkorderManualPartEvidence,
+} from "./src/server/db/repositories/workorder-manual-part-evidence.repo.js";
+import {
+  canReadArchiveJob,
+  safeArchiveJob,
+  safeArchiveShare,
+  scopeArchiveLedger,
+} from "./src/server/print/archive-scope.js";
+import {
+  containedStoragePath,
+  createArchivedWorkorderPrint,
+  findArchivedPrintForWorkorder,
+  listArchivedPrints,
+  readArchivedPdf,
+} from "./src/server/print/workorder-print-archive.service.js";
 import { handleConfigApi } from "./src/server/routes/config.routes.js";
 import { handleAdminApi } from "./src/server/routes/admin.routes.js";
 import { handleIntegrationsApi } from "./src/server/routes/integrations.routes.js";
@@ -114,13 +135,18 @@ function sendText(res, status, body) {
 
 async function sendPdfDownload(res, filePath, fileName) {
   const resolvedPath = resolve(filePath);
-  if (!resolvedPath.startsWith(resolve(outputDir)) || !existsSync(resolvedPath)) {
+  const storageKey = relative(resolve(outputDir), resolvedPath);
+  if (!containedStoragePath(outputDir, storageKey) || !existsSync(resolvedPath)) {
     sendJson(res, 404, { error: "PDF not found." });
     return;
   }
 
   const body = await readFile(resolvedPath);
-  const safeName = sanitizeFileName(fileName || basename(resolvedPath));
+  sendPdfBytes(res, body, fileName || basename(resolvedPath));
+}
+
+function sendPdfBytes(res, body, fileName) {
+  const safeName = sanitizeFileName(fileName || "workorder.pdf");
   res.writeHead(200, {
     "content-type": "application/pdf",
     "content-length": Buffer.byteLength(body),
@@ -247,7 +273,7 @@ function addActivity(ledger, type, details) {
   ledger.activity = ledger.activity.slice(0, 1000);
 }
 
-function publicWorkorder(workorder) {
+function publicWorkorder(workorder, { includeStoragePath = false } = {}) {
   return {
     id: workorder.id,
     serial: workorder.serial,
@@ -259,7 +285,7 @@ function publicWorkorder(workorder) {
     uploadedAt: workorder.uploadedAt || null,
     uploadedBy: workorder.uploadedBy || "",
     originalFileName: workorder.originalFileName || "",
-    uploadedFilePath: workorder.uploadedFilePath || "",
+    ...(includeStoragePath ? { uploadedFilePath: workorder.uploadedFilePath || "" } : {}),
     status: workorder.uploadedAt ? "uploaded" : "waiting_upload",
     lastSharedAt: workorder.lastSharedAt || null,
     lastSharedTo: workorder.lastSharedTo || "",
@@ -267,7 +293,7 @@ function publicWorkorder(workorder) {
   };
 }
 
-function operationalWorkorderPrintForm(workorder) {
+async function operationalWorkorderPrintForm(workorder) {
   const saved = workorder.formData || {};
   const asset = workorder.asset || {};
   const mechanicName = workorder.mechanics?.map((mechanic) => mechanic.name).filter(Boolean).join(", ")
@@ -276,6 +302,22 @@ function operationalWorkorderPrintForm(workorder) {
     || "";
   const model = [asset.year, asset.make, asset.model].filter(Boolean).join(" ");
 
+  const { serializedParts, aggregateParts } = workorder.locationId
+    ? await listOfficialWorkorderInventoryParts({
+      workorderId: workorder.id,
+      companyId: workorder.companyId,
+      locationId: workorder.locationId,
+    })
+    : { serializedParts: [], aggregateParts: [] };
+  const manualEvidence = workorder.locationId
+    ? await listWorkorderManualPartEvidence({
+      workorderId: workorder.id,
+      companyId: workorder.companyId,
+      locationId: workorder.locationId,
+      limit: 100,
+    })
+    : [];
+  const manualParts = applyManualPartEvidence(saved.parts, manualEvidence);
   return {
     ...saved,
     companyName: saved.companyName || workorder.location?.name || "",
@@ -288,7 +330,7 @@ function operationalWorkorderPrintForm(workorder) {
     mechanicConcern: saved.mechanicConcern || workorder.concern || "",
     mechanicName,
     officeNotes: workorder.officeNotes || saved.officeNotes || "",
-    parts: Array.isArray(saved.parts) ? saved.parts : [],
+    parts: mergeOfficialWorkorderParts(manualParts, serializedParts, aggregateParts),
   };
 }
 
@@ -474,8 +516,11 @@ async function writeWorkorderPdf(form, company, job, serials) {
   const companyDir = join(outputDir, sanitizeFileName(company.name));
   await mkdir(companyDir, { recursive: true });
   const serialRange = serials.length === 1 ? serials[0] : `${serials[0]}_to_${serials.at(-1)}`;
-  const filePath = join(companyDir, `${date}_${sanitizeFileName(serialRange)}_${job.id.slice(0, 8)}.pdf`);
-  const htmlPath = join(tempDir, `${job.id}.html`);
+  const artifactKey = job.artifactKey
+    ? sanitizeFileName(job.artifactKey).slice(0, 96)
+    : job.id.slice(0, 8);
+  const filePath = join(companyDir, `${date}_${sanitizeFileName(serialRange)}_${artifactKey}.pdf`);
+  const htmlPath = join(tempDir, `${artifactKey}.html`);
   await writeFile(htmlPath, renderWorkorderDocument(form, serials));
   try {
     await renderHtmlToPdf(htmlPath, filePath);
@@ -493,7 +538,7 @@ function dateInRange(value, from, to) {
   return true;
 }
 
-function filteredWorkorders(ledger, query) {
+function filteredWorkorders(ledger, query, options = {}) {
   const from = query.get("from") || "";
   const to = query.get("to") || "";
   const companyId = query.get("companyId") || "";
@@ -512,7 +557,7 @@ function filteredWorkorders(ledger, query) {
       return dateInRange(workorder[dateField], from, to);
     })
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return rows.map(publicWorkorder);
+  return rows.map((workorder) => publicWorkorder(workorder, options));
 }
 
 function decodeBase64File(dataUrl) {
@@ -521,7 +566,7 @@ function decodeBase64File(dataUrl) {
   return { mimeType: match[1], buffer: Buffer.from(match[2], "base64") };
 }
 
-async function uploadWorkorder(input) {
+async function uploadWorkorder(input, requestContext) {
   return withLedgerLock(async () => {
     const serial = String(input.serial || "").trim();
     if (!serial) throw new Error("Serial number required.");
@@ -529,6 +574,7 @@ async function uploadWorkorder(input) {
     const ledger = normalizeLedger(await loadLedger());
     const workorder = ledger.workorders[serial];
     if (!workorder) throw new Error(`Serial ${serial} was not generated by this app.`);
+    if (!scopeArchiveLedger(ledger, requestContext).workorders[serial]) throw resourceNotFound("Workorder");
 
     const now = new Date().toISOString();
     const companyDir = join(uploadDir, sanitizeFileName(workorder.companyName));
@@ -564,9 +610,10 @@ async function uploadWorkorder(input) {
   });
 }
 
-async function createShare(input) {
+async function createShare(input, requestContext) {
   return withLedgerLock(async () => {
     const ledger = normalizeLedger(await loadLedger());
+    const scopedLedger = scopeArchiveLedger(ledger, requestContext);
     const from = String(input.from || "").slice(0, 10);
     const to = String(input.to || "").slice(0, 10);
     const recipients = String(input.recipients || "").trim();
@@ -580,8 +627,10 @@ async function createShare(input) {
       dateField: input.dateField === "uploadedAt" ? "uploadedAt" : "createdAt",
     });
     if (input.companyId) query.set("companyId", input.companyId);
-    const rows = filteredWorkorders(ledger, query);
+    const rows = filteredWorkorders(scopedLedger, query, { includeStoragePath: true });
     if (!rows.length) throw new Error("No uploaded workorders found in this date range.");
+    const shareCompanyIds = [...new Set(rows.map((row) => row.companyId).filter(Boolean))];
+    if (shareCompanyIds.length !== 1) throw invalidRequest("Share one company at a time.");
 
     const now = new Date().toISOString();
     const shareId = crypto.randomUUID();
@@ -613,7 +662,7 @@ async function createShare(input) {
       from,
       to,
       dateField: input.dateField === "uploadedAt" ? "uploadedAt" : "createdAt",
-      companyId: input.companyId || "",
+      companyId: shareCompanyIds[0],
       recipients,
       note: String(input.note || "").trim(),
       serials: rows.map((row) => row.serial),
@@ -763,20 +812,34 @@ async function handleApi(req, res) {
   if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;
   if (await handleWorkorderPreferencesApi(req, res, url, helpers)) return;
 
+  const printArchiveLookupMatch = /^\/api\/workorders\/([^/]+)\/print-archives$/.exec(url.pathname);
+  if (req.method === "GET" && printArchiveLookupMatch) {
+    const workorderId = decodeURIComponent(printArchiveLookupMatch[1]);
+    const artifactKind = url.searchParams.get("artifactKind") || "original";
+    const archive = await findArchivedPrintForWorkorder(workorderId, artifactKind, requestContext, {
+      requireWorkorderAccess,
+    });
+    sendJson(res, 200, { archive });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/state") {
-    const ledger = normalizeLedger(await loadLedger());
+    const ledger = scopeArchiveLedger(normalizeLedger(await loadLedger()), requestContext);
+    const archivedPrints = await listArchivedPrints(requestContext);
     sendJson(res, 200, {
-      companies: Object.values(ledger.companies).map(companyView),
+      companies: Object.values(ledger.companies).filter((company) => requestContext.companyIds?.has(company.id)).map(companyView),
       workorders: filteredWorkorders(ledger, url.searchParams),
-      jobs: ledger.jobs.slice(0, 50),
-      shares: ledger.shares.slice(0, 50),
+      jobs: [...archivedPrints, ...ledger.jobs.slice(0, 50).map(safeArchiveJob)]
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .slice(0, 50),
+      shares: ledger.shares.slice(0, 50).map(safeArchiveShare),
       activity: ledger.activity.slice(0, 100),
     });
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/workorders") {
-    const ledger = normalizeLedger(await loadLedger());
+    const ledger = scopeArchiveLedger(normalizeLedger(await loadLedger()), requestContext);
     sendJson(res, 200, { workorders: filteredWorkorders(ledger, url.searchParams) });
     return;
   }
@@ -789,14 +852,25 @@ async function handleApi(req, res) {
 
   const pdfMatch = /^\/api\/jobs\/([^/]+)\/pdf$/.exec(url.pathname);
   if (req.method === "GET" && pdfMatch) {
-    const ledger = normalizeLedger(await loadLedger());
     const jobId = decodeURIComponent(pdfMatch[1]);
+    try {
+      const archived = await readArchivedPdf(jobId, requestContext, {
+        outputDir,
+        readFile,
+        requireWorkorderAccess,
+      });
+      sendPdfBytes(res, archived.bytes, archived.fileName);
+      return;
+    } catch (error) {
+      if (!(error instanceof AuthError && error.statusCode === 404)) throw error;
+    }
+    const ledger = normalizeLedger(await loadLedger());
     const job = ledger.jobs.find((entry) => entry.id === jobId);
     if (!job?.pdfPath) {
       sendJson(res, 404, { error: "PDF not found for this print job." });
       return;
     }
-    if (!requestContext.companyIds?.has(job.companyId)) throw resourceNotFound("Print job");
+    if (!canReadArchiveJob(requestContext, job)) throw resourceNotFound("Print job");
     if (job.workorderId) {
       await requireWorkorderAccess(requestContext, job.workorderId);
     } else if (job.locationId && requestContext.actor.role !== "admin" && !requestContext.locationIds?.has(job.locationId)) {
@@ -825,42 +899,41 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/print") {
     const input = await readBody(req);
-    if (!input.workorderId) throw invalidRequest("Create the workorder before printing.");
-    const workorder = await requireWorkorderAccess(requestContext, input.workorderId);
-    const selected = { companyId: workorder.companyId, location: workorder.location || null };
-    const form = operationalWorkorderPrintForm(workorder);
-    const settings = await getWorkorderSerialSettings(workorder.companyId);
-    const reservation = { ...settings, serials: [workorder.serial] };
-    const allocation = await recordSerialAllocation({
-      ...input,
-      ...form,
-      companyId: selected.companyId,
-      companyName: selected.location?.name || form.companyName,
-      locationId: selected.location?.id || input.locationId || null,
-    }, reservation);
-    const pdfPath = await writeWorkorderPdf(form, allocation.company, allocation.job, allocation.serials);
-    await markPdfGenerated(allocation.job.id, pdfPath);
+    const result = await createArchivedWorkorderPrint(input, requestContext, {
+      outputDir,
+      readFile,
+      requireWorkorderAccess,
+      buildPrintForm: operationalWorkorderPrintForm,
+      writePdf: (form, workorder, archive, copyCount) => writeWorkorderPdf(
+        form,
+        { name: workorder.location?.name || form.companyName || "Workorders" },
+        { ...archive, artifactKey: `${archive.id}-${archive.leaseToken}` },
+        Array.from({ length: copyCount }, () => workorder.serial),
+      ),
+    });
+    const settings = await getWorkorderSerialSettings(result.archive.companyId);
 
     sendJson(res, 200, {
       ok: true,
-      status: "generated",
-      message: "PDF generated and saved. Open it to print with your browser.",
-      jobId: allocation.job.id,
-      serials: allocation.serials,
-      nextNumber: allocation.company.nextNumber,
-      downloadUrl: `/api/jobs/${encodeURIComponent(allocation.job.id)}/pdf`,
-      printForm: form,
+      status: result.replayed ? "existing" : "generated",
+      message: result.replayed ? "Existing immutable PDF archive returned." : "PDF generated and archived. Open it to print with your browser.",
+      jobId: result.archive.id,
+      archive: result.archive,
+      serials: Array.from({ length: result.archive.snapshot.copyCount }, () => result.archive.workorderSerial),
+      nextNumber: settings.nextNumber,
+      downloadUrl: `/api/jobs/${encodeURIComponent(result.archive.id)}/pdf`,
+      printForm: result.form,
     });
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/upload") {
-    sendJson(res, 200, await uploadWorkorder(await readBody(req)));
+    sendJson(res, 200, await uploadWorkorder(await readBody(req), requestContext));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/share") {
-    sendJson(res, 200, await createShare(await readBody(req)));
+    sendJson(res, 200, await createShare(await readBody(req), requestContext));
     return;
   }
 

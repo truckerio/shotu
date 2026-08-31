@@ -33,8 +33,9 @@ test("local serial migration extends the canonical QR identity tables and backfi
   assert.match(sql, /on conflict \(company_id, receipt_line_id, unit_ordinal\) do nothing/i);
 });
 
-test("local posting serializes invoice creation while Odoo sync writes its separate projection", async () => {
+test("local posting serializes invoice creation while Odoo sync remains catalog-only", async () => {
   const repository = await readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8");
+  const authorityRepository = await readFile(new URL("../../db/repositories/inventory-authority.repo.js", import.meta.url), "utf8");
   const genericTracking = await readFile(new URL("../../db/migrations/080_inventory_receipt_line_tracking.sql", import.meta.url), "utf8");
   const odoo = await readFile(new URL("../../integrations/odoo/odoo.admin.repo.js", import.meta.url), "utf8");
   assert.match(repository, /pg_advisory_xact_lock\(hashtext\(\$1\)\)/);
@@ -46,8 +47,8 @@ test("local posting serializes invoice creation while Odoo sync writes its separ
   assert.match(repository, /when inventory_items\.source_provider = 'local'[\s\S]*inventory_items\.quantity_on_hand \+ excluded\.quantity_on_hand[\s\S]*else excluded\.quantity_on_hand/);
   assert.match(repository, /when inventory_items\.source_provider = 'local'[\s\S]*inventory_items\.quantity_reserved[\s\S]*else 0/);
   assert.match(repository, /inventory_items\.source_provider = 'local'[\s\S]*or inventory_items\.quantity_reserved = 0/);
-  assert.match(repository, /insert into inventory_authority_cutovers/);
-  assert.match(repository, /from inventory_items[\s\S]*where company_id = \$1 and location_id = \$2\s+and normalized_part_number = \$3 and uom_code = \$4\s+limit 1 for update/);
+  assert.match(repository, /recordInventoryAuthorityCutover\(client, \{/);
+  assert.match(authorityRepository, /from inventory_items[\s\S]*where company_id = \$1 and location_id = \$2[\s\S]*for update/);
   assert.match(repository, /local_inventory_receipts_company_id_created_by_idempotency__key/);
   assert.match(repository, /inventory_receipts_company_id_invoice_run_id_key/);
   assert.match(genericTracking, /tracking_mode in \('serial', 'aggregate'\)/i);
@@ -56,7 +57,11 @@ test("local posting serializes invoice creation while Odoo sync writes its separ
   const movementInsert = repository.indexOf("insert into inventory_stock_movements");
   assert.ok(canonicalLineInsert > -1 && canonicalLineInsert < movementInsert,
     "canonical receipt line must exist before its movement FK is inserted");
-  assert.match(odoo, /insert into odoo_inventory_balances/);
+  const importer = odoo.slice(odoo.indexOf("export async function importOdooInventory"));
+  assert.doesNotMatch(importer, /insert into odoo_inventory_balances|update odoo_inventory_balances|insert into inventory_items/);
+  assert.match(importer, /insert into odoo_product_mappings/);
+  assert.doesNotMatch(importer, /update odoo_product_mappings[\s\S]*set active = false/);
+  assert.match(importer, /active = excluded\.active/);
 });
 
 test("invoice detail projects durable local receipt truth after refresh", async () => {
@@ -87,7 +92,7 @@ test("physical receipt confirmation and immutable label manifests are additive i
   assert.doesNotMatch(sql, /update inventory_label_batch_items/i);
 });
 
-test("migration 082 separates Odoo reference balances from application inventory", async () => {
+test("migration 082 preserves legacy Odoo reference balances while current sync is catalog-only", async () => {
   const sql = await readFile(new URL("../../db/migrations/082_separate_odoo_and_serialized_local_inventory.sql", import.meta.url), "utf8");
   const odoo = await readFile(new URL("../../integrations/odoo/odoo.admin.repo.js", import.meta.url), "utf8");
   const local = await readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8");
@@ -97,8 +102,9 @@ test("migration 082 separates Odoo reference balances from application inventory
   assert.match(sql, /quantity_on_hand = quantity_reserved/i);
   assert.match(sql, /create table inventory_serialization_batches/i);
   assert.match(sql, /'local_serialization'/i);
-  assert.match(odoo, /insert into odoo_inventory_balances/i);
-  assert.doesNotMatch(odoo.slice(odoo.indexOf("export async function importOdooInventory")), /insert into inventory_items/i);
+  const importer = odoo.slice(odoo.indexOf("export async function importOdooInventory"));
+  assert.doesNotMatch(importer, /insert into odoo_inventory_balances|update odoo_inventory_balances|insert into inventory_items/i);
+  assert.match(importer, /insert into odoo_product_mappings/i);
   assert.match(local, /item\.source_provider = 'local'/i);
   assert.match(local, /odooQuantityOnHand: Number/i);
   assert.match(local, /join locations catalog_location[\s\S]*catalog_location\.active = true/i);

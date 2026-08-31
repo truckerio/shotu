@@ -87,6 +87,18 @@ test("used parts preserve valid units and default old rows to piece", () => {
   ]);
 });
 
+test("aggregate evidence appears once in the preview and preserves legacy manual evidence", () => {
+  const preview = workorderPreviewParts([
+    { partNo: "COOLANT", qty: "2", uomCode: "gal", repairOrder: "Top off", evidenceId: "evidence-1" },
+    { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" },
+  ], [], [{ partNo: "COOLANT", qty: "2", uomCode: "gal", repairOrder: "Top off", evidenceId: "evidence-1" }]);
+  assert.deepEqual(preview, [
+    { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" },
+    { partNo: "COOLANT", qty: "2", uomCode: "gal", repairOrder: "Top off" },
+  ]);
+  assert.equal(normalizeUsedParts([{ partNo: "COOLANT", qty: "2", evidenceId: "legacy-1" }])[0].evidenceId, "legacy-1");
+});
+
 test("installed serialized parts become immutable display rows and preview parts", () => {
   const detail = {
     modules: {
@@ -165,7 +177,7 @@ test("refreshed serialized summaries add one immutable row then remove it withou
     repairOrder: "Fuel level sensor",
   }]);
   assert.deepEqual(workorderPreviewParts(manualParts, installedRows), [
-    { partNo: "0000000002211", qty: "1", uomCode: "ea", repairOrder: "Fuel level sensor" },
+    { partNo: "0000000002211", qty: "1", uomCode: "ea", serialNumber: "WG-S-F06752C6AA1D48E7-1", repairOrder: "Fuel level sensor" },
     { partNo: "FUEL", qty: "1", uomCode: "gal", repairOrder: "Refilled" },
   ]);
 

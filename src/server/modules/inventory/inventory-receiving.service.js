@@ -11,9 +11,6 @@ import {
   markInventoryReceiptReconciliation,
   stageInventoryReceipt,
 } from "../../db/repositories/inventory-receipts.repo.js";
-import { readOdooConfiguration } from "../../integrations/odoo/odoo.admin.repo.js";
-import { createOdooClient } from "../../integrations/odoo/odoo.client.js";
-import { ensureOdooSerializedReceipt, inspectOdooReceipt } from "../../integrations/odoo/odoo.receipts.js";
 import { normalizePartNumber } from "../parts/part.constants.js";
 import { invoiceDraftSchema } from "../invoice-extraction/invoice-extraction.schemas.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
@@ -146,6 +143,12 @@ function providerContextFromReceipt(receipt, inspection) {
 }
 
 export async function receiveReviewedInvoice(runId, input, requestContext, dependencies = {}) {
+  throw publicError(
+    "LEGACY_ODOO_RECEIPT_INGRESS_RETIRED",
+    "This Odoo receipt path is retired. Confirm delivery through the local inventory receipt workflow.",
+    410,
+  );
+  /* c8 ignore start -- retained temporarily as historical recovery logic; unreachable by contract. */
   const parsed = receiveInvoiceSchema.parse(input);
   assertInventoryQrConfigured(dependencies.qrOptions);
   const scope = actorScope(requestContext);
@@ -260,6 +263,7 @@ export async function receiveReviewedInvoice(runId, input, requestContext, depen
     throw publicError("ODOO_RECEIPT_RECONCILIATION_REQUIRED", "Odoo receipt status is uncertain. Reconcile it before retrying.", 502, true);
   }
   return { receipt: withInventoryLabels(confirmed, dependencies.qrOptions), replayed: !staged.inserted };
+  /* c8 ignore stop */
 }
 
 export async function readInventoryReceiptLabels(receiptId, requestContext, dependencies = {}) {

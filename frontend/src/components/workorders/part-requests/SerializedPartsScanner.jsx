@@ -271,6 +271,15 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
     setFocusUsageId(usageId);
   }
 
+  async function recordUsage(usage) {
+    if (!usage?.id) return;
+    usageRevisionRef.current += 1;
+    setUsages((current) => replaceUsage(current, usage));
+    setUsageSnapshotReady(true);
+    setFocusUsageId(usage.id);
+    await onChanged?.();
+  }
+
   function openScanner() {
     setScannerOpen(true);
     setMessage("");
@@ -433,6 +442,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
           requestRemove: (usageId) => setRemoveConfirmationId(usageId),
           cancelRemove: () => setRemoveConfirmationId(""),
           removeFromUnit,
+          recordUsage,
           removeConfirmationId,
         })}
       </>

@@ -156,14 +156,21 @@ test("opening-count apply rejects office role before any repository write", asyn
   assert.equal(wrote, false);
 });
 
-test("opening-count apply blocks Odoo authority", async () => {
+test("opening-count apply exposes legacy reservation and identity reconciliation errors", async () => {
   const admin = context({ actor: { role: "admin" } });
   const qrOptions = { signingKey: Buffer.alloc(32, 4).toString("base64") };
   await assert.rejects(
     confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, admin, {
       qrOptions,
-      applyImport: async () => ({ kind: "odoo_authority_conflict", sourceRow: 8 }),
+      applyImport: async () => ({ kind: "authority_conflict", sourceRow: 8 }),
     }),
-    (error) => error.code === "INVENTORY_COUNT_ODOO_AUTHORITY_CONFLICT" && /Odoo-managed/.test(error.message),
+    (error) => error.code === "INVENTORY_COUNT_AUTHORITY_CONFLICT" && /reservation/i.test(error.message),
+  );
+  await assert.rejects(
+    confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, admin, {
+      qrOptions,
+      applyImport: async () => ({ kind: "authority_unmatched", sourceRow: 9 }),
+    }),
+    (error) => error.code === "INVENTORY_COUNT_AUTHORITY_IDENTITY_UNMATCHED" && /row 9/.test(error.message),
   );
 });

@@ -6,6 +6,7 @@ import {
   finalizeSerializedUnitUsage,
   issueSerializedUnitToWorkorder,
   listWorkorderSerializedUnitUsages,
+  listAvailableSerializedUnitsForWorkorder,
   resolveWorkorderSerializedUnit,
   updateSerializedUsageRepairOrder,
 } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
@@ -16,9 +17,12 @@ import {
   finalizeWorkorderInventoryUnitSchema,
   inventoryWorkorderEntityIdSchema,
   issueWorkorderInventoryUnitSchema,
+  createWorkorderInventoryUnitsSchema,
+  listWorkorderInventoryUnitsSchema,
   resolveWorkorderInventoryUnitSchema,
   updateSerializedUsageRepairOrderSchema,
 } from "./inventory-unit-workorder.schemas.js";
+import { createSerializedUnitsForPart } from "./inventory-part-serialization.service.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
 
@@ -116,7 +120,7 @@ export async function issueSerializedUnitForWorkorder(workorderId, rawInput, con
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
   const input = issueWorkorderInventoryUnitSchema.parse(rawInput);
   const { scope } = await authorizeScanning(workorderId, context, dependencies, "write", "issue");
-  const unitId = unitIdFromCode(input.code, dependencies);
+  const unitId = input.unitId || unitIdFromCode(input.code, dependencies);
   const requestHash = hash({ action: "issue", workorderId, unitId });
   const result = await (dependencies.issueUnit || issueSerializedUnitToWorkorder)({
     workorderId,
@@ -128,6 +132,47 @@ export async function issueSerializedUnitForWorkorder(workorderId, rawInput, con
   });
   mapMutationFailure(result.kind);
   return { usage: result.usage, replayed: result.kind === "replay" };
+}
+
+export async function readAvailableSerializedUnitsForWorkorder(workorderId, rawInput, context, dependencies = {}) {
+  workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
+  const input = listWorkorderInventoryUnitsSchema.parse(rawInput);
+  const { scope } = await authorizeScanning(workorderId, context, dependencies, "read");
+  const result = await (dependencies.listAvailableUnits || listAvailableSerializedUnitsForWorkorder)({
+    workorderId,
+    catalogPartId: input.catalogPartId,
+    queryText: input.q,
+    after: input.after,
+    limit: input.limit,
+    ...scope,
+  });
+  if (result.kind === "missing") throw inventoryNotFound();
+  return {
+    part: result.part,
+    location: result.location,
+    canCreateSerializedUnits: result.canCreateSerializedUnits
+      && ["admin", "office"].includes(context.actor.role),
+    units: result.units,
+    nextCursor: result.nextCursor,
+  };
+}
+
+export async function createSerializedUnitsForWorkorder(workorderId, rawInput, context, dependencies = {}) {
+  workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
+  const input = createWorkorderInventoryUnitsSchema.parse(rawInput);
+  if (!["admin", "office"].includes(context.actor.role)) {
+    throw failure("INVENTORY_CREATE_FORBIDDEN", "Only Office or Admin can add physical inventory.", 403);
+  }
+  const { authorization } = await authorizeScanning(workorderId, context, dependencies, "write");
+  if (!["open", "accepted", "in_progress"].includes(authorization.workorder.status)) {
+    throw failure("WORKORDER_INVENTORY_NOT_ACTIVE", "Physical units can only be added while this workorder is open or active.");
+  }
+  const create = dependencies.createUnits || createSerializedUnitsForPart;
+  return create(input.catalogPartId, authorization.locationId, {
+    quantity: input.quantity,
+    confirmation: input.confirmation,
+    idempotencyKey: input.idempotencyKey,
+  }, context, { ...(dependencies.serializationDependencies || {}), workorderId });
 }
 
 export async function finalizeSerializedUnitForWorkorder(workorderId, usageId, rawInput, context, dependencies = {}) {

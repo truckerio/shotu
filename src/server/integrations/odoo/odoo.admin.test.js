@@ -105,10 +105,13 @@ test("Odoo client authenticates with an API key and paginates search_read", asyn
     apiKey: "long-api-key",
     fetchImpl,
   });
-  const records = await client.searchReadAll("stock.location", [], ["id", "name"]);
+  const records = await client.searchReadAll("stock.location", [], ["id", "name"], {
+    context: { active_test: false },
+  });
   assert.equal(records.length, 501);
   assert.equal(calls.filter((call) => call.service === "common").length, 1);
   assert.equal(calls.at(-1).args[6].offset, 500);
+  assert.deepEqual(calls.at(-1).args[6].context, { active_test: false });
 });
 
 test("Odoo client marks a response timeout as an unknown transport outcome", async () => {
@@ -172,13 +175,27 @@ test("Odoo inventory collapses provider locations and duplicate product identiti
   );
 });
 
-test("Odoo inventory import reconciles stale provider rows after canonical upserts", async () => {
+test("Odoo sync imports catalog mappings without provider quantities or local identity overwrite", async () => {
   const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
-  assert.match(repository, /buildOdooInventoryBalances\(\{ quants, mappedLocations, catalogIds \}\)/);
-  assert.match(repository, /insert into odoo_inventory_balances/);
-  assert.match(repository, /external_id = excluded\.external_id[\s\S]*quantity_on_hand = excluded\.quantity_on_hand/);
-  assert.match(repository, /update odoo_inventory_balances[\s\S]*set quantity_on_hand = 0[\s\S]*last_seen_at is distinct from \$2/);
-  assert.doesNotMatch(repository.slice(repository.indexOf("export async function importOdooInventory")), /insert into inventory_items/);
+  const importer = repository.slice(repository.indexOf("export async function importOdooInventory"));
+  assert.match(importer, /select catalog_part_id from odoo_product_mappings/);
+  assert.doesNotMatch(importer, /insert into odoo_inventory_balances|update odoo_inventory_balances|insert into inventory_items/);
+  assert.doesNotMatch(importer, /on conflict \(company_id, normalized_part_number\) do update/);
+  assert.doesNotMatch(importer, /set catalog_part_id = excluded\.catalog_part_id/);
+  assert.match(importer, /provider_updated_at, last_seen_at, updated_at[\s\S]*\$8, \$9, now\(\)/);
+  assert.doesNotMatch(importer, /update odoo_product_mappings[\s\S]*set active = false/);
+  assert.match(importer, /product\.active !== false/);
+});
+
+test("Odoo catalog sync fetches inactive products explicitly and never infers state from absence", async () => {
+  const service = await readFile(new URL("./odoo.admin.service.js", import.meta.url), "utf8");
+  const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
+  const sync = service.slice(service.indexOf("export async function syncOdooPartsAndInventory"));
+  const importer = repository.slice(repository.indexOf("export async function importOdooInventory"));
+  assert.match(sync, /searchReadAll\("product\.product", \[\],[\s\S]*active_test: false/);
+  assert.match(sync, /"active"/);
+  assert.doesNotMatch(importer, /last_seen_at is distinct from|not in\s*\(/i);
+  assert.match(importer, /active = excluded\.active/);
 });
 
 test("Odoo repair text keeps work performed and does not treat generic labor product names as repairs", () => {
@@ -350,6 +367,8 @@ test("Odoo history defensively excludes ordinary sales from a mixed provider res
 
 test("inventory sync isolates optional service-history permission failures", async () => {
   const source = await readFile(new URL("./odoo.admin.service.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /searchReadAll\("stock\.quant"/);
+  assert.match(source, /searchReadAll\("product\.product"/);
   assert.match(source, /const inventoryResult = await importOdooInventory[\s\S]*try \{[\s\S]*readOdooServiceHistory/);
   assert.match(source, /catch \{[\s\S]*\.\.\.inventoryResult[\s\S]*historyWarning:/);
   assert.match(source, /markServiceHistorySyncSucceeded[\s\S]*providerWatermark: syncStartedAt/);

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   finalizeSerializedUnitForWorkorder,
+  createSerializedUnitsForWorkorder,
   issueSerializedUnitForWorkorder,
+  readAvailableSerializedUnitsForWorkorder,
   readSerializedUnitUsagesForWorkorder,
   resolveSerializedUnitForWorkorder,
   updateSerializedUsageRepairOrderForWorkorder,
@@ -153,6 +155,103 @@ test("issue passes only server-derived identity and returns exact idempotent rep
   assert.equal(command.locationId, LOCATION_ID);
   assert.equal("companyIds" in command, false);
   assert.equal("locationIds" in command, false);
+});
+
+test("issue accepts an exact unit id without decoding a client code", async () => {
+  let command;
+  await issueSerializedUnitForWorkorder(
+    WORKORDER_ID,
+    { unitId: UNIT_ID, idempotencyKey: "issue-unit-id-key" },
+    context(),
+    dependencies({
+      readToken: () => { throw new Error("must not decode"); },
+      issueUnit: async (input) => { command = input; return { kind: "reserved", usage: { id: USAGE_ID } }; },
+    }),
+  );
+  assert.equal(command.unitId, UNIT_ID);
+});
+
+test("available-child read returns safe bounded workorder-scoped metadata", async () => {
+  let received;
+  const repositoryResult = {
+    kind: "found",
+    part: { catalogPartId: unit().catalogPartId, partNumber: "FILTER-1", description: "Filter", uomCode: "ea" },
+    location: { locationId: LOCATION_ID, name: "Main shop" },
+    canCreateSerializedUnits: true,
+    units: [{ id: UNIT_ID, serialNumber: "WG-S-1", eligible: true }],
+    nextCursor: "WG-S-1",
+  };
+  const result = await readAvailableSerializedUnitsForWorkorder(WORKORDER_ID, {
+    catalogPartId: unit().catalogPartId,
+    q: " WG-S ",
+    after: "WG-S-0",
+    limit: "25",
+  }, context(), dependencies({
+    listAvailableUnits: async (input) => { received = input; return repositoryResult; },
+  }));
+  assert.deepEqual(result, {
+    part: repositoryResult.part,
+    location: repositoryResult.location,
+    canCreateSerializedUnits: true,
+    units: repositoryResult.units,
+    nextCursor: "WG-S-1",
+  });
+  assert.deepEqual(received, {
+    workorderId: WORKORDER_ID,
+    catalogPartId: unit().catalogPartId,
+    queryText: "WG-S",
+    after: "WG-S-0",
+    limit: 25,
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    actorRole: "office",
+  });
+});
+
+test("workorder intake passes its identity to the locked repository path and denies mechanics", async () => {
+  let createInput;
+  let createDependencies;
+  const result = await createSerializedUnitsForWorkorder(WORKORDER_ID, {
+    catalogPartId: unit().catalogPartId,
+    quantity: 2,
+    confirmation: "physically_present_at_location",
+    idempotencyKey: "workorder-create-two",
+  }, context(), dependencies({
+    createUnits: async (_partId, locationId, input, _context, receivedDependencies) => {
+      createInput = { locationId, ...input };
+      createDependencies = receivedDependencies;
+      return { batch: { itemCount: 2, printUrl: "/labels/1" }, units: [] };
+    },
+  }));
+  assert.equal(result.batch.itemCount, 2);
+  assert.equal(createInput.locationId, LOCATION_ID);
+  assert.equal(createDependencies.workorderId, WORKORDER_ID);
+  await assert.rejects(
+    createSerializedUnitsForWorkorder(WORKORDER_ID, {
+      catalogPartId: unit().catalogPartId,
+      quantity: 1,
+      confirmation: "physically_present_at_location",
+      idempotencyKey: "mechanic-create-denied",
+    }, context("mechanic"), dependencies()),
+    (error) => error.code === "INVENTORY_CREATE_FORBIDDEN" && error.statusCode === 403,
+  );
+});
+
+test("workorder intake rejects stale lifecycle before calling creation", async () => {
+  let wrote = false;
+  await assert.rejects(
+    createSerializedUnitsForWorkorder(WORKORDER_ID, {
+      catalogPartId: unit().catalogPartId,
+      quantity: 1,
+      confirmation: "physically_present_at_location",
+      idempotencyKey: "closed-create-denied",
+    }, context(), dependencies({
+      authorize: async () => ({ workorder: workorder({ status: "mechanic_done" }), companyId: COMPANY_ID, locationId: LOCATION_ID }),
+      createUnits: async () => { wrote = true; },
+    })),
+    (error) => error.code === "WORKORDER_INVENTORY_NOT_ACTIVE",
+  );
+  assert.equal(wrote, false);
 });
 
 test("issue maps stale, Odoo, disabled-policy, balance, and changed-hash outcomes", async () => {

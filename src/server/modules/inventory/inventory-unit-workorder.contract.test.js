@@ -11,6 +11,7 @@ const server = readFileSync(new URL("../../../../server.js", import.meta.url), "
 const partsModule = readFileSync(new URL("../../../../frontend/src/features/workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
 const service = readFileSync(new URL("./inventory-unit-workorder.service.js", import.meta.url), "utf8");
 const providerPolicy = readFileSync(new URL("../../../../shared/inventory-provider.js", import.meta.url), "utf8");
+const serializationRepository = readFileSync(new URL("../../db/repositories/inventory-part-serialization.repo.js", import.meta.url), "utf8");
 
 test("serialized usage migration enforces tenant FKs, one unresolved unit, and exact idempotency", () => {
   assert.match(migration, /foreign key \(company_id, workorder_id\) references operational_workorders\(company_id, id\)/i);
@@ -101,4 +102,23 @@ test("workorder lifecycle blocks unresolved exact-unit issues", () => {
   assert.match(workorders, /before cancelling this workorder/);
   assert.match(workorders, /before changing the mechanic assignment/);
   assert.match(workorders, /before leaving this workorder/);
+});
+
+test("workorder inline intake locks active lifecycle before durable writes", () => {
+  const lifecycleLock = serializationRepository.indexOf('["open", "accepted", "in_progress"].includes(workorderStatus)');
+  const firstWrite = serializationRepository.indexOf("insert into inventory_serialization_batches");
+  assert.ok(lifecycleLock >= 0);
+  assert.ok(firstWrite > lifecycleLock);
+  assert.match(serializationRepository, /workorderId = null/);
+  assert.match(serializationRepository, /return \{ kind: "workorder_state" \}/);
+  assert.match(service, /serializationDependencies \|\| \{\}\), workorderId/);
+});
+
+test("available child listing stays workorder, company, location, catalog, provider, and size scoped", () => {
+  assert.match(repository, /workorder\.id = \$1 and workorder\.company_id = \$2/);
+  assert.match(repository, /workorder\.location_id = \$3 and part\.id = \$4/);
+  assert.match(repository, /receipt\.provider in \('local', 'local_count', 'local_serialization'\)/);
+  assert.match(repository, /unit\.status = 'in_stock'/);
+  assert.match(repository, /limit \$7/);
+  assert.doesNotMatch(repository, /vendor_name|invoice_number|qr_token/i);
 });

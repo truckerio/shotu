@@ -27,6 +27,7 @@ export function PartRequestsPanel({
   const installedParts = installedSerializedUsedParts(detail);
   const commonProps = {
     actorId,
+    role,
     detail,
     parts,
     laborHours,

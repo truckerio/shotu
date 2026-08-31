@@ -37,6 +37,7 @@ test("legacy Mechanic detail includes installed serialized summaries and restric
         installedScope = scope;
         return [{ catalogPartId: "catalog-1", partNumber: "LF9009", quantity: 2, uomCode: "ea" }];
       },
+      listAggregateUsages: async () => [],
     },
   );
 
@@ -62,6 +63,7 @@ test("legacy Mechanic detail does not query or expose summaries when Parts is hi
       resolveModules: async () => ({ decisions: { parts: { access: "hidden", source: "user" } } }),
       loadDetail: async () => ({ workorder: { id: "workorder-1", companyId: "company-1", locationId: "location-1", formData: {} } }),
       listInstalledParts: async () => { queried = true; return []; },
+      listAggregateUsages: async () => [],
     },
   );
   assert.equal(queried, false);

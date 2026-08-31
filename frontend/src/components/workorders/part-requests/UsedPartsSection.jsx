@@ -2,6 +2,7 @@ import { UsedPartsEditor } from "../UsedPartsEditor.jsx";
 
 export function UsedPartsSection({
   actorId,
+  role,
   detail,
   parts,
   laborHours,
@@ -28,6 +29,7 @@ export function UsedPartsSection({
     <div id={id} hidden={hidden}>
       <UsedPartsEditor
         actorId={actorId}
+        role={role}
         detail={detail}
         parts={parts}
         laborHours={laborHours}

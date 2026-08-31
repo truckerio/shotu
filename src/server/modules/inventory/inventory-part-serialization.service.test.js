@@ -54,6 +54,21 @@ test("serialized intake forwards physical confirmation and assigned-location sco
   assert.equal(createInput.actorId, ACTOR_ID);
 });
 
+test("workorder-scoped serialized intake forwards workorder identity to the transactional repository", async () => {
+  const workorderId = "00000000-0000-4000-8000-000000000399";
+  let createInput;
+  await createSerializedUnitsForPart(PART_ID, ASSIGNED_LOCATION_ID, {
+    quantity: 1,
+    confirmation: "physically_present_at_location",
+    idempotencyKey: "workorder-locked-intake",
+  }, context(), {
+    workorderId,
+    qrOptions: { signingKey: SIGNING_KEY },
+    create: async (input) => { createInput = input; return { kind: "created", batch: {}, units: [] }; },
+  });
+  assert.equal(createInput.workorderId, workorderId);
+});
+
 test("Office reads canonical serialized-child history across its company", async () => {
   let readInput;
   const result = await readSerializedInventoryUnit(PART_ID, context(), {

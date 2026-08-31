@@ -28,7 +28,15 @@ export function createInitialDraftBaseline(actor) {
 
 export function workorderPreviewForm(form, detail) {
   if (!detail) return form;
-  return { ...form, parts: workorderPreviewParts(form.parts, installedSerializedUsedParts(detail)) };
+  const aggregateParts = detail?.modules?.parts?.data?.aggregatePartUsages || detail?.aggregatePartUsages || [];
+  return { ...form, parts: workorderPreviewParts(form.parts, installedSerializedUsedParts(detail), aggregateParts.filter((usage) => ["consumed", "installed_pending_approval"].includes(usage.status)).map((usage) => ({
+    evidenceId: usage.evidenceId,
+    partNo: usage.partNumber,
+    qty: String(usage.effectiveQuantity),
+    uomCode: usage.uomCode,
+    repairOrder: usage.repairOrder || "",
+    pendingApproval: usage.status === "installed_pending_approval",
+  }))) };
 }
 
 export function createInitialWorkorderForm(actor) {

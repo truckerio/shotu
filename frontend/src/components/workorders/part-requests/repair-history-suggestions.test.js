@@ -35,7 +35,9 @@ test("catalog selection does not silently apply repair-history or AI repair sugg
   assert.doesNotMatch(used, /repairOrder: catalogPart\.repairOrder/);
   assert.doesNotMatch(used, /repairOrder: result\.part\.repairOrder/);
   assert.doesNotMatch(officeReview, /repairOrder:\s*result\.part\.repairOrder/);
-  assert.match(used, /repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
+  assert.match(used, /purpose="workorder_assignment"/);
+  assert.match(used, /setSerializedDialogPart\(catalogPart\)/);
+  assert.doesNotMatch(used, /onSelect=\{\(catalogPart\) => \{[\s\S]{0,500}partNo: catalogPart\.partNumber/);
   assert.match(office, /<RepairHistorySuggestions/);
   assert.match(officeRequest, /<RepairHistorySuggestions/);
   assert.match(used, /<RepairHistorySuggestions/);

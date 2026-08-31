@@ -120,6 +120,7 @@ function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
     case "parts": return {
       formData: formSlice(workorder, moduleKey),
       installedSerializedParts: detail.installedSerializedParts || [],
+      aggregatePartUsages: detail.aggregatePartUsages || [],
       partRequests: ["mechanic", "kiosk"].includes(viewerRole)
         ? (detail.partRequests || []).map((request) => mechanicPartRequest(
           request,

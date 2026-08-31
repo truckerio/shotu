@@ -10,7 +10,7 @@ const optionalText = z.string().trim().max(500).optional().default("");
 export const catalogSearchInputSchema = z.object({
   workorderId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),
-  purpose: z.enum(["issue", "request", "master_match"]).optional().default("request"),
+  purpose: z.enum(["issue", "request", "master_match", "workorder_assignment"]).optional().default("request"),
   q: z.string().trim().min(2).max(120),
   limit: z.coerce.number().int().min(1).max(12).optional().default(8),
 }).superRefine((value, context) => {
@@ -19,6 +19,13 @@ export const catalogSearchInputSchema = z.object({
       code: "custom",
       path: ["workorderId"],
       message: "Provide exactly one catalog scope: workorderId or locationId.",
+    });
+  }
+  if (value.purpose === "workorder_assignment" && !value.workorderId) {
+    context.addIssue({
+      code: "custom",
+      path: ["workorderId"],
+      message: "Workorder assignment search requires workorder scope.",
     });
   }
 });

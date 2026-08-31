@@ -6,10 +6,10 @@ const WORKORDER_ID = "00000000-0000-4000-8000-000000000001";
 const USAGE_ID = "00000000-0000-4000-8000-000000000002";
 const UNIT_ID = "00000000-0000-4000-8000-000000000003";
 
-function helpers(body = null) {
+function helpers(body = null, role = "office") {
   return {
     requestContext: {
-      actor: { id: "00000000-0000-4000-8000-000000000004", role: "office" },
+      actor: { id: "00000000-0000-4000-8000-000000000004", role },
       companyIds: new Set(["00000000-0000-4000-8000-000000000005"]),
       locationIds: new Set(["00000000-0000-4000-8000-000000000006"]),
     },
@@ -89,6 +89,72 @@ test("resolve, issue, list, and finalize routes cross the service boundary", asy
   assert.equal(finalResponse.payload.usage.status, "installed");
 });
 
+test("workorder part-unit routes list safe children and create a printable batch", async () => {
+  const catalogPartId = "00000000-0000-4000-8000-000000000008";
+  let listed;
+  const listResponse = {};
+  await handleInventoryUnitWorkorderApi(
+    { method: "GET" }, listResponse,
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-parts/${catalogPartId}/units?q=SERIAL&cursor=SERIAL-0`),
+    helpers(), dependencies({
+      listAvailableUnits: async (input) => {
+        listed = input;
+        return {
+          kind: "found",
+          part: { catalogPartId, partNumber: "P-1", description: "Part", uomCode: "ea" },
+          location: { locationId: helpers().requestContext.locationIds.values().next().value, name: "Shop" },
+          canCreateSerializedUnits: true,
+          units: [{ id: UNIT_ID, serialNumber: "SERIAL-1", status: "in_stock", eligible: true }],
+          nextCursor: null,
+        };
+      },
+    }),
+  );
+  assert.equal(listResponse.status, 200);
+  assert.equal(listResponse.payload.units[0].serialNumber, "SERIAL-1");
+  assert.equal(listed.queryText, "SERIAL");
+  assert.equal(listed.limit, 25);
+  assert.equal(listed.after, "SERIAL-0");
+
+  const createResponse = {};
+  await handleInventoryUnitWorkorderApi(
+    { method: "POST" }, createResponse,
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-parts/${catalogPartId}/units`),
+    helpers({ quantity: 2, confirmation: "physically_present_at_location", idempotencyKey: "create-parts-key" }),
+    dependencies({
+      createUnits: async (_partId, _locationId, _input, _context, receivedDependencies) => ({
+        batch: { id: "batch-1", itemCount: 2, printUrl: "/labels/batch-1" },
+        units: [{ id: UNIT_ID, serialNumber: "SERIAL-1", status: "in_stock" }],
+        workorderId: receivedDependencies.workorderId,
+      }),
+    }),
+  );
+  assert.equal(createResponse.status, 201);
+  assert.equal(createResponse.payload.batch.itemCount, 2);
+  assert.equal(createResponse.payload.workorderId, WORKORDER_ID);
+});
+
+test("mechanics can list units but are not offered the inventory-creation action", async () => {
+  const catalogPartId = "00000000-0000-4000-8000-000000000008";
+  const response = {};
+  await handleInventoryUnitWorkorderApi(
+    { method: "GET" }, response,
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-parts/${catalogPartId}/units`),
+    helpers(null, "mechanic"), dependencies({
+      listAvailableUnits: async () => ({
+        kind: "found",
+        part: { catalogPartId, partNumber: "P-1", description: "Part", uomCode: "ea" },
+        location: { locationId: "00000000-0000-4000-8000-000000000006", name: "Shop" },
+        canCreateSerializedUnits: true,
+        units: [],
+        nextCursor: null,
+      }),
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.payload.canCreateSerializedUnits, false);
+});
+
 test("handler returns stable validation and inventory errors", async () => {
   const invalid = {};
   await handleInventoryUnitWorkorderApi(
@@ -98,6 +164,15 @@ test("handler returns stable validation and inventory errors", async () => {
   );
   assert.equal(invalid.status, 400);
   assert.equal(invalid.payload.code, "validation_error");
+
+  const ambiguous = {};
+  await handleInventoryUnitWorkorderApi(
+    { method: "POST" }, ambiguous,
+    new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-units/issue`),
+    helpers({ unitId: UNIT_ID, code: "inventory-code", idempotencyKey: "issue-key-123" }), dependencies(),
+  );
+  assert.equal(ambiguous.status, 400);
+  assert.equal(ambiguous.payload.code, "validation_error");
 
   const conflict = {};
   await handleInventoryUnitWorkorderApi(

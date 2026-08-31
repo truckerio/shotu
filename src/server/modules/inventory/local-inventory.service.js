@@ -179,6 +179,13 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
       409,
     );
   }
+  if (result.kind === "authority_unmatched") {
+    throw publicError(
+      "INVENTORY_AUTHORITY_IDENTITY_UNMATCHED",
+      "A legacy inventory identity conflicts with this catalog part. Reconcile it before receiving stock.",
+      409,
+    );
+  }
   return {
     receipt: withInventoryLabels(result.receipt, dependencies.qrOptions),
     labelBatch: result.receipt.labelBatch || null,

@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch } from "./inventory-labels.repo.js";
+import {
+  inspectInventoryAuthority,
+  recordInventoryAuthorityCutover,
+  recordInventoryAuthorityException,
+} from "./inventory-authority.repo.js";
 
 function hashRequest(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -96,11 +101,26 @@ export async function createPartSerializedUnits({
   companyIds,
   locationIds = [],
   isAdmin = false,
+  workorderId = null,
 }) {
   const client = await getPool().connect();
   const hash = hashRequest({ catalogPartId, locationId, quantity, confirmation });
+  let workorderStatus = null;
   try {
     await client.query("begin");
+    if (workorderId) {
+      const workorder = await client.query(
+        `select id, status from operational_workorders
+         where id = $1 and company_id = any($2::uuid[]) and location_id = $3
+         for update`,
+        [workorderId, companyIds, locationId],
+      );
+      if (!workorder.rows[0]) {
+        await client.query("rollback");
+        return { kind: "workorder_state" };
+      }
+      workorderStatus = workorder.rows[0].status;
+    }
     const partResult = await client.query(
       `select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
               catalog.description, catalog.normalized_part_number, catalog.uom_code,
@@ -135,6 +155,13 @@ export async function createPartSerializedUnits({
       [part.company_id, actorId, idempotencyKey],
     );
     if (replay.rows[0]) {
+      const replayedUnits = await client.query(
+        `select unit.id, unit.serial_number, unit.status, unit.created_at
+         from inventory_serialized_units unit
+         where unit.company_id = $1 and unit.receipt_id = $2
+         order by unit.unit_ordinal, unit.id`,
+        [part.company_id, replay.rows[0].receipt_id],
+      );
       await client.query("commit");
       if (replay.rows[0].request_hash !== hash) return { kind: "replay_conflict" };
       return {
@@ -147,7 +174,31 @@ export async function createPartSerializedUnits({
           itemCount: Number(replay.rows[0].quantity),
           printUrl: `/api/office/inventory/label-batches/${encodeURIComponent(replay.rows[0].label_batch_id)}/print`,
         },
+        units: replayedUnits.rows.map(publicUnit),
       };
+    }
+    if (workorderId && !["open", "accepted", "in_progress"].includes(workorderStatus)) {
+      await client.query("rollback");
+      return { kind: "workorder_state" };
+    }
+    const authority = await inspectInventoryAuthority(client, {
+      companyId: part.company_id,
+      locationId: part.location_id,
+      catalogPartId: part.catalog_part_id,
+      normalizedPartNumber: part.normalized_part_number,
+      uomCode: part.uom_code,
+    });
+    if (authority.kind !== "claimable") {
+      await recordInventoryAuthorityException(client, {
+        claim: authority,
+        companyId: part.company_id,
+        locationId: part.location_id,
+        catalogPartId: part.catalog_part_id,
+        normalizedPartNumber: part.normalized_part_number,
+        uomCode: part.uom_code,
+      });
+      await client.query("commit");
+      return { kind: authority.kind === "reservation_blocked" ? "authority_conflict" : "authority_unmatched" };
     }
     if (!["count", "packaging"].includes(part.uom_category) || Number(part.decimal_scale) !== 0) {
       await client.query("rollback");
@@ -188,6 +239,14 @@ export async function createPartSerializedUnits({
         `local-serialization:${part.catalog_part_id}`, part.part_number,
         part.description || "", quantity, part.uom_code],
     );
+    await recordInventoryAuthorityCutover(client, {
+      claim: authority,
+      companyId: part.company_id,
+      locationId: part.location_id,
+      catalogPartId: part.catalog_part_id,
+      receiptId,
+      receiptLineId,
+    });
     await client.query(
       `insert into inventory_serialized_units (
          id, company_id, location_id, receipt_id, receipt_line_id,
@@ -259,7 +318,18 @@ export async function createPartSerializedUnits({
       })),
     });
     await client.query("commit");
-    return { kind: "created", replayed: false, quantity, batch };
+    return {
+      kind: "created",
+      replayed: false,
+      quantity,
+      batch,
+      units: unitIds.map((id, index) => publicUnit({
+        id,
+        serial_number: serials[index],
+        status: "in_stock",
+        created_at: null,
+      })),
+    };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { defaultLocation } from "../../db/repositories/locations.repo.js";
 import { addChatMessage, chatMessageDedupeKey } from "../../db/repositories/chat.repo.js";
 import { persistChatImageAttachment, removeStoredChatImage } from "../chat/chat-media.service.js";
@@ -27,6 +28,7 @@ import { listActiveWorkorderAttention, markWorkorderRead } from "../../db/reposi
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 import { AuthError } from "../../auth/errors.js";
 import { getLocationWorkorderPolicy } from "../../db/repositories/workorder-policies.repo.js";
+import { amendWorkorderManualPartEvidence } from "../../db/repositories/workorder-manual-part-evidence.repo.js";
 
 async function requireOffice(userId) {
   const user = await getUserById(userId);
@@ -231,6 +233,42 @@ export async function saveOfficeUsedParts(workorderId, input) {
   } catch (error) {
     return mapLifecycleConflict(error);
   }
+}
+
+export async function amendOfficeManualPartEvidence(workorderId, input, dependencies = {}) {
+  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  if (!office) throw new Error("Office user not found.");
+  const command = {
+    workorderId,
+    evidenceId: input.evidenceId,
+    action: input.action,
+    replacementPart: input.replacementPart || null,
+    reason: input.reason,
+    idempotencyKey: input.idempotencyKey,
+    actorId: office.id,
+    companyIds: [input.companyId],
+    locationIds: input.locationId ? [input.locationId] : [],
+    isAdmin: office.role === "admin",
+  };
+  const result = await (dependencies.amendManualPartEvidence || amendWorkorderManualPartEvidence)({
+    ...command,
+    requestHash: createHash("sha256").update(JSON.stringify(command)).digest("hex"),
+  });
+  if (result.kind === "not_found") {
+    throw new AuthError(404, "WORKORDER_MANUAL_PART_EVIDENCE_NOT_FOUND", "Manual part evidence was not found.");
+  }
+  if (result.kind === "workorder_state") {
+    throw new AuthError(409, "WORKORDER_MANUAL_PART_AMENDMENT_NOT_ALLOWED", "Manual part evidence can only be amended before workorder approval.");
+  }
+  if (result.kind === "idempotency_conflict") {
+    throw new AuthError(409, "WORKORDER_MANUAL_PART_AMENDMENT_REPLAY_CONFLICT", "That amendment request key was already used with different details.");
+  }
+  return {
+    amendmentId: result.amendmentId,
+    originalHash: result.originalHash || null,
+    supersedesAmendmentId: result.supersedesAmendmentId || null,
+    replayed: result.kind === "replay",
+  };
 }
 
 export async function sendOfficeMessage(workorderId, input) {

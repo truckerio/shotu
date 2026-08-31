@@ -16,7 +16,7 @@ test("admin opens invoice intake through Inventory while scan links preempt role
   const shell = await readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8");
   const inventory = await readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8");
   const outlet = await readFile(new URL("../../app/routes/RoleWorkspaceOutlet.jsx", import.meta.url), "utf8");
-  assert.match(shell, /<InventoryWorkspace canApplyInventoryCount=\{actor\?\.role === "admin"\} presentation="page" \/>/);
+  assert.match(shell, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
   assert.match(inventory, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\}/);
   assert.match(outlet, /searchParams\(window\.location\.search\)\.has\("inventoryScan"\)/i);
   assert.match(outlet, /<InventoryScanWorkspace actor=\{actor\} \/>/);

@@ -84,6 +84,7 @@ test("legacy Office detail includes installed serialized summaries without losin
         installedScope = scope;
         return [{ catalogPartId: "catalog-1", partNumber: "LF9009", quantity: 1, uomCode: "ea" }];
       },
+      listAggregateUsages: async () => [],
     },
   );
 
@@ -113,6 +114,7 @@ test("legacy Office detail does not query or expose summaries when Parts is hidd
       resolveModules: async () => ({ decisions: { parts: { access: "hidden", source: "user" } } }),
       loadDetail: async () => ({ workorder: { id: "workorder-1", companyId: "company-1", locationId: "location-1", formData: {} } }),
       listInstalledParts: async () => { queried = true; return []; },
+      listAggregateUsages: async () => [],
     },
   );
   assert.equal(queried, false);
