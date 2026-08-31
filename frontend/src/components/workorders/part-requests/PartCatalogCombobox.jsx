@@ -26,6 +26,7 @@ export function PartCatalogCombobox({
   inputAriaLabel,
   inputPolicy = "search",
   allowAiFallback = false,
+  allowManualEntry = true,
   catalogEndpoint = "/api/parts-helper/catalog",
   purpose = "issue",
   resultLimit = 8,
@@ -262,7 +263,7 @@ export function PartCatalogCombobox({
             <p className="part-catalog-state" role="status" aria-live="polite">
               {state === "waiting" || state === "loading"
                 ? t(masterMatch ? "parts.searchingMasterCatalog" : "parts.searchingOurInventory")
-                : state === "empty"
+                : state === "empty" || !allowManualEntry
                   ? t(masterMatch ? "parts.noMasterCatalogParts" : "parts.noCompanyParts")
                   : state === "error"
                     ? t("parts.lookupUnavailable")

@@ -7,10 +7,13 @@ const editor = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), 
 const scanner = readFileSync(new URL("./SerializedPartsScanner.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./workorder-serialized-part-dialog.css", import.meta.url), "utf8");
 
-test("catalog parent selection opens one serialized-unit dialog without mutating the manual row", () => {
+test("inventory finder routes countable catalog selections to one serialized-unit dialog without creating a manual row", () => {
   assert.match(editor, /purpose="workorder_assignment"/);
+  assert.match(editor, /value=\{catalogQuery\}/);
+  assert.match(editor, /onChange=\{setCatalogQuery\}/);
   assert.match(editor, /setSerializedDialogPart\(catalogPart\)/);
-  assert.doesNotMatch(editor, /onSelect=\{\(catalogPart\) => \{[\s\S]{0,500}partNo: catalogPart\.partNumber/);
+  assert.doesNotMatch(editor, /used-part-quantity-/);
+  assert.doesNotMatch(editor, /addUsedPart|usedPartsAutosave|recoveredUnsavedEntries/);
   assert.match(editor, /<WorkorderSerializedPartDialog/);
   assert.match(dialog, /<ModalOverlay/);
   assert.match(dialog, /<Modal/);
@@ -70,8 +73,8 @@ test("list, manual code, and one camera scan use the same idempotent reservation
   assert.match(scanner, /recordUsage,/);
   assert.match(editor, /serializedParts\?\.recordUsage\?\.\(usage\)/);
   assert.match(editor, /Part added; refresh the workorder if the serialized row is not visible/);
-  assert.match(editor, /serializedDialogOriginRef\.current = index/);
-  assert.match(editor, /document\.querySelector\(/);
+  assert.match(editor, /value=\{catalogQuery\}/);
+  assert.match(editor, /function closeSerializedDialog\(\)/);
 });
 
 test("dialog is touch-safe, full-screen on phone, and retains a single content scroller", () => {

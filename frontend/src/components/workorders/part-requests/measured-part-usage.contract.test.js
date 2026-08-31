@@ -14,14 +14,14 @@ test("measured catalog parents use the aggregate endpoint and retain an in-memor
   assert.match(source, /operation: "aggregateUsageLifecycle"/);
 });
 
-test("measured success cannot be retried when refresh fails and restores its originating combobox", () => {
+test("measured selection bypasses manual rows and retains the aggregate-owned retry behavior", () => {
   assert.match(source, /setCompleted\(true\)/);
   assert.match(source, /await onReserved\?\.\(result\.usage, result\)/);
   assert.match(source, /aggregateReservedRefresh/);
   assert.match(source, /disabled=\{busy \|\| completed\}/);
-  assert.match(editor, /measuredDialogOriginRef\.current = index/);
+  assert.match(editor, /if \(MEASURED_UOM_CATEGORIES\.has\(category\)\) setMeasuredDialogPart\(catalogPart\)/);
   assert.match(editor, /function closeMeasuredDialog\(\)/);
-  assert.match(editor, /legacyManualRowsRef/);
+  assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.match(editor, /parts\.legacyManualEvidence/);
 });
 

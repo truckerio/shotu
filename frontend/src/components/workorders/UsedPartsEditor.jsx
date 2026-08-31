@@ -1,27 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, SearchMd } from "@untitledui/icons";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { NarrativeField } from "../forms/NarrativeField.jsx";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import {
-  MAX_USED_PARTS,
-  addUsedPart,
-  defaultUsedPartQuantity,
-  initialUsedPartRows,
-  normalizeUsedParts,
   readonlyUsedParts,
-  removeUsedPart,
   serializedUsageTableState,
-  usedPartQuantityAfterPartNumberChange,
 } from "./used-parts-model.js";
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
-import { createUsedPartsAutosave } from "./used-parts-autosave.js";
-import {
-  mechanicWorkStorageKey,
-  removeLegacyMechanicWorkStorage,
-} from "../../features/mechanic/progress/mechanic-work-storage.js";
 import "./used-parts-editor.css";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
 import { WorkorderSerializedPartDialog } from "./part-requests/WorkorderSerializedPartDialog.jsx";
@@ -32,38 +19,6 @@ import { interfaceText } from "../../i18n/index.js";
 import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
 
 const MEASURED_UOM_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
-
-function vehicleInput(detail) {
-  const asset = detail.workorder.asset || {};
-  return {
-    assetId: asset.id || detail.workorder.assetId || undefined,
-    unitNo: asset.unitNo || asset.name || "",
-    vin: asset.vin || detail.workorder.formData?.vinNo || "",
-    make: asset.make || "",
-    model: asset.model || detail.workorder.formData?.model || "",
-    year: asset.year || undefined,
-    engine: detail.workorder.formData?.engine || "",
-  };
-}
-
-function purchasingLocation(detail) {
-  const name = detail.workorder.location?.name || "Chino";
-  return {
-    country: "US",
-    city: name.replace(/\s+yard$/i, "") || "Chino",
-    region: "CA",
-    timezone: "America/Los_Angeles",
-  };
-}
-
-function looksLikePartNumber(value) {
-  const text = String(value || "").trim();
-  return text.length >= 3 && /\d/.test(text) && !/\s/.test(text) && /^[a-z0-9._/-]+$/i.test(text);
-}
-
-function partFingerprint(part) {
-  return [part?.partNo || "", part?.qty || "", part?.uomCode || "", part?.repairOrder || ""].join("\u001f");
-}
 
 export function UsedPartsEditor({
   actorId,
@@ -77,42 +32,22 @@ export function UsedPartsEditor({
   installedParts = [],
   onLaborHoursChange = () => {},
   onLaborRepairOrderChange = () => {},
-  onChange,
-  onSave,
   onChanged = () => {},
   onRegisterSerializedRepairFlush = () => {},
   serializedParts = null,
   disabled = false,
   partsEditable = !disabled,
   laborEditable = !disabled,
-  defaultRows,
   suggestionsEnabled = true,
   locale = "en",
   readonlyMessage = "Used parts are read-only for your role.",
 }) {
   const t = (key) => interfaceText(locale, key);
   const readOnlyText = locale === "en" ? readonlyMessage : t("parts.usedPartsReadOnly");
-  const [visibleRowCount, setVisibleRowCount] = useState(() => initialUsedPartRows(parts, defaultRows).length);
-  const [draftRows, setDraftRows] = useState(() => initialUsedPartRows(parts, defaultRows));
-  const rows = useMemo(() => normalizeUsedParts(draftRows, visibleRowCount), [draftRows, visibleRowCount]);
-  const storageKey = actorId
-    ? mechanicWorkStorageKey("used-parts", actorId, detail.workorder.id)
-    : "";
-  const hydratedRef = useRef(false);
-  const saveRef = useRef(onSave);
-  const autosaveContextRef = useRef(null);
-  const usedPartsAutosaveRef = useRef(null);
-  const [findingRow, setFindingRow] = useState(-1);
-  const [saveState, setSaveState] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
   const [message, setMessage] = useState("");
-  const [selectedCatalogParts, setSelectedCatalogParts] = useState([]);
   const [serializedDialogPart, setSerializedDialogPart] = useState(null);
   const [measuredDialogPart, setMeasuredDialogPart] = useState(null);
-  const serializedDialogOriginRef = useRef(-1);
-  const measuredDialogOriginRef = useRef(-1);
-  const legacyManualRowsRef = useRef(new Set(normalizeUsedParts(parts)
-    .filter((part) => part.partNo || part.qty || part.repairOrder)
-    .map(partFingerprint)));
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
   const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
   const focusedSerializedUsageId = serializedParts?.focusUsageId || "";
@@ -150,42 +85,7 @@ export function UsedPartsEditor({
       },
     });
   }
-  if (!usedPartsAutosaveRef.current) {
-    usedPartsAutosaveRef.current = createUsedPartsAutosave({
-      save: (nextRows, revision) => saveRef.current(nextRows, revision),
-      onSaving: (saving) => {
-        const savingText = autosaveContextRef.current.t("progress.saving");
-        setSaveState((current) => saving ? savingText : current === savingText ? "" : current);
-      },
-      onSaved: (submittedRows, _revision, saved) => {
-        const context = autosaveContextRef.current;
-        if (context.storageKey) window.localStorage.removeItem(context.storageKey);
-        context.onChange(submittedRows, {
-          saved: true,
-          workorder: saved?.workorder,
-        });
-        setSaveState(context.t("progress.saved"));
-      },
-      onStoreDraft: (nextRows) => {
-        const context = autosaveContextRef.current;
-        if (context.storageKey) window.localStorage.setItem(context.storageKey, JSON.stringify({ parts: nextRows }));
-      },
-      onError: (error) => {
-        const context = autosaveContextRef.current;
-        setSaveState(context.t("progress.notSaved"));
-        setMessage(context.locale === "en" && error?.message ? error.message : context.t("parts.saveFailed"));
-      },
-    });
-  }
-  const usedPartsAutosave = usedPartsAutosaveRef.current;
   const serializedRepairAutosave = serializedRepairAutosaveRef.current;
-  autosaveContextRef.current = { locale, onChange, storageKey, t };
-
-  useEffect(() => {
-    saveRef.current = onSave;
-  }, [onSave]);
-
-  useEffect(() => () => usedPartsAutosave.dispose(), [usedPartsAutosave]);
 
   useEffect(() => {
     if (!focusedSerializedUsageId) return undefined;
@@ -199,91 +99,12 @@ export function UsedPartsEditor({
   }, [focusedSerializedUsageId, serializedParts]);
 
   useEffect(() => {
-    onRegisterSerializedRepairFlush(async () => {
-      const [manualSaved, serializedSaved] = await Promise.all([
-        usedPartsAutosave.flush(),
-        serializedRepairAutosave.flushAll(),
-      ]);
-      return manualSaved && serializedSaved;
-    });
+    onRegisterSerializedRepairFlush(serializedRepairAutosave.flushAll);
     return () => {
       onRegisterSerializedRepairFlush(null);
       serializedRepairAutosave.dispose();
     };
-  }, [onRegisterSerializedRepairFlush, serializedRepairAutosave, usedPartsAutosave]);
-
-  useEffect(() => {
-    const currentRows = initialUsedPartRows(parts, defaultRows);
-    setVisibleRowCount(currentRows.length);
-    setDraftRows(currentRows);
-    hydratedRef.current = false;
-    usedPartsAutosave.reset(currentRows);
-    setSaveState("");
-    setMessage("");
-    setSelectedCatalogParts([]);
-    setSerializedDialogPart(null);
-    setMeasuredDialogPart(null);
-
-    hydratedRef.current = true;
-    removeLegacyMechanicWorkStorage();
-    if (!storageKey || !partsEditable) return;
-    try {
-      const stored = window.localStorage.getItem(storageKey);
-      if (!stored) return;
-      const storedValue = JSON.parse(stored);
-      const recovered = initialUsedPartRows(Array.isArray(storedValue) ? storedValue : storedValue.parts, defaultRows);
-      setVisibleRowCount(recovered.length);
-      if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
-        setDraftRows(recovered);
-        onChange(recovered);
-        usedPartsAutosave.update(recovered);
-        setMessage(t("parts.recoveredUnsavedEntries"));
-      }
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    }
-  }, [partsEditable, storageKey]);
-
-  useEffect(() => {
-    legacyManualRowsRef.current = new Set(normalizeUsedParts(parts)
-      .filter((part) => part.partNo || part.qty || part.repairOrder)
-      .map(partFingerprint));
-  }, [detail.workorder.id]);
-
-  function changeRows(nextRows) {
-    setDraftRows(nextRows);
-    onChange(nextRows);
-    if (hydratedRef.current && partsEditable) usedPartsAutosave.update(nextRows);
-  }
-
-  function update(index, field, value) {
-    changeRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
-  }
-
-  function updateFields(index, fields) {
-    changeRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...fields } : row));
-  }
-
-  function addRow() {
-    const next = addUsedPart(rows, rows.length);
-    setVisibleRowCount(next.length);
-    changeRows(next);
-  }
-
-  function removeRow(index) {
-    const normalized = removeUsedPart(rows, index, Math.max(0, rows.length - 1));
-    setVisibleRowCount(normalized.length);
-    setSelectedCatalogParts((current) => current.filter((_, rowIndex) => rowIndex !== index));
-    changeRows(normalized);
-  }
-
-  function setSelectedCatalogPart(index, part) {
-    setSelectedCatalogParts((current) => {
-      const next = [...current];
-      next[index] = part;
-      return next;
-    });
-  }
+  }, [onRegisterSerializedRepairFlush, serializedRepairAutosave]);
 
   function serializedRepairOrder(part) {
     return Object.hasOwn(serializedRepairOrders, part.usageId)
@@ -296,36 +117,6 @@ export function UsedPartsEditor({
     setSerializedRepairOrders((current) => ({ ...current, [part.usageId]: repairOrder }));
     setMessage("");
     serializedRepairAutosave.update(part, repairOrder);
-  }
-
-  async function suggestRepair(index) {
-    const row = rows[index];
-    if (!looksLikePartNumber(row.partNo)) return;
-    setFindingRow(index);
-    setMessage("");
-    try {
-      const result = await api("/api/parts-helper/identify", {
-        method: "POST",
-        body: JSON.stringify({
-          query: row.partNo,
-          vehicle: vehicleInput(detail),
-          location: purchasingLocation(detail),
-        }),
-      });
-      const next = [...rows];
-      next[index] = {
-        ...row,
-        partNo: result.part.normalizedPartNumber || row.partNo,
-        qty: defaultUsedPartQuantity(result.part.suggestedQuantity || row.qty),
-        uomCode: result.part.uomCode || row.uomCode,
-      };
-      changeRows(next);
-      setMessage(t("parts.detailsFound"));
-    } catch {
-      setMessage(t("parts.detailsUnavailable"));
-    } finally {
-      setFindingRow(-1);
-    }
   }
 
   const serializedUsageState = serializedParts?.usageSnapshotReady
@@ -445,15 +236,11 @@ export function UsedPartsEditor({
   ) : null;
 
   function closeSerializedDialog() {
-    const origin = serializedDialogOriginRef.current;
     setSerializedDialogPart(null);
-    window.requestAnimationFrame(() => document.querySelector(`[aria-label="${t("parts.partNumber")} ${origin + 1}"]`)?.focus());
   }
 
   function closeMeasuredDialog() {
-    const origin = measuredDialogOriginRef.current;
     setMeasuredDialogPart(null);
-    window.requestAnimationFrame(() => document.querySelector(`[aria-label="${t("parts.partNumber")} ${origin + 1}"]`)?.focus());
   }
 
   const serializedDialog = serializedDialogPart ? <WorkorderSerializedPartDialog
@@ -514,7 +301,7 @@ export function UsedPartsEditor({
                 <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
                 <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
                 {part.repairOrder ? <span>{part.repairOrder}</span> : null}
-                {(part.evidenceId || legacyManualRowsRef.current.has(partFingerprint(part))) ? <small>{t("parts.legacyManualEvidence")}</small> : null}
+                <small>{t("parts.legacyManualEvidence")}</small>
               </li>
             ))}
           </ul>
@@ -531,6 +318,26 @@ export function UsedPartsEditor({
     <div className="used-parts-editor">
       {serializedToolbar}
       {serializedFeedback}
+      {partsEditable ? <PartCatalogCombobox
+        workorderId={detail.workorder.id}
+        purpose="workorder_assignment"
+        value={catalogQuery}
+        onChange={setCatalogQuery}
+        onSelect={(catalogPart) => {
+          const category = getUnitDefinition(catalogPart.uomCode)?.category;
+          setCatalogQuery("");
+          setMessage("");
+          if (MEASURED_UOM_CATEGORIES.has(category)) setMeasuredDialogPart(catalogPart);
+          else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
+          else setSerializedDialogPart(catalogPart);
+        }}
+        label={t("parts.partNumber")}
+        inputAriaLabel={t("parts.partNumber")}
+        inputPolicy="identifier"
+        placeholder={t("parts.partNumber")}
+        allowManualEntry={false}
+        locale={locale}
+      /> : null}
       <div className="parts-editor">
         <div className="part-row part-row-head" aria-hidden="true">
           <span>{t("parts.serialNumber")}</span>
@@ -573,115 +380,23 @@ export function UsedPartsEditor({
           <span aria-hidden="true"></span>
         </div>
         {activeSerializedParts.map(renderSerializedPartRow)}
-        {partsEditable ? rows.map((part, index) => (
-          (() => {
-            const legacyManual = Boolean(part.evidenceId) || legacyManualRowsRef.current.has(partFingerprint(part));
-            return <div className="part-row" key={index}>
-            <strong>{activeSerializedParts.length + index + 2}</strong>
-            <div className="used-part-field">
-              <span className="used-part-label">{t("parts.partNumber")}</span>
-              <div className={`used-part-number-control ${suggestionsEnabled ? "has-suggestion" : ""}`}>
-                <PartCatalogCombobox
-                  workorderId={detail.workorder.id}
-                  purpose="workorder_assignment"
-                  value={part.partNo}
-                  onChange={(value) => {
-                    if (part.evidenceId) return;
-                    setSelectedCatalogPart(index, null);
-                    updateFields(index, {
-                      partNo: value,
-                      qty: usedPartQuantityAfterPartNumberChange(part, value),
-                    });
-                  }}
-                  onSelect={(catalogPart) => {
-                    setSelectedCatalogPart(index, null);
-                    serializedDialogOriginRef.current = index;
-                    const category = getUnitDefinition(catalogPart.uomCode)?.category;
-                    setMessage("");
-                    if (MEASURED_UOM_CATEGORIES.has(category)) { measuredDialogOriginRef.current = index; setMeasuredDialogPart(catalogPart); }
-                    else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
-                    else setSerializedDialogPart(catalogPart);
-                  }}
-                  label={`${t("parts.partNumber")} ${index + 1}`}
-                  inputAriaLabel={`${t("parts.partNumber")} ${index + 1}`}
-                  inputPolicy="identifier"
-                  placeholder={t("parts.partNumber")}
-                  disabled={!partsEditable || legacyManual}
-                  locale={locale}
-                />
-                {suggestionsEnabled ? (
-                  <button type="button" onClick={() => suggestRepair(index)} disabled={!partsEditable || legacyManual || findingRow >= 0 || !looksLikePartNumber(part.partNo)} title={t("parts.findDetails")} aria-label={`${t("parts.findDetails")} ${index + 1}`}>
-                    <SearchMd />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <div className="used-part-field used-part-quantity">
-              <QuantityUnitInput
-                id={`used-part-quantity-${index}`}
-                quantity={part.qty}
-                uomCode={part.uomCode}
-                onValueChange={({ quantity, uomCode }) => updateFields(index, { qty: quantity, uomCode })}
-                quantityLabel={`${t("parts.quantity")} ${index + 1}`}
-                unitLabel={`${t("parts.unit")} ${index + 1}`}
-                disabled={!partsEditable || legacyManual}
-                compact
-              />
-            </div>
-            <div className="used-part-field used-part-repair">
-              <NarrativeField
-                locale={locale}
-                singleLine
-                value={part.repairOrder}
-                onChange={(event) => update(index, "repairOrder", event.target.value)}
-                aria-label={`${t("parts.repairOrder")} ${index + 1}`}
-                placeholder={t("parts.describeRepair")}
-                disabled={!partsEditable || legacyManual}
-              />
-            </div>
-            <div className="used-part-row-action">{legacyManual ? <small>{t("parts.legacyManualEvidence")}</small> : <button className="remove-row" type="button" onClick={() => removeRow(index)} disabled={!partsEditable} aria-label={`${t("parts.removePartRow")} ${index + 1}`}>{t("parts.remove")}</button>}</div>
-            {selectedCatalogParts[index]?.id ? <div className="used-part-history">
-              <RepairHistorySuggestions
-                workorderId={detail.workorder.id}
-                catalogPartId={selectedCatalogParts[index]?.id}
-                partNumber={selectedCatalogParts[index]?.partNumber}
-                assetId={detail.workorder.asset?.id || detail.workorder.assetId}
-                onApply={(text) => update(index, "repairOrder", text)}
-                disabled={!partsEditable}
-                locale={locale}
-              />
-            </div> : null}
-          </div>;
-          })()
-        )) : null}
       </div>
-      {!partsEditable ? (
-        <div className="used-parts-locked-list">
-          <p className="used-parts-readonly-state" role="status">{readOnlyText}</p>
-          {readonlyUsedParts(parts).length ? (
-            <ul className="used-parts-readonly-list">
-              {readonlyUsedParts(parts).map((part, index) => (
-                <li key={`${part.partNo}-${index}`}>
-                  <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
-                  <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
-                  {part.repairOrder ? <span>{part.repairOrder}</span> : null}
-                  {(part.evidenceId || legacyManualRowsRef.current.has(partFingerprint(part))) ? <small>{t("parts.legacyManualEvidence")}</small> : null}
-                </li>
-              ))}
-            </ul>
-          ) : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
-        </div>
+      {readonlyUsedParts(parts).length ? (
+        <ul className="used-parts-readonly-list">
+          {readonlyUsedParts(parts).map((part, index) => (
+            <li key={`${part.partNo}-${index}`}>
+              <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
+              <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
+              {part.repairOrder ? <span>{part.repairOrder}</span> : null}
+              <small>{t("parts.legacyManualEvidence")}</small>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {serializedHistory}
       <AggregatePartUsageRows actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} locale={locale} onChanged={onChanged} />
-      {partsEditable ? (
-        <Button icon={Plus} onClick={addRow} disabled={rows.length >= MAX_USED_PARTS}>
-          {rows.length ? t("parts.addAnotherPart") : t("parts.recordUsedPart")}
-        </Button>
-      ) : null}
       <div className="used-parts-feedback" aria-live="polite">
         {message ? <span>{message}</span> : <span></span>}
-        {saveState ? <strong>{saveState}</strong> : null}
       </div>
       {serializedDialog}
       {measuredDialog}

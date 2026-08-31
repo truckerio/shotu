@@ -42,9 +42,10 @@ test("surveillance read-only parts use the shared quantity formatter", () => {
   assert.doesNotMatch(usedPartsEditor, /part\.qty \|\| 1/);
 });
 
-test("AI part suggestions retain quantity and unit in the shared used-parts row", () => {
-  assert.match(usedPartsEditor, /qty:\s*defaultUsedPartQuantity\(result\.part\.suggestedQuantity \|\| row\.qty\)/);
-  assert.match(usedPartsEditor, /uomCode:\s*result\.part\.uomCode \|\| row\.uomCode/);
+test("detail inventory finder does not turn suggestions into manual used-parts autosaves", () => {
+  assert.doesNotMatch(usedPartsEditor, /defaultUsedPartQuantity\(result\.part\.suggestedQuantity/);
+  assert.doesNotMatch(usedPartsEditor, /usedPartsAutosave|addUsedPart/);
+  assert.match(usedPartsEditor, /value=\{catalogQuery\}/);
 });
 
 test("detail catalog parent selection waits for an exact serialized child", () => {
@@ -53,8 +54,11 @@ test("detail catalog parent selection waits for an exact serialized child", () =
   assert.doesNotMatch(usedPartsEditor, /partNo:\s*catalogPart\.partNumber,[\s\S]*qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
 });
 
-test("typed part numbers default blank quantities before autosave", () => {
-  assert.match(usedPartsEditor, /partNo:\s*value,[\s\S]*qty:\s*usedPartQuantityAfterPartNumberChange\(part, value\)/);
+test("detail catalog selection routes measured and countable inventory by UOM", () => {
+  assert.match(usedPartsEditor, /MEASURED_UOM_CATEGORIES\.has\(category\)/);
+  assert.match(usedPartsEditor, /setMeasuredDialogPart\(catalogPart\)/);
+  assert.match(usedPartsEditor, /setSerializedDialogPart\(catalogPart\)/);
+  assert.doesNotMatch(usedPartsEditor, /partNo:\s*value,[\s\S]*qty:/);
 });
 
 test("create workorder uses the location-scoped catalog selector and retains selected identity", () => {

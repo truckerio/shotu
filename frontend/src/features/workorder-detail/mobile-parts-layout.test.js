@@ -22,21 +22,24 @@ function phonePartsCss() {
   return css.slice(start);
 }
 
-test("shared parts editor uses one text remove action without duplicate icons", () => {
-  assert.match(editor, /\{t\("parts\.remove"\)\}<\/button>/);
+test("shared parts editor keeps legacy manual evidence immutable without remove actions", () => {
+  assert.match(editor, /readonlyUsedParts\(parts\)\.map/);
+  assert.match(editor, /parts\.legacyManualEvidence/);
+  assert.doesNotMatch(editor, /className="remove-row"/);
   assert.doesNotMatch(editor, /Trash01/);
   assert.doesNotMatch(globalCss, /\.remove-row::before/);
   assert.doesNotMatch(css, /\.remove-row::before/);
 });
 
-test("repair order uses one visible column heading and an accessible row control", () => {
+test("serialized repair order uses one visible heading and accessible editable control", () => {
   assert.match(editor, /<span>\{t\("parts\.repairOrder"\)\}<\/span>/);
   assert.doesNotMatch(editor, /<span className="used-part-label">\{t\("parts\.repairOrder"\)\}<\/span>/);
-  assert.match(editor, /aria-label=\{`\$\{t\("parts\.repairOrder"\)\} \$\{index \+ 1\}`\}/);
+  assert.match(editor, /aria-label=\{`\$\{t\("parts\.repairOrder"\)\} \$\{index \+ 2\}`\}/);
   assert.match(editor, /placeholder=\{t\("parts\.describeRepair"\)\}/);
   assert.doesNotMatch(editor, /aria-label=\{`Work performed \$\{index \+ 1\}`\}/);
   assert.match(globalCss, /\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
   assert.doesNotMatch(globalCss, /\.used-part-field\s*>\s*span\s*\{[^}]*display:\s*none;/s);
+  assert.match(editor, /className="part-row used-part-serialized-row"/);
   assert.match(css, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*34px;[^}]*padding:\s*6px 8px;/s);
 });
 
@@ -67,7 +70,7 @@ test("phone parts row fits 390px and 430px viewports without control overlap", (
 
   assert.match(mobileCss, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+124px;/);
   assert.match(mobileCss, /padding:\s*12px;/);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.remove-row\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*min-width:\s*72px;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*flex:\s*1 1 140px;/s);
 
   for (const viewportWidth of [390, 430]) {
     const cardWidth = viewportWidth - 48;

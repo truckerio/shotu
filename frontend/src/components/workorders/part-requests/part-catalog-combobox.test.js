@@ -5,6 +5,7 @@ import { catalogPopupWidth, catalogSearchPlan } from "./part-catalog-popup-model
 
 const source = readFileSync(new URL("./PartCatalogCombobox.jsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./part-catalog-combobox.css", import.meta.url), "utf8");
+const usedParts = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
 
 test("catalog lookup stays deterministic, bounded, debounced, and cancellable", () => {
   assert.match(source, /SEARCH_DELAY_MS = 250/);
@@ -40,7 +41,7 @@ test("master matching uses a neutral master catalog label", () => {
 
 test("every catalog consumer declares its search purpose", () => {
   const consumers = {
-    usedParts: readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8"),
+    usedParts,
     mechanicRequest: readFileSync(new URL("../MechanicPartRequestForm.jsx", import.meta.url), "utf8"),
     officeApproved: readFileSync(new URL("./OfficePartComposer.jsx", import.meta.url), "utf8"),
     officeRequest: readFileSync(new URL("./OfficeRequestCard.jsx", import.meta.url), "utf8"),
@@ -103,12 +104,18 @@ test("combobox exposes listbox semantics and complete keyboard selection", () =>
 });
 
 test("manual entry remains available for empty, unmatched, and failed lookup", () => {
+  assert.match(source, /allowManualEntry = true/);
   assert.match(source, /role="status" aria-live="polite"/);
   assert.match(source, /parts\.noCompanyParts/);
   assert.match(source, /parts\.noCatalogMatchFind/);
   assert.match(source, /parts\.noCatalogMatch/);
   assert.match(source, /t\("parts\.lookupUnavailable"\)/);
   assert.match(source, /onChange\(event\.target\.value\)/);
+});
+
+test("inventory-only consumers can suppress false manual-entry fallback copy", () => {
+  assert.match(source, /state === "empty" \|\| !allowManualEntry/);
+  assert.match(usedParts, /allowManualEntry=\{false\}/);
 });
 
 test("catalog popup stays readable beyond the narrow input column", () => {
