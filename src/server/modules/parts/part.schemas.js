@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { PART_ALLOCATION_STATUSES, PART_SOURCE_TYPES, PART_USAGE_STATUSES } from "./part.constants.js";
+import {
+  isValidInitialAllocationStatus,
+  PART_ALLOCATION_STATUSES,
+  PART_SOURCE_TYPES,
+  PART_USAGE_STATUSES,
+} from "./part.constants.js";
 import {
   quantitySchema,
   uomCodeSchema,
@@ -43,7 +48,24 @@ export const createOfficePartSchema = z.object({
   allocations: z.array(partAllocationInputSchema).max(20).default([]),
 }).superRefine((value, context) => {
   validateQuantityUnit(value, context);
+  if (value.allocations.length) {
+    const allocated = value.allocations.reduce((sum, allocation) => sum + allocation.quantity, 0);
+    if (Math.abs(allocated - value.quantity) > 0.0005) {
+      context.addIssue({
+        code: "custom",
+        path: ["allocations"],
+        message: "Supply quantities must equal the approved quantity.",
+      });
+    }
+  }
   value.allocations.forEach((allocation, index) => {
+    if (!isValidInitialAllocationStatus(allocation.sourceType, allocation.status)) {
+      context.addIssue({
+        code: "custom",
+        path: ["allocations", index, "status"],
+        message: `Initial ${allocation.sourceType} supply status must be valid for its source.`,
+      });
+    }
     if (allocation.uomCode !== value.uomCode) {
       context.addIssue({
         code: "custom",
@@ -82,6 +104,13 @@ export const decidePartRequestSchema = z.object({
       context.addIssue({ code: "custom", path: ["allocations"], message: "Supply quantities must equal the approved quantity." });
     }
     value.allocations.forEach((allocation, index) => {
+      if (!isValidInitialAllocationStatus(allocation.sourceType, allocation.status)) {
+        context.addIssue({
+          code: "custom",
+          path: ["allocations", index, "status"],
+          message: `Initial ${allocation.sourceType} supply status must be valid for its source.`,
+        });
+      }
       if (allocation.uomCode !== value.uomCode) {
         context.addIssue({
           code: "custom",

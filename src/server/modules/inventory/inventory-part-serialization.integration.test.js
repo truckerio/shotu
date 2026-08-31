@@ -63,7 +63,9 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
     const replay = await command();
     assert.equal(replay.replayed, true);
 
+    await query("update parts_catalog set inventory_display_uom_code='pc' where id=$1", [partId]);
     const detail = await getPartLocationSerialization({ catalogPartId: partId, locationId, companyIds: [companyId] });
+    assert.equal(detail.part.uomCode, "pc");
     assert.equal(detail.location.localQuantityOnHand, 2);
     assert.equal(detail.location.odooQuantityOnHand, 4);
     assert.equal(detail.units.length, 2);

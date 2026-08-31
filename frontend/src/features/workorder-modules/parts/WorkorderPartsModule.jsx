@@ -36,7 +36,7 @@ export function WorkorderPartsModule({
       <PartRequestsPanel
         key={activeWorkorder.workorder.id}
         actorId={actorId}
-        role={canWrite ? (isOfficeDetail ? "office" : "mechanic") : "read"}
+        role={canWrite && isOfficeDetail ? "office" : canWrite && isMechanicDetail ? "mechanic" : "read"}
         detail={activeWorkorder}
         parts={form.parts}
         laborHours={form.laborHours || ""}

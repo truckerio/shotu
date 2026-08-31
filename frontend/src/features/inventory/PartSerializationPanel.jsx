@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Plus, Printer, QrCode01, RefreshCw01, XClose } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
+import { serializedUnitSourceView } from "./part-serialization-source-model.js";
 
 function quantity(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(Number(value || 0));
@@ -17,15 +18,6 @@ function unitStatus(status) {
     scrapped: "Scrapped",
     pending: "Pending",
   }[status] || status;
-}
-
-function sourceLabel(source) {
-  return {
-    invoice: "Invoice receipt",
-    stock_count: "Inventory count",
-    manual: "Added manually",
-    receipt: "Inventory receipt",
-  }[source?.type] || "Inventory receipt";
 }
 
 function eventLabel(type) {
@@ -70,6 +62,7 @@ export function PartSerializationPanel({ item, location, onBack, onInventoryChan
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [unitLoading, setUnitLoading] = useState(false);
   const [unitError, setUnitError] = useState("");
+  const selectedUnitSource = serializedUnitSourceView(selectedUnit?.source);
 
   const endpoint = `/api/office/inventory/parts/${encodeURIComponent(item.catalogPartId)}/locations/${encodeURIComponent(location.locationId)}/units`;
   const load = useCallback(async () => {
@@ -175,7 +168,7 @@ export function PartSerializationPanel({ item, location, onBack, onInventoryChan
           </div>
           <dl className="inventory-unit-facts">
             <div><dt>Location</dt><dd>{selectedUnit.locationName}</dd></div>
-            <div><dt>Source</dt><dd>{sourceLabel(selectedUnit.source)}</dd></div>
+            <div><dt>Source</dt><dd>{selectedUnitSource.label}{selectedUnitSource.href ? <> · <a href={selectedUnitSource.href} aria-label={`Open invoice ${selectedUnitSource.details}`}>{selectedUnitSource.details}</a></> : null}</dd></div>
             <div><dt>Created</dt><dd>{dateTime(selectedUnit.createdAt)}{selectedUnit.createdBy?.name ? ` by ${selectedUnit.createdBy.name}` : ""}</dd></div>
             {selectedUnit.providerLotExternalId ? <div><dt>Provider serial</dt><dd>{selectedUnit.providerLotExternalId}</dd></div> : null}
           </dl>

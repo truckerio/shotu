@@ -20,5 +20,6 @@ export async function updateInventoryPart(catalogPartId, input, requestContext, 
   if (result.kind === "identity_conflict") throw new InventoryError("That part or reference number is already used by another part.", { code: "INVENTORY_PART_IDENTITY_CONFLICT", statusCode: 409 });
   if (result.kind === "provider_managed") throw new InventoryError("Odoo-managed part fields must be edited in Odoo.", { code: "INVENTORY_PART_FIELD_PROVIDER_MANAGED", statusCode: 422 });
   if (result.kind === "uom_locked") throw new InventoryError("Unit is locked after inventory activity.", { code: "INVENTORY_PART_UOM_LOCKED", statusCode: 422 });
+  if (result.kind === "uom_incompatible") throw new InventoryError("Choose a unit with the same quantity value as the current inventory unit.", { code: "INVENTORY_PART_UOM_INCOMPATIBLE", statusCode: 422 });
   return result.part;
 }

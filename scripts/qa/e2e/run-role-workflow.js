@@ -19,7 +19,20 @@ async function provisionDeterministicAccounts(config) {
   };
   await manageQaAccounts({ action: "apply", ...accountOptions });
   await manageQaAccounts({ action: "reset", ...accountOptions });
-  await closePool();
+  const staleAdmin = await RoleApiClient.create({
+    role: "admin",
+    baseUrl: config.baseUrl,
+    timeoutMs: config.requestTimeoutMs,
+  });
+  try {
+    await staleAdmin.authenticate(config.accounts.admin);
+    await manageQaAccounts({ action: "reset", ...accountOptions });
+    const staleSession = await staleAdmin.request("/api/me", { expectedStatuses: [401] });
+    if (staleSession.status !== 401) throw new Error("QA account reset did not revoke the existing session.");
+  } finally {
+    await staleAdmin.dispose().catch(() => {});
+    await closePool();
+  }
 }
 
 async function createRoleClients(config) {
@@ -45,8 +58,16 @@ export async function runRoleWorkflow({ environment = process.env, argv = proces
   await provisionDeterministicAccounts(config);
 
   const clients = await createRoleClients(config);
+  const cleanupWorkorderIds = new Set();
+  let workflow;
   try {
-    const workflow = await runApiRoleWorkflow({ clients, config, logger });
+    workflow = await runApiRoleWorkflow({
+      clients,
+      config,
+      logger,
+      onCleanupFixture: (workorderId) => cleanupWorkorderIds.add(workorderId),
+    });
+    for (const workorderId of workflow.cleanupWorkorderIds || []) cleanupWorkorderIds.add(workorderId);
     const browserAssertions = config.browser.enabled
       ? await assertCriticalRoleSurfaces({ config, workflow })
       : [];
@@ -61,6 +82,12 @@ export async function runRoleWorkflow({ environment = process.env, argv = proces
     logger.log(JSON.stringify(result, null, 2));
     return result;
   } finally {
+    for (const workorderId of cleanupWorkorderIds) {
+      await clients.admin.request(`/api/office/workorders/${workorderId}/cancel`, {
+        method: "POST",
+        body: { reason: "QA role workflow fixture cleanup" },
+      }).catch((error) => logger.warn(`[role-workflow] cleanup failed: ${error.message}`));
+    }
     await disposeRoleClients(clients);
     await closePool().catch(() => {});
   }

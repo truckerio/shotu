@@ -26,7 +26,7 @@ test("all direct button icons receive a low-specificity alignment fallback", () 
   assert.match(foundation, /:where\(button\s*>\s*svg\)\s*\{[^}]*align-self:\s*center;[^}]*display:\s*block;[^}]*flex:\s*0 0 auto;/s);
 });
 
-test("office part action uses the shared icon slot instead of nesting SVG in text", () => {
-  assert.match(officePartComposer, /<Button\s+icon=\{Plus\}[\s\S]*?Add approved part\s*<\/Button>/);
-  assert.doesNotMatch(officePartComposer, /<Button[^>]*><Plus \/> Add approved part<\/Button>/);
+test("office planning action uses the shared icon slot instead of nesting SVG in text", () => {
+  assert.match(officePartComposer, /<Button\s+icon=\{Plus\}[\s\S]*?\{t\("parts\.planSourcePart"\)\}\s*<\/Button>/);
+  assert.doesNotMatch(officePartComposer, /<Button[^>]*><Plus \/> \{t\("parts\.planSourcePart"\)\}<\/Button>/);
 });

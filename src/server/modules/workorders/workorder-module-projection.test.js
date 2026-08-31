@@ -74,6 +74,17 @@ test("parts projection returns persisted labor hours with used parts", () => {
   ]);
 });
 
+test("parts planning action follows the same Parts module visibility boundary", () => {
+  const detail = {
+    workorder: { id: "wo-1", companyId: "company-1", formData: {} },
+    allowedActions: { addApprovedParts: true, planParts: true },
+  };
+  const writable = projectProtectedWorkorderDetail(detail, { parts: { access: "write", source: "default" } });
+  const hidden = projectProtectedWorkorderDetail(detail, { parts: { access: "hidden", source: "user" } });
+  assert.deepEqual(writable.allowedActions, { addApprovedParts: true, planParts: true });
+  assert.deepEqual(hidden.allowedActions, { addApprovedParts: false, planParts: false });
+});
+
 test("installed serialized summaries stay hidden when Parts is hidden", () => {
   const projected = projectProtectedWorkorderDetail({
     workorder: { id: "wo-1", companyId: "company-1", formData: {} },

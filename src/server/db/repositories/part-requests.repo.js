@@ -1,9 +1,8 @@
 import { getPool, query } from "../pool.js";
-import { PART_APPROVAL_STATUS, normalizePartNumber } from "../../modules/parts/part.constants.js";
+import { isValidInitialAllocationStatus, PART_APPROVAL_STATUS, normalizePartNumber } from "../../modules/parts/part.constants.js";
 import {
   formatAllocationFeedback,
   formatPartDecisionFeedback,
-  formatUsageFeedback,
   partRequestLabel,
 } from "../../modules/parts/part-feedback.js";
 import { publicQuantity, quantityLabel } from "../../modules/parts/quantity-uom.js";
@@ -12,8 +11,92 @@ import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 import { assertPrimaryPartIdentityAvailable } from "./parts-catalog-edit.repo.js";
 
 const TERMINAL_WORKORDER_STATUSES = [WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED, WORKORDER_STATUS.CANCELLED];
+const ALLOCATION_TOLERANCE = 0.0005;
 
-function publicAllocation(row) {
+export class PartAllocationConflictError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "PartAllocationConflictError";
+    this.code = code;
+    this.statusCode = 409;
+  }
+}
+
+export class PartWorkflowConflictError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "PartWorkflowConflictError";
+    this.code = code;
+    this.statusCode = 409;
+  }
+}
+
+const INVENTORY_ALLOCATION_TRANSITIONS = Object.freeze({
+  proposed: ["reserved", "cancelled"],
+  reserved: ["issued", "cancelled"],
+  issued: ["installed", "returned"],
+});
+
+const NON_INVENTORY_ALLOCATION_TRANSITIONS = Object.freeze({
+  purchase: Object.freeze({
+    proposed: ["ordered", "cancelled"],
+    ordered: ["received", "cancelled"],
+    received: ["issued", "cancelled"],
+    issued: ["installed", "returned"],
+  }),
+  transfer: Object.freeze({
+    proposed: ["transferred", "cancelled"],
+    transferred: ["issued", "cancelled"],
+    issued: ["installed", "returned"],
+  }),
+  customer_supplied: Object.freeze({
+    proposed: ["received", "cancelled"],
+    received: ["issued", "cancelled"],
+    issued: ["installed", "returned"],
+  }),
+  mechanic_supplied: Object.freeze({
+    proposed: ["received", "cancelled"],
+    received: ["issued", "cancelled"],
+    issued: ["installed", "returned"],
+  }),
+  unknown: Object.freeze({
+    proposed: ["ordered", "cancelled"],
+    ordered: ["received", "cancelled"],
+    received: ["issued", "cancelled"],
+    issued: ["installed", "returned"],
+  }),
+});
+
+export function allocationNextStatuses({ sourceType, status, inventoryItemId }) {
+  const transitions = sourceType === "inventory" || inventoryItemId
+    ? INVENTORY_ALLOCATION_TRANSITIONS
+    : NON_INVENTORY_ALLOCATION_TRANSITIONS[sourceType] || {};
+  return [...(transitions[status] || [])];
+}
+
+export function validateAllocationCoverage(quantity, uomCode, allocations) {
+  if (!Array.isArray(allocations) || !allocations.length) return;
+  const expectedUom = uomCode || DEFAULT_UOM_CODE;
+  const allocated = allocations.reduce((total, allocation) => {
+    if ((allocation.uomCode || DEFAULT_UOM_CODE) !== expectedUom) {
+      throw new Error("Supply unit must match the approved quantity unit.");
+    }
+    return total + Number(allocation.quantity);
+  }, 0);
+  if (!Number.isFinite(allocated) || Math.abs(allocated - Number(quantity)) > ALLOCATION_TOLERANCE) {
+    throw new Error("Supply quantities must equal the approved quantity.");
+  }
+}
+
+export function validateInitialAllocationStatuses(allocations) {
+  for (const allocation of allocations || []) {
+    if (!isValidInitialAllocationStatus(allocation.sourceType, allocation.status)) {
+      throw new Error(`Initial ${allocation.sourceType} supply status must be valid for its source.`);
+    }
+  }
+}
+
+export function publicAllocation(row) {
   return {
     id: row.id,
     sourceType: row.source_type,
@@ -29,6 +112,11 @@ function publicAllocation(row) {
     quoteUrl: row.quote_url,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    nextStatuses: allocationNextStatuses({
+      sourceType: row.source_type,
+      status: row.status,
+      inventoryItemId: row.inventory_item_id,
+    }),
   };
 }
 
@@ -266,6 +354,29 @@ export async function createPartRequest(workorderId, input) {
 }
 
 export async function createApprovedOfficePart(workorderId, input, actorUserId) {
+  return createOfficePart(workorderId, input, actorUserId, {
+    appendToWorkorder: true,
+    eventType: "office_added",
+    eventNote: "Office added",
+    systemMessage: "Office added approved part",
+  });
+}
+
+export async function createPlannedOfficePart(workorderId, input, actorUserId) {
+  return createOfficePart(workorderId, input, actorUserId, {
+    appendToWorkorder: false,
+    eventType: "office_planned",
+    eventNote: "Office planned",
+    systemMessage: "Office planned approved part",
+  });
+}
+
+async function createOfficePart(workorderId, input, actorUserId, {
+  appendToWorkorder,
+  eventType,
+  eventNote,
+  systemMessage,
+}) {
   const pool = getPool();
   const client = await pool.connect();
   try {
@@ -283,6 +394,9 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       uomCode: input.uomCode || DEFAULT_UOM_CODE,
       repairOrder: input.repairOrder || "",
     };
+    const suppliedAllocations = Array.isArray(input.allocations) ? input.allocations : [];
+    validateAllocationCoverage(values.quantity, values.uomCode, suppliedAllocations);
+    validateInitialAllocationStatuses(suppliedAllocations);
     const selectedCatalogPart = await requireSelectedCatalogPart(
       client,
       workorder.company_id,
@@ -320,7 +434,7 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
       ]
     );
     const requestId = inserted.rows[0].id;
-    const allocations = input.allocations.length ? input.allocations : [{
+    const allocations = suppliedAllocations.length ? suppliedAllocations : [{
       sourceType: "unknown",
       status: "proposed",
       quantity: values.quantity,
@@ -336,17 +450,17 @@ export async function createApprovedOfficePart(workorderId, input, actorUserId) 
         normalizedPartNumber: normalizePartNumber(values.partNumber),
       });
     }
-    await appendOfficeAddedPart(client, workorderId, values);
+    if (appendToWorkorder) await appendOfficeAddedPart(client, workorderId, values);
     const label = values.partNumber || values.description || input.query;
     await addPartEvent(client, {
       workorderId,
       partRequestId: requestId,
-      eventType: "office_added",
+      eventType,
       actorUserId,
-      note: `Office added ${quantityLabel(values.quantity, values.uomCode)} ${label}.`,
+      note: `${eventNote} ${quantityLabel(values.quantity, values.uomCode)} ${label}.`,
       metadata: { allocations: allocations.length, fitmentStatus: input.fitmentStatus },
     });
-    await addSystemMessage(client, workorderId, `Office added approved part: ${quantityLabel(values.quantity, values.uomCode)} ${label}.`);
+    await addSystemMessage(client, workorderId, `${systemMessage}: ${quantityLabel(values.quantity, values.uomCode)} ${label}.`);
     await client.query("commit");
     return (await listWorkorderPartRequests(workorderId)).find((request) => request.id === requestId);
   } catch (error) {
@@ -589,9 +703,16 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
     );
     const request = result.rows[0];
     if (!request) throw new Error("Part request not found.");
+    if (TERMINAL_WORKORDER_STATUSES.includes(request.workorder_status)) {
+      throw new PartWorkflowConflictError(
+        "PART_DECISION_WORKORDER_TERMINAL",
+        "Part requests cannot be reviewed on a completed workorder.",
+      );
+    }
     if (![PART_APPROVAL_STATUS.SUBMITTED, PART_APPROVAL_STATUS.NEEDS_INFO].includes(request.approval_status)) {
       throw new Error("This part request was already reviewed.");
     }
+    const inputAllocations = Array.isArray(input.allocations) ? input.allocations : [];
     const values = {
       partNumber: input.partNumber || request.part_number,
       manufacturer: input.manufacturer || request.manufacturer,
@@ -601,6 +722,10 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       uomCode: input.uomCode || request.uom_code || DEFAULT_UOM_CODE,
       repairOrder: input.repairOrder || request.repair_order,
     };
+    if (input.decision === PART_APPROVAL_STATUS.APPROVED) {
+      validateAllocationCoverage(values.quantity, values.uomCode, inputAllocations);
+      validateInitialAllocationStatuses(inputAllocations);
+    }
     const catalogPartId = input.decision === PART_APPROVAL_STATUS.APPROVED
       ? (await requireSelectedCatalogPart(
         client,
@@ -651,7 +776,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       ]
     );
     if (input.decision === PART_APPROVAL_STATUS.APPROVED) {
-      const allocations = input.allocations.length ? input.allocations : [{
+      const allocations = inputAllocations.length ? inputAllocations : [{
         sourceType: "unknown",
         status: "proposed",
         quantity: values.quantity,
@@ -677,7 +802,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       actorUserId,
       note: input.reason || `Part request ${eventType}: ${label}.`,
       metadata: {
-        allocations: input.allocations.length,
+        allocations: inputAllocations.length,
         fitmentStatus: input.fitmentStatus,
         quantity: values.quantity,
         uomCode: values.uomCode,
@@ -689,7 +814,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       uomCode: values.uomCode,
       label,
       reason: input.reason,
-      allocations: input.allocations,
+      allocations: inputAllocations,
     }));
     await restoreWorkorderWhenResolved(client, {
       id: workorderId,
@@ -706,39 +831,99 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
   }
 }
 
+async function applyInventoryAllocationTransition(client, allocation, nextStatus) {
+  const inventory = await client.query(
+    "select id from inventory_items where id = $1 for update",
+    [allocation.inventory_item_id],
+  );
+  if (!inventory.rows[0]) {
+    throw new PartAllocationConflictError("PART_ALLOCATION_INVENTORY_MISSING", "Inventory for this allocation is no longer available.");
+  }
+  const quantity = allocation.quantity;
+  let updated;
+  if (allocation.status === "proposed" && nextStatus === "reserved") {
+    updated = await client.query(
+      `update inventory_items
+       set quantity_reserved = quantity_reserved + $2, updated_at = now()
+       where id = $1 and quantity_on_hand - quantity_reserved >= $2
+       returning id`,
+      [allocation.inventory_item_id, quantity],
+    );
+  } else if (allocation.status === "reserved" && nextStatus === "issued") {
+    updated = await client.query(
+      `update inventory_items
+       set quantity_reserved = quantity_reserved - $2,
+           quantity_on_hand = quantity_on_hand - $2,
+           updated_at = now()
+       where id = $1 and quantity_reserved >= $2 and quantity_on_hand >= $2
+       returning id`,
+      [allocation.inventory_item_id, quantity],
+    );
+  } else if (allocation.status === "reserved" && nextStatus === "cancelled") {
+    updated = await client.query(
+      `update inventory_items
+       set quantity_reserved = quantity_reserved - $2, updated_at = now()
+       where id = $1 and quantity_reserved >= $2
+       returning id`,
+      [allocation.inventory_item_id, quantity],
+    );
+  } else if (allocation.status === "issued" && nextStatus === "returned") {
+    updated = await client.query(
+      `update inventory_items
+       set quantity_on_hand = quantity_on_hand + $2, updated_at = now()
+       where id = $1
+       returning id`,
+      [allocation.inventory_item_id, quantity],
+    );
+  }
+  if (updated && !updated.rows[0]) {
+    throw new PartAllocationConflictError(
+      "PART_ALLOCATION_INVENTORY_BALANCE_CONFLICT",
+      "Inventory quantities changed before this allocation could transition.",
+    );
+  }
+}
+
 export async function updatePartAllocation(workorderId, requestId, allocationId, input, actorUserId) {
   const pool = getPool();
   const client = await pool.connect();
   try {
     await client.query("begin");
     const result = await client.query(
-      `select pa.*, pr.workorder_id, pr.part_number, pr.description, pr.raw_query, pr.quantity as request_quantity
+      `select pa.*, pr.workorder_id, pr.part_number, pr.description, pr.raw_query, pr.quantity as request_quantity,
+              wo.status as workorder_status
        from part_allocations pa
        join workorder_part_requests pr on pr.id = pa.part_request_id
+       join operational_workorders wo on wo.id = pr.workorder_id
        where pa.id = $1 and pa.part_request_id = $2 and pr.workorder_id = $3
        for update`,
       [allocationId, requestId, workorderId]
     );
     const allocation = result.rows[0];
     if (!allocation) throw new Error("Part allocation not found.");
-    if (allocation.inventory_item_id && allocation.source_type === "inventory" && allocation.status !== input.status) {
-      await client.query("select id from inventory_items where id = $1 for update", [allocation.inventory_item_id]);
-      if (allocation.status === "reserved" && input.status === "issued") {
-        await client.query(
-          `update inventory_items set quantity_reserved = quantity_reserved - $2, quantity_on_hand = quantity_on_hand - $2, updated_at = now() where id = $1`,
-          [allocation.inventory_item_id, allocation.quantity]
-        );
-      } else if (allocation.status === "reserved" && input.status === "cancelled") {
-        await client.query(
-          `update inventory_items set quantity_reserved = quantity_reserved - $2, updated_at = now() where id = $1`,
-          [allocation.inventory_item_id, allocation.quantity]
-        );
-      } else if (allocation.status === "issued" && input.status === "returned") {
-        await client.query(
-          `update inventory_items set quantity_on_hand = quantity_on_hand + $2, updated_at = now() where id = $1`,
-          [allocation.inventory_item_id, allocation.quantity]
-        );
-      }
+    if (TERMINAL_WORKORDER_STATUSES.includes(allocation.workorder_status)) {
+      throw new PartAllocationConflictError(
+        "PART_ALLOCATION_WORKORDER_TERMINAL",
+        "Parts cannot be allocated on a completed workorder.",
+      );
+    }
+    if (allocation.status === input.status) {
+      await client.query("commit");
+      return (await listWorkorderPartRequests(workorderId)).find((part) => part.id === requestId);
+    }
+    const nextStatuses = allocationNextStatuses({
+      sourceType: allocation.source_type,
+      status: allocation.status,
+      inventoryItemId: allocation.inventory_item_id,
+    });
+    if (!nextStatuses.includes(input.status)) {
+      throw new PartAllocationConflictError(
+        "PART_ALLOCATION_TRANSITION_INVALID",
+        `Cannot change ${allocation.source_type} allocation from ${allocation.status} to ${input.status}.`,
+      );
+    }
+    if (allocation.inventory_item_id && allocation.source_type === "inventory") {
+      await applyInventoryAllocationTransition(client, allocation, input.status);
     }
     await client.query("update part_allocations set status = $2, updated_at = now() where id = $1", [allocationId, input.status]);
     await addPartEvent(client, {
@@ -774,55 +959,14 @@ export async function updatePartAllocation(workorderId, requestId, allocationId,
 }
 
 export async function updatePartUsage(workorderId, requestId, input) {
-  const pool = getPool();
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
-    const result = await client.query(
-      `select
-         pr.*,
-         exists (
-           select 1 from workorder_mechanic_assignments assignment
-           where assignment.workorder_id = wo.id
-             and assignment.mechanic_user_id = $3
-             and assignment.active = true
-         ) as mechanic_assigned
-       from workorder_part_requests pr
-       join operational_workorders wo on wo.id = pr.workorder_id
-       where pr.id = $1 and pr.workorder_id = $2 for update`,
-      [requestId, workorderId, input.mechanicUserId]
-    );
-    const request = result.rows[0];
-    if (!request) throw new Error("Part request not found.");
-    if (!request.mechanic_assigned) throw new Error("Only an assigned mechanic can update part usage.");
-    if (request.approval_status !== PART_APPROVAL_STATUS.APPROVED) throw new Error("Only approved parts can be issued or installed.");
-    await client.query("update workorder_part_requests set usage_status = $2, updated_at = now() where id = $1", [requestId, input.usageStatus]);
-    await addPartEvent(client, {
-      workorderId,
-      partRequestId: requestId,
-      eventType: "usage_updated",
-      actorUserId: input.mechanicUserId,
-      note: input.note || `Part usage changed from ${request.usage_status} to ${input.usageStatus}.`,
-      metadata: {
-        from: request.usage_status,
-        to: input.usageStatus,
-        quantity: publicQuantity(request.quantity),
-        uomCode: request.uom_code || DEFAULT_UOM_CODE,
-      },
-    });
-    await addSystemMessage(client, workorderId, formatUsageFeedback({
-      quantity: request.quantity,
-      uomCode: request.uom_code,
-      label: partRequestLabel(request),
-      usageStatus: input.usageStatus,
-      note: input.note,
-    }));
-    await client.query("commit");
-    return (await listWorkorderPartRequests(workorderId)).find((part) => part.id === requestId);
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
+  // Lifecycle is derived from Office-controlled allocation transitions. The mechanic UI
+  // intentionally exposes it as read-only, so this retained compatibility entry point
+  // must not become a bypass for arbitrary request status writes.
+  void workorderId;
+  void requestId;
+  void input;
+  throw new PartWorkflowConflictError(
+    "PART_USAGE_READ_ONLY",
+    "Part lifecycle status is read-only for mechanics. Office manages supply lifecycle changes.",
+  );
 }

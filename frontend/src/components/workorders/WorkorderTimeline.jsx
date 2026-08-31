@@ -34,11 +34,11 @@ function TimelineMeta({ actorLabel, actorName, actorRole, createdAt, dateText, e
   );
 }
 
-export function WorkorderTimelineList({ emptyMessage, items, locale = "en" }) {
+export function WorkorderTimelineList({ className = "", emptyMessage, items, locale = "en" }) {
   if (!items.length) return <p className="chat-empty">{emptyMessage ?? interfaceText(locale, "timeline.noActivity")}</p>;
 
   return (
-    <ol className="workorder-timeline-list">
+    <ol className={`workorder-timeline-list ${className}`.trim()}>
       {items.map((item) => (
         <li key={item.id} className={item.className || ""}>
           <TimelineMeta

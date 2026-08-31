@@ -14,8 +14,8 @@ test("part edit forwards only authenticated company and normalized strict input"
   assert.deepEqual(received.referenceNumbers, ["BW-1"]);
 });
 
-test("part edit maps stale, identity, provider and hidden tenant failures", async () => {
-  for (const [kind, code, status] of [["stale", "INVENTORY_PART_STALE", 409], ["identity_conflict", "INVENTORY_PART_IDENTITY_CONFLICT", 409], ["provider_managed", "INVENTORY_PART_FIELD_PROVIDER_MANAGED", 422], ["uom_locked", "INVENTORY_PART_UOM_LOCKED", 422], ["not_found", "inventory_not_found", 404]]) {
+test("part edit maps stale, identity, provider, unit and hidden tenant failures", async () => {
+  for (const [kind, code, status] of [["stale", "INVENTORY_PART_STALE", 409], ["identity_conflict", "INVENTORY_PART_IDENTITY_CONFLICT", 409], ["provider_managed", "INVENTORY_PART_FIELD_PROVIDER_MANAGED", 422], ["uom_locked", "INVENTORY_PART_UOM_LOCKED", 422], ["uom_incompatible", "INVENTORY_PART_UOM_INCOMPATIBLE", 422], ["not_found", "inventory_not_found", 404]]) {
     await assert.rejects(() => updateInventoryPart("33333333-3333-4333-8333-333333333333", input, context, { updatePart: async () => ({ kind }) }), (error) => error.code === code && error.statusCode === status);
   }
 });

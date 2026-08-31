@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { officeDashboard } from "./office.service.js";
+
+test("Office Parts mutations retain an explicit active Office or Admin owner guard", async () => {
+  const source = await readFile(new URL("./office.service.js", import.meta.url), "utf8");
+  const guard = source.slice(source.indexOf("async function requireOffice"), source.indexOf("export async function defaultOfficeUser"));
+
+  assert.match(guard, /user\.active/);
+  assert.match(guard, /\["office", "admin"\]\.includes\(user\.role\)/);
+});
 
 test("office dashboard includes assigned mechanics without workorders", async () => {
   const queries = [];

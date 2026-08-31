@@ -9,9 +9,12 @@ import {
   purchasingLocation,
   requestUomCode,
   vehicleInput,
+  partRequestLabel,
 } from "./part-request-model.js";
+import { interfaceText } from "../../../i18n/index.js";
 
-export function useOfficeRequestReview({ request, detail, onChanged }) {
+export function useOfficeRequestReview({ request, detail, onChanged, locale = "en" }) {
+  const t = (key) => interfaceText(locale, key);
   const initial = createOfficeReviewState(request, detail.workorder.locationId);
   const [form, setForm] = useState(initial.form);
   const [allocations, setAllocations] = useState(initial.allocations);
@@ -82,21 +85,21 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
   async function decide(decision) {
     if (decision !== "approved" && !form.reason.trim()) {
       fail(decision === "needs_info"
-        ? "Write the question the mechanic needs to answer."
-        : "Explain why the request is being declined.", true);
+        ? t("parts.questionRequired")
+        : t("parts.declineReasonRequired"), true);
       return;
     }
     if (decision === "approved" && !form.partNumber.trim() && !form.description.trim()) {
-      fail("Add a part number or description before approval.");
+      fail(t("parts.partRequiredBeforeApproval"));
       return;
     }
     if (decision === "approved" && form.fitmentStatus === "conflict") {
-      fail("This part has conflicting fitment. Resolve the fitment before approval.");
+      fail(t("parts.resolveFitmentBeforeApproval"));
       return;
     }
     const allocatedQuantity = allocations.reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0);
     if (decision === "approved" && Math.abs(allocatedQuantity - Number(form.quantity)) > 0.0005) {
-      fail(`Supply quantities must total ${formatQuantityUnit(form.quantity, form.uomCode)}.`);
+      fail(`${t("parts.supplyMustTotal")} ${formatQuantityUnit(form.quantity, form.uomCode)}.`);
       return;
     }
 
@@ -114,12 +117,12 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
       await onChanged();
       setMessageTone("success");
       setMessage(decision === "approved"
-        ? "Approved. The mechanic was notified in chat."
+        ? t("parts.approvedNotified")
         : decision === "needs_info"
-          ? "Question sent to the mechanic."
-          : "Request declined. The mechanic was notified.");
+          ? t("parts.questionSent")
+          : t("parts.declinedNotified"));
     } catch (error) {
-      fail(error.message);
+      fail(locale === "en" && error?.message ? error.message : t("parts.decisionFailed"));
     } finally {
       setBusy("");
     }
@@ -161,10 +164,10 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
       })));
       setMessageTone("success");
       setMessage(result.resolutionSource === "company_catalog"
-        ? "Matched company-approved part data."
-        : "AI suggestion loaded for review. Nothing has been approved yet.");
+        ? t("parts.matchedCompanyData")
+        : t("parts.aiSuggestionLoaded"));
     } catch (error) {
-      fail(`${error.message} Review and enter the part manually.`);
+      fail(locale === "en" && error?.message ? `${error.message} ${t("parts.reviewManualEntry")}` : t("parts.suggestionFailed"));
     } finally {
       setBusy("");
     }
@@ -180,9 +183,9 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
       });
       await onChanged();
       setMessageTone("success");
-      setMessage(`Supply updated to ${ALLOCATION_STATUS_LABELS[status]}. The mechanic was notified.`);
+      setMessage(`${t("parts.supplyUpdatedTo")} ${partRequestLabel(locale, "allocation", status, ALLOCATION_STATUS_LABELS[status])}. ${t("parts.mechanicNotified")}`);
     } catch (error) {
-      fail(error.message);
+      fail(locale === "en" && error?.message ? error.message : t("parts.allocationUpdateFailed"));
     } finally {
       setBusy("");
     }
@@ -205,7 +208,7 @@ export function useOfficeRequestReview({ request, detail, onChanged }) {
         }),
       }));
     } catch (error) {
-      fail(error.message);
+      fail(locale === "en" && error?.message ? error.message : t("parts.priceSearchFailed"));
     } finally {
       setBusy("");
     }

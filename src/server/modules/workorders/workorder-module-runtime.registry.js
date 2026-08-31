@@ -84,6 +84,7 @@ const ACTIONS = Object.freeze({
       z.object({ operation: z.literal("usedParts"), ...updateMechanicUsedPartsSchema.shape }),
       z.object({ operation: z.literal("usage"), requestId: id, ...updatePartUsageSchema.shape }),
       z.object({ operation: z.literal("officePart"), ...createOfficePartSchema.shape }),
+      z.object({ operation: z.literal("officePartPlan"), ...createOfficePartSchema.shape }),
       updateSerializedUsageRepairOrderSchema,
     ]),
     approve: partDecision,

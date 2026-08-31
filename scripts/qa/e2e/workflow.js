@@ -7,9 +7,12 @@ export const ROLE_WORKFLOW_STEPS = Object.freeze([
   "mechanic-accept",
   "chat-and-parts",
   "office-part-decision",
+  "office-parts-projection",
   "mechanic-done",
   "office-close",
   "surveillance-odoo-readiness",
+  "empty-parts-fixture",
+  "active-parts-fixture",
 ]);
 
 function lifecycle(workorder) {
@@ -89,7 +92,7 @@ function workorderFrom(result, stage) {
   return workorder;
 }
 
-export async function runApiRoleWorkflow({ clients, config, logger = console }) {
+export async function runApiRoleWorkflow({ clients, config, logger = console, onCleanupFixture = () => {} }) {
   const runId = `qa-e2e-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const trace = [];
   const record = (stage, detail = {}) => {
@@ -132,6 +135,7 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
     body: buildWorkorderInput({ location: restricted, concern: restrictedConcern }),
   });
   const restrictedWorkorder = workorderFrom(restrictedCreated, "restricted create");
+  onCleanupFixture(restrictedWorkorder.id);
 
   await Promise.all([
     expectDenied(clients.office, `/api/office/workorders/${restrictedWorkorder.id}`),
@@ -177,7 +181,7 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
   record("mechanic-accept");
 
   const chatBody = `QA status update completed at ${Date.now()}.`;
-  const partNumber = `QA-${runId.slice(-8).toUpperCase()}`;
+  const partNumber = `QA-${runId.slice(-8).toUpperCase()}-LONG-PART-NUMBER-1234567890`;
   await clients.mechanic.request(`/api/mechanic/workorders/${workorder.id}/messages`, {
     method: "POST",
     body: { clientMessageId: randomUUID(), messageType: "normal", body: chatBody },
@@ -187,10 +191,10 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
     body: {
       query: partNumber,
       partNumber,
-      description: "Deterministic QA workflow part",
+      description: "Deterministic QA workflow part with a deliberately long description for responsive Parts verification.",
       quantity: 1,
       uomCode: "pc",
-      repairOrder: "Install during QA workflow",
+      repairOrder: "Install the deliberately long QA fixture part and verify all associated hardware before returning the unit to service.",
       fitmentStatus: "confirmed",
       fitmentNotes: "Synthetic test data",
     },
@@ -221,6 +225,38 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
     throw new Error("Office part decision did not resolve the synthetic request.");
   }
   record("office-part-decision", { decision: "rejected" });
+
+  const plannedPartNumber = `PLAN-${runId.slice(-8).toUpperCase()}-NOT-PRINTED`;
+  await clients.office.request(`/api/office/workorders/${workorder.id}/part-plans`, {
+    method: "POST",
+    body: {
+      query: plannedPartNumber,
+      partNumber: plannedPartNumber,
+      description: "Long planned supply description that must stay outside printed work performed.",
+      quantity: 1,
+      uomCode: "ea",
+      repairOrder: "Plan this supply without recording it as work performed or an actually used part.",
+      fitmentStatus: "confirmed",
+      fitmentNotes: "Office planning QA fixture",
+      allocations: [],
+    },
+  });
+  const actualPartNumber = `USED-${runId.slice(-8).toUpperCase()}-PRINTED`;
+  await clients.office.request(`/api/office/workorders/${workorder.id}/parts`, {
+    method: "POST",
+    body: {
+      query: actualPartNumber,
+      partNumber: actualPartNumber,
+      description: "Long legacy-compatible actual-used part description that must remain printable.",
+      quantity: 1,
+      uomCode: "ea",
+      repairOrder: "Install the actual-used QA fixture and include it in printed work performed.",
+      fitmentStatus: "confirmed",
+      fitmentNotes: "Office actual-used QA fixture",
+      allocations: [],
+    },
+  });
+  record("office-parts-projection");
 
   const done = await clients.mechanic.request(`/api/mechanic/workorders/${workorder.id}/mark-done`, {
     method: "POST",
@@ -257,10 +293,53 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
     blockerCodes: odooReadiness.blockerCodes,
   });
 
-  await clients.admin.request(`/api/office/workorders/${restrictedWorkorder.id}/cancel`, {
+  const emptyConcern = `QA empty Parts state ${runId}`;
+  const emptyCreated = await clients.admin.request("/api/office/workorders", {
     method: "POST",
-    body: { reason: "QA authorization boundary complete" },
+    body: buildWorkorderInput({
+      location: primary,
+      concern: emptyConcern,
+      mechanicUserIds: [actors.mechanic.id],
+    }),
   });
+  const emptyWorkorder = workorderFrom(emptyCreated, "empty Parts create");
+  onCleanupFixture(emptyWorkorder.id);
+  record("empty-parts-fixture", { workorderId: emptyWorkorder.id });
+
+  // Keep a separate in-progress fixture for the browser-only actions below.
+  // The canonical closed fixture must remain untouched for print, history,
+  // surveillance, and terminal-state coverage.
+  const activeConcern = `QA active Parts state ${runId}`;
+  const activeCreated = await clients.admin.request("/api/office/workorders", {
+    method: "POST",
+    body: buildWorkorderInput({ location: primary, concern: activeConcern }),
+  });
+  let activeWorkorder = workorderFrom(activeCreated, "active Parts create");
+  onCleanupFixture(activeWorkorder.id);
+  assertLifecycle(activeWorkorder, "open", "active Parts create");
+  const activeAssigned = await clients.office.request(`/api/office/workorders/${activeWorkorder.id}/assignments`, {
+    method: "POST",
+    body: { mechanicUserIds: [actors.mechanic.id], reason: "QA active Parts browser fixture" },
+  });
+  activeWorkorder = workorderFrom(activeAssigned, "active Parts assignment");
+  assertLifecycle(activeWorkorder, "accepted", "active Parts assignment");
+  const activeUnassigned = await clients.office.request(`/api/office/workorders/${activeWorkorder.id}/assignments`, {
+    method: "POST",
+    body: { mechanicUserIds: [], reason: "QA active Parts available-queue acceptance" },
+  });
+  activeWorkorder = workorderFrom(activeUnassigned, "active Parts unassignment");
+  assertLifecycle(activeWorkorder, "open", "active Parts unassignment");
+  const activeAccepted = await clients.mechanic.request(`/api/mechanic/workorders/${activeWorkorder.id}/accept`, {
+    method: "POST",
+    body: {},
+  });
+  activeWorkorder = workorderFrom(activeAccepted, "active Parts mechanic accept");
+  assertLifecycle(activeWorkorder, "in_progress", "active Parts mechanic accept");
+  const activeSuffix = runId.slice(-8).toUpperCase();
+  const activeManualPartNumber = `MANUAL-${activeSuffix}-USED`;
+  const activeRequestDescription = `Browser-requested QA part ${activeSuffix}`;
+  const activePlannedPartNumber = `PLAN-${activeSuffix}-BROWSER`;
+  record("active-parts-fixture", { workorderId: activeWorkorder.id, serial: activeWorkorder.serial });
 
   return {
     runId,
@@ -269,11 +348,22 @@ export async function runApiRoleWorkflow({ clients, config, logger = console }) 
     concern: mainConcern,
     chatBody,
     partNumber,
+    plannedPartNumber,
+    actualPartNumber,
+    emptyWorkorderId: emptyWorkorder.id,
+    emptyConcern,
+    activeWorkorderId: activeWorkorder.id,
+    activeConcern,
+    activeManualPartNumber,
+    activeRequestDescription,
+    activePlannedPartNumber,
     odooReadiness: {
       ready: odooReadiness.ready,
       blockerCodes: odooReadiness.blockerCodes,
     },
     restrictedWorkorderId: restrictedWorkorder.id,
+    restrictedConcern,
+    cleanupWorkorderIds: [restrictedWorkorder.id, emptyWorkorder.id, activeWorkorder.id],
     trace,
   };
 }

@@ -23,6 +23,7 @@ import {
   sendOfficeMessage,
   updateOfficeWorkorder,
   markOfficeWorkorderDone,
+  planOfficePart,
 } from "../office/office.service.js";
 import { loadWorkorderDetail } from "./workorder-detail.service.js";
 import {
@@ -192,6 +193,9 @@ export async function runWorkorderModuleAction(
     }
     if (action === "record" && input.operation === "officePart" && ["office", "admin"].includes(context.actor.role)) {
       return (dependencies.addOfficePart || addOfficePart)(workorderId, { ...input, officeUserId: actorId });
+    }
+    if (action === "record" && input.operation === "officePartPlan" && ["office", "admin"].includes(context.actor.role)) {
+      return (dependencies.planOfficePart || planOfficePart)(workorderId, { ...input, officeUserId: actorId });
     }
     if (action === "record" && input.operation === "serializedUsageRepairOrder") {
       return (dependencies.updateSerializedRepairOrderForWorkorder || updateSerializedUsageRepairOrderForWorkorder)(

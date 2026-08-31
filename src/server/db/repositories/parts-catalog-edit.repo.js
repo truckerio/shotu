@@ -1,14 +1,16 @@
 import { getPool } from "../pool.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
 
+function preferredUom(row) { return row.inventory_display_uom_code || row.uom_code; }
+
 function state(row, references) {
   return { description: row.description, partNumber: row.part_number, manufacturer: row.manufacturer,
-    category: row.category, barcode: row.barcode, uomCode: row.uom_code, referenceNumbers: references };
+    category: row.category, barcode: row.barcode, uomCode: preferredUom(row), referenceNumbers: references };
 }
 
 function editableFields(providerManaged, uomLocked) {
-  if (providerManaged) return ["manufacturer", "referenceNumbers"];
-  return ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers", ...(uomLocked ? [] : ["uomCode"])];
+  if (providerManaged) return ["manufacturer", "uomCode", "referenceNumbers"];
+  return ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "referenceNumbers"];
 }
 
 export async function lockCompanyPartIdentity(client, companyId) {
@@ -43,11 +45,30 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     const current = selected.rows[0];
     if (!current) { await client.query("rollback"); return { kind: "not_found" }; }
     if (Number(current.version) !== Number(expectedVersion)) { await client.query("rollback"); return { kind: "stale" }; }
-    if (current.provider_managed && (description !== current.description || partNumber !== current.part_number || category !== current.category || barcode !== current.barcode || uomCode !== current.uom_code)) {
+    if (current.provider_managed && (description !== current.description || partNumber !== current.part_number || category !== current.category || barcode !== current.barcode)) {
       await client.query("rollback"); return { kind: "provider_managed" };
     }
-    const uomChanged = uomCode !== current.uom_code;
-    if (uomChanged && current.uom_locked_at) { await client.query("rollback"); return { kind: "uom_locked" }; }
+    const displayOnlyUom = current.provider_managed || current.uom_locked_at !== null;
+    let canonicalUomCode = uomCode;
+    let displayUomCode = null;
+    if (displayOnlyUom) {
+      const equivalent = await client.query(
+        `select 1 from units_of_measure canonical
+         join units_of_measure preferred on preferred.code = $2 and preferred.active
+         where canonical.code = $1 and canonical.active
+           and (preferred.code = canonical.code or (
+             canonical.reference_code is not null
+             and canonical.conversion_factor is not null
+             and preferred.reference_code = canonical.reference_code
+             and preferred.conversion_factor = canonical.conversion_factor
+             and preferred.decimal_scale = canonical.decimal_scale
+           )) limit 1`,
+        [current.uom_code, uomCode],
+      );
+      if (!equivalent.rows[0]) { await client.query("rollback"); return { kind: "uom_incompatible" }; }
+      canonicalUomCode = current.uom_code;
+      displayUomCode = uomCode === current.uom_code ? null : uomCode;
+    }
     const normalizedPartNumber = normalizePartNumber(partNumber);
     const normalizedReferences = referenceNumbers.map(normalizePartNumber);
     const identities = [normalizedPartNumber, ...normalizedReferences];
@@ -68,9 +89,9 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     const oldRefs = await client.query("select reference_number from part_reference_numbers where company_id=$1 and catalog_part_id=$2 order by lower(reference_number), id", [current.company_id, catalogPartId]);
     const before = state(current, oldRefs.rows.map((row) => row.reference_number));
     const updated = await client.query(
-      `update parts_catalog set normalized_part_number=$3, part_number=$4, description=$5, manufacturer=$6, category=$7, barcode=$8, uom_code=$9, version=version+1, updated_at=now()
+      `update parts_catalog set normalized_part_number=$3, part_number=$4, description=$5, manufacturer=$6, category=$7, barcode=$8, uom_code=$9, inventory_display_uom_code=$10, version=version+1, updated_at=now()
        where company_id=$1 and id=$2 returning *`,
-      [current.company_id, catalogPartId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode, uomCode],
+      [current.company_id, catalogPartId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode, canonicalUomCode, displayUomCode],
     );
     await client.query("delete from part_reference_numbers where company_id=$1 and catalog_part_id=$2", [current.company_id, catalogPartId]);
     if (referenceNumbers.length) await client.query(
@@ -91,10 +112,11 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
       [current.company_id, catalogPartId, actorId, current.version, row.version, JSON.stringify(before), JSON.stringify(after)],
     );
     await client.query("commit");
-    return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, uomCode: row.uom_code, uomLocked: row.uom_locked_at !== null, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: editableFields(current.provider_managed, row.uom_locked_at !== null) } };
+    return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, uomCode: preferredUom(row), canonicalUomCode: row.uom_code, uomLocked: row.uom_locked_at !== null, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: editableFields(current.provider_managed, row.uom_locked_at !== null) } };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     if (error?.constraint === "parts_catalog_uom_locked" || error?.constraint === "catalog_uom_activity_uom_mismatch") return { kind: "uom_locked" };
+    if (error?.constraint === "inventory_display_uom_not_equivalent") return { kind: "uom_incompatible" };
     if (error?.code === "23505") return { kind: "identity_conflict" };
     throw error;
   } finally { client.release(); }

@@ -6,7 +6,7 @@ import {
   updateMechanicUsedParts,
   WorkorderLifecycleConflictError,
 } from "../../db/repositories/operational-workorders.repo.js";
-import { createPartRequest, updatePartUsage } from "../../db/repositories/part-requests.repo.js";
+import { createPartRequest } from "../../db/repositories/part-requests.repo.js";
 import { getUserById, listUsersByRole } from "../../db/repositories/users.repo.js";
 import {
   getLocationWorkorderPolicy,
@@ -29,7 +29,9 @@ import { AuthError, resourceNotFound } from "../../auth/errors.js";
 
 async function requireMechanic(userId) {
   const user = await getUserById(userId);
-  if (!user || !user.active) throw new Error("Active workorder user not found.");
+  if (!user || !user.active || user.role !== "mechanic") {
+    throw new Error("Active Mechanic workorder user not found.");
+  }
   return user;
 }
 
@@ -154,7 +156,15 @@ export async function requestMechanicPart(workorderId, input) {
 
 export async function updateMechanicPartUsage(workorderId, requestId, input) {
   await requireMechanic(input.mechanicUserId);
-  return updatePartUsage(workorderId, requestId, input);
+  // Keep the service guard explicit as legacy routes still dispatch this operation.
+  // Allocation lifecycle is Office-owned and mechanics are read-only observers.
+  void workorderId;
+  void requestId;
+  throw new AuthError(
+    403,
+    "MECHANIC_PART_USAGE_READ_ONLY",
+    "Part lifecycle status is read-only. Ask the office to update the supply lifecycle.",
+  );
 }
 
 export async function acceptMechanicWorkorder(workorderId, mechanicUserId) {

@@ -18,7 +18,7 @@ test("inventory repositories enforce company and location scope and serialize re
 
 test("authenticated scan projection excludes invoice, vendor, price, and QR secrets", async () => {
   const source = await readFile(new URL("../../db/repositories/inventory-receipts.repo.js", import.meta.url), "utf8");
-  const start = source.indexOf("export async function getSerializedInventoryUnit");
+  const start = source.indexOf("export async function getSerializedInventoryUnit({");
   const projection = source.slice(start);
   assert.doesNotMatch(projection, /invoice_number|vendor_name|unit_price|line_total|qr_token/i);
   assert.match(projection, /provider_picking_name/);

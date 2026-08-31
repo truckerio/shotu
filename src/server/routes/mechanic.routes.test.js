@@ -68,3 +68,40 @@ test("legacy Mechanic detail does not query or expose summaries when Parts is hi
   assert.equal("parts" in responses[0].value.modules, false);
   assert.equal("installedSerializedParts" in responses[0].value.workorder, false);
 });
+
+test("legacy mechanic part-usage PATCH propagates the read-only lifecycle guard without a success response", async () => {
+  const responses = [];
+  const calls = [];
+  const lifecycleError = Object.assign(new Error("Part lifecycle status is read-only."), {
+    code: "MECHANIC_PART_USAGE_READ_ONLY",
+    statusCode: 403,
+  });
+  const routeHelpers = {
+    ...helpers(responses),
+    readBody: async () => ({ usageStatus: "installed", note: "Attempt direct lifecycle jump" }),
+  };
+
+  await assert.rejects(
+    handleMechanicApi(
+      { method: "PATCH" },
+      {},
+      new URL("http://example.test/api/mechanic/workorders/workorder-1/parts/request-1/usage"),
+      routeHelpers,
+      {
+        runAction: async (...args) => {
+          calls.push(args);
+          throw lifecycleError;
+        },
+      },
+    ),
+    (error) => error === lifecycleError,
+  );
+
+  assert.equal(responses.length, 0);
+  assert.deepEqual(calls[0].slice(1, 5), ["workorder-1", "parts", "record", {
+    operation: "usage",
+    requestId: "request-1",
+    usageStatus: "installed",
+    note: "Attempt direct lifecycle jump",
+  }]);
+});

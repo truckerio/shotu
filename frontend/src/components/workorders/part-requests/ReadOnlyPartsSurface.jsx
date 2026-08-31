@@ -45,7 +45,7 @@ export function ReadOnlyPartsSurface({
       {requests.length ? (
         <div className="part-request-list">
           {requests.map((request) => (
-            <MechanicRequestCard request={request} detail={detail} onChanged={onChanged} key={request.id} />
+            <MechanicRequestCard request={request} key={request.id} />
           ))}
         </div>
       ) : null}

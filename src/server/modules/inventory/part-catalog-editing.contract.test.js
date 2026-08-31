@@ -46,6 +46,14 @@ test("catalog UOM lock migration backfills activity and serializes parent and ch
   assert.match(sql, /tg_argv\[0\] in \('uom', 'workorder_request_uom'\)/i);
 });
 
+test("inventory display UOM migration permits only exact quantity-equivalent aliases", async () => {
+  const sql = await readFile(new URL("../../db/migrations/090_inventory_display_uom.sql", import.meta.url), "utf8");
+  assert.match(sql, /add column if not exists inventory_display_uom_code text references units_of_measure\(code\)/i);
+  assert.match(sql, /inventory_display_uom_not_equivalent/i);
+  assert.match(sql, /preferred\.conversion_factor is distinct from canonical\.conversion_factor/i);
+  assert.match(sql, /new\.uom_code is distinct from old\.uom_code[\s\S]*inventory_display_uom_code := null/i);
+});
+
 test("every catalog writer shares the reference identity lock and advances mutable versions", async () => {
   const [edit, requests, local, odoo] = await Promise.all([
     readFile(new URL("../../db/repositories/parts-catalog-edit.repo.js", import.meta.url), "utf8"),

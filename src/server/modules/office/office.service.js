@@ -1,7 +1,7 @@
 import { defaultLocation } from "../../db/repositories/locations.repo.js";
 import { addChatMessage, chatMessageDedupeKey } from "../../db/repositories/chat.repo.js";
 import { persistChatImageAttachment, removeStoredChatImage } from "../chat/chat-media.service.js";
-import { createApprovedOfficePart, decidePartRequest, updatePartAllocation } from "../../db/repositories/part-requests.repo.js";
+import { createApprovedOfficePart, createPlannedOfficePart, decidePartRequest, updatePartAllocation } from "../../db/repositories/part-requests.repo.js";
 import {
   cancelOperationalWorkorder,
   closeOperationalWorkorder,
@@ -30,7 +30,9 @@ import { getLocationWorkorderPolicy } from "../../db/repositories/workorder-poli
 
 async function requireOffice(userId) {
   const user = await getUserById(userId);
-  if (!user || !user.active) throw new Error("Active workorder user not found.");
+  if (!user || !user.active || !["office", "admin"].includes(user.role)) {
+    throw new Error("Active Office workorder user not found.");
+  }
   return user;
 }
 
@@ -51,6 +53,7 @@ export function officeAllowedActions(status, activeAttention = []) {
     sendMessage: active || review,
     recordUsedParts: canUpdate,
     addApprovedParts: active,
+    planParts: active,
     markDone: active,
     approve: review,
     returnToMechanic: review,
@@ -193,6 +196,12 @@ export async function addOfficePart(workorderId, input) {
   const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   return createApprovedOfficePart(workorderId, input, office.id);
+}
+
+export async function planOfficePart(workorderId, input) {
+  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  if (!office) throw new Error("Office user not found.");
+  return createPlannedOfficePart(workorderId, input, office.id);
 }
 
 export async function changeOfficePartAllocation(workorderId, requestId, allocationId, input) {

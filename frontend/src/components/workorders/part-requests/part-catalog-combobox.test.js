@@ -48,10 +48,10 @@ test("every catalog consumer declares its search purpose", () => {
     inventoryCount: readFileSync(new URL("../../../features/inventory/InventoryCountImportPanel.jsx", import.meta.url), "utf8"),
   };
 
-  for (const sourceText of [consumers.usedParts, consumers.officeApproved, consumers.createParts]) {
+  for (const sourceText of [consumers.usedParts, consumers.createParts]) {
     assert.match(sourceText, /<PartCatalogCombobox[\s\S]*?purpose="issue"/);
   }
-  for (const sourceText of [consumers.mechanicRequest, consumers.officeRequest]) {
+  for (const sourceText of [consumers.mechanicRequest, consumers.officeRequest, consumers.officeApproved]) {
     assert.match(sourceText, /<PartCatalogCombobox[\s\S]*?purpose="request"/);
   }
   assert.match(consumers.inventoryCount, /<PartCatalogCombobox[\s\S]*?purpose="master_match"/);

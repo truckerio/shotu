@@ -25,7 +25,7 @@ test("legacy request and allocation units default through the shared catalog", (
 
 test("supply source uses the same anchored selector as fitment", () => {
   assert.match(allocationEditor, /className="allocation-source-select"/);
-  assert.match(allocationEditor, /label=\{`Supply source \$\{index \+ 1\}`\}/);
+  assert.match(allocationEditor, /label=\{`\$\{t\("parts\.supplySource"\)\} \$\{index \+ 1\}`\}/);
   assert.match(allocationEditor, /onChange=\{\(sourceType\) => updateSource\(index, sourceType\)\}/);
   assert.doesNotMatch(allocationEditor, /<select value=\{allocation\.sourceType\}/);
 });

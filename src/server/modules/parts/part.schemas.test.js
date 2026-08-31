@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { createPartRequestSchema, decidePartRequestSchema } from "./part.schemas.js";
+import { createOfficePartSchema, createPartRequestSchema, decidePartRequestSchema } from "./part.schemas.js";
+import { PART_ALLOCATION_INITIAL_STATUSES } from "./part.constants.js";
 
 function decision(overrides = {}) {
   return {
@@ -119,4 +120,39 @@ test("approved allocations use the same unit as the request", () => {
   }));
 
   assert.equal(result.success, false);
+});
+
+test("Office-created planned parts require explicit supply quantities to match", () => {
+  const input = {
+    query: "Oil filter",
+    partNumber: "LF9009",
+    quantity: 1,
+    uomCode: "ea",
+    allocations: [{ sourceType: "purchase", status: "proposed", quantity: 100, uomCode: "ea" }],
+  };
+  assert.equal(createOfficePartSchema.safeParse(input).success, false);
+  assert.equal(createOfficePartSchema.safeParse({ ...input, allocations: [] }).success, true);
+});
+
+test("Office-created supplies begin only in source-compatible states", () => {
+  const base = {
+    query: "Oil filter",
+    partNumber: "LF9009",
+    quantity: 1,
+    uomCode: "ea",
+  };
+  for (const status of ["issued", "installed", "returned", "cancelled"]) {
+    assert.equal(createOfficePartSchema.safeParse({
+      ...base,
+      allocations: [{ sourceType: "inventory", status, quantity: 1, uomCode: "ea" }],
+    }).success, false, `inventory must not begin ${status}`);
+  }
+  for (const [sourceType, statuses] of Object.entries(PART_ALLOCATION_INITIAL_STATUSES)) {
+    for (const status of statuses) {
+      assert.equal(createOfficePartSchema.safeParse({
+        ...base,
+        allocations: [{ sourceType, status, quantity: 1, uomCode: "ea" }],
+      }).success, true, `${sourceType} may begin ${status}`);
+    }
+  }
 });

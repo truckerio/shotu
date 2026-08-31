@@ -3,7 +3,10 @@ import {
   createPartSerializedUnits,
   getPartLocationSerialization,
 } from "../../db/repositories/inventory-part-serialization.repo.js";
-import { getSerializedInventoryUnit } from "../../db/repositories/inventory-receipts.repo.js";
+import {
+  getSerializedInventoryUnit,
+  getSerializedInventoryUnitInvoiceSource,
+} from "../../db/repositories/inventory-receipts.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { assertInventoryQrConfigured } from "./inventory-qr.js";
 import { createPartSerializedUnitsSchema } from "./inventory.schemas.js";
@@ -43,13 +46,18 @@ export async function readPartLocationSerialization(catalogPartId, locationId, r
 
 export async function readSerializedInventoryUnit(unitId, requestContext, dependencies = {}) {
   const id = idSchema.parse(unitId);
-  const result = await (dependencies.readUnit || getSerializedInventoryUnit)({
+  const scope = {
     unitId: id,
     companyIds: [...(requestContext.companyIds || [])],
     locationIds: [...(requestContext.locationIds || [])],
     isAdmin: ["admin", "office"].includes(requestContext.actor.role),
-  });
+  };
+  const result = await (dependencies.readUnit || getSerializedInventoryUnit)(scope);
   if (!result) throw inventoryNotFound();
+  if (result.source?.type === "invoice") {
+    const invoice = await (dependencies.readInvoiceSource || getSerializedInventoryUnitInvoiceSource)(scope);
+    if (invoice) return { ...result, source: { type: "invoice", ...invoice } };
+  }
   return result;
 }
 

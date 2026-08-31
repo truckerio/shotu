@@ -79,6 +79,12 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.match(panelStyles, /prefers-reduced-motion: reduce/);
 });
 
+test("inventory selection identity stays stable when a display unit changes", async () => {
+  const workspace = await readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8");
+  assert.match(workspace, /return `\$\{item\.companyId\}:\$\{item\.catalogPartId\}`/);
+  assert.doesNotMatch(workspace, /return `\$\{item\.companyId\}:\$\{item\.catalogPartId\}:\$\{item\.uomCode\}`/);
+});
+
 test("part identity editing remains inside the part detail drawer", async () => {
   const [workspace, editor, model, styles] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
@@ -111,14 +117,16 @@ test("part identity editing remains inside the part detail drawer", async () => 
   assert.match(editor, /conflict\.kind === "stale"/);
   assert.match(model, /INVENTORY_PART_STALE/);
   assert.match(model, /INVENTORY_PART_IDENTITY_CONFLICT/);
-  assert.match(editor, /Add reference number/);
+  assert.match(editor, />Add reference</);
   assert.match(editor, /Remove reference number \$\{index \+ 1\}/);
   assert.match(editor, /MAX_REFERENCE_NUMBERS/);
   assert.match(editor, /UnitOfMeasurePicker/);
-  assert.match(editor, /fieldIsEditable\(part, "uomCode"\) && part\.uomLocked === false/);
-  assert.match(editor, /Unit is locked after inventory activity/);
+  assert.match(editor, /allowedUomCodes/);
+  assert.match(editor, /Choose an equivalent label; inventory quantities stay unchanged/);
+  assert.match(editor, /inventory-part-editor-summary/);
   assert.match(model, /uomCode/);
   assert.match(styles, /\.inventory-part-editor-reference-row/);
+  assert.match(styles, /\.inventory-part-editor-grid/);
   assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) 44px/);
   assert.match(styles, /\.inventory-part-editor-remove/);
   assert.match(styles, /@media \(max-width: 760px\)/);

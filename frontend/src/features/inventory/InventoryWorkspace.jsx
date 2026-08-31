@@ -55,7 +55,7 @@ function inventoryUrl({ invoiceRun = "", upload = false, countImport = "", count
 }
 
 function stockItemKey(item) {
-  return `${item.companyId}:${item.catalogPartId}:${item.uomCode}`;
+  return `${item.companyId}:${item.catalogPartId}`;
 }
 
 export function InventoryWorkspace({ canApplyInventoryCount = false, presentation = "page" }) {

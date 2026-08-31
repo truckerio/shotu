@@ -56,6 +56,11 @@ function officePartsPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function officePartPlansPath(pathname) {
+  const match = /^\/api\/office\/workorders\/([^/]+)\/part-plans$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function officeUsedPartsPath(pathname) {
   const match = /^\/api\/office\/workorders\/([^/]+)\/used-parts$/.exec(pathname);
   return match ? decodeURIComponent(match[1]) : null;
@@ -193,6 +198,15 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
     const input = createOfficePartSchema.parse(await readBody(req));
     sendJson(res, 200, { partRequest: await runAction(requestContext, officePartsId, "parts", "record", {
       operation: "officePart", ...input,
+    }) });
+    return true;
+  }
+
+  const officePartPlansId = officePartPlansPath(url.pathname);
+  if (req.method === "POST" && officePartPlansId) {
+    const input = createOfficePartSchema.parse(await readBody(req));
+    sendJson(res, 200, { partRequest: await runAction(requestContext, officePartPlansId, "parts", "record", {
+      operation: "officePartPlan", ...input,
     }) });
     return true;
   }

@@ -26,6 +26,7 @@ test("Manager actions reflect active, review, correction, and terminal lifecycle
     sendMessage: true,
     recordUsedParts: true,
     addApprovedParts: true,
+    planParts: true,
     markDone: true,
     approve: false,
     returnToMechanic: false,

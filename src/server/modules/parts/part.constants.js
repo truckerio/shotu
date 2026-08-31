@@ -27,6 +27,19 @@ export const PART_ALLOCATION_STATUSES = [
   "cancelled",
 ];
 
+export const PART_ALLOCATION_INITIAL_STATUSES = Object.freeze({
+  inventory: Object.freeze(["proposed", "reserved"]),
+  purchase: Object.freeze(["proposed", "ordered", "received"]),
+  transfer: Object.freeze(["proposed", "transferred"]),
+  customer_supplied: Object.freeze(["proposed", "received"]),
+  mechanic_supplied: Object.freeze(["proposed", "received"]),
+  unknown: Object.freeze(["proposed"]),
+});
+
+export function isValidInitialAllocationStatus(sourceType, status) {
+  return PART_ALLOCATION_INITIAL_STATUSES[sourceType]?.includes(status) === true;
+}
+
 export const PART_USAGE_STATUSES = [
   "not_issued",
   "issued",

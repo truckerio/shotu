@@ -12,25 +12,26 @@ test("mechanic part form posts to the existing authorized endpoint and reloads d
   assert.doesNotMatch(form, /actorId|mechanicUserId/);
 });
 
-test("mechanic form is permission-gated without changing office composition", () => {
+test("mechanic request action is permission-gated while used parts remain canonical", () => {
   assert.match(mechanicSurface, /mechanicPartsActionState\(detail\.allowedActions/);
-  assert.match(mechanicSurface, /canRecordUsedPart[\s\S]*parts\.usedPartAction/);
-  assert.match(mechanicSurface, /canRequestPart[\s\S]*parts\.needPartAction/);
+  assert.match(mechanicSurface, /canRequestPart[\s\S]*parts\.requestPart/);
   assert.match(mechanicSurface, /<MechanicPartRequestForm/);
   assert.match(panel, /role === "office"/);
   assert.match(mechanicSurface, /<UsedPartsSection/);
+  assert.doesNotMatch(mechanicSurface, /usedPartAction|needPartAction|activeAction/);
 });
 
-test("mechanic choices use the shared locale owner", () => {
+test("mechanic request action uses the shared locale owner", () => {
   assert.match(mechanicSurface, /interfaceText\(locale, key\)/);
-  assert.match(mechanicSurface, /aria-label=\{t\("parts\.chooseAction"\)\}/);
+  assert.match(mechanicSurface, /\{t\("parts\.requestPart"\)\}/);
 });
 
-test("mechanic choice uses keyboard buttons and keeps inactive workflows mounted", () => {
+test("mechanic request action uses an accessible inline disclosure", () => {
   assert.match(mechanicSurface, /type="button"/);
-  assert.match(mechanicSurface, /aria-pressed=/);
-  assert.match(mechanicSurface, /hidden=\{mechanicActions\.canRecordUsedPart && activeAction !== "used"\}/);
-  assert.match(mechanicSurface, /hidden=\{activeAction !== "request"\}/);
+  assert.match(mechanicSurface, /aria-controls=\{requestPartPanelId\}/);
+  assert.match(mechanicSurface, /aria-expanded=\{requestFormOpen\}/);
+  assert.match(mechanicSurface, /hidden=\{!requestFormOpen\}/);
+  assert.doesNotMatch(mechanicSurface, /aria-pressed/);
 });
 
 test("failed submission retains the draft and reports local field errors", () => {

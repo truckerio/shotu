@@ -68,6 +68,40 @@ test("Office reads canonical serialized-child history across its company", async
   assert.equal(readInput.isAdmin, true);
 });
 
+test("Office unit detail adds tenant-scoped invoice identity without changing the scan projection", async () => {
+  let invoiceInput;
+  const result = await readSerializedInventoryUnit(PART_ID, context(), {
+    readUnit: async () => ({
+      id: PART_ID,
+      serialNumber: "WG-L-TEST-1",
+      source: { type: "invoice", id: "00000000-0000-4000-8000-000000000306" },
+      events: [],
+    }),
+    readInvoiceSource: async (input) => {
+      invoiceInput = input;
+      return {
+        id: "00000000-0000-4000-8000-000000000306",
+        fileName: "qa-invoice.pdf",
+        vendorName: "QA Vendor",
+        invoiceNumber: "QA-INV-306",
+      };
+    },
+  });
+  assert.deepEqual(result.source, {
+    type: "invoice",
+    id: "00000000-0000-4000-8000-000000000306",
+    fileName: "qa-invoice.pdf",
+    vendorName: "QA Vendor",
+    invoiceNumber: "QA-INV-306",
+  });
+  assert.deepEqual(invoiceInput, {
+    unitId: PART_ID,
+    companyIds: [COMPANY_ID],
+    locationIds: [ASSIGNED_LOCATION_ID],
+    isAdmin: true,
+  });
+});
+
 test("missing serialized-child detail stays hidden behind a stable not-found error", async () => {
   await assert.rejects(
     readSerializedInventoryUnit(PART_ID, context(), { readUnit: async () => null }),

@@ -4,13 +4,7 @@
   gap: 16px;
 }
 
-.mechanic-part-choices {
-  display: flex;
-  gap: 10px;
-  max-width: 720px;
-}
-
-.mechanic-part-choices > button {
+.mechanic-part-request-action > button {
   align-items: center;
   background: #fff;
   border: 1px solid #d5d7da;
@@ -25,22 +19,18 @@
   padding: 10px 16px;
 }
 
-.mechanic-part-choices > button:hover,
-.mechanic-part-choices > button:focus-visible {
+.mechanic-part-request-action > button:hover,
+.mechanic-part-request-action > button:focus-visible {
   background: #f5f8ff;
   border-color: #84adff;
 }
 
-.mechanic-part-choices > button:focus-visible {
+.mechanic-part-request-action > button:focus-visible {
   box-shadow: 0 0 0 3px #d1e9ff;
   outline: none;
 }
 
-.mechanic-part-choices > button.is-selected {
-  background: #eff8ff;
-  border-color: #1570ef;
-  color: #175cd3;
-}
+.mechanic-part-request-action { display: grid; gap: 10px; max-width: 720px; }
 
 .mechanic-part-request-form {
   background: #f8f9fb;
@@ -203,10 +193,7 @@
 }
 
 @media (max-width: 640px) {
-  .mechanic-part-choices {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
+  .mechanic-part-request-action > button { width: 100%; }
 
   .mechanic-part-request-form {
     padding: 14px;

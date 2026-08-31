@@ -17,7 +17,7 @@ test("unit history stays inside the Unit module as native progressive disclosure
   assert.doesNotMatch(panel, /aria-controls="unit-service-history-list"/);
   assert.match(panel, /t\("history\.showMore"\)/);
   assert.match(panel, /import \{ WorkorderTimelineList \} from "\.\.\/\.\.\/\.\.\/components\/workorders\/WorkorderTimeline\.jsx"/);
-  assert.match(panel, /<WorkorderTimelineList items=\{history\.items\.map\(\(item\) => serviceRecordTimelineItem\(item, locale\)\)\}/);
+  assert.match(panel, /<WorkorderTimelineList className="is-service-history" items=\{history\.items\.map\(\(item\) => serviceRecordTimelineItem\(item, locale\)\)\}/);
   assert.doesNotMatch(panel, /unit-service-history-record(?:s|-heading)?/);
   assert.doesNotMatch(css, /unit-service-history-record(?:s|-heading)?/);
   assert.match(panel, /open=\{expanded\}/);
@@ -27,6 +27,15 @@ test("unit history stays inside the Unit module as native progressive disclosure
   assert.match(panel, /t\("history\.openSettings"\)/);
   assert.match(hook, /expanded, setExpanded/);
   assert.doesNotMatch(panel, /onApply|onFieldChange|set.*(?:diagnosis|workPerformed)/);
+});
+
+test("service records use the compact shared timeline variant while preserving all record fields", () => {
+  assert.match(panel, /className="is-service-history"/);
+  for (const label of ["detail.concern", "detail.diagnosis", "detail.workPerformed", "detail.parts"]) {
+    assert.match(panel, new RegExp(`t\\("${label}"\\)`));
+  }
+  assert.match(css, /\.unit-service-history-state\.is-warning/);
+  assert.match(panel, /history\.nextCursor/);
 });
 
 test("history fetch is bounded, cancellable, and stale-safe", () => {

@@ -110,8 +110,7 @@
 .mechanic-part-composer label,
 .office-add-part label,
 .part-office-fields label,
-.part-suggestion-fields label,
-.part-usage-control {
+.part-suggestion-fields label {
   color: #414651;
   display: grid;
   font-size: var(--text-secondary);
@@ -150,7 +149,7 @@
   font-weight: var(--weight-semibold);
   gap: 5px;
   justify-content: center;
-  min-height: 38px;
+  min-height: 44px;
   padding: 7px 10px;
 }
 
@@ -207,7 +206,8 @@
   font: inherit;
   font-weight: 600;
   gap: 6px;
-  padding: 4px 0;
+  min-height: 44px;
+  padding: 8px 0;
 }
 
 .part-review-heading-actions button svg {
@@ -340,8 +340,42 @@
   padding: 7px 8px;
 }
 
-.part-usage-control {
-  grid-template-columns: auto minmax(130px, 1fr);
+.part-request-section,
+.office-part-planning {
+  display: grid;
+  gap: 10px;
+}
+
+.office-part-planning .button,
+.office-add-part-head button {
+  min-height: 44px;
+}
+
+.part-request-section h3,
+.office-part-planning h3 {
+  color: #181d27;
+  font-size: var(--text-body);
+  margin: 0;
+}
+
+.office-part-planning > div > p,
+.office-add-part-head p {
+  color: #535862;
+  font-size: var(--text-secondary);
+  margin: 3px 0 0;
+}
+
+.part-request-history {
+  display: grid;
+  gap: 10px;
+}
+
+.part-request-history > summary {
+  color: #414651;
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+  min-height: 44px;
+  padding: 12px 0;
 }
 
 .office-part-overview {
@@ -367,7 +401,7 @@
   font-size: var(--text-secondary);
   font-weight: var(--weight-semibold);
   justify-content: center;
-  min-height: 30px;
+  min-height: 44px;
 }
 
 .allocation-editor-head svg,
@@ -397,7 +431,7 @@
   border: 1px solid #d5d7da;
   border-radius: 6px;
   color: #414651;
-  min-height: 38px;
+  min-height: 44px;
   padding: 7px 10px;
 }
 
@@ -419,11 +453,42 @@
   color: #344054;
   display: flex;
   justify-content: space-between;
+  min-height: 44px;
   padding: 8px;
   text-decoration: none;
 }
 
 @media (max-width: 700px) {
+  .part-review-heading,
+  .part-review-section-heading,
+  .part-request-summary,
+  .office-add-part-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .part-review-heading-actions {
+    justify-items: start;
+  }
+
+  .part-decision-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .part-decision-actions > .button,
+  .part-decision-actions > button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .allocation-row,
+  .office-allocation-list label {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .office-assignment-control {
     align-items: stretch;
     grid-template-columns: 1fr;

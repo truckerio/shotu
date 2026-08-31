@@ -6,7 +6,7 @@ const readSource = (relativePath) => readFileSync(new URL(relativePath, import.m
 const hook = readSource("../hooks/useWorkorderPreferences.js");
 const home = readSource("../features/mechanic/MechanicWorkspace.jsx");
 const detail = readSource("../features/workorder-detail/WorkorderDetailPage.jsx");
-const detailSurface = readSource("../components/workorders/WorkorderDetailSurface.jsx");
+const router = readSource("../app/routes/RoleRouter.jsx");
 
 test("authenticated locale updates use a narrow preference patch and recover on failure", () => {
   assert.match(hook, /JSON\.stringify\(\{ locale \}\)/);
@@ -16,6 +16,11 @@ test("authenticated locale updates use a narrow preference patch and recover on 
   assert.match(hook, /JSON\.stringify\(\{ defaultLocationId, defaultView, savedFilters \}\)/);
 });
 
+test("document locale effect does not return the locale string as a React cleanup", () => {
+  assert.match(router, /useEffect\(\(\) => \{\s*setDocumentLocale\(/);
+  assert.doesNotMatch(router, /useEffect\(\(\) => setDocumentLocale\(/);
+});
+
 test("mechanic home and detail share the locale selector and static dictionary owner", () => {
   assert.match(home, /<LocaleSelector/);
   assert.match(home, /interfaceText\(locale, key\)/);
@@ -23,7 +28,6 @@ test("mechanic home and detail share the locale selector and static dictionary o
   assert.match(detail, /localizedMechanicHelpActions\(locale\)/);
   assert.match(detail, /interfaceText\(locale, "mechanic\.myWork"\)/);
   assert.match(detail, /activeWorkorder\.workorder\.serial \|\| t\("detail\.workorder"\)/);
-  assert.match(detailSurface, /ariaLabel=\{interfaceText\(locale, "detail\.breadcrumb"\)\}/);
 });
 
 test("dynamic workorder content bypasses interface translation", () => {

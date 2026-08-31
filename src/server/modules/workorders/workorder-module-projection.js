@@ -26,7 +26,7 @@ const MECHANIC_AVAILABILITY_KEYS = Object.freeze([
 const ALLOWED_ACTION_MODULES = Object.freeze({
   accept: "assignment", release: "assignment", assignMechanics: "assignment",
   saveNotes: "diagnosisRepair", sendMessage: "chat",
-  recordUsedParts: "parts", requestParts: "parts", addApprovedParts: "parts",
+  recordUsedParts: "parts", requestParts: "parts", addApprovedParts: "parts", planParts: "parts",
   markDone: "completion", approve: "completion", returnToMechanic: "completion", cancel: "completion",
   updateAdministrative: "concern",
 });

@@ -18,11 +18,16 @@ test("PartRequestsPanel only dispatches role-owned surfaces", () => {
 test("role surfaces keep permissions and endpoints with their owners", () => {
   const mechanicSurface = source("./MechanicPartsSurface.jsx");
   const mechanicCard = source("./MechanicRequestCard.jsx");
+  const officeSurface = source("./OfficePartsSurface.jsx");
+  const officeComposer = source("./OfficePartComposer.jsx");
   const officeReview = source("./useOfficeRequestReview.js");
 
   assert.match(mechanicSurface, /mechanicPartsActionState\(detail\.allowedActions/);
   assert.match(mechanicSurface, /<MechanicPartRequestForm/);
-  assert.match(mechanicCard, /\/api\/mechanic\/workorders\/\$\{detail\.workorder\.id\}\/parts\/\$\{request\.id\}\/usage/);
+  assert.doesNotMatch(mechanicCard, /\/api\/mechanic\/|<Dropdown/);
+  assert.match(officeSurface, /detail\.allowedActions\?\.planParts \? \(/);
+  assert.doesNotMatch(officeSurface, /addApprovedParts/);
+  assert.match(officeComposer, /\/api\/office\/workorders\/\$\{detail\.workorder\.id\}\/part-plans/);
   assert.match(officeReview, /\/api\/office\/workorders\/\$\{detail\.workorder\.id\}\/parts\/\$\{request\.id\}\/decision/);
   assert.match(officeReview, /\/api\/parts-helper\/identify/);
   assert.match(officeReview, /\/api\/parts-helper\/live-prices/);
@@ -44,9 +49,10 @@ test("quantity and supply controls remain shared implementations", () => {
   assert.doesNotMatch(allocation, /const\s+UNITS_OF_MEASURE/);
 });
 
-test("office add-part capability remains a focused, reusable owner", () => {
+test("office planning capability remains a focused, reusable owner", () => {
   const composer = source("./OfficePartComposer.jsx");
   assert.match(composer, /export function OfficePartComposer/);
-  assert.match(composer, /\/api\/office\/workorders\/\$\{detail\.workorder\.id\}\/parts/);
+  assert.match(composer, /\/api\/office\/workorders\/\$\{detail\.workorder\.id\}\/part-plans/);
+  assert.match(composer, /t\("parts\.planningDoesNotRecordUse"\)/);
   assert.match(composer, /await onChanged\(\)/);
 });

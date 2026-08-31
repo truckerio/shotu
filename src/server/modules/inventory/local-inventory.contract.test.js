@@ -106,6 +106,7 @@ test("migration 082 separates Odoo reference balances from application inventory
   assert.match(serialization, /insert into inventory_serialized_units/i);
   assert.match(serialization, /pg_advisory_xact_lock\(hashtext\(\$1\)\)/i);
   assert.match(serialization, /quantity_on_hand = inventory_items\.quantity_on_hand \+ excluded\.quantity_on_hand/i);
+  assert.match(serialization, /inventory_display_uom_code \|\| part\.uom_code/i);
 });
 
 test("inventory stock applies a whitelisted requested order before pagination", async () => {

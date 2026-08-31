@@ -6,7 +6,7 @@ import { textEntryProps } from "./text-entry-policy.js";
 import { interfaceText } from "../../i18n/index.js";
 import "./quantity-unit-input.css";
 
-export function UnitOfMeasurePicker({ uomCode, onChange, label = "Unit", disabled = false, readOnly = false, id, locale = "en", ...ariaProps }) {
+export function UnitOfMeasurePicker({ uomCode, onChange, allowedUomCodes = null, label = "Unit", disabled = false, readOnly = false, id, locale = "en", ...ariaProps }) {
   const t = (key) => interfaceText(locale, key);
   const generatedId = useId();
   const inputId = id || `unit-${generatedId}`;
@@ -21,7 +21,7 @@ export function UnitOfMeasurePicker({ uomCode, onChange, label = "Unit", disable
   const [menuStyle, setMenuStyle] = useState(undefined);
   const code = normalizeUomCode(uomCode);
   const definition = getUnitDefinition(code);
-  const groups = useMemo(() => unitOptionGroups(query, (kind, value) => t(`uom.${kind}.${value}`)), [locale, query]);
+  const groups = useMemo(() => unitOptionGroups(query, (kind, value) => t(`uom.${kind}.${value}`), allowedUomCodes), [allowedUomCodes, locale, query]);
 
   useEffect(() => {
     if (!open) return undefined;

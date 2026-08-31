@@ -72,7 +72,7 @@ export function UnitServiceHistory({ actorRole, historyController, workorderId, 
         {!loading && !error && canShowRecords ? <>
           {history.state === "stale" ? <div className="unit-service-history-state is-warning" role="status"><strong>{status.title}</strong><span>{status.message}</span></div> : null}
           {providerNeverSynced ? <div className="unit-service-history-state is-warning" role="status"><strong>{t("history.odooNotSynced")}</strong><span>{t("history.localShown")}</span></div> : null}
-          <WorkorderTimelineList items={history.items.map((item) => serviceRecordTimelineItem(item, locale))} emptyMessage={t("history.noPreviousRecords")} locale={locale} />
+          <WorkorderTimelineList className="is-service-history" items={history.items.map((item) => serviceRecordTimelineItem(item, locale))} emptyMessage={t("history.noPreviousRecords")} locale={locale} />
           {history.nextCursor ? <button className="unit-service-history-more" type="button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? t("history.loadingMore") : t("history.showMore")}</button> : null}
         </> : null}
       </div>

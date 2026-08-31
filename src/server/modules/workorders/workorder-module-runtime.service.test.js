@@ -176,6 +176,45 @@ test("parts action persists labor hours with goods through the authenticated rol
   assert.equal(result[1].parts[0].partNo, "46305");
 });
 
+test("office part planning uses the authenticated Office actor without recording a used part", async () => {
+  const calls = [];
+  const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", {
+    operation: "officePartPlan",
+    query: "Oil filter",
+    partNumber: "LF9009",
+    quantity: 1,
+    uomCode: "ea",
+    allocations: [],
+  }, {
+    authorize: async (...args) => calls.push(["authorize", ...args]),
+    planOfficePart: async (...args) => { calls.push(["plan", ...args]); return { planned: true }; },
+    addOfficePart: async () => assert.fail("planning must not use the legacy used-part operation"),
+  });
+
+  assert.deepEqual(result, { planned: true });
+  assert.equal(calls[0][3].moduleKey, "parts");
+  assert.equal(calls[0][3].action, "record");
+  assert.equal(calls[1][0], "plan");
+  assert.equal(calls[1][2].officeUserId, "actor-1");
+});
+
+test("mechanics cannot plan office parts even when the Parts record guard is reached", async () => {
+  await assert.rejects(
+    runWorkorderModuleAction({ actor: { id: "mechanic-1", role: "mechanic" } }, "wo-1", "parts", "record", {
+      operation: "officePartPlan",
+      query: "Oil filter",
+      partNumber: "LF9009",
+      quantity: 1,
+      uomCode: "ea",
+      allocations: [],
+    }, {
+      authorize: async () => {},
+      planOfficePart: async () => assert.fail("mechanics must not reach the planning service"),
+    }),
+    /permission denied/i,
+  );
+});
+
 test("parts record routes serialized repair wording through the scoped inventory owner", async () => {
   const usage = { id: "usage-1", repairOrder: "Install and test" };
   const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", {

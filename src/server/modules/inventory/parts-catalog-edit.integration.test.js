@@ -69,7 +69,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     assert.equal(updated.part.version, 2);
     assert.deepEqual(updated.part.referenceNumbers, [`BW-${suffix}`]);
     assert.equal(updated.part.uomLocked, true);
-    assert.ok(!updated.part.editableFields.includes("uomCode"));
+    assert.ok(updated.part.editableFields.includes("uomCode"));
 
     const projection = await query(
       "select normalized_part_number, part_number, description, manufacturer from inventory_items where company_id = $1 and catalog_part_id = $2",
@@ -102,7 +102,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       ...base, catalogPartId: historyPartId, expectedVersion: 1, partNumber: `HISTORY-${suffix}`,
       barcode: "", uomCode: "qt", referenceNumbers: [],
     });
-    assert.equal(historyLocked.kind, "uom_locked");
+    assert.equal(historyLocked.kind, "uom_incompatible");
 
     const conflict = await updateCompanyCatalogPart({ ...base, catalogPartId: partId, expectedVersion: 2, referenceNumbers: [`USED-${suffix}`] });
     assert.equal(conflict.kind, "identity_conflict");
@@ -115,7 +115,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     const stockLocked = await updateCompanyCatalogPart({
       ...base, catalogPartId: partId, expectedVersion: concurrent.find((result) => result.kind === "updated").part.version, uomCode: "qt",
     });
-    assert.equal(stockLocked.kind, "uom_locked");
+    assert.equal(stockLocked.kind, "uom_incompatible");
 
     const providerManaged = await updateCompanyCatalogPart({
       ...base,
@@ -137,10 +137,15 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       category: "",
       barcode: "",
       manufacturer: "Local manufacturer note",
+      uomCode: "pc",
       referenceNumbers: [`ALT-${suffix}`],
     });
     assert.equal(providerEnrichment.kind, "updated");
-    assert.deepEqual(providerEnrichment.part.editableFields, ["manufacturer", "referenceNumbers"]);
+    assert.equal(providerEnrichment.part.uomCode, "pc");
+    assert.equal(providerEnrichment.part.canonicalUomCode, "ea");
+    assert.deepEqual(providerEnrichment.part.editableFields, ["manufacturer", "uomCode", "referenceNumbers"]);
+    const providerUnits = await query("select uom_code, inventory_display_uom_code from parts_catalog where id=$1", [providerPartId]);
+    assert.deepEqual(providerUnits.rows[0], { uom_code: "ea", inventory_display_uom_code: "pc" });
 
     const evidence = await query(
       "select count(*)::int as count, min(version_before)::int as first_version from part_catalog_edit_events where company_id = $1",

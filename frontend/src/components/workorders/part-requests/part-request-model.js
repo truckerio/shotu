@@ -1,4 +1,5 @@
 import { DEFAULT_UOM_CODE, normalizeUomCode } from "../../../../../shared/units-of-measure.js";
+import { interfaceText } from "../../../i18n/index.js";
 
 export const SOURCE_LABELS = {
   inventory: "Inventory",
@@ -37,6 +38,19 @@ export const FITMENT_OPTIONS = [
   { value: "confirmed", label: "Confirmed" },
   { value: "conflict", label: "Conflict" },
 ];
+
+export function partRequestLabel(locale, prefix, value, fallback = value) {
+  const key = `parts.${prefix}.${value}`;
+  const translated = interfaceText(locale, key);
+  return translated === key ? fallback : translated;
+}
+
+export function localizedFitmentOptions(locale) {
+  return FITMENT_OPTIONS.map((option) => ({
+    ...option,
+    label: partRequestLabel(locale, "fitment", option.value, option.label),
+  }));
+}
 
 export function createEmptyPartDraft() {
   return {
@@ -125,11 +139,14 @@ export function createOfficeReviewState(request, workorderLocationId = null) {
   };
 }
 
-export function officeQueueText(requests) {
+export function officeQueueText(requests, locale = "en") {
   const reviewCount = requests.filter((request) => request.approvalStatus === "submitted").length;
   const clarificationCount = requests.filter((request) => request.approvalStatus === "needs_info").length;
-  return [
-    reviewCount ? `${reviewCount} request${reviewCount === 1 ? "" : "s"} need review` : "",
-    clarificationCount ? `${clarificationCount} waiting for mechanic` : "",
-  ].filter(Boolean).join(" · ") || "No pending part requests";
+  const review = reviewCount
+    ? `${reviewCount} ${interfaceText(locale, reviewCount === 1 ? "parts.queue.requestNeedsReview" : "parts.queue.requestsNeedReview")}`
+    : "";
+  const clarification = clarificationCount
+    ? `${clarificationCount} ${interfaceText(locale, "parts.queue.waitingForMechanic")}`
+    : "";
+  return [review, clarification].filter(Boolean).join(" · ") || interfaceText(locale, "parts.queue.empty");
 }

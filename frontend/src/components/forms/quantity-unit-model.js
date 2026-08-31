@@ -52,13 +52,14 @@ export function formatQuantityUnit(quantity, uomCode = DEFAULT_UOM_CODE) {
   return formatQuantity(value, code) || `${String(value)} ${definition.symbol}`;
 }
 
-export function unitOptionGroups(query = "", labelFor = (_kind, _value, fallback) => fallback) {
+export function unitOptionGroups(query = "", labelFor = (_kind, _value, fallback) => fallback, allowedUomCodes = null) {
   const normalizedQuery = String(query || "").trim().toLowerCase();
-  const matches = (definition) => !normalizedQuery
+  const allowed = allowedUomCodes ? new Set(allowedUomCodes) : null;
+  const matches = (definition) => (!allowed || allowed.has(definition.code)) && (!normalizedQuery
     || definition.code.includes(normalizedQuery)
     || definition.label.toLowerCase().includes(normalizedQuery)
     || labelFor("unit", definition.code, definition.label).toLowerCase().includes(normalizedQuery)
-    || definition.symbol.toLowerCase().includes(normalizedQuery);
+    || definition.symbol.toLowerCase().includes(normalizedQuery));
   const commonCodes = new Set(COMMON_UOM_CODES);
   const common = COMMON_UOM_CODES
     .map((code) => getUnitDefinition(code))

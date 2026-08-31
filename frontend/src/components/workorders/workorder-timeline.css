@@ -99,7 +99,7 @@
 .workorder-timeline-list > li {
   position: relative;
   display: grid;
-  grid-template-columns: 230px 18px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 168px) 12px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
   min-width: 0;
@@ -108,106 +108,108 @@
 
 .workorder-timeline-list > li:not(:last-child)::after {
   position: absolute;
-  top: 30px;
+  top: 24px;
   bottom: -12px;
-  left: 250.5px;
+  left: 185.5px;
   width: 1px;
   background: #d0d5dd;
   content: "";
 }
 
 .workorder-timeline-date {
-  display: inline-flex;
-  gap: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 5px;
+  row-gap: 2px;
   align-items: baseline;
   justify-self: end;
+  min-width: 0;
   max-width: 100%;
-  margin-top: 1px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: #f2f4f7;
-  color: #475467;
-  font-size: 11px;
-  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--weight-semibold, 600);
   line-height: 1.35;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .workorder-timeline-date strong {
-  color: #344054;
-  font-size: 11px;
-  font-weight: 650;
+  color: var(--text-primary, #181d27);
+  font-size: var(--text-secondary, 13px);
+  font-weight: var(--weight-semibold, 600);
 }
 
 .workorder-timeline-date time,
 .workorder-timeline-date > span {
-  color: #667085;
-  font-size: 10px;
-  font-weight: 500;
+  min-width: 0;
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--weight-regular, 400);
+  overflow-wrap: anywhere;
 }
 
 .workorder-timeline-date .workorder-timeline-role {
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 70%);
-  color: #475467;
-  font-size: 9px;
-  font-weight: 650;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--weight-regular, 400);
   line-height: 1.35;
-}
-
-.workorder-timeline-list > li:first-child .workorder-timeline-date {
-  background: #181d27;
-  color: #fff;
-}
-
-.workorder-timeline-list > li:first-child .workorder-timeline-date strong,
-.workorder-timeline-list > li:first-child .workorder-timeline-date time,
-.workorder-timeline-list > li:first-child .workorder-timeline-date > span {
-  color: #fff;
-}
-
-.workorder-timeline-list > li:first-child .workorder-timeline-date .workorder-timeline-role {
-  background: rgb(255 255 255 / 16%);
 }
 
 .workorder-timeline-marker {
   position: relative;
   z-index: 1;
   justify-self: center;
-  width: 13px;
-  height: 13px;
-  margin-top: 5px;
-  border: 3px solid #eaecf0;
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  border: 2px solid var(--border-subtle, #e4e7ec);
   border-radius: 999px;
-  background: #98a2b3;
-  box-shadow: 0 0 0 4px #f2f4f7;
+  background: var(--text-tertiary, #98a2b3);
+  box-shadow: 0 0 0 3px #fff;
 }
 
 .workorder-timeline-list > li:first-child .workorder-timeline-marker {
   border-color: #d1e9ff;
   background: #1570ef;
-  box-shadow: 0 0 0 4px #eff8ff;
+  box-shadow: 0 0 0 3px #fff;
 }
 
 .workorder-timeline-event {
   display: grid;
   gap: 5px;
   min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid #e4e7ec;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle, #e4e7ec);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workorder-timeline-list > li:last-child .workorder-timeline-event {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .workorder-timeline-event-heading {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   min-width: 0;
+}
+
+.workorder-timeline-event-heading > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .workorder-timeline-toggle {
@@ -332,10 +334,13 @@
 }
 
 .workorder-timeline-child-heading time {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   color: #667085;
   font-size: 10px;
-  white-space: nowrap;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .workorder-timeline-children > li > span {
@@ -345,7 +350,125 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 640px) {
+/* Service history is reference material inside the Unit module, not a stack of
+ * competing cards. Keep the shared timeline semantics, but reduce its visual
+ * weight so the service facts can be scanned in chronological order. */
+.workorder-timeline-list.is-service-history {
+  gap: 0;
+}
+
+.workorder-timeline-list.is-service-history > li {
+  grid-template-columns: 148px 14px minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px 0;
+}
+
+.workorder-timeline-list.is-service-history > li:not(:last-child)::after {
+  top: 25px;
+  bottom: -14px;
+  left: 164.5px;
+  background: var(--border-subtle, #e4e7ec);
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-date,
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-date {
+  display: grid;
+  gap: 1px;
+  justify-self: end;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--weight-semibold, 600);
+  line-height: 1.35;
+  text-align: right;
+  white-space: normal;
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-date strong,
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-date strong {
+  color: var(--text-primary, #181d27);
+  font-size: var(--text-secondary, 13px);
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-date time,
+.workorder-timeline-list.is-service-history .workorder-timeline-date > span,
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-date time,
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-date > span {
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-date [aria-hidden="true"] {
+  display: none;
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-role,
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-date .workorder-timeline-role {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--weight-regular, 400);
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-marker,
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-marker {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border: 2px solid var(--border-subtle, #e4e7ec);
+  background: var(--text-tertiary, #98a2b3);
+  box-shadow: 0 0 0 3px #fff;
+}
+
+.workorder-timeline-list.is-service-history > li:first-child .workorder-timeline-marker {
+  border-color: var(--border-brand, #b2ddff);
+  background: var(--primary, #1570ef);
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-event {
+  gap: 6px;
+  padding: 0 0 14px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-subtle, #e4e7ec);
+  background: transparent;
+  box-shadow: none;
+}
+
+.workorder-timeline-list.is-service-history > li:last-child .workorder-timeline-event {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-details {
+  gap: 6px;
+  margin: 4px 0 0;
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-details > div {
+  grid-template-columns: minmax(88px, 0.32fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-details dt {
+  color: var(--text-secondary, #667085);
+  font-size: var(--text-caption, 12px);
+  font-weight: var(--weight-semibold, 600);
+}
+
+.workorder-timeline-list.is-service-history .workorder-timeline-details dd {
+  color: var(--text-primary, #344054);
+  font-size: var(--text-secondary, 13px);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1024px) {
   .workorder-timeline-panel {
     gap: 0;
   }
@@ -357,15 +480,58 @@
   }
 
   .workorder-timeline-list > li {
-    grid-template-columns: 16px minmax(0, 1fr);
+    grid-template-columns: 14px minmax(0, 1fr);
     gap: 6px 10px;
     padding: 11px 0;
   }
 
+  .workorder-timeline-list.is-service-history > li {
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 6px 10px;
+    padding: 12px 0;
+  }
+
+  .workorder-timeline-list.is-service-history > li:not(:last-child)::after {
+    top: 24px;
+    bottom: -12px;
+    left: 5.5px;
+  }
+
+  .workorder-timeline-list.is-service-history .workorder-timeline-date {
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .workorder-timeline-list.is-service-history .workorder-timeline-date strong,
+  .workorder-timeline-list.is-service-history .workorder-timeline-role,
+  .workorder-timeline-list.is-service-history .workorder-timeline-date time {
+    display: inline;
+  }
+
+  .workorder-timeline-list.is-service-history .workorder-timeline-date [aria-hidden="true"] {
+    display: none;
+  }
+
+  .workorder-timeline-list.is-service-history .workorder-timeline-marker {
+    grid-row: 2;
+    margin-top: 5px;
+  }
+
+  .workorder-timeline-list.is-service-history .workorder-timeline-event {
+    grid-column: 2;
+    padding-bottom: 12px;
+  }
+
+  .workorder-timeline-list.is-service-history .workorder-timeline-details > div {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+
   .workorder-timeline-list > li:not(:last-child)::after {
-    top: 29px;
+    top: 19px;
     bottom: -11px;
-    left: 7px;
+    left: 6.5px;
   }
 
   .workorder-timeline-date {
@@ -373,20 +539,24 @@
     justify-self: start;
     margin: 0;
     max-width: 100%;
-    overflow: hidden;
     text-align: left;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .workorder-timeline-date [aria-hidden="true"] {
+    display: none;
   }
 
   .workorder-timeline-marker {
     grid-row: 1 / span 2;
     grid-column: 1;
-    margin-top: 5px;
+    margin-top: 4px;
   }
 
   .workorder-timeline-event {
     grid-column: 2;
-    padding: 12px 13px;
+    padding: 0 0 12px;
   }
 
   .workorder-timeline-event-heading {
@@ -415,10 +585,6 @@
   .workorder-timeline-child-heading {
     display: grid;
     gap: 2px;
-  }
-
-  .workorder-timeline-child-heading time {
-    white-space: normal;
   }
 
 }

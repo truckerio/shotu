@@ -359,6 +359,31 @@ export async function getInventoryReceipt({ receiptId, companyIds, locationIds =
   return publicReceipt({ query }, row);
 }
 
+export async function getSerializedInventoryUnitInvoiceSource({ unitId, companyIds, locationIds = [], isAdmin = false }) {
+  const result = await query(
+    `select invoice.id,
+            invoice.file_name,
+            coalesce(invoice.reviewed_draft, invoice.extracted_draft) #>> '{vendorName,value}' as vendor_name,
+            coalesce(invoice.reviewed_draft, invoice.extracted_draft) #>> '{invoiceNumber,value}' as invoice_number
+     from inventory_serialized_units unit
+     join inventory_receipts receipt
+       on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
+     join invoice_extraction_runs invoice
+       on invoice.company_id = receipt.company_id and invoice.id = receipt.invoice_run_id
+     where unit.id = $1 and unit.company_id = any($2::uuid[])
+       and ($4::boolean or unit.location_id = any($3::uuid[]))
+     limit 1`,
+    [unitId, companyIds, locationIds, isAdmin],
+  );
+  const row = result.rows[0];
+  return row ? {
+    id: row.id,
+    fileName: row.file_name || "",
+    vendorName: row.vendor_name || "",
+    invoiceNumber: row.invoice_number || "",
+  } : null;
+}
+
 export async function getSerializedInventoryUnit({ unitId, companyIds, locationIds = [], isAdmin = false }) {
   const unit = await query(
     `select unit.id, unit.company_id, unit.location_id, unit.serial_number,

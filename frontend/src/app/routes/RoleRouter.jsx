@@ -49,7 +49,7 @@ export function RoleRouter({ actor }) {
   const [officeCreateAttempt, setOfficeCreateAttempt] = useState(0);
   const interfacePreferences = useWorkorderPreferences("mechanic-interface");
   const interfaceLocale = normalizeLocale(interfacePreferences.preferences.locale);
-  useEffect(() => setDocumentLocale(actor.role === "mechanic" ? interfaceLocale : "en"), [actor.role, interfaceLocale]);
+  useEffect(() => { setDocumentLocale(actor.role === "mechanic" ? interfaceLocale : "en"); }, [actor.role, interfaceLocale]);
   const createInitialDatesRef = useRef(createInitialDraftBaseline(actor));
   const [officeDetailState, setOfficeDetailState] = useState({ busy: false, message: "" });
   const [usedPartsDirty, setUsedPartsDirty] = useState(false);

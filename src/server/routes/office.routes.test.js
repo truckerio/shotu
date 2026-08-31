@@ -31,6 +31,34 @@ test("does not serve the queue to a non-office role", async () => {
   );
 });
 
+test("Office part-plan route preserves the legacy part route and forwards a non-printing runtime operation", async () => {
+  const body = {
+    query: "Oil filter",
+    partNumber: "LF9009",
+    quantity: 1,
+    uomCode: "ea",
+    allocations: [],
+  };
+  const calls = [];
+  const runAction = async (...args) => { calls.push(args); return { id: "request-1" }; };
+  const sendJson = () => {};
+  const helpers = { requestContext: context, sendJson, readBody: async () => body };
+
+  await handleOfficeApi(
+    { method: "POST" }, {}, new URL("http://example.test/api/office/workorders/workorder-1/parts"), helpers, { runAction },
+  );
+  await handleOfficeApi(
+    { method: "POST" }, {}, new URL("http://example.test/api/office/workorders/workorder-1/part-plans"), helpers, { runAction },
+  );
+
+  assert.equal(calls[0][2], "parts");
+  assert.equal(calls[0][3], "record");
+  assert.equal(calls[0][4].operation, "officePart");
+  assert.equal(calls[1][2], "parts");
+  assert.equal(calls[1][3], "record");
+  assert.equal(calls[1][4].operation, "officePartPlan");
+});
+
 test("legacy Office detail includes installed serialized summaries without losing role detail", async () => {
   const sent = [];
   let installedScope;
