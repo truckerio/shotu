@@ -220,6 +220,31 @@ test("an explicitly cleared serialized repair order stays blank after refresh", 
   assert.equal(installed[0].repairOrder, "");
 });
 
+test("pending serialized installations appear in the live preview with exact identity and status", () => {
+  const installed = installedSerializedUsedParts({
+    modules: { parts: { data: { installedSerializedParts: [{
+      usageId: "usage-pending",
+      catalogPartId: "part-filter",
+      partNumber: "013V/23044511",
+      serialNumber: "WG-S-7A822F3CA8424AFD-4",
+      quantity: 1,
+      uomCode: "ea",
+      description: "FUEL FILTER",
+      repairOrder: "Replace fuel filter",
+      status: "installed_pending_approval",
+    }] } } },
+  });
+
+  assert.deepEqual(workorderPreviewParts([], installed), [{
+    partNo: "013V/23044511",
+    serialNumber: "WG-S-7A822F3CA8424AFD-4",
+    qty: "1",
+    uomCode: "ea",
+    repairOrder: "Replace fuel filter",
+    pendingApproval: true,
+  }]);
+});
+
 test("serialized usage table state keeps actionable rows active and completed rows in history", () => {
   const usages = [
     { id: "issued", partNumber: "P-1", serialNumber: "SER-1", uomCode: "ea", status: "issued" },

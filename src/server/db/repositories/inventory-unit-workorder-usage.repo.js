@@ -138,6 +138,36 @@ export async function listWorkorderSerializedUnitUsages({
   return result.rows.map(publicUsage);
 }
 
+export async function listWorkorderInstalledSerializedPartSummaries({
+  workorderId,
+  companyId,
+  locationId,
+  limit = 2000,
+}, dependencies = {}) {
+  const runQuery = dependencies.query || query;
+  const result = await runQuery(
+    `${USAGE_SELECT}
+     where usage.workorder_id = $1
+       and usage.company_id = $2
+       and usage.location_id = $3
+       and usage.status in ('installed_pending_approval', 'installed')
+     order by usage.finalized_at, usage.issued_at, usage.id
+     limit $4`,
+    [workorderId, companyId, locationId, limit],
+  );
+  return result.rows.map((row) => ({
+    usageId: row.id,
+    catalogPartId: row.catalog_part_id,
+    partNumber: row.part_number,
+    serialNumber: row.serial_number,
+    quantity: 1,
+    uomCode: row.uom_code,
+    description: row.description || "",
+    repairOrder: row.repair_order || "",
+    status: row.status,
+  }));
+}
+
 export async function listAvailableSerializedUnitsForWorkorder({
   workorderId,
   companyId,

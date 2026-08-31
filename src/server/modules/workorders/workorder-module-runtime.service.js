@@ -35,7 +35,6 @@ import {
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
-import { listOfficialInstalledSerializedParts } from "../../print/workorder-print-projection.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import {
   authorizeWorkorderModule,
@@ -62,6 +61,7 @@ import {
   applyManualPartEvidence,
   listWorkorderManualPartEvidence,
 } from "../../db/repositories/workorder-manual-part-evidence.repo.js";
+import { listWorkorderInstalledSerializedPartSummaries } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 
 function resourceOptions(context) {
   return context.actor.role === "mechanic"
@@ -71,7 +71,7 @@ function resourceOptions(context) {
 
 async function withInstalledSerializedParts(detail, decisions, dependencies) {
   if (!decisions?.parts || decisions.parts.access === "hidden") return detail;
-  const listInstalledParts = dependencies.listInstalledParts || listOfficialInstalledSerializedParts;
+  const listInstalledParts = dependencies.listInstalledParts || listWorkorderInstalledSerializedPartSummaries;
   const listMeasuredParts = dependencies.listAggregateUsages || listAggregateWorkorderUsages;
   const listManualEvidence = dependencies.listManualPartEvidence || listWorkorderManualPartEvidence;
   const formData = detail.workorder.formData || {};

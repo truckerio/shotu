@@ -80,6 +80,7 @@ export function installedSerializedUsedParts(detail) {
     const repairOrder = Object.hasOwn(part || {}, "repairOrder")
       ? String(part.repairOrder || "").trim()
       : description;
+    const status = String(part?.status || "").trim();
     return [{
       ...(usageId ? { usageId } : {}),
       partNo,
@@ -88,6 +89,8 @@ export function installedSerializedUsedParts(detail) {
       ...(serialNumber ? { serialNumber } : {}),
       ...(description ? { description } : {}),
       repairOrder,
+      ...(status ? { status } : {}),
+      ...(status === "installed_pending_approval" ? { pendingApproval: true } : {}),
       catalogPartId: part?.catalogPartId || null,
     }];
   });
