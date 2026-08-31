@@ -145,7 +145,6 @@ export function useOfficeWorkorderActions({
   setOfficeCloseOpen,
   setOfficeDetailState,
   setOfficeReturn,
-  setUsedPartsDirty,
   writeEditBackup,
   autosaveDelay = 700,
 }) {
@@ -438,12 +437,11 @@ export function useOfficeWorkorderActions({
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId) throw new Error("Open a workorder before saving parts.");
     const result = await saveOfficeUsedPartsRequest({ request, workorderId, parts });
-    const detail = await reloadOfficeWorkorder(result.workorder.id, { refreshForm: false });
-    const savedParts = detail.workorder.formData?.parts || [];
-    setForm((current) => ({ ...current, parts: savedParts }));
-    setUsedPartsDirty(false);
-    return savedParts;
-  }, [activeWorkorder?.workorder?.id, reloadOfficeWorkorder, request, setForm, setUsedPartsDirty]);
+    return {
+      parts: result.workorder.formData?.parts || [],
+      workorder: result.workorder,
+    };
+  }, [activeWorkorder?.workorder?.id, request]);
 
   return {
     autosaveRevision,

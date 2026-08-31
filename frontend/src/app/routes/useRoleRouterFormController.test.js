@@ -112,3 +112,36 @@ test("shared form callbacks remain stable across unrelated router renders", () =
   assert.match(source, /form: \{ workEndDate: form\.workEndDate \}/);
   assert.doesNotMatch(source, /\[form,/);
 });
+
+test("Used Parts stays dirty until the editor acknowledges the latest saved revision", () => {
+  const dirtyStates = [];
+  const formUpdates = [];
+  const detailUpdates = [];
+  const controller = createRoleRouterFormController({
+    activeWorkorder: {
+      allowedActions: { update: true },
+      workorder: { id: "workorder-1" },
+    },
+    actorId: "mechanic-1",
+    form: { workEndDate: "" },
+    isOfficeDetail: false,
+    officeActionsRef: { current: null },
+    setActiveWorkorder: (next) => detailUpdates.push(next),
+    setCreateErrors: () => {},
+    setForm: (next) => formUpdates.push(next),
+    setUsedPartsDirty: (dirty) => dirtyStates.push(dirty),
+  });
+  const draft = [{ partNo: "FILTER  ", qty: "1", uomCode: "pc", repairOrder: "Replace" }];
+  const canonicalWorkorder = { id: "workorder-1", formData: { parts: draft } };
+
+  controller.updateActiveUsedParts(draft);
+  controller.updateActiveUsedParts(draft, { saved: true, workorder: canonicalWorkorder });
+
+  assert.deepEqual(dirtyStates, [true, false]);
+  assert.deepEqual(formUpdates[0]({ other: "preserved", parts: [] }), { other: "preserved", parts: draft });
+  assert.deepEqual(formUpdates[1]({ other: "preserved", parts: [] }), { other: "preserved", parts: draft });
+  assert.deepEqual(detailUpdates[0]({ allowedActions: {}, workorder: { id: "old" } }), {
+    allowedActions: {},
+    workorder: canonicalWorkorder,
+  });
+});

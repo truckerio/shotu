@@ -45,11 +45,11 @@ test("confirmed saves clear only the scoped backup", () => {
   assert.deepEqual(readOfficeWorkorderEditBackup("office-1", "wo-2", storage), { customerSignature: "Driver Two" });
 });
 
-test("Office parts autosave uses the narrow persistence endpoint and reloads server truth", () => {
+test("Office parts autosave uses the narrow endpoint response without a stale follow-up reload", () => {
   assert.match(officeActions, /workorderPath\(workorderId, "\/used-parts"\)/);
   assert.match(officeActions, /body: JSON\.stringify\(\{ parts \}\)/);
-  assert.match(officeActions, /reloadOfficeWorkorder\(result\.workorder\.id/);
-  assert.match(officeActions, /savedParts = detail\.workorder\.formData\?\.parts \|\| \[\]/);
+  assert.match(officeActions, /parts: result\.workorder\.formData\?\.parts \|\| \[\]/);
+  assert.doesNotMatch(officeActions, /saveActiveUsedParts[\s\S]*reloadOfficeWorkorder\(result\.workorder\.id/);
   assert.doesNotMatch(officeActions, /body: JSON\.stringify\(\{ parts, laborHours \}\)/);
   assert.doesNotMatch(officeActions, /formData:\s*\{\s*\.\.\.\(activeWorkorder\.workorder\.formData \|\| \{\}\),\s*parts,/s);
   assert.match(roleRouter, /useOfficeWorkorderActions/);
@@ -62,7 +62,7 @@ test("detail location and template changes enter the shared autosave queue", () 
 });
 
 test("real-time refresh cannot overwrite debounced part edits", () => {
-  assert.match(formController, /function updateActiveUsedParts\(parts\) \{\s*setUsedPartsDirty\(true\)/);
+  assert.match(formController, /function updateActiveUsedParts\(parts, options = \{\}\) \{[\s\S]*setUsedPartsDirty\(!saved\)/);
   assert.match(lifecycleEffects, /paused: usedPartsDirty \|\| \(/);
-  assert.match(formController, /setUsedPartsDirty\(false\);\s*\}/);
+  assert.match(formController, /options\.saved === true/);
 });

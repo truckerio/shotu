@@ -17,6 +17,7 @@ import {
   usedPartQuantityAfterPartNumberChange,
 } from "./used-parts-model.js";
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
+import { createUsedPartsAutosave } from "./used-parts-autosave.js";
 import {
   mechanicWorkStorageKey,
   removeLegacyMechanicWorkStorage,
@@ -92,20 +93,15 @@ export function UsedPartsEditor({
   const t = (key) => interfaceText(locale, key);
   const readOnlyText = locale === "en" ? readonlyMessage : t("parts.usedPartsReadOnly");
   const [visibleRowCount, setVisibleRowCount] = useState(() => initialUsedPartRows(parts, defaultRows).length);
-  const rows = useMemo(
-    () => normalizeUsedParts(parts, visibleRowCount),
-    [parts, visibleRowCount],
-  );
-  const savePayload = useMemo(
-    () => JSON.stringify({ parts: rows }),
-    [rows],
-  );
+  const [draftRows, setDraftRows] = useState(() => initialUsedPartRows(parts, defaultRows));
+  const rows = useMemo(() => normalizeUsedParts(draftRows, visibleRowCount), [draftRows, visibleRowCount]);
   const storageKey = actorId
     ? mechanicWorkStorageKey("used-parts", actorId, detail.workorder.id)
     : "";
-  const persistedRef = useRef(savePayload);
   const hydratedRef = useRef(false);
   const saveRef = useRef(onSave);
+  const autosaveContextRef = useRef(null);
+  const usedPartsAutosaveRef = useRef(null);
   const [findingRow, setFindingRow] = useState(-1);
   const [saveState, setSaveState] = useState("");
   const [message, setMessage] = useState("");
@@ -154,11 +150,42 @@ export function UsedPartsEditor({
       },
     });
   }
+  if (!usedPartsAutosaveRef.current) {
+    usedPartsAutosaveRef.current = createUsedPartsAutosave({
+      save: (nextRows, revision) => saveRef.current(nextRows, revision),
+      onSaving: (saving) => {
+        const savingText = autosaveContextRef.current.t("progress.saving");
+        setSaveState((current) => saving ? savingText : current === savingText ? "" : current);
+      },
+      onSaved: (submittedRows, _revision, saved) => {
+        const context = autosaveContextRef.current;
+        if (context.storageKey) window.localStorage.removeItem(context.storageKey);
+        context.onChange(submittedRows, {
+          saved: true,
+          workorder: saved?.workorder,
+        });
+        setSaveState(context.t("progress.saved"));
+      },
+      onStoreDraft: (nextRows) => {
+        const context = autosaveContextRef.current;
+        if (context.storageKey) window.localStorage.setItem(context.storageKey, JSON.stringify({ parts: nextRows }));
+      },
+      onError: (error) => {
+        const context = autosaveContextRef.current;
+        setSaveState(context.t("progress.notSaved"));
+        setMessage(context.locale === "en" && error?.message ? error.message : context.t("parts.saveFailed"));
+      },
+    });
+  }
+  const usedPartsAutosave = usedPartsAutosaveRef.current;
   const serializedRepairAutosave = serializedRepairAutosaveRef.current;
+  autosaveContextRef.current = { locale, onChange, storageKey, t };
 
   useEffect(() => {
     saveRef.current = onSave;
   }, [onSave]);
+
+  useEffect(() => () => usedPartsAutosave.dispose(), [usedPartsAutosave]);
 
   useEffect(() => {
     if (!focusedSerializedUsageId) return undefined;
@@ -172,18 +199,25 @@ export function UsedPartsEditor({
   }, [focusedSerializedUsageId, serializedParts]);
 
   useEffect(() => {
-    onRegisterSerializedRepairFlush(serializedRepairAutosave.flushAll);
+    onRegisterSerializedRepairFlush(async () => {
+      const [manualSaved, serializedSaved] = await Promise.all([
+        usedPartsAutosave.flush(),
+        serializedRepairAutosave.flushAll(),
+      ]);
+      return manualSaved && serializedSaved;
+    });
     return () => {
       onRegisterSerializedRepairFlush(null);
       serializedRepairAutosave.dispose();
     };
-  }, [onRegisterSerializedRepairFlush, serializedRepairAutosave]);
+  }, [onRegisterSerializedRepairFlush, serializedRepairAutosave, usedPartsAutosave]);
 
   useEffect(() => {
     const currentRows = initialUsedPartRows(parts, defaultRows);
     setVisibleRowCount(currentRows.length);
+    setDraftRows(currentRows);
     hydratedRef.current = false;
-    persistedRef.current = JSON.stringify({ parts: currentRows });
+    usedPartsAutosave.reset(currentRows);
     setSaveState("");
     setMessage("");
     setSelectedCatalogParts([]);
@@ -200,7 +234,9 @@ export function UsedPartsEditor({
       const recovered = initialUsedPartRows(Array.isArray(storedValue) ? storedValue : storedValue.parts, defaultRows);
       setVisibleRowCount(recovered.length);
       if (JSON.stringify(recovered) !== JSON.stringify(currentRows)) {
+        setDraftRows(recovered);
         onChange(recovered);
+        usedPartsAutosave.update(recovered);
         setMessage(t("parts.recoveredUnsavedEntries"));
       }
     } catch {
@@ -214,44 +250,31 @@ export function UsedPartsEditor({
       .map(partFingerprint));
   }, [detail.workorder.id]);
 
-  useEffect(() => {
-    if (!hydratedRef.current || !partsEditable || !storageKey) return undefined;
-    if (savePayload === persistedRef.current) return undefined;
-    window.localStorage.setItem(storageKey, savePayload);
-    setSaveState(t("progress.saving"));
-    const timer = window.setTimeout(async () => {
-      try {
-        await saveRef.current(rows);
-        persistedRef.current = savePayload;
-        window.localStorage.removeItem(storageKey);
-        setSaveState(t("progress.saved"));
-      } catch (error) {
-        setSaveState(t("progress.notSaved"));
-        setMessage(locale === "en" && error?.message ? error.message : t("parts.saveFailed"));
-      }
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [partsEditable, rows, savePayload, storageKey]);
+  function changeRows(nextRows) {
+    setDraftRows(nextRows);
+    onChange(nextRows);
+    if (hydratedRef.current && partsEditable) usedPartsAutosave.update(nextRows);
+  }
 
   function update(index, field, value) {
-    onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
+    changeRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
   }
 
   function updateFields(index, fields) {
-    onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...fields } : row));
+    changeRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...fields } : row));
   }
 
   function addRow() {
     const next = addUsedPart(rows, rows.length);
     setVisibleRowCount(next.length);
-    onChange(next);
+    changeRows(next);
   }
 
   function removeRow(index) {
     const normalized = removeUsedPart(rows, index, Math.max(0, rows.length - 1));
     setVisibleRowCount(normalized.length);
     setSelectedCatalogParts((current) => current.filter((_, rowIndex) => rowIndex !== index));
-    onChange(normalized);
+    changeRows(normalized);
   }
 
   function setSelectedCatalogPart(index, part) {
@@ -296,7 +319,7 @@ export function UsedPartsEditor({
         qty: defaultUsedPartQuantity(result.part.suggestedQuantity || row.qty),
         uomCode: result.part.uomCode || row.uomCode,
       };
-      onChange(next);
+      changeRows(next);
       setMessage(t("parts.detailsFound"));
     } catch {
       setMessage(t("parts.detailsUnavailable"));

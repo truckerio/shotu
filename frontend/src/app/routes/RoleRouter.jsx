@@ -314,7 +314,6 @@ export function RoleRouter({ actor }) {
     setOfficeCloseOpen,
     setOfficeDetailState,
     setOfficeReturn,
-    setUsedPartsDirty,
     writeEditBackup: writeOfficeWorkorderEditBackup,
   });
   officeActionsRef.current = officeActions;

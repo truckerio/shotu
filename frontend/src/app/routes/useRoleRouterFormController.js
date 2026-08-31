@@ -90,9 +90,16 @@ export function createRoleRouterFormController({
     }));
   }
 
-  function updateActiveUsedParts(parts) {
-    setUsedPartsDirty(true);
+  function updateActiveUsedParts(parts, options = {}) {
+    const saved = options.saved === true;
+    setUsedPartsDirty(!saved);
     setForm((current) => ({ ...current, parts }));
+    if (saved && options.workorder) {
+      setActiveWorkorder((current) => current ? {
+        ...current,
+        workorder: options.workorder,
+      } : current);
+    }
   }
 
   function updateActiveLaborHours(laborHours) {
@@ -103,24 +110,18 @@ export function createRoleRouterFormController({
     const workorderId = activeWorkorder?.workorder?.id;
     if (!workorderId) throw new Error("Open a workorder before saving parts.");
     if (isOfficeDetail) {
-      await officeActionsRef.current?.saveActiveUsedParts(parts);
-      return;
+      return officeActionsRef.current?.saveActiveUsedParts(parts);
     }
 
     const savedParts = normalizeSavedUsedParts(parts);
-    await api(`/api/mechanic/workorders/${workorderId}/used-parts`, {
+    const result = await api(`/api/mechanic/workorders/${workorderId}/used-parts`, {
       method: "PATCH",
       body: JSON.stringify({ parts: savedParts }),
     });
-    setForm((current) => ({ ...current, parts: savedParts }));
-    setActiveWorkorder((current) => current ? {
-      ...current,
-      workorder: {
-        ...current.workorder,
-        formData: { ...(current.workorder.formData || {}), parts: savedParts },
-      },
-    } : current);
-    setUsedPartsDirty(false);
+    return {
+      parts: normalizeSavedUsedParts(result?.workorder?.formData?.parts || savedParts),
+      workorder: result?.workorder,
+    };
   }
 
   return {
