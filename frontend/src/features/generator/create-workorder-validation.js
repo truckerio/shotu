@@ -1,24 +1,15 @@
-import {
-  DEFAULT_UOM_CODE,
-  getUnitDefinition,
-  normalizeQuantity,
-} from "../../../../shared/units-of-measure.js";
+import { invalidCreatePartIndex } from "../workorder-modules/parts/create-parts-model.js";
 
 export const CREATE_WORKORDER_FIELD_IDS = Object.freeze({
   locationId: "workorder-location",
   unitNo: "workorder-unit",
   customerCompanyName: "customer-company-name",
   mechanicConcern: "workorder-concern",
-  parts: "known-part-quantity-0",
+  parts: "create-known-parts-editor",
 });
 
 export function validateCreateWorkorder(form = {}) {
-  const invalidPart = (Array.isArray(form.parts) ? form.parts : []).find((part) => {
-    const hasContent = Boolean(part?.partNo || part?.qty || part?.repairOrder);
-    if (!hasContent) return false;
-    const code = String(part?.uomCode || DEFAULT_UOM_CODE).trim().toLowerCase();
-    return !getUnitDefinition(code) || !normalizeQuantity(part?.qty, code);
-  });
+  const invalidPartIndex = invalidCreatePartIndex(Array.isArray(form.parts) ? form.parts : []);
   return {
     ...(!String(form.locationId || "").trim() ? { locationId: "Select the repair location." } : {}),
     ...(!String(form.unitNo || "").trim() ? { unitNo: "Enter or select the unit." } : {}),
@@ -28,7 +19,7 @@ export function validateCreateWorkorder(form = {}) {
     ...(!String(form.mechanicConcern || "").trim()
       ? { mechanicConcern: "Describe what needs to be inspected or repaired." }
       : {}),
-    ...(invalidPart ? { parts: "Enter a valid quantity and unit for each known part." } : {}),
+    ...(invalidPartIndex >= 0 ? { parts: "Enter a valid quantity and unit for each known part." } : {}),
   };
 }
 

@@ -50,3 +50,7 @@ test("create validation summary targets the rendered controls", () => {
     Object.fromEntries(Object.keys(errors).map((key) => [key, CREATE_WORKORDER_FIELD_IDS[key]])),
   );
 });
+
+test("parts validation targets the compact editor anchor", () => {
+  assert.equal(CREATE_WORKORDER_FIELD_IDS.parts, "create-known-parts-editor");
+});
