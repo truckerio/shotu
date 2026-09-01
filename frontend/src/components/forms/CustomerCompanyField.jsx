@@ -20,7 +20,6 @@ export function CustomerCompanyField({
   const options = suggestions.map((name, index) => ({ id: `customer-company-${index}`, name }));
   const listboxId = `customer-company-options-${useId().replaceAll(":", "")}`;
   const rootRef = useRef(null);
-  const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const suggestionKey = suggestions.join("\u0000");
@@ -45,7 +44,6 @@ export function CustomerCompanyField({
     onChange?.(option.name);
     setOpen(false);
     setActiveIndex(-1);
-    inputRef.current?.focus();
   }
 
   function handleKeyDown(event) {
@@ -84,7 +82,6 @@ export function CustomerCompanyField({
             <input
               {...textEntryProps("name")}
               {...inputProps}
-              ref={inputRef}
               id={accessibility.id}
               aria-describedby={accessibility.describedBy}
               aria-invalid={accessibility.invalid || undefined}
@@ -109,7 +106,6 @@ export function CustomerCompanyField({
               aria-controls={listboxId}
               type="button"
               onClick={() => {
-                inputRef.current?.focus();
                 setOpen((current) => !current);
                 setActiveIndex((current) => current >= 0 ? current : 0);
               }}

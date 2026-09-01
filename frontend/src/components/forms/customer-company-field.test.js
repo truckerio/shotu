@@ -22,3 +22,14 @@ test("one selected suggestion replaces the company while manual entry remains su
   assert.match(source, /options\.length \? \(/);
   assert.match(source, /onChange=\{\(event\) => onChange\?\.\(event\.target\.value, event\)\}/);
 });
+
+test("pointer dropdown actions do not force focus into the text input", () => {
+  const selectHandler = source.match(/function select\(option\) \{([\s\S]*?)\n  \}/)?.[1] ?? "";
+  const triggerHandler = source.match(/className="customer-company-combobox-trigger"[\s\S]*?onClick=\{\(\) => \{([\s\S]*?)\n              \}\}/)?.[1] ?? "";
+
+  assert.ok(selectHandler, "expected suggestion selection handler");
+  assert.ok(triggerHandler, "expected dropdown trigger handler");
+  assert.doesNotMatch(selectHandler, /\.focus\(/);
+  assert.doesNotMatch(triggerHandler, /\.focus\(/);
+  assert.match(triggerHandler, /setOpen\(\(current\) => !current\)/);
+});
