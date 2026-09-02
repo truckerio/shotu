@@ -80,6 +80,7 @@ export function useWorkorderDetailRoute({
   officeLocations,
   queueOfficeAutosave,
   setActiveWorkorder,
+  setCreateState,
   setDetailSection,
   setDetailSource,
   setDetailStatus,
@@ -201,9 +202,24 @@ export function useWorkorderDetailRoute({
     }
   }, [actor.role, hydrateOfficeWorkorder, setOfficeDetailState]);
 
+  const openActiveUnitWorkorder = useCallback(async (workorderId) => {
+    setCreateState({ busy: true, error: false, message: "" });
+    try {
+      const detail = await loadWorkorderDetail({ markOpened: true, role: actor.role, workorderId });
+      setCreateState({ busy: false, error: false, message: "" });
+      if (actor.role === "mechanic") hydrateOperationalWorkorder(detail);
+      else hydrateOfficeWorkorder(detail);
+      return true;
+    } catch (error) {
+      setCreateState({ busy: false, error: true, message: error.message });
+      return false;
+    }
+  }, [actor.role, hydrateOfficeWorkorder, hydrateOperationalWorkorder, setCreateState]);
+
   return {
     hydrateOfficeWorkorder,
     hydrateOperationalWorkorder,
+    openActiveUnitWorkorder,
     openOfficeWorkorder,
     openOperationalWorkorder: hydrateOperationalWorkorder,
   };

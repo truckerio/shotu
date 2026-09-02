@@ -136,6 +136,7 @@ export async function markOfficeWorkorderDone(workorderId, input) {
   try {
     return await markOperationalWorkorderDone(workorderId, office.id, input, {
       requireAssignedMechanic: false,
+      requireRepairDetails: false,
       statusNote: "Office marked work done.",
     });
   } catch (error) {

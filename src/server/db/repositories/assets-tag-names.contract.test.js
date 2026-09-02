@@ -4,6 +4,7 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./assets.repo.js", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../migrations/083_samsara_asset_tag_names.sql", import.meta.url), "utf8");
+const workorders = readFileSync(new URL("./operational-workorders.repo.js", import.meta.url), "utf8");
 
 test("vehicle search and detail expose tag names without exposing raw provider data", () => {
   const readQueries = source.slice(0, source.indexOf("export async function updateVehicleLocation"));
@@ -11,6 +12,7 @@ test("vehicle search and detail expose tag names without exposing raw provider d
   assert.doesNotMatch(readQueries, /raw_provider_data/i);
   assert.match(readQueries, /a\.company_id = any\(\$5::uuid\[\]\)/);
   assert.match(readQueries, /a\.id = \$1 and a\.company_id = any\(\$2::uuid\[\]\)/);
+  assert.match(workorders, /'tagNames', \$\{alias\}\.tag_names/);
 });
 
 test("Samsara upserts persist tag names as JSONB", () => {

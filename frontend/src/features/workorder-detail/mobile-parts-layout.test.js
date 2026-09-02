@@ -22,9 +22,9 @@ function phonePartsCss() {
   return css.slice(start);
 }
 
-test("shared parts editor keeps legacy manual evidence immutable without remove actions", () => {
+test("shared parts editor keeps legacy manual rows immutable without extra evidence labels or remove actions", () => {
   assert.match(editor, /readonlyUsedParts\(parts\)\.map/);
-  assert.match(editor, /parts\.legacyManualEvidence/);
+  assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
   assert.doesNotMatch(editor, /className="remove-row"/);
   assert.doesNotMatch(editor, /Trash01/);
   assert.doesNotMatch(globalCss, /\.remove-row::before/);

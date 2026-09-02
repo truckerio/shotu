@@ -118,6 +118,24 @@ test("office save patch keeps administrative fields and excludes mechanic-owned 
   assert.equal(Object.hasOwn(payload, "userId"), false);
 });
 
+test("manual Unit replacement detaches the previously selected asset", () => {
+  const payload = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: {
+        id: "wo-1",
+        updatedAt: "2026-08-02T10:00:00.000Z",
+        asset: { id: "asset-old", unitNo: "G2020" },
+        formData: { unitNo: "G2020" },
+      },
+    },
+    selectedVehicle: null,
+    form: { unitNo: "MANUAL-1", parts: [] },
+  });
+
+  assert.equal(payload.assetId, null);
+  assert.equal(payload.formData.unitNo, "MANUAL-1");
+});
+
 test("office PATCH helper preserves endpoint, revision payload, and no browser actor ID", async () => {
   const recorder = requestRecorder({ workorder: { id: "wo-1" } });
   const payload = { concern: "Inspect", expectedUpdatedAt: "revision-1" };

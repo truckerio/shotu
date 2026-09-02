@@ -8,6 +8,7 @@ import { cancelWorkorderSchema, returnWorkorderSchema } from "./workorder.schema
 const migrationUrl = new URL("../../db/migrations/039_workorder_handoff.sql", import.meta.url);
 const repositoryUrl = new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url);
 const partRequestRepositoryUrl = new URL("../../db/repositories/part-requests.repo.js", import.meta.url);
+const mechanicServiceUrl = new URL("../mechanic/mechanic.service.js", import.meta.url);
 
 test("handoff mutation inputs require useful bounded reasons and known categories", () => {
   assert.equal(returnWorkorderSchema.safeParse({ reason: " " }).success, false);
@@ -58,10 +59,11 @@ test("cancelled work locks every mechanic repair action while retaining particip
 });
 
 test("handoff migration and repository encode transactional lifecycle ownership", async () => {
-  const [migration, repository, partRequestRepository] = await Promise.all([
+  const [migration, repository, partRequestRepository, mechanicService] = await Promise.all([
     readFile(migrationUrl, "utf8"),
     readFile(repositoryUrl, "utf8"),
     readFile(partRequestRepositoryUrl, "utf8"),
+    readFile(mechanicServiceUrl, "utf8"),
   ]);
   for (const column of ["cancelled_at", "cancelled_by_user_id", "cancel_reason", "approved_by_user_id"]) {
     assert.match(migration, new RegExp(column));
@@ -71,8 +73,9 @@ test("handoff migration and repository encode transactional lifecycle ownership"
   assert.match(repository, /started_at = coalesce\(started_at, now\(\)\)/);
   assert.match(repository, /\$6::boolean = false[\s\S]*assignment\.mechanic_user_id = \$2/);
   assert.match(repository, /WORKORDER_STATUS\.MECHANIC_DONE,[\s\S]*requireAssignedMechanic/);
+  assert.match(repository, /requireRepairDetails && !nextInput\.workPerformed/);
   assert.match(repository, /WORKORDER_REPAIR_DETAILS_REQUIRED/);
-  assert.match(repository, /Add a repair order in Parts before marking Work done\./);
+  assert.match(mechanicService, /markOperationalWorkorderDone\([\s\S]*requireRepairDetails: false/);
   assert.match(repository, /mechanic_done_at = null/);
   assert.match(repository, /quantity_reserved = quantity_reserved - \$2/);
   assert.match(repository, /approved_by_user_id = \$3/);

@@ -59,13 +59,15 @@ export function createOfficeAutosaveQueue() {
 export function buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehicle }) {
   const workorder = activeWorkorder?.workorder;
   if (!workorder) throw new TypeError("An active workorder is required.");
+  const savedUnitNo = String(workorder.formData?.unitNo || workorder.asset?.unitNo || "").trim().toLowerCase();
+  const currentUnitNo = String(form.unitNo || "").trim().toLowerCase();
 
   const savedAdministrativeForm = Object.fromEntries(
     Object.entries(workorder.formData || {}).filter(([key]) => !ADMINISTRATIVE_FORM_EXCLUSIONS.has(key)),
   );
 
   return {
-    assetId: selectedVehicle?.id || workorder.asset?.id || null,
+    assetId: selectedVehicle?.id || (currentUnitNo === savedUnitNo ? workorder.asset?.id : null) || null,
     locationId: form.locationId || workorder.locationId || null,
     concern: form.mechanicConcern,
     officeNotes: form.officeNotes || "",

@@ -88,6 +88,9 @@ export function WorkorderSerializedPartDialog({
     ? `/api/workorders/${encodeURIComponent(workorderId)}/inventory-parts/${encodeURIComponent(partId)}/units`
     : "";
   const part = data?.part || catalogPart || {};
+  const partNumber = part.partNumber || part.normalizedPartNumber || "";
+  const partDescription = part.description?.trim();
+  const showDescription = partDescription && partDescription.toLocaleLowerCase() !== partNumber.trim().toLocaleLowerCase();
   const locationName = data?.location?.name || data?.location?.locationName || catalogPart?.locationName || "this workorder location";
   const units = unitsFrom(data);
   const text = DIALOG_TEXT[normalizeLocale(locale)] || DIALOG_TEXT.en;
@@ -228,38 +231,52 @@ export function WorkorderSerializedPartDialog({
       <Modal className="workorder-serialized-dialog-modal">
         <Dialog className="workorder-serialized-dialog" aria-labelledby={`${dialogId}-title`} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}>
           <header>
-            <div>
-              <p>{text.title}</p>
+            <div className="workorder-serialized-heading">
               <h2 id={`${dialogId}-title`}>{view === "create" ? text.add : view === "created" ? text.ready : text.choose}</h2>
-              <strong>{part.partNumber || part.normalizedPartNumber}</strong>
-              {part.description ? <span>{part.description}</span> : null}
-              {part.uomCode ? <small>{part.uomCode}</small> : null}
-              <small>{text.location}: {locationName}</small>
+              <div className="workorder-serialized-context" aria-label={text.title}>
+                <div className="workorder-serialized-part-identity">
+                  <strong>{partNumber}</strong>
+                  {showDescription ? <span>{partDescription}</span> : null}
+                </div>
+                <div className="workorder-serialized-meta">
+                  {part.uomCode ? <span>{part.uomCode}</span> : null}
+                  <span>{text.location}: {locationName}</span>
+                </div>
+              </div>
             </div>
             <button type="button" className="workorder-serialized-close" onClick={close} disabled={busy} aria-label={text.close}>×</button>
           </header>
           <div className="workorder-serialized-dialog-content" ref={contentRef}>
             {message ? <p className="workorder-serialized-message" role="alert">{message}</p> : null}
             {view === "create" ? <form onSubmit={createUnits} className="workorder-serialized-create">
-              <label>{text.quantity}<input ref={quantityRef} type="number" min="1" max="25" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
-              <p>{text.creates}</p>
-              {Number(quantity) > 10 ? <p>This will permanently create {quantity} serial numbers and {quantity} labels.</p> : null}
-              <label className="workorder-serialized-check"><input type="checkbox" checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /> {text.confirm} {locationName}.</label>
+              <div className="workorder-serialized-field">
+                <label>{text.quantity}<input ref={quantityRef} type="number" min="1" max="25" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
+                <p>{text.creates}</p>
+                {Number(quantity) > 10 ? <p className="workorder-serialized-notice">This will permanently create {quantity} serial numbers and {quantity} labels.</p> : null}
+              </div>
+              <label className="workorder-serialized-check"><input type="checkbox" checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /><span>{text.confirm} <strong>{locationName}</strong>.</span></label>
               <footer><Button type="button" onClick={() => { setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type="submit" variant="primary" disabled={busy || !physicallyPresent}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
             </form> : <>
-              {view === "created" && batch?.printUrl ? <a ref={printRef} className="button primary" href={batch.printUrl} target="_blank" rel="noreferrer">{text.printed} {batch.itemCount || units.length} {text.labels}</a> : null}
-              <div className="workorder-serialized-scan">
-                <h3>{text.scan}</h3>
-                <InventoryCodeScanner autoStart resetKey={`${workorderId}:${partId}:${open}`} disabled={busy} onScan={(code) => reserve({ code })} labels={{ enterCode: text.manual, codeLabel: text.code, openError: text.error }} />
-              </div>
-              <form className="workorder-serialized-search" onSubmit={search}><label>{text.search}<input value={serialQuery} onChange={(event) => setSerialQuery(event.target.value)} placeholder="Full or beginning of serial" disabled={busy} /></label><Button type="submit" disabled={loading || busy}>{loading ? text.searching : text.searchButton}</Button></form>
+              {view === "created" && batch?.printUrl ? <div className="workorder-serialized-ready"><strong>{text.ready}</strong><a ref={printRef} className="button primary" href={batch.printUrl} target="_blank" rel="noreferrer">{text.printed} {batch.itemCount || units.length} {text.labels}</a></div> : null}
+              <section className="workorder-serialized-find" aria-labelledby={`${dialogId}-find-heading`}>
+                <div className="workorder-serialized-section-heading">
+                  <h3 id={`${dialogId}-find-heading`}>{text.scan}</h3>
+                  <span>{text.manual}</span>
+                </div>
+                <div className="workorder-serialized-scan">
+                  <InventoryCodeScanner autoStart resetKey={`${workorderId}:${partId}:${open}`} disabled={busy} onScan={(code) => reserve({ code })} labels={{ enterCode: text.manual, codeLabel: text.code, openError: text.error }} />
+                </div>
+                <form className="workorder-serialized-search" onSubmit={search}><label>{text.search}<input value={serialQuery} onChange={(event) => setSerialQuery(event.target.value)} placeholder="Full or beginning of serial" disabled={busy} /></label><Button type="submit" disabled={loading || busy}>{loading ? text.searching : text.searchButton}</Button></form>
+              </section>
               {loading ? <p role="status">{text.loading}</p> : null}
-              {!loading && data ? <p className="workorder-serialized-availability" role="status">{units.length} {text.availability}</p> : null}
-              {!loading && !units.length ? <div className="workorder-serialized-empty"><p>{text.none} {locationName}.</p>{canCreate ? <Button ref={addUnitsRef} type="button" variant="primary" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : <p ref={emptyStatusRef} tabIndex="-1">{text.ask}</p>}</div> : null}
-              {units.length ? <fieldset className="workorder-serialized-unit-list"><legend>{text.available}</legend>{units.map((unit) => <label key={unit.id} className="workorder-serialized-unit"><input type="radio" name="serialized-unit" value={unit.id} checked={selectedUnitId === unit.id} onChange={() => setSelectedUnitId(unit.id)} disabled={busy || unit.eligible === false || unit.eligibility?.canIssue === false || unit.canIssue === false} /><span><strong>{unit.partNumber || part.partNumber}</strong><code>{unit.serialNumber || unit.serial}</code><small>{unit.status === "in_stock" ? text.stock : unit.status}{unit.locationName ? ` · ${unit.locationName}` : ""}</small></span></label>)}</fieldset> : null}
-              {!loading && units.length && canCreate ? <Button type="button" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : null}
+              {!loading && !units.length ? <div className="workorder-serialized-empty" ref={canCreate ? undefined : emptyStatusRef} tabIndex={canCreate ? undefined : -1}>
+                <span className="workorder-serialized-empty-count" aria-hidden="true">0</span>
+                <div><strong>{text.none} {locationName}.</strong>{!canCreate ? <p>{text.ask}</p> : null}</div>
+                {canCreate ? <Button ref={addUnitsRef} type="button" variant="primary" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : null}
+              </div> : null}
+              {units.length ? <fieldset className="workorder-serialized-unit-list"><legend><span>{text.available}</span><small role="status">{units.length} {text.availability}</small></legend>{units.map((unit) => <label key={unit.id} className="workorder-serialized-unit"><input type="radio" name="serialized-unit" value={unit.id} checked={selectedUnitId === unit.id} onChange={() => setSelectedUnitId(unit.id)} disabled={busy || unit.eligible === false || unit.eligibility?.canIssue === false || unit.canIssue === false} /><span><strong>{unit.partNumber || part.partNumber}</strong><code>{unit.serialNumber || unit.serial}</code><small>{unit.status === "in_stock" ? text.stock : unit.status}{unit.locationName ? ` · ${unit.locationName}` : ""}</small></span></label>)}</fieldset> : null}
               {data?.nextCursor ? <Button type="button" onClick={() => load({ cursor: data.nextCursor, append: true })} disabled={loading || busy}>{text.more}</Button> : null}
-              <footer><Button type="button" onClick={close} disabled={busy}>{text.close}</Button><Button type="button" variant="primary" onClick={() => reserve({ unitId: selectedUnitId })} disabled={!canReserve || busy}>{busy ? text.adding : text.selected}</Button></footer>
+              {units.length ? <footer>{canCreate ? <Button type="button" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : <span /> }<Button type="button" variant="primary" onClick={() => reserve({ unitId: selectedUnitId })} disabled={!canReserve || busy}>{busy ? text.adding : text.selected}</Button></footer> : null}
             </>}
           </div>
         </Dialog>

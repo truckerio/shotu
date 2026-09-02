@@ -15,7 +15,7 @@ test("mechanic used-parts interface text is owned by the selected locale", () =>
   assert.match(editor, /locale = "en"/);
   assert.match(editor, /parts\.noUsedPartsRecorded/);
   assert.match(editor, /progress\.saving/);
-  assert.match(editor, /parts\.legacyManualEvidence/);
+  assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
 });
 
 test("installed serialized summaries keep identity locked, edit only repair wording, and feed every preview", () => {

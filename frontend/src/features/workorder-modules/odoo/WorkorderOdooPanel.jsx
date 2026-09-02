@@ -62,9 +62,6 @@ export function WorkorderOdooPanel({
       {!eligible ? (
         <div className="surveillance-progress-state">
           <h3>{workorder.status === "mechanic_done" ? "Awaiting office approval" : "Work in progress"}</h3>
-          <p>{workorder.status === "mechanic_done"
-            ? "The mechanic finished this workorder. Odoo becomes available after office approval."
-            : "Odoo entry becomes available after the mechanic finishes and office approves this workorder."}</p>
         </div>
       ) : (
         <div className="surveillance-odoo-form" aria-label="Odoo workorder module">

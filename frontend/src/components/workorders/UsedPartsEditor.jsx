@@ -301,7 +301,6 @@ export function UsedPartsEditor({
                 <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
                 <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
                 {part.repairOrder ? <span>{part.repairOrder}</span> : null}
-                <small>{t("parts.legacyManualEvidence")}</small>
               </li>
             ))}
           </ul>
@@ -388,7 +387,6 @@ export function UsedPartsEditor({
               <strong>{part.partNo || t("parts.partNumberNotRecorded")}</strong>
               <span>{formatQuantityUnit(part.qty, part.uomCode)}</span>
               {part.repairOrder ? <span>{part.repairOrder}</span> : null}
-              <small>{t("parts.legacyManualEvidence")}</small>
             </li>
           ))}
         </ul>

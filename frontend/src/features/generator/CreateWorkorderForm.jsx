@@ -25,6 +25,7 @@ export function CreateWorkorderForm({
   onAssignmentChange,
   onFieldChange,
   onLocationChange,
+  onOpenActiveWorkorder,
   onReloadLocations,
   onPartChange,
   onRemovePart,
@@ -74,7 +75,7 @@ export function CreateWorkorderForm({
       onRemove: onRemovePart,
     },
     schedule: { activeSection: mobileSection, form, locale, onChange: onFieldChange },
-    unit: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange, onUnitChange, onVehicleSelect, selectedVehicle, vehicleLookup },
+    unit: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, selectedVehicle, vehicleLookup },
   };
 
   return (

@@ -19,6 +19,7 @@ import { RepairHistorySuggestions } from "./RepairHistorySuggestions.jsx";
 import { useOfficeRequestReview } from "./useOfficeRequestReview.js";
 import { GetPartsFlow } from "../../../features/inventory/GetPartsFlow.jsx";
 import { interfaceText } from "../../../i18n/index.js";
+import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
 
 export function OfficeRequestCard({ request, detail, onChanged }) {
   const locale = "en";
@@ -32,9 +33,9 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
       {pending ? (
         <>
           <div className="part-review-heading">
-            <div>
+            <div className="part-review-heading-copy">
               <strong>{t("parts.reviewRequest")}</strong>
-              <span>{t("parts.reviewRequestHelp")}</span>
+              <SectionHelpDisclosure label={t("parts.reviewRequestHelp")}><p>{t("parts.reviewRequestHelp")}</p></SectionHelpDisclosure>
             </div>
             <div className="part-review-heading-actions">
               {request.requestedByName ? <span>{t("parts.requestedBy")} {request.requestedByName}</span> : null}
@@ -106,7 +107,10 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
             />
           </div>
           <div className="part-response-composer">
-            <label htmlFor={`part-response-${request.id}`}>{t("parts.messageToMechanic")}</label>
+            <div className="part-response-heading">
+              <label htmlFor={`part-response-${request.id}`}>{t("parts.messageToMechanic")}</label>
+              <SectionHelpDisclosure label={t("parts.responseHelp")}><p>{t("parts.responseHelp")}</p></SectionHelpDisclosure>
+            </div>
             <NarrativeField
               id={`part-response-${request.id}`}
               ref={review.responseRef}
@@ -115,7 +119,6 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
               placeholder={t("parts.responsePlaceholder")}
               rows="3"
             />
-            <span>{t("parts.responseHelp")}</span>
             <div className="part-decision-actions">
               <ApproveButton
                 onClick={() => review.decide("approved")}

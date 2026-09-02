@@ -27,3 +27,22 @@ test("customer company combobox retains touch and responsive popup geometry", ()
   assert.match(formCss, /\.customer-company-combobox-popover \{[\s\S]*max-height: min\(320px,[\s\S]*position: absolute;[\s\S]*width: 100%;/);
   assert.match(formCss, /\.customer-company-combobox-option \{[\s\S]*min-height: 40px;/);
 });
+
+test("minimal Unit help shares the visible heading row", () => {
+  assert.match(source, /<FormSection[\s\S]*title=\{t\("create\.unit\.unit"\)\}[\s\S]*action=\{\([\s\S]*<SectionHelpDisclosure/);
+  assert.doesNotMatch(source, /headerAction=\{\([\s\S]*create\.unit\.summary/);
+  assert.match(formCss, /\.create-unit-card \.operational-form-section:first-child > \.operational-form-section-legend,[\s\S]*align-items: center;/);
+});
+
+test("unit lookup is a compact keyboard listbox with actionable active workorders", () => {
+  assert.match(source, /aria-activedescendant=/);
+  assert.match(source, /onKeyDown=\{handleUnitKeyDown\}/);
+  assert.match(source, /moveVehicleSearchResultIndex/);
+  assert.match(source, /vehicleSearchResultAction/);
+  assert.match(source, /onOpenActiveWorkorder\?\.\(action\.workorderId\)/);
+  assert.doesNotMatch(source, /disabled=\{unavailable\}/);
+  assert.doesNotMatch(source, /closeBeforeAnother/);
+  assert.match(formCss, /\.operational-unit-results \{[\s\S]*max-height: min\(312px,[\s\S]*overscroll-behavior: contain;/);
+  assert.match(formCss, /\.operational-unit-results button \{[\s\S]*min-height: 52px;/);
+  assert.match(formCss, /button\.is-unavailable \{[\s\S]*background: #f9fafb;[\s\S]*color: #475467;/);
+});

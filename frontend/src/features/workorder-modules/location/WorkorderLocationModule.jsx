@@ -28,7 +28,7 @@ export function WorkorderLocationModule({
   const locationName = location?.name || location?.label || t("detail.notListed");
 
   return (
-    <ProgressiveWorkorderSection id="location" title={t("location.title")} summary={locationName} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
+    <ProgressiveWorkorderSection id="location" title={t("location.title")} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
       {canWrite && locations.length ? (
         <Field label={t("location.repairLocation")}>
           <Dropdown value={location?.id || ""} onChange={(event) => onChange?.(event.target.value)}>

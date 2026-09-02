@@ -68,16 +68,6 @@ export function mechanicChatRequest({
   };
 }
 
-export function mechanicFinishError(form, detail, localeText = (key) => interfaceText("en", key)) {
-  if (typeof detail === "function") return mechanicFinishError(form, null, detail);
-  return resolveWorkPerformed({
-    ...form,
-    parts: [...(form?.parts || []), ...installedSerializedUsedParts(detail)],
-  })
-    ? ""
-    : localeText("mechanic.repairRequiredBeforeDone");
-}
-
 export function shouldPreserveMechanicWorkorderForm({
   activeElement,
   isMechanicDetail,
@@ -95,25 +85,10 @@ function browserActiveElement() {
   return globalThis.document?.activeElement || null;
 }
 
-function browserRequestAnimationFrame(callback) {
-  if (typeof globalThis.requestAnimationFrame === "function") {
-    return globalThis.requestAnimationFrame(callback);
-  }
-  callback();
-  return 0;
-}
-
-function focusMechanicWorkPerformed() {
-  const field = globalThis.document?.getElementById("mechanic-work-performed");
-  field?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-  field?.focus?.({ preventScroll: true });
-}
-
 export function createMechanicWorkorderActions({
   activeWorkorder,
   apiRequest,
   detailLoader,
-  focusWorkPerformed = focusMechanicWorkPerformed,
   form,
   getActiveElement = browserActiveElement,
   isMechanicDetail,
@@ -124,9 +99,7 @@ export function createMechanicWorkorderActions({
   normalizeWorkorderForm,
   officeLocations,
   replaceRoute,
-  requestFrame = browserRequestAnimationFrame,
   setActiveWorkorder,
-  selectDetailSection,
   setDetailSource,
   setDetailStatus,
   setForm,
@@ -300,19 +273,6 @@ export function createMechanicWorkorderActions({
 
   async function submitMechanicFinish(event) {
     event.preventDefault();
-    const validationError = mechanicFinishError(form, activeWorkorder, localeText);
-    if (validationError) {
-      setMechanicFinish({ open: false, name: "", message: "" });
-      selectDetailSection("diagnosisRepair");
-      setMechanicAction({
-        busy: "",
-        message: validationError,
-        validationField: "workPerformed",
-      });
-      requestFrame(() => requestFrame(focusWorkPerformed));
-      return false;
-    }
-
     const finished = await markMechanicWorkDone();
     if (finished) setMechanicFinish({ open: false, name: "", message: "" });
     return finished;

@@ -122,7 +122,6 @@ export function OfficePartComposer({ detail, onChanged }) {
       <div className="office-add-part-head">
         <div>
           <strong>{t("parts.planSourcePart")}</strong>
-          <p>{t("parts.planningDoesNotRecordUse")}</p>
         </div>
         <button type="button" onClick={() => setOpen(false)}>{t("parts.cancel")}</button>
       </div>

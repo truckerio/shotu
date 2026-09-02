@@ -83,5 +83,25 @@ test("dialog is touch-safe, full-screen on phone, and retains a single content s
   assert.match(css, /overflow: auto/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(css, /scroll-padding-block-end: 88px/);
-  assert.match(css, /footer \.button:last-child \{ flex-basis: 100%; \}/);
+  assert.match(css, /footer \.button:last-child \{[\s\S]*flex-basis: 100%/);
+});
+
+test("dialog uses one compact hierarchy across chooser, intake, and label-ready states", () => {
+  assert.match(dialog, /className="workorder-serialized-context"/);
+  assert.match(dialog, /showDescription/);
+  assert.match(dialog, /className="workorder-serialized-find"/);
+  assert.match(dialog, /className="workorder-serialized-ready"/);
+  assert.match(dialog, /className="workorder-serialized-empty"/);
+  assert.match(css, /\.workorder-serialized-scan \.inventory-code-scanner \{[\s\S]*height: auto;[\s\S]*padding: 0;/);
+  assert.match(css, /\.workorder-serialized-scan \.inventory-code-camera-stage \{[\s\S]*display: none;/);
+  assert.match(css, /\.workorder-serialized-scan \.inventory-code-camera-stage\.is-active \{[\s\S]*display: flex;/);
+});
+
+test("zero-stock state presents one next action without an unusable selection footer", () => {
+  const emptyState = dialog.match(/!loading && !units\.length \? <div className="workorder-serialized-empty"[\s\S]*?<\/div> : null/);
+  assert.ok(emptyState);
+  assert.match(emptyState[0], /text\.addUnits/);
+  assert.doesNotMatch(emptyState[0], /text\.selected/);
+  assert.match(dialog, /\{units\.length \? <footer>/);
+  assert.doesNotMatch(dialog, /<footer><Button type="button" onClick=\{close\}/);
 });

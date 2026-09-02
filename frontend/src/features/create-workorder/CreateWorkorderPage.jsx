@@ -64,6 +64,7 @@ export function CreateWorkorderPage({
   discardDraftAndLeave,
   jumpToPreview,
   openOfficeWorkspace,
+  openActiveUnitWorkorder,
   openFullscreenPreview,
   reloadOfficeLocations,
   removePartRow,
@@ -266,6 +267,7 @@ export function CreateWorkorderPage({
               onAssignmentChange={(mechanicUserIds) => setCreateAssignment((current) => ({ ...current, mechanicUserIds }))}
               onFieldChange={updateField}
               onLocationChange={selectOfficeLocation}
+              onOpenActiveWorkorder={openActiveUnitWorkorder}
               onReloadLocations={reloadOfficeLocations}
               onPartChange={updatePart}
               onRemovePart={removePartRow}

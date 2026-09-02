@@ -15,7 +15,7 @@ export function WorkorderScheduleModule({ access, activeSection, allowedActions 
   const canWrite = writable(access) && Boolean(allowedActions.update);
   const dateRange = formatUiDateRange(startDate, endDate, { locale }) || t("schedule.notScheduled");
   return (
-    <ProgressiveWorkorderSection id="schedule" title={t("schedule.title")} summary={dateRange} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
+    <ProgressiveWorkorderSection id="schedule" title={t("schedule.title")} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
       {canWrite ? (
         <div className="two-col">
           <Field label={t("schedule.startDate")}><input type="date" value={startDate || ""} onChange={(event) => onStartDateChange?.(event.target.value)} /></Field>

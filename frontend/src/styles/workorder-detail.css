@@ -413,6 +413,18 @@
   gap: 3px;
 }
 
+.workorder-section-panel-heading > .workorder-section-panel-action {
+  display: block;
+  flex: 0 0 auto;
+  margin-left: 16px;
+}
+
+.workorder-section-panel-heading.is-action-only {
+  border-bottom: 0;
+  justify-content: flex-end;
+  padding: 8px 20px 0;
+}
+
 .workorder-section-panel-heading h2 {
   color: #181d27;
   font-size: 15px;
@@ -949,6 +961,10 @@ fieldset.workorder-unit-content {
 
   .workorder-section-panel-heading {
     padding: 16px 12px 12px;
+  }
+
+  .workorder-section-panel-heading.is-action-only {
+    padding: 8px 12px 0;
   }
 
   .workorder-section-panel-content {

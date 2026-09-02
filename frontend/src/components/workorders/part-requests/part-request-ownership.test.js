@@ -51,8 +51,10 @@ test("quantity and supply controls remain shared implementations", () => {
 
 test("office planning capability remains a focused, reusable owner", () => {
   const composer = source("./OfficePartComposer.jsx");
+  const surface = source("./OfficePartsSurface.jsx");
   assert.match(composer, /export function OfficePartComposer/);
   assert.match(composer, /\/api\/office\/workorders\/\$\{detail\.workorder\.id\}\/part-plans/);
-  assert.match(composer, /t\("parts\.planningDoesNotRecordUse"\)/);
+  assert.doesNotMatch(composer, /t\("parts\.planningDoesNotRecordUse"\)/);
+  assert.match(surface, /<SectionHelpDisclosure label=\{t\("parts\.planningDoesNotRecordUse"\)\}>/);
   assert.match(composer, /await onChanged\(\)/);
 });

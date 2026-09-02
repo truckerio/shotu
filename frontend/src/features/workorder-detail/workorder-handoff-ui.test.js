@@ -32,12 +32,10 @@ test("existing mechanic completion flow uses Work done language", () => {
   assert.doesNotMatch(detailPage, /Write your name to confirm|expectedMechanicName|mechanicFinishNameMatches/);
   assert.doesNotMatch(detailPage, /Finish workorder|Finish work|Finishing/);
   assert.match(mechanicActions, /\/mark-done/);
-  assert.match(mechanicActions, /selectDetailSection\("diagnosisRepair"\)/);
-  assert.match(mechanicActions, /validationField: "workPerformed"/);
   assert.match(detailPage, /is-validation-warning/);
   assert.match(detailPage, /role=\{validation \? "alert" : "status"\}/);
-  assert.match(diagnosisRepairModule, /is-completion-required/);
-  assert.match(diagnosisRepairModule, /localeText\("detail\.repairRequired"\)/);
+  assert.doesNotMatch(diagnosisRepairModule, /is-completion-required/);
+  assert.doesNotMatch(diagnosisRepairModule, /detail\.repairRequired/);
   assert.match(detailToolbarCss, /\.mechanic-action-message\.is-validation-warning[\s\S]*#b42318/);
   assert.match(detailCss, /@keyframes mechanic-required-field-blink/);
   assert.match(detailCss, /\.operational-form-field\.is-completion-required/);

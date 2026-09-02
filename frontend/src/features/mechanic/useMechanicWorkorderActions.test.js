@@ -4,7 +4,6 @@ import {
   createMechanicWorkorderActions,
   mechanicActionResult,
   mechanicChatRequest,
-  mechanicFinishError,
   shouldPreserveMechanicWorkorderForm,
 } from "./useMechanicWorkorderActions.js";
 
@@ -31,7 +30,6 @@ function actionHarness(overrides = {}) {
       calls.push(["load", ...args]);
       return { ...detail, workorder: { ...detail.workorder, status: "accepted" } };
     },
-    focusWorkPerformed: () => calls.push(["focus"]),
     form: { diagnosis: "Checked brakes", workPerformed: "Replaced pads" },
     getActiveElement: () => null,
     isMechanicDetail: true,
@@ -45,9 +43,7 @@ function actionHarness(overrides = {}) {
     normalizeWorkorderForm: ({ detail: loaded }) => ({ loaded: loaded.workorder.id }),
     officeLocations: [{ id: "location-1" }],
     replaceRoute: (...args) => calls.push(["route", ...args]),
-    requestFrame: (callback) => callback(),
     setActiveWorkorder: (...args) => calls.push(["active", ...args]),
-    selectDetailSection: (...args) => calls.push(["section", ...args]),
     setDetailSource: (...args) => calls.push(["source", ...args]),
     setDetailStatus: (...args) => calls.push(["status", ...args]),
     setForm: (...args) => calls.push(["form", ...args]),
@@ -124,28 +120,6 @@ test("preservation protects unsynced mechanic progress and focused form controls
     isMechanicDetail: false,
     mechanicProgress: { hasUnsyncedChanges: false, status: "saved" },
   }), true);
-});
-
-test("finish validation accepts repair-completed text or part repair orders", () => {
-  assert.equal(mechanicFinishError({ workPerformed: "   " }), "Add repair details in Parts or Repair completed before marking Work done.");
-  assert.equal(mechanicFinishError({ workPerformed: "Installed new belt" }), "");
-  assert.equal(mechanicFinishError({
-    workPerformed: "",
-    parts: [{ partNo: "46305", repairOrder: "Put new hub seal, adjust brakes" }],
-  }), "");
-  assert.equal(mechanicFinishError(
-    { workPerformed: "", parts: [] },
-    { modules: { parts: { data: { installedSerializedParts: [{
-      usageId: "usage-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea", repairOrder: "Replace failed sensor",
-    }] } } } },
-  ), "");
-  assert.match(mechanicFinishError(
-    { workPerformed: "", parts: [] },
-    { modules: { parts: { data: { installedSerializedParts: [{
-      usageId: "usage-1", partNumber: "0000000002211", quantity: 1, uomCode: "ea",
-      description: "Fuel level sensor", repairOrder: "",
-    }] } } } },
-  ), /repair/i);
 });
 
 test("returnToMyWork blocks navigation when the unsynced progress flush fails", async () => {
@@ -302,18 +276,14 @@ test("mark done reuses persisted serialized repair orders when manual parts are 
   });
 });
 
-test("submit finish opens Diagnosis and repair and highlights the missing repair field", async () => {
+test("submit finish allows blank diagnosis and repair details", async () => {
   const { actions, calls } = actionHarness({
-    form: { diagnosis: "Checked brakes", workPerformed: "" },
+    form: { diagnosis: "", workPerformed: "", parts: [] },
   });
   let prevented = false;
-  assert.equal(await actions.submitMechanicFinish({ preventDefault: () => { prevented = true; } }), false);
+  assert.equal(await actions.submitMechanicFinish({ preventDefault: () => { prevented = true; } }), true);
   assert.equal(prevented, true);
-  assert.deepEqual(calls.find(([name]) => name === "focus"), ["focus"]);
-  assert.deepEqual(calls.find(([name]) => name === "section"), ["section", "diagnosisRepair"]);
-  assert.deepEqual(calls.find(([name]) => name === "action"), ["action", {
-    busy: "",
-    message: "Add repair details in Parts or Repair completed before marking Work done.",
-    validationField: "workPerformed",
-  }]);
+  const apiCall = calls.find(([name, path]) => name === "api" && path.endsWith("/mark-done"));
+  assert.deepEqual(JSON.parse(apiCall[2].body), { diagnosis: "", workPerformed: "" });
+  assert.deepEqual(calls.at(-1), ["finish", { open: false, name: "", message: "" }]);
 });

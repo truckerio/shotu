@@ -1,10 +1,12 @@
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
+import { CustomerCompanyField } from "../../../components/forms/index.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { getVehicleLocation } from "../../../components/workorders/AssetLocationCard.jsx";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Field } from "../../generator/GeneratorUi.jsx";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
 import { UnitServiceHistory } from "./UnitServiceHistory.jsx";
+import { normalizedVehicleTagNames } from "./CreateUnitModule.jsx";
 import { interfaceText, localizedUnitType } from "../../../i18n/index.js";
 
 function writable(access) {
@@ -37,7 +39,10 @@ export function WorkorderUnitModule({
   onApplyVehicle,
   onFieldChange,
   onSelect,
+  onUnitNumberCommit,
   onUnitNumberChange,
+  selectedVehicle,
+  unitLookupQuery,
   vehicleLookup,
   vehicleMileage,
   vehicleModelText,
@@ -45,12 +50,12 @@ export function WorkorderUnitModule({
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
   const canWrite = writable(access) && Boolean(activeWorkorder.allowedActions?.update);
+  const vehicleTags = normalizedVehicleTagNames(selectedVehicle?.tag_names || selectedVehicle?.tagNames);
 
   return (
     <ProgressiveWorkorderSection
       id="unit"
       title={`${localizedUnitType(form.unitType, locale) || t("unit.title")} ${t("unit.details")}`}
-      summary={[form.unitNo, form.customerCompanyName].filter(Boolean).join(" · ") || t("unit.summary")}
       activeSection={detailSection}
       onSelect={onSelect}
       displayMode="panel"
@@ -67,8 +72,9 @@ export function WorkorderUnitModule({
                 aria-controls="vehicle-suggestions"
                 aria-expanded={vehicleLookup.results.length > 0}
                 role="combobox"
-                value={form.unitNo}
+                value={unitLookupQuery}
                 onChange={(event) => onUnitNumberChange(event.target.value)}
+                onBlur={onUnitNumberCommit}
                 autoComplete="off"
               />
             </label>
@@ -76,7 +82,7 @@ export function WorkorderUnitModule({
             {vehicleLookup.results.length ? (
               <div className="vehicle-results" id="vehicle-suggestions" role="listbox" aria-label={t("unit.suggestions")}>
                 {vehicleLookup.results.map((vehicle) => (
-                  <button type="button" role="option" aria-selected="false" key={vehicle.id} onClick={() => onApplyVehicle(vehicle)}>
+                  <button type="button" role="option" aria-selected="false" key={vehicle.id} onMouseDown={(event) => event.preventDefault()} onClick={() => onApplyVehicle(vehicle)}>
                     <strong>{vehicle.unit_no || vehicle.name || vehicle.vin || t("unit.unnamed")}</strong>
                     <span>{[vehicle.unit_type, vehicle.owner_name, vehicleModelText(vehicle), vehicle.vin, vehicle.license_plate, vehicleMileage(vehicle) ? `${vehicleMileage(vehicle)} ${t("unit.milesShort")}` : "", getVehicleLocation(vehicle) ? t("unit.map") : ""].filter(Boolean).join(" / ")}</span>
                   </button>
@@ -93,7 +99,7 @@ export function WorkorderUnitModule({
             <Field label={t("unit.model")}><input {...textEntryProps("identifier")} value={form.model} onChange={(event) => onFieldChange("model", event.target.value)} /></Field>
           </div>
           <div className="two-col">
-            <Field label={t("unit.customerCompany")}><input {...textEntryProps("name")} value={form.customerCompanyName} onChange={(event) => onFieldChange("customerCompanyName", event.target.value)} /></Field>
+            <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onFieldChange("customerCompanyName", value)} label={t("unit.customerCompany")} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} />
             <Field label={t("unit.vinNumber")}><input {...textEntryProps("identifier")} value={form.vinNo} onChange={(event) => onFieldChange("vinNo", event.target.value)} /></Field>
           </div>
           <UnitServiceHistory actorRole={actorRole} historyController={historyController} locale={locale} workorderId={activeWorkorder.workorder?.id} />

@@ -23,6 +23,10 @@ import { selectedVehicleFromWorkorderDraft } from "../generator/workorder-draft.
 
 const EMPTY_LOOKUP = Object.freeze({ loading: false, status: "", results: [] });
 
+export function vehicleLookupRequestIsCurrent(requestGeneration, currentGeneration, cancelled = false) {
+  return !cancelled && requestGeneration === currentGeneration;
+}
+
 export function useVehicleLookupController({
   activeWorkorderId,
   clearCreateErrors,
@@ -35,12 +39,13 @@ export function useVehicleLookupController({
   const locationRequestRef = useRef({ vehicleId: "", promise: null });
   const locationBackoffUntilRef = useRef(0);
   const detailLocationRefreshRef = useRef("");
+  const lookupGenerationRef = useRef(0);
   const formRef = useRef(form);
   const companyIdRef = useRef(companyId);
   const selectedVehicleRef = useRef(null);
-  const applyVehicleRef = useRef(null);
   const [vehicleLookup, setVehicleLookup] = useState(EMPTY_LOOKUP);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [unitLookupQuery, setUnitLookupQuery] = useState(() => form.unitNo);
   formRef.current = form;
   companyIdRef.current = companyId;
   selectedVehicleRef.current = selectedVehicle;
@@ -106,6 +111,7 @@ export function useVehicleLookupController({
     };
     setForm((current) => ({ ...current, ...vehiclePatch }));
     stageAutosave(vehiclePatch);
+    setUnitLookupQuery(vehiclePatch.unitNo);
     setVehicleLookup({
       loading: false,
       status: `${vehicle.unit_no || vehicle.name || "Vehicle"} applied from Samsara.`,
@@ -115,11 +121,10 @@ export function useVehicleLookupController({
     refreshVehicleLocation(vehicle);
     return true;
   }, [activeWorkorderId, clearCreateErrors, refreshVehicleLocation, setForm, stageAutosave]);
-  applyVehicleRef.current = applyVehicle;
-
   useEffect(() => {
     let cancelled = false;
-    const query = form.unitNo.trim();
+    const requestGeneration = lookupGenerationRef.current;
+    const query = unitLookupQuery.trim();
     if (query.length < 2) {
       setVehicleLookup((current) => ({ ...current, loading: false, results: [] }));
       return undefined;
@@ -131,15 +136,11 @@ export function useVehicleLookupController({
 
     setVehicleLookup((current) => ({ ...current, loading: true, results: [] }));
     const timer = window.setTimeout(() => {
-      api(`/api/vehicles/search?q=${encodeURIComponent(query)}&limit=8`, { timeoutMs: 10_000 })
+      api(`/api/vehicles/search?q=${encodeURIComponent(query)}&limit=6`, { timeoutMs: 10_000 })
         .then((result) => {
-          if (cancelled) return;
+          if (!vehicleLookupRequestIsCurrent(requestGeneration, lookupGenerationRef.current, cancelled)) return;
           const vehicles = vehiclesForCompany(result.vehicles || [], companyIdRef.current);
           const exactMatch = uniqueExactVehicleMatch(vehicles, query);
-          if (exactMatch && vehicleCanBeSelected(exactMatch, activeWorkorderId)) {
-            applyVehicleRef.current(exactMatch);
-            return;
-          }
           setVehicleLookup({
             loading: false,
             status: vehicleHasActiveWorkorder(exactMatch)
@@ -149,14 +150,20 @@ export function useVehicleLookupController({
           });
         })
         .catch((error) => {
-          if (!cancelled) setVehicleLookup({ loading: false, status: error.message, results: [] });
+          if (vehicleLookupRequestIsCurrent(requestGeneration, lookupGenerationRef.current, cancelled)) {
+            setVehicleLookup({ loading: false, status: error.message, results: [] });
+          }
         });
     }, 250);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeWorkorderId, form.unitNo, selectedVehicle]);
+  }, [activeWorkorderId, selectedVehicle, unitLookupQuery]);
+
+  useEffect(() => {
+    setUnitLookupQuery(form.unitNo);
+  }, [form.unitNo]);
 
   useEffect(() => {
     if (
@@ -188,12 +195,19 @@ export function useVehicleLookupController({
     { enabled: Boolean(enabled && selectedVehicle?.id), intervalMs: 60_000 },
   );
 
-  const updateUnitNumber = useCallback((value, updateField) => {
-    updateField("unitNo", value);
+  const updateUnitLookupQuery = useCallback((value) => {
+    lookupGenerationRef.current += 1;
+    setVehicleLookup((current) => ({ ...current, loading: false, results: [] }));
+    setUnitLookupQuery(value);
     if (selectedVehicle && !vehicleLookupValues(selectedVehicle).includes(normalizeVehicleLookupValue(value))) {
       setSelectedVehicle(null);
     }
   }, [selectedVehicle]);
+
+  const commitUnitNumber = useCallback((updateField) => {
+    const value = unitLookupQuery;
+    if (value !== formRef.current.unitNo) updateField("unitNo", value);
+  }, [unitLookupQuery]);
 
   const restoreDraftVehicle = useCallback(async (payload) => {
     const snapshot = selectedVehicleFromWorkorderDraft(payload);
@@ -234,7 +248,9 @@ export function useVehicleLookupController({
     restoreDraftVehicle,
     selectedVehicle,
     setSelectedVehicle,
-    updateUnitNumber,
+    unitLookupQuery,
+    updateUnitLookupQuery,
+    commitUnitNumber,
     vehicleLookup,
   };
 }

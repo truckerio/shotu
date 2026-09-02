@@ -192,6 +192,14 @@
   gap: 2px;
 }
 
+.part-review-heading > .part-review-heading-copy,
+.part-response-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .part-review-heading-actions {
   justify-items: end;
 }
@@ -222,7 +230,7 @@
 
 .part-review-heading strong,
 .part-review-section-heading strong,
-.part-response-composer > label {
+.part-response-heading > label {
   color: #181d27;
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
@@ -349,6 +357,13 @@
 .office-part-planning .button,
 .office-add-part-head button {
   min-height: 44px;
+}
+
+.office-part-planning-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
 }
 
 .part-request-section h3,

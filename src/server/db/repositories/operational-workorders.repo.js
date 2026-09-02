@@ -50,6 +50,7 @@ function publicAssetSelect(alias = "a", workorderAlias = "wo") {
       ),
       'lastOdometerMiles', ${alias}.last_odometer_miles,
       'ownerName', ${alias}.owner_name,
+      'tagNames', ${alias}.tag_names,
       'lastLocation', ${alias}.last_location,
       'lastSeenAt', ${alias}.last_seen_at
     )
@@ -1643,7 +1644,11 @@ export async function markOperationalWorkorderDone(
   workorderId,
   completedByUserId,
   input,
-  { requireAssignedMechanic = true, statusNote = "Mechanic marked work done." } = {},
+  {
+    requireAssignedMechanic = true,
+    requireRepairDetails = true,
+    statusNote = "Mechanic marked work done.",
+  } = {},
 ) {
   const pool = getPool();
   const client = await pool.connect();
@@ -1685,7 +1690,7 @@ export async function markOperationalWorkorderDone(
         parts: [...(before.form_data?.parts || []), ...serializedParts],
       }),
     };
-    if (!nextInput.workPerformed) {
+    if (requireRepairDetails && !nextInput.workPerformed) {
       throw lifecycleConflict(
         "WORKORDER_REPAIR_DETAILS_REQUIRED",
         "Add a repair order in Parts before marking Work done.",

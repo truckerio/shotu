@@ -10,6 +10,7 @@ import {
   usedPartQuantityAfterPartNumberChange,
 } from "../../../components/workorders/used-parts-model.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { laborProductLabel } from "../../../../../shared/labor-product.js";
@@ -118,7 +119,6 @@ function LegacyCreatePartsEditor({
             repairOrder: "",
           })}
         />
-        <p className="create-parts-action-help">{t("create.parts.scanDraftHelp")}</p>
       </div>
     </div>
   );
@@ -323,18 +323,27 @@ export function CreatePartsModule({
 
   if (!access) return null;
 
+  const partsHelp = (
+    <SectionHelpDisclosure label={t("create.parts.summary")}>
+      <p>{t("create.parts.summary")}</p>
+      <p>{t("create.parts.laborHelp")}</p>
+      <p>{t("create.parts.noPartsHelp")}</p>
+      <p>{t("create.parts.scanDraftHelp")}</p>
+    </SectionHelpDisclosure>
+  );
+
   return (
-    <ProgressiveWorkorderSection id="parts" className="create-parts-card" title={t("create.parts.title")} summary={t("create.parts.summary")} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
+    <ProgressiveWorkorderSection id="parts" className="create-parts-card" title={t("create.parts.title")} headerAction={compactLayout ? null : partsHelp} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted showTitle={!compactLayout}>
       {compactLayout ? (
         <div className="create-known-parts-content create-parts-compact" id="create-known-parts-editor" ref={rootRef} tabIndex={-1}>
           {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
 
           <section className="create-parts-group" aria-labelledby="create-parts-labor-title">
-            <div className="create-parts-group-heading">
+            <div className="create-parts-group-heading has-help">
               <div>
                 <h3 id="create-parts-labor-title">{t("create.parts.laborAndWork")}</h3>
-                <p>{t("create.parts.laborHelp")}</p>
               </div>
+              {partsHelp}
             </div>
             {laborOpen ? (
               <div className="create-labor-editor">
@@ -391,7 +400,6 @@ export function CreatePartsModule({
             <div className="create-parts-group-heading">
               <div>
                 <h3 id="create-parts-approved-title">{t("create.parts.approvedParts")}</h3>
-                <p>{t("create.parts.approvedPartsHelp")}</p>
               </div>
               <span className="create-parts-count" aria-label={`${filledIndexes.length} ${t("create.parts.approvedParts")}`}>{filledIndexes.length}</span>
             </div>
@@ -399,7 +407,6 @@ export function CreatePartsModule({
             {!renderIndexes.length ? (
               <div className="create-parts-empty">
                 <strong>{t("create.parts.noParts")}</strong>
-                <p>{t("create.parts.noPartsHelp")}</p>
               </div>
             ) : (
               <div className="create-parts-list">
@@ -412,10 +419,6 @@ export function CreatePartsModule({
                 {filledIndexes.length ? t("create.parts.addAnother") : t("create.parts.add")}
               </Button>
               <CreatePartScanner disabled={!canAddPart} locationId={locationId} locale={locale} onScanned={addScannedPart} />
-              <details className="create-parts-scan-help">
-                <summary>{t("create.parts.scanHelpTitle")}</summary>
-                <p>{t("create.parts.scanDraftHelp")}</p>
-              </details>
             </div>
           </section>
         </div>

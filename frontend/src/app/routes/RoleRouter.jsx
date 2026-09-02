@@ -161,12 +161,14 @@ export function RoleRouter({ actor }) {
   });
   const {
     applyVehicle,
+    commitUnitNumber,
     refreshVehicleLocation,
     resetVehicleLookup,
     restoreDraftVehicle,
     selectedVehicle,
     setSelectedVehicle,
-    updateUnitNumber: updateVehicleUnitNumber,
+    unitLookupQuery,
+    updateUnitLookupQuery,
     vehicleLookup,
   } = useVehicleLookupController({
     activeWorkorderId: activeWorkorder?.workorder?.id,
@@ -177,10 +179,6 @@ export function RoleRouter({ actor }) {
     setForm,
     stageAutosave: stageOfficeWorkorderAutosave,
   });
-  const updateUnitNumber = useCallback(
-    (value) => updateVehicleUnitNumber(value, updateField),
-    [updateField, updateVehicleUnitNumber],
-  );
   const createMechanicUserIds = useMemo(() => (
     actor.role === "mechanic"
       ? [actor.id].filter(Boolean)
@@ -330,6 +328,7 @@ export function RoleRouter({ actor }) {
   const {
     hydrateOfficeWorkorder,
     hydrateOperationalWorkorder,
+    openActiveUnitWorkorder,
     openOfficeWorkorder,
     openOperationalWorkorder,
   } = useWorkorderDetailRoute({
@@ -338,6 +337,7 @@ export function RoleRouter({ actor }) {
     officeLocations,
     queueOfficeAutosave: officeActions.queueOfficeWorkorderAutosave,
     setActiveWorkorder,
+    setCreateState: setOfficeCreateState,
     setDetailSection,
     setDetailSource,
     setDetailStatus,
@@ -467,7 +467,8 @@ export function RoleRouter({ actor }) {
         setOfficeCancel, setOfficeCloseNote, setOfficeCloseOpen, setOfficeDetailState,
         setOfficeReturn, setPreviewFullscreen, setPrintMenuOpen, setPrintState,
         setSupportingView, submitMechanicFinish, toggleWorkorderTools, updateActiveUsedParts, updateActiveLaborHours,
-        updateField, updateOfficeMechanicTeam, updateStartDate, updateUnitNumber,
+        commitDetailUnitNumber: () => commitUnitNumber(updateField), unitLookupQuery, updateField, updateOfficeMechanicTeam,
+        updateStartDate, updateUnitLookupQuery,
         vehicleMileage, vehicleModelText,
       }}
       createPageProps={{
@@ -481,10 +482,11 @@ export function RoleRouter({ actor }) {
         showEmbeddedPreview: detailViewModel.showEmbeddedPreview, vehicleLookup,
         workorderCountLabel, workorderDraft, draftLeaveBusy, draftLeaveOpen,
         addPartRow, applyVehicle, createOfficeWorkorder, discardDraftAndLeave,
-        jumpToPreview, openFullscreenPreview, openOfficeWorkspace, reloadOfficeLocations: loadCreateLocations,
+        jumpToPreview, openActiveUnitWorkorder, openFullscreenPreview, openOfficeWorkspace, reloadOfficeLocations: loadCreateLocations,
         removePartRow, saveDraftAndLeave, selectOfficeLocation, setCreateAssignment,
         setDraftLeaveOpen, setFullscreenPageIndex, setFullscreenZoom, setPreviewFullscreen,
-        setPrintMenuOpen, setPrintState, updateField, updatePart, updateUnitNumber,
+        setPrintMenuOpen, setPrintState, updateField, updatePart,
+        updateUnitNumber: (value) => { updateUnitLookupQuery(value); updateField("unitNo", value); },
       }}
     />
   );

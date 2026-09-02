@@ -44,7 +44,7 @@ export function WorkorderCompletionModule({
   ].some(Boolean);
   const hasActions = canMarkDone || hasWritableActions;
   return (
-    <ProgressiveWorkorderSection id="completion" title={text("completion.title", "Completion")} summary={workorder?.endTime ? text("completion.completed", "Work completed") : text("completion.review", "Completion and review")} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
+    <ProgressiveWorkorderSection id="completion" title={text("completion.title", "Completion")} activeSection={activeSection} onSelect={onSelect} displayMode="panel">
       <WorkorderHandoffFacts workorder={workorder} locale={isMechanicDetail ? locale : undefined} />
       <dl className="workorder-readonly-details">
         <div><dt>{text("completion.customerAuthorization", "Customer authorization")}</dt><dd>{customerSignature || text("completion.pending", "Pending")}</dd></div>

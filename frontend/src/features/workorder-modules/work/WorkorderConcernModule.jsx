@@ -36,7 +36,6 @@ export function WorkorderConcernModule({
     <ProgressiveWorkorderSection
       id="concern"
       title={text("detail.concern", "Concern")}
-      summary={concern || text("detail.requestedWork", "Requested work")}
       activeSection={activeSection}
       onSelect={onSelect}
       displayMode="panel"

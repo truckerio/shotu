@@ -52,3 +52,9 @@ test("desktop retains the existing create Parts grid", () => {
   assert.match(source, /className="operational-part-row has-quantity-unit"/);
   assert.match(source, /compactLayout \? \(/);
 });
+
+test("help aligns with the visible Parts heading in both layouts", () => {
+  assert.match(source, /headerAction=\{compactLayout \? null : partsHelp\}/);
+  assert.match(source, /className="create-parts-group-heading has-help"[\s\S]*create-parts-labor-title[\s\S]*\{partsHelp\}/);
+  assert.match(css, /\.create-parts-group-heading\.has-help\s*\{[^}]*align-items:\s*center/s);
+});

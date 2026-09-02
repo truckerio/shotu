@@ -33,7 +33,7 @@ test("shared workorder writing surfaces use selectable spelling suggestions", ()
 
 test("shared workorder names and technical values use conservative keyboard policies", () => {
   assert.match(customerCompanyField, /textEntryProps\("name"\)/);
-  assert.match(unitModule, /textEntryProps\("name"\)[\s\S]*form\.customerCompanyName/);
+  assert.match(unitModule, /<CustomerCompanyField[\s\S]*value=\{form\.customerCompanyName\}/);
   assert.match(completionModule, /customerSignature/);
   assert.doesNotMatch(detailPage, /mechanicFinish\.name|expectedMechanicName/);
   assert.match(createUnit, /textEntryProps\("search"\)[\s\S]*role="combobox"/);

@@ -22,7 +22,7 @@ test("measured selection bypasses manual rows and retains the aggregate-owned re
   assert.match(editor, /if \(MEASURED_UOM_CATEGORIES\.has\(category\)\) setMeasuredDialogPart\(catalogPart\)/);
   assert.match(editor, /function closeMeasuredDialog\(\)/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
-  assert.match(editor, /parts\.legacyManualEvidence/);
+  assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
 });
 
 test("aggregate evidence stays in the canonical Parts row hierarchy", () => {

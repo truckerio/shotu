@@ -384,6 +384,7 @@ export function ProgressiveWorkorderSection({
   id,
   title,
   summary,
+  headerAction = null,
   activeSection,
   onSelect,
   attention = false,
@@ -391,6 +392,7 @@ export function ProgressiveWorkorderSection({
   className = "",
   displayMode = "accordion",
   keepMounted = false,
+  showTitle = true,
 }) {
   const panelId = useId();
   const open = activeSection === id;
@@ -405,12 +407,12 @@ export function ProgressiveWorkorderSection({
         aria-label={title}
         hidden={!open}
       >
-        <div className="workorder-section-panel-heading">
-          <div>
-            <h2>{title}</h2>
-            {summary ? <p>{summary}</p> : null}
+        {showTitle || headerAction ? (
+          <div className={`workorder-section-panel-heading ${showTitle ? "" : "is-action-only"}`.trim()}>
+            {showTitle ? <div><h2>{title}</h2>{summary ? <p>{summary}</p> : null}</div> : null}
+            {headerAction ? <div className="workorder-section-panel-action">{headerAction}</div> : null}
           </div>
-        </div>
+        ) : null}
         <div className="workorder-section-panel-content">
           {children}
         </div>

@@ -31,7 +31,6 @@ export function WorkorderAssignmentModule({
     <ProgressiveWorkorderSection
       id="assignment"
       title={t("assignment.title")}
-      summary={mechanicNames || t("assignment.unassigned")}
       activeSection={activeSection}
       onSelect={onSelect}
       attention={!assignedIds.length}

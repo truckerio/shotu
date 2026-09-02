@@ -63,7 +63,7 @@ export function WorkorderPhotosModule({ access, activeSection, messages, onSelec
             <WorkorderPhoto photo={photo} t={t} key={photo.id} />
           ))}
         </div>
-      ) : <p>{t("photos.noneOnWorkorder")}</p>}
+      ) : null}
     </ProgressiveWorkorderSection>
   );
 }

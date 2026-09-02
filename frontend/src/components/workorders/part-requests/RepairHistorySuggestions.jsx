@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { XClose } from "@untitledui/icons";
 import { api } from "../../../lib/api.js";
 import { interfaceText } from "../../../i18n/index.js";
+import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
 import {
   normalizeRepairSuggestionsResponse,
   repairSuggestionMeta,
@@ -90,9 +91,9 @@ export function RepairHistorySuggestions({
   return (
     <section id={panelId} className="repair-history-suggestions" aria-label={t("parts.repairHistorySuggestions")}>
       <div className="repair-history-heading">
-        <div>
+        <div className="repair-history-heading-copy">
           <strong>{t("parts.previousWorkWithPart")}</strong>
-          <span>{t("parts.repairSuggestionHelp")}</span>
+          <SectionHelpDisclosure label={t("parts.repairSuggestionHelp")}><p>{t("parts.repairSuggestionHelp")}</p></SectionHelpDisclosure>
         </div>
         <button
           className="repair-history-dismiss"

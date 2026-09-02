@@ -9,7 +9,7 @@ export function CreateLocationModule({ access, activeSection, errors, form, load
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
   return (
-    <ProgressiveWorkorderSection id="location" className="create-workorder-card" title={t("create.location.title")} summary={t("create.location.summary")} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
+    <ProgressiveWorkorderSection id="location" className="create-workorder-card" title={t("create.location.title")} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted showTitle={false}>
       <FormSection title={t("create.location.repairLocation")}>
         <FormField id="workorder-location" label={t("create.location.label")} error={errors?.locationId} required requiredLabel={t("create.required")}>
           <Dropdown value={form.locationId} onChange={(event) => onChange(event.target.value)} disabled={loadState?.loading || Boolean(loadState?.error) || !locations.length}>

@@ -231,7 +231,9 @@ export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts, 
 export async function markMechanicDone(workorderId, mechanicUserId, input) {
   await requireMechanic(mechanicUserId);
   try {
-    return await markOperationalWorkorderDone(workorderId, mechanicUserId, input);
+    return await markOperationalWorkorderDone(workorderId, mechanicUserId, input, {
+      requireRepairDetails: false,
+    });
   } catch (error) {
     if (error instanceof WorkorderLifecycleConflictError) {
       throw new AuthError(error.statusCode, error.code, error.message);

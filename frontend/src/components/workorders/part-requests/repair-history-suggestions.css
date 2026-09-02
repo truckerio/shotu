@@ -20,6 +20,13 @@
   gap: 2px;
 }
 
+.repair-history-heading > .repair-history-heading-copy {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .repair-history-heading strong {
   color: #181d27;
   font-size: var(--text-secondary, 13px);

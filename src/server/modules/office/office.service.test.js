@@ -11,6 +11,14 @@ test("Office Parts mutations retain an explicit active Office or Admin owner gua
   assert.match(guard, /\["office", "admin"\]\.includes\(user\.role\)/);
 });
 
+test("Office work done explicitly permits empty diagnosis and repair details", async () => {
+  const source = await readFile(new URL("./office.service.js", import.meta.url), "utf8");
+  const operation = source.slice(source.indexOf("export async function markOfficeWorkorderDone"), source.indexOf("export async function officeWorkorderDetail"));
+
+  assert.match(operation, /requireAssignedMechanic:\s*false/);
+  assert.match(operation, /requireRepairDetails:\s*false/);
+});
+
 test("office dashboard includes assigned mechanics without workorders", async () => {
   const queries = [];
   const locationIds = new Set([

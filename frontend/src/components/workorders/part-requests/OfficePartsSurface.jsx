@@ -4,6 +4,7 @@ import { OfficeRequestCard } from "./OfficeRequestCard.jsx";
 import { OfficePartComposer } from "./OfficePartComposer.jsx";
 import { UsedPartsSection } from "./UsedPartsSection.jsx";
 import { interfaceText } from "../../../i18n/index.js";
+import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
 
 export function OfficePartsSurface({
   actorId,
@@ -67,9 +68,9 @@ export function OfficePartsSurface({
       />
       {detail.allowedActions?.planParts ? (
         <section className="office-part-planning" aria-labelledby="requests-supply-heading">
-          <div>
+          <div className="office-part-planning-heading">
             <h3 id="requests-supply-heading">{t("parts.requestsSupply")}</h3>
-            <p>{t("parts.planningDoesNotRecordUse")}</p>
+            <SectionHelpDisclosure label={t("parts.planningDoesNotRecordUse")}><p>{t("parts.planningDoesNotRecordUse")}</p></SectionHelpDisclosure>
           </div>
           <OfficePartComposer detail={detail} onChanged={onChanged} />
         </section>
@@ -90,7 +91,7 @@ export function OfficePartsSurface({
           >
             <OfficeRequestCard request={request} detail={detail} onChanged={onChanged} />
           </div>
-        )) : <p className="part-request-empty">{t("parts.noRequestsYet")}</p>}
+        )) : null}
       </div>
     </>
   );

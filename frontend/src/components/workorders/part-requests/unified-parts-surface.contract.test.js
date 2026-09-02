@@ -64,7 +64,8 @@ test("office planning follows actual used parts and cannot use the used-part end
   assert.doesNotMatch(officeComposer, /workorders\/\$\{detail\.workorder\.id\}\/parts`/);
   assert.match(officeComposer, /interfaceText\(locale, key\)/);
   assert.match(officeComposer, /t\("parts\.planSourcePart"\)/);
-  assert.match(officeComposer, /t\("parts\.planningDoesNotRecordUse"\)/);
+  assert.doesNotMatch(officeComposer, /t\("parts\.planningDoesNotRecordUse"\)/);
+  assert.match(officeSurface, /<SectionHelpDisclosure label=\{t\("parts\.planningDoesNotRecordUse"\)\}>/);
 });
 
 test("mechanic request labels remain owned by every supported locale", () => {

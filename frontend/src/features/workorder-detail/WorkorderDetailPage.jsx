@@ -166,7 +166,9 @@ export function WorkorderDetailPage({
   updateField,
   updateOfficeMechanicTeam,
   updateStartDate,
-  updateUnitNumber,
+  commitDetailUnitNumber,
+  unitLookupQuery,
+  updateUnitLookupQuery,
   vehicleMileage,
   vehicleModelText,
 }) {
@@ -545,7 +547,9 @@ export function WorkorderDetailPage({
             updateField={updateField}
             updateOfficeMechanicTeam={updateOfficeMechanicTeam}
             updateStartDate={updateStartDate}
-            updateUnitNumber={updateUnitNumber}
+            onUnitNumberCommit={commitDetailUnitNumber}
+            unitLookupQuery={unitLookupQuery}
+            updateUnitNumber={updateUnitLookupQuery}
             unitHistoryController={unitHistoryController}
             vehicleMileage={vehicleMileage}
             vehicleModelText={vehicleModelText}

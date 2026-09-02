@@ -1,4 +1,5 @@
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
+import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
 import { WorkorderOdooPanel } from "./WorkorderOdooPanel.jsx";
 import {
   isWorkorderOdooEligible,
@@ -24,7 +25,8 @@ export function WorkorderOdooModule({
         ? `Draft ${activeWorkorder.workorder.odooServiceOrderNo}`
         : activeWorkorder.workorder.odooStatus === "missing_info"
           ? "Waiting for information"
-          : "Service order readiness and entry"}
+          : undefined}
+      headerAction={<SectionHelpDisclosure label="Odoo help"><p>Odoo entry becomes available after the mechanic finishes and office approves this workorder.</p></SectionHelpDisclosure>}
       activeSection={detailSection}
       onSelect={onSelect}
       attention={activeWorkorder.workorder.odooStatus === "missing_info"}

@@ -157,6 +157,11 @@
   margin-left: 16px;
 }
 
+.create-unit-card .operational-form-section:first-child > .operational-form-section-legend,
+.create-workorder-card .operational-form-section:first-child > .operational-form-section-legend {
+  align-items: center;
+}
+
 .operational-form-section-content {
   display: grid;
   gap: 16px;
@@ -328,7 +333,8 @@
   box-shadow: 0 8px 20px rgb(16 24 40 / 12%);
   display: grid;
   left: 0;
-  max-height: 260px;
+  max-height: min(312px, calc(100dvh - 32px));
+  overscroll-behavior: contain;
   overflow-y: auto;
   position: absolute;
   right: 0;
@@ -342,10 +348,14 @@
   border-bottom: 1px solid #eaecf0;
   color: #101828;
   display: grid;
-  gap: 3px;
-  min-height: 48px;
-  padding: 10px 12px;
+  gap: 4px;
+  min-height: 52px;
+  padding: 8px 10px;
   text-align: left;
+}
+
+.operational-unit-results button:last-child {
+  border-bottom: 0;
 }
 
 .operational-unit-results button:hover,
@@ -355,25 +365,36 @@
   outline-offset: -2px;
 }
 
-.operational-unit-results button:disabled {
-  background: #fef3f2;
-  color: #912018;
-  cursor: not-allowed;
-  opacity: 1;
+.operational-unit-results button.is-unavailable {
+  background: #f9fafb;
+  color: #475467;
 }
 
-.operational-unit-results button:disabled:hover {
-  background: #fef3f2;
+.operational-unit-results button.is-unavailable:hover,
+.operational-unit-results button.is-unavailable:focus-visible {
+  background: #f2f4f7;
 }
 
-.operational-unit-results span {
+.operational-unit-result-main {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+}
+
+.operational-unit-result-meta,
+.operational-unit-workorder {
   color: #667085;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 
-.operational-unit-results .operational-unit-unavailable {
-  color: #b42318;
+.operational-unit-workorder {
+  flex: 0 0 auto;
+  font-weight: 600;
+  text-align: right;
 }
 
 .customer-company-combobox {
