@@ -9,8 +9,13 @@
   width: 100%;
 }
 
+.mechanic-home-content:has(> .mechanic-queue-shell) {
+  display: grid;
+  gap: 16px;
+}
+
 .mechanic-home-content > .page-header {
-  margin-top: -2px;
+  margin-top: 0;
 }
 
 .mechanic-home .mechanic-queue-shell {
