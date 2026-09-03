@@ -272,6 +272,7 @@
 .inspection-section h2 { font-size: var(--text-heading); margin: 0; }
 .inspection-section > header span { color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); }
 .inspection-check-list { display: grid; }
+.inspection-check-list[hidden] { display: none; }
 .inspection-check {
   align-items: center;
   border: 0;

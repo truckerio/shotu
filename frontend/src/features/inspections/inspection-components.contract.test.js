@@ -32,6 +32,7 @@ test("inspection UI keeps one progressive checklist section open and a bounded d
   assert.match(detail, /const \[activeSection, setActiveSection\]/);
   assert.match(detail, /aria-expanded=\{open\} aria-controls=\{sectionId\}/);
   assert.match(detail, /id=\{sectionId\} hidden=\{!open\}/);
+  assert.match(css, /\.inspection-check-list\[hidden\] \{ display: none; \}/);
   assert.match(detail, /setActiveSection\(section\.key\)/);
   assert.match(detail, /setActiveSection\(section\.key\);[\s\S]*requestAnimationFrame/);
   assert.match(detail, /Findings &amp; workorders/);
