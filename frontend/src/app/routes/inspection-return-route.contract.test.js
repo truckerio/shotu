@@ -7,6 +7,7 @@ const roleNavigation = readFileSync(new URL("./useRoleRouteNavigation.js", impor
 const office = readFileSync(new URL("../../features/office/OfficeWorkspace.jsx", import.meta.url), "utf8");
 const mechanic = readFileSync(new URL("../../features/mechanic/MechanicWorkspace.jsx", import.meta.url), "utf8");
 const admin = readFileSync(new URL("../../features/admin/workspace/OperationsPage.jsx", import.meta.url), "utf8");
+const workorderDetail = readFileSync(new URL("../../features/workorder-detail/WorkorderDetailPage.jsx", import.meta.url), "utf8");
 
 test("only successful workorder hydration writes inspection return context", () => {
   assert.match(detailRoute, /hydrateOfficeWorkorder\(detail, \{ partRequestId, inspectionReturn \}\)/);
@@ -29,4 +30,10 @@ test("mechanic forwards the return context only through its normal detail hydrat
   assert.match(mechanic, /async function openWorkorder\(id, inspectionReturn\)/);
   assert.match(mechanic, /onOpenWorkorder\(detail, \{ inspectionReturn \}\)/);
   assert.doesNotMatch(mechanic, /replaceRouteSearch/);
+});
+
+test("workorder detail back action preserves and labels an inspection return", () => {
+  assert.match(workorderDetail, /const inspectionReturn = inspectionReturnContext\(url\.searchParams\)/);
+  assert.match(workorderDetail, /workspaceSearchForRole\(actorRole, \{ inspectionReturn \}\)/);
+  assert.match(workorderDetail, /label: inspectionReturn \? "Inspection"/);
 });

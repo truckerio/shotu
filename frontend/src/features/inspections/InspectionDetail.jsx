@@ -145,7 +145,16 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
     setResponses(next);
     if (!inspectionResponseShouldSave(item, value, commit)) { setSaveState("Unsaved"); return; }
     setSaveState("Saving");
-    try { await onResponse?.({ itemKey: item.key, value, responses: next }); setSaveState("Saved"); setRetryPayload(null); } catch (error) { setSaveState(error?.message || "Save failed"); setRetryPayload({ item, value }); }
+    try {
+      const saved = await onResponse?.({ itemKey: item.key, value, responses: next });
+      const persistedFindingId = saved?.responses?.[item.key]?.findingId;
+      if (persistedFindingId) {
+        setResponses((current) => current[item.key]?.response === "issue"
+          ? { ...current, [item.key]: { ...current[item.key], findingId: persistedFindingId } }
+          : current);
+      }
+      setSaveState("Saved"); setRetryPayload(null);
+    } catch (error) { setSaveState(error?.message || "Save failed"); setRetryPayload({ item, value }); }
   }
   function nextUnchecked() {
     const section = (template.sections || []).find((entry) => entry.items.some((item) => !responseIsComplete(item, responses[item.key])));

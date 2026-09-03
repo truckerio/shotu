@@ -16,6 +16,12 @@ test("autosave conflict reloads the authoritative version and leaves an explicit
   assert.match(detail, /setResponses\(latest\.responses \|\| \{\}\)/);
 });
 
+test("a saved issue immediately receives its durable finding identity", () => {
+  assert.match(experience, /activeRef\.current = next; setActive\(next\);\s*return next;/);
+  assert.match(detail, /const persistedFindingId = saved\?\.responses\?\.\[item\.key\]\?\.findingId/);
+  assert.match(detail, /findingId: persistedFindingId/);
+});
+
 test("opening an assigned inspection leaves lifecycle start to the explicit detail action", () => {
   assert.doesNotMatch(experience, /projection === "mechanic"[\s\S]*\/actions\/start/);
   assert.match(experience, /async function startInspection\(input\)/);

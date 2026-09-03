@@ -32,7 +32,7 @@ import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOd
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
-import { inspectionWorkspaceSearch, workspaceSearchForRole } from "../../app/routes/route-state.js";
+import { inspectionReturnContext, inspectionWorkspaceSearch, workspaceSearchForRole } from "../../app/routes/route-state.js";
 import {
   resolveWorkorderModulePolicy,
   WORKORDER_MODULE_IDS,
@@ -54,9 +54,10 @@ function MechanicActionMessage({ action, validationActive = false }) {
 
 function detailParent(actorRole, isOfficeDetail, locale) {
   const url = new URL(window.location.href);
-  url.search = workspaceSearchForRole(actorRole);
+  const inspectionReturn = inspectionReturnContext(url.searchParams);
+  url.search = workspaceSearchForRole(actorRole, { inspectionReturn });
   return {
-    label: actorRole === "admin" ? "Operations" : isOfficeDetail ? "Office" : interfaceText(locale, "mechanic.myWork"),
+    label: inspectionReturn ? "Inspection" : actorRole === "admin" ? "Operations" : isOfficeDetail ? "Office" : interfaceText(locale, "mechanic.myWork"),
     href: url.toString(),
   };
 }

@@ -186,6 +186,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
         const next = { ...current, ...normalized, responses: { ...current.responses, ...normalized.responses, [itemKey]: { ...value, ...normalized.responses?.[itemKey] } } };
         failedResponseSaves.current.delete(itemKey);
         activeRef.current = next; setActive(next);
+        return next;
       } catch (error) {
         if (error?.status === 409) {
           await reloadActive().catch(() => {});

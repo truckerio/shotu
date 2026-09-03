@@ -75,7 +75,7 @@ test("office/mechanic and surveillance details consume one structural surface", 
   assert.doesNotMatch(panelShell, /ContextBreadcrumbs|breadcrumbs/);
   assert.match(surface, /back:\s*\{[\s\S]*label: context\.parent\.label,[\s\S]*onClick: context\.parent\.onClick/);
   assert.match(panelShell, /context\.back[\s\S]*onClick=\{context\.back\.onClick\}[\s\S]*aria-label=\{context\.back\.label\}/);
-  assert.match(detailPage, /label: actorRole === "admin" \? "Operations" : isOfficeDetail \? "Office" : interfaceText\(locale, "mechanic\.myWork"\)/);
+  assert.match(detailPage, /label: inspectionReturn \? "Inspection" : actorRole === "admin" \? "Operations" : isOfficeDetail \? "Office" : interfaceText\(locale, "mechanic\.myWork"\)/);
   assert.match(detailPage, /isPlainPrimaryActivation\(event\)/);
   assert.match(detailPage, /\[role='row'\]\[aria-label\]/);
   assert.match(detailPage, /focus\(\{ preventScroll: true \}\)/);
