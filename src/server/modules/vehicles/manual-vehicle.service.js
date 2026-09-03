@@ -3,12 +3,14 @@ import { permissionDenied, resourceNotFound } from "../../auth/errors.js";
 import { requireActor } from "../../auth/authorize.js";
 import { createManualVehicle, findVehicleIdentityDuplicates } from "../../db/repositories/assets.repo.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
+import { DATABASE_UUID_PATTERN } from "../../db/company.js";
 
 const uuid = z.string().uuid();
+const companyId = z.string().regex(DATABASE_UUID_PATTERN, "Invalid company ID");
 const text = z.string().trim().max(120);
 
 export const createManualVehicleSchema = z.object({
-  companyId: uuid,
+  companyId,
   locationId: uuid,
   unitType: z.enum(["Truck", "Trailer"]),
   unitNo: text.min(1, "Unit number is required."),

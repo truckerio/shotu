@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createLocalVehicle, createManualVehicleSchema, normalizedVehicleIdentity } from "./manual-vehicle.service.js";
+import { DEFAULT_COMPANY_ID } from "../../db/company.js";
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const locationId = "22222222-2222-4222-8222-222222222222";
@@ -12,6 +13,10 @@ test("manual local unit requires stable unit identity and Truck or Trailer", () 
   assert.equal(createManualVehicleSchema.safeParse({ ...input, unitNo: "" }).success, false);
   assert.equal(createManualVehicleSchema.safeParse({ ...input, unitType: "Other" }).success, false);
   assert.equal(normalizedVehicleIdentity(" TRL- 44 "), "trl44");
+});
+
+test("manual local unit accepts the canonical legacy-compatible company UUID", () => {
+  assert.equal(createManualVehicleSchema.safeParse({ ...input, companyId: DEFAULT_COMPANY_ID }).success, true);
 });
 
 test("office creates a scoped canonical local asset after normalized duplicate scan", async () => {
