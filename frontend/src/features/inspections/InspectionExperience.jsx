@@ -5,6 +5,7 @@ import { OperationalCollectionTabs } from "../../components/operations/Operation
 import { InspectionDetail } from "./InspectionDetail.jsx";
 import { InspectionQueue } from "./InspectionQueue.jsx";
 import { inspectionFromApi, inspectionRefreshMode, loadInspectionRefreshWindow, MAX_LIVE_INSPECTION_ROWS, mergeFastInspectionPage, responsePayload } from "./inspection-api-model.js";
+import { renderAndPrintInspectionSlip } from "./inspection-print.js";
 import { readInspectionSession, writeInspectionSession } from "./inspection-session-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
 import { createLatestRequestGuard, LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
@@ -189,7 +190,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
         const archived = await api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives`, { method: "POST", body: JSON.stringify({ idempotencyKey: `inspection-print-${current.id}-v${current.version}` }) });
         result = await api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives/${encodeURIComponent(archived.archive.id)}`);
       } else result = await api(`/api/inspections/${encodeURIComponent(current.id)}/print`);
-      popup.document.open(); popup.document.write(result.html); popup.document.close(); popup.focus(); popup.print();
+      await renderAndPrintInspectionSlip(popup, result.html);
     } catch (error) { popup?.close(); setState((value) => ({ ...value, error: error.message })); }
   }
 

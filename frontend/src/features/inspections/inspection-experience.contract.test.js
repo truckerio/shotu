@@ -36,6 +36,7 @@ test("detail shows office instructions only to authorized operational projection
 
 test("printing and workorder findings cross their durable inspection APIs", () => {
   assert.match(experience, /\/print-archives/);
+  assert.match(experience, /await renderAndPrintInspectionSlip\(popup, result\.html\)/);
   assert.match(experience, /api\(`\/api\/inspections\/\$\{encodeURIComponent\(current\.id\)\}\/workorders`, \{/);
   assert.match(experience, /method: "POST"/);
   assert.match(experience, /expectedVersion: current\.version, findingIds, idempotencyKey:/);
