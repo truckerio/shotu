@@ -35,6 +35,7 @@ export async function authorizeWorkorderOdooModule(
     capability: write ? "write" : "read",
     action,
   }, {
+    authorizeProduct: dependencies.authorizeProduct,
     requireAccess: dependencies.requireAccess,
     getEffectivePolicy: dependencies.getEffectivePolicy || (dependencies.getPolicy
       ? async () => ({ companyPolicy: null, locationPolicy: await dependencies.getPolicy() })

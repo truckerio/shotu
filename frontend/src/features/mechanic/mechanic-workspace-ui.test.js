@@ -21,12 +21,12 @@ test("create workorder stays visible in the shared page actions instead of More"
   const moreStart = workspace.indexOf('className="mechanic-home-more"');
 
   assert.ok(pageHeader >= 0);
-  assert.ok(createAction > pageHeader);
-  assert.ok(createAction < primaryStart);
+  assert.ok(createAction >= 0);
+  assert.match(workspace.slice(pageHeader, primaryStart), /actions=\{createActions\}/);
   assert.ok(primaryStart >= 0);
   assert.ok(createAction < moreStart);
   assert.equal(workspace.slice(moreStart).includes("mechanic.createWorkorder"), false);
-  assert.match(workspace, /actor=\{actor\}[\s\S]*onCreateWorkorder=\{onCreateWorkorder\}[\s\S]*createLabel=\{t\("mechanic\.createWorkorder"\)\}/);
+  assert.match(workspace, /actor=\{actor\}[\s\S]*onCreateWorkorder=\{workorderAccess\.canWrite \? onCreateWorkorder : null\}[\s\S]*createLabel=\{t\("mechanic\.createWorkorder"\)\}/);
 });
 
 test("phone mechanic home shows three important queues and keeps secondary queues in More", () => {

@@ -20,6 +20,7 @@ function context(role, id = `${role}-user`) {
 
 function dependencies({ status = "closed", policy = null, ...overrides } = {}) {
   return {
+    authorizeProduct: async () => ({ mode: "full" }),
     requireAccess: async () => ({
       id: WORKORDER_ID,
       companyId: COMPANY_ID,
@@ -175,4 +176,13 @@ test("missing information uses the authenticated actor and updates attention", a
   assert.equal(attention.actorUserId, "admin-one");
   assert.equal(attention.workorderId, WORKORDER_ID);
   assert.deepEqual(entry, { status: "missing_info", note: "Need VIN" });
+});
+
+test("product-level workorder denial stops Odoo provider activity", async () => {
+  let readinessCalls = 0;
+  await assert.rejects(workorderOdooReadiness(context("admin"), WORKORDER_ID, dependencies({
+    authorizeProduct: async () => { throw Object.assign(new Error("denied"), { statusCode: 403 }); },
+    readiness: async () => { readinessCalls += 1; },
+  })), (error) => error.statusCode === 403);
+  assert.equal(readinessCalls, 0);
 });

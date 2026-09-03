@@ -2,6 +2,7 @@ export const ADMIN_MOBILE_DESTINATIONS = [
   { key: "inventory", label: "Inventory", view: "inventory" },
   { key: "locations", label: "Locations", view: "locations" },
   { key: "modules", label: "Modules", view: "modules" },
+  { key: "templates", label: "Templates", view: "templates" },
   { key: "settings", label: "System", view: "settings" },
   { key: "operations", label: "Ops", view: "operations", secondary: true },
 ];
@@ -25,6 +26,7 @@ export function initialAdminView(search = "") {
   const params = new URLSearchParams(search);
   if (params.has("samsara") || params.get("adminView") === "settings") return "settings";
   if (params.get("adminView") === "modules") return "modules";
+  if (params.get("adminView") === "templates") return "templates";
   if (params.get("adminView") === "invoices") return "inventory";
   if (params.get("adminView") === "inventory") return "inventory";
   if (params.get("adminView") === "surveillance") return "operations";

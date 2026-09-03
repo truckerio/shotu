@@ -1,6 +1,7 @@
 import { invalidRequest, permissionDenied } from "../../auth/errors.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import { getEffectiveWorkorderModulePolicy } from "../../db/repositories/workorder-policies.repo.js";
+import { authorizeProductModule } from "../access/product-module-access.service.js";
 import {
   getWorkorderModule,
   resolveEffectiveWorkorderModuleAccess,
@@ -78,6 +79,12 @@ export async function authorizeWorkorderModuleActions(
   const requireAccess = dependencies.requireAccess || requireWorkorderAccess;
   const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
   const workorder = await requireAccess(context, workorderId, resourceAccess);
+  const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
+  await authorizeProduct(context, {
+    companyId: workorder.companyId,
+    locationId: workorder.locationId || null,
+    moduleKey: "workorders",
+  }, registered.some((request) => request.capability === "write") ? "write" : "read");
   const policies = await getEffectivePolicy({
     companyId: workorder.companyId,
     locationId: workorder.locationId || null,
@@ -112,6 +119,8 @@ export async function authorizeWorkorderCreate(
   { companyId, locationId, moduleKeys = ["concern"] },
   dependencies = {},
 ) {
+  const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
+  await authorizeProduct(context, { companyId, locationId: locationId || null, moduleKey: "workorders" }, "write");
   const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
   const policies = await getEffectivePolicy({ companyId, locationId: locationId || null });
   const requested = new Set(moduleKeys);
@@ -151,6 +160,12 @@ export async function resolveWorkorderModuleDecisions(
   const requireAccess = dependencies.requireAccess || requireWorkorderAccess;
   const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
   const workorder = await requireAccess(context, workorderId, resourceAccess);
+  const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
+  await authorizeProduct(context, {
+    companyId: workorder.companyId,
+    locationId: workorder.locationId || null,
+    moduleKey: "workorders",
+  }, "read");
   const policies = await getEffectivePolicy({
     companyId: workorder.companyId,
     locationId: workorder.locationId || null,

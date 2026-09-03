@@ -15,21 +15,32 @@ function context(role, { locations = [], companies = ["default"], id = mechanicI
   };
 }
 
+function productScopeFor(requestContext) {
+  return async () => ({
+    companyIds: [...requestContext.companyIds],
+    locationIds: requestContext.actor.role === "admin" ? [...requestContext.locationIds] : [...requestContext.locationIds],
+  });
+}
+
 test("admin query spans authorized company locations without a browser actor id", async () => {
   let received;
-  const result = await queryAuthorizedWorkorders(context("admin", { locations: [locationA] }), { category: "all" }, {
+  const requestContext = context("admin", { locations: [locationA] });
+  const result = await queryAuthorizedWorkorders(requestContext, { category: "all" }, {
+    resolveProductScope: productScopeFor(requestContext),
     queryWorkorders: async (input) => { received = input; return { items: [], total: 0 }; },
   });
   assert.equal(result.total, 0);
   assert.deepEqual(received.companyIds, ["default"]);
-  assert.deepEqual(received.locationIds, []);
+  assert.deepEqual(received.locationIds, [locationA]);
   assert.equal(received.actorUserId, mechanicId);
   assert.equal(received.visibility, "operations");
 });
 
 test("office query is limited to assigned locations", async () => {
   let received;
-  await queryAuthorizedWorkorders(context("office", { locations: [locationA, locationB] }), { category: "active" }, {
+  const requestContext = context("office", { locations: [locationA, locationB] });
+  await queryAuthorizedWorkorders(requestContext, { category: "active" }, {
+    resolveProductScope: productScopeFor(requestContext),
     queryWorkorders: async (input) => { received = input; return { items: [] }; },
   });
   assert.deepEqual(received.locationIds, [locationA, locationB]);
@@ -38,7 +49,9 @@ test("office query is limited to assigned locations", async () => {
 
 test("mechanic query carries own-or-available isolation", async () => {
   let received;
-  await queryAuthorizedWorkorders(context("mechanic", { locations: [locationA] }), { category: "all" }, {
+  const requestContext = context("mechanic", { locations: [locationA] });
+  await queryAuthorizedWorkorders(requestContext, { category: "all" }, {
+    resolveProductScope: productScopeFor(requestContext),
     queryWorkorders: async (input) => { received = input; return { items: [] }; },
   });
   assert.equal(received.visibility, "mechanic");
@@ -47,7 +60,9 @@ test("mechanic query carries own-or-available isolation", async () => {
 
 test("surveillance query receives its role visibility boundary", async () => {
   let received;
-  await queryAuthorizedWorkorders(context("surveillance", { locations: [locationA] }), { category: "all" }, {
+  const requestContext = context("surveillance", { locations: [locationA] });
+  await queryAuthorizedWorkorders(requestContext, { category: "all" }, {
+    resolveProductScope: productScopeFor(requestContext),
     queryWorkorders: async (input) => { received = input; return { items: [] }; },
   });
   assert.equal(received.visibility, "surveillance");
@@ -57,6 +72,7 @@ test("inaccessible location is hidden", async () => {
   await assert.rejects(
     queryAuthorizedWorkorders(context("office", { locations: [locationA] }), { category: "all", locationId: locationB }, {
       getLocation: async () => ({ id: locationB, company_id: "default" }),
+      authorizeProduct: async () => ({ mode: "full" }),
       queryWorkorders: async () => ({ items: [] }),
     }),
     (error) => error.statusCode === 404,
@@ -65,16 +81,29 @@ test("inaccessible location is hidden", async () => {
 
 test("attention projection and summary values pass through the shared service", async () => {
   const projected = { id: "wo-1", lifecycle: "in_progress", attentionReasons: ["parts", "overdue"] };
-  const list = await queryAuthorizedWorkorders(context("admin"), { category: "needs_attention" }, {
+  const requestContext = context("admin", { locations: [locationA] });
+  const list = await queryAuthorizedWorkorders(requestContext, { category: "needs_attention" }, {
+    resolveProductScope: productScopeFor(requestContext),
     queryWorkorders: async () => ({ items: [projected], total: 1 }),
   });
   assert.deepEqual(list.items[0].attentionReasons, ["parts", "overdue"]);
 
-  const summary = await summarizeAuthorizedWorkorders(context("admin"), {}, {
+  const summary = await summarizeAuthorizedWorkorders(requestContext, {}, {
+    resolveProductScope: productScopeFor(requestContext),
     summarizeWorkorders: async () => ({ needsAttention: 1, unassigned: 0, active: 1, parts: 1, readyReview: 0, odooBacklog: 0, all: 1 }),
   });
   assert.equal(summary.needsAttention, 1);
   assert.equal(summary.parts, 1);
+});
+
+test("a product module with no readable scope cannot leak workorders", async () => {
+  let received;
+  await queryAuthorizedWorkorders(context("office", { locations: [locationA] }), { category: "all" }, {
+    resolveProductScope: async () => ({ companyIds: [], locationIds: [] }),
+    queryWorkorders: async (input) => { received = input; return { items: [] }; },
+  });
+  assert.deepEqual(received.companyIds, ["00000000-0000-0000-0000-000000000000"]);
+  assert.deepEqual(received.locationIds, ["00000000-0000-0000-0000-000000000000"]);
 });
 
 test("query parser validates pagination, filters, and sorting", () => {

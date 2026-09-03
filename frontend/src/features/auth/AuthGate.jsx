@@ -111,7 +111,7 @@ export function AuthGate({ children }) {
         return body;
       })
       .then((body) => {
-        setActor(body.user);
+        setActor({ ...body.user, productModuleAccess: body.productModuleAccess || null });
         setActorSession({
           kiosk: body.kiosk || null,
           sessionMode: body.sessionMode === "kiosk" ? "kiosk" : "standard",

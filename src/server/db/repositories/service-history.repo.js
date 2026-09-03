@@ -381,7 +381,11 @@ export async function listUnitServiceHistory(companyId, assetId, currentWorkorde
          case when history.source_provider = 'local' then length(workorder.concern) > ${MAX_HISTORY_TEXT_LENGTH} else false end as concern_truncated,
          case when history.source_provider = 'local' then left(workorder.diagnosis, ${MAX_HISTORY_TEXT_LENGTH}) else '' end as diagnosis,
          case when history.source_provider = 'local' then length(workorder.diagnosis) > ${MAX_HISTORY_TEXT_LENGTH} else false end as diagnosis_truncated,
-         case when history.source_provider = 'local' then left(workorder.work_performed, ${MAX_HISTORY_TEXT_LENGTH}) else '' end as work_performed,
+         case
+           when history.source_provider = 'local' then left(workorder.work_performed, ${MAX_HISTORY_TEXT_LENGTH})
+           when history.source_provider = 'local_inspection' then left('Weekly inspection · ' || coalesce(history.raw_metadata->>'result','completed'), ${MAX_HISTORY_TEXT_LENGTH})
+           else ''
+         end as work_performed,
          case when history.source_provider = 'local' then length(workorder.work_performed) > ${MAX_HISTORY_TEXT_LENGTH} else false end as work_performed_truncated,
          workorder.form_data
        from service_history_orders history
@@ -418,6 +422,11 @@ export async function listUnitServiceHistory(companyId, assetId, currentWorkorde
                     and entry.odoo_service_order_no <> ''
                     and entry.odoo_service_order_no = history.reference)
              ))
+           or
+           (history.source_provider = 'local_inspection'
+             and history.inspection_id is not null
+             and history.completed_at is not null
+             and history.completion_date_kind = 'verified_completed')
          )
      ), page as (
        select eligible.*
@@ -433,8 +442,8 @@ export async function listUnitServiceHistory(companyId, assetId, currentWorkorde
      )
      select page.*,
             stats.total_count, stats.last_completed_service_at, stats.latest_recorded_service_at,
-            case when page.source_provider = 'odoo' then coalesce(service_lines.items, '[]'::jsonb) else '[]'::jsonb end as service_lines,
-            case when page.source_provider = 'odoo' then coalesce(service_lines.truncated, false) else false end as service_lines_truncated,
+            case when page.source_provider in ('odoo','local_inspection') then coalesce(service_lines.items, '[]'::jsonb) else '[]'::jsonb end as service_lines,
+            case when page.source_provider in ('odoo','local_inspection') then coalesce(service_lines.truncated, false) else false end as service_lines_truncated,
             case
               when page.source_provider = 'local' then coalesce(local_parts.items, '[]'::jsonb)
               else coalesce(provider_parts.items, '[]'::jsonb)

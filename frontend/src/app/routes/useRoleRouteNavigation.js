@@ -31,7 +31,7 @@ export function useRoleRouteNavigation({
   workorderDraft,
   workspace,
 }) {
-  const openCreateWorkspace = useCallback(() => {
+  const openCreateWorkspace = useCallback((prefill = {}) => {
     const createDate = todayIso();
     workorderDraft.reset(null);
     setResumedDraft(null);
@@ -39,7 +39,7 @@ export function useRoleRouteNavigation({
     setActiveWorkorder(null);
     resetVehicleLookup();
     setForm((current) => {
-      const next = resetWorkorderFormForCreate(current, actor, createDate);
+      const next = { ...resetWorkorderFormForCreate(current, actor, createDate), ...prefill };
       createInitialDatesRef.current = createDraftBaselineFromForm(next);
       return next;
     });

@@ -36,5 +36,5 @@ test("part request refresh preserves unsaved mechanic progress", () => {
 });
 
 test("mechanic phone header retains access to the shared create and profile owner", () => {
-  assert.match(mechanicWorkspace, /<WorkspaceCreateActions[\s\S]*actor=\{actor\}[\s\S]*onCreateWorkorder=\{onCreateWorkorder\}/);
+  assert.match(mechanicWorkspace, /<WorkspaceCreateActions[\s\S]*actor=\{actor\}[\s\S]*onCreateWorkorder=\{workorderAccess\.canWrite \? onCreateWorkorder : null\}/);
 });

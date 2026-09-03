@@ -1,4 +1,4 @@
-import { MarkerPin01, Package, Settings01, Shield03, Tool02 } from "@untitledui/icons";
+import { FileCheck02, MarkerPin01, Package, Settings01, Shield03, Tool02 } from "@untitledui/icons";
 import { ProfileMenu } from "../../../components/account/ProfileMenu.jsx";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.jsx";
 import { workorderTemplateStyles } from "../../../../../shared/workorder-template.js";
@@ -11,11 +11,13 @@ import {
 import { LocationDetailPage, LocationsPage } from "./LocationsPage.jsx";
 import { OperationsPage } from "./OperationsPage.jsx";
 import { InventoryWorkspace } from "../../inventory/InventoryWorkspace.jsx";
+import { InspectionTemplatesPage } from "../templates/InspectionTemplatesPage.jsx";
 
 function mobileDestinationIcon(key) {
   if (key === "locations") return MarkerPin01;
   if (key === "inventory") return Package;
   if (key === "modules") return Shield03;
+  if (key === "templates") return FileCheck02;
   if (key === "settings") return Settings01;
   return Tool02;
 }
@@ -29,6 +31,8 @@ export function AdminWorkspaceShell({
   draftQueue,
   onOpenWorkorder,
   onCreateWorkorder,
+  inspectionAccess,
+  workorderAccess,
   selectedId,
   detail,
   locationDetailProps,
@@ -45,15 +49,17 @@ export function AdminWorkspaceShell({
           <button className={view === "inventory" ? "active" : ""} type="button" onClick={() => changeView("inventory")}><Package />Inventory</button>
           <button className={view === "locations" ? "active" : ""} type="button" onClick={() => changeView("locations")}><MarkerPin01 />Locations</button>
           <button className={view === "modules" ? "active" : ""} type="button" onClick={() => changeView("modules")}><Shield03 />Modules</button>
+          <button className={view === "templates" ? "active" : ""} type="button" onClick={() => changeView("templates")}><FileCheck02 />Templates</button>
           <button className={view === "settings" ? "active" : ""} type="button" onClick={() => changeView("settings")}><Settings01 />Settings</button>
         </nav>
       </WorkspaceHeader>
       {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
       {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
-      {view === "operations" ? <OperationsPage actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} /> : null}
+      {view === "operations" ? <OperationsPage actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} /> : null}
       {view === "inventory" ? <InventoryWorkspace actorId={actor?.id} canApplyInventoryCount={actor?.role === "admin"} canReconcileAuthority={actor?.role === "admin"} presentation="page" /> : null}
       {view === "settings" ? <IntegrationsSettings /> : null}
       {view === "modules" ? <ModulesPage {...modulePageProps} /> : null}
+      {view === "templates" ? <InspectionTemplatesPage actor={actor} locations={locations} /> : null}
       {view === "locations" && selectedId && detail ? <LocationDetailPage {...locationDetailProps} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsPage locations={locations} loading={state.loading} onCreate={onCreateLocation} onOpen={onOpenLocation} /> : null}
       <nav className="admin-mobile-nav" aria-label="Admin workspace">

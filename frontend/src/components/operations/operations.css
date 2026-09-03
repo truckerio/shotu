@@ -189,46 +189,14 @@
 .operations-pagination svg { height: 15px; width: 15px; }
 
 .part-request-queue {
-  margin-inline: auto;
-  max-width: 1440px;
   min-width: 0;
   width: 100%;
 }
-.part-request-queue-toolbar {
-  align-items: end;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(190px, 1.5fr) repeat(4, minmax(132px, .8fr));
-  padding: 0 0 16px;
-}
-.part-request-queue-toolbar label { display: grid; gap: 5px; min-width: 0; }
-.part-request-queue-toolbar input,
-.part-request-queue-toolbar select {
-  background: #fff;
-  border: 1px solid #d0d5dd;
-  border-radius: 6px;
-  box-sizing: border-box;
-  color: #182230;
-  font: inherit;
-  font-size: var(--text-secondary);
-  height: 38px;
-  min-width: 0;
-  padding: 0 10px;
-  width: 100%;
-}
-.part-request-queue-toolbar .operations-input-with-icon input { padding-left: 34px; }
-.part-request-queue-toolbar input:focus,
-.part-request-queue-toolbar select:focus,
 .part-request-queue-open:focus-visible { outline: 2px solid #2e6ee6; outline-offset: 2px; }
-.part-request-queue-table { background: #fff; border-bottom: 1px solid #d0d5dd; border-top: 1px solid #d0d5dd; min-width: 0; }
-.part-request-queue-head,
-.part-request-queue-row { display: grid; grid-template-columns: minmax(150px, 1.25fr) minmax(130px, 1fr) minmax(120px, .9fr) minmax(110px, .8fr) minmax(120px, .9fr) minmax(150px, 1.15fr) minmax(120px, .9fr); }
-.part-request-queue-head { background: #f9fafb; color: #667085; font-size: var(--text-caption); font-weight: var(--weight-semibold); min-height: 40px; }
-.part-request-queue-head span,
-.part-request-queue-cell { align-items: center; border-right: 1px solid #eaecf0; display: flex; min-width: 0; padding: 9px 10px; }
-.part-request-queue-head span:last-child,
-.part-request-queue-cell:last-child { border-right: 0; }
-.part-request-queue-row { border-top: 1px solid #eaecf0; color: #344054; font-size: var(--text-secondary); min-height: 72px; outline: none; }
+.operational-collection-table.part-request-queue-table {
+  --operational-collection-columns: minmax(150px, 1.25fr) minmax(130px, 1fr) minmax(120px, .9fr) minmax(110px, .8fr) minmax(120px, .9fr) minmax(150px, 1.15fr) minmax(120px, .9fr);
+}
+.part-request-queue-row { min-height: 72px; }
 .part-request-queue-cell { align-content: center; flex-direction: column; flex-wrap: wrap; gap: 3px; justify-content: center; overflow: hidden; overflow-wrap: anywhere; }
 .part-request-queue-cell strong { color: #182230; font-weight: var(--weight-semibold); }
 .part-request-queue-cell > span { color: #667085; font-size: var(--text-caption); overflow-wrap: anywhere; }
@@ -243,7 +211,6 @@
 
 @media (max-width: 1050px) {
   .operations-toolbar { grid-template-columns: 1.4fr repeat(2, 1fr); }
-  .part-request-queue-toolbar { grid-template-columns: 1.4fr repeat(2, 1fr); }
 }
 
 @media (max-width: 960px) {
@@ -343,16 +310,6 @@
     display: none;
   }
   .operations-loading span { height: 150px; }
-  .part-request-queue-head {
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    position: absolute;
-    white-space: nowrap;
-    width: 1px;
-  }
   .part-request-queue-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; padding: 8px 0; }
   .part-request-queue-cell {
     align-items: flex-start;
@@ -363,7 +320,6 @@
     justify-content: flex-start;
     padding: 7px 12px;
   }
-  .part-request-queue-cell::before { color: #667085; content: attr(data-label); flex: 0 0 96px; font-size: var(--text-caption); font-weight: var(--weight-semibold); }
   .part-request-queue-loading span { height: 150px; }
 }
 
@@ -375,9 +331,6 @@
   .operations-pagination button {
     min-height: 44px;
   }
-  .part-request-queue-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .part-request-queue-toolbar .part-request-queue-search { grid-column: 1 / -1; }
-  .part-request-queue-table { background: transparent; border: 0; display: grid; gap: 10px; }
   .part-request-queue-row { background: #fff; border: 1px solid #eaecf0; border-radius: 10px; box-shadow: 0 1px 2px rgb(16 24 40 / 4%); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); overflow: hidden; padding: 14px; }
   .part-request-queue-cell { align-items: flex-start; display: grid; gap: 2px 10px; grid-template-columns: 96px minmax(0, 1fr); padding: 0; }
   .part-request-queue-cell::before { grid-column: 1; grid-row: 1 / span 2; }

@@ -11,6 +11,7 @@ import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
+import { CreateInspectionPage, InspectionExperience, ProductModeSwitch } from "../inspections/index.js";
 import {
   MECHANIC_QUEUE_TABS,
   mechanicActionLabel,
@@ -32,7 +33,17 @@ function jobLocation(workorder, fallback) {
   return workorder.locationName || workorder.location?.name || fallback;
 }
 
-export function MechanicWorkspace({ actor, locale = "en", localeError = "", localeReady = true, onLocaleChange, onCreateWorkorder, onOpenWorkorder }) {
+export function MechanicWorkspace({
+  actor,
+  locale = "en",
+  localeError = "",
+  localeReady = true,
+  onLocaleChange,
+  onCreateWorkorder,
+  onOpenWorkorder,
+  inspectionAccess = { canRead: false, canWrite: false },
+  workorderAccess = { canRead: true, canWrite: true },
+}) {
   const t = (key) => interfaceText(locale, key);
   const errorText = useCallback(
     (error) => locale === "en" && error?.message ? error.message : interfaceText(locale, "mechanic.requestFailed"),
@@ -46,6 +57,9 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", loca
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(() => navigator.onLine);
+  const [product, setProduct] = useState(() => !workorderAccess.canRead && inspectionAccess.canRead ? "inspections" : "workorders");
+  const [creatingInspection, setCreatingInspection] = useState(false);
+  const [createdInspectionId, setCreatedInspectionId] = useState("");
 
   const loadDashboard = useCallback(async () => {
     setError("");
@@ -55,20 +69,21 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", loca
   }, []);
 
   useEffect(() => {
+    if (!workorderAccess.canRead) { setLoading(false); return; }
     loadDashboard().catch((err) => {
       setError(errorText(err));
       setLoading(false);
     });
-  }, [errorText, loadDashboard]);
+  }, [errorText, loadDashboard, workorderAccess.canRead]);
   useAutomaticRefresh(
     () => loadDashboard().catch((err) => setError(errorText(err))),
-    { enabled: online },
+    { enabled: online && workorderAccess.canRead },
   );
 
   useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
-      loadDashboard().catch((err) => setError(errorText(err)));
+      if (workorderAccess.canRead) loadDashboard().catch((err) => setError(errorText(err)));
     };
     const handleOffline = () => setOnline(false);
     window.addEventListener("online", handleOnline);
@@ -77,7 +92,7 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", loca
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [errorText, loadDashboard]);
+  }, [errorText, loadDashboard, workorderAccess.canRead]);
 
   async function openWorkorder(id) {
     setOpeningId(id);
@@ -137,21 +152,48 @@ export function MechanicWorkspace({ actor, locale = "en", localeError = "", loca
 
   const emptyAssigned = !loading && activeTab === "myWork" && !nextJob;
 
+  const createActions = (
+    <WorkspaceCreateActions
+      actor={actor}
+      locale={locale}
+      onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null}
+      onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); setCreatedInspectionId(""); } : null}
+      createLabel={t("mechanic.createWorkorder")}
+    />
+  );
+
+  if (product === "inspections" && inspectionAccess.canRead) {
+    return (
+      <main className="prototype mechanic-home workspace-operations">
+        <WorkspaceHeader actor={actor} className="role-home-account-header" locale={locale} />
+        <div className="mechanic-home-content">
+          <PageHeader title="Inspections" actions={createActions} />
+          {workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); setCreatedInspectionId(""); }} /> : null}
+          {creatingInspection ? (
+            <CreateInspectionPage
+              actor={actor}
+              access={{ canCreate: inspectionAccess.canWrite }}
+              request={api}
+              onCreated={(result) => { setCreatingInspection(false); setCreatedInspectionId(result?.inspection?.id || ""); }}
+              onCancel={() => setCreatingInspection(false)}
+            />
+          ) : (
+            <InspectionExperience actor={actor} projection="mechanic" initialInspectionId={createdInspectionId} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} />
+          )}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="prototype mechanic-home workspace-operations">
       <WorkspaceHeader actor={actor} className="role-home-account-header" locale={locale} />
       <div className="mechanic-home-content">
         <PageHeader
           title={t("mechanic.workorders")}
-          actions={(
-            <WorkspaceCreateActions
-              actor={actor}
-              locale={locale}
-              onCreateWorkorder={onCreateWorkorder}
-              createLabel={t("mechanic.createWorkorder")}
-            />
-          )}
+          actions={createActions}
         />
+        {inspectionAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); }} /> : null}
 
         {!online ? <p className="workspace-connection-state" role="status">{t("mechanic.offline")}</p> : null}
         <section className="mechanic-queue-shell" aria-label={t("mechanic.work")}>

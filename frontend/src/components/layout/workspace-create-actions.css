@@ -1,0 +1,39 @@
+.workspace-create-trigger {
+  gap: 0.45rem;
+  min-height: 44px;
+}
+
+.workspace-create-chevron {
+  width: 1rem;
+  height: 1rem;
+}
+
+.workspace-create-popover {
+  min-width: 11rem;
+  padding: 0.35rem;
+  background: var(--surface-primary, #fff);
+  border: 1px solid var(--border-secondary, #d0d5dd);
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 28px rgb(16 24 40 / 16%);
+}
+
+.workspace-create-menu {
+  display: grid;
+  gap: 0.125rem;
+  outline: none;
+}
+
+.workspace-create-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border-radius: 0.375rem;
+  color: var(--text-primary, #101828);
+  cursor: pointer;
+  outline: none;
+}
+
+.workspace-create-menu-item[data-focused] {
+  background: var(--background-secondary, #f2f4f7);
+}

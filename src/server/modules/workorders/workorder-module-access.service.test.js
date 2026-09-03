@@ -21,12 +21,15 @@ const workorder = {
   status: "work_done",
 };
 
+const allowProduct = async () => ({ mode: "full" });
+
 test("module authorization loads policy once and allows declared read access", async () => {
   let loads = 0;
   const result = await authorizeWorkorderModule(context, workorder.id, {
     moduleKey: "odoo",
     capability: "read",
   }, {
+    authorizeProduct: allowProduct,
     requireAccess: async () => workorder,
     getEffectivePolicy: async () => {
       loads += 1;
@@ -48,6 +51,7 @@ test("module authorization denies write through a read-only grant", async () => 
       moduleKey: "odoo",
       capability: "write",
     }, {
+      authorizeProduct: allowProduct,
       requireAccess: async () => workorder,
       getEffectivePolicy: async () => ({
         companyPolicy: { moduleAccess: { office: { detail: { odoo: "read" } } } },
@@ -107,6 +111,7 @@ test("module actions require their declared capability and Parts requests remain
     capability: "read",
     action: "request",
   }, {
+    authorizeProduct: allowProduct,
     requireAccess: async () => workorder,
     getEffectivePolicy: async () => ({
       companyPolicy: { moduleAccess: { mechanic: { detail: { parts: "read" } } } },
@@ -127,6 +132,7 @@ test("module actions require their declared capability and Parts requests remain
 
 test("part scanning defaults to Office and supports a narrow named-Mechanic grant", async () => {
   const dependencies = {
+    authorizeProduct: allowProduct,
     requireAccess: async () => workorder,
     getEffectivePolicy: async () => ({ companyPolicy: null, locationPolicy: null }),
   };
@@ -159,6 +165,7 @@ test("explicit policy grants are not blocked by legacy role ownership hints", as
       capability: "write",
       action: "update",
     }, {
+      authorizeProduct: allowProduct,
       requireAccess: async () => workorder,
       getEffectivePolicy: async () => ({
         companyPolicy: { moduleAccess: { surveillance: { detail: { unit: "write" } } } },
@@ -204,6 +211,7 @@ test("batch authorization loads the workorder and effective policy once", async 
     { moduleKey: "parts", capability: "write", action: "approve" },
     { moduleKey: "chat", capability: "write", action: "send" },
   ], {}, {
+    authorizeProduct: allowProduct,
     requireAccess: async () => workorder,
     getEffectivePolicy: async () => {
       policyLoads += 1;
@@ -223,6 +231,7 @@ test("create authorization requires write access to the mandatory concern module
     locationId: "location-1",
     moduleKeys: ["location", "concern"],
   }, {
+    authorizeProduct: allowProduct,
     getEffectivePolicy: async () => ({
       companyPolicy: { moduleAccess: { office: { create: { concern: "hidden", unit: "write" } } } },
       locationPolicy: null,
@@ -232,6 +241,7 @@ test("create authorization requires write access to the mandatory concern module
 
 test("detail resolution returns hidden decisions without exposing policy internals", async () => {
   const result = await resolveWorkorderModuleDecisions(context, workorder.id, {}, {
+    authorizeProduct: allowProduct,
     requireAccess: async () => workorder,
     getEffectivePolicy: async () => ({
       companyPolicy: { moduleAccess: { office: { detail: { concern: "hidden" } } } },
@@ -241,4 +251,17 @@ test("detail resolution returns hidden decisions without exposing policy interna
   assert.deepEqual(result.decisions.concern, { access: "hidden", source: "company" });
   assert.equal(result.decisions.unit.access, "write");
   assert.equal("companyPolicy" in result, false);
+});
+
+test("product-level workorder access is enforced before module policy", async () => {
+  let policyLoads = 0;
+  await assert.rejects(authorizeWorkorderModule(context, workorder.id, {
+    moduleKey: "concern",
+    capability: "read",
+  }, {
+    requireAccess: async () => workorder,
+    authorizeProduct: async () => { throw Object.assign(new Error("denied"), { statusCode: 403 }); },
+    getEffectivePolicy: async () => { policyLoads += 1; return {}; },
+  }), (error) => error.statusCode === 403);
+  assert.equal(policyLoads, 0);
 });

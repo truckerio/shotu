@@ -13,7 +13,23 @@ import {
   formatDuration,
 } from "./operations-format.js";
 import { clampPartRequestPage, partRequestRowModel } from "./part-request-queue-model.js";
+import {
+  OperationalCollectionCell,
+  OperationalCollectionRow,
+  OperationalCollectionTable,
+  OperationalCollectionToolbar,
+} from "./OperationalCollectionPage.jsx";
 import "./operations.css";
+
+const PART_REQUEST_COLUMNS = [
+  { id: "part", label: "Part" },
+  { id: "workorder", label: "Workorder / unit" },
+  { id: "destination", label: "Destination" },
+  { id: "requester", label: "Requester" },
+  { id: "supply", label: "Supply" },
+  { id: "status", label: "Status / next action" },
+  { id: "activity", label: "Waiting / activity" },
+];
 
 function PartRequestRow({ request, onOpenWorkorder }) {
   const row = partRequestRowModel(request);
@@ -27,8 +43,8 @@ function PartRequestRow({ request, onOpenWorkorder }) {
   }
 
   return (
-    <div className="part-request-queue-row" role="row">
-      <div className="part-request-queue-cell part-request-queue-part" role="cell" data-label="Part">
+    <OperationalCollectionRow className="part-request-queue-row">
+      <OperationalCollectionCell className="part-request-queue-cell part-request-queue-part" label="Part">
         {interactive ? (
           <button type="button" className="part-request-queue-open" onClick={open} aria-label={`Open ${partIdentity} request for ${row.workorderLabel}, ${row.unitLabel}`}>
             <strong>{row.partNumber || row.partDescription}</strong>
@@ -36,25 +52,25 @@ function PartRequestRow({ request, onOpenWorkorder }) {
             <span>{row.quantity} {row.unit}</span>
           </button>
         ) : <><strong>{row.partNumber || row.partDescription}</strong>{row.partNumber && row.partDescription ? <span>{row.partDescription}</span> : null}<span>{row.quantity} {row.unit}</span></>}
-      </div>
-      <div className="part-request-queue-cell" role="cell" data-label="Workorder / unit">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="part-request-queue-cell" label="Workorder / unit">
         <strong>{row.workorderLabel}</strong>
         <span>{row.unitLabel}</span>
-      </div>
-      <div className="part-request-queue-cell" role="cell" data-label="Destination">{row.destination}</div>
-      <div className="part-request-queue-cell" role="cell" data-label="Requester">{row.requester}</div>
-      <div className="part-request-queue-cell" role="cell" data-label="Supply">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="part-request-queue-cell" label="Destination">{row.destination}</OperationalCollectionCell>
+      <OperationalCollectionCell className="part-request-queue-cell" label="Requester">{row.requester}</OperationalCollectionCell>
+      <OperationalCollectionCell className="part-request-queue-cell" label="Supply">
         <span className="part-request-queue-supply">{row.supply}</span>
-      </div>
-      <div className="part-request-queue-cell part-request-queue-state" role="cell" data-label="Status / next action">
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="part-request-queue-cell part-request-queue-state" label="Status / next action">
         <span className="part-request-queue-status">{row.status}</span>
         <span>{row.nextAction}</span>
-      </div>
-      <div className="part-request-queue-cell part-request-queue-activity" role="cell" data-label="Waiting / activity" title={activity.absolute}>
+      </OperationalCollectionCell>
+      <OperationalCollectionCell className="part-request-queue-cell part-request-queue-activity" label="Waiting / activity">
         <strong>{waiting}</strong>
-        <span>{activity.relative}</span>
-      </div>
-    </div>
+        <span title={activity.absolute}>{activity.relative}</span>
+      </OperationalCollectionCell>
+    </OperationalCollectionRow>
   );
 }
 
@@ -109,7 +125,7 @@ export function PartRequestQueue({
 
   return (
     <div className="part-request-queue">
-      <div className="part-request-queue-toolbar">
+      <OperationalCollectionToolbar className="operations-toolbar part-request-queue-toolbar">
         <label className="part-request-queue-search">
           <span className="operations-field-label">Search part requests</span>
           <span className="operations-input-with-icon"><SearchMd /><input {...textEntryProps("search")} type="search" value={filters.search} onChange={(event) => updateFilter("search", event.target.value)} placeholder="Part, workorder, unit" /></span>
@@ -118,14 +134,13 @@ export function PartRequestQueue({
         <label><span className="operations-field-label">Status</span><Dropdown value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>{PART_REQUEST_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Dropdown></label>
         <label><span className="operations-field-label">Supply</span><Dropdown value={filters.supply} onChange={(event) => updateFilter("supply", event.target.value)}>{PART_REQUEST_SUPPLY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Dropdown></label>
         <label><span className="operations-field-label">Sort</span><Dropdown value={filters.sort} onChange={(event) => updateFilter("sort", event.target.value)}>{PART_REQUEST_SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Dropdown></label>
-      </div>
-      <div className="part-request-queue-table" role="table" aria-label="Part requests" aria-busy={result.loading}>
-        <div className="part-request-queue-head" role="row"><span role="columnheader">Part</span><span role="columnheader">Workorder / unit</span><span role="columnheader">Destination</span><span role="columnheader">Requester</span><span role="columnheader">Supply</span><span role="columnheader">Status / next action</span><span role="columnheader">Waiting / activity</span></div>
+      </OperationalCollectionToolbar>
+      <OperationalCollectionTable className="part-request-queue-table" columns={PART_REQUEST_COLUMNS} ariaLabel="Part requests" busy={result.loading}>
         {result.loading ? <LoadingRows /> : null}
         {!result.loading && result.error ? <div className="operations-state-message error" role="alert"><strong>Part requests could not be loaded.</strong><span>{result.error}</span><button type="button" onClick={() => setRetryKey((current) => current + 1)}>Try again</button></div> : null}
         {!result.loading && !result.error && !result.items.length ? <div className="operations-state-message"><strong>No part requests match these filters.</strong></div> : null}
         {!result.loading && !result.error ? result.items.map((request) => <PartRequestRow key={request.id} request={request} onOpenWorkorder={onOpenWorkorder} />) : null}
-      </div>
+      </OperationalCollectionTable>
       <Pagination currentPage={page} pageCount={result.pageCount} setPage={setPage} total={result.total} label="part requests" loading={result.loading} />
     </div>
   );

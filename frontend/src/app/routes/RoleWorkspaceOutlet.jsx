@@ -9,6 +9,10 @@ import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceW
 import { WorkorderDetailPage } from "../../features/workorder-detail/WorkorderDetailPage.jsx";
 import { InventoryScanWorkspace } from "../../features/inventory/InventoryScanWorkspace.jsx";
 import { interfaceText } from "../../i18n/index.js";
+import { productModuleCapabilities } from "./product-module-access.js";
+import { InspectionExperience } from "../../features/inspections/index.js";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { PageHeader } from "../../components/layout/PageHeader.jsx";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx")
   .then((module) => ({ default: module.AdminWorkspace })));
@@ -26,6 +30,8 @@ export function RoleWorkspaceOutlet({
 }) {
   const locale = actor?.role === "mechanic" ? interfacePreferences?.locale || "en" : "en";
   const t = (key) => interfaceText(locale, key);
+  const inspectionAccess = productModuleCapabilities(actor, "inspections");
+  const workorderAccess = productModuleCapabilities(actor, "workorders");
   if (new URLSearchParams(window.location.search).has("inventoryScan")) {
     return <InventoryScanWorkspace actor={actor} />;
   }
@@ -50,6 +56,8 @@ export function RoleWorkspaceOutlet({
         onLocaleChange={interfacePreferences.onLocaleChange}
         onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
         onOpenWorkorder={navigation.openOperationalWorkorder}
+        inspectionAccess={inspectionAccess}
+        workorderAccess={workorderAccess}
       />
     );
   }
@@ -62,6 +70,8 @@ export function RoleWorkspaceOutlet({
           {...draftWorkspaceProps}
           onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
           onOpenWorkorder={navigation.openOfficeWorkorder}
+          inspectionAccess={inspectionAccess}
+          workorderAccess={workorderAccess}
         />
       </Suspense>
     );
@@ -74,12 +84,17 @@ export function RoleWorkspaceOutlet({
         {...draftWorkspaceProps}
         onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
         onOpenWorkorder={navigation.openOfficeWorkorder}
+        inspectionAccess={inspectionAccess}
+        workorderAccess={workorderAccess}
       />
     );
   }
 
   if (workspace === "surveillance") {
-    return <SurveillanceWorkspace actor={actor} />;
+    if (inspectionAccess.canRead && !workorderAccess.canRead) {
+      return <main className="prototype mechanic-home workspace-operations"><WorkspaceHeader actor={actor} className="role-home-account-header" locale="en" /><div className="mechanic-home-content"><PageHeader title="Inspections" /><InspectionExperience actor={actor} projection="read_only" /></div></main>;
+    }
+    return <SurveillanceWorkspace actor={actor} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} />;
   }
 
   if (activeWorkorder) {

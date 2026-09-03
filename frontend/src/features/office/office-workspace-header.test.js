@@ -25,7 +25,7 @@ test("every operational role uses the same workspace identity and page-title str
 test("Manager and Mechanic share one phone Create and profile action owner", () => {
   for (const source of [workspace, mechanicWorkspace]) {
     assert.match(source, /className="role-home-account-header"/);
-    assert.match(source, /<WorkspaceCreateActions[\s\S]*?actor=\{actor\}[\s\S]*?onCreateWorkorder=\{onCreateWorkorder\}/);
+    assert.match(source, /<WorkspaceCreateActions[\s\S]*?actor=\{actor\}[\s\S]*?onCreateWorkorder=\{workorderAccess\.canWrite \? onCreateWorkorder : null\}/);
   }
 });
 

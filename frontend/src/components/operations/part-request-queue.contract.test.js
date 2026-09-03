@@ -13,25 +13,27 @@ test("shared part request queue uses the Office endpoint and request-level ident
   for (const filter of ["search", "status", "supply", "sort", "page"]) assert.match(source, new RegExp(filter));
   assert.match(source, /key=\{request\.id\}/);
   assert.match(source, /onOpenWorkorder\(row\.workorderId, \{ partRequestId: request\.id \}\)/);
-  assert.match(source, /role="row"/);
+  assert.match(source, /OperationalCollectionToolbar/);
+  assert.match(source, /OperationalCollectionTable/);
+  assert.match(source, /OperationalCollectionRow/);
+  assert.match(source, /OperationalCollectionCell/);
   assert.match(source, /className="part-request-queue-open"/);
   assert.match(source, /aria-label=\{`Open \$\{partIdentity\} request/);
-  assert.match(source, /aria-busy=\{result\.loading\}/);
+  assert.match(source, /busy=\{result\.loading\}/);
   assert.match(source, /role="alert"/);
   assert.match(source, /clampPartRequestPage\(page, resolved\.pageCount\)/);
   assert.match(source, /setPage\(validPage\)/);
 });
 
-test("compact request cards preserve table headers for assistive technology", async () => {
+test("part requests share collection geometry and preserve compact cards", async () => {
   const css = await readFile(new URL("./operations.css", import.meta.url), "utf8");
 
-  assert.match(css, /\.part-request-queue \{[\s\S]*margin-inline: auto;[\s\S]*max-width: 1440px;[\s\S]*width: 100%;[\s\S]*\}/);
-  assert.match(css, /@media \(max-width: 960px\)[\s\S]*\.part-request-queue-head \{[\s\S]*clip-path: inset\(50%\)/);
+  assert.match(css, /\.part-request-queue \{[\s\S]*min-width: 0;[\s\S]*width: 100%;[\s\S]*\}/);
+  assert.doesNotMatch(css, /\.part-request-queue \{[^}]*max-width:/);
+  assert.match(css, /\.operational-collection-table\.part-request-queue-table \{[\s\S]*--operational-collection-columns:/);
   assert.match(css, /@media \(max-width: 960px\)[\s\S]*\.part-request-queue-cell \{[\s\S]*flex-direction: row;[\s\S]*flex-wrap: nowrap;[\s\S]*justify-content: flex-start;/);
-  assert.doesNotMatch(css, /\.part-request-queue-head \{ display: none; \}/);
-  assert.match(css, /\.part-request-queue-toolbar \.operations-input-with-icon input \{ padding-left: 34px; \}/);
   assert.match(css, /\.part-request-queue-open \{[^}]*text-align: left;[^}]*width: 100%;[^}]*\}/);
-  assert.match(css, /\.part-request-queue-toolbar input:focus,[\s\S]*\.part-request-queue-open:focus-visible \{ outline: 2px solid #2e6ee6;/);
+  assert.match(css, /\.part-request-queue-open:focus-visible \{ outline: 2px solid #2e6ee6;/);
   assert.doesNotMatch(css, /#84adff/);
 });
 

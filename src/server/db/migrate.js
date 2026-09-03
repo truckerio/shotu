@@ -14,6 +14,26 @@ function checksum(sql) {
 
 const LEGACY_MIGRATION_CHECKSUMS = new Map([
   [
+    "096_product_module_access.sql",
+    new Set([
+      // Early inspection development applied identical SQL with one extra
+      // trailing newline before the migration files were formatting-cleaned.
+      "4c5959024dbb01939c3c12a83a343b08050c5de7cf5f8c4c0da952adfd069382",
+    ]),
+  ],
+  [
+    "097_template_platform.sql",
+    new Set([
+      "230f1e7c3d42c284c04caf3c018b5db03491c9b3f2e8b657534c7d96c16fea36",
+    ]),
+  ],
+  [
+    "098_inspections.sql",
+    new Set([
+      "4e232850837793373d3f4f1c3a122bc511ce30fa5ba994992ed8a4984c0c401f",
+    ]),
+  ],
+  [
     "019_not_null_constraint_name_cleanup.sql",
     new Set([
       "69b4787e8422993a3b83efba357c06163f1dc1d76c7919116650371871452d5b",

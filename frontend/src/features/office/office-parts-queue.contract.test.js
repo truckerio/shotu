@@ -14,7 +14,7 @@ test("Office Parts uses the shared request queue and opens the exact request", a
   assert.match(source, /await onOpenWorkorder\(id, options\)/);
   assert.match(source, /import \{ usePartRequestQueueCount \} from "\.\.\/\.\.\/components\/operations\/usePartRequestQueueCount\.js"/);
   assert.match(source, /const \[partRequestRefreshKey, setPartRequestRefreshKey\] = useState\(0\);/);
-  assert.match(source, /const partRequestCount = usePartRequestQueueCount\(\{ refreshKey: partRequestRefreshKey \}\);/);
+  assert.match(source, /const partRequestCount = usePartRequestQueueCount\(\{ refreshKey: partRequestRefreshKey, enabled: workorderAccess\.canRead \}\);/);
   assert.match(source, /setPartRequestRefreshKey\(\(current\) => current \+ 1\)/);
   assert.match(source, /count: partRequestCount\.loaded \? partRequestCount\.total : null/);
   assert.doesNotMatch(source, /dashboard\?\.parts\?\.length/);

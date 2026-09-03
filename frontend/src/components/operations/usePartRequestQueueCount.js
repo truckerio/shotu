@@ -10,10 +10,11 @@ const CANONICAL_QUEUE_FILTERS = Object.freeze({
   sort: "waiting:desc",
 });
 
-export function usePartRequestQueueCount({ locationId = "", refreshKey = 0 } = {}) {
+export function usePartRequestQueueCount({ locationId = "", refreshKey = 0, enabled = true } = {}) {
   const [result, setResult] = useState({ total: null, loading: true, loaded: false, error: "" });
 
   useEffect(() => {
+    if (!enabled) { setResult({ total: 0, loading: false, loaded: false, error: "" }); return undefined; }
     const controller = new AbortController();
     const params = buildPartRequestsQuery({ ...CANONICAL_QUEUE_FILTERS, locationId }, 1, 1);
     setResult((current) => ({ ...current, loading: true, error: "" }));
@@ -30,7 +31,7 @@ export function usePartRequestQueueCount({ locationId = "", refreshKey = 0 } = {
         }
       });
     return () => controller.abort();
-  }, [locationId, refreshKey]);
+  }, [enabled, locationId, refreshKey]);
 
   return result;
 }

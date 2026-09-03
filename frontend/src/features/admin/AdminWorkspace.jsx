@@ -14,15 +14,13 @@ import {
   HIDDEN_PASSWORDS, templateForm, userLocationIds,
 } from "./workspace/admin-workspace-model.js";
 import "./admin.css";
-
 export function AdminWorkspace({
   actor,
-  drafts = [],
-  draftLoading = false,
+  drafts = [], draftLoading = false,
   draftError = "",
   draftBusyId = "",
-  onOpenWorkorder,
-  onCreateWorkorder,
+  onOpenWorkorder, onCreateWorkorder,
+  inspectionAccess = { canRead: false, canWrite: false }, workorderAccess = { canRead: true, canWrite: true },
   onOpenDraft,
   onDiscardDraft,
   onTakeoverDraft,
@@ -399,7 +397,9 @@ export function AdminWorkspace({
         locations={locations}
         draftQueue={draftQueue}
         onOpenWorkorder={onOpenWorkorder}
-        onCreateWorkorder={onCreateWorkorder}
+      onCreateWorkorder={onCreateWorkorder}
+      inspectionAccess={inspectionAccess}
+      workorderAccess={workorderAccess}
         selectedId={selectedId}
         detail={detail}
         locationDetailProps={locationDetailProps}

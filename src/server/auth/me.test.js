@@ -24,6 +24,7 @@ test("GET /api/me returns linked operational actor", async () => {
           companyMemberships: [{ companyId: "default", role: "office" }],
         },
       }),
+      productModuleBootstrap: async () => ({ version: 1, companies: [] }),
       sendJson: (_res, status, body) => { response = { status, body }; },
     },
   );
@@ -32,6 +33,7 @@ test("GET /api/me returns linked operational actor", async () => {
   assert.equal(response.body.user.id, "app-user-1");
   assert.equal(response.body.user.authUserId, undefined);
   assert.equal(response.body.sessionMode, "standard");
+  assert.deepEqual(response.body.productModuleAccess, { version: 1, companies: [] });
   assert.equal(response.body.kiosk, null);
 });
 
@@ -55,6 +57,7 @@ test("GET /api/me exposes minimal kiosk companion context", async () => {
           companyMemberships: [{ companyId: "company-1", role: "mechanic" }],
         },
       }),
+      productModuleBootstrap: async () => ({ version: 1, companies: [] }),
       sendJson: (_res, status, body) => { response = { status, body }; },
     },
   );

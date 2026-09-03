@@ -6,6 +6,7 @@ import { Button } from "../../../components/ui/Button.jsx";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
 import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
+import { ProductModuleAccessPanel } from "./ProductModuleAccessPanel.jsx";
 import {
   WORKORDER_ACCESS_MODES,
   WORKORDER_INHERIT_ACCESS,
@@ -417,6 +418,8 @@ export function ModulesPage({
           </label>
         )}
       />
+
+      {hasScope ? <ProductModuleAccessPanel companyId={companyId} locationId={scopeType === "location" ? detail?.location?.id : null} /> : null}
 
       {!hasScope ? (
         <div className="admin-modules-empty">

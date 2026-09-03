@@ -16,6 +16,7 @@ import { usePartRequestQueueCount } from "../../components/operations/usePartReq
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { InventoryWorkspace } from "../inventory/InventoryWorkspace.jsx";
+import { CreateInspectionPage, InspectionExperience, ProductModeSwitch } from "../inspections/index.js";
 import {
   OFFICE_PRIMARY_TABS,
   OFFICE_SECONDARY_TAB_KEYS,
@@ -107,6 +108,8 @@ export function OfficeWorkspace({
   onTakeoverDraft,
   onRefreshDrafts,
   onOpenWorkorder,
+  inspectionAccess = { canRead: false, canWrite: false },
+  workorderAccess = { canRead: true, canWrite: true },
 }) {
   const [dashboard, setDashboard] = useState(null);
   const [activeTab, setActiveTab] = useState(() => requestedOfficeWorkspace(window.location.search) || "needs");
@@ -124,10 +127,12 @@ export function OfficeWorkspace({
   const [partRequestRefreshKey, setPartRequestRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [product, setProduct] = useState(() => !workorderAccess.canRead && inspectionAccess.canRead ? "inspections" : "workorders");
+  const [creatingInspection, setCreatingInspection] = useState(false);
   const preferenceHydrated = useRef(false);
   const requestedWorkspace = useMemo(() => requestedOfficeWorkspace(window.location.search), []);
   const queuePreferences = useWorkorderPreferences("office");
-  const partRequestCount = usePartRequestQueueCount({ refreshKey: partRequestRefreshKey });
+  const partRequestCount = usePartRequestQueueCount({ refreshKey: partRequestRefreshKey, enabled: workorderAccess.canRead });
 
   async function loadDashboard() {
     setError("");
@@ -137,16 +142,18 @@ export function OfficeWorkspace({
   }
 
   useEffect(() => {
+    if (!workorderAccess.canRead) { setLoading(false); return; }
     loadDashboard().catch((err) => {
       setError(err.message);
       setLoading(false);
     });
-  }, []);
+  }, [workorderAccess.canRead]);
   useAutomaticRefresh(
     () => {
       setPartRequestRefreshKey((current) => current + 1);
       return loadDashboard().catch((err) => setError(err.message));
     },
+    { enabled: workorderAccess.canRead },
   );
 
   useEffect(() => {
@@ -270,13 +277,28 @@ export function OfficeWorkspace({
     .filter((row) => workorderMatchesSearch(row, search))
     .sort((left, right) => officeUrgency(left) - officeUrgency(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt));
 
+  if (product === "inspections" && inspectionAccess.canRead) {
+    const switcher = workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); }} /> : null;
+    return (
+      <main className="prototype mechanic-home office-home workspace-operations">
+        <WorkspaceHeader actor={actor} className="role-home-account-header" />
+        <PageHeader title="Inspections" actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => setCreatingInspection(true) : null} />} />
+        {switcher}
+        {creatingInspection
+          ? <CreateInspectionPage actor={actor} access={{ canCreate: inspectionAccess.canWrite }} request={api} onCreated={() => setCreatingInspection(false)} onCancel={() => setCreatingInspection(false)} />
+          : <InspectionExperience actor={actor} projection={inspectionAccess.canWrite ? "office" : "read_only"} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} />}
+      </main>
+    );
+  }
+
   return (
     <main className="prototype mechanic-home office-home workspace-operations">
       <WorkspaceHeader actor={actor} className="role-home-account-header" />
       <PageHeader
         title="Workorders"
-        actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={onCreateWorkorder} />}
+        actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} />}
       />
+      {inspectionAccess.canRead ? <ProductModeSwitch value={product} onChange={setProduct} /> : null}
 
       <section className={`office-layout${["drafts", "inventory", "parts"].includes(activeTab) ? " is-drafts" : ""}`}>
         {!["drafts", "inventory", "parts"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">

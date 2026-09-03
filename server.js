@@ -46,6 +46,9 @@ import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extracti
 import { handleInventoryApi } from "./src/server/routes/inventory.routes.js";
 import { handlePartFulfillmentApi } from "./src/server/routes/part-fulfillment.routes.js";
 import { handleInventoryUnitWorkorderApi } from "./src/server/routes/inventory-unit-workorder.routes.js";
+import { handleInspectionsApi } from "./src/server/routes/inspections.routes.js";
+import { handleProductModulesApi } from "./src/server/routes/product-modules.routes.js";
+import { handleInspectionTemplatesApi } from "./src/server/routes/inspection-templates.routes.js";
 import { catalogUomConflictError } from "./src/server/modules/inventory/inventory.errors.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
@@ -795,6 +798,8 @@ async function handleApi(req, res) {
   };
 
   if (await handleAdminApi(req, res, url, helpers)) return;
+  if (await handleProductModulesApi(req, res, url, helpers)) return;
+  if (await handleInspectionTemplatesApi(req, res, url, helpers)) return;
   if (await handleKioskApi(req, res, url, helpers)) return;
   if (await handleConfigApi(req, res, url, helpers)) return;
   if (await handleVehiclesApi(req, res, url, helpers)) return;
@@ -811,6 +816,7 @@ async function handleApi(req, res) {
   if (await handleProofreadingApi(req, res, url, helpers)) return;
   if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;
   if (await handleWorkorderPreferencesApi(req, res, url, helpers)) return;
+  if (await handleInspectionsApi(req, res, url, helpers)) return;
 
   const printArchiveLookupMatch = /^\/api\/workorders\/([^/]+)\/print-archives$/.exec(url.pathname);
   if (req.method === "GET" && printArchiveLookupMatch) {
@@ -981,6 +987,10 @@ const server = createServer(async (req, res) => {
     if (error instanceof SecurityHttpError) {
       if (error.result) applyRateLimitHeaders(res, error.result);
       sendJson(res, error.statusCode, { error: error.message, code: error.code });
+      return;
+    }
+    if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+      sendJson(res, error.statusCode, { error: error.message, code: error.code || "request_error" });
       return;
     }
     console.error(JSON.stringify({
