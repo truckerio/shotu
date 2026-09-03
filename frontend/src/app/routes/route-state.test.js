@@ -32,7 +32,7 @@ test("inspection Summary workorder routes retain only a valid completed-inspecti
   );
   assert.deepEqual(
     inspectionReturnContext(new URLSearchParams(`from=inspection&inspection=${inspectionId}&anchor=summary`)),
-    { inspectionId, anchor: "summary" },
+    { from: "inspection", inspectionId, anchor: "summary" },
   );
   assert.equal(
     workspaceSearchForRole("admin", { inspectionReturn: { from: "inspection", inspectionId, anchor: "summary" } }),
@@ -49,6 +49,17 @@ test("inspection Summary workorder routes retain only a valid completed-inspecti
     inspectionWorkspaceSearch("office", inspectionId, "reinspect"),
     `?from=inspection&inspection=${inspectionId}&anchor=reinspect`,
   );
+});
+
+test("parsed inspection context round-trips through workorder and workspace navigation", () => {
+  const inspectionId = "123e4567-e89b-42d3-a456-426614174000";
+  const source = new URLSearchParams(`from=inspection&inspection=${inspectionId}&anchor=summary`);
+  const context = inspectionReturnContext(source);
+  const workorderSearch = workorderDetailSearch("workorder-1", "assignment", { inspectionReturn: context });
+  const returnedContext = inspectionReturnContext(new URLSearchParams(workorderSearch));
+  assert.deepEqual(returnedContext, context);
+  assert.equal(workspaceSearchForRole("admin", { inspectionReturn: returnedContext }), `?adminView=operations&from=inspection&inspection=${inspectionId}&anchor=summary`);
+  assert.equal(workspaceSearchForRole("office", { inspectionReturn: returnedContext }), `?from=inspection&inspection=${inspectionId}&anchor=summary`);
 });
 
 test("initial workspace follows role and URL ownership", () => {

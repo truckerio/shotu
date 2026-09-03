@@ -19,7 +19,7 @@ export function inspectionReturnContext(value = currentRouteParams()) {
   if (read("from") !== "inspection" || !["summary", "reinspect"].includes(anchor) || !INSPECTION_ID_PATTERN.test(inspectionId || "")) {
     return null;
   }
-  return { inspectionId, anchor };
+  return { from: "inspection", inspectionId, anchor };
 }
 
 function inspectionReturnSearch(inspectionReturn) {
