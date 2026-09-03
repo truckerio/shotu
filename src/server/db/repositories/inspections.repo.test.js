@@ -221,3 +221,21 @@ test("correction preserves unchanged response actor and changes only corrected r
   assert.match(correction,/select company_id,\$2,item_key,response,na_reason,updated_by_user_id,created_at,updated_at from inspection_responses/);
   assert.match(correction,/update inspection_responses set response=\$3,na_reason=\$4,updated_by_user_id=\$5/);
 });
+test("reinspection starts an original print archive while retaining its observation reason", async () => {
+  for (const kind of ["reinspection", "correction"]) {
+    let inserted;
+    const row = {id:"inspection-new", company_id:"company", location_id:"location", asset_id:"asset", inspection_number:"INS-QA", status:"completed", result:"passed", unit_type:"Truck", lineage_kind:kind, predecessor_inspection_id:"inspection-source", revision_reason:"Verify repaired lamp", template_snapshot:{sections:[]}, asset_snapshot:{unitNo:"QA"}};
+    const client = {query:async (sql, values) => {
+      if(sql.startsWith("select archive.*")) return {rows:[{id:"archive-source",revision_number:2,predecessor_inspection_number:"INS-SOURCE"}]};
+      if(sql.startsWith("insert into inspection_print_archives")) { inserted=values; return {rows:[{id:"archive-new",revision_number:values[5],status:"pending"}]}; }
+      return {rows:[]};
+    }};
+    await inspectionRepositoryInternals.archiveCompletedInspection(client,row,[],[],"actor");
+    assert.equal(inserted[4],kind==="correction"?"revised":"original");
+    assert.equal(inserted[5],kind==="correction"?3:1);
+    assert.equal(inserted[6],kind==="correction"?"archive-source":null);
+    assert.equal(inserted[7],kind==="correction"?"Verify repaired lamp":"");
+    assert.equal(JSON.parse(inserted[8]).revisionReason,"Verify repaired lamp");
+    assert.equal(JSON.parse(inserted[8]).lineageKind,kind);
+  }
+});

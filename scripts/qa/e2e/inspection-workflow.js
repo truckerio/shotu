@@ -6,6 +6,14 @@ export const INSPECTION_WORKFLOW_STEPS = Object.freeze(["admin-template-and-modu
 
 function inspectionFrom(result, stage) { const inspection = result.body?.inspection; if (!inspection?.id) throw new Error(`${stage} did not return an inspection.`); return inspection; }
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
+export function validateArchivedPdf(archive, bytes) {
+  if (bytes.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Inspection print archive download is not a PDF.");
+  if (archive.documentSha256 && archive.documentSha256 !== sha256(bytes)) throw new Error("Inspection print archive PDF digest does not match archive metadata.");
+  if (archive.documentByteSize != null && archive.documentByteSize !== bytes.length) throw new Error("Inspection print archive PDF byte size does not match archive metadata.");
+}
+export function validateReinspectionRecord(inspection, predecessorId) {
+  if ((inspection.responses || []).length || inspection.lineage?.kind !== "reinspection" || inspection.lineage?.predecessorInspectionId !== predecessorId) throw new Error("Reinspection did not start blank with typed correction lineage.");
+}
 export function startPayload(inspection) {
   const payload = { expectedVersion: inspection.version, previousReportReviewed:Boolean(inspection.previousReportAvailable) };
   if (String(inspection.unitType || "").toLowerCase() !== "trailer") {
@@ -67,16 +75,12 @@ export async function runApiInspectionWorkflow({ clients, config, createClient, 
   if (!archive.body?.archive?.id) throw new Error("Inspection print archive was not created.");
   const archiveRead = await clients.mechanic.request(`/api/inspections/${encodeURIComponent(inspection.id)}/print-archives/${encodeURIComponent(archive.body.archive.id)}`);
   if (!archiveRead.body?.html) throw new Error("Inspection print archive did not return printable HTML.");
-  if (archive.body.archive.documentSha256 && archive.body.archive.documentSha256 !== sha256(archiveRead.body.html)) throw new Error("Inspection print archive document digest does not match returned bytes.");
-  if (archive.body.archive.documentByteSize != null && archive.body.archive.documentByteSize !== Buffer.byteLength(archiveRead.body.html)) throw new Error("Inspection print archive byte size does not match returned bytes.");
   const pdfPath = archive.body.archive.downloadUrl || `/api/inspections/${encodeURIComponent(inspection.id)}/print-archives/${encodeURIComponent(archive.body.archive.id)}/pdf`;
   const pdf = await clients.mechanic.requestBytes(pdfPath, { expectedContentType: "application/pdf" });
-  if (pdf.bytes.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Inspection print archive download is not a PDF.");
-  if (archive.body.archive.documentSha256 && archive.body.archive.documentSha256 !== sha256(pdf.bytes)) throw new Error("Inspection print archive PDF digest does not match archive metadata.");
-  if (archive.body.archive.documentByteSize != null && archive.body.archive.documentByteSize !== pdf.bytes.length) throw new Error("Inspection print archive PDF byte size does not match archive metadata.");
+  validateArchivedPdf(archive.body.archive, pdf.bytes);
   const replay = await clients.mechanic.request(`/api/inspections/${encodeURIComponent(inspection.id)}/print-archives`, { method: "POST", body: { idempotencyKey: printIdempotencyKey }, expectedStatuses: [201] });
   if (replay.body?.archive?.id !== archive.body.archive.id) throw new Error("Inspection print archive idempotency replay created a different archive.");
-  record("print", { archiveId: archive.body.archive.id, replayedArchiveId: replay.body.archive.id, documentByteSize: Buffer.byteLength(archiveRead.body.html) });
+  record("print", { archiveId: archive.body.archive.id, replayedArchiveId: replay.body.archive.id, documentByteSize: pdf.bytes.length });
   const followUp = (inspection.followUps || []).find((entry) => entry.findingId === followUpFinding.id && entry.status === "open");
   if (!followUp?.version) throw new Error("Completed Office follow-up was not opened.");
   const followedUp = await clients.office.request(`/api/inspections/${encodeURIComponent(inspection.id)}/follow-ups/${encodeURIComponent(followUpFinding.id)}/actions/no-workorder`, { method: "POST", body: { expectedVersion: followUp.version, idempotencyKey: `qa-inspection-follow-up-${randomUUID()}`, reason: "QA verified no repair workorder is required." } });
@@ -94,7 +98,7 @@ export async function runApiInspectionWorkflow({ clients, config, createClient, 
   record("correction", { inspectionId: correction.id });
   const reinspected = await clients.office.request(`/api/inspections/${encodeURIComponent(correction.id)}/actions/reinspect`, { method: "POST", body: { expectedVersion: correction.version, idempotencyKey: `qa-inspection-reinspection-${randomUUID()}`, reason: "QA repair verified.", mechanicUserIds: [actors.mechanic.id], startImmediately: false }, expectedStatuses: [201] });
   const reinspection = inspectionFrom(reinspected, "inspection reinspection");
-  if ((reinspection.responses || []).length || reinspection.lineageKind !== "reinspection" || reinspection.predecessorInspectionId !== correction.id) throw new Error("Reinspection did not start blank with typed correction lineage.");
+  validateReinspectionRecord(reinspection, correction.id);
   const reinspectionStarted = await clients.mechanic.request(`/api/inspections/${encodeURIComponent(reinspection.id)}/actions/start`, { method: "POST", body: startPayload(reinspection) });
   let activeReinspection = inspectionFrom(reinspectionStarted, "reinspection start");
   const reinspectionSaved = await clients.mechanic.request(`/api/inspections/${encodeURIComponent(activeReinspection.id)}/responses`, { method: "PATCH", body: { expectedVersion: activeReinspection.version, responses: itemResponses(activeReinspection).map((response) => ({ itemKey: response.itemKey, response: "pass" })) } });
@@ -105,7 +109,7 @@ export async function runApiInspectionWorkflow({ clients, config, createClient, 
   record("reinspection", { inspectionId: reinspection.id });
   const trailerCreated = await clients.office.request("/api/inspections", { method: "POST", body: inspectionCreatePayload({ location, assetId: config.fixtures.trailerAssetId, mechanicUserId: actors.mechanic.id, label: `${fixtureLabel} trailer` }), expectedStatuses: [201] });
   let trailerInspection = inspectionFrom(trailerCreated, "trailer request");
-  const trailerStarted = await clients.mechanic.request(`/api/inspections/${encodeURIComponent(trailerInspection.id)}/actions/start`, { method: "POST", body: { expectedVersion: trailerInspection.version } }); trailerInspection = inspectionFrom(trailerStarted, "trailer start");
+  const trailerStarted = await clients.mechanic.request(`/api/inspections/${encodeURIComponent(trailerInspection.id)}/actions/start`, { method: "POST", body: startPayload(trailerInspection) }); trailerInspection = inspectionFrom(trailerStarted, "trailer start");
   record("trailer-active-checklist", { inspectionId: trailerInspection.id, inspectionNumber: trailerInspection.inspectionNumber });
   return { inspectionId: inspection.id, inspectionNumber: inspection.inspectionNumber, correctionId: correction.id, reinspectionId: reinspection.id, reinspectionStatus: activeReinspection.status, trailerInspectionId: trailerInspection.id, trailerInspectionNumber: trailerInspection.inspectionNumber, workorderId, workorderNumber: (officeInspection.workorderLinks || [])[0]?.workorderSerial || "", capabilities: config.capabilities, trace };
 }

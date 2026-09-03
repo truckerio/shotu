@@ -1,14 +1,34 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { INSPECTION_REQUIRED_CAPABILITIES } from "./inspection-config.js";
-import { INSPECTION_WORKFLOW_STEPS, inspectionCreatePayload, requiredCapabilityHook, startPayload } from "./inspection-workflow.js";
+import { INSPECTION_WORKFLOW_STEPS, inspectionCreatePayload, requiredCapabilityHook, startPayload, validateArchivedPdf, validateReinspectionRecord } from "./inspection-workflow.js";
 import { createInspectionSchema, inspectionVersionActionSchema } from "../../../src/server/modules/inspections/inspection.schemas.js";
 import { inspectionStartPayload } from "../../../frontend/src/features/inspections/inspection-api-model.js";
 
 test("inspection workflow declares every daily-life stage with implemented capability contracts", () => {
   assert.deepEqual(INSPECTION_WORKFLOW_STEPS, ["admin-template-and-module", "office-request-and-assign", "mechanic-start-save-interrupt-resume", "mechanic-issue-workorder-complete", "summary-link-back", "read-only-slip", "print", "follow-up", "correction", "reinspection"]);
   for (const capability of INSPECTION_REQUIRED_CAPABILITIES) assert.equal(requiredCapabilityHook(capability), true);
+});
+
+test("print metadata validates the PDF, never the separate HTML rendering", async () => {
+  const bytes = Buffer.from("%PDF-1.7\nQA fixture");
+  const archive = { documentSha256: createHash("sha256").update(bytes).digest("hex"), documentByteSize: bytes.length };
+  assert.doesNotThrow(() => validateArchivedPdf(archive, bytes));
+  assert.throws(() => validateArchivedPdf(archive, Buffer.from("<html>QA fixture</html>")), /not a PDF/);
+  assert.throws(() => validateArchivedPdf({...archive, documentSha256:"invalid"}, bytes), /digest/);
+  assert.throws(() => validateArchivedPdf({...archive, documentByteSize:1}, bytes), /byte size/);
+  const source = await readFile(new URL("./inspection-workflow.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /sha256\(archiveRead\.body\.html\)/);
+});
+
+test("reinspection evidence uses the API nested lineage and requires blank answers", () => {
+  const record = {responses:[],lineage:{kind:"reinspection",predecessorInspectionId:"source"}};
+  assert.doesNotThrow(() => validateReinspectionRecord(record, "source"));
+  assert.throws(() => validateReinspectionRecord({...record,responses:[{response:"pass"}]}, "source"), /blank/);
+  assert.throws(() => validateReinspectionRecord(record, "other"), /lineage/);
+  assert.throws(() => validateReinspectionRecord({...record,lineage:{kind:"correction",predecessorInspectionId:"source"}}, "source"), /lineage/);
 });
 
 test("inspection fixture create payload has a bounded idempotency key accepted by the live route schema", () => {
@@ -37,6 +57,8 @@ test("inspection runner keeps live writes behind the configuration gate and repo
   assert.match(source, /requiredCapabilityHook\(capability\)/);
   assert.match(source, /cleanupWorkorderIds/);
   assert.match(workflow, /trailerAssetId/);
+  assert.match(workflow, /body: startPayload\(trailerInspection\)/);
+  assert.match(workflow, /documentByteSize: pdf\.bytes\.length/);
   assert.match(workflow, /actions\/no-workorder/);
   assert.match(workflow, /actions\/correct/);
   assert.match(workflow, /actions\/reinspect/);
