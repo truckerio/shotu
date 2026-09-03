@@ -45,7 +45,8 @@
 }
 
 .used-parts-editor .part-row {
-  grid-template-columns: 28px minmax(120px, 1fr) minmax(116px, .65fr) minmax(150px, 1fr) minmax(160px, auto);
+  column-gap: 12px;
+  grid-template-columns: 28px minmax(0, 1.25fr) 116px minmax(0, 1.4fr) minmax(220px, 1fr);
 }
 
 .used-parts-toolbar {
@@ -79,7 +80,6 @@
 .used-parts-editor .used-part-serialized-row {
   align-items: start;
   background: var(--surface-subtle, #f9fafb);
-  column-gap: 12px;
   padding-block: 10px;
 }
 
@@ -124,19 +124,22 @@
 .used-parts-editor .used-part-serialized-actions {
   align-content: start;
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
 }
 
 .used-parts-editor .used-part-serialized-actions .used-part-serialized-status {
-  flex: 1 0 100%;
+  grid-column: 1 / -1;
 }
 
 .used-parts-editor .used-part-serialized-actions .button {
+  min-width: 0;
   min-height: 34px;
   padding: 6px 10px;
+  white-space: normal;
+  width: 100%;
 }
 
 .used-part-pending-repair {
@@ -305,7 +308,7 @@
   }
 
   .used-parts-editor .used-part-serialized-actions .button {
-    flex: 1 1 140px;
+    min-height: 44px;
   }
 
   .used-part-serialized-confirmation {

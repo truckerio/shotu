@@ -47,10 +47,33 @@ test("serialized part identity uses separate wrapping lines and top-aligned row 
   assert.match(editor, /className="used-part-field used-part-serialized-identity"/);
   assert.match(editor, /className="used-part-serialized-serial"/);
   assert.match(editor, /className="used-part-serialized-kind"/);
-  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;[^}]*column-gap:\s*12px;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;[^}]*min-width:\s*0;/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*left;/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*small\s*\{[^}]*display:\s*block;[^}]*overflow-wrap:\s*anywhere;/s);
+});
+
+test("desktop and tablet rows keep content-independent columns across lifecycle stages", () => {
+  assert.match(
+    css,
+    /\.used-parts-editor\s+\.part-row\s*\{[^}]*column-gap:\s*12px;[^}]*grid-template-columns:\s*28px minmax\(0,\s*1\.25fr\) 116px minmax\(0,\s*1\.4fr\) minmax\(220px,\s*1fr\);/s,
+  );
+  assert.doesNotMatch(
+    css,
+    /\.used-parts-editor\s+\.part-row\s*\{[^}]*grid-template-columns:[^;]*\bauto\b/s,
+  );
+  assert.match(
+    css,
+    /\.used-parts-editor\s+\.used-part-serialized-actions\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
+  );
+  assert.match(
+    css,
+    /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.used-part-serialized-status\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s,
+  );
+  assert.match(
+    css,
+    /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
+  );
 });
 
 test("phone parts editor removes desktop labels", () => {
@@ -61,7 +84,7 @@ test("phone parts editor removes desktop labels", () => {
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-status\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
   assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*flex:\s*1 1 140px;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(mobileCss, /\.used-part-serialized-confirmation\s*\{[^}]*margin-left:\s*0;/s);
 });
 
@@ -70,7 +93,7 @@ test("phone parts row fits 390px and 430px viewports without control overlap", (
 
   assert.match(mobileCss, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+124px;/);
   assert.match(mobileCss, /padding:\s*12px;/);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*flex:\s*1 1 140px;/s);
+  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-height:\s*44px;/s);
 
   for (const viewportWidth of [390, 430]) {
     const cardWidth = viewportWidth - 48;
