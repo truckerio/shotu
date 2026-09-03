@@ -90,3 +90,16 @@ test("mixed-location access derives every inspection action from the record loca
   assert.match(experience, /productModuleCapabilities\(actor, "workorders", active\?\.locationId\)/);
   assert.match(experience, /!activeInspectionAccess\.canWrite \? "read_only"/);
 });
+
+test("visible inspection queues refresh automatically without overwriting active detail work", () => {
+  assert.match(experience, /inspectionRefreshMode\(refreshCycle\.current\)/);
+  assert.match(experience, /enabled: !active, intervalMs: LIVE_QUEUE_REFRESH_INTERVAL_MS/);
+  assert.match(experience, /createLatestRequestGuard\(\)/);
+  assert.match(experience, /loadGeneration\.current\.begin\(\)/);
+  assert.match(experience, /loadGeneration\.current\.isCurrent\(generation\)/);
+  assert.match(experience, /foregroundLoads\.current > 0/);
+  assert.match(experience, /abortBackgroundLoad\.current\?\.\(\)/);
+  assert.match(experience, /loadInspectionRefreshWindow/);
+  assert.match(experience, /loadedCount: Math\.max\(loadedItemCount\.current, 25\)/);
+  assert.match(experience, /items\.length < MAX_LIVE_INSPECTION_ROWS/);
+});

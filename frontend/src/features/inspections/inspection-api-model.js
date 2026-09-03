@@ -47,3 +47,29 @@ export function responsePayload(itemKey, value) {
     } } : {}),
   };
 }
+
+export const MAX_LIVE_INSPECTION_ROWS = 250;
+export const INSPECTION_RECONCILE_EVERY_CYCLES = 20;
+
+export function inspectionRefreshMode(cycle) {
+  return cycle > 0 && cycle % INSPECTION_RECONCILE_EVERY_CYCLES === 0 ? "reconcile" : "fast";
+}
+
+export function mergeFastInspectionPage(currentItems = [], refreshedItems = []) {
+  const refreshedIds = new Set(refreshedItems.map((item) => item.id));
+  return [...refreshedItems, ...currentItems.filter((item) => !refreshedIds.has(item.id))].slice(0, MAX_LIVE_INSPECTION_ROWS);
+}
+
+export async function loadInspectionRefreshWindow(fetchPage, { loadedCount = 25, pageSize = 50 } = {}) {
+  const targetCount = Math.min(MAX_LIVE_INSPECTION_ROWS, Math.max(1, loadedCount));
+  const items = [];
+  let cursor = "";
+  let nextCursor = "";
+  do {
+    const page = await fetchPage({ cursor, limit: Math.min(pageSize, targetCount - items.length) });
+    items.push(...(page.items || []));
+    nextCursor = page.nextCursor || "";
+    cursor = nextCursor;
+  } while (items.length < targetCount && cursor);
+  return { items, nextCursor };
+}
