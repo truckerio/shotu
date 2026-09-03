@@ -5,6 +5,7 @@ import test from "node:test";
 const workspace = readFileSync(new URL("./OfficeWorkspace.jsx", import.meta.url), "utf8");
 const mechanicWorkspace = readFileSync(new URL("../mechanic/MechanicWorkspace.jsx", import.meta.url), "utf8");
 const surveillanceQueueView = readFileSync(new URL("../surveillance/workspace/SurveillanceQueueView.jsx", import.meta.url), "utf8");
+const roleWorkspaceCss = readFileSync(new URL("../role-workspaces.css", import.meta.url), "utf8");
 
 test("Manager uses the shared workspace identity header and a separate page title", () => {
   assert.match(workspace, /<WorkspaceHeader actor=\{actor\} className="role-home-account-header"\s*\/>/);
@@ -27,6 +28,13 @@ test("Manager and Mechanic share one phone Create and profile action owner", () 
     assert.match(source, /className="role-home-account-header"/);
     assert.match(source, /<WorkspaceCreateActions[\s\S]*?actor=\{actor\}[\s\S]*?onCreateWorkorder=\{workorderAccess\.canWrite \? onCreateWorkorder : null\}/);
   }
+});
+
+test("inspection workspaces retain the profile header on phone", () => {
+  assert.match(workspace, /workspace-operations inspection-workspace/);
+  assert.match(mechanicWorkspace, /workspace-operations inspection-workspace/);
+  assert.match(roleWorkspaceCss, /\.workspace-operations\.inspection-workspace > \.role-home-account-header\s*\{\s*display:\s*flex;/);
+  assert.match(roleWorkspaceCss, /\.workspace-operations\.inspection-workspace \.profile-menu-mobile-action\s*\{\s*display:\s*none;/);
 });
 
 test("Manager queue controls clear incompatible Unassigned filters", () => {

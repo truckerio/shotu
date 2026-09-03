@@ -9,7 +9,7 @@ const css = readFileSync(new URL("./inspections.css", import.meta.url), "utf8");
 test("detail uses one radio group per checklist item and only expands issue details when selected", () => {
   assert.match(detail, /type="radio" name=\{item\.key\}/);
   assert.match(detail, /response === "issue" \? <div className="inspection-issue-fields">/);
-  assert.match(detail, /disabled=\{!canComplete \|\| workorderFindings\.length > 0 \|\| saveState !== "Saved"\}/);
+  assert.match(detail, /inspectionCompletionBlockers/);
   assert.match(detail, /restrictedReadOnly && inspection\.status !== "completed"/);
   assert.match(detail, /inspection\.status === "in_progress"/);
   assert.match(detail, /if \(!inspectionResponseShouldSave\(item, value, commit\)\) \{ setSaveState\("Unsaved"\); return; \}/);
@@ -23,13 +23,27 @@ test("inspection queue shares progressive queue and does not render a privileged
   assert.doesNotMatch(queue, /<button className="inspection-row-action"/);
 });
 
-test("inspection UI keeps phone controls at 44px and a single compact detail column", () => {
+test("inspection UI keeps one progressive checklist section open and a bounded desktop rail", () => {
   assert.match(detail, /inspection-detail-layout/);
   assert.match(detail, /inspection-detail-primary/);
   assert.match(detail, /inspection-detail-support/);
   assert.match(detail, /<section className="inspection-detail-primary" aria-label="Inspection checklist">/);
   assert.doesNotMatch(detail, /<main/);
-  assert.match(css, /\.inspection-detail-layout\.has-supporting \{ grid-template-columns: minmax\(0, 1\.65fr\) minmax\(320px, \.75fr\); \}/);
+  assert.match(detail, /const \[activeSection, setActiveSection\]/);
+  assert.match(detail, /aria-expanded=\{open\} aria-controls=\{sectionId\}/);
+  assert.match(detail, /id=\{sectionId\} hidden=\{!open\}/);
+  assert.match(detail, /setActiveSection\(section\.key\)/);
+  assert.match(detail, /setActiveSection\(section\.key\);[\s\S]*requestAnimationFrame/);
+  assert.match(detail, /Findings &amp; workorders/);
+  assert.match(detail, /linkedWorkordersByFinding/);
+  assert.match(detail, /inspection-resolved-finding/);
+  assert.match(detail, /actionError.*role="alert"/);
+  assert.match(detail, /resolvingWorkorder/);
+  assert.match(detail, /workorderEligibilityLoading/);
+  assert.match(detail, /Checking active workorders/);
+  assert.match(detail, /Complete inspection/);
+  assert.match(css, /\.inspection-detail-layout\.has-supporting \{ grid-template-columns: minmax\(0, 1fr\) minmax\(360px, 420px\); \}/);
+  assert.match(css, /@media \(max-width: 1099px\) and \(min-width: 701px\)[\s\S]*\.inspection-detail-layout\.has-supporting,[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.inspection-response-group label,[\s\S]*min-height: 44px/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.inspection-detail-layout\.has-supporting,[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*grid-template-columns: repeat\(3,/);

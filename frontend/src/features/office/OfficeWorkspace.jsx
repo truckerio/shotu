@@ -280,7 +280,7 @@ export function OfficeWorkspace({
   if (product === "inspections" && inspectionAccess.canRead) {
     const switcher = workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); }} /> : null;
     return (
-      <main className="prototype mechanic-home office-home workspace-operations">
+      <main className="prototype mechanic-home office-home workspace-operations inspection-workspace">
         <WorkspaceHeader actor={actor} className="role-home-account-header" />
         <PageHeader title="Inspections" actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => setCreatingInspection(true) : null} />} />
         {switcher}

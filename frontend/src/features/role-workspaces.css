@@ -110,6 +110,14 @@
     display: none;
   }
 
+  .workspace-operations.inspection-workspace > .role-home-account-header {
+    display: flex;
+  }
+
+  .workspace-operations.inspection-workspace .profile-menu-mobile-action {
+    display: none;
+  }
+
   .workspace-operations.mechanic-home {
     padding-inline: 16px;
   }

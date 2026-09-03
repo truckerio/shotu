@@ -18,15 +18,33 @@ test("assignment and workorder link require both product boundaries and carry te
   const record={id:"i",companyId,locationId,assetId:"asset",status:"in_progress",version:2,assignments:[]}; const calls=[];
   await assignInspection(context,"i",{expectedVersion:2,mechanicUserIds:[]},{load:async()=>record,authorizeProduct:async(...args)=>calls.push(args),assign:async(input)=>input});
   assert.equal(calls.at(-1)[2],"write");
-  const link=await linkInspectionToWorkorder(context,"i","finding",{expectedVersion:2,workorderId:"44444444-4444-4444-8444-444444444444",idempotencyKey:"inspection-link-001"},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},requireWorkorder:async()=>({companyId,locationId,assetId:"asset",status:"open"}),link:async(input)=>input});
+  let accessOptions; const link=await linkInspectionToWorkorder(context,"i","finding",{expectedVersion:2,workorderId:"44444444-4444-4444-8444-444444444444",idempotencyKey:"inspection-link-001"},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},requireWorkorder:async(_context,_id,options)=>(accessOptions=options,{companyId,locationId,assetId:"asset",status:"open"}),link:async(input)=>input});
   assert.equal(link.findingId,"finding"); assert.deepEqual(link.companyIds,[companyId]); assert.equal(link.locationId,locationId);
+  assert.deepEqual(accessOptions,{requireLocationMembership:true,allowAvailable:true,allowActiveAtLocation:true});
   const eligible=await eligibleInspectionWorkorders(context,"i",{search:"WO",limit:5},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},listEligible:async(input)=>[input]});
   assert.equal(eligible.items[0].assetId,"asset");
 });
 
 test("workorder links hide an out-of-location or terminal target before persistence", async () => {
   const record={id:"i",companyId,locationId,assetId:"asset",status:"in_progress",version:2,assignments:[]};
-  await assert.rejects(linkInspectionToWorkorder(context,"i","finding",{expectedVersion:2,workorderId:"44444444-4444-4444-8444-444444444444",idempotencyKey:"inspection-link-002"},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},requireWorkorder:async()=>({companyId,locationId:"other",assetId:"asset",status:"closed"}),link:async()=>assert.fail("must not persist")}),/not found/i);
+  const invalidTargets = [
+    { companyId:"other",locationId,assetId:"asset",status:"open" },
+    { companyId,locationId:"other",assetId:"asset",status:"open" },
+    { companyId,locationId,assetId:"other",status:"open" },
+    { companyId,locationId,assetId:"asset",status:"closed" },
+  ];
+  for (const [index,target] of invalidTargets.entries()) await assert.rejects(linkInspectionToWorkorder(context,"i","finding",{expectedVersion:2,workorderId:"44444444-4444-4444-8444-444444444444",idempotencyKey:`inspection-link-negative-${index}`},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},requireWorkorder:async()=>target,link:async()=>assert.fail("must not persist")}),/not found/i);
+});
+
+test("assigned mechanic can discover and link a same-unit active workorder without broad workorder access", async () => {
+  const mechanicContext={actor:{id:userId,role:"mechanic"},companyIds:new Set([companyId]),locationIds:new Set([locationId]),companyRoles:new Map([[companyId,"mechanic"]])};
+  const record={id:"i",companyId,locationId,assetId:"asset",status:"in_progress",version:2,assignments:[{mechanicUserId:userId}]};
+  let listInput;
+  const eligible=await eligibleInspectionWorkorders(mechanicContext,"i",{search:"WO",limit:5},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},listEligible:async(input)=>(listInput=input,[{id:"w",status:"in_progress"}])});
+  assert.equal(listInput.actorId,null); assert.equal(listInput.companyId,companyId); assert.equal(listInput.locationId,locationId); assert.equal(listInput.assetId,"asset");
+  let accessOptions;
+  const linked=await linkInspectionToWorkorder(mechanicContext,"i","finding",{expectedVersion:2,workorderId:"44444444-4444-4444-8444-444444444444",idempotencyKey:"inspection-link-active"},{load:async()=>record,authorizeProduct:async()=>{},authorizeWorkorders:async()=>{},requireWorkorder:async(_context,_id,options)=>(accessOptions=options,{companyId,locationId,assetId:"asset",status:"in_progress"}),link:async(input)=>input});
+  assert.equal(linked.actorId,userId); assert.equal(accessOptions.allowActiveAtLocation,true);
 });
 
 test("completed printing reads the persisted archive rather than rebuilding a live slip", async () => {

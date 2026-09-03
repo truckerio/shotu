@@ -191,7 +191,7 @@ export async function linkInspectionToWorkorder(context, inspectionId, findingId
   await (dependencies.authorizeProduct || authorizeProductModule)(context, { companyId:record.companyId, locationId:record.locationId, moduleKey:"inspections" }, "write");
   await (dependencies.authorizeWorkorders || authorizeProductModule)(context, { companyId:record.companyId, locationId:record.locationId, moduleKey:"workorders" }, "write");
   if (!["mechanic", "office", "admin"].includes(role)) throw permissionDenied();
-  const target = await (dependencies.requireWorkorder || requireWorkorderAccess)(context,input.workorderId,{ requireLocationMembership:true, allowAvailable:true });
+  const target = await (dependencies.requireWorkorder || requireWorkorderAccess)(context,input.workorderId,{ requireLocationMembership:true, allowAvailable:true, allowActiveAtLocation:true });
   if (target.companyId !== record.companyId || target.locationId !== record.locationId || target.assetId !== record.assetId || !["open","accepted","in_progress"].includes(target.status)) throw resourceNotFound("Workorder");
   return (dependencies.link || linkInspectionWorkorder)({ ...input, inspectionId, findingId, companyIds:[...(context.companyIds || [])], locationId:record.locationId, actorId:actor.id });
 }
@@ -200,7 +200,7 @@ export async function eligibleInspectionWorkorders(context, inspectionId, input 
   await (dependencies.authorizeProduct || authorizeProductModule)(context, { companyId:record.companyId, locationId:record.locationId, moduleKey:"inspections" }, "write");
   await (dependencies.authorizeWorkorders || authorizeProductModule)(context, { companyId:record.companyId, locationId:record.locationId, moduleKey:"workorders" }, "write");
   if (!["mechanic", "office", "admin"].includes(role)) throw permissionDenied();
-  return { items:await (dependencies.listEligible || listEligibleInspectionWorkorders)({ companyId:record.companyId, locationId:record.locationId, assetId:record.assetId, actorId:role === "mechanic" ? actor.id : null, search:input.search || "", limit:input.limit || 20 }) };
+  return { items:await (dependencies.listEligible || listEligibleInspectionWorkorders)({ companyId:record.companyId, locationId:record.locationId, assetId:record.assetId, actorId:null, search:input.search || "", limit:input.limit || 20 }) };
 }
 
 export const inspectionServiceInternals={summary,completedSlip,assigned,printSnapshot,stableJson};

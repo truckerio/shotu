@@ -4,9 +4,10 @@ import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { OperationalCollectionTabs } from "../../components/operations/OperationalCollectionPage.jsx";
 import { InspectionDetail } from "./InspectionDetail.jsx";
 import { InspectionQueue } from "./InspectionQueue.jsx";
-import { inspectionFromApi, responsePayload } from "./inspection-api-model.js";
+import { inspectionFromApi, inspectionRefreshMode, loadInspectionRefreshWindow, MAX_LIVE_INSPECTION_ROWS, mergeFastInspectionPage, responsePayload } from "./inspection-api-model.js";
 import { readInspectionSession, writeInspectionSession } from "./inspection-session-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
+import { createLatestRequestGuard, LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import "./inspections.css";
 
 export function InspectionExperience({ actor, projection = "office", initialInspectionId = "", onBack, onCreateWorkorder, onAssign }) {
@@ -19,7 +20,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   const [status, setStatus] = useState(allowedInitialStatuses.includes(initialSession.status) ? initialSession.status : (fullProjection ? "needs_action" : ""));
   const [active, setActive] = useState(null);
   const [mechanics, setMechanics] = useState([]);
-  const [eligibleWorkorders, setEligibleWorkorders] = useState([]);
+  const [eligibleWorkorders, setEligibleWorkorders] = useState(null);
   const [nextCursor, setNextCursor] = useState("");
   const [state, setState] = useState({ loading: true, error: "" });
   const activeRef = useRef(null);
@@ -27,23 +28,74 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   const workorderCreateKeys = useRef(new Map());
   const workorderCreateRequests = useRef(new Map());
   const queueScrollY = useRef(initialSession.scrollY);
+  const loadGeneration = useRef(createLatestRequestGuard());
+  const loadedItemCount = useRef(0);
+  const foregroundLoads = useRef(0);
+  const abortBackgroundLoad = useRef(null);
+  const refreshCycle = useRef(0);
 
-  const load = useCallback(async ({ cursor = "", append = false } = {}) => {
-    setState((current) => ({ ...current, error: "" }));
+  const load = useCallback(async ({ cursor = "", append = false, background = "", signal } = {}) => {
+    if (background && foregroundLoads.current > 0) return true;
+    if (!background) {
+      foregroundLoads.current += 1;
+      abortBackgroundLoad.current?.();
+    }
+    const generation = loadGeneration.current.begin();
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort();
+    signal?.addEventListener("abort", abortFromCaller, { once: true });
+    if (signal?.aborted) controller.abort();
+    if (background) abortBackgroundLoad.current = () => controller.abort();
+    if (!background) setState((current) => ({ ...current, error: "" }));
     try {
-      const params = new URLSearchParams();
-      if (["needs_action", "completed", "in_progress"].includes(status)) params.set("status", status);
-      if (search.trim()) params.set("search", search.trim());
-      if (cursor) params.set("cursor", cursor);
-      const result = await api(`/api/inspections?${params}`);
+      const fetchPage = ({ cursor: pageCursor = "", limit } = {}) => {
+        const params = new URLSearchParams();
+        if (["needs_action", "completed", "in_progress"].includes(status)) params.set("status", status);
+        if (search.trim()) params.set("search", search.trim());
+        if (pageCursor) params.set("cursor", pageCursor);
+        if (limit) params.set("limit", String(limit));
+        return api(`/api/inspections?${params}`, { signal: controller.signal });
+      };
+      const result = background === "reconcile"
+        ? await loadInspectionRefreshWindow(fetchPage, { loadedCount: Math.max(loadedItemCount.current, 25) })
+        : await fetchPage({ cursor });
+      if (controller.signal.aborted || !loadGeneration.current.isCurrent(generation)) return background;
       const nextItems = (result.items || []).map(inspectionFromApi);
-      setItems((current) => append ? [...current, ...nextItems] : nextItems);
-      setNextCursor(result.nextCursor || "");
+      if (background === "reconcile") {
+        setItems(nextItems);
+        loadedItemCount.current = nextItems.length;
+        setNextCursor(result.nextCursor || "");
+      } else if (background === "fast") {
+        setItems((current) => {
+          const updated = mergeFastInspectionPage(current, nextItems);
+          loadedItemCount.current = updated.length;
+          return updated;
+        });
+      } else {
+        setItems((current) => {
+          const updated = (append ? [...current, ...nextItems] : nextItems).slice(0, MAX_LIVE_INSPECTION_ROWS);
+          loadedItemCount.current = updated.length;
+          return updated;
+        });
+        setNextCursor(result.nextCursor || "");
+      }
       setState({ loading: false, error: "" });
-    } catch (error) { setState({ loading: false, error: error.message }); }
+      return true;
+    } catch (error) {
+      if (loadGeneration.current.isCurrent(generation) && !background) setState({ loading: false, error: error.message });
+      return background && controller.signal.aborted;
+    } finally {
+      signal?.removeEventListener("abort", abortFromCaller);
+      if (background && abortBackgroundLoad.current) abortBackgroundLoad.current = null;
+      if (!background) foregroundLoads.current = Math.max(0, foregroundLoads.current - 1);
+    }
   }, [search, status]);
 
   useEffect(() => { const timer = window.setTimeout(() => load(), search ? 250 : 0); return () => window.clearTimeout(timer); }, [load, search]);
+  useAutomaticRefresh(({ signal } = {}) => {
+    refreshCycle.current += 1;
+    return load({ background: inspectionRefreshMode(refreshCycle.current), signal });
+  }, { enabled: !active, intervalMs: LIVE_QUEUE_REFRESH_INTERVAL_MS });
   useEffect(() => { activeRef.current = active; }, [active]);
   useEffect(() => { const id = initialInspectionId || initialSession.activeId; if (id) open({ id }); }, [initialInspectionId]);
   useEffect(() => () => writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current }), [projection, search, status]);
@@ -57,6 +109,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
 
   async function open(record) {
     setState((current) => ({ ...current, error: "" }));
+    setEligibleWorkorders(null);
     queueScrollY.current = window.scrollY;
     writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
     try {
@@ -69,8 +122,10 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       activeRef.current = next; setActive(next);
       const recordWorkorderAccess = productModuleCapabilities(actor, "workorders", result.inspection.locationId);
       if (recordInspectionAccess.canWrite && recordWorkorderAccess.canWrite && onCreateWorkorder) {
-        api(`/api/inspections/${encodeURIComponent(record.id)}/workorders?limit=20`).then((workorders) => setEligibleWorkorders(workorders.items || [])).catch(() => setEligibleWorkorders([]));
-      }
+        api(`/api/inspections/${encodeURIComponent(record.id)}/workorders?limit=20`)
+          .then((workorders) => setEligibleWorkorders(workorders.items || []))
+          .catch((error) => setState((current) => ({ ...current, error: error.message })));
+      } else setEligibleWorkorders([]);
     } catch (error) { setState((current) => ({ ...current, error: error.message })); }
   }
 
@@ -157,7 +212,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       return result;
     }).catch((error) => {
       setState((value) => ({ ...value, error: error.message }));
-      return null;
+      throw error;
     }).finally(() => {
       workorderCreateRequests.current.delete(requestIdentity);
     });
@@ -176,8 +231,14 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
 
   async function linkWorkorder({ findingId, workorderId }) {
     const current = activeRef.current;
-    const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/findings/${encodeURIComponent(findingId)}/workorder-links`, { method: "POST", body: JSON.stringify({ expectedVersion: current.version, workorderId, idempotencyKey: `inspection-link-${findingId}-${workorderId}` }) });
-    const next = inspectionFromApi(result.inspection); activeRef.current = next; setActive(next);
+    setState((value) => ({ ...value, error: "" }));
+    try {
+      const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/findings/${encodeURIComponent(findingId)}/workorder-links`, { method: "POST", body: JSON.stringify({ expectedVersion: current.version, workorderId, idempotencyKey: `inspection-link-${findingId}-${workorderId}` }) });
+      const next = inspectionFromApi(result.inspection); activeRef.current = next; setActive(next);
+    } catch (error) {
+      setState((value) => ({ ...value, error: error.message }));
+      throw error;
+    }
   }
 
   const projectionFor = (inspection) => productModuleCapabilities(actor, "inspections", inspection.locationId).canWrite ? projection : "read_only";
@@ -191,12 +252,12 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     load().finally(() => window.requestAnimationFrame(() => window.scrollTo({ top: queueScrollY.current })));
   }
 
-  if (active) return <><InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onPrint={active.status === "completed" ? print : null} />{state.error ? <p className="inspection-error" role="alert">{state.error}</p> : null}</>;
+  if (active) return <InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} actionError={state.error} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onPrint={active.status === "completed" ? print : null} />;
   return <section className="inspection-experience" aria-label="Inspection workspace">
     {onBack ? <button className="inspection-back" type="button" onClick={onBack}>Back</button> : null}
     {fullProjection ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "needs_action", label: "Needs action" }, { id: "in_progress", label: "In progress" }, { id: "completed", label: "Completed" }]} /> : null}
     {readOnly ? <label className="inspection-status-filter">Status<Dropdown value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All</option><option value="completed">Completed</option></Dropdown></label> : null}
     {state.error ? <p className="inspection-error" role="alert">{state.error}</p> : null}
-    {state.loading ? <p role="status">Loading inspections…</p> : <><InspectionQueue inspections={items} projection={projection} projectionForInspection={projectionFor} search={search} onSearchChange={setSearch} onOpen={open} />{nextCursor ? <button className="inspection-load-more" type="button" onClick={() => load({ cursor: nextCursor, append: true })}>Load more inspections</button> : null}</>}
+    {state.loading ? <p role="status">Loading inspections…</p> : <><InspectionQueue inspections={items} projection={projection} projectionForInspection={projectionFor} search={search} onSearchChange={setSearch} onOpen={open} />{nextCursor && items.length < MAX_LIVE_INSPECTION_ROWS ? <button className="inspection-load-more" type="button" onClick={() => load({ cursor: nextCursor, append: true })}>Load more inspections</button> : null}</>}
   </section>;
 }

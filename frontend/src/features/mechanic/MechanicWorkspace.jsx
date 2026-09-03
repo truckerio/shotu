@@ -164,7 +164,7 @@ export function MechanicWorkspace({
 
   if (product === "inspections" && inspectionAccess.canRead) {
     return (
-      <main className="prototype mechanic-home workspace-operations">
+      <main className="prototype mechanic-home workspace-operations inspection-workspace">
         <WorkspaceHeader actor={actor} className="role-home-account-header" locale={locale} />
         <div className="mechanic-home-content">
           <PageHeader title="Inspections" actions={createActions} />

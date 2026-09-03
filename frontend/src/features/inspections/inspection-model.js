@@ -69,6 +69,18 @@ export function inspectionCanComplete(template, responses = {}) {
   return (template?.sections || []).flatMap((section) => section.items || []).every((item) => responseIsComplete(item, responses[item.key]));
 }
 
+export function inspectionSectionSummary(section, responses = {}) {
+  return inspectionProgress({ sections: [section] }, responses);
+}
+
+export function inspectionCompletionBlockers(template, responses = {}, { saveState = "Saved", unresolvedWorkorderCount = 0 } = {}) {
+  const blockers = [];
+  if (saveState !== "Saved") blockers.push("Wait for inspection changes to save.");
+  if (!inspectionCanComplete(template, responses)) blockers.push("Answer every required check and complete issue details.");
+  if (unresolvedWorkorderCount) blockers.push(`${unresolvedWorkorderCount} issue${unresolvedWorkorderCount === 1 ? "" : "s"} still need${unresolvedWorkorderCount === 1 ? "s" : ""} a workorder.`);
+  return blockers;
+}
+
 export function inspectionMatchesSearch(inspection, search = "") {
   const term = search.trim().toLowerCase();
   if (!term) return true;

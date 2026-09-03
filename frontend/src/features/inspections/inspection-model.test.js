@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inspectionCanComplete, inspectionProgress, inspectionResponseShouldSave, inspectionResult, inspectionActionForRole, inspectionUnitTypeLabel, weeklyInspectionTemplate } from "./inspection-model.js";
+import { inspectionCanComplete, inspectionCompletionBlockers, inspectionProgress, inspectionResponseShouldSave, inspectionResult, inspectionSectionSummary, inspectionActionForRole, inspectionUnitTypeLabel, weeklyInspectionTemplate } from "./inspection-model.js";
 
 test("inspection unit labels accept canonical and lowercase trailer values", () => {
   assert.equal(inspectionUnitTypeLabel("Trailer"), "Trailer");
@@ -45,6 +45,17 @@ test("partial issue edits stay local until every required finding field is valid
   assert.equal(inspectionResponseShouldSave(item, { response: "issue", severity: "attention", note: "Lamp out", disposition: "office_follow_up" }), true);
   assert.equal(inspectionResponseShouldSave(item, { response: "pass" }), true);
   assert.equal(inspectionResponseShouldSave(item, { response: "pass" }, false), false);
+});
+
+test("section summaries and completion blockers preserve actionable inspection state", () => {
+  const template = weeklyInspectionTemplate();
+  const responses = { outside_1: { response: "issue", severity: "attention", note: "Tire worn", disposition: "new_workorder" } };
+  assert.deepEqual(inspectionSectionSummary(template.sections[0], responses), { total: 4, answered: 1, issues: 1, complete: false });
+  assert.deepEqual(inspectionCompletionBlockers(template, responses, { saveState: "Saving", unresolvedWorkorderCount: 1 }), [
+    "Wait for inspection changes to save.",
+    "Answer every required check and complete issue details.",
+    "1 issue still needs a workorder.",
+  ]);
 });
 
 test("row action follows role projection without granting read-only mutation", () => {
