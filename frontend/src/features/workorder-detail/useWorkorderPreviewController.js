@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { replaceRouteSearch, workorderDetailSearch } from "../../app/routes/route-state.js";
+import { inspectionReturnContext, replaceRouteSearch, workorderDetailSearch } from "../../app/routes/route-state.js";
 import { defaultDetailSection } from "./workorder-detail-sections.js";
 
 const PHONE_QUERY = "(max-width: 700px)";
@@ -130,23 +130,24 @@ export function useWorkorderPreviewController({
 
   const selectDetailSection = useCallback((section) => {
     const workorderId = activeWorkorder?.workorder?.id;
+    const inspectionReturn = inspectionReturnContext();
     if (section === "preview" && !isCompact) {
       setSupportingView("preview");
       setPreviewPanelOpen(true);
       if (detailSection === "preview") {
         setDetailSection(defaultDetailSection(actorRole, detailStatus, false));
       }
-      if (workorderId) replaceRouteSearch(workorderDetailSearch(workorderId, "preview"));
+      if (workorderId) replaceRouteSearch(workorderDetailSearch(workorderId, "preview", { inspectionReturn }));
       return;
     }
     if (section === "chat" && !isCompact && !isMechanicDetail) {
       setSupportingView("chat");
       setPreviewPanelOpen(true);
-      if (workorderId) replaceRouteSearch(workorderDetailSearch(workorderId, "chat"));
+      if (workorderId) replaceRouteSearch(workorderDetailSearch(workorderId, "chat", { inspectionReturn }));
       return;
     }
     setDetailSection(section);
-    if (workorderId) replaceRouteSearch(workorderDetailSearch(workorderId, section));
+    if (workorderId) replaceRouteSearch(workorderDetailSearch(workorderId, section, { inspectionReturn }));
   }, [
     activeWorkorder?.workorder?.id,
     actorRole,

@@ -8,6 +8,14 @@ const office = readFileSync(new URL("../../features/office/OfficeWorkspace.jsx",
 const mechanic = readFileSync(new URL("../../features/mechanic/MechanicWorkspace.jsx", import.meta.url), "utf8");
 const admin = readFileSync(new URL("../../features/admin/workspace/OperationsPage.jsx", import.meta.url), "utf8");
 const workorderDetail = readFileSync(new URL("../../features/workorder-detail/WorkorderDetailPage.jsx", import.meta.url), "utf8");
+const previewController = readFileSync(new URL("../../features/workorder-detail/useWorkorderPreviewController.js", import.meta.url), "utf8");
+
+test("every workorder section change preserves inspection context", () => {
+  assert.match(previewController, /const inspectionReturn = inspectionReturnContext\(\)/);
+  for (const section of ['"preview"', '"chat"', "section"]) {
+    assert.ok(previewController.includes(`workorderDetailSearch(workorderId, ${section}, { inspectionReturn })`));
+  }
+});
 
 test("only successful workorder hydration writes inspection return context", () => {
   assert.match(detailRoute, /hydrateOfficeWorkorder\(detail, \{ partRequestId, inspectionReturn \}\)/);

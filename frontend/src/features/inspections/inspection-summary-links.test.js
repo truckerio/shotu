@@ -48,7 +48,7 @@ test("completed Summary owns number-only workorder links and does not leak linke
 
 test("workorder activation uses the caller-owned route contract with inspection return context", () => {
   assert.match(detail, /onOpenWorkorder\(workorder\.id\)/);
-  assert.match(detail, /href=\{workorderDetailSearch\(workorder\.id\)\}/);
+  assert.match(detail, /href=\{workorderDetailSearch\(workorder\.id, "", \{ inspectionReturn: \{ from: "inspection", inspectionId: inspection\.id, anchor: "summary" \} \}\)\}/);
   assert.match(experience, /onOpenWorkorder/);
   assert.match(experience, /onOpenWorkorder=\{onOpenWorkorder \? \(workorderId\) => onOpenWorkorder\(workorderId, \{ from: "inspection", inspectionId: active\.id, anchor: "summary" \}\) : null\}/);
 });
