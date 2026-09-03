@@ -124,7 +124,10 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       if (recordInspectionAccess.canWrite && recordWorkorderAccess.canWrite && onCreateWorkorder) {
         api(`/api/inspections/${encodeURIComponent(record.id)}/workorders?limit=20`)
           .then((workorders) => setEligibleWorkorders(workorders.items || []))
-          .catch((error) => setState((current) => ({ ...current, error: error.message })));
+          .catch((error) => {
+            setEligibleWorkorders(false);
+            setState((current) => ({ ...current, error: error.message }));
+          });
       } else setEligibleWorkorders([]);
     } catch (error) { setState((current) => ({ ...current, error: error.message })); }
   }

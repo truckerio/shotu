@@ -45,6 +45,12 @@ test("inspection completion gives its shared service-history identifier one Post
   assert.doesNotMatch(source, /values\(\$1,'local_inspection',\$2,\$3,[\s\S]*'verified_completed',\$2::uuid\)/);
 });
 
+test("inspection completion gives shared service-history line ordering one PostgreSQL type", async () => {
+  const source = await readFile(new URL("inspections.repo.js", import.meta.url), "utf8");
+  assert.match(source, /values\(\$1,\$2,\$3,\$4::integer::numeric,\$4::integer,'service'/);
+  assert.doesNotMatch(source, /values\(\$1,\$2,\$3,\$4,\$4,'service'/);
+});
+
 test("inspection workorder creation maps the one-active-unit constraint to a public conflict", async () => {
   const activeConflict = Object.assign(new Error("Asset already has an active workorder."), {
     code: "23505",

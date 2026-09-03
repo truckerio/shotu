@@ -55,6 +55,20 @@ test("inspection workorder creation is atomic, retry-safe, and does not open the
   assert.doesNotMatch(experience, /onCreateWorkorder\?\.\(\{ inspectionId:/);
 });
 
+test("mixed workorder dispositions cannot silently route linked-only findings through creation", () => {
+  assert.match(detail, /selectedNewWorkorderFindings = selectedFindings\.filter\(\(finding\) => finding\.disposition === "new_workorder"\)/);
+  assert.match(detail, /if \(!selectedNewWorkorderFindings\.length\) return/);
+  assert.match(detail, /Existing workorder required/);
+  assert.match(detail, /must be linked by Office before completion/);
+});
+
+test("eligible-workorder failures leave loading and expose an unavailable recovery state", () => {
+  assert.match(experience, /setEligibleWorkorders\(false\)/);
+  assert.match(detail, /workorderEligibilityLoading = eligibleWorkorders == null/);
+  assert.match(detail, /workorderEligibilityUnavailable = eligibleWorkorders === false/);
+  assert.match(detail, /Active workorders are unavailable\. Reload the inspection or ask Office/);
+});
+
 test("detail exposes keyboard-reachable next unchecked navigation and Office/Admin assignment without native selects", () => {
   assert.match(detail, /id=\{`inspection-check-\$\{item\.key\}`\}/);
   assert.match(detail, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);

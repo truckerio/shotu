@@ -159,7 +159,7 @@ export async function transitionInspection(input, dependencies = {}) {
         values($1,'local_inspection',$2::uuid::text,$3,'completed',$4,$5,now(),now(),$6::jsonb,now(),$5,'verified_completed',$2::uuid)
         on conflict(company_id,source_provider,external_id) do nothing`,[before.company_id,before.id,before.inspection_number,before.asset_id,before.requested_at,JSON.stringify({ result, inspectionKind: before.inspection_kind })]);
       const history=await client.query("select id from service_history_orders where company_id=$1 and source_provider='local_inspection' and external_id=$2",[before.company_id,before.id]); for(const [index,finding] of findings.rows.entries())await client.query(`insert into service_history_lines(company_id,service_order_id,external_id,sequence,line_index,line_kind,description,raw_payload)
-        values($1,$2,$3,$4,$4,'service',$5,$6::jsonb) on conflict(company_id,service_order_id,external_id) do nothing`,[before.company_id,history.rows[0].id,finding.id,index,finding.note,JSON.stringify({ severity:finding.severity })]);
+        values($1,$2,$3,$4::integer::numeric,$4::integer,'service',$5,$6::jsonb) on conflict(company_id,service_order_id,external_id) do nothing`,[before.company_id,history.rows[0].id,finding.id,index,finding.note,JSON.stringify({ severity:finding.severity })]);
     }
     const updated=(await client.query(`update inspections set status=$2,result=$3,final_notes=case when $2='completed' then $4 else final_notes end,
       started_at=case when $2='in_progress' then coalesce(started_at,now()) else started_at end,completed_at=case when $2='completed' then now() else completed_at end,
