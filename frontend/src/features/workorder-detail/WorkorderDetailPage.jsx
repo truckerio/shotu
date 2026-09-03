@@ -32,7 +32,7 @@ import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOd
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
-import { workspaceSearchForRole } from "../../app/routes/route-state.js";
+import { inspectionWorkspaceSearch, workspaceSearchForRole } from "../../app/routes/route-state.js";
 import {
   resolveWorkorderModulePolicy,
   WORKORDER_MODULE_IDS,
@@ -59,6 +59,22 @@ function detailParent(actorRole, isOfficeDetail, locale) {
     label: actorRole === "admin" ? "Operations" : isOfficeDetail ? "Office" : interfaceText(locale, "mechanic.myWork"),
     href: url.toString(),
   };
+}
+
+function InspectionSourceReferences({ detailStatus, inspectionContext, inspectionContextUnavailable, actorRole }) {
+  if (detailStatus !== "closed") return null;
+  const sources = inspectionContext?.sources || [];
+  if (!sources.length) return inspectionContextUnavailable ? <p className="workorder-inspection-context-unavailable" role="status">Inspection history is unavailable.</p> : null;
+  const exactOne = sources.length === 1;
+  const multiple = !exactOne;
+  return <section className="workorder-inspection-sources" aria-label="Source inspections">
+    <strong>{multiple ? "Choose source inspection" : "Source inspection"}</strong>
+    {sources.map((source) => <div key={source.inspectionId}>
+      <span>{source.inspectionNumber || "Inspection"}</span>
+      <a href={inspectionWorkspaceSearch(actorRole, source.inspectionId)}>View inspection</a>
+      {source.eligible ? <a href={inspectionWorkspaceSearch(actorRole, source.inspectionId, "reinspect")}>Reinspect</a> : source.blockerMessage ? <small>{source.blockerMessage}</small> : <small>Reinspection is not available.</small>}
+    </div>)}
+  </section>;
 }
 
 export function WorkorderDetailPage({
@@ -417,6 +433,12 @@ export function WorkorderDetailPage({
             ) : null,
           children: (
             <>
+            <InspectionSourceReferences
+              detailStatus={detailStatus}
+              inspectionContext={activeWorkorder.inspectionContext}
+              inspectionContextUnavailable={activeWorkorder.inspectionContextUnavailable}
+              actorRole={actor.role}
+            />
             {isMechanicDetail && unitPolicy.canRead ? (
               <div className="workorder-object-inline-detail">
                 <span>{t("detail.assetDetails")}</span>

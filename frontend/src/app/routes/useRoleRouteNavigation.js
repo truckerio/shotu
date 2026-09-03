@@ -4,6 +4,7 @@ import { createDraftBaselineFromForm, resetWorkorderFormForCreate } from "./role
 import {
   createWorkorderSearch,
   defaultWorkspaceForRole,
+  inspectionReturnContext,
   replaceRouteSearch,
   workspaceSearchForRole,
 } from "./route-state.js";
@@ -71,6 +72,7 @@ export function useRoleRouteNavigation({
   ]);
 
   const finishRoleWorkspace = useCallback(() => {
+    const inspectionReturn = inspectionReturnContext();
     setDraftLeaveOpen(false);
     setDraftLeaveBusy(false);
     setActiveWorkorder(null);
@@ -78,7 +80,7 @@ export function useRoleRouteNavigation({
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace(defaultWorkspaceForRole(actor.role));
-    replaceRouteSearch(workspaceSearchForRole(actor.role));
+    replaceRouteSearch(workspaceSearchForRole(actor.role, { inspectionReturn }));
   }, [
     actor.role,
     resetVehicleLookup,

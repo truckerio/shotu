@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { templateRepositoryInternals } from "./template-definitions.repo.js";
+import { readFile } from "node:fs/promises";
+import { archiveInspectionTemplateVersion, resolvePublishedTemplateForInspection, saveTemplateAssignment, templateRepositoryInternals } from "./template-definitions.repo.js";
 
 test("publish repository rejects inspection assignment unit-type mismatches in both directions", () => {
   for (const [definitionType, assignmentType] of [["Truck", "Trailer"], ["Trailer", "Truck"]]) {
@@ -9,4 +10,28 @@ test("publish repository rejects inspection assignment unit-type mismatches in b
       (error) => error.code === "TEMPLATE_ASSIGNMENT_UNIT_MISMATCH" && error.statusCode === 400,
     );
   }
+});
+
+test("standalone assignment accepts only a published version from the same family and unit type", async () => {
+  let lookup;
+  const client={async query(sql,values){if(["begin","rollback"].includes(sql)||sql.startsWith("select pg_advisory"))return{rows:[]};if(sql.includes("join template_definitions definition")){lookup={sql,values};return{rows:[]};}throw new Error(`Unexpected query: ${sql}`);},release(){}};
+  await assert.rejects(saveTemplateAssignment({companyId:"company-1",locationId:null,familyKey:"inspection",applicabilityKey:"Truck",templateVersionId:"trailer-version",expectedVersion:0,actorId:"actor-1"},{pool:{connect:async()=>client}}),(error)=>error.statusCode===409&&/same family and unit type/i.test(error.message));
+  assert.match(lookup.sql,/definition\.family_key=\$3 and definition\.applicability_key=\$4/);
+  assert.deepEqual(lookup.values,["trailer-version","company-1","inspection","Truck"]);
+});
+
+test("archive atomically replaces every assignment and exactly replays its command",async()=>{const companyId="11111111-1111-4111-8111-111111111111",versionId="22222222-2222-4222-8222-222222222222",replacementId="33333333-3333-4333-8333-333333333333",assignmentId="44444444-4444-4444-8444-444444444444",actorId="55555555-5555-4555-8555-555555555555";let commandHash;const target={id:versionId,company_id:companyId,template_id:"66666666-6666-4666-8666-666666666666",version_number:2,state:"published",optimistic_version:4,family_schema_version:1,renderer_version:"inspection-slip-v1",definition:{},definition_sha256:"a".repeat(64),published_at:"2026-01-01",published_by_user_id:actorId,family_key:"inspection",applicability_key:"Truck"};const assignment={id:assignmentId,company_id:companyId,location_id:null,family_key:"inspection",applicability_key:"Truck",template_version_id:versionId,version:3};function client(replay=false){return{async query(sql,values){if(["begin","commit","rollback"].includes(sql)||sql.startsWith("select pg_advisory"))return{rows:[]};if(sql.includes("from template_archive_commands command"))return{rows:replay?[{template_version_id:versionId,request_sha256:commandHash}]:[]};if(sql.includes("select version.id,definition.family_key"))return{rows:[target]};if(sql.includes("version.state='published'")&&sql.includes("for update of version"))return{rows:[target]};if(sql.startsWith("select * from template_assignments"))return{rows:[assignment]};if(sql.includes("select replacement.id"))return{rows:[{id:replacementId}]};if(sql.startsWith("update template_assignments"))return{rows:[{...assignment,template_version_id:replacementId,version:4}]};if(sql.startsWith("update template_versions set state='archived'"))return{rows:[{...target,state:"archived",optimistic_version:5}]};if(sql.startsWith("insert into template_archive_commands")){commandHash=values[4];return{rows:[{id:"77777777-7777-4777-8777-777777777777"}]};}if(sql.startsWith("insert into template_archive_command_replacements")||sql.startsWith("insert into template_audit_events"))return{rows:[]};if(sql.startsWith("select * from template_versions"))return{rows:[{...target,state:"archived",optimistic_version:5}]};if(sql.startsWith("select assignment_id"))return{rows:[{assignment_id:assignmentId,replacement_version_id:replacementId,assignment_version_after:4}]};throw new Error(`Unexpected query: ${sql}`);},release(){}};}const input={companyId,versionId,expectedVersion:4,actorId,idempotencyKey:"template-archive-001",replacements:[{assignmentId,expectedVersion:3,replacementVersionId:replacementId}]};const first=await archiveInspectionTemplateVersion(input,{pool:{connect:async()=>client(false)}});assert.equal(first.version.state,"archived");assert.equal(first.replayed,false);const second=await archiveInspectionTemplateVersion(input,{pool:{connect:async()=>client(true)}});assert.equal(second.replayed,true);assert.deepEqual(second.replacements,first.replacements);await assert.rejects(archiveInspectionTemplateVersion({...input,replacements:[]},{pool:{connect:async()=>client(true)}}),(error)=>error.statusCode===409);});
+
+test("archive rejects partial assignment replacement before any assignment update",async()=>{let updated=false;const client={async query(sql){if(["begin","rollback"].includes(sql)||sql.startsWith("select pg_advisory"))return{rows:[]};if(sql.includes("from template_archive_commands command"))return{rows:[]};if(sql.includes("select version.id,definition.family_key")||sql.includes("for update of version"))return{rows:[{id:"v",company_id:"c",family_key:"inspection",applicability_key:"Truck",state:"published",optimistic_version:1}]};if(sql.startsWith("select * from template_assignments"))return{rows:[{id:"a",version:1},{id:"b",version:1}]};if(sql.startsWith("update template_assignments")){updated=true;return{rows:[]};}throw new Error(`Unexpected query: ${sql}`);},release(){}};await assert.rejects(archiveInspectionTemplateVersion({companyId:"c",versionId:"v",expectedVersion:1,actorId:"u",idempotencyKey:"template-archive-partial",replacements:[{assignmentId:"a",expectedVersion:1,replacementVersionId:"r"}]},{pool:{connect:async()=>client}}),/every active assignment/i);assert.equal(updated,false);});
+
+test("migration preflights unsafe assignments and makes archive evidence immutable",async()=>{const sql=await readFile(new URL("../migrations/108_template_archive_replacement.sql",import.meta.url),"utf8");assert.match(sql,/Migration 108 blocked: an active template assignment references a non-published version/);assert.match(sql,/template_assignments_published_only/);assert.match(sql,/for key share/);assert.match(sql,/create table template_archive_commands/);assert.match(sql,/template_audit_events_append_only/);});
+
+test("assigned versions cannot be archived by bypassing replacement",async()=>{const sql=await readFile(new URL("../migrations/112_template_assigned_archive_guard.sql",import.meta.url),"utf8");assert.match(sql,/prevent_assigned_template_archive/);assert.match(sql,/template_versions_assigned_archive_guard/);assert.match(sql,/Template version is still assigned/);assert.doesNotMatch(sql,/delete from template_assignments|update template_assignments/i);});
+
+test("inspection template resolution never manufactures a preset when assignment is missing",async()=>{
+  const statements=[];
+  const client={async query(sql){statements.push(sql);if(sql.startsWith("select pg_advisory"))return{rows:[]};if(sql.includes("from template_assignments assignment"))return{rows:[]};throw new Error(`Unexpected query: ${sql}`);}};
+  const resolved=await resolvePublishedTemplateForInspection(client,{companyId:"company-1",locationId:"location-1",unitType:"Truck",actorId:"actor-1"});
+  assert.equal(resolved,null);
+  assert.equal(statements.some((sql)=>/^\s*insert into template_/i.test(sql)),false);
 });

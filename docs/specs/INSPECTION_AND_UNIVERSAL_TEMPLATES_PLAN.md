@@ -2,8 +2,8 @@
 
 ## Metadata
 
-- **Date:** 2026-09-01
-- **Status:** Ready for weekly-first staged implementation; implementation is not authorized by this document
+- **Date:** 2026-09-03
+- **Status:** Weekly-first implementation in progress under explicit user authorization; staging evidence remains required
 - **Initial delivery:** Minimal weekly truck and trailer inspections and their editable templates
 - **Future delivery:** Annual/FMCSA Periodic inspections, company-defined workorder documents, and other typed operational templates
 - **Architecture:** Modular monolith; application-owned records and immutable template snapshots
@@ -26,6 +26,7 @@ Replace the proposed Admin-only Inspection Templates page with one company-wide 
 - Admin template builder for truck and trailer inspections.
 - Safe template catalog designed to add a workorder builder later.
 - Workorder creation or explicit linking from one or more inspection findings.
+- Number-only linked-workorder navigation from the inspection summary and a typed reinspection path after repair.
 - Immutable completed inspection and print evidence.
 - A permission-controlled Inspection module with Off, Read only, and Full access modes.
 - A minimal read-only inspection mode in the existing Office workspace for authorized dispatch and guard users.
@@ -41,6 +42,7 @@ Replace the proposed Admin-only Inspection Templates page with one company-wide 
 - Fleet-management dashboards, maintenance forecasting, or customer portals.
 - Gate approvals, load-release decisions, truck-trailer pairing, or new guard/dispatcher roles.
 - Replacing the current workorder print renderer or location workorder templates before a separately verified migration.
+- Treating workorder closure as proof that a unit is safe or automatically releasing an out-of-service unit.
 - Annual/FMCSA Periodic inspection presets, qualification records, regulated certification, and periodic-inspection retention workflows.
 
 ## 3. Regulatory and checklist baseline
@@ -86,16 +88,18 @@ The trigger label is **Create**. Menu items use exactly **Workorder** and **Insp
 2. Select the asset. Its `unit_type` resolves the Weekly Truck or Weekly Trailer preset by default.
 3. If no exact asset exists, use **Create local unit** with an explicit unit type and stable asset identity.
 4. Derive company and location when unambiguous; ask only when the actor has a real choice.
-5. Office/Admin selects one or more mechanics. The first is primary.
+5. Office/Admin selects one responsible primary mechanic and may add support mechanics only when the inspection genuinely needs collaboration.
 6. Put optional due date and office instructions under **More details**.
-7. Mechanic-created inspection assigns the current mechanic and starts immediately.
+7. Mechanic-created inspection assigns the current mechanic but does not bypass the explicit Start gate. Starting captures current Truck odometer, optional engine hours, and prior-report review evidence when history exists; Trailer start accepts no Truck readings.
 8. Save an immutable template-version snapshot on the inspection.
 
-V1 has no inspection-type selector. Truck or trailer type resolves the corresponding active weekly template automatically; annual/periodic choices do not appear in the create flow.
+V1 has no inspection-type selector. Truck or trailer type resolves the one active weekly template assignment automatically; annual/periodic choices do not appear in the create flow. Several equally valid assignments are a configuration conflict, not a decision pushed onto the mechanic.
 
 The created record derives and stores inspection number, status, inspection kind, preset/template version, requester, assignees, company, location, unit identity, requested/due/started/completed timestamps, and audit/version metadata. Users enter only values that cannot safely be derived.
 
 Inspection creation must require a real `asset_id`. A text-only unit cannot meet the requirement that every inspection appears in exact-unit service history. Manual creation must check normalized unit number, VIN, and plate for likely duplicates and require explicit confirmation instead of silently producing another asset.
+
+Creation is idempotent and duplicate-safe. Use an actor-scoped idempotency key/request hash plus an asset-scoped transaction lock. V1 permits only one active Weekly Truck or Weekly Trailer inspection for the same company, asset, and applicability family across requested, assigned, and in-progress states. When one exists, open its number instead of creating another. A correction or reinspection may start only after its predecessor is completed and must still respect any other active weekly inspection for that asset.
 
 Current workorder lookup prevents choosing an asset with an active workorder. Inspection lookup must reuse search and unit-summary components but use an inspection-specific availability policy: an active workorder does not prevent inspecting that unit.
 
@@ -136,6 +140,9 @@ Rules:
 - Response saves use `expectedVersion`; stale updates return `409` without overwriting newer work.
 - Start, response, assignment, disposition, completion, cancellation, and revision events are append-only.
 - Completed inspections cannot be reopened in place. Corrections create a revision with a reason and predecessor.
+- Exactly one active primary mechanic owns completion accountability. Support mechanics may enter responses when authorized, and every response records its last actor, but only the primary mechanic or an Admin explicitly acting as inspector may complete. Reassignment changes the primary through an audited event; it never rewrites response authorship.
+- Completion first flushes the current response, waits for all saves to settle, then submits the server-confirmed `expectedVersion`. Dirty, saving, failed, retrying, or conflicted state cannot complete.
+- Server autosave is canonical. Any client retry cache is actor-and-inspection scoped, short-lived, cleared on logout/completion/cancellation, never presented as saved, and never reused by another signed-in account. Offline completion is not supported in V1.
 
 Overall result is derived and then confirmed by the mechanic:
 
@@ -144,6 +151,14 @@ Overall result is derived and then confirmed by the mechanic:
 - Out of service
 
 An Issue or Out-of-service item prevents a Passed result. Internally an Issue remains a typed defect/finding state. The application records the result; it does not make an automated legal determination that a vehicle is safe to operate.
+
+Interruption and scheduling rules:
+
+- Store due timestamps in UTC and display them in the inspection location’s configured timezone with the timezone visible anywhere day boundaries matter. A DST or browser-timezone change cannot silently move the operational due day.
+- Requested and assigned inspections may be cancelled by Office/Admin with a reason. Cancelling an in-progress inspection requires explicit confirmation that saved responses will remain audit evidence but no completed inspection or service-history record will be created.
+- Reassignment during in-progress work preserves all server-confirmed answers and response authorship. The removed mechanic loses mutation access on the next request and receives a clear access-changed state; unsynced local retries are never submitted under the replacement mechanic.
+- Do not auto-cancel or auto-complete stale inspections. Surface overdue/stale age in Office Needs action and require an explicit reassignment, cancellation, or continuation decision.
+- If the unit becomes inactive or its company/location ownership changes after request, keep the evidence readable but block start/continuation until an authorized Office/Admin resolves the unit and scope conflict. Never silently retarget an inspection to another asset.
 
 ### 4.4 Workorder from a finding
 
@@ -168,6 +183,23 @@ Current database policy permits only one active workorder per asset. When one ex
 - Cancel and return.
 
 Never create a second conflicting workorder, silently attach findings, or weaken `operational_workorders_one_active_per_asset`.
+
+Inspection completion and repair completion are deliberately separate:
+
+- **Complete inspection** records what the mechanic observed. It remains blocked until every Issue has a valid disposition and every disposition that promises a workorder has a committed reciprocal link.
+- It does not wait for the linked workorder to be finished. Blocking completion until repair would falsify the inspection timestamp, leave evidence in a draft state, and mix inspection ownership with repair ownership.
+- Workorder progress does not rewrite the completed inspection result. The linked workorder is the repair record; a reinspection is new evidence that follows it.
+- A workorder reaching `mechanic_done` is not sufficient for reinspection eligibility when manager approval is part of the canonical workflow. Use the server-owned terminal repair state (`closed`, plus any later terminal export state such as `odoo_entered`).
+- A completed Out-of-service inspection remains Out of service even after repair closure. A passing reinspection may support a separate return-to-service decision, but the Inspection module must not silently make that decision.
+
+Completed inspections may still carry operational follow-up without becoming editable. Model that separately from inspection lifecycle:
+
+- A finding completed as **Office follow-up required** creates an open follow-up obligation. Inspection status remains Completed and its result, responses, notes, completion time, and original archive remain immutable.
+- Full Office/Admin users see completed inspections with open obligations in **Needs action** through a derived `actionState`; do not overload lifecycle status or move the inspection back to In progress.
+- Office/Admin resolves the obligation by creating/linking the canonical workorder or recording an authorized no-workorder decision with reason. The command is atomic, idempotent, versioned, and append-only.
+- A post-completion link updates the live Summary and service-history relationship only. It does not regenerate or alter the original completed archive.
+- If a linked workorder is later cancelled, deleted by an exceptional administrative process, moved out of scope, or otherwise becomes ineligible, reopen a repair-follow-up obligation without changing the completed inspection. Reinspection remains unavailable until Office resolves the exception.
+- Queue counts distinguish requested/assignment work from completed follow-up work while presenting both under **Needs action**. The row states the required action instead of making Office open every record.
 
 ### 4.5 Inspection module access
 
@@ -257,7 +289,7 @@ Initial inspection block types:
 - Unit-identity field group.
 - Inspection metadata field group.
 - Findings summary.
-- Related-workorders list.
+- Related-workorder indicator. In the immutable archive this is neutral (`Workorder linked`); authorized live links belong to application Summary UI, not the template snapshot.
 - Physical-signature line.
 - Page break.
 
@@ -299,6 +331,7 @@ Suggested constraints:
 - One published company-default assignment per family and applicability key.
 - One location override per family and applicability key.
 - Draft/published/archived state checks.
+- A version assigned for new inspections cannot be archived until Admin first assigns another published version. Archiving blocks new selection but never removes historical or in-progress access.
 - Optimistic version on drafts and assignments.
 - Definition payload, item count, depth, and printable-size limits.
 - No hard deletion when any operational record references a version.
@@ -312,8 +345,20 @@ Inspection domain tables stay typed rather than becoming generic template respon
 - `inspection_events`
 - `inspection_findings`
 - `inspection_workorder_links`
+- `inspection_finding_follow_ups`
 - `inspection_print_archives`
 - `inspection_serial_counters`
+
+Reinspection needs typed lineage, not reuse of the correction path without a discriminator:
+
+- Add `predecessor_inspection_id` plus `lineage_kind = correction | reinspection` (or an equivalent constrained lineage table). Existing predecessor rows must be migrated to an explicit kind; null or inferred production semantics are not acceptable after cutover.
+- A correction explains why a completed record was replaced for record accuracy. A reinspection records a later physical check after attention or repair. They must have different actions, labels, events, and audit reasons.
+- A correction starts from the completed predecessor’s captured answers and identity, preserves the original observation/completion time, records corrected fields, reason, correcting actor, and corrected time, and generates a revision-labelled successor archive. It is not a second physical inspection and must not create a second service-history event/count. Service history groups the revision chain and opens the latest effective revision while retaining original access.
+- A reinspection receives a new inspection number, current resolved weekly template snapshot, new observation timestamps, blank responses, result, archive, and separate service-history entry. Source findings remain read-only context and are never copied as answers. It never changes or reopens its predecessor.
+- Keep workorder status live in the Workorder domain. The inspection detail action projection may expose only an authorization-safe `canReinspect` decision and blocker code; do not copy mutable status into the completed inspection or its print archive.
+- Deduplicate summary workorder links by workorder ID because several findings may intentionally point to the same workorder.
+- Add a partial uniqueness constraint or equivalent asset-scoped command guard for one active weekly inspection per company/asset/applicability family. Database enforcement and service-level user guidance are both required.
+- Follow-up state belongs to finding obligations, not `inspections.status`: `open | resolved_workorder | resolved_no_workorder | reopened`. Resolution events retain before/after state, actor, reason/link, and source workorder status that triggered reopening.
 
 ## 6. Default inspection content
 
@@ -410,9 +455,13 @@ POST   /api/inspections/:inspectionId/actions/assign
 POST   /api/inspections/:inspectionId/actions/start
 POST   /api/inspections/:inspectionId/actions/complete
 POST   /api/inspections/:inspectionId/actions/cancel
-POST   /api/inspections/:inspectionId/actions/revise
+POST   /api/inspections/:inspectionId/actions/correct
+POST   /api/inspections/:inspectionId/actions/reinspect
 POST   /api/inspections/:inspectionId/workorders
 POST   /api/inspections/:inspectionId/workorder-links
+GET    /api/inspections/:inspectionId/follow-ups
+POST   /api/inspections/:inspectionId/follow-ups/:findingId/actions/link-workorder
+POST   /api/inspections/:inspectionId/follow-ups/:findingId/actions/no-workorder
 GET    /api/inspections/:inspectionId/slip-preview
 GET    /api/inspections/:inspectionId/print-archives/current
 POST   /api/inspections/:inspectionId/print-archives
@@ -442,7 +491,7 @@ AND role/action permission
 AND lifecycle/version rule
 ```
 
-An explicit module Off decision is a hard deny. Read only permits summary lists plus completed-detail, read-only slip preview, and existing completed-archive download through GET routes; all POST/PATCH inspection operations fail. Archive creation remains a Full/Admin or completion-transaction operation. Workorders Off independently denies workorder queues, search, detail, creation, linkage, and related-workorder navigation, even for an Office role that historically had workorder permission.
+An explicit module Off decision is a hard deny. Read only permits summary lists plus completed-detail, read-only slip preview, and existing completed-archive download through GET routes; all POST/PATCH inspection operations, including reinspection creation, fail. Archive creation remains a Full/Admin or completion-transaction operation. Workorders Off independently denies workorder queues, search, detail, creation, linkage, and related-workorder navigation, even for an Office role that historically had workorder permission.
 
 Role baseline when the Inspection module is Full:
 
@@ -451,14 +500,15 @@ Role baseline when the Inspection module is Full:
 | Create self inspection | Yes | No | No | No |
 | Create inspection request | No | Yes | Yes | No |
 | Assign/reassign mechanics | No | Yes | Yes | No |
-| Complete assigned inspection | Yes | No | Yes when explicitly acting as inspector | No |
+| Complete assigned inspection | Primary mechanic only | No | Yes when explicitly acting as inspector | No |
 | Read authorized inspection | Assigned/location scope | Company and location scope | Company scope | Read-only only if separately enabled |
 | Create/link workorder from finding | Subject to workorder permissions | Yes | Yes | No |
+| Create reinspection | Yes for self when eligible | Request/assign when eligible | Yes when eligible | No |
 | Manage templates and assignments | No | No | Yes | No |
 
 Every server operation enforces company membership, location scope, assignment or administrative capability, lifecycle, and current expected version. UI visibility is not authorization. Cross-company, cross-location, and unauthorized record IDs return resource-not-found semantics and make no mutation.
 
-Read-only projections must contain inspection data only. Unfinished inspections expose summary status in the list but not draft checklist responses or notes. Completed slips may expose unit identity, inspection number/status/result, completed date, mechanic display name, checklist answers, findings, notes intended for the slip, and the immutable print archive. They must not serialize workorder concern, parts, labor, pricing, customer-private notes, assignments, chat, or workorder URLs. A related workorder may be represented only as a neutral “Workorder linked” indicator unless the actor separately has Workorders access.
+Read-only projections must contain inspection data only. Unfinished inspections expose summary status in the list but not draft checklist responses or notes. Completed slips may expose unit identity, inspection number/status/result, completed date, mechanic display name, checklist answers, findings, notes intended for the slip, and the immutable print archive. They must not serialize workorder concern, parts, labor, pricing, customer-private notes, assignments, chat, or workorder URLs. A related workorder may be represented only as a neutral “Workorder linked” indicator unless the actor separately has Workorders access. When the actor has Workorders access, the live inspection detail may expose authorized workorder identity and a canonical navigation target; the immutable slip/archive remains a completion-time document and does not gain live repair status.
 
 Permission changes take effect on the next authorized request and bootstrap refresh. Cached list/detail responses must be private and scoped by actor, company, location, and effective module mode. Search input is schema-validated and bounded. Rate-limit abusive search and document-download traffic. Audit module changes, denied access, archive creation, and print/download events; use ordinary redacted request telemetry for successful list/detail reads so audit storage does not grow with every keystroke.
 
@@ -495,6 +545,8 @@ On completed inspection:
 - Display inspection number, result, defect count, notes, and related workorders only when the actor has the corresponding access.
 - Link to inspection detail when the actor remains authorized.
 
+Correction revisions do not add another service occurrence. Group the lineage as one inspection record, retain access to every immutable revision, and use the latest effective correction for display. Reinspections are separate physical observations and therefore separate service-history records linked back to their source.
+
 Only completed inspections enter durable service history. Requested, cancelled, and abandoned drafts stay in operational/audit views. Add record-kind filters and compact inspection summaries so frequent checks do not bury repairs.
 
 Primary owners:
@@ -508,19 +560,33 @@ Primary owners:
 
 Create `shared/inspection-template.js`. Reuse the safe HTML escaping, browser preview, Chromium PDF generation, hashing, immutable archive, idempotency, contained storage, and integrity-verification patterns from workorder printing. Do not force inspection data through `shared/workorder-template.js` or workorder archive tables.
 
+### 9.1 Current staging repair prerequisite
+
+Before linked-summary or reinspection work is released, recheck and, if still present, repair the inspection print-archive integrity failure last reproduced on staging on 2026-09-02. That evidence showed legacy completed archives hashing a JavaScript `Date` as an empty object before JSONB persisted it as an ISO string, so a later read recomputed a different digest and returned `409 INSPECTION_PRINT_ARCHIVE_INTEGRITY_FAILURE`. If staging has already been remediated, retain the regression gates below and record fresh proof rather than repeating a repair blindly.
+
+The repair must:
+
+- Canonicalize timestamp values before both archive persistence and digest generation so write-time and read-time representations are identical.
+- Add a compatibility migration or narrowly scoped legacy-verification path for existing archives whose stored digest matches the confirmed legacy representation. Never turn off integrity checks or accept an arbitrary mismatch.
+- Record which archives were repaired or accepted through the legacy path, store newly generated immutable PDF bytes with their digest and byte length in durable database-backed archive storage, and make the operation idempotent. Temporary Chromium files are deleted after capture.
+- Prove an existing affected completed inspection and a newly completed inspection can both preview, download, and print on staging.
+- Keep popup handling secondary: open the preview only after the authorized archive request succeeds, or close the provisional window on failure.
+
 Printed inspection slip:
 
 - Company/shop heading.
 - Inspection number and template-version label.
-- Unit, VIN/serial, plate, mileage, location, date/time, and mechanic.
+- Unit, VIN/serial, plate, captured odometer, optional engine hours, prior-report review evidence, location, date/time, and mechanic.
 - Sectioned checklist with Pass/Issue/N/A boxes for weekly forms.
-- Finding notes and related workorder numbers only when the print actor has Workorders access; otherwise omit workorder identity.
+- Finding notes plus a neutral **Workorder linked** marker captured at completion when applicable. Do not place workorder IDs, serials, URLs, mutable status, concern, parts, labor, or pricing in the canonical inspection archive.
 - Overall result.
 - Blank mechanic physical-signature and date lines.
 - Optional office acknowledgment line.
 - Page number and revision label.
 
-An in-progress print carries an **IN PROGRESS** watermark. Completed original archives are immutable. Later changes generate a revised archive with reason and predecessor. The system records who printed and when, but a blank or printed signature line is not represented as an electronic signature.
+An in-progress preview, if V1 retains it, carries an **IN PROGRESS** watermark and is never stored or offered as the completed archive. Completed original archives are immutable. Corrections generate a revision-labelled successor archive with reason and predecessor; post-completion workorder follow-up does not regenerate the archive. The system records who printed and when, but a blank or printed signature line is not represented as an electronic signature.
+
+One canonical archive cannot vary by the viewer’s Workorders permission. Keep it inspection-only and permission-stable. Authorized workorder numbers remain live number-only links in the application Summary, where request-time authorization can be enforced.
 
 ## 10. Minimal UI/UX interaction contract
 
@@ -548,7 +614,7 @@ The normal inspection request is one compact surface, not a multi-step wizard:
 2. **Location** — prefilled from the current workspace or unit context when unambiguous; show a selector only when the actor must choose.
 3. **Assign to** — Office/Admin can assign mechanics; mechanic-created inspections assign the current mechanic automatically.
 
-Template family and version are resolved from unit type, company, and location. Display the resolved template as read-only context. Show a template selector only when several equally valid published templates require a real user choice. Put optional due date and office instructions under **More details**.
+Template family and version are resolved deterministically from unit type, company, and location. Display the resolved template as read-only context. If configuration produces zero or several equally valid assignments, block creation with one Admin-facing configuration action; never ask the mechanic to choose between conflicting weekly policies. Put optional due date and office instructions under **More details**.
 
 Primary action labels reflect intent: **Request inspection** for Office/Admin and **Start inspection** for a mechanic. Validation stays beside the affected field. Successful creation opens the inspection; it does not add a confirmation page.
 
@@ -571,7 +637,7 @@ Every inspection row uses unit number as the title and shows truck/trailer, insp
 
 - Keep the existing Office workspace and its usable queue area. A compact **Workorders / Inspections** selector in the workspace header changes the domain in place; it does not add a destination, sidebar page, dashboard, or mixed record list.
 - Workorder mode stays unchanged with its current **Needs action**, **In progress**, and **Done / Odoo** behavior.
-- Inspection mode maps the same status-tab area to **Needs action**, **In progress**, and **Completed**. Requested and assigned records are decision states within Needs action rather than extra top-level tabs.
+- Inspection mode maps the same status-tab area to **Needs action**, **In progress**, and **Completed**. Requested/assignment work, overdue requests, and completed finding follow-ups are derived decision states within Needs action rather than extra top-level tabs or false lifecycle statuses.
 - Reuse the existing search, filter row/sheet, list, pagination, empty/error states, and route-state owners with a domain-specific presentation model.
 - The shared Create button offers Workorder and Inspection. Each mode's filters, scroll, and selected record survive switching, navigation, and refresh.
 - Inspection rows expose **Assign**, **Review**, or **View slip** only when the actor has the corresponding Full capability.
@@ -632,9 +698,64 @@ After the first issue, show one compact findings summary with issue count and **
 
 When Workorders is Off, replace the action with the single **Office follow-up required** disposition; do not open or imitate the workorder surface.
 
-The final completion region lists unanswered required items, issues, and missing dispositions. It exposes one primary **Complete inspection** action. Print remains secondary and is available from preview or the completed state.
+The final completion region lists unanswered required items, issues, and missing dispositions. It exposes one primary **Complete inspection** action. It does not wait for linked repairs to close. Print remains secondary and is available from preview or the completed state.
 
-### 10.6 Templates catalog and builder
+After completion, the compact **Summary** owns linked-workorder navigation:
+
+- Render a plain **Workorders** row only when at least one reciprocal link exists. Under it, show each distinct workorder number as the entire visible link text: for example, `WO-001284`.
+- Do not show workorder status, issue count, concern, labels such as “Open workorder,” metadata, icons, buttons, or nested cards beside the number. The visible number is enough because the surrounding row supplies context.
+- The accessible name is **Open workorder WO-001284**. The number uses ordinary link affordance, keyboard focus, and a minimum 44px touch target without visually inflating the row.
+- One click opens the canonical workorder detail in the same application surface. Browser-native new-tab behavior remains available; the app does not force a new tab.
+- Preserve `from=inspection`, inspection ID, summary anchor, and the prior queue/filter state in the canonical route-state owner. One Back action returns to the same completed inspection and scroll position.
+- If several findings link to one workorder, show its number once. If several workorders are linked, show a short vertical list of number-only links in creation order.
+- If Workorders is Off or the actor cannot read a linked record, show only the neutral text **Workorder linked** with no ID, serial, count, URL, disabled link, or record-existence leak.
+- Keep this live navigation out of the immutable print archive. The canonical slip may show only a neutral completion-time **Workorder linked** marker, never workorder numbers or mutable status.
+
+### 10.6 Reinspection after repair
+
+Reinspection is a secondary action on a completed inspection, not part of the minimal Summary and not an action inside the workorder-number row. Put **Reinspect** in the completed inspection action region beside the secondary Print action. On phone it appears in the bottom action sheet/dock after the primary reading content; on desktop it appears in the compact completed-action row. It must not compete with **Complete inspection** while the source is still editable.
+
+Eligibility is server-derived:
+
+- Source inspection is completed with Issues found or Out of service.
+- Actor has Inspection Full access and may create/self-start or request an inspection for the same company, location, and unit.
+- Every finding marked new/link workorder has a valid reciprocal link, and every repair-required linked workorder is in the canonical terminal repair state. `mechanic_done`, cancelled, missing, unauthorized, or stale links do not qualify.
+- Findings with an approved no-workorder reason have no repair dependency; a permitted actor may recheck them immediately after the source inspection completes. **Office follow-up required** remains operationally unresolved until Office commits a workorder link or records an authorized no-workorder reason, so it does not enable reinspection by itself.
+- A Passed inspection has no **Reinspect** action. The ordinary Create Inspection path remains available for the next scheduled inspection.
+
+While repair work is open, do not show a dead disabled button. In the completed action region, show one quiet sentence: **Reinspection is available after linked workorders are closed.** The number-only Summary remains unchanged. When eligibility changes, replace that sentence with **Reinspect** after refresh, return from the workorder, or a bounded background revalidation.
+
+**Reinspect** opens one compact confirmation sheet with derived values already filled:
+
+- Unit, location, weekly template family, source inspection number, and linked workorder numbers are read-only context.
+- Resolve the currently assigned published weekly template at reinspection creation. If the assignment is missing or ambiguous, stop with an Admin configuration action; do not silently reuse an obsolete predecessor snapshot. The predecessor’s failed checks remain visible as read-only context even when item keys changed.
+- Mechanic path derives self-assignment, uses **Create reinspection**, then requires the ordinary explicit **Start inspection** evidence step.
+- Office/Admin chooses an assignee only when it cannot be derived, then uses **Create reinspection**. Optional due date/instructions remain under **More details**.
+- The server creates the new inspection and lineage atomically with an idempotency key, then opens the first incomplete section. Closing the sheet creates nothing and restores focus to **Reinspect**.
+
+The completed inspection is the canonical owner of **Reinspect**. Add one convenience entry in the closed workorder action region so the mechanic who just finished the repair does not have to search for the source record:
+
+- When exactly one linked source inspection is eligible, show the same secondary **Reinspect** action and open the same confirmation sheet.
+- When other linked repairs are still open, keep **Reinspect** absent and provide only **View source inspection**. The source page explains the remaining dependency outside its minimal Summary.
+- When several source inspections are linked, show **View inspections** rather than guessing which record to reinspect. Selection occurs on the existing inspection list/detail surface, not in a new workorder-side picker.
+- This is one backend command with two entry points, not two reinspection implementations. Permission and eligibility are revalidated transactionally on submit.
+
+Click budget from an open completed inspection:
+
+| Task | Mechanic/Admin acting as inspector | Office assigning another mechanic |
+| --- | ---: | ---: |
+| Open a linked workorder | 1 click | 1 click |
+| Return to the source inspection | 1 Back action | 1 Back action |
+| Reach ready-to-enter reinspection | **Reinspect** + **Create reinspection** + **Start inspection** = 3 actions | **Reinspect** + assignee + **Create reinspection** + **Start inspection** = 4 decisions |
+| Reopen source from the new reinspection | 1 source-inspection link | 1 source-inspection link |
+
+From a closed workorder with exactly one eligible source, the same three-action mechanic and four-decision Office budgets apply. With multiple sources, one extra explicit source-selection decision is allowed; the system must never choose silently.
+
+Do not auto-create a reinspection when a workorder closes: closure may happen before the unit is physically available, the correct inspector may differ, and silent record creation creates abandoned drafts. Do not reopen or clone answers from the completed source. Copy identity and template context only; every checklist response must be observed again.
+
+A failed reinspection remains valid new evidence. It can create/link a follow-up workorder through the same canonical transaction, producing a visible lineage chain without altering the source inspection or the prior repair record. For Out-of-service findings, workorder closure alone must not be labelled **Ready**, **Safe**, or **Return to service**. If a future fleet-hold feature is authorized, a passing reinspection may be an input to an explicit release decision; it must not silently clear the hold.
+
+### 10.7 Templates catalog and builder
 
 The Admin **Templates** workspace has two peer views: **Templates** and **Assignments**. Do not mix assignment rules into the content editor.
 
@@ -653,7 +774,7 @@ Editor behavior:
 
 At wide desktop widths where both panes remain useful, use a bounded edit/preview split with the editor slightly wider than the preview. At narrower desktop, tablet, phone, or 200% zoom, switch to explicit **Edit** and **Preview** modes. Never force a squeezed split view or nested page scrolling.
 
-### 10.7 Responsive, accessibility, and state rules
+### 10.8 Responsive, accessibility, and state rules
 
 - Inspection mode on phone: search first, one compact status row, secondary filters in the shared filter sheet, one-column rows, and progressive rendering without horizontal page movement.
 - Office phone with both modules: one Workorders/Inspections product switch followed by that product's status views; do not stack duplicate global and local tab bars.
@@ -666,8 +787,9 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - Every field has a persistent label; every grouped response has a legend; status and error text is announced to assistive technology without stealing focus on each autosave.
 - Support loading, empty, permission denied, offline/retrying, stale-version conflict, saved, save-failed, cancelled, and completed states without blank screens or destructive resets.
 - Use the existing spacing rhythm and restrained borders. Avoid stacked cards, decorative gradients, icon-only mystery actions, and repeated summaries.
+- Number-only workorder links wrap safely, retain a 44px touch target, and remain distinguishable from text at 200% zoom. **Reinspect**, Print, and Back never overlap or share an ambiguous tap target.
 
-### 10.8 Explicitly rejected UI alternatives
+### 10.9 Explicitly rejected UI alternatives
 
 - A new Inspection Dashboard page or separate guard, dispatcher, Office, Admin, or Surveillance implementations of the inspection list.
 - Mixing Office workorder and inspection records into one overloaded supervisory list; switching the existing workspace in place is the accepted model.
@@ -679,22 +801,25 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - Permanent live preview beside the checklist on tablet or phone.
 - Raw JSON, arbitrary HTML, or free-position canvas editing in the template builder.
 - Drag-only ordering, color-only statuses, or icon-only critical actions.
+- A workorder card inside inspection Summary, status text beside the linked number, automatic reinspection creation, reopening a completed inspection, or treating correction and reinspection as the same action.
 
 ## 11. Implementation slices
 
+0. **Repair current print integrity** — canonical timestamp serialization, narrowly scoped legacy archive compatibility, audit evidence, and existing/new staging print proof. This is a release prerequisite, not permission to weaken verification.
 1. **Template foundation** — family manifest registry, generic version/assignment tables, company and location resolution, Admin APIs, tenant tests.
 2. **Admin Templates workspace** — top-level destination, catalog, inspection builder, assignments, preview, publish/archive flow.
 3. **Inspection module access** — Off/Read only/Full catalog, bootstrap projection, company/location/user resolution, route/API hard denies, compatibility defaults, and negative authorization tests.
-4. **Inspection domain** — typed tables, serials, repository, schemas, lifecycle, assignments, events, conflicts, idempotency.
+4. **Inspection domain** — typed tables, serials, repository, schemas, lifecycle, one-active-weekly guard, primary/support accountability, response authorship, events, conflicts, and create/mutation idempotency.
 5. **In-place role workspace modes** — bounded summary query, indexes, cursor pagination, shared search/filters/list owners, permission-locked product selector, read-only projection, and preserved per-mode route state.
 6. **Create and execution** — permission-aware create menu, exact asset selection/manual local asset path, mechanic queue rows, role actions, and route hydration.
 7. **Inspection detail** — responsive checklist, findings, autosave, version conflicts, completion, activity, and read-only slip mode.
-8. **Workorder linkage** — new/link decision, multi-finding concern projection, reciprocal links, active-workorder conflict path, and Workorders-Off denial.
-9. **Print/archive** — inspection renderer, live preview, completed archive, PDF download, revision path, integrity and authorization tests.
-10. **Service history** — completed inspection projection, timeline record-kind support, filters, linked navigation, and restricted read-only projection.
-11. **Hardening and release evidence** — permissions, concurrency, query plans/load test, migration rehearsal, accessibility, phone/tablet/desktop, browser workflows, and full repository verification.
-12. **Future annual/FMCSA Periodic phase** — protected presets, applicability rules, inspector qualifications, regulated report fields, retention, certification-safe labels, and separate release evidence.
-13. **Future workorder builder** — typed workorder manifest, compatibility adapter, legacy location-template migration rehearsal, dual-read cutover, rollback, and removal only after parity evidence.
+8. **Workorder linkage, follow-up, and minimal Summary** — new/link decision, multi-finding concern projection, reciprocal links, completed Office follow-up obligations, cancelled-link reopening, active-workorder conflict path, Workorders-Off denial, deduplicated number-only navigation, and route-state return.
+9. **Print/archive and correction** — permission-stable inspection-only renderer, live preview, completed archive, PDF download, typed correction revision, grouped service-history semantics, integrity, and authorization tests.
+10. **Reinspection lineage** — typed correction/reinspection discriminator, current-template resolution, source-finding context, blank answers, eligibility projection, atomic idempotent creation, three/four-decision UI including explicit start evidence, closed-workorder revalidation, and no automatic safety/release claim.
+11. **Service history** — completed inspection projection, correction grouping, separate reinspection occurrences, timeline record-kind support, filters, linked navigation, lineage display, and restricted read-only projection.
+12. **Hardening and release evidence** — permissions, concurrency, query plans/load test, migration rehearsal, accessibility, phone/tablet/desktop, browser workflows, and full repository verification.
+13. **Future annual/FMCSA Periodic phase** — protected presets, applicability rules, inspector qualifications, regulated report fields, retention, certification-safe labels, and separate release evidence.
+14. **Future workorder builder** — typed workorder manifest, compatibility adapter, legacy location-template migration rehearsal, dual-read cutover, rollback, and removal only after parity evidence.
 
 ## 12. Verification matrix
 
@@ -702,12 +827,16 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - Admin template CRUD is tenant-scoped; Office and Mechanic direct calls fail.
 - Stale draft or assignment writes return `409` and preserve the winner.
 - Published versions are immutable; archive never breaks referenced inspections.
+- An actively assigned template cannot be archived until a replacement is assigned; zero/ambiguous assignment blocks creation with no mechanic-side selector.
 - Concurrent publish and inspection creation always capture one internally consistent version and snapshot.
 - Reordered or removed template items cannot remap historical responses because responses use immutable snapshot item keys.
 - Location assignment overrides company default; missing override falls back deterministically.
 - Asset search permits inspection when active workorder exists but prevents cross-company selection.
 - Manual local-asset creation detects likely identity conflicts.
 - Inspection lifecycle rejects invalid transitions and unauthorized assignment/completion.
+- Concurrent create/retry cannot create two active weekly inspections for the same asset/applicability family; exact idempotent replay returns the existing result and a different request hash conflicts.
+- Exactly one active primary mechanic exists. Support response edits retain actor attribution; support-only completion fails; reassignment preserves answers and revokes the previous mechanic without cross-account retry.
+- In-progress cancellation preserves saved responses/events, creates no completed service-history record/archive, and requires an explicit reason and confirmation.
 - Off module mode removes Inspection navigation and denies list, detail, preview, print, and mutation APIs.
 - Read only permits authorized list/detail/GET preview/existing-archive download and rejects every create, archive-generation, assign, response, completion, cancellation, revision, template, and workorder-link mutation.
 - Workorders Off denies workorder queues, search, detail, creation, and linkage even for an Office actor with Inspection Read only or Full.
@@ -718,8 +847,19 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - Required responses, N/A rules, defect notes, severity, and disposition are enforced server-side.
 - Concurrent response saves do not lose newer changes.
 - Workorder creation/link replay is idempotent; active-workorder conflict offers explicit link path.
+- Completed Office-follow-up obligations appear in Needs action, resolve without reopening/mutating inspection evidence, update only live relationships, and reopen when a linked repair becomes cancelled/ineligible.
+- Completing an inspection with valid linked-workorder dispositions succeeds while linked workorders remain open; it never waits for repair closure or changes later when repair status changes.
+- Completed Summary shows each authorized linked workorder exactly once with the number as its only visible link content. One activation opens the canonical workorder, and Back restores the inspection Summary anchor and queue state.
+- Workorders-Off, inaccessible-link, guessed-ID, cancelled-workorder, and permission-revocation cases expose neither serial nor URL and never render a broken/disabled record link.
+- Reinspection is a new inspection with typed lineage, new serial, new response set, new timestamps, new archive, and idempotent creation. Correction and reinspection cannot be confused through UI, event, or API payload.
+- Correction carries the predecessor’s observation time and values into an explicitly corrected revision, records changed fields/reason/actor/time, and remains one grouped service-history occurrence. Reinspection resolves the current template and starts with blank answers as a separate occurrence.
+- Reinspection eligibility rejects `mechanic_done`, open, cancelled, stale, cross-tenant, or missing repair links; accepts the canonical terminal repair state; and revalidates transactionally to close the page-staleness race.
+- Mechanic/Admin reaches a ready reinspection in three actions from completed detail, including explicit start evidence. Office assignment takes no more than four decisions. Cancellation creates no record and restores focus.
+- A failed reinspection may create/link follow-up work without mutating predecessor evidence. A Passed source exposes ordinary Create Inspection, not Reinspect.
+- An Out-of-service source never becomes Passed, Ready, Safe, or Return to service because its workorder closes. No inspection or workorder transition silently clears a future operational hold.
 - Completion and service-history materialization commit consistently or fail together.
 - Print archive snapshot is immutable, hash-verified, tenant/location scoped, and traversal-safe.
+- Canonical print content is permission-stable and inspection-only; no workorder ID, serial, URL, status, concern, parts, labor, or pricing enters the immutable archive.
 - Print handles maximum allowed sections/items/notes without clipping or unreadable boxes.
 - Inspection list endpoints are cursor-paginated, have bounded query counts, omit checklist/PDF bodies, and use verified scoped query plans.
 - Production-like performance tests meet provisional p95 budgets for dashboard/search and detail, including high inspection volume and concurrent filter traffic.
@@ -728,10 +868,12 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - V1 creation accepts no annual/periodic profile choice; selecting an asset resolves the active Weekly Truck or Weekly Trailer template from canonical unit type.
 - V1 template catalog, runtime APIs, seeded data, and role workflows expose no annual/FMCSA Periodic option or compliance claim.
 - A mechanic can identify unit, inspection state, progress, save state, and next action within five seconds in moderated checks.
+- Completion while a response is dirty/saving/failed/retrying is impossible; final blur/flush is server-confirmed before the completion version is submitted.
+- Client retry data is isolated by actor and inspection, expires, clears on logout/completion/cancellation, and cannot appear for the next account on a shared device.
 - The default Weekly Truck and Weekly Trailer checklists each render exactly three sections and twelve broad checks before company customization.
 - A default weekly inspection can be completed without issues in approximately five minutes during pilot testing, while issue entry remains explicit and cannot be skipped.
 - A separately tested maximum custom checklist remains operable with 12 sections, 100 items, long labels/notes, 10 issues, and intermittent save failures.
-- Route round trips and workorder creation preserve queue filters, inspection answers, active section, scroll position, and focus target.
+- Route round trips, linked-workorder navigation, workorder creation, and reinspection creation preserve queue filters, inspection answers, active section, Summary anchor, scroll position, and focus target.
 - At 320px, 390px, 430px, 768px, 1440px, 1920px, and 200% zoom there is no page-level horizontal scrolling or obscured focused control.
 - Phone response controls and dock actions meet the 44px target; Pass/Issue/N/A, save state, and status remain understandable without color.
 - Keyboard and screen-reader checks cover response groups, section navigation, dialog focus restore, autosave announcements, reorder controls, errors, and completion blockers.
@@ -741,7 +883,7 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - Guard/dispatch configuration lands directly in locked read-only Inspection mode and can find and open a slip without encountering a product selector, creation, or mutation controls.
 - Read-only dashboard normal, empty, loading, error, no-results, long-label, expired-session, and permission-revoked states render without blank screens or data flashes.
 - Templates workspace and inspection pages work at 390px, 430px, tablet, desktop, 200% zoom, keyboard-only, and screen-reader landmarks.
-- Fresh browser flows cover Admin publish/assign/module access, Office request/assign, Mechanic complete/create workorder, Office-with-both navigation, read-only guard/dispatch search and slip viewing, Office history review, and completed print.
+- Fresh browser flows cover Admin publish/assign/module access, Office request/assign, Mechanic complete/create workorder, number-only workorder navigation/back, open-to-closed repair transition, Mechanic and Office reinspection paths, failed reinspection follow-up, Office-with-both navigation, read-only guard/dispatch search and slip viewing, Office history review, and completed print.
 - Run focused tests, PostgreSQL integration tests, `npm run test:role-workflow`, `npm run verify`, and fresh rendered browser checks.
 
 ## 13. Stress test
@@ -962,6 +1104,158 @@ At wide desktop widths where both panes remain useful, use a bounded edit/previe
 - **Hedge:** Preserve typed extension points and the future requirements in this plan, but add no periodic UI, API choice, seed, database workflow, or release dependency until that phase is separately authorized.
 - **Early warning:** Periodic profile fields appear in V1 migrations, create forms, template presets, role tests, or required release gates.
 
+### Assumption AB: an inspection should remain open until repair is complete
+
+- **Counter-evidence:** Inspection and repair have different actors, timestamps, evidence, and lifecycle. An open inspection after the physical check makes it unclear when the condition was actually observed.
+- **Downside:** Draft records become a repair queue, historical evidence changes late, printing is delayed, and supervisors cannot distinguish “inspection performed” from “repair finished.”
+- **Sensitivity:** Critical.
+- **Hedge:** Require a disposition and committed workorder link before inspection completion, then allow completion immediately. Track repair in Workorder and later verification in a new reinspection.
+- **Early warning:** Inspections stay in progress for days, completion timestamps match workorder closure, or users edit findings after repair.
+
+### Assumption AC: more workorder information makes the inspection Summary more useful
+
+- **Counter-evidence:** Status, concern, counts, icons, and card chrome repeat Workorder-domain information and compete with the inspection result. The immediate user intent is navigation.
+- **Downside:** The Summary becomes a second workorder card, grows unpredictably on phone, and displays stale mutable state beside immutable inspection evidence.
+- **Sensitivity:** High.
+- **Hedge:** Show each distinct serial as the only visible link text, retain an accessible action name, and keep mutable repair state behind the canonical workorder route.
+- **Early warning:** Summary needs wrapping metadata rows, users cannot find result/print/reinspect, or workorder status differs between surfaces.
+
+### Assumption AD: workorder closure alone proves that the unit is safe
+
+- **Counter-evidence:** Repair completion confirms work performed, not that every inspection item now passes or that an authorized release decision occurred.
+- **Downside:** An Out-of-service result may appear cleared without a physical check, creating unsafe operational interpretation.
+- **Sensitivity:** Critical.
+- **Hedge:** Preserve the original result, create a new reinspection, never label closure as Ready/Safe, and keep any future unit hold/release as a separate explicit policy.
+- **Early warning:** Closing a workorder changes inspection result, clears an out-of-service badge, or causes dispatch to infer release.
+
+### Assumption AE: automatically creating a reinspection on workorder closure saves clicks
+
+- **Counter-evidence:** The unit may be unavailable, no inspector may be assigned, several workorders may close at different times, and the repair may not require a formal recheck.
+- **Downside:** Abandoned drafts, duplicate inspections, noisy queues, and unclear responsibility.
+- **Sensitivity:** High.
+- **Hedge:** Show one eligible **Reinspect** action after all required repairs reach terminal state; use a three-action mechanic or four-decision Office flow with idempotent creation and explicit start evidence.
+- **Early warning:** Reinspection drafts accumulate without responses or several records are created for one repair chain.
+
+### Assumption AF: correction revisions and reinspections can share one undifferentiated predecessor field
+
+- **Counter-evidence:** A correction changes record accuracy; a reinspection records a new physical observation after elapsed time and repair. Their audit meaning is opposite.
+- **Downside:** Service history cannot explain whether evidence was corrected or repeated, print labels mislead, and APIs allow the wrong permissions.
+- **Sensitivity:** Critical.
+- **Hedge:** Constrain `lineage_kind`, use separate actions/events/reasons, give reinspection a new serial and answers, and test both chains independently.
+- **Early warning:** UI labels both actions “Revise,” a reinspection copies answers, or reports cannot distinguish the two.
+
+### Assumption AG: a workorder number link is harmless whenever an inspection is visible
+
+- **Counter-evidence:** Inspection Read only and Workorders Off are independent permissions. Serial existence, URL shape, and counts can leak cross-module data.
+- **Downside:** Hidden workorders become enumerable through completed inspection detail or cached responses.
+- **Sensitivity:** Critical.
+- **Hedge:** Resolve visibility server-side per linked record, return neutral text without count/ID/URL when unauthorized, use private actor-scoped caching, and retest after revocation.
+- **Early warning:** A read-only payload includes `workorderId`, `workorderSerial`, href, or a different message for missing versus forbidden links.
+
+### Assumption AH: the current print failure is independent and can wait
+
+- **Counter-evidence:** A completed inspection’s core evidence path currently returns an integrity `409` for confirmed legacy archives. Shipping new Summary/reinspection UI on top of a broken completed-state action creates an incoherent workflow.
+- **Downside:** Users can navigate repairs but cannot retrieve the inspection slip that initiated them; attempts to bypass the digest would weaken evidence integrity.
+- **Sensitivity:** Critical release blocker.
+- **Hedge:** Canonicalize timestamps, support only the confirmed legacy digest representation, audit compatibility use, and prove existing plus newly generated archives on staging before release.
+- **Early warning:** Any archive mismatch is accepted, PDF bytes are regenerated in place, or only a new inspection is tested while existing completed records still fail.
+
+### Assumption AI: Office follow-up is resolved merely because the inspection completed
+
+- **Counter-evidence:** Workorders-Off lets a mechanic complete with Office follow-up, but completed inspection content is immutable and the original create/link commands may accept only in-progress records.
+- **Downside:** A real defect disappears into Completed with no actionable owner or legal mutation path.
+- **Sensitivity:** Critical.
+- **Hedge:** Separate finding-follow-up state, derived Needs action queue, post-completion Office/Admin resolution commands, and append-only relationship events that never reopen the inspection.
+- **Early warning:** Completed Office-follow-up findings cannot be linked, or Office must create an unrelated workorder and paste the inspection number manually.
+
+### Assumption AJ: duplicate active weekly inspections are harmless
+
+- **Counter-evidence:** Network retries, double taps, and simultaneous Office/mechanic creation can produce competing checklists for one unit.
+- **Downside:** Conflicting results, duplicate workorders, uncertain service history, and wasted mechanic time.
+- **Sensitivity:** Critical.
+- **Hedge:** Create idempotency key/request hash, asset-scoped lock, partial uniqueness for one active weekly family, and an explicit open-existing path.
+- **Early warning:** The same unit has several requested/assigned/in-progress weekly inspections or users choose which duplicate to finish.
+
+### Assumption AK: multiple assigned mechanics need no completion-owner rule
+
+- **Counter-evidence:** Support mechanics may edit responses concurrently, while the completed record still needs one accountable inspector.
+- **Downside:** A support user completes work the primary has not reviewed, or response authorship is flattened into one name.
+- **Sensitivity:** Critical.
+- **Hedge:** Exactly one primary, per-response actor evidence, support editing only when assigned, primary-only completion, and audited reassignment.
+- **Early warning:** Completed mechanic differs from the primary without an Admin acting-inspector event, or the UI cannot show who changed an answer.
+
+### Assumption AL: the immutable print archive can vary by viewer permission
+
+- **Counter-evidence:** A single hash-verified archive cannot both contain and omit workorder numbers depending on who downloads it, and post-completion links may not exist at archive time.
+- **Downside:** Hash instability, permission leakage, or several documents presented as the same original.
+- **Sensitivity:** Critical.
+- **Hedge:** One permission-stable inspection-only archive with a neutral linked marker; authorized workorder numbers remain live application links.
+- **Early warning:** The same archive ID yields different HTML/PDF bytes or contains workorder URLs/serials.
+
+### Assumption AM: a correction is another inspection with blank answers
+
+- **Counter-evidence:** Correction repairs record accuracy for an already observed event; reinspection records a new physical observation after time or repair.
+- **Downside:** Service history double-counts one inspection, correction loses original values, or users unknowingly perform a second checklist.
+- **Sensitivity:** Critical.
+- **Hedge:** Typed lineage, prefilled correction successor with original observation time and explicit changed fields, grouped history, versus blank current-template reinspection with a new observation time.
+- **Early warning:** Both actions share one label/endpoint, correction asks the mechanic to redo every check, or history lists correction as another weekly inspection.
+
+### Assumption AN: browser retry persistence is safe on a shared shop device
+
+- **Counter-evidence:** Another mechanic may sign in after logout, permission revocation, cancellation, or reassignment while unsynced notes remain locally stored.
+- **Downside:** Cross-user data disclosure or stale answers submitted under the wrong actor.
+- **Sensitivity:** Critical.
+- **Hedge:** Actor-and-inspection namespacing, short expiry, logout/completion/cancellation purge, access revalidation before retry, and no “Saved” label until server confirmation.
+- **Early warning:** A different account sees prior answers, or a revoked mechanic’s queued mutation succeeds after reassignment.
+
+### Assumption AO: template ambiguity should be solved by asking the mechanic
+
+- **Counter-evidence:** Company/location assignment is policy, not a field observation; two valid weekly templates indicate configuration failure.
+- **Downside:** Mechanics choose different standards for the same unit and historical comparisons lose meaning.
+- **Sensitivity:** High.
+- **Hedge:** Deterministic unique assignment, configuration blocker with Admin action, and no V1 template picker.
+- **Early warning:** The create form offers several Weekly Truck options or mechanics ask which one to use.
+
+### Assumption AP: archiving an assigned template affects only the catalog
+
+- **Counter-evidence:** New inspections still need deterministic resolution while in-progress and completed records need their immutable version.
+- **Downside:** Creation fails unexpectedly or historical inspections lose renderability.
+- **Sensitivity:** Critical.
+- **Hedge:** Require replacement assignment before archive, block archived versions from new selection, and retain referenced versions/renderers permanently.
+- **Early warning:** An assigned version becomes archived with no replacement or an old slip cannot render.
+
+### Assumption AQ: linked workorder cancellation does not affect inspection follow-up
+
+- **Counter-evidence:** Cancellation can leave the defect without planned repair even though the original link remains valid historical evidence.
+- **Downside:** Reinspection becomes available without completed repair or Office sees no unresolved task.
+- **Sensitivity:** Critical.
+- **Hedge:** Keep original link immutable, reopen a derived follow-up obligation when the repair becomes ineligible, and block reinspection until resolved.
+- **Early warning:** Cancelled linked workorders qualify as repaired or disappear from Needs action.
+
+### Assumption AR: reinspection should silently reuse the predecessor template
+
+- **Counter-evidence:** Company safety policy may have changed since the source inspection; an obsolete snapshot may omit newly required checks.
+- **Downside:** A fresh physical inspection follows retired policy while appearing current.
+- **Sensitivity:** High.
+- **Hedge:** Resolve the current unique published assignment, keep source failed checks as read-only context, and block on missing/ambiguous configuration rather than silently falling back.
+- **Early warning:** Reinspection uses an archived template or drops source finding context because item keys changed.
+
+### Assumption AS: cancellation or reassignment cannot race autosave
+
+- **Counter-evidence:** Office may act while the mechanic has a dirty field or pending request.
+- **Downside:** A late response overwrites the new owner’s work, appears after cancellation, or is lost without explanation.
+- **Sensitivity:** Critical.
+- **Hedge:** Expected-version checks, transactional state/access revalidation, preserved server-confirmed answers, explicit access-changed conflict UI, and actor-isolated retry purge.
+- **Early warning:** A response commits after cancellation/release or the old mechanic continues editing without a conflict.
+
+### Assumption AT: due dates are timezone-neutral display text
+
+- **Counter-evidence:** Locations and browsers can use different zones, and DST changes can shift date boundaries.
+- **Downside:** An inspection appears overdue at the wrong shop time or on the wrong day.
+- **Sensitivity:** Medium.
+- **Hedge:** Store UTC, resolve/display location timezone, show timezone where ambiguity matters, and test DST/browser-zone differences.
+- **Early warning:** Office and mechanic see different due days for the same record.
+
 ## 14. Release gates
 
 Do not release until:
@@ -981,6 +1275,21 @@ Do not release until:
 13. Migration is rehearsed on representative PostgreSQL data with compatibility defaults and rollback documented.
 14. Local checks, Git delivery, staging health, and authenticated staging workflows are reported as separate evidence layers.
 15. Annual/FMCSA Periodic presets are not seeded, visible, selectable, or required for V1; their future protected-profile requirements remain documented and separately gated.
+16. Existing and newly completed inspection archives both preview, download, and print on staging with hash verification enabled; the confirmed legacy repair path is narrow, idempotent, and audited.
+17. Linked-workorder Summary renders number-only authorized links, deduplicates repeated links, opens in one click, returns in one Back action, and leaks no workorder identity when Workorders is Off.
+18. Inspection completion succeeds after valid disposition/linkage while repair is still open. Repair closure does not alter the completed inspection result or archive.
+19. Reinspection eligibility and creation pass terminal/open/`mechanic_done`/cancelled/missing/permission-race tests. A mechanic reaches the checklist in three actions and Office assignment in no more than four decisions from completed detail, including explicit start evidence.
+20. Correction and reinspection lineage remain distinguishable in data, API, audit events, service history, and print labels; a reinspection never inherits answers.
+21. Out-of-service browser flows prove that workorder closure does not display Ready/Safe/Return to service or silently clear any operational restriction.
+22. Idempotent and concurrent create tests prove one active weekly inspection per asset/applicability family; duplicate attempts open the existing record or return a deterministic conflict.
+23. Exactly one primary mechanic owns completion; support editing retains response authorship; reassignment/cancellation races preserve confirmed work and reject stale mutations.
+24. Completed Office-follow-up findings remain visible in Needs action and can be resolved or reopened after workorder cancellation without changing inspection result, responses, completion time, or original archive.
+25. The canonical archive is byte-stable across actors and contains no workorder identity or URL. Live Summary authorization is tested separately.
+26. Correction creates one grouped service-history occurrence with original observation time and explicit changed fields; reinspection resolves the current unique template and creates a blank, separate occurrence.
+27. Missing/ambiguous/archived template assignment blocks creation or reinspection with an Admin recovery path; no mechanic-facing template policy choice appears.
+28. Shared-device tests prove retry data cannot cross logout, account change, permission revocation, reassignment, cancellation, or completion boundaries.
+29. Completion cannot outrun the final autosave; dirty/saving/failed/retrying/conflicted states remain blocked until the server-confirmed version is current.
+30. Location-timezone and DST tests show one consistent due instant/day for Office, mechanic, browser refresh, and queue overdue state.
 
 ## 15. Future annual/FMCSA Periodic boundary
 

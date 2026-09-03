@@ -1,8 +1,23 @@
-import { findVehicleById, findVehicles, refreshVehicleLocation } from "../services/vehicles.service.js";
+import { createManualVehicle, findVehicleById, findVehicles, refreshVehicleLocation } from "../services/vehicles.service.js";
+import { createManualVehicleSchema } from "../modules/vehicles/manual-vehicle.service.js";
 
-export async function handleVehiclesApi(req, res, url, helpers) {
-  const { sendJson, requestContext } = helpers;
+function parse(schema, value) {
+  const result = schema.safeParse(value);
+  if (result.success) return result.data;
+  const error = new Error(result.error.issues[0]?.message || "Invalid vehicle request.");
+  error.statusCode = 400;
+  throw error;
+}
+
+export async function handleVehiclesApi(req, res, url, helpers, dependencies = {}) {
+  const { sendJson, requestContext, readBody } = helpers;
   const companyIds = [...(requestContext?.companyIds || [])];
+
+  if (req.method === "POST" && url.pathname === "/api/vehicles/manual") {
+    const vehicle = await (dependencies.createManual || createManualVehicle)(requestContext, parse(createManualVehicleSchema, await readBody(req)));
+    sendJson(res, 201, { vehicle });
+    return true;
+  }
 
   if (req.method === "GET" && url.pathname === "/api/vehicles/search") {
     const vehicles = await findVehicles(url.searchParams.get("q"), url.searchParams.get("limit"), companyIds);

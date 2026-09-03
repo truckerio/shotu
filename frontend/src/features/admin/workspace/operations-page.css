@@ -1,0 +1,107 @@
+.operations-page-title-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 8px;
+  justify-content: flex-start;
+  margin: -4px -8px;
+  min-height: 40px;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.operations-page-title-trigger svg {
+  height: 18px;
+  width: 18px;
+}
+
+.operations-page-title-trigger:focus-visible {
+  outline: 2px solid #2e6ee6;
+  outline-offset: 2px;
+}
+
+.operations-page-title-popover {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgb(16 24 40 / 16%);
+  min-width: 248px;
+  padding: 4px;
+}
+
+.operations-page-title-menu {
+  display: grid;
+  gap: 2px;
+  outline: 0;
+}
+
+.operations-page-title-menu-item {
+  align-items: center;
+  border-radius: 6px;
+  color: #182230;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 52px;
+  outline: 0;
+  padding: 8px 10px;
+}
+
+.operations-page-title-menu-item[data-focused] {
+  background: #f2f4f7;
+}
+
+.operations-page-title-menu-item > span {
+  display: grid;
+  gap: 2px;
+}
+
+.operations-page-title-menu-item strong {
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.operations-page-title-menu-item small {
+  color: #667085;
+  font-size: var(--text-caption);
+}
+
+.operations-page-title-menu-item > svg {
+  color: #175cd3;
+  height: 18px;
+  width: 18px;
+}
+
+@media (max-width: 700px) {
+  .operations-page-title-trigger {
+    min-height: 44px;
+  }
+
+  .operations-page-title-popover {
+    max-width: calc(100vw - 32px);
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-operations-content > .page-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-operations-content > .page-header .page-header-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .admin-operations-content > .page-header .page-header-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    width: auto;
+  }
+}

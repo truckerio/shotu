@@ -22,3 +22,16 @@ test("templates UI uses accessible controls and compact Edit Preview modes", asy
   assert.match(css, /min-height: 44px/);
   assert.match(css, /@media \(max-width: 760px\)/);
 });
+
+test("published template archive requires complete replacement choices and preserves recoverable errors", async () => {
+  const ui = await source();
+  assert.match(ui, /template\.status === "published"/);
+  assert.match(ui, /active\.some\(\(assignment\) => !replacement\[assignment\.id\]\)/);
+  assert.match(ui, /active\.map\(\(assignment\) => \(\{ assignmentId: assignment\.id, expectedVersion: assignment\.version, replacementVersionId:/);
+  assert.match(ui, /await onArchive\?\./);
+  assert.match(ui, /setArchiveError\(error\.message\)/);
+  assert.match(ui, /role="alert"/);
+  assert.match(ui, /Confirm archive/);
+  assert.match(ui, /Cancel/);
+  assert.doesNotMatch(ui, /Delete template/);
+});

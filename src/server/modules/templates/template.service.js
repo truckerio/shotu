@@ -1,6 +1,6 @@
 import { permissionDenied } from "../../auth/errors.js";
 import { requireActor, requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
-import { createTemplateDefinition, createTemplateRevision, listInspectionTemplateDefinitions, publishTemplateAndAssign, publishTemplateVersion, saveTemplateAssignment, updateTemplateDraft } from "../../db/repositories/template-definitions.repo.js";
+import { archiveInspectionTemplateVersion, createTemplateDefinition, createTemplateRevision, listInspectionTemplateDefinitions, publishTemplateAndAssign, publishTemplateVersion, saveTemplateAssignment, updateTemplateDraft } from "../../db/repositories/template-definitions.repo.js";
 import { validateTemplateDefinition } from "./template-family.registry.js";
 
 function adminScope(context, companyId, locationId = null) {
@@ -33,3 +33,4 @@ export async function publishAndAssignInspectionTemplate(context, companyId, ver
 export async function assignInspectionTemplate(context, input, dependencies = {}) {
   const actor = adminScope(context, input.companyId, input.locationId); return (dependencies.assign || saveTemplateAssignment)({ ...input, actorId: actor.id });
 }
+export async function archiveInspectionTemplate(context,companyId,versionId,input,dependencies={}){const actor=adminScope(context,companyId);return(dependencies.archive||archiveInspectionTemplateVersion)({...input,companyId,versionId,actorId:actor.id});}

@@ -4,6 +4,8 @@ import {
   createWorkorderSearch,
   defaultWorkspaceForRole,
   draftsSearch,
+  inspectionReturnContext,
+  inspectionWorkspaceSearch,
   readInitialWorkspace,
   routeStartsLoading,
   workspaceSearchForRole,
@@ -20,6 +22,33 @@ test("route search builders preserve detail and draft URL contracts", () => {
   assert.equal(createWorkorderSearch(), "?view=create");
   assert.equal(createWorkorderSearch("draft 1"), "?view=create&draft=draft%201");
   assert.equal(draftsSearch(), "?view=drafts");
+});
+
+test("inspection Summary workorder routes retain only a valid completed-inspection return context", () => {
+  const inspectionId = "123e4567-e89b-42d3-a456-426614174000";
+  assert.equal(
+    workorderDetailSearch("wo 1", "", { inspectionReturn: { from: "inspection", inspectionId, anchor: "summary" } }),
+    `?workorder=wo%201&from=inspection&inspection=${inspectionId}&anchor=summary`,
+  );
+  assert.deepEqual(
+    inspectionReturnContext(new URLSearchParams(`from=inspection&inspection=${inspectionId}&anchor=summary`)),
+    { inspectionId, anchor: "summary" },
+  );
+  assert.equal(
+    workspaceSearchForRole("admin", { inspectionReturn: { from: "inspection", inspectionId, anchor: "summary" } }),
+    `?adminView=operations&from=inspection&inspection=${inspectionId}&anchor=summary`,
+  );
+  assert.equal(
+    workspaceSearchForRole("mechanic", { inspectionReturn: { from: "inspection", inspectionId, anchor: "summary" } }),
+    `?from=inspection&inspection=${inspectionId}&anchor=summary`,
+  );
+  assert.equal(inspectionReturnContext(new URLSearchParams("from=inspection&inspection=not-an-id&anchor=summary")), null);
+  assert.equal(inspectionReturnContext(new URLSearchParams(`from=other&inspection=${inspectionId}&anchor=summary`)), null);
+  assert.equal(workspaceSearchForRole("office", { inspectionReturn: { from: "inspection", inspectionId: "not-an-id", anchor: "summary" } }), "");
+  assert.equal(
+    inspectionWorkspaceSearch("office", inspectionId, "reinspect"),
+    `?from=inspection&inspection=${inspectionId}&anchor=reinspect`,
+  );
 });
 
 test("initial workspace follows role and URL ownership", () => {

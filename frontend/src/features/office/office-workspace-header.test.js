@@ -37,6 +37,12 @@ test("inspection workspaces retain the profile header on phone", () => {
   assert.match(roleWorkspaceCss, /\.workspace-operations\.inspection-workspace \.profile-menu-mobile-action\s*\{\s*display:\s*none;/);
 });
 
+test("Office opens the newly created inspection instead of returning to the queue", () => {
+  assert.match(workspace, /const \[createdInspectionId, setCreatedInspectionId\] = useState\(""\)/);
+  assert.match(workspace, /onCreated=\{\(result\) => \{ setCreatingInspection\(false\); setCreatedInspectionId\(result\?\.inspection\?\.id \|\| ""\); \}\}/);
+  assert.match(workspace, /initialInspectionId=\{createdInspectionId \|\| initialInspectionId\}/);
+});
+
 test("Manager queue controls clear incompatible Unassigned filters", () => {
   assert.match(workspace, /officeQueueFilterState\(nextTab, \{ lifecycleFilter, mechanicFilter \}\)/);
   assert.match(workspace, /officeTabForMechanicFilter\(current, nextMechanic\)/);

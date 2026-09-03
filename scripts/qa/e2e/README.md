@@ -74,3 +74,11 @@ Odoo-readiness backlog and cancels the restricted-location fixture.
 node --test scripts/qa/e2e/*.test.js
 npm run build
 ```
+
+## Inspection daily-life workflow
+
+`npm run test:inspection-workflow` is a separate, fail-closed acceptance harness for the weekly Inspection flow. It uses the same disposable Admin, Office, Mechanic, and read-only QA accounts, but requires two isolated asset fixtures so no customer unit is ever used.
+
+It refuses production. Remote staging writes additionally require `QA_INSPECTION_CONFIRM_REMOTE_WRITES=RUN_INSPECTION_WORKFLOW`, `QA_INSPECTION_EVIDENCE_RETENTION_ACKNOWLEDGEMENT=RETAIN_QA_INSPECTION_EVIDENCE`, and a dedicated `QA_INSPECTION_EVIDENCE_NAMESPACE`; credentials are read from `QA_ACCOUNT_PASSWORD` and are never printed. Set `QA_INSPECTION_TRUCK_ASSET_ID` and `QA_INSPECTION_TRAILER_ASSET_ID` to disposable staging assets in the dedicated QA location. The completed truck inspection/archive is deliberately retained as immutable staging evidence under that namespace; the runner cancels its reversible repair workorder. The browser pass uses fresh role contexts, semantic locators, keyboard/focus assertions, error capture, and 390/430/640-at-200%-zoom/768/820/1280/1920 viewports.
+
+The API journey verifies follow-up resolution, correction lineage, reinspection start/save/complete, truck start evidence (nonnegative odometer and prior-report acknowledgement only when required), trailer start without truck-only fields, print archive replay idempotency, printable HTML integrity, and the binary PDF download (`%PDF-`, `application/pdf`, SHA-256, and byte size). The browser phase verifies the user-facing print popup and rendered surfaces. Actual OS printer output and physical-device proof remain separate manual gates. If a required endpoint or capability is unavailable, the runner must fail with a named error; it must not report a false pass.

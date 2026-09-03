@@ -25,6 +25,7 @@ export function permissionForRequest(method, pathname) {
   if (method === "GET" && /^\/api\/workorders\/[^/]+\/print-archives$/.test(pathname)) return PERMISSION.PRINT_MANAGE;
   if (pathname === "/api/parts-helper/live-prices") return PERMISSION.PART_PRICE;
   if (pathname.startsWith("/api/parts-helper/")) return PERMISSION.PART_IDENTIFY;
+  if (method === "POST" && pathname === "/api/vehicles/manual") return PERMISSION.VEHICLE_MANUAL_CREATE;
   if (pathname.startsWith("/api/vehicles/")) return pathname.endsWith("/live-location")
     ? PERMISSION.VEHICLE_LOCATION_REFRESH
     : PERMISSION.VEHICLE_READ;

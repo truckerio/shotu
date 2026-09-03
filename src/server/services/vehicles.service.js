@@ -1,5 +1,6 @@
 import { migrate } from "../db/migrate.js";
 import { getVehicleById, searchVehicles, updateVehicleLocation } from "../db/repositories/assets.repo.js";
+import { createLocalVehicle } from "../modules/vehicles/manual-vehicle.service.js";
 import { withSamsaraClient } from "../integrations/samsara/samsara.oauth.service.js";
 import { recordSamsaraConnectionFailure } from "../integrations/samsara/samsara.connection-health.js";
 
@@ -11,6 +12,11 @@ export async function findVehicles(query, limit, companyIds) {
 export async function findVehicleById(id, companyIds) {
   await migrate();
   return getVehicleById(id, companyIds);
+}
+
+export async function createManualVehicle(context, input) {
+  await migrate();
+  return createLocalVehicle(context, input);
 }
 
 export function hasValidGpsCoordinates(gps) {

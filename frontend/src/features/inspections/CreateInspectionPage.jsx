@@ -21,6 +21,20 @@ export function CreateInspectionPage({ actor, access = {}, locations = [], mecha
                 {form.unitSearch ? <section className="inspection-unit-results" aria-label="Matching units">
                   {form.choices.length ? <ul>{form.choices.map((unit) => <li key={unit.id}><button type="button" onClick={() => form.selectUnit(unit)}><strong>{unit.unitNo || unit.name}</strong><span>{inspectionUnitTypeLabel(unit.unitType)}{unit.vin ? ` · ${unit.vin}` : ""}</span></button></li>)}</ul> : <p>No matching units.</p>}
                 </section> : null}
+                {form.unitSearch && !form.hasExactUnit && form.canCreateLocalUnit ? <div className="inspection-local-unit-action">
+                  <Button type="button" onClick={form.openLocalUnit} aria-expanded={form.localUnitOpen}>Add local unit</Button>
+                </div> : null}
+                {form.localUnitOpen ? <section className="inspection-local-unit" aria-label="Add local unit">
+                  <h3>Add local unit</h3>
+                  <div className="operational-form-grid">
+                    <FormField label="Unit number" required><input value={form.localUnit.unitNo} onChange={(event) => form.setLocalUnitField("unitNo", event.target.value)} autoComplete="off" /></FormField>
+                    <FormField label="Unit type" required><Dropdown value={form.localUnit.unitType} onChange={(event) => form.setLocalUnitField("unitType", event.target.value)}><option value="">Select type</option><option value="Truck">Truck</option><option value="Trailer">Trailer</option></Dropdown></FormField>
+                    <FormField label="VIN"><input value={form.localUnit.vin} onChange={(event) => form.setLocalUnitField("vin", event.target.value)} autoComplete="off" /></FormField>
+                    <FormField label="Plate"><input value={form.localUnit.plate} onChange={(event) => form.setLocalUnitField("plate", event.target.value)} autoComplete="off" /></FormField>
+                  </div>
+                  {form.localUnit.confirmDuplicate ? <p role="alert">A matching unit may already exist. Confirm only when this is a different physical unit.</p> : null}
+                  <div className="inspection-local-unit-actions"><Button type="button" onClick={() => form.setLocalUnitOpen(false)}>Cancel</Button><Button type="button" variant="primary" onClick={form.createLocalUnit} disabled={form.state.busy}>{form.localUnit.confirmDuplicate ? "Confirm and add local unit" : "Add and select unit"}</Button></div>
+                </section> : null}
               </> : <UnitSummary unit={{ ...form.selectedUnit, unitType: inspectionUnitTypeLabel(form.selectedUnit.unitType) }} onEdit={form.clearSelectedUnit} editLabel="Change unit" />}
               {form.selectedUnit ? <div className="inspection-template-summary"><span>Template</span><strong>{form.template.label}</strong></div> : null}
             </FormSection>

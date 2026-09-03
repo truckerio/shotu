@@ -12,8 +12,8 @@ export function WorkspaceCreateActions({
   locale = "en",
 }) {
   const actions = [
-    onCreateWorkorder ? { id: "workorder", label: "Workorder", onAction: onCreateWorkorder } : null,
-    onCreateInspection ? { id: "inspection", label: "Inspection", onAction: onCreateInspection } : null,
+    onCreateWorkorder ? { id: "workorder", label: "Workorder", menuLabel: "Create workorder", onAction: onCreateWorkorder } : null,
+    onCreateInspection ? { id: "inspection", label: "Inspection", menuLabel: "Create inspection", onAction: onCreateInspection } : null,
   ].filter(Boolean);
 
   if (!actions.length) return <ProfileMenu actor={actor} mobileAction locale={locale} />;
@@ -25,7 +25,6 @@ export function WorkspaceCreateActions({
   ) : (
     <MenuTrigger>
       <AriaButton className="button primary workspace-create-trigger" aria-label="Create">
-        <Plus aria-hidden="true" />
         <span>Create</span>
         <ChevronDown aria-hidden="true" className="workspace-create-chevron" />
       </AriaButton>
@@ -36,9 +35,9 @@ export function WorkspaceCreateActions({
               className="workspace-create-menu-item"
               key={action.id}
               onAction={action.onAction}
-              textValue={action.label}
+              textValue={action.menuLabel}
             >
-              {action.label}
+              {action.menuLabel}
             </MenuItem>
           ))}
         </Menu>

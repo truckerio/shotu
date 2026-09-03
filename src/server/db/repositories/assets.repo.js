@@ -82,6 +82,37 @@ export async function getVehicleById(id, companyIds = []) {
   return result.rows[0] || null;
 }
 
+export async function findVehicleIdentityDuplicates({ companyId, unitNo = "", vin = "", licensePlate = "" }) {
+  const result = await query(
+    `
+      select a.id, a.company_id, a.location_id, a.provider, a.unit_type, a.name, a.unit_no, a.vin, a.license_plate
+      from assets a
+      where a.company_id = $1
+        and (
+          ($2 <> '' and regexp_replace(lower(coalesce(a.unit_no, '')), '[^a-z0-9]', '', 'g') = $2)
+          or ($3 <> '' and regexp_replace(lower(coalesce(a.vin, '')), '[^a-z0-9]', '', 'g') = $3)
+          or ($4 <> '' and regexp_replace(lower(coalesce(a.license_plate, '')), '[^a-z0-9]', '', 'g') = $4)
+        )
+      order by a.updated_at desc, a.id desc
+      limit 10
+    `,
+    [companyId, unitNo, vin, licensePlate],
+  );
+  return result.rows;
+}
+
+export async function createManualVehicle({ companyId, locationId, unitType, unitNo, vin = "", licensePlate = "", name = "" }) {
+  const result = await query(
+    `
+      insert into assets (company_id, location_id, provider, unit_type, name, unit_no, vin, license_plate)
+      values ($1, $2, 'manual', $3, $4, $5, nullif($6, ''), nullif($7, ''))
+      returning id, company_id, location_id, provider, unit_type, name, unit_no, vin, license_plate
+    `,
+    [companyId, locationId, unitType, name || unitNo, unitNo, vin, licensePlate],
+  );
+  return result.rows[0] || null;
+}
+
 export async function updateVehicleLocation(id, companyId, location, seenAt) {
   const tenantId = requireCompanyId(companyId);
   const result = await query(

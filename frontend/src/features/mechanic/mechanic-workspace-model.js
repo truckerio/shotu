@@ -52,3 +52,42 @@ export function buildMechanicHomeView(dashboard = {}) {
     historyJobs: [...(source.done || [])],
   };
 }
+
+function inspectionQueueState(inspection = {}) {
+  if (["assigned", "in_progress"].includes(inspection.status)) return "myWork";
+  if (inspection.status === "completed") return "done";
+  return "waiting";
+}
+
+export function mixedMechanicQueue(dashboard = {}, inspections = []) {
+  const groups = { myWork: [], openWork: [], waiting: [], done: [], activeWork: [] };
+  const addWorkorders = (key, workorders = []) => workorders.forEach((workorder) => groups[key].push({ ...workorder, queueType: "workorder" }));
+  addWorkorders("myWork", dashboard?.myWork);
+  addWorkorders("openWork", dashboard?.openWork);
+  addWorkorders("waiting", dashboard?.waiting);
+  addWorkorders("done", dashboard?.done);
+  addWorkorders("activeWork", dashboard?.activeWork);
+  inspections.forEach((inspection) => {
+    const key = inspectionQueueState(inspection);
+    const item = {
+      id: inspection.id, queueType: "inspection", inspection,
+      serial: `Inspection · ${inspection.number || inspection.id}`,
+      assetUnitNo: inspection.unitNo, assetLabel: inspection.unitNo,
+      locationName: inspection.locationName, mechanicName: inspection.mechanicName,
+      concern: inspection.templateLabel || "Weekly inspection",
+      lifecycle: inspection.status, status: inspection.status,
+      createdAt: inspection.startedAt || inspection.requestedAt || inspection.completedAt,
+      updatedAt: inspection.completedAt || inspection.startedAt || inspection.requestedAt,
+    };
+    groups[key].push(item);
+    if (["assigned", "in_progress"].includes(inspection.status)) groups.activeWork.push(item);
+  });
+  Object.values(groups).forEach((items) => items.sort(compareMechanicJobs));
+  return groups;
+}
+
+export function mixedMechanicMatchesSearch(item, search = "", workorderMatches = () => true, inspectionMatches = () => true) {
+  return item.queueType === "inspection"
+    ? inspectionMatches(item.inspection, search)
+    : workorderMatches(item, search);
+}

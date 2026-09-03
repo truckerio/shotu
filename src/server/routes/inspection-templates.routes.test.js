@@ -40,3 +40,13 @@ test("publish rejects template assignment mismatches in both unit-type direction
     );
   }
 });
+
+test("assignment recovery is strict, tenant-scoped through the admin service, and versioned", async () => {
+  const input={companyId,locationId:null,familyKey:"inspection",applicabilityKey:"Truck",templateVersionId:versionId,expectedVersion:0}; const request=harness(input); let received;
+  await handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates/assignments"),request.helpers,{assign:async(_context,value)=>(received=value,{id:"assignment-1"})});
+  assert.deepEqual(received,input); assert.equal(request.sent[0].payload.assignment.id,"assignment-1");
+  const invalid=harness({...input,familyKey:"other"});
+  await assert.rejects(handleInspectionTemplatesApi({method:"POST"},{},new URL("http://x/api/admin/inspection-templates/assignments"),invalid.helpers,{assign:async()=>assert.fail()}),/Invalid literal|inspection/i);
+});
+
+test("archive route requires a versioned complete replacement command",async()=>{const replacementVersionId="33333333-3333-4333-8333-333333333333",assignmentId="44444444-4444-4444-8444-444444444444";const request=harness({companyId,expectedVersion:4,idempotencyKey:"template-archive-001",replacements:[{assignmentId,expectedVersion:2,replacementVersionId}]});let received;await handleInspectionTemplatesApi({method:"POST"},{},new URL(`http://x/api/admin/inspection-templates/${versionId}/archive`),request.helpers,{archive:async(_context,...args)=>(received=args,{version:{id:versionId,state:"archived"}})});assert.equal(received[0],companyId);assert.equal(received[1],versionId);assert.equal(received[2].replacements[0].assignmentId,assignmentId);const duplicate=harness({companyId,expectedVersion:4,idempotencyKey:"template-archive-002",replacements:[{assignmentId,expectedVersion:2,replacementVersionId},{assignmentId,expectedVersion:2,replacementVersionId}]});await assert.rejects(handleInspectionTemplatesApi({method:"POST"},{},new URL(`http://x/api/admin/inspection-templates/${versionId}/archive`),duplicate.helpers,{archive:async()=>assert.fail()}),/only once/i);});

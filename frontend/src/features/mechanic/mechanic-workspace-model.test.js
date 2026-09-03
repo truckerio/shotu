@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildMechanicHomeView,
   mechanicJobActionLabel,
+  mixedMechanicQueue,
   selectNextMechanicJob,
 } from "./mechanic-workspace-model.js";
 
@@ -16,6 +17,16 @@ test("selectNextMechanicJob chooses active work deterministically", () => {
 
   assert.equal(selectNextMechanicJob(jobs).id, "progress-old-a");
   assert.equal(selectNextMechanicJob([...jobs].reverse()).id, "progress-old-a");
+});
+
+test("mixed queue keeps assigned inspection and workorder work together with deterministic type-safe rows", () => {
+  const queue = mixedMechanicQueue({ myWork: [{ id: "wo-1", serial: "WO-1", lifecycle: "accepted", createdAt: "2026-01-02" }], openWork: [], waiting: [], done: [] }, [
+    { id: "in-1", number: "INS-1", status: "in_progress", unitNo: "T-1", requestedAt: "2026-01-01", templateLabel: "Weekly Truck Inspection" },
+    { id: "in-2", number: "INS-2", status: "completed", unitNo: "T-2", completedAt: "2026-01-03" },
+  ]);
+  assert.deepEqual(queue.myWork.map((item) => [item.queueType, item.id]), [["inspection", "in-1"], ["workorder", "wo-1"]]);
+  assert.deepEqual(queue.done.map((item) => item.id), ["in-2"]);
+  assert.match(queue.myWork[0].serial, /^Inspection · INS-1$/);
 });
 
 test("mechanic next-job action matches lifecycle", () => {

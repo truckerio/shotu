@@ -27,7 +27,7 @@
   cursor: pointer;
   font: inherit;
   font-weight: 600;
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 14px;
 }
 
@@ -43,10 +43,18 @@
   outline-offset: 2px;
 }
 
-.inspection-lifecycle-tabs { margin-top: 16px; }
+.inspection-lifecycle-tabs { margin-top: 0; }
 .inspection-status-filter { align-items: center; display: flex; gap: 8px; margin: 16px 0; }
 .inspection-status-filter .dropdown-select-trigger { min-height: 44px; }
 .inspection-load-more { justify-self: start; margin-top: 14px; }
+.inspection-follow-ups { display: grid; gap: 12px; }
+.inspection-follow-ups > p { margin: -6px 0 0; }
+.inspection-follow-up { border: 1px solid var(--border, #d8dee8); border-radius: 8px; display: grid; gap: 10px; padding: 12px; }
+.inspection-follow-up p { margin: 4px 0 0; }
+.inspection-follow-up-actions { display: grid; gap: 8px; }
+.inspection-follow-up label { display: grid; gap: 6px; font-weight: 600; }
+.inspection-follow-up .button, .inspection-follow-up button, .inspection-follow-up .dropdown-select-trigger, .inspection-follow-up textarea { min-height: 44px; }
+.inspection-cancel { border-top: 1px solid #eaecf0; display: grid; gap: 10px; padding-top: 14px; }.inspection-cancel label { display: grid; gap: 6px; font-weight: 600; }.inspection-cancel > div { display: flex; flex-wrap: wrap; gap: 8px; }.inspection-cancel .button, .inspection-cancel textarea { min-height: 44px; }
 .inspection-back { justify-self: start; }
 
 .inspection-toolbar {
@@ -140,6 +148,24 @@
 .inspection-waiting svg { color: #667085; height: 22px; width: 22px; }
 .inspection-waiting div { display: grid; gap: 3px; }
 
+.inspection-start {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+.inspection-start h2 { color: #101828; font-size: var(--text-body); margin: 0; }
+.inspection-start p { color: #667085; font-size: var(--text-secondary); margin: 4px 0 0; }
+.inspection-start p strong { color: #344054; }
+.inspection-start-fields { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.inspection-start label { color: #344054; display: grid; font-size: var(--text-secondary); font-weight: var(--weight-semibold); gap: 6px; }
+.inspection-start label span { color: #667085; font-weight: var(--weight-regular); }
+.inspection-start input { min-height: 44px; }
+.inspection-start-review { align-items: center; display: flex !important; gap: 10px !important; min-height: 44px; }
+.inspection-start-review input { height: 20px; margin: 0; min-height: 20px; width: 20px; }
+
 .inspection-detail-header {
   background: #fff;
   border: 1px solid #e4e7ec;
@@ -217,6 +243,8 @@
 .inspection-summary dl div { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
 .inspection-summary dt { color: #667085; font-size: var(--text-caption); }
 .inspection-summary dd { color: #344054; font-size: var(--text-secondary); font-weight: var(--weight-semibold); margin: 0; text-align: right; }
+.inspection-summary dd:has(a) { display: grid; justify-items: end; }
+.inspection-summary dd a { align-items: center; display: inline-flex; min-height: 44px; overflow-wrap: anywhere; }
 .inspection-finding-card { align-items: start; border-top: 1px solid #eaecf0; cursor: pointer; display: grid; gap: 10px; grid-template-columns: 20px minmax(0, 1fr); min-height: 44px; padding-top: 12px; }
 .inspection-finding-card input { accent-color: #175cd3; height: 18px; margin: 2px 0 0; width: 18px; }
 .inspection-finding-card span { display: grid; gap: 3px; min-width: 0; }
@@ -378,6 +406,7 @@
 
 @media (max-width: 700px) {
   .inspection-product-switch { box-sizing: border-box; display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .inspection-product-switch button { min-height: 44px; }
   .inspection-lifecycle-tabs { margin-top: 12px; }
   .inspection-toolbar { grid-template-columns: 1fr; padding: 12px 0; }
   .inspection-search-control input { height: 44px; }
@@ -407,6 +436,9 @@
   .inspection-progress { align-items: stretch; grid-template-columns: 1fr; top: 4px; }
   .inspection-progress .button { grid-row: 3; justify-content: center; min-height: 44px; }
   .inspection-progress progress { grid-column: 1; }
+  .inspection-start { padding: 14px; }
+  .inspection-start-fields { grid-template-columns: 1fr; }
+  .inspection-start .button { justify-content: center; min-height: 44px; width: 100%; }
   .inspection-assignment,
   .inspection-save-recovery { align-items: stretch; grid-template-columns: 1fr; }
   .inspection-assignment .button { justify-content: center; }

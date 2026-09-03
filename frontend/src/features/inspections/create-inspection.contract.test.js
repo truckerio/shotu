@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { resolvedLocationId } from "./useCreateInspectionController.js";
+import { canCreateInspectionLocalUnit, hasExactInspectionUnit, localInspectionUnitPayload, resolvedLocationId } from "./useCreateInspectionController.js";
 
 const page = readFileSync(new URL("./CreateInspectionPage.jsx", import.meta.url), "utf8");
 const controller = readFileSync(new URL("./useCreateInspectionController.js", import.meta.url), "utf8");
@@ -44,4 +44,24 @@ test("create form keeps optional details progressive and preserves inputs when i
   assert.doesNotMatch(controller, /catch \(error\) \{[\s\S]*setSelectedUnit\(null\)/);
   assert.doesNotMatch(controller, /catch \(error\) \{[\s\S]*setDueDate\(""\)/);
   assert.doesNotMatch(controller, /catch \(error\) \{[\s\S]*setInstructions\(""\)/);
+});
+
+test("local inspection unit fallback is Office/Admin-only and only appears when no canonical identity matches", () => {
+  const units = [{ id: "asset-1", unitNo: "TRL-44", vin: "VIN-44", plate: "CA 44" }];
+  assert.equal(canCreateInspectionLocalUnit({ role: "office" }), true);
+  assert.equal(canCreateInspectionLocalUnit({ role: "admin" }), true);
+  assert.equal(canCreateInspectionLocalUnit({ role: "mechanic" }), false);
+  assert.equal(hasExactInspectionUnit(units, "trl 44"), true);
+  assert.equal(hasExactInspectionUnit(units, "vin44"), true);
+  assert.equal(hasExactInspectionUnit(units, "new-44"), false);
+});
+
+test("local inspection unit payload preserves selected company/location and requires duplicate confirmation", () => {
+  assert.deepEqual(localInspectionUnitPayload({
+    location: { id: "location-1", companyId: "company-1" },
+    localUnit: { unitNo: " LOCAL-1 ", unitType: "Truck", vin: " VIN ", plate: " PLATE ", confirmDuplicate: true },
+  }), { companyId: "company-1", locationId: "location-1", unitNo: "LOCAL-1", unitType: "Truck", vin: "VIN", licensePlate: "PLATE", confirmDuplicate: true });
+  assert.match(page, /Add local unit/);
+  assert.match(page, /Confirm and add local unit/);
+  assert.match(controller, /\/api\/vehicles\/manual/);
 });

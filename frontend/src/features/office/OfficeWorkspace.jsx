@@ -17,6 +17,7 @@ import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.j
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { InventoryWorkspace } from "../inventory/InventoryWorkspace.jsx";
 import { CreateInspectionPage, InspectionExperience, ProductModeSwitch } from "../inspections/index.js";
+import { inspectionReturnContext } from "../../app/routes/route-state.js";
 import {
   OFFICE_PRIMARY_TABS,
   OFFICE_SECONDARY_TAB_KEYS,
@@ -127,8 +128,11 @@ export function OfficeWorkspace({
   const [partRequestRefreshKey, setPartRequestRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [product, setProduct] = useState(() => !workorderAccess.canRead && inspectionAccess.canRead ? "inspections" : "workorders");
+  const inspectionReturn = inspectionReturnContext();
+  const initialInspectionId = inspectionAccess.canRead && workorderAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
+  const [product, setProduct] = useState(() => initialInspectionId || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
   const [creatingInspection, setCreatingInspection] = useState(false);
+  const [createdInspectionId, setCreatedInspectionId] = useState("");
   const preferenceHydrated = useRef(false);
   const requestedWorkspace = useMemo(() => requestedOfficeWorkspace(window.location.search), []);
   const queuePreferences = useWorkorderPreferences("office");
@@ -278,15 +282,15 @@ export function OfficeWorkspace({
     .sort((left, right) => officeUrgency(left) - officeUrgency(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt));
 
   if (product === "inspections" && inspectionAccess.canRead) {
-    const switcher = workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); }} /> : null;
+    const switcher = workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); setCreatedInspectionId(""); }} /> : null;
     return (
       <main className="prototype mechanic-home office-home workspace-operations inspection-workspace">
         <WorkspaceHeader actor={actor} className="role-home-account-header" />
         <PageHeader title="Inspections" actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => setCreatingInspection(true) : null} />} />
         {switcher}
         {creatingInspection
-          ? <CreateInspectionPage actor={actor} access={{ canCreate: inspectionAccess.canWrite }} request={api} onCreated={() => setCreatingInspection(false)} onCancel={() => setCreatingInspection(false)} />
-          : <InspectionExperience actor={actor} projection={inspectionAccess.canWrite ? "office" : "read_only"} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} />}
+          ? <CreateInspectionPage actor={actor} access={{ canCreate: inspectionAccess.canWrite }} request={api} onCreated={(result) => { setCreatingInspection(false); setCreatedInspectionId(result?.inspection?.id || ""); }} onCancel={() => setCreatingInspection(false)} />
+          : <InspectionExperience actor={actor} projection={inspectionAccess.canWrite ? "office" : "read_only"} initialInspectionId={createdInspectionId || initialInspectionId} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onOpenWorkorder={workorderAccess.canRead ? openDetail : null} />}
       </main>
     );
   }

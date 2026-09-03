@@ -16,13 +16,19 @@ test("autosave conflict reloads the authoritative version and leaves an explicit
   assert.match(detail, /setResponses\(latest\.responses \|\| \{\}\)/);
 });
 
-test("full projections have compact lifecycle filters while read-only uses only server-supported choices", () => {
+test("opening an assigned inspection leaves lifecycle start to the explicit detail action", () => {
+  assert.doesNotMatch(experience, /projection === "mechanic"[\s\S]*\/actions\/start/);
+  assert.match(experience, /async function startInspection\(input\)/);
+  assert.match(experience, /onStart=\{activeInspectionAccess\.canWrite/);
+});
+
+test("full projections have compact lifecycle filters while read-only exposes the operator status choices", () => {
   assert.match(experience, /<OperationalCollectionTabs/);
   assert.match(experience, /id: "needs_action", label: "Needs action"/);
   assert.match(experience, /id: "in_progress", label: "In progress"/);
   assert.match(experience, /id: "completed", label: "Completed"/);
-  assert.match(experience, /<option value="">All<\/option><option value="completed">Completed<\/option>/);
-  assert.doesNotMatch(experience, /not_completed/);
+  assert.match(experience, /<option value="">All<\/option><option value="completed">Completed<\/option><option value="not_completed">Not completed<\/option>/);
+  assert.match(experience, /\["needs_action", "completed", "in_progress", "not_completed"\]\.includes\(status\)/);
   assert.match(experience, /activeId=\{status\}/);
   assert.match(experience, /nextCursor/);
   assert.match(experience, /Load more inspections/);
@@ -37,6 +43,9 @@ test("detail shows office instructions only to authorized operational projection
 test("printing and workorder findings cross their durable inspection APIs", () => {
   assert.match(experience, /\/print-archives/);
   assert.match(experience, /await renderAndPrintInspectionSlip\(popup, result\.html\)/);
+  assert.match(experience, /result\.archive\?\.downloadUrl/);
+  assert.match(experience, /popup\.location\.replace\(result\.archive\.downloadUrl\)/);
+  assert.match(detail, />Download PDF<\/Button>/);
   assert.match(experience, /api\(`\/api\/inspections\/\$\{encodeURIComponent\(current\.id\)\}\/workorders`, \{/);
   assert.match(experience, /method: "POST"/);
   assert.match(experience, /expectedVersion: current\.version, findingIds, idempotencyKey:/);
@@ -44,6 +53,12 @@ test("printing and workorder findings cross their durable inspection APIs", () =
   assert.match(experience, /\/findings\/\$\{encodeURIComponent\(findingId\)\}\/workorder-links/);
   assert.match(detail, /Existing workorder/);
   assert.match(detail, /workorderFindings\.length > 0/);
+});
+
+test("workorders-disabled mechanics receive only dispositions they can complete", () => {
+  assert.match(detail, /workorderActionsAuthorized \? dispositions : dispositions\.filter/);
+  assert.match(detail, /!\["new_workorder", "linked_workorder"\]\.includes\(key\)/);
+  assert.match(experience, /workorderActionsAuthorized=\{activeWorkorderAccess\.canWrite\}/);
 });
 
 test("inspection workorder creation is atomic, retry-safe, and does not open the generic create form", () => {
@@ -94,6 +109,8 @@ test("queue scroll is captured before detail and restored after Back without res
   assert.match(experience, /function returnToQueue\(\)/);
   assert.match(experience, /activeId: "", scrollY: queueScrollY\.current/);
   assert.match(experience, /window\.scrollTo\(\{ top: queueScrollY\.current \}\)/);
+  assert.match(experience, /const queueFocusRef = useRef\(null\)/);
+  assert.match(experience, /queueFocusRef\.current\?\.querySelector\("input"\)\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(experience, /onBack=\{returnToQueue\}/);
 });
 

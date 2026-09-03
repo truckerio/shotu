@@ -81,6 +81,7 @@ export function serviceHistorySourceLabel(source, locale = "en") {
   return ({
     odoo: interfaceText(locale, "history.odooOrder"),
     local: interfaceText(locale, "history.localWorkorder"),
+    local_inspection: interfaceText(locale, "history.localInspection"),
   })[text(source).toLowerCase()] || text(source);
 }
 

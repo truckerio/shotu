@@ -32,6 +32,7 @@ test("route families map to domain permissions", () => {
   assert.equal(permissionForRequest("GET", "/api/parts-helper/catalog"), PERMISSION.PART_IDENTIFY);
   assert.equal(permissionForRequest("GET", "/api/parts-helper/repair-suggestions"), PERMISSION.PART_IDENTIFY);
   assert.equal(permissionForRequest("GET", "/api/vehicles/1"), PERMISSION.VEHICLE_READ);
+  assert.equal(permissionForRequest("POST", "/api/vehicles/manual"), PERMISSION.VEHICLE_MANUAL_CREATE);
   assert.equal(permissionForRequest("POST", "/api/vehicles/1/live-location"), PERMISSION.VEHICLE_LOCATION_REFRESH);
   assert.equal(permissionForRequest("GET", "/api/jobs/job-1/pdf"), PERMISSION.PRINT_MANAGE);
   assert.equal(permissionForRequest("GET", "/api/workorders/workorder-1/print-archives"), PERMISSION.PRINT_MANAGE);

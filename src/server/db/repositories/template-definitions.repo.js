@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { getPool, query } from "../pool.js";
-import { weeklyInspectionPreset } from "../../../../shared/inspection-template.js";
 
 export class TemplateConflictError extends Error {
   constructor(message = "Template changed elsewhere. Reload and try again.") {
@@ -142,14 +141,19 @@ export async function saveTemplateAssignment(input, dependencies = {}) {
   const pool = dependencies.pool || getPool(); const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`inspection-template-assignment:${input.companyId}:${input.applicabilityKey}`]);
+    const version = await client.query(`select version.id from template_versions version
+      join template_definitions definition on definition.company_id=version.company_id and definition.id=version.template_id
+      where version.id=$1 and version.company_id=$2 and version.state='published'
+        and definition.family_key=$3 and definition.applicability_key=$4
+      for share of version`, [input.templateVersionId, input.companyId, input.familyKey, input.applicabilityKey]);
+    if (!version.rows[0]) throw new TemplateConflictError("Select a published template version for the same family and unit type.");
     const current = await client.query(
       `select * from template_assignments where company_id=$1 and location_id is not distinct from $2::uuid
        and family_key=$3 and applicability_key=$4 for update`,
       [input.companyId, input.locationId || null, input.familyKey, input.applicabilityKey],
     );
     if (Number(current.rows[0]?.version || 0) !== input.expectedVersion) throw new TemplateConflictError("Template assignment changed elsewhere.");
-    const version = await client.query("select id from template_versions where id=$1 and company_id=$2 and state='published'", [input.templateVersionId, input.companyId]);
-    if (!version.rows[0]) throw new TemplateConflictError("Select a published template version.");
     const saved = current.rows[0]
       ? await client.query("update template_assignments set template_version_id=$2,version=version+1,updated_by_user_id=$3,updated_at=now() where id=$1 returning *", [current.rows[0].id, input.templateVersionId, input.actorId])
       : await client.query(`insert into template_assignments(company_id,location_id,family_key,applicability_key,template_version_id,updated_by_user_id)
@@ -158,7 +162,17 @@ export async function saveTemplateAssignment(input, dependencies = {}) {
   } catch (error) { await client.query("rollback").catch(() => {}); throw error; } finally { client.release(); }
 }
 
+export async function archiveInspectionTemplateVersion(input,dependencies={}){
+  const pool=dependencies.pool||getPool();const client=await pool.connect();const replacements=[...(input.replacements||[])].sort((a,b)=>a.assignmentId.localeCompare(b.assignmentId));const requestSha256=hash({templateVersionId:input.versionId,expectedVersion:input.expectedVersion,replacements,actorId:input.actorId});
+  try{await client.query("begin");await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`${input.companyId}:${input.actorId}:${input.idempotencyKey}`]);const replay=await client.query(`select command.template_version_id,command.request_sha256 from template_archive_commands command where command.company_id=$1 and command.actor_id=$2 and command.idempotency_key=$3 for update`,[input.companyId,input.actorId,input.idempotencyKey]);if(replay.rows[0]){if(replay.rows[0].request_sha256!==requestSha256)throw new TemplateConflictError("That idempotency key was already used for a different template archive.");const version=(await client.query("select * from template_versions where company_id=$1 and id=$2",[input.companyId,replay.rows[0].template_version_id])).rows[0];const evidence=await client.query("select assignment_id,replacement_version_id,assignment_version_after from template_archive_command_replacements where company_id=$1 and command_id=(select id from template_archive_commands where company_id=$1 and actor_id=$2 and idempotency_key=$3) order by assignment_id",[input.companyId,input.actorId,input.idempotencyKey]);await client.query("commit");return{version:publicVersion(version),replacements:evidence.rows.map((entry)=>({assignmentId:entry.assignment_id,replacementVersionId:entry.replacement_version_id,assignmentVersion:Number(entry.assignment_version_after)})),replayed:true};}
+    const scope=(await client.query(`select version.id,definition.family_key,definition.applicability_key from template_versions version join template_definitions definition on definition.company_id=version.company_id and definition.id=version.template_id where version.company_id=$1 and version.id=$2 and definition.family_key='inspection'`,[input.companyId,input.versionId])).rows[0];if(!scope)throw new TemplateConflictError("Template version was not found.");await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`inspection-template-assignment:${input.companyId}:${scope.applicability_key}`]);const target=(await client.query(`select version.*,definition.family_key,definition.applicability_key from template_versions version join template_definitions definition on definition.company_id=version.company_id and definition.id=version.template_id where version.company_id=$1 and version.id=$2 and version.state='published' and version.optimistic_version=$3 and definition.family_key='inspection' for update of version`,[input.companyId,input.versionId,input.expectedVersion])).rows[0];if(!target)throw new TemplateConflictError("Published template changed or cannot be archived.");const assignments=(await client.query("select * from template_assignments where company_id=$1 and template_version_id=$2 and family_key='inspection' order by id for update",[input.companyId,target.id])).rows;const byId=new Map(replacements.map((entry)=>[entry.assignmentId,entry]));if(assignments.length!==replacements.length||assignments.some((assignment)=>!byId.has(assignment.id)))throw new TemplateConflictError("Replace every active assignment before archiving this template.");
+    const saved=[];for(const assignment of assignments){const replacement=byId.get(assignment.id);if(Number(assignment.version)!==Number(replacement.expectedVersion))throw new TemplateConflictError("Template assignment changed elsewhere.");if(replacement.replacementVersionId===target.id)throw new TemplateConflictError("Replacement must use a different published template version.");const eligible=(await client.query(`select replacement.id from template_versions replacement join template_definitions definition on definition.company_id=replacement.company_id and definition.id=replacement.template_id where replacement.company_id=$1 and replacement.id=$2 and replacement.state='published' and definition.family_key=$3 and definition.applicability_key=$4 for share of replacement`,[input.companyId,replacement.replacementVersionId,assignment.family_key,assignment.applicability_key])).rows[0];if(!eligible)throw new TemplateConflictError("Replacement must be a published template for the same family and applicability.");const updated=(await client.query("update template_assignments set template_version_id=$2,version=version+1,updated_by_user_id=$3,updated_at=now() where company_id=$1 and id=$4 and version=$5 and template_version_id=$6 returning *",[input.companyId,replacement.replacementVersionId,input.actorId,assignment.id,assignment.version,target.id])).rows[0];if(!updated)throw new TemplateConflictError("Template assignment changed elsewhere.");saved.push({before:assignment,after:updated});}
+    const archived=(await client.query("update template_versions set state='archived',optimistic_version=optimistic_version+1,updated_at=now() where company_id=$1 and id=$2 and state='published' and optimistic_version=$3 returning *",[input.companyId,target.id,input.expectedVersion])).rows[0];if(!archived)throw new TemplateConflictError();const command=(await client.query("insert into template_archive_commands(company_id,template_version_id,actor_id,idempotency_key,request_sha256) values($1,$2,$3,$4,$5) returning *",[input.companyId,target.id,input.actorId,input.idempotencyKey,requestSha256])).rows[0];for(const entry of saved){await client.query("insert into template_archive_command_replacements(company_id,command_id,assignment_id,archived_version_id,replacement_version_id,assignment_version_before,assignment_version_after) values($1,$2,$3,$4,$5,$6,$7)",[input.companyId,command.id,entry.before.id,target.id,entry.after.template_version_id,entry.before.version,entry.after.version]);await client.query("insert into template_audit_events(company_id,template_id,template_version_id,assignment_id,event_type,actor_id,details) values($1,$2,$3,$4,'assignment_replaced_for_archive',$5,$6::jsonb)",[input.companyId,target.template_id,target.id,entry.before.id,input.actorId,JSON.stringify({replacementVersionId:entry.after.template_version_id,assignmentVersionBefore:Number(entry.before.version),assignmentVersionAfter:Number(entry.after.version)})]);}await client.query("insert into template_audit_events(company_id,template_id,template_version_id,event_type,actor_id,details) values($1,$2,$3,'archived',$4,$5::jsonb)",[input.companyId,target.template_id,target.id,input.actorId,JSON.stringify({replacementCount:saved.length,commandId:command.id})]);await client.query("commit");return{version:publicVersion(archived),replacements:saved.map((entry)=>({assignmentId:entry.after.id,replacementVersionId:entry.after.template_version_id,assignmentVersion:Number(entry.after.version)})),replayed:false};
+  }catch(error){await client.query("rollback").catch(()=>{});throw error;}finally{client.release();}
+}
+
 export async function resolvePublishedTemplateForInspection(client, { companyId, locationId, unitType, actorId }) {
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`inspection-template-assignment:${companyId}:${unitType}`]);
   const readAssigned = () => client.query(
     `select version.* from template_assignments assignment
      join template_versions version on version.company_id=assignment.company_id and version.id=assignment.template_version_id
@@ -170,40 +184,8 @@ export async function resolvePublishedTemplateForInspection(client, { companyId,
      order by (assignment.location_id is not null) desc limit 1 for share of assignment, version`,
     [companyId, locationId, unitType],
   );
-  let result = await readAssigned();
-  if (result.rows[0] || !actorId) return publicVersion(result.rows[0]);
-
-  const preset = weeklyInspectionPreset(unitType);
-  if (!preset) return null;
-  await client.query("select pg_advisory_xact_lock(hashtext($1))", [`weekly-inspection-template:${companyId}:${unitType}`]);
-  result = await readAssigned();
-  if (result.rows[0]) return publicVersion(result.rows[0]);
-
-  const definition = await client.query(
-    `insert into template_definitions(company_id,family_key,applicability_key,name,preset_key,created_by_user_id)
-     values($1,'inspection',$2,$3,$4,$5)
-     on conflict(company_id,family_key,applicability_key,name) do update set updated_at=template_definitions.updated_at
-     returning *`,
-    [companyId, unitType, preset.label, preset.presetKey, actorId],
-  );
-  let version = await client.query(
-    "select * from template_versions where company_id=$1 and template_id=$2 and state='published' order by version_number desc limit 1",
-    [companyId, definition.rows[0].id],
-  );
-  if (!version.rows[0]) {
-    version = await client.query(
-      `insert into template_versions(company_id,template_id,version_number,state,family_schema_version,renderer_version,
-         definition,definition_sha256,published_by_user_id,published_at,created_by_user_id)
-       values($1,$2,(select coalesce(max(version_number),0)+1 from template_versions where company_id=$1 and template_id=$2),'published',$3,$4,$5::jsonb,$6,$7,now(),$7) returning *`,
-      [companyId, definition.rows[0].id, preset.schemaVersion, preset.rendererVersion, JSON.stringify(preset), hash(preset), actorId],
-    );
-  }
-  await client.query(
-    `insert into template_assignments(company_id,location_id,family_key,applicability_key,template_version_id,updated_by_user_id)
-     values($1,null,'inspection',$2,$3,$4)`,
-    [companyId, unitType, version.rows[0].id, actorId],
-  );
-  return publicVersion(version.rows[0]);
+  const result = await readAssigned();
+  return publicVersion(result.rows[0]);
 }
 
 export const templateRepositoryInternals = { hash, publicVersion, assertInspectionAssignmentMatchesDefinition };

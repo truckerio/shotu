@@ -54,4 +54,5 @@ test("does not label a recorded-only date as completed", () => {
 test("uses plain-language labels for provider and local history sources", () => {
   assert.equal(serviceHistorySourceLabel("odoo"), "Odoo service order");
   assert.equal(serviceHistorySourceLabel("local"), "Local workorder");
+  assert.equal(serviceHistorySourceLabel("local_inspection"), "Inspection");
 });

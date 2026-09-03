@@ -1,5 +1,6 @@
 import { validateCreateWorkorder } from "../../features/generator/create-workorder-validation.js";
 import { api } from "../../lib/api.js";
+import { inspectionReturnContext, workspaceSearchForRole } from "./route-state.js";
 
 export function createdWorkorderMessage({ assigned, mechanic, serial }) {
   if (mechanic) return `${serial} created and assigned to you.`;
@@ -99,7 +100,7 @@ export function useRoleRouterCommands({
       openRoleWorkspace();
       return;
     }
-    if (activeWorkorder) returnToMyWork();
+    if (activeWorkorder) returnToMyWork(workspaceSearchForRole(actor.role, { inspectionReturn: inspectionReturnContext() }));
     else finishRoleWorkspace();
   }
 

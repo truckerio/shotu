@@ -6,6 +6,7 @@ import { basename, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import { createInspectionPdfWriter } from "./src/server/print/inspection-print-archive.service.js";
 import { renderWorkorderDocument } from "./shared/workorder-template.js";
 import {
   listOfficialWorkorderInventoryParts,
@@ -533,6 +534,8 @@ async function writeWorkorderPdf(form, company, job, serials) {
   return filePath;
 }
 
+const writeInspectionPdf=createInspectionPdfWriter({outputDir,tempDir,renderHtmlToPdf});
+
 function dateInRange(value, from, to) {
   if (!value) return false;
   const day = value.slice(0, 10);
@@ -792,9 +795,11 @@ async function handleApi(req, res) {
 
   const helpers = {
     sendJson,
+    sendPdfBytes,
     readBody,
     requestContext,
     emitAdministrativeAuditEvent: emitStructuredEvent,
+    inspectionPrintDependencies:{outputDir,readFile,removeFile:(filePath)=>rm(filePath,{force:true}),writePdf:writeInspectionPdf},
   };
 
   if (await handleAdminApi(req, res, url, helpers)) return;

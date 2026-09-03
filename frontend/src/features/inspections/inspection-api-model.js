@@ -48,6 +48,46 @@ export function responsePayload(itemKey, value) {
   };
 }
 
+export function inspectionStartPayload(inspection = {}, values = {}) {
+  const payload = { expectedVersion: inspection.version, previousReportReviewed:Boolean(values.previousReportReviewed) };
+  const isTrailer = String(inspection.unitType || "").trim().toLowerCase() === "trailer";
+  if (isTrailer) return payload;
+  payload.odometerMiles = Number(values.odometerMiles);
+  const engineHours = String(values.engineHours || "").trim();
+  if (engineHours) payload.engineHours = Number(engineHours);
+  return payload;
+}
+
+export function authorizedSummaryWorkorders(links = []) {
+  return links
+    .map((link, index) => ({
+      id: link.workorderId || link.workorder?.id || "",
+      number: link.workorderSerial || link.workorder?.serial || "",
+      createdAt: link.createdAt || link.created_at || "",
+      index,
+    }))
+    .filter((link) => link.id && link.number)
+    .sort((left, right) => left.createdAt && right.createdAt ? left.createdAt.localeCompare(right.createdAt) || left.index - right.index : left.index - right.index)
+    .filter((link, index, entries) => entries.findIndex((entry) => entry.id === link.id) === index)
+    .map(({ id, number }) => ({ id, number }));
+}
+
+export function openInspectionFollowUps({ findings = [], followUps = [] } = {}) {
+  const notes = new Map(findings.map((finding) => {
+    const note = String(finding.note || "").trim() || "Finding details pending";
+    return [finding.id, note.length > 240 ? `${note.slice(0, 237)}…` : note];
+  }));
+  return followUps
+    .filter((followUp) => ["open", "reopened"].includes(followUp.status) && followUp.findingId && Number.isInteger(Number(followUp.version)) && Number(followUp.version) > 0)
+    .map((followUp) => ({
+      id: followUp.id || followUp.findingId,
+      findingId: followUp.findingId,
+      note: notes.get(followUp.findingId) || "Finding details pending",
+      status: followUp.status,
+      version: Number(followUp.version),
+    }));
+}
+
 export const MAX_LIVE_INSPECTION_ROWS = 250;
 export const INSPECTION_RECONCILE_EVERY_CYCLES = 20;
 

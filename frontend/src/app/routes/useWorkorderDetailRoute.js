@@ -94,7 +94,7 @@ export function useWorkorderDetailRoute({
   setSupportingView,
   setWorkspace,
 }) {
-  const hydrateOperationalWorkorder = useCallback((detail, { updateRoute = true } = {}) => {
+  const hydrateOperationalWorkorder = useCallback((detail, { updateRoute = true, inspectionReturn = null } = {}) => {
     const workorder = detail.workorder;
     const nextSection = requestedAllowedDetailSection({
       assignedMechanicCount: workorder.mechanics?.length || (workorder.mechanic?.id ? 1 : 0),
@@ -118,7 +118,7 @@ export function useWorkorderDetailRoute({
     setSupportingView(nextSection === "chat" ? "chat" : defaultSupportingView("mechanic", workorder.status));
     setForm((current) => workorderFormValues({ detail, current, officeLocations }));
     setWorkspace("generator");
-    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection));
+    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection, { inspectionReturn }));
   }, [
     isCompact,
     officeLocations,
@@ -135,7 +135,7 @@ export function useWorkorderDetailRoute({
     setWorkspace,
   ]);
 
-  const hydrateOfficeWorkorder = useCallback((detail, { updateRoute = true, partRequestId = "" } = {}) => {
+  const hydrateOfficeWorkorder = useCallback((detail, { updateRoute = true, partRequestId = "", inspectionReturn = null } = {}) => {
     const workorder = detail.workorder;
     const editBackup = readOfficeWorkorderEditBackup(actor.id, workorder.id);
     const nextSection = requestedAllowedDetailSection({
@@ -169,7 +169,7 @@ export function useWorkorderDetailRoute({
       busy: false,
       message: editBackup ? "Recovered unsaved changes. Saving automatically..." : "",
     });
-    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection, { partRequestId }));
+    if (updateRoute) replaceRouteSearch(workorderDetailSearch(workorder.id, nextSection, { partRequestId, inspectionReturn }));
   }, [
     actor.id,
     actor.role,
@@ -190,11 +190,11 @@ export function useWorkorderDetailRoute({
     setWorkspace,
   ]);
 
-  const openOfficeWorkorder = useCallback(async (workorderId, { partRequestId = "" } = {}) => {
+  const openOfficeWorkorder = useCallback(async (workorderId, { partRequestId = "", ...inspectionReturn } = {}) => {
     setOfficeDetailState({ busy: true, message: "" });
     try {
       const detail = await loadWorkorderDetail({ markOpened: true, role: actor.role, workorderId });
-      hydrateOfficeWorkorder(detail, { partRequestId });
+      hydrateOfficeWorkorder(detail, { partRequestId, inspectionReturn });
       return true;
     } catch (error) {
       setOfficeDetailState({ busy: false, message: error.message });

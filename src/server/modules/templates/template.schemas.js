@@ -55,6 +55,13 @@ export const createTemplateRevisionSchema = z.object({
   expectedVersion: z.number().int().positive(),
 }).strict();
 
+export const archiveInspectionTemplateSchema=z.object({
+  companyId:companyIdSchema,
+  expectedVersion:z.number().int().positive(),
+  idempotencyKey:z.string().trim().min(8).max(120),
+  replacements:z.array(z.object({assignmentId:z.string().uuid(),expectedVersion:z.number().int().positive(),replacementVersionId:z.string().uuid()}).strict()).max(100).refine((entries)=>new Set(entries.map((entry)=>entry.assignmentId)).size===entries.length,{message:"Each assignment may be replaced only once."}),
+}).strict();
+
 export const assignTemplateSchema = z.object({
   companyId: companyIdSchema,
   locationId: z.string().uuid().nullable().optional(),

@@ -7,9 +7,9 @@ const surface = readFileSync(new URL("./OfficePartsSurface.jsx", import.meta.url
 const styles = readFileSync(new URL("./legacy-part-requests.css", import.meta.url), "utf8");
 
 test("request queue navigation opens the parts section and preserves the exact request", () => {
-  assert.match(route, /openOfficeWorkorder = useCallback\(async \(workorderId, \{ partRequestId = "" \} = \{\}\)/);
+  assert.match(route, /openOfficeWorkorder = useCallback\(async \(workorderId, \{ partRequestId = "", \.\.\.inspectionReturn \} = \{\}\)/);
   assert.match(route, /requestedSection: partRequestId \? "parts"/);
-  assert.match(route, /workorderDetailSearch\(workorder\.id, nextSection, \{ partRequestId \}\)/);
+  assert.match(route, /workorderDetailSearch\(workorder\.id, nextSection, \{ partRequestId, inspectionReturn \}\)/);
 });
 
 test("office parts surface focuses a request selected from the queue", () => {

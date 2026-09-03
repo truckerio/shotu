@@ -13,6 +13,7 @@ const adminStyles = read("../admin.css");
 const users = read("./UsersPage.jsx");
 const template = read("./TemplatePage.jsx");
 const operationsPage = read("./OperationsPage.jsx");
+const operationsStyles = read("./operations-page.css");
 const inventory = read("../../inventory/InventoryWorkspace.jsx");
 const collectionPage = read("../../../components/operations/OperationalCollectionPage.jsx");
 
@@ -44,11 +45,35 @@ test("admin pages are owned outside the controller", () => {
 
 test("Operations and Inventory share the operational collection page composition", () => {
   assert.match(operationsPage, /<OperationalCollectionPage/);
+  assert.match(operationsPage, /title=\{<OperationsTitle product=\{product\} canSwitch=\{canSwitch\} onChange=\{changeProduct\} \/>\}/);
   assert.match(inventory, /<OperationalCollectionPage/);
   assert.match(inventory, /presentation=\{presentation\}/);
   assert.match(inventory, /<OperationalCollectionTabs/);
   assert.match(inventory, /<OperationalCollectionTable/);
   assert.match(collectionPage, /headingLevel=\{embedded \? 2 : 1\}/);
+});
+
+test("admin Operations keeps the authorized workorder queue mounted while inspections are active", () => {
+  assert.match(operationsPage, /workorderAccess\.canRead \? <div hidden=\{product !== "workorders"\}>/);
+  assert.match(operationsPage, /<OperationsWorkspace actor=\{actor\}/);
+  assert.doesNotMatch(operationsPage, /:\s*<OperationsWorkspace/);
+});
+
+test("admin Operations title menu offers only the authorized peer views and clears inspection creation on change", () => {
+  assert.match(operationsPage, /const PRODUCT_VIEWS = \[/);
+  assert.match(operationsPage, /label: "Workorders", description: "Manage repair work"/);
+  assert.match(operationsPage, /label: "Inspections", description: "Review scheduled checks"/);
+  assert.match(operationsPage, /aria-current=\{product === view\.id \? "page" : undefined\}/);
+  assert.match(operationsPage, /setCreatingInspection\(false\);/);
+  assert.doesNotMatch(operationsPage, /ProductModeSwitch/);
+  assert.match(operationsStyles, /@media \(max-width: 640px\)[\s\S]*\.admin-operations-content > \.page-header \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.match(operationsStyles, /\.admin-operations-content > \.page-header \.page-header-actions \{[\s\S]*grid-column: 2;[\s\S]*width: auto;/);
+});
+
+test("admin Operations opens the inspection returned by create", () => {
+  assert.match(operationsPage, /const \[createdInspectionId, setCreatedInspectionId\] = useState\(""\)/);
+  assert.match(operationsPage, /onCreated=\{\(result\) => \{ setCreatingInspection\(false\); setCreatedInspectionId\(result\?\.inspection\?\.id \|\| ""\); \}\}/);
+  assert.match(operationsPage, /initialInspectionId=\{createdInspectionId \|\| initialInspectionId\}/);
 });
 
 test("page owners retain their meaningful domain behavior", () => {

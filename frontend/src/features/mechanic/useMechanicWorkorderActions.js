@@ -111,7 +111,7 @@ export function createMechanicWorkorderActions({
   setSelectedVehicle,
   setWorkspace,
 }) {
-  async function returnToMyWork() {
+  async function returnToMyWork(returnSearch = "") {
     if (isMechanicDetail && mechanicProgress.hasUnsyncedChanges) {
       setMechanicAction({ busy: "progress", message: localeText("mechanic.savingBeforeLeaving") });
       try {
@@ -133,7 +133,7 @@ export function createMechanicWorkorderActions({
     setPreviewPanelOpen(false);
     setDetailSource(null);
     setWorkspace("mechanic");
-    replaceRoute("");
+    replaceRoute(returnSearch);
     return true;
   }
 

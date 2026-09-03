@@ -8,14 +8,16 @@ import { inspectionFromApi, inspectionRefreshMode, loadInspectionRefreshWindow, 
 import { renderAndPrintInspectionSlip } from "./inspection-print.js";
 import { readInspectionSession, writeInspectionSession } from "./inspection-session-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
+import { inspectionReturnContext } from "../../app/routes/route-state.js";
 import { createLatestRequestGuard, LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import "./inspections.css";
 
-export function InspectionExperience({ actor, projection = "office", initialInspectionId = "", onBack, onCreateWorkorder, onAssign }) {
+export function InspectionExperience({ actor, projection = "office", initialInspectionId = "", onBack, onCreateWorkorder, onOpenWorkorder, onAssign }) {
   const initialSession = readInspectionSession(projection);
+  const initialReinspection = inspectionReturnContext()?.anchor === "reinspect";
   const fullProjection = projection === "office" || projection === "admin";
   const readOnly = projection === "read_only";
-  const allowedInitialStatuses = fullProjection ? ["needs_action", "in_progress", "completed"] : ["completed"];
+  const allowedInitialStatuses = fullProjection ? ["needs_action", "in_progress", "completed"] : ["completed", "not_completed"];
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState(initialSession.search);
   const [status, setStatus] = useState(allowedInitialStatuses.includes(initialSession.status) ? initialSession.status : (fullProjection ? "needs_action" : ""));
@@ -26,9 +28,15 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   const [state, setState] = useState({ loading: true, error: "" });
   const activeRef = useRef(null);
   const saveQueue = useRef(Promise.resolve());
+  const pendingResponseSaves = useRef(0);
+  const failedResponseSaves = useRef(new Map());
   const workorderCreateKeys = useRef(new Map());
   const workorderCreateRequests = useRef(new Map());
+  const followUpKeys = useRef(new Map());
+  const followUpRequests = useRef(new Map());
+  const lineageKeys = useRef(new Map());
   const queueScrollY = useRef(initialSession.scrollY);
+  const queueFocusRef = useRef(null);
   const loadGeneration = useRef(createLatestRequestGuard());
   const loadedItemCount = useRef(0);
   const foregroundLoads = useRef(0);
@@ -51,7 +59,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     try {
       const fetchPage = ({ cursor: pageCursor = "", limit } = {}) => {
         const params = new URLSearchParams();
-        if (["needs_action", "completed", "in_progress"].includes(status)) params.set("status", status);
+        if (["needs_action", "completed", "in_progress", "not_completed"].includes(status)) params.set("status", status);
         if (search.trim()) params.set("search", search.trim());
         if (pageCursor) params.set("cursor", pageCursor);
         if (limit) params.set("limit", String(limit));
@@ -102,6 +110,15 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   useEffect(() => () => writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current }), [projection, search, status]);
   useEffect(() => { if (initialSession.scrollY) window.requestAnimationFrame(() => window.scrollTo({ top: initialSession.scrollY })); }, []);
   useEffect(() => {
+    const warnBeforeUnload = (event) => {
+      if (pendingResponseSaves.current === 0 && failedResponseSaves.current.size === 0) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, []);
+  useEffect(() => {
     if (!fullProjection || !active?.locationId) return undefined;
     const controller = new AbortController();
     api(`/api/inspections/create-context?locationId=${encodeURIComponent(active.locationId)}`, { signal: controller.signal }).then((result) => setMechanics(result.mechanics || [])).catch(() => {});
@@ -114,15 +131,12 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     queueScrollY.current = window.scrollY;
     writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
     try {
-      let result = await api(`/api/inspections/${encodeURIComponent(record.id)}`);
+      const result = await api(`/api/inspections/${encodeURIComponent(record.id)}`);
       const recordInspectionAccess = productModuleCapabilities(actor, "inspections", result.inspection.locationId);
-      if (projection === "mechanic" && recordInspectionAccess.canWrite && result.inspection.status === "assigned") {
-        result = await api(`/api/inspections/${encodeURIComponent(record.id)}/actions/start`, { method: "POST", body: JSON.stringify({ expectedVersion: result.inspection.version }) });
-      }
       const next = inspectionFromApi(result.inspection);
       activeRef.current = next; setActive(next);
       const recordWorkorderAccess = productModuleCapabilities(actor, "workorders", result.inspection.locationId);
-      if (recordInspectionAccess.canWrite && recordWorkorderAccess.canWrite && onCreateWorkorder) {
+      if (fullProjection && result.inspection.status === "completed" && recordInspectionAccess.canWrite && recordWorkorderAccess.canWrite) {
         api(`/api/inspections/${encodeURIComponent(record.id)}/workorders?limit=20`)
           .then((workorders) => setEligibleWorkorders(workorders.items || []))
           .catch((error) => {
@@ -142,10 +156,27 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     return next;
   }
 
+  async function startInspection(input) {
+    const current = activeRef.current;
+    if (!current) throw new Error("Inspection is no longer open.");
+    setState((state) => ({ ...state, error: "" }));
+    try {
+      const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/start`, { method: "POST", body: JSON.stringify(input) });
+      const next = inspectionFromApi(result.inspection);
+      activeRef.current = next;
+      setActive(next);
+      return next;
+    } catch (error) {
+      setState((state) => ({ ...state, error: error.message }));
+      throw error;
+    }
+  }
+
   function saveResponse({ itemKey, value }) {
     const request = saveQueue.current.catch(() => {}).then(async () => {
       const current = activeRef.current;
       if (!current) throw new Error("Inspection is no longer open.");
+      pendingResponseSaves.current += 1;
       try {
         const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/responses`, {
           method: "PATCH",
@@ -153,29 +184,66 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
         });
         const normalized = inspectionFromApi(result.inspection);
         const next = { ...current, ...normalized, responses: { ...current.responses, ...normalized.responses, [itemKey]: { ...value, ...normalized.responses?.[itemKey] } } };
+        failedResponseSaves.current.delete(itemKey);
         activeRef.current = next; setActive(next);
       } catch (error) {
         if (error?.status === 409) {
           await reloadActive().catch(() => {});
           const conflict = new Error("This inspection changed elsewhere. Review the latest version, then retry your response.");
           conflict.status = 409;
+          failedResponseSaves.current.set(itemKey, conflict);
           throw conflict;
         }
+        failedResponseSaves.current.set(itemKey, error);
         throw error;
+      } finally {
+        pendingResponseSaves.current = Math.max(0, pendingResponseSaves.current - 1);
       }
     });
     saveQueue.current = request.catch(() => {});
     return request;
   }
 
+  async function flushResponseSaves() {
+    await saveQueue.current;
+    if (failedResponseSaves.current.size === 0) return true;
+    const error = failedResponseSaves.current.values().next().value;
+    setState((value) => ({ ...value, error: error?.message || "A response has not been saved. Retry it before continuing." }));
+    return false;
+  }
+
   async function complete({ result: derivedResult, finalNotes = "" }) {
-    const current = activeRef.current;
     try {
-      const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/complete`, { method: "POST", body: JSON.stringify({ expectedVersion: current.version, finalNotes }) });
+      if (!await flushResponseSaves()) return;
+      const current = activeRef.current;
+      if (!current) throw new Error("Inspection is no longer open.");
+      const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/complete`, { method: "POST", body: JSON.stringify({ expectedVersion: current.version, finalNotes, ...(projection === "admin" ? { actingAsInspector: true } : {}) }) });
       const refreshed = await api(`/api/inspections/${encodeURIComponent(current.id)}`);
       const next = inspectionFromApi({ ...refreshed.inspection, result: result.inspection.result || derivedResult });
       activeRef.current = next; setActive(next); await load();
     } catch (error) { setState((value) => ({ ...value, error: error.message })); }
+  }
+
+  async function cancelInspection({ reason }) {
+    const current = activeRef.current;
+    if (!current) throw new Error("Inspection is no longer open.");
+    setState((value) => ({ ...value, error: "" }));
+    try {
+      await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/cancel`, { method: "POST", body: JSON.stringify({ expectedVersion: current.version, reason }) });
+      activeRef.current = null; setActive(null); await load();
+    } catch (error) { setState((value) => ({ ...value, error: error.message })); throw error; }
+  }
+  async function submitLineage(action, input) { const current=activeRef.current; const identity=JSON.stringify([current.id,current.version,action,input]); if(!lineageKeys.current.has(identity))lineageKeys.current.set(identity,`inspection-${action}-${crypto.randomUUID()}`); try { const result=await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/${action}`,{method:"POST",body:JSON.stringify({expectedVersion:current.version,idempotencyKey:lineageKeys.current.get(identity),...input})}); lineageKeys.current.delete(identity); const next=inspectionFromApi(result.inspection);activeRef.current=next;setActive(next);await load(); } catch(error){setState((value)=>({...value,error:error.message}));throw error;} }
+  const correctCompletedInspection=(input)=>submitLineage("correct",input);
+  const reinspectCompletedInspection=(input)=>submitLineage("reinspect",input);
+
+  async function loadPrintableArchive() {
+    const current = activeRef.current;
+    if (productModuleCapabilities(actor, "inspections", current.locationId).canWrite) {
+      const archived = await api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives`, { method: "POST", body: JSON.stringify({ idempotencyKey: `inspection-print-${current.id}-v${current.version}` }) });
+      return api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives/${encodeURIComponent(archived.archive.id)}`);
+    }
+    return api(`/api/inspections/${encodeURIComponent(current.id)}/print`);
   }
 
   async function print() {
@@ -184,13 +252,20 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       if (!popup) throw new Error("Allow pop-ups to print the inspection slip.");
       popup.opener = null;
       popup.document.write("<p>Preparing inspection slip…</p>");
-      const current = activeRef.current;
-      let result;
-      if (productModuleCapabilities(actor, "inspections", current.locationId).canWrite) {
-        const archived = await api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives`, { method: "POST", body: JSON.stringify({ idempotencyKey: `inspection-print-${current.id}-v${current.version}` }) });
-        result = await api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives/${encodeURIComponent(archived.archive.id)}`);
-      } else result = await api(`/api/inspections/${encodeURIComponent(current.id)}/print`);
+      const result = await loadPrintableArchive();
       await renderAndPrintInspectionSlip(popup, result.html);
+    } catch (error) { popup?.close(); setState((value) => ({ ...value, error: error.message })); }
+  }
+
+  async function downloadPrintPdf() {
+    const popup = window.open("", "_blank");
+    try {
+      if (!popup) throw new Error("Allow pop-ups to download the inspection slip.");
+      popup.opener = null;
+      popup.document.write("<p>Preparing inspection PDF…</p>");
+      const result = await loadPrintableArchive();
+      if (!result.archive?.downloadUrl) throw new Error("Inspection PDF is unavailable.");
+      popup.location.replace(result.archive.downloadUrl);
     } catch (error) { popup?.close(); setState((value) => ({ ...value, error: error.message })); }
   }
 
@@ -245,22 +320,56 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     }
   }
 
+  function resolveFollowUp({ action, concern = "", findingId, followUp, reason = "", workorderId = "" }) {
+    const current = activeRef.current;
+    if (!current || !findingId || !followUp?.version) return Promise.resolve();
+    const requestIdentity = JSON.stringify([current.id, findingId, followUp.version, action, workorderId, reason, concern]);
+    if (followUpRequests.current.has(requestIdentity)) return followUpRequests.current.get(requestIdentity);
+    if (!followUpKeys.current.has(requestIdentity)) followUpKeys.current.set(requestIdentity, `inspection-follow-up-${crypto.randomUUID()}`);
+    setState((value) => ({ ...value, error: "" }));
+    const body = {
+      expectedVersion: followUp.version,
+      idempotencyKey: followUpKeys.current.get(requestIdentity),
+      ...(action === "link-workorder" ? { workorderId } : {}),
+      ...(action === "create-workorder" && concern.trim() ? { concern } : {}),
+      ...(action === "no-workorder" ? { reason } : {}),
+    };
+    const request = api(`/api/inspections/${encodeURIComponent(current.id)}/follow-ups/${encodeURIComponent(findingId)}/actions/${action}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then(async () => {
+      await reloadActive();
+      await load();
+    }).catch((error) => {
+      setState((value) => ({ ...value, error: error.message }));
+      throw error;
+    }).finally(() => {
+      followUpRequests.current.delete(requestIdentity);
+    });
+    followUpRequests.current.set(requestIdentity, request);
+    return request;
+  }
+
   const projectionFor = (inspection) => productModuleCapabilities(actor, "inspections", inspection.locationId).canWrite ? projection : "read_only";
   const activeInspectionAccess = productModuleCapabilities(actor, "inspections", active?.locationId);
   const activeWorkorderAccess = productModuleCapabilities(actor, "workorders", active?.locationId);
   const activeProjection = readOnly || !activeInspectionAccess.canWrite ? "read_only" : projection;
 
-  function returnToQueue() {
+  async function returnToQueue() {
+    if (!await flushResponseSaves()) return;
     setActive(null);
     writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
-    load().finally(() => window.requestAnimationFrame(() => window.scrollTo({ top: queueScrollY.current })));
+    load().finally(() => window.requestAnimationFrame(() => {
+      window.scrollTo({ top: queueScrollY.current });
+      queueFocusRef.current?.querySelector("input")?.focus({ preventScroll: true });
+    }));
   }
 
-  if (active) return <InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} actionError={state.error} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onPrint={active.status === "completed" ? print : null} />;
-  return <section className="inspection-experience" aria-label="Inspection workspace">
+  if (active) return <InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} actionError={state.error} onCorrect={fullProjection&&active.status==="completed"&&activeInspectionAccess.canWrite?correctCompletedInspection:null} onReinspect={(fullProjection||projection==="mechanic")&&active.status==="completed"&&activeInspectionAccess.canWrite?reinspectCompletedInspection:null} mechanicReinspect={projection==="mechanic"} initialReinspection={initialReinspection} actor={actor} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onStart={activeInspectionAccess.canWrite && (projection === "mechanic" || projection === "admin") ? startInspection : null} onCancelInspection={fullProjection && activeInspectionAccess.canWrite ? cancelInspection : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onResolveFollowUp={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite ? resolveFollowUp : null} canResolveFollowUpWorkorders={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite} canResolveFollowUps={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite} onOpenWorkorder={onOpenWorkorder ? (workorderId) => onOpenWorkorder(workorderId, { from: "inspection", inspectionId: active.id, anchor: "summary" }) : null} onPrint={active.status === "completed" ? print : null} onDownload={active.status === "completed" ? downloadPrintPdf : null} workorderLinksAuthorized={activeWorkorderAccess.canRead} workorderActionsAuthorized={activeWorkorderAccess.canWrite} />;
+  return <section className="inspection-experience" aria-label="Inspection workspace" ref={queueFocusRef}>
     {onBack ? <button className="inspection-back" type="button" onClick={onBack}>Back</button> : null}
     {fullProjection ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "needs_action", label: "Needs action" }, { id: "in_progress", label: "In progress" }, { id: "completed", label: "Completed" }]} /> : null}
-    {readOnly ? <label className="inspection-status-filter">Status<Dropdown value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All</option><option value="completed">Completed</option></Dropdown></label> : null}
+    {readOnly ? <label className="inspection-status-filter">Status<Dropdown value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All</option><option value="completed">Completed</option><option value="not_completed">Not completed</option></Dropdown></label> : null}
     {state.error ? <p className="inspection-error" role="alert">{state.error}</p> : null}
     {state.loading ? <p role="status">Loading inspections…</p> : <><InspectionQueue inspections={items} projection={projection} projectionForInspection={projectionFor} search={search} onSearchChange={setSearch} onOpen={open} />{nextCursor && items.length < MAX_LIVE_INSPECTION_ROWS ? <button className="inspection-load-more" type="button" onClick={() => load({ cursor: nextCursor, append: true })}>Load more inspections</button> : null}</>}
   </section>;

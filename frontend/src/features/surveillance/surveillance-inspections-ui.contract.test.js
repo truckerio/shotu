@@ -24,12 +24,15 @@ test("shared create menu exposes exactly workorder and inspection when both call
   assert.doesNotMatch(createActions, /Annual|FMCSA|Periodic/);
 });
 
-test("office and admin operations retain one in-place switch and authorize its two create entries", () => {
+test("office retains the shared switch while admin owns a title menu and both authorize create entries", () => {
+  assert.match(office, /<ProductModeSwitch value=\{product\}/);
+  assert.match(office, /inspectionAccess\.canRead \? <ProductModeSwitch/);
+  assert.match(operations, /<OperationsTitle product=\{product\} canSwitch=\{canSwitch\} onChange=\{changeProduct\}/);
+  assert.match(operations, /<MenuTrigger>/);
+  assert.match(operations, /const canSwitch = inspectionAccess\.canRead && workorderAccess\.canRead;/);
+  assert.match(operations, /setCreatingInspection\(false\);/);
   for (const source of [office, operations]) {
-    assert.match(source, /<ProductModeSwitch value=\{product\}/);
     assert.match(source, /onCreateWorkorder=\{workorderAccess\.canWrite/);
     assert.match(source, /onCreateInspection=\{inspectionAccess\.canWrite/);
   }
-  assert.match(office, /inspectionAccess\.canRead \? <ProductModeSwitch/);
-  assert.match(operations, /inspectionAccess\.canRead && workorderAccess\.canRead/);
 });

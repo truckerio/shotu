@@ -155,6 +155,13 @@ test("returnToMyWork flushes progress before clearing detail navigation", async 
   assert.deepEqual(calls.at(-1), ["route", ""]);
 });
 
+test("returnToMyWork preserves a validated inspection Summary return route after flushing", async () => {
+  const { actions, calls } = actionHarness();
+  const returnSearch = "?from=inspection&inspection=123e4567-e89b-42d3-a456-426614174000&anchor=summary";
+  assert.equal(await actions.returnToMyWork(returnSearch), true);
+  assert.deepEqual(calls.at(-1), ["route", returnSearch]);
+});
+
 test("accept reloads mechanic detail, normalizes the form, and resets progress version", async () => {
   const { actions, calls, detail } = actionHarness();
   assert.equal(await actions.acceptOpenedMechanicWorkorder(), true);

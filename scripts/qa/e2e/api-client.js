@@ -61,6 +61,27 @@ export class RoleApiClient {
     return { status: response.status(), body: parsed };
   }
 
+  async requestBytes(path, { method = "GET", body, expectedStatuses = [200], expectedContentType = "" } = {}) {
+    const response = await this.context.fetch(path, {
+      method,
+      data: body,
+      failOnStatusCode: false,
+    });
+    const bytes = await response.body();
+    const contentType = response.headers()["content-type"] || "";
+    if (!expectedStatuses.includes(response.status())) {
+      throw new RoleWorkflowHttpError(`Unexpected HTTP ${response.status()}.`, {
+        status: response.status(), code: "", path,
+      });
+    }
+    if (expectedContentType && contentType.split(";", 1)[0].trim().toLowerCase() !== expectedContentType.toLowerCase()) {
+      throw new RoleWorkflowHttpError(`Unexpected content type ${contentType || "(missing)"}.`, {
+        status: response.status(), code: "UNEXPECTED_CONTENT_TYPE", path,
+      });
+    }
+    return { status: response.status(), bytes, contentType, headers: response.headers() };
+  }
+
   async authenticate(credentials) {
     await this.request("/api/auth/sign-in/username", {
       method: "POST",
