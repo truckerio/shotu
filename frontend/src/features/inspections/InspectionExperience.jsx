@@ -135,6 +135,8 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       const recordInspectionAccess = productModuleCapabilities(actor, "inspections", result.inspection.locationId);
       const next = inspectionFromApi(result.inspection);
       activeRef.current = next; setActive(next);
+      const routeContext = inspectionReturnContext();
+      replaceRouteSearch(inspectionWorkspaceSearch(actor.role, next.id, routeContext?.inspectionId === next.id ? routeContext.anchor : "summary"));
       const recordWorkorderAccess = productModuleCapabilities(actor, "workorders", result.inspection.locationId);
       if (fullProjection && result.inspection.status === "completed" && recordInspectionAccess.canWrite && recordWorkorderAccess.canWrite) {
         api(`/api/inspections/${encodeURIComponent(record.id)}/workorders?limit=20`)

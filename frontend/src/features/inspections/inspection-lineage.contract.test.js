@@ -6,3 +6,7 @@ test("lineage keeps correction distinct, creates reinspection without bypassing 
 test("successful lineage creation updates the reloadable route to the returned inspection",()=>{
   assert.match(experience,/setActive\(next\);replaceRouteSearch\(inspectionWorkspaceSearch\(actor\.role,next\.id\)\)/);
 });
+test("opening a newly created or queued inspection replaces a stale inspection route",()=>{
+  assert.match(experience,/const routeContext = inspectionReturnContext\(\)/);
+  assert.match(experience,/inspectionWorkspaceSearch\(actor\.role, next\.id, routeContext\?\.inspectionId === next\.id \? routeContext\.anchor : "summary"\)/);
+});
