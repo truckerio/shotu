@@ -4,12 +4,18 @@ import { Button } from "../../ui/Button.jsx";
 import { InventoryCodeScanner } from "../../../features/inventory/InventoryCodeScanner.jsx";
 import { api } from "../../../lib/api.js";
 import { normalizeLocale } from "../../../i18n/index.js";
+import {
+  eligibleSelectedUnitIds,
+  isEligibleSerializedUnit,
+  issueSelectedSerializedUnits,
+  selectAllEligibleUnitIds,
+} from "./workorder-serialized-part-selection.js";
 import "./workorder-serialized-part-dialog.css";
 
 const DIALOG_TEXT = {
-  en: { title: "Serialized unit", choose: "Choose serialized unit", add: "Add serialized units", ready: "QR labels ready", location: "Workorder location", close: "Close", quantity: "Quantity", creates: "Creates one permanent serial number and QR label per unit.", confirm: "I confirm these units are physically present at", back: "Back to units", scan: "Scan a label", manual: "Enter code manually", code: "Label link or exact serial", search: "Find exact serial", searchButton: "Search", searching: "Searching…", loading: "Loading serialized units…", none: "No serialized units are available at", addUnits: "Add units", ask: "Ask an authorized inventory user to add physical units at this location.", available: "Available serialized units", availability: "serialized units available", stock: "In stock", selected: "Use selected unit", adding: "Adding part…", more: "Load more", printed: "Print", labels: "QR labels", error: "Something went wrong. Try again." },
-  es: { title: "Unidad serializada", choose: "Elegir unidad serializada", add: "Agregar unidades serializadas", ready: "Etiquetas QR listas", location: "Ubicación de la orden", close: "Cerrar", quantity: "Cantidad", creates: "Crea un número de serie permanente y una etiqueta QR por unidad.", confirm: "Confirmo que estas unidades están físicamente presentes en", back: "Volver a unidades", scan: "Escanear una etiqueta", manual: "Ingresar código manualmente", code: "Enlace de etiqueta o número de serie exacto", search: "Buscar número de serie exacto", searchButton: "Buscar", searching: "Buscando…", loading: "Cargando unidades serializadas…", none: "No hay unidades serializadas disponibles en", addUnits: "Agregar unidades", ask: "Pida a un usuario autorizado que agregue unidades físicas en esta ubicación.", available: "Unidades serializadas disponibles", availability: "unidades serializadas disponibles", stock: "En stock", selected: "Usar unidad seleccionada", adding: "Agregando pieza…", more: "Cargar más", printed: "Imprimir", labels: "etiquetas QR", error: "Algo salió mal. Inténtelo de nuevo." },
-  pa: { title: "ਸੀਰੀਅਲ ਯੂਨਿਟ", choose: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਚੁਣੋ", add: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਜੋੜੋ", ready: "QR ਲੇਬਲ ਤਿਆਰ ਹਨ", location: "ਵਰਕਆਰਡਰ ਟਿਕਾਣਾ", close: "ਬੰਦ ਕਰੋ", quantity: "ਮਾਤਰਾ", creates: "ਹਰ ਯੂਨਿਟ ਲਈ ਇੱਕ ਪੱਕਾ ਸੀਰੀਅਲ ਨੰਬਰ ਅਤੇ QR ਲੇਬਲ ਬਣਾਉਂਦਾ ਹੈ।", confirm: "ਮੈਂ ਪੁਸ਼ਟੀ ਕਰਦਾ ਹਾਂ ਕਿ ਇਹ ਯੂਨਿਟ ਇੱਥੇ ਮੌਜੂਦ ਹਨ", back: "ਯੂਨਿਟਾਂ ਤੇ ਵਾਪਸ", scan: "ਲੇਬਲ ਸਕੈਨ ਕਰੋ", manual: "ਕੋਡ ਹੱਥੀਂ ਦਰਜ ਕਰੋ", code: "ਲੇਬਲ ਲਿੰਕ ਜਾਂ ਸਹੀ ਸੀਰੀਅਲ", search: "ਸਹੀ ਸੀਰੀਅਲ ਲੱਭੋ", searchButton: "ਲੱਭੋ", searching: "ਲੱਭ ਰਿਹਾ ਹੈ…", loading: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਲੋਡ ਹੋ ਰਹੇ ਹਨ…", none: "ਇਸ ਟਿਕਾਣੇ ਤੇ ਕੋਈ ਸੀਰੀਅਲ ਯੂਨਿਟ ਨਹੀਂ ਹੈ", addUnits: "ਯੂਨਿਟ ਜੋੜੋ", ask: "ਅਧਿਕਾਰਤ ਇਨਵੈਂਟਰੀ ਉਪਭੋਗਤਾ ਨੂੰ ਇਸ ਟਿਕਾਣੇ ਤੇ ਅਸਲ ਯੂਨਿਟ ਜੋੜਨ ਲਈ ਕਹੋ।", available: "ਉਪਲਬਧ ਸੀਰੀਅਲ ਯੂਨਿਟ", availability: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਉਪਲਬਧ ਹਨ", stock: "ਸਟਾਕ ਵਿੱਚ", selected: "ਚੁਣੀ ਯੂਨਿਟ ਵਰਤੋ", adding: "ਪਾਰਟ ਜੋੜਿਆ ਜਾ ਰਿਹਾ ਹੈ…", more: "ਹੋਰ ਲੋਡ ਕਰੋ", printed: "ਛਾਪੋ", labels: "QR ਲੇਬਲ", error: "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ।" },
+  en: { title: "Serialized unit", choose: "Choose serialized units", add: "Add serialized units", ready: "QR labels ready", location: "Workorder location", close: "Close", quantity: "Quantity", creates: "Creates one permanent serial number and QR label per unit.", confirm: "I confirm these units are physically present at", back: "Back to units", scan: "Scan a label", manual: "Enter code manually", code: "Label link or exact serial", search: "Find exact serial", searchButton: "Search", searching: "Searching…", loading: "Loading serialized units…", none: "No serialized units are available at", addUnits: "Add units", ask: "Ask an authorized inventory user to add physical units at this location.", available: "Available serialized units", availability: "serialized units available", stock: "In stock", selectAll: "Select all available", selected: "Use selected units", adding: "Adding parts…", more: "Load more", printed: "Print", labels: "QR labels", error: "Something went wrong. Try again." },
+  es: { title: "Unidad serializada", choose: "Elegir unidades serializadas", add: "Agregar unidades serializadas", ready: "Etiquetas QR listas", location: "Ubicación de la orden", close: "Cerrar", quantity: "Cantidad", creates: "Crea un número de serie permanente y una etiqueta QR por unidad.", confirm: "Confirmo que estas unidades están físicamente presentes en", back: "Volver a unidades", scan: "Escanear una etiqueta", manual: "Ingresar código manualmente", code: "Enlace de etiqueta o número de serie exacto", search: "Buscar número de serie exacto", searchButton: "Buscar", searching: "Buscando…", loading: "Cargando unidades serializadas…", none: "No hay unidades serializadas disponibles en", addUnits: "Agregar unidades", ask: "Pida a un usuario autorizado que agregue unidades físicas en esta ubicación.", available: "Unidades serializadas disponibles", availability: "unidades serializadas disponibles", stock: "En stock", selectAll: "Seleccionar todas las disponibles", selected: "Usar unidades seleccionadas", adding: "Agregando piezas…", more: "Cargar más", printed: "Imprimir", labels: "etiquetas QR", error: "Algo salió mal. Inténtelo de nuevo." },
+  pa: { title: "ਸੀਰੀਅਲ ਯੂਨਿਟ", choose: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਚੁਣੋ", add: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਜੋੜੋ", ready: "QR ਲੇਬਲ ਤਿਆਰ ਹਨ", location: "ਵਰਕਆਰਡਰ ਟਿਕਾਣਾ", close: "ਬੰਦ ਕਰੋ", quantity: "ਮਾਤਰਾ", creates: "ਹਰ ਯੂਨਿਟ ਲਈ ਇੱਕ ਪੱਕਾ ਸੀਰੀਅਲ ਨੰਬਰ ਅਤੇ QR ਲੇਬਲ ਬਣਾਉਂਦਾ ਹੈ।", confirm: "ਮੈਂ ਪੁਸ਼ਟੀ ਕਰਦਾ ਹਾਂ ਕਿ ਇਹ ਯੂਨਿਟ ਇੱਥੇ ਮੌਜੂਦ ਹਨ", back: "ਯੂਨਿਟਾਂ ਤੇ ਵਾਪਸ", scan: "ਲੇਬਲ ਸਕੈਨ ਕਰੋ", manual: "ਕੋਡ ਹੱਥੀਂ ਦਰਜ ਕਰੋ", code: "ਲੇਬਲ ਲਿੰਕ ਜਾਂ ਸਹੀ ਸੀਰੀਅਲ", search: "ਸਹੀ ਸੀਰੀਅਲ ਲੱਭੋ", searchButton: "ਲੱਭੋ", searching: "ਲੱਭ ਰਿਹਾ ਹੈ…", loading: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਲੋਡ ਹੋ ਰਹੇ ਹਨ…", none: "ਇਸ ਟਿਕਾਣੇ ਤੇ ਕੋਈ ਸੀਰੀਅਲ ਯੂਨਿਟ ਨਹੀਂ ਹੈ", addUnits: "ਯੂਨਿਟ ਜੋੜੋ", ask: "ਅਧਿਕਾਰਤ ਇਨਵੈਂਟਰੀ ਉਪਭੋਗਤਾ ਨੂੰ ਇਸ ਟਿਕਾਣੇ ਤੇ ਅਸਲ ਯੂਨਿਟ ਜੋੜਨ ਲਈ ਕਹੋ।", available: "ਉਪਲਬਧ ਸੀਰੀਅਲ ਯੂਨਿਟ", availability: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਉਪਲਬਧ ਹਨ", stock: "ਸਟਾਕ ਵਿੱਚ", selectAll: "ਸਾਰੀਆਂ ਉਪਲਬਧ ਚੁਣੋ", selected: "ਚੁਣੀਆਂ ਯੂਨਿਟਾਂ ਵਰਤੋ", adding: "ਪਾਰਟ ਜੋੜੇ ਜਾ ਰਹੇ ਹਨ…", more: "ਹੋਰ ਲੋਡ ਕਰੋ", printed: "ਛਾਪੋ", labels: "QR ਲੇਬਲ", error: "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ।" },
 };
 
 function key(prefix) {
@@ -73,9 +79,10 @@ export function WorkorderSerializedPartDialog({
   const [message, setMessage] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [physicallyPresent, setPhysicallyPresent] = useState(false);
-  const [selectedUnitId, setSelectedUnitId] = useState("");
+  const [selectedUnitIds, setSelectedUnitIds] = useState(() => new Set());
   const [serialQuery, setSerialQuery] = useState("");
   const requestKeyRef = useRef({ identity: "", key: "" });
+  const unitRequestKeysRef = useRef(new Map());
   const createKeyRef = useRef({ identity: "", key: "" });
   const quantityRef = useRef(null);
   const addUnitsRef = useRef(null);
@@ -125,9 +132,10 @@ export function WorkorderSerializedPartDialog({
     setMessage("");
     setQuantity("1");
     setPhysicallyPresent(false);
-    setSelectedUnitId("");
+    setSelectedUnitIds(new Set());
     setSerialQuery("");
     requestKeyRef.current = { identity: "", key: "" };
+    unitRequestKeysRef.current = new Map();
     createKeyRef.current = { identity: "", key: "" };
     load({ query: "" });
   }, [open, endpoint]);
@@ -182,7 +190,7 @@ export function WorkorderSerializedPartDialog({
         }),
       });
       setData(result);
-      setSelectedUnitId("");
+      setSelectedUnitIds(new Set());
       clearPendingCreateKey(storageKey);
       createKeyRef.current = { identity: "", key: "" };
       setView("created");
@@ -196,7 +204,9 @@ export function WorkorderSerializedPartDialog({
   async function reserve({ unitId, code } = {}) {
     if (busy || (!unitId && !code)) return;
     const identity = unitId ? `unit:${unitId}` : `code:${code}`;
-    if (requestKeyRef.current.identity !== identity) {
+    if (unitId) {
+      if (!unitRequestKeysRef.current.has(unitId)) unitRequestKeysRef.current.set(unitId, key("workorder-serialized-issue"));
+    } else if (requestKeyRef.current.identity !== identity) {
       requestKeyRef.current = { identity, key: key("workorder-serialized-issue") };
     }
     setBusy(true);
@@ -204,7 +214,7 @@ export function WorkorderSerializedPartDialog({
     try {
       const result = await api(`/api/workorders/${encodeURIComponent(workorderId)}/inventory-units/issue`, {
         method: "POST",
-        body: JSON.stringify({ unitId, code, idempotencyKey: requestKeyRef.current.key }),
+        body: JSON.stringify({ unitId, code, idempotencyKey: unitId ? unitRequestKeysRef.current.get(unitId) : requestKeyRef.current.key }),
       });
       await onReserved?.(result.usage, result);
       onClose?.();
@@ -217,14 +227,54 @@ export function WorkorderSerializedPartDialog({
     }
   }
 
+  async function reserveSelectedUnits() {
+    if (busy || !eligibleSelectedUnitIds(units, selectedUnitIds).length) return;
+    setBusy(true);
+    setMessage("");
+    const { successes, failures } = await issueSelectedSerializedUnits({
+      units,
+      selectedUnitIds,
+      keyByUnitId: unitRequestKeysRef.current,
+      createKey: () => key("workorder-serialized-issue"),
+      issue: (unitId, idempotencyKey) => api(`/api/workorders/${encodeURIComponent(workorderId)}/inventory-units/issue`, {
+        method: "POST",
+        body: JSON.stringify({ unitId, idempotencyKey }),
+      }),
+      onIssued: (result) => onReserved?.(result.usage, result),
+    });
+    if (!failures.length) {
+      onClose?.();
+    } else {
+      const succeeded = new Set(successes);
+      setData((current) => current ? { ...current, units: unitsFrom(current).filter((unit) => !succeeded.has(unit.id)) } : current);
+      setSelectedUnitIds(new Set(failures.map(({ id }) => id)));
+      setMessage(`${successes.length} unit${successes.length === 1 ? " was" : "s were"} added. ${failures.length} unit${failures.length === 1 ? " could" : "s could"} not be added; review and retry the selected units.`);
+    }
+    setBusy(false);
+  }
+
+  function toggleUnit(unitId) {
+    setSelectedUnitIds((current) => {
+      const next = new Set(current);
+      if (next.has(unitId)) next.delete(unitId);
+      else next.add(unitId);
+      return next;
+    });
+  }
+
+  function selectAllAvailable() {
+    setSelectedUnitIds(selectAllEligibleUnitIds(units));
+  }
+
   function search(event) {
     event.preventDefault();
-    setSelectedUnitId("");
+    setSelectedUnitIds(new Set());
     load({ query: serialQuery });
   }
 
   const batch = data?.batch || data?.labelBatch;
-  const canReserve = selectedUnitId && units.some((unit) => unit.id === selectedUnitId && unit.eligible !== false && unit.eligibility?.canIssue !== false && unit.canIssue !== false);
+  const selectedCount = eligibleSelectedUnitIds(units, selectedUnitIds).length;
+  const canReserve = selectedCount > 0;
 
   return (
     <ModalOverlay className="workorder-serialized-dialog-overlay" isOpen={open} isDismissable={false}>
@@ -274,9 +324,9 @@ export function WorkorderSerializedPartDialog({
                 <div><strong>{text.none} {locationName}.</strong>{!canCreate ? <p>{text.ask}</p> : null}</div>
                 {canCreate ? <Button ref={addUnitsRef} type="button" variant="primary" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : null}
               </div> : null}
-              {units.length ? <fieldset className="workorder-serialized-unit-list"><legend><span>{text.available}</span><small role="status">{units.length} {text.availability}</small></legend>{units.map((unit) => <label key={unit.id} className="workorder-serialized-unit"><input type="radio" name="serialized-unit" value={unit.id} checked={selectedUnitId === unit.id} onChange={() => setSelectedUnitId(unit.id)} disabled={busy || unit.eligible === false || unit.eligibility?.canIssue === false || unit.canIssue === false} /><span><strong>{unit.partNumber || part.partNumber}</strong><code>{unit.serialNumber || unit.serial}</code><small>{unit.status === "in_stock" ? text.stock : unit.status}{unit.locationName ? ` · ${unit.locationName}` : ""}</small></span></label>)}</fieldset> : null}
+              {units.length ? <fieldset className="workorder-serialized-unit-list"><legend><span>{text.available}</span><small role="status">{units.length} {text.availability}</small></legend><Button type="button" className="workorder-serialized-select-all" onClick={selectAllAvailable} disabled={busy || !units.some(isEligibleSerializedUnit)}>{text.selectAll}</Button>{units.map((unit) => <label key={unit.id} className="workorder-serialized-unit"><input type="checkbox" value={unit.id} checked={selectedUnitIds.has(unit.id)} onChange={() => toggleUnit(unit.id)} disabled={busy || !isEligibleSerializedUnit(unit)} /><span><strong>{unit.partNumber || part.partNumber}</strong><code>{unit.serialNumber || unit.serial}</code><small>{unit.status === "in_stock" ? text.stock : unit.status}{unit.locationName ? ` · ${unit.locationName}` : ""}</small></span></label>)}</fieldset> : null}
               {data?.nextCursor ? <Button type="button" onClick={() => load({ cursor: data.nextCursor, append: true })} disabled={loading || busy}>{text.more}</Button> : null}
-              {units.length ? <footer>{canCreate ? <Button type="button" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : <span /> }<Button type="button" variant="primary" onClick={() => reserve({ unitId: selectedUnitId })} disabled={!canReserve || busy}>{busy ? text.adding : text.selected}</Button></footer> : null}
+              {units.length ? <footer>{canCreate ? <Button type="button" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : <span /> }<Button type="button" variant="primary" onClick={reserveSelectedUnits} disabled={!canReserve || busy}>{busy ? text.adding : `${text.selected} (${selectedCount})`}</Button></footer> : null}
             </>}
           </div>
         </Dialog>

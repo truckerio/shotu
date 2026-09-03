@@ -61,13 +61,12 @@ test("dialog centralizes supported locale copy and focuses the first useful cont
   assert.match(dialog, /: canCreate \? addUnitsRef\.current : emptyStatusRef\.current/);
 });
 
-test("list, manual code, and one camera scan use the same idempotent reservation owner", () => {
+test("manual code and one camera scan keep immediate single-unit reservation behavior", () => {
   assert.match(dialog, /function reserve\(\{ unitId, code \} = \{\}\)/);
   assert.match(dialog, /inventory-units\/issue/);
-  assert.match(dialog, /body: JSON\.stringify\(\{ unitId, code, idempotencyKey: requestKeyRef\.current\.key \}\)/);
+  assert.match(dialog, /unitId \? unitRequestKeysRef\.current\.get\(unitId\) : requestKeyRef\.current\.key/);
   assert.match(dialog, /onScan=\{\(code\) => reserve\(\{ code \}\)\}/);
-  assert.match(dialog, /onClick=\{\(\) => reserve\(\{ unitId: selectedUnitId \}\)\}/);
-  assert.match(dialog, /unit\.eligible !== false/);
+  assert.match(dialog, /if \(unitId\) \{[\s\S]*unitRequestKeysRef\.current\.has\(unitId\)/);
   assert.match(dialog, /Retain the key for a retry of this exact unit\/code/);
   assert.match(scanner, /async function recordUsage\(usage\)/);
   assert.match(scanner, /recordUsage,/);
@@ -75,6 +74,37 @@ test("list, manual code, and one camera scan use the same idempotent reservation
   assert.match(editor, /Part added; refresh the workorder if the serialized row is not visible/);
   assert.match(editor, /value=\{catalogQuery\}/);
   assert.match(editor, /function closeSerializedDialog\(\)/);
+});
+
+test("catalog units are independently selectable and submit every selected eligible serial in sequence", () => {
+  assert.match(dialog, /const \[selectedUnitIds, setSelectedUnitIds\] = useState\(\(\) => new Set\(\)\)/);
+  assert.doesNotMatch(dialog, /type="radio" name="serialized-unit"/);
+  assert.match(dialog, /type="checkbox" value=\{unit\.id\} checked=\{selectedUnitIds\.has\(unit\.id\)\}/);
+  assert.match(dialog, /selectAllEligibleUnitIds\(units\)/);
+  assert.match(dialog, /text\.selectAll/);
+  assert.match(dialog, /async function reserveSelectedUnits\(\)/);
+  assert.match(dialog, /issueSelectedSerializedUnits\(\{/);
+  assert.match(dialog, /keyByUnitId: unitRequestKeysRef\.current/);
+  assert.match(dialog, /body: JSON\.stringify\(\{ unitId, idempotencyKey \}\)/);
+  assert.match(dialog, /onIssued: \(result\) => onReserved\?\.\(result\.usage, result\)/);
+  assert.match(dialog, /if \(!failures\.length\) \{[\s\S]*onClose\?\.\(\)/);
+});
+
+test("partial multi-unit issue keeps only failed units selected and never reissues successes", () => {
+  assert.match(dialog, /const succeeded = new Set\(successes\)/);
+  assert.match(dialog, /unitsFrom\(current\)\.filter\(\(unit\) => !succeeded\.has\(unit\.id\)\)/);
+  assert.match(dialog, /setSelectedUnitIds\(new Set\(failures\.map\(\(\{ id \}\) => id\)\)\)/);
+  assert.match(dialog, /review and retry the selected units/);
+  assert.match(dialog, /unitRequestKeysRef\.current = new Map\(\)/);
+});
+
+test("the parent records each serialized usage without taking ownership of dialog close timing", () => {
+  const onReserved = editor.match(/onReserved=\{async \(usage\) => \{([\s\S]*?)\n    \}\}/);
+  assert.ok(onReserved, "serialized dialog must receive an async usage callback");
+  assert.match(onReserved[1], /await serializedParts\?\.recordUsage\?\.\(usage\)/);
+  assert.match(onReserved[1], /Part added; refresh the workorder if the serialized row is not visible/);
+  assert.doesNotMatch(onReserved[1], /setSerializedDialogPart\(null\)/);
+  assert.match(dialog, /await onReserved\?\.\(result\.usage, result\);[\s\S]*onClose\?\.\(\)/);
 });
 
 test("dialog is touch-safe, full-screen on phone, and retains a single content scroller", () => {

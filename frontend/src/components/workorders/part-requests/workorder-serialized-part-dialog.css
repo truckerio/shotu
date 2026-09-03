@@ -379,6 +379,11 @@
   font-weight: 400;
 }
 
+.workorder-serialized-select-all {
+  justify-self: start;
+  min-height: 44px;
+}
+
 .workorder-serialized-unit {
   align-items: start;
   border: 1px solid var(--border-subtle, #d0d5dd);

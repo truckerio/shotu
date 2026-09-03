@@ -258,7 +258,6 @@ export function UsedPartsEditor({
         // recoverable refresh state rather than inviting a duplicate scan.
         setMessage("Part added; refresh the workorder if the serialized row is not visible.");
       }
-      setSerializedDialogPart(null);
     }}
   /> : null;
   const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
