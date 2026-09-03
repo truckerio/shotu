@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inspectionCanComplete, inspectionProgress, inspectionResponseShouldSave, inspectionResult, inspectionActionForRole, weeklyInspectionTemplate } from "./inspection-model.js";
+import { inspectionCanComplete, inspectionProgress, inspectionResponseShouldSave, inspectionResult, inspectionActionForRole, inspectionUnitTypeLabel, weeklyInspectionTemplate } from "./inspection-model.js";
+
+test("inspection unit labels accept canonical and lowercase trailer values", () => {
+  assert.equal(inspectionUnitTypeLabel("Trailer"), "Trailer");
+  assert.equal(inspectionUnitTypeLabel("trailer"), "Trailer");
+  assert.equal(inspectionUnitTypeLabel("Truck"), "Truck");
+});
 
 test("weekly truck and trailer templates have exact distinct approved twelve-check content", () => {
   const truck = weeklyInspectionTemplate("truck"); const trailer = weeklyInspectionTemplate("trailer");

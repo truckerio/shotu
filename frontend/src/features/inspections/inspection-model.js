@@ -13,6 +13,10 @@ const WEEKLY_TRAILER_SECTIONS = Object.freeze([
   ["safety", "Safety", ["Frame and crossmembers", "Mudflaps and rear-impact guard", "Cargo securement equipment"]],
 ]);
 
+export function inspectionUnitTypeLabel(unitType) {
+  return String(unitType).trim().toLowerCase() === "trailer" ? "Trailer" : "Truck";
+}
+
 export function weeklyInspectionTemplate(unitType = "truck") {
   const normalizedType = String(unitType).toLowerCase() === "trailer" ? "trailer" : "truck";
   const sections = normalizedType === "trailer" ? WEEKLY_TRAILER_SECTIONS : WEEKLY_TRUCK_SECTIONS;

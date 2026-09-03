@@ -12,6 +12,9 @@ test("create inspection derives template from canonical selected unit without an
   assert.match(page, /Search truck or trailer/);
   assert.match(page, /form\.template\.label/);
   assert.doesNotMatch(page, /Annual|FMCSA|Inspection type/);
+  assert.match(page, /inspectionUnitTypeLabel\(unit\.unitType\)/);
+  assert.match(page, /inspectionUnitTypeLabel\(form\.selectedUnit\.unitType\)/);
+  assert.doesNotMatch(page, /unitType === "trailer"/);
 });
 
 test("create form derives location where possible and limits mechanics assignment to Office/Admin", () => {

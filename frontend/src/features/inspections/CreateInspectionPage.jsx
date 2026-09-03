@@ -1,5 +1,6 @@
 import { ActionFooter, Dropdown, FormCard, FormField, FormSection, OperationalForm, OptionalSection, UnitSummary } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
+import { inspectionUnitTypeLabel } from "./inspection-model.js";
 import { useCreateInspectionController } from "./useCreateInspectionController.js";
 import "./inspections.css";
 
@@ -18,9 +19,9 @@ export function CreateInspectionPage({ actor, access = {}, locations = [], mecha
                   <input type="search" value={form.unitSearch} onChange={(event) => form.setUnitSearch(event.target.value)} placeholder="Search unit number, VIN, or plate" aria-label="Search truck or trailer" autoFocus />
                 </FormField>
                 {form.unitSearch ? <section className="inspection-unit-results" aria-label="Matching units">
-                  {form.choices.length ? <ul>{form.choices.map((unit) => <li key={unit.id}><button type="button" onClick={() => form.selectUnit(unit)}><strong>{unit.unitNo || unit.name}</strong><span>{unit.unitType === "trailer" ? "Trailer" : "Truck"}{unit.vin ? ` · ${unit.vin}` : ""}</span></button></li>)}</ul> : <p>No matching units.</p>}
+                  {form.choices.length ? <ul>{form.choices.map((unit) => <li key={unit.id}><button type="button" onClick={() => form.selectUnit(unit)}><strong>{unit.unitNo || unit.name}</strong><span>{inspectionUnitTypeLabel(unit.unitType)}{unit.vin ? ` · ${unit.vin}` : ""}</span></button></li>)}</ul> : <p>No matching units.</p>}
                 </section> : null}
-              </> : <UnitSummary unit={{ ...form.selectedUnit, unitType: form.selectedUnit.unitType === "trailer" ? "Trailer" : "Truck" }} onEdit={form.clearSelectedUnit} editLabel="Change unit" />}
+              </> : <UnitSummary unit={{ ...form.selectedUnit, unitType: inspectionUnitTypeLabel(form.selectedUnit.unitType) }} onEdit={form.clearSelectedUnit} editLabel="Change unit" />}
               {form.selectedUnit ? <div className="inspection-template-summary"><span>Template</span><strong>{form.template.label}</strong></div> : null}
             </FormSection>
           </div>
