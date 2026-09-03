@@ -28,6 +28,8 @@ test("ordinary app Back consumes validated inspection context and each workspace
   assert.match(roleNavigation, /workspaceSearchForRole\(actor\.role, \{ inspectionReturn \}\)/);
   for (const source of [office, mechanic, admin]) {
     assert.match(source, /inspectionReturnContext\(\)/);
+    assert.match(source, /const initialInspectionId = inspectionAccess\.canRead \? inspectionReturn\?\.inspectionId \|\| "" : ""/);
+    assert.doesNotMatch(source, /const initialInspectionId = inspectionAccess\.canRead && workorderAccess\.canRead/);
   }
   assert.match(office, /initialInspectionId=\{createdInspectionId \|\| initialInspectionId\}/);
   assert.match(admin, /initialInspectionId=\{createdInspectionId \|\| initialInspectionId\}/);

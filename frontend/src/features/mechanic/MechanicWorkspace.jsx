@@ -66,7 +66,7 @@ export function MechanicWorkspace({
   const [error, setError] = useState("");
   const [online, setOnline] = useState(() => navigator.onLine);
   const inspectionReturn = inspectionReturnContext();
-  const initialInspectionId = inspectionAccess.canRead && workorderAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
+  const initialInspectionId = inspectionAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
   const [product, setProduct] = useState(() => initialInspectionId || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");

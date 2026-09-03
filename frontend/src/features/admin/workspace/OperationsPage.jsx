@@ -41,7 +41,7 @@ function OperationsTitle({ product, canSwitch, onChange }) {
 
 export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, onCreateWorkorder, inspectionAccess = { canRead: false, canWrite: false }, workorderAccess = { canRead: true, canWrite: true } }) {
   const inspectionReturn = inspectionReturnContext();
-  const initialInspectionId = inspectionAccess.canRead && workorderAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
+  const initialInspectionId = inspectionAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
   const [product, setProduct] = useState(() => initialInspectionId || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");

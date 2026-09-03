@@ -8,7 +8,7 @@ import { inspectionFromApi, inspectionRefreshMode, loadInspectionRefreshWindow, 
 import { renderAndPrintInspectionSlip } from "./inspection-print.js";
 import { readInspectionSession, writeInspectionSession } from "./inspection-session-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
-import { inspectionReturnContext } from "../../app/routes/route-state.js";
+import { inspectionReturnContext, inspectionWorkspaceSearch, replaceRouteSearch } from "../../app/routes/route-state.js";
 import { createLatestRequestGuard, LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import "./inspections.css";
 
@@ -234,7 +234,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       activeRef.current = null; setActive(null); await load();
     } catch (error) { setState((value) => ({ ...value, error: error.message })); throw error; }
   }
-  async function submitLineage(action, input) { const current=activeRef.current; const identity=JSON.stringify([current.id,current.version,action,input]); if(!lineageKeys.current.has(identity))lineageKeys.current.set(identity,`inspection-${action}-${crypto.randomUUID()}`); try { const result=await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/${action}`,{method:"POST",body:JSON.stringify({expectedVersion:current.version,idempotencyKey:lineageKeys.current.get(identity),...input})}); lineageKeys.current.delete(identity); const next=inspectionFromApi(result.inspection);activeRef.current=next;setActive(next);await load(); } catch(error){setState((value)=>({...value,error:error.message}));throw error;} }
+  async function submitLineage(action, input) { const current=activeRef.current; const identity=JSON.stringify([current.id,current.version,action,input]); if(!lineageKeys.current.has(identity))lineageKeys.current.set(identity,`inspection-${action}-${crypto.randomUUID()}`); try { const result=await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/${action}`,{method:"POST",body:JSON.stringify({expectedVersion:current.version,idempotencyKey:lineageKeys.current.get(identity),...input})}); lineageKeys.current.delete(identity); const next=inspectionFromApi(result.inspection);activeRef.current=next;setActive(next);replaceRouteSearch(inspectionWorkspaceSearch(actor.role,next.id));await load(); } catch(error){setState((value)=>({...value,error:error.message}));throw error;} }
   const correctCompletedInspection=(input)=>submitLineage("correct",input);
   const reinspectCompletedInspection=(input)=>submitLineage("reinspect",input);
 
