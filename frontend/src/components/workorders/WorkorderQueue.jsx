@@ -77,10 +77,10 @@ export function WorkorderQueueTabs({ tabs, activeTab, onChange, locale = "en" })
   return (
     <nav className="mechanic-queue-tabs" aria-label={t("queue.workorders")}>
       {tabs.map(({ key, label, count, icon: Icon }) => (
-        <button className={activeTab === key ? "active" : ""} type="button" key={key} onClick={() => onChange(key)} aria-current={activeTab === key ? "page" : undefined} aria-label={`${label}, ${formatLocaleNumber(count || 0, locale)} ${t("queue.workordersCount")}`}>
+        <button className={activeTab === key ? "active" : ""} type="button" key={key} onClick={() => onChange(key)} aria-current={activeTab === key ? "page" : undefined} aria-label={count == null ? label : `${label}, ${formatLocaleNumber(count, locale)} ${t("queue.workordersCount")}`}>
           {Icon ? <Icon aria-hidden="true" /> : null}
           <span>{label}</span>
-          <strong aria-hidden="true">{formatLocaleNumber(count || 0, locale)}</strong>
+          {count != null ? <strong aria-hidden="true">{formatLocaleNumber(count, locale)}</strong> : null}
         </button>
       ))}
     </nav>

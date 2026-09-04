@@ -86,17 +86,19 @@ test("camera denial or unavailable support enters manual recovery", () => {
   assert.match(scanner, /catch[\s\S]*setMessage\(text\.cameraAccessUnavailable\)[\s\S]*setManualEntry\(true\)/);
 });
 
-test("authorized parts surfaces reserve exact units and expose explicit physical dispositions", () => {
+test("authorized parts surfaces reserve exact units and route removal through custody", () => {
   assert.match(surface, /t\("parts\.reserveForWorkorder"\)/);
   assert.match(surface, /t\("parts\.reservedForWorkorder"\)/);
   assert.match(surface, /t\("parts\.disposition"\)/);
   assert.match(surface, /t\("parts\.markInstalled"\)/);
   assert.match(surface, /t\("parts\.returnUnused"\)/);
   assert.match(surface, /t\("parts\.removeFromUnit"\)/);
-  assert.match(surface, /removeConfirmationId/);
-  assert.match(surface, /parts\.removePhysicalReturnConfirm/);
+  assert.match(surface, /<SecondaryDetailPanel/);
+  assert.match(surface, /<UnitPartsLifecycle/);
+  assert.match(surface, /initialUsageId=\{custodyUsage\.id\}/);
+  assert.match(surface, /onBusyChange=\{setCustodyBusy\}/);
   assert.match(surface, /inventory-unit-usages.*\/finalize/);
-  assert.match(surface, /disposition: usage\.status === "installed_pending_approval" \? "returned" : "removed"/);
+  assert.doesNotMatch(surface, /disposition: usage\.status === "installed_pending_approval" \? "returned" : "removed"/);
   assert.match(surface, /inventory-unit-usages/);
   assert.doesNotMatch(surface, /\/api\/mechanic\//);
   assert.match(surface, /aria-live="polite"/);
@@ -123,8 +125,8 @@ test("parts-visible scanning projects usage state and actions into the canonical
   assert.match(usedPartsEditor, /activeSerializedParts/);
   assert.match(usedPartsEditor, /serializedParts\.finalize\(usage, "installed"\)/);
   assert.match(usedPartsEditor, /serializedParts\.finalize\(usage, "returned"\)/);
-  assert.match(usedPartsEditor, /serializedParts\.requestRemove\(usage\.id\)/);
-  assert.match(usedPartsEditor, /serializedParts\.removeFromUnit\(usage\)/);
+  assert.match(usedPartsEditor, /serializedParts\.requestRemove\(usage\)/);
+  assert.doesNotMatch(usedPartsEditor, /serializedParts\.removeFromUnit\(usage\)/);
   assert.match(usedPartsEditor, /className="used-parts-serialized-history"/);
   assert.match(usedPartsEditor, /<details/);
 });

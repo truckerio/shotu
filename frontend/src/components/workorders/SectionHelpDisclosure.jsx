@@ -19,6 +19,7 @@ export function SectionHelpDisclosure({ children, label }) {
   const closeOnEscape = (event) => {
     if (event.key !== "Escape" || !open) return;
     event.preventDefault();
+    event.stopPropagation();
     setOpen(false);
     triggerRef.current?.focus();
   };

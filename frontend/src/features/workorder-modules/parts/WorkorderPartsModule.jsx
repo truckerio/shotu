@@ -73,6 +73,7 @@ export function WorkorderPartsModule({
           <SerializedPartsScanner
             key={`scanner:${activeWorkorder.workorder.id}`}
             workorderId={activeWorkorder.workorder.id}
+            actorId={actorId}
             onChanged={onChanged}
             locale={locale}
           >

@@ -9,6 +9,7 @@ const styles = readSource("./section-help-disclosure.css");
 test("section help is an explicit dismissible disclosure", () => {
   assert.match(component, /<button[\s\S]*type="button"[\s\S]*aria-controls=\{panelId\}[\s\S]*aria-expanded=\{open\}/);
   assert.match(component, /event\.key !== "Escape"/);
+  assert.match(component, /event\.stopPropagation\(\)/);
   assert.match(component, /triggerRef\.current\?\.focus\(\)/);
   assert.match(component, /document\.addEventListener\("pointerdown", closeOutside\)/);
   assert.match(component, /role="note" hidden=\{!open\}/);

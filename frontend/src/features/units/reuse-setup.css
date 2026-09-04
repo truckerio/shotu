@@ -1,0 +1,13 @@
+.reuse-setup { border-top: 1px solid #eaecf0; padding-block: 16px; }
+.reuse-setup summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.reuse-setup > p { color: #667085; }
+.reuse-setup form { display: grid; gap: 12px; padding-block: 16px; }
+.reuse-setup form + form { border-top: 1px solid #eaecf0; }
+.reuse-setup h4 { margin: 0; }
+.reuse-setup label { display: grid; gap: 6px; min-width: 0; }
+.reuse-setup input:not([type="checkbox"]), .reuse-setup textarea { box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; border: 1px solid #d0d5dd; border-radius: 8px; }
+.reuse-setup fieldset { min-width: 0; border: 1px solid #eaecf0; border-radius: 8px; }
+.reuse-setup .reuse-setup-check { display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.reuse-setup input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; }
+.reuse-setup button { min-height: 44px; }
+.reuse-setup-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

@@ -14,7 +14,7 @@ test("legacy invoice links resolve to Inventory and win over saved queue prefere
     readFile(new URL("../inventory/InventoryWorkspace.jsx", import.meta.url), "utf8"),
   ]);
   assert.match(officeSource, /if \(requested === "invoices"\) return "inventory"/);
-  assert.match(officeSource, /return \["drafts", "inventory"\]\.includes\(requested\) \? requested : ""/);
+  assert.match(officeSource, /return \["drafts", "inventory", "units"\]\.includes\(requested\) \? requested : ""/);
   assert.match(officeSource, /const savedTabCandidate = !requestedWorkspace/);
   assert.match(officeSource, /: requestedWorkspace \|\| "needs"/);
   assert.match(inventorySource, /initialParams\.get\("view"\) === "invoices"/);

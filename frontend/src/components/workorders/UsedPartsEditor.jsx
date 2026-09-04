@@ -131,8 +131,6 @@ export function UsedPartsEditor({
     const actions = usage && serializedParts ? serializedParts.actionsFor(usage) : {};
     const installed = ["installed_pending_approval", "installed"].includes(part.status);
     const status = usage && serializedParts ? serializedParts.statusLabel(usage.status) : t("parts.installed");
-    const confirmingRemoval = usage && serializedParts?.removeConfirmationId === usage.id;
-    const removing = usage && serializedParts?.busy === `${usage.id}:remove`;
     const rowBusy = Boolean(serializedParts?.busy);
     const rowId = usage?.id ? `serialized-part-${usage.id}` : undefined;
     return (
@@ -187,24 +185,11 @@ export function UsedPartsEditor({
             {actions.returnUnused ? <Button type="button" onClick={() => serializedParts.finalize(usage, "returned")} disabled={rowBusy}>
               {t("parts.returnUnused")}
             </Button> : null}
-            {actions.remove && !confirmingRemoval ? <Button type="button" onClick={() => serializedParts.requestRemove(usage.id)} disabled={rowBusy}>
+            {actions.remove ? <Button type="button" onClick={() => serializedParts.requestRemove(usage)} disabled={rowBusy}>
               {t("parts.removeFromUnit")}
             </Button> : null}
           </div>
         </div>
-        {actions.remove && confirmingRemoval ? (
-          <div className="used-part-serialized-confirmation" role="status" aria-live="polite">
-            <p>{usage.status === "installed_pending_approval" ? t("parts.removePhysicalReturnConfirm") : t("parts.removeInspectionConfirm")}</p>
-            <div>
-              <Button type="button" variant="primary" onClick={() => serializedParts.removeFromUnit(usage)} disabled={rowBusy}>
-                {removing ? t("parts.removing") : t("parts.confirmRemove")}
-              </Button>
-              <Button type="button" onClick={serializedParts.cancelRemove} disabled={rowBusy}>
-                {t("parts.cancelRemove")}
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </div>
     );
   }

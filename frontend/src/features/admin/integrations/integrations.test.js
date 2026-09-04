@@ -78,7 +78,7 @@ test("integration landing uses equal summary cards and mounts configuration only
   assert.match(settings, /selectedIntegrationFromLocation/);
   assert.match(settings, /params\.set\("integration", integrationId\)/);
   assert.match(settings, /window\.addEventListener\("popstate"/);
-  assert.equal((settings.match(/<IntegrationSummaryCard/g) || []).length, 3);
+  assert.equal((settings.match(/<IntegrationSummaryCard/g) || []).length, 4);
   assert.match(settings, /!selectedIntegration \?/);
   assert.match(settings, /selectedIntegration === "odoo" \? <OdooIntegrationCard/);
   assert.match(settings, /selectedIntegration === "samsara"/);

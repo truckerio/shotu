@@ -84,6 +84,7 @@ function eligibility({ workorder, unit }) {
 }
 
 function mapMutationFailure(kind) {
+  if (kind === "custody_required") throw failure("INVENTORY_REUSE_CUSTODY_REQUIRED", "Physically installed parts require removal, handoff, and inspection through Units → Removed parts.");
   if (kind === "missing") throw inventoryNotFound();
   if (kind === "idempotency_conflict") throw failure("INVENTORY_UNIT_REPLAY_CONFLICT", "This request key was already used for a different serialized-part action.");
   if (kind === "workorder_state") throw failure("WORKORDER_INVENTORY_NOT_ACTIVE", "Serialized parts can only be changed while this workorder is active.");

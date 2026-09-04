@@ -19,5 +19,5 @@ test("Office Parts uses the shared request queue and opens the exact request", a
   assert.match(source, /count: partRequestCount\.loaded \? partRequestCount\.total : null/);
   assert.doesNotMatch(source, /dashboard\?\.parts\?\.length/);
   assert.match(source, /refreshKey=\{partRequestRefreshKey\}/);
-  assert.match(source, /\["drafts", "inventory", "parts"\]\.includes\(activeTab\)/);
+  assert.match(source, /\["drafts", "inventory", "units", "parts"\]\.includes\(activeTab\)/);
 });

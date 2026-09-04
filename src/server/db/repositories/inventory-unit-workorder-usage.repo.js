@@ -10,6 +10,7 @@ function publicUsage(row) {
   if (!row) return null;
   return {
     id: row.id,
+    companyId: row.company_id,
     workorderId: row.workorder_id,
     assetId: row.asset_id,
     locationId: row.location_id,
@@ -539,6 +540,12 @@ export async function finalizeSerializedUnitUsage(input) {
     const reserving = usage.status === "reserved" && usage.unit_status === "reserved";
     const pendingInstall = usage.status === "installed_pending_approval" && usage.unit_status === "installed_pending_approval";
     const approvedInstall = usage.status === "installed" && usage.unit_status === "installed";
+    // Physically fitted parts never go straight back to Available. The custody
+    // command records removal-workorder context, handoff, and independent review.
+    if (removing || input.disposition === "returned" && pendingInstall) {
+      await client.query("rollback");
+      return { kind: "custody_required" };
+    }
     if (!(
       input.disposition === "installed" && (legacy || reserving)
       || input.disposition === "returned" && (legacy || reserving || pendingInstall)

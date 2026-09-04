@@ -3,7 +3,9 @@ import { CheckCircle, Scan, XClose } from "@untitledui/icons";
 import { Dialog, Modal, ModalOverlay } from "react-aria-components";
 import { Button } from "../../ui/Button.jsx";
 import { DraggableBottomSheet } from "../../ui/DraggableBottomSheet.jsx";
+import { SecondaryDetailPanel } from "../../ui/SecondaryDetailPanel.jsx";
 import { InventoryCodeScanner } from "../../../features/inventory/InventoryCodeScanner.jsx";
+import { UnitPartsLifecycle } from "../../../features/units/UnitPartsLifecycle.jsx";
 import {
   enqueuePendingCandidate,
   inventoryUsageActions,
@@ -21,7 +23,7 @@ function requestKey(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", children = null }) {
+export function SerializedPartsScanner({ workorderId, actorId = "", onChanged, locale = "en", children = null }) {
   const t = (key) => interfaceText(locale, key);
   const errorText = (error) => locale === "en" && error?.message ? error.message : t("mechanic.requestFailed");
   const usageStatus = (status) => t(`parts.status.${status}`) === `parts.status.${status}`
@@ -37,7 +39,8 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [drawerSnap, setDrawerSnap] = useState("peek");
-  const [removeConfirmationId, setRemoveConfirmationId] = useState("");
+  const [custodyUsage, setCustodyUsage] = useState(null);
+  const [custodyBusy, setCustodyBusy] = useState(false);
   const [focusUsageId, setFocusUsageId] = useState("");
   const finalizeKeysRef = useRef(new Map());
   const usageRevisionRef = useRef(0);
@@ -81,7 +84,8 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
     setScannerOpen(false);
     setUsages([]);
     setUsageSnapshotReady(false);
-    setRemoveConfirmationId("");
+    setCustodyUsage(null);
+    setCustodyBusy(false);
     setFocusUsageId("");
     usagesLoadedRef.current = true;
     setDrawerSnap("peek");
@@ -197,47 +201,17 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
     }
   }
 
-  async function removeFromUnit(usage) {
-    if (busy) return;
-    const generation = workorderGenerationRef.current;
-    const requestedWorkorderId = workorderId;
-    const mapKey = `${usage.id}:remove`;
-    if (!finalizeKeysRef.current.has(mapKey)) {
-      finalizeKeysRef.current.set(mapKey, requestKey("serialized-remove"));
-    }
-    setBusy(mapKey);
+  function requestRemove(usage) {
+    if (busy || custodyBusy || !usage?.assetId || !usage?.companyId || !usage?.locationId) return;
+    setCustodyUsage(usage);
     setMessage("");
     setMessageTone("status");
-    try {
-      const result = await api(
-        `/api/workorders/${encodeURIComponent(requestedWorkorderId)}/inventory-unit-usages/${encodeURIComponent(usage.id)}/finalize`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            disposition: usage.status === "installed_pending_approval" ? "returned" : "removed",
-            idempotencyKey: finalizeKeysRef.current.get(mapKey),
-          }),
-        },
-      );
-      if (generation !== workorderGenerationRef.current) return;
-      usageRevisionRef.current += 1;
-      setUsages((current) => replaceUsage(current, result.usage));
-      setUsageSnapshotReady(true);
-      setRemoveConfirmationId("");
-      setMessage(["removed", "removed_inspection_required", "inspection_required"].includes(result.usage?.status)
-        ? t("parts.removedInspectionRequired")
-        : t("parts.removedReturnedToStock"));
-      await onChanged?.();
-    } catch (error) {
-      if (generation !== workorderGenerationRef.current) return;
-      setMessageTone("error");
-      setMessage(errorText(error));
-      if (error?.status === 409 || error?.code === "INVENTORY_USAGE_STATE_CONFLICT") {
-        await onChanged?.().catch(() => {});
-      }
-    } finally {
-      if (generation === workorderGenerationRef.current) setBusy("");
-    }
+  }
+
+  async function refreshAfterCustodyChange() {
+    usageRevisionRef.current += 1;
+    await loadUsages();
+    await onChanged?.();
   }
 
   const actionable = usages.filter((usage) => {
@@ -422,11 +396,17 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
           </Modal>
         </ModalOverlay>
   ) : null;
+  const custodyPanel = (
+    <SecondaryDetailPanel open={Boolean(custodyUsage)} onOpenChange={(open) => { if (!open && !custodyBusy) setCustodyUsage(null); }} onClose={() => { if (!custodyBusy) setCustodyUsage(null); }} closeDisabled={custodyBusy} dismissable={!custodyBusy} title={custodyUsage?.partNumber || "Remove tracked part"} eyebrow="Parts custody">
+      {custodyUsage ? <UnitPartsLifecycle unit={{ id: custodyUsage.assetId, companyId: custodyUsage.companyId, locationId: custodyUsage.locationId }} actorId={actorId} initialUsageId={custodyUsage.id} initialWorkorderId={workorderId} onChanged={refreshAfterCustodyChange} onBusyChange={setCustodyBusy} /> : null}
+    </SecondaryDetailPanel>
+  );
 
   if (tablePresentation) {
     return (
       <>
         {scannerOverlay}
+        {custodyPanel}
         {children({
           scanControl,
           usages,
@@ -439,11 +419,9 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
           actionsFor: inventoryUsageActions,
           statusLabel: usageStatus,
           finalize,
-          requestRemove: (usageId) => setRemoveConfirmationId(usageId),
-          cancelRemove: () => setRemoveConfirmationId(""),
-          removeFromUnit,
+          requestRemove,
           recordUsage,
-          removeConfirmationId,
+          custodyUsageId: custodyUsage?.id || "",
         })}
       </>
     );
@@ -456,7 +434,6 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
 
       {actionable.map((usage) => {
         const actions = inventoryUsageActions(usage);
-        const removing = busy === `${usage.id}:remove`;
         return (
         <article className="mechanic-serialized-usage is-issued" key={usage.id}>
           <div><strong>{usage.partNumber}</strong><code>{usage.serialNumber}</code><span>{usageStatus(usage.status)}</span></div>
@@ -468,23 +445,10 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
             {actions.returnUnused ? <Button type="button" onClick={() => finalize(usage, "returned")}>
               {t("parts.returnUnused")}
             </Button> : null}
-            {actions.remove && removeConfirmationId !== usage.id ? <Button type="button" onClick={() => setRemoveConfirmationId(usage.id)}>
+            {actions.remove ? <Button type="button" onClick={() => requestRemove(usage)}>
               {t("parts.removeFromUnit")}
             </Button> : null}
           </fieldset>
-          {actions.remove && removeConfirmationId === usage.id ? (
-            <div className="mechanic-serialized-remove-confirmation" role="status" aria-live="polite">
-              <p>{usage.status === "installed_pending_approval" ? t("parts.removePhysicalReturnConfirm") : t("parts.removeInspectionConfirm")}</p>
-              <div>
-                <Button type="button" variant="primary" onClick={() => removeFromUnit(usage)} disabled={removing}>
-                  {removing ? t("parts.removing") : t("parts.confirmRemove")}
-                </Button>
-                <Button type="button" onClick={() => setRemoveConfirmationId("")} disabled={removing}>
-                  {t("parts.cancelRemove")}
-                </Button>
-              </div>
-            </div>
-          ) : null}
         </article>
         );
       })}
@@ -497,6 +461,7 @@ export function SerializedPartsScanner({ workorderId, onChanged, locale = "en", 
         </ol>
       ) : null}
       {!scannerOpen && message ? <p className="mechanic-serialized-message" role={messageTone === "error" ? "alert" : "status"} aria-live={messageTone === "error" ? "assertive" : "polite"}>{message}</p> : null}
+      {custodyPanel}
     </section>
   );
 }

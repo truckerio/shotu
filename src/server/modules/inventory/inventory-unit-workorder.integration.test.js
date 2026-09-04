@@ -24,13 +24,15 @@ function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("real PostgreSQL reserves until approval, releases preapproval returns, and records postapproval removal", { skip: !runPostgres }, async () => {
+test("real PostgreSQL reserves until approval, returns unused parts, and rejects legacy removal shortcuts", { skip: !runPostgres }, async () => {
   const suffix = randomUUID().replaceAll("-", "");
   const actorId = randomUUID();
   const companyId = randomUUID();
   const locationId = randomUUID();
   const assetId = randomUUID();
   const workorderId = randomUUID();
+  const secondAssetId = randomUUID();
+  const secondWorkorderId = randomUUID();
   const runId = randomUUID();
   const receiptId = randomUUID();
   const lineId = randomUUID();
@@ -152,10 +154,6 @@ test("real PostgreSQL reserves until approval, releases preapproval returns, and
     });
     assert.equal(removedBeforeApproval.kind, "reserved");
     assert.equal((await finalizeSerializedUnitUsage({
-      ...scope, usageId: removedBeforeApproval.usage.id, disposition: "installed",
-      idempotencyKey: `install-a2-${suffix}`, requestHash: digest(`install-a2-${suffix}`),
-    })).usage.status, "installed_pending_approval");
-    assert.equal((await finalizeSerializedUnitUsage({
       ...scope, usageId: removedBeforeApproval.usage.id, disposition: "returned",
       idempotencyKey: `remove-return-a2-${suffix}`, requestHash: digest(`remove-return-a2-${suffix}`),
     })).kind, "finalized");
@@ -207,7 +205,7 @@ test("real PostgreSQL reserves until approval, releases preapproval returns, and
     assert.equal((await finalizeSerializedUnitUsage({
       ...scope, usageId: usageB.id, disposition: "removed",
       idempotencyKey: `remove-b-${suffix}`, requestHash: digest(`remove-b-${suffix}`),
-    })).kind, "finalized");
+    })).kind, "custody_required");
 
     const snapshot = await query(
       `select
@@ -220,14 +218,51 @@ test("real PostgreSQL reserves until approval, releases preapproval returns, and
       [companyId, catalogPartId, locationId, unitB],
     );
     assert.deepEqual(snapshot.rows[0], {
-      on_hand: "1.000", issues: 1, returns: 0, installed_events: 1, reserved: "0.000", removed_unit_status: "removed",
+      on_hand: "1.000", issues: 1, returns: 0, installed_events: 1, reserved: "0.000", removed_unit_status: "installed",
     });
+    await query(
+      "insert into assets (id, company_id, location_id, provider, name, unit_no) values ($1,$2,$3,'manual','Second integration truck',$4)",
+      [secondAssetId, companyId, locationId, `B-${suffix.slice(0, 8)}`],
+    );
+    await query(
+      `insert into operational_workorders (id, company_id, serial, asset_id, location_id, created_by_user_id, concern, status)
+       values ($1,$2,$3,$4,$5,$6,'Cross-vehicle serialized test','in_progress')`,
+      [secondWorkorderId, companyId, `WO-SECOND-${suffix}`, secondAssetId, locationId, actorId],
+    );
+    const secondScope = { ...scope, workorderId: secondWorkorderId };
+    // The denied legacy removal must not free the installed identity for another truck.
+    assert.equal((await issueSerializedUnitToWorkorder({
+      ...secondScope, unitId: unitB, idempotencyKey: `unsafe-reuse-${suffix}`, requestHash: digest("unsafe-reuse"),
+    })).kind, "unit_state");
+    assert.equal((await query(
+      "select status from inventory_serialized_units where company_id=$1 and id=$2",
+      [companyId, unitB],
+    )).rows[0].status, "installed");
+    // An unused returned unit can be reserved on another vehicle without cloning its identity.
+    const secondIssue = await issueSerializedUnitToWorkorder({
+      ...secondScope, unitId: unitA, idempotencyKey: `second-issue-${suffix}`, requestHash: digest("second-issue"),
+    });
+    assert.equal(secondIssue.kind, "reserved");
+    assert.notEqual(secondIssue.usage.id, usageA.id);
+    const placement = (await query(
+      "select unit_id, asset_id, workorder_id from workorder_serialized_part_usages where id=$1",
+      [secondIssue.usage.id],
+    )).rows[0];
+    assert.deepEqual(placement, { unit_id: unitA, asset_id: secondAssetId, workorder_id: secondWorkorderId });
+    assert.equal((await finalizeSerializedUnitUsage({
+      ...secondScope, usageId: secondIssue.usage.id, disposition: "returned",
+      idempotencyKey: `second-return-${suffix}`, requestHash: digest("second-return"),
+    })).kind, "finalized");
+    assert.deepEqual((await query(
+      "select quantity_on_hand, quantity_reserved from inventory_items where company_id=$1 and catalog_part_id=$2 and location_id=$3",
+      [companyId, catalogPartId, locationId],
+    )).rows[0], { quantity_on_hand: "1.000", quantity_reserved: "0.000" });
     const refreshed = await listWorkorderSerializedUnitUsages({ ...scope, limit: 100 });
-    assert.deepEqual(refreshed.map((usage) => usage.status).sort(), ["removed", "returned", "returned"]);
+    assert.deepEqual(refreshed.map((usage) => usage.status).sort(), ["installed", "returned", "returned"]);
     const serializedTimeline = (await getWorkorderTimeline(workorderId)).filter((event) => event.type === "part");
     assert.deepEqual(serializedTimeline.map((event) => event.action), [
-      "reserved", "returned", "reserved", "installed_pending_approval", "removed_returned_to_stock",
-      "reserved", "installed_pending_approval", "installed", "removed",
+      "reserved", "returned", "reserved", "returned",
+      "reserved", "installed_pending_approval", "installed",
     ]);
     assert.equal(serializedTimeline[0].part_number, `SERIAL-${suffix}`);
     assert.equal(serializedTimeline[0].serial_number, `WG-L-${suffix}-1`);
@@ -254,6 +289,8 @@ test("real PostgreSQL reserves until approval, releases preapproval returns, and
     await query("delete from parts_catalog where company_id = $1", [companyId]).catch(() => {});
     await query("delete from workorder_mechanic_assignments where workorder_id = $1", [workorderId]).catch(() => {});
     await query("delete from operational_workorders where id = $1", [workorderId]).catch(() => {});
+    await query("delete from operational_workorders where id = $1", [secondWorkorderId]).catch(() => {});
+    await query("delete from assets where id = $1", [secondAssetId]).catch(() => {});
     await query("delete from assets where id = $1", [assetId]).catch(() => {});
     await query("delete from invoice_extraction_runs where company_id = $1", [companyId]).catch(() => {});
     await query("delete from locations where company_id = $1", [companyId]).catch(() => {});

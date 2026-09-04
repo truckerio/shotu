@@ -15,7 +15,7 @@ export function IntegrationSummaryCard({
       <header className="integration-card-header">
         <span className="integration-provider-icon"><Icon /></span>
         <div><h2>{title}</h2><p>{category}</p></div>
-        <span className={`integration-status ${statusTone}`}>{statusLabel}</span>
+        {statusLabel ? <span className={`integration-status ${statusTone}`}>{statusLabel}</span> : null}
       </header>
       <p className="integration-description">{description}</p>
       <dl className="integration-summary-facts">

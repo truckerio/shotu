@@ -5,6 +5,12 @@ import test from "node:test";
 const queueCss = await readFile(new URL("./workorder-queue.css", import.meta.url), "utf8");
 const mechanicCss = await readFile(new URL("../../features/mechanic/mechanic-workspace.css", import.meta.url), "utf8");
 
+test("non-queue destinations do not invent zero workorder counts", async () => {
+  const component = await readFile(new URL("./WorkorderQueue.jsx", import.meta.url), "utf8");
+  assert.match(component, /aria-label=\{count == null \? label/);
+  assert.match(component, /count != null \? <strong/);
+});
+
 test("mechanic page header keeps one composition step above the queue", () => {
   assert.match(mechanicCss, /\.mechanic-home-content:has\(>\s*\.mechanic-queue-shell\)\s*\{[^}]*display:\s*grid;[^}]*gap:\s*16px;/s);
   assert.match(mechanicCss, /\.mechanic-home-content\s*>\s*\.page-header\s*\{[^}]*margin-top:\s*0;/s);

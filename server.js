@@ -47,6 +47,7 @@ import { handleInvoiceExtractionApi } from "./src/server/routes/invoice-extracti
 import { handleInventoryApi } from "./src/server/routes/inventory.routes.js";
 import { handlePartFulfillmentApi } from "./src/server/routes/part-fulfillment.routes.js";
 import { handleInventoryUnitWorkorderApi } from "./src/server/routes/inventory-unit-workorder.routes.js";
+import { handleInventoryReuseApi } from "./src/server/routes/inventory-reuse.routes.js";
 import { handleInspectionsApi } from "./src/server/routes/inspections.routes.js";
 import { handleProductModulesApi } from "./src/server/routes/product-modules.routes.js";
 import { handleInspectionTemplatesApi } from "./src/server/routes/inspection-templates.routes.js";
@@ -811,6 +812,7 @@ async function handleApi(req, res) {
   if (await handleIntegrationsApi(req, res, url, helpers)) return;
   if (await handleMechanicApi(req, res, url, helpers)) return;
   if (await handleInventoryUnitWorkorderApi(req, res, url, helpers)) return;
+  if (await handleInventoryReuseApi(req, res, url, helpers)) return;
   if (await handleOfficeApi(req, res, url, helpers)) return;
   if (await handlePartFulfillmentApi(req, res, url, helpers)) return;
   if (await handleInventoryApi(req, res, url, helpers)) return;

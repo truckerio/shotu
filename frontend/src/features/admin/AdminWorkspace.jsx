@@ -108,6 +108,7 @@ export function AdminWorkspace({
   );
 
   function changeView(nextView) {
+    if (nextView === "settings" && view === "settings") return;
     setView(nextView);
     setSelectedId(null);
     setDetail(null);

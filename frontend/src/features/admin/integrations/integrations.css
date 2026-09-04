@@ -5,18 +5,31 @@
 .admin-settings-tabs {
   border-bottom: 1px solid #d0d5dd;
   display: flex;
+  gap: 24px;
   margin-top: 24px;
 }
 
 .admin-settings-tabs button {
   background: transparent;
   border: 0;
-  border-bottom: 2px solid #1570ef;
-  color: #175cd3;
+  border-bottom: 2px solid transparent;
+  color: #475467;
   font: inherit;
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   padding: 11px 2px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.admin-settings-tabs button.active {
+  border-bottom-color: #1570ef;
+  color: #175cd3;
+}
+
+.admin-settings-tabs button:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: 2px;
 }
 
 .integration-page-heading {

@@ -8,6 +8,7 @@ function read(relativePath) {
 
 const controller = read("../AdminWorkspace.jsx");
 const shell = read("./AdminWorkspaceShell.jsx");
+const settings = read("./AdminSettingsWorkspace.jsx");
 const locations = read("./LocationsPage.jsx");
 const adminStyles = read("../admin.css");
 const users = read("./UsersPage.jsx");
@@ -19,7 +20,7 @@ const collectionPage = read("../../../components/operations/OperationalCollectio
 
 test("AdminWorkspace remains a controller with a stable public export", () => {
   assert.match(controller, /export function AdminWorkspace\(\{/);
-  assert.ok(controller.split("\n").length <= 450, "AdminWorkspace should stay at or below 450 lines");
+  assert.ok(controller.replace(/\n$/, "").split("\n").length <= 450, "AdminWorkspace should stay at or below 450 lines");
   assert.match(controller, /<AdminWorkspaceShell/);
   assert.match(controller, /<AdminLocationDialogs/);
   assert.match(controller, /<AdminUserActionDialog/);
@@ -34,7 +35,9 @@ test("admin pages are owned outside the controller", () => {
   assert.match(shell, /<OperationsPage/);
   assert.doesNotMatch(shell, /SurveillanceWorkspace/);
   assert.doesNotMatch(shell, /Odoo entry/);
-  assert.match(shell, /<IntegrationsSettings/);
+  assert.match(shell, /<AdminSettingsWorkspace/);
+  assert.match(settings, /<IntegrationsSettings/);
+  assert.match(settings, /<InspectionTemplatesPage/);
   assert.match(shell, /<LocationDetailPage/);
   assert.match(shell, /<LocationsPage/);
   assert.match(locations, /<UsersPage/);

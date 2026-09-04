@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Key01, RefreshCw01, Trash01, XClose } from "@untitledui/icons";
+import { AlertCircle, FileCheck02, Key01, RefreshCw01, Trash01, XClose } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
@@ -42,7 +42,7 @@ function callbackResult() {
     : { message: "", error: message || "Samsara connection failed." };
 }
 
-export function IntegrationsSettings() {
+export function IntegrationsSettings({ onOpenTemplates }) {
   const [status, setStatus] = useState(null);
   const [odooStatus, setOdooStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -206,9 +206,6 @@ export function IntegrationsSettings() {
           current={detailTitle}
         /> : null}
       />
-      <nav className="admin-settings-tabs" aria-label="Company settings">
-        <button className="active" type="button">Integrations</button>
-      </nav>
 
       {!selectedIntegration ? (
         <div className="integration-page-heading">
@@ -284,6 +281,26 @@ export function IntegrationsSettings() {
           ) : null}
         </div>
       )}
+
+      {!selectedIntegration ? (
+        <section aria-labelledby="settings-templates-heading">
+          <div className="integration-page-heading">
+            <div>
+              <h2 id="settings-templates-heading">Templates</h2>
+              <p>Manage inspection templates for your company.</p>
+            </div>
+          </div>
+          <div className="integration-provider-grid">
+          <IntegrationSummaryCard
+            category="Inspections"
+            description="Create, edit, and assign inspection templates for company locations."
+            icon={FileCheck02}
+            onManage={onOpenTemplates}
+            title="Inspection templates"
+          />
+          </div>
+        </section>
+      ) : null}
 
       {confirmDisconnect ? (
         <div className="integration-confirm-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmDisconnect(false)}>
