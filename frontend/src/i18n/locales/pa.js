@@ -94,6 +94,8 @@ export const pa = Object.freeze({
   "mechanic.waiting": "ਉਡੀਕ ਵਿੱਚ",
   "mechanic.history": "ਪਿਛਲਾ ਕੰਮ",
   "mechanic.allActive": "ਸਾਰੇ ਚੱਲਦੇ ਕੰਮ",
+  "mechanic.acceptInspection": "ਜਾਂਚ ਸਵੀਕਾਰੋ",
+  "mechanic.acceptingInspection": "ਜਾਂਚ ਸਵੀਕਾਰ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ…",
   "mechanic.searchAndFilters": "ਖੋਜ ਅਤੇ ਫਿਲਟਰ",
   "mechanic.createWorkorder": "ਵਰਕਆਰਡਰ ਬਣਾਓ",
   "mechanic.noAssignedJobs": "ਕੋਈ ਕੰਮ ਸੌਂਪਿਆ ਨਹੀਂ ਗਿਆ",

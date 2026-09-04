@@ -20,6 +20,9 @@ export function PartCatalogCombobox({
   value,
   onChange,
   onSelect,
+  onSelectedValueClose,
+  onSelectedValueOpen,
+  selectedValueOpen = false,
   disabled = false,
   label = "Part number or description",
   placeholder = "Part number or description",
@@ -142,11 +145,18 @@ export function PartCatalogCombobox({
       setInteracting(false);
       setOpen(false);
       setActiveIndex(-1);
+      onSelectedValueClose?.();
       return;
     }
     if (event.key === "Tab") {
       setInteracting(false);
       setOpen(false);
+      return;
+    }
+    if (onSelectedValueOpen && !selectedValueOpen && ["ArrowDown", "Enter"].includes(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectedValueOpen();
       return;
     }
     if (state !== "results" || !items.length || !["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
@@ -210,7 +220,7 @@ export function PartCatalogCombobox({
         role="combobox"
         aria-label={inputAriaLabel}
         aria-autocomplete="list"
-        aria-expanded={showPopup}
+        aria-expanded={showPopup || selectedValueOpen}
         aria-controls={showPopup ? listboxId : undefined}
         aria-activedescendant={activeOptionId}
         autoComplete="off"
@@ -221,7 +231,19 @@ export function PartCatalogCombobox({
           onChange(event.target.value);
           setOpen(true);
         }}
+        onClick={() => {
+          if (onSelectedValueOpen && !selectedValueOpen) {
+            setInteracting(false);
+            setOpen(false);
+            onSelectedValueOpen();
+          }
+        }}
         onFocus={() => {
+          if (onSelectedValueOpen) {
+            setInteracting(false);
+            setOpen(false);
+            return;
+          }
           setInteracting(true);
           if (normalizedQuery.length >= MIN_QUERY_LENGTH && selectedQueryRef.current !== normalizedQuery) setOpen(true);
         }}

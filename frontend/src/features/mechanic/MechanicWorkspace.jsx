@@ -15,6 +15,7 @@ import { CreateInspectionPage, InspectionExperience, ProductModeSwitch } from ".
 import { inspectionFromApi } from "../inspections/inspection-api-model.js";
 import { inspectionMatchesSearch } from "../inspections/inspection-model.js";
 import { inspectionReturnContext } from "../../app/routes/route-state.js";
+import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
 import {
   MECHANIC_QUEUE_TABS,
   mechanicActionLabel,
@@ -28,6 +29,7 @@ import {
   mixedMechanicQueue,
 } from "./mechanic-workspace-model.js";
 import { readMechanicQueueSession, writeMechanicQueueSession } from "./mechanic-queue-session.js";
+import { loadMechanicWorkspaceData } from "./mechanic-workspace-api.js";
 import "./mechanic-workspace.css";
 import "../role-workspaces.css";
 
@@ -74,14 +76,13 @@ export function MechanicWorkspace({
 
   const loadDashboard = useCallback(async () => {
     setError("");
-    const [result, inspections] = await Promise.all([
-      api("/api/mechanic/dashboard"),
-      combinedQueueEnabled ? api("/api/inspections?limit=100") : Promise.resolve(null),
-    ]);
-    setDashboard(result);
-    if (inspections) setInspectionItems((inspections.items || []).map(inspectionFromApi));
+    const result = await loadMechanicWorkspaceData(api, { includeInspections:combinedQueueEnabled });
+    if (result.dashboard) setDashboard(result.dashboard);
+    if (result.inspections) setInspectionItems((result.inspections.items || []).map(inspectionFromApi));
     setLoading(false);
-  }, [combinedQueueEnabled]);
+    if (result.dashboardError) throw result.dashboardError;
+    if (result.inspectionError) setError(errorText(result.inspectionError));
+  }, [combinedQueueEnabled, errorText]);
 
   useEffect(() => {
     if (!workorderAccess.canRead) { setLoading(false); return; }
@@ -140,13 +141,30 @@ export function MechanicWorkspace({
     }
   }
 
+  async function claimInspectionFromCard(item) {
+    setAcceptingId(item.id);
+    setError("");
+    try {
+      const result = await api(`/api/inspections/${encodeURIComponent(item.id)}/actions/claim`, { method:"POST", body:JSON.stringify({ expectedVersion:item.inspection.version }) });
+      const next = inspectionFromApi(result.inspection);
+      setInspectionItems((current) => current.map((inspection) => inspection.id === next.id ? next : inspection));
+      setCreatedInspectionId(next.id);
+      setProduct("inspections");
+    } catch (err) {
+      setError(errorText(err));
+      await loadDashboard().catch(() => {});
+    } finally {
+      setAcceptingId("");
+    }
+  }
+
   const homeView = useMemo(() => buildMechanicHomeView(dashboard), [dashboard]);
   const mixedQueue = useMemo(() => mixedMechanicQueue(dashboard, inspectionItems), [dashboard, inspectionItems]);
   const secondaryIcons = { waiting: Clock, done: FileCheck02, activeWork: Users01 };
   const queueTabs = MECHANIC_QUEUE_TABS.map((tab) => ({
     ...tab,
     label: t(tab.labelKey),
-    count: dashboard?.counts[tab.countKey] || 0,
+    count: (dashboard?.counts[tab.countKey] || 0) + (combinedQueueEnabled ? mixedQueue[tab.key].filter((item) => item.queueType === "inspection").length : 0),
     icon: tab.key === "myWork" ? Briefcase02 : tab.key === "openWork" ? Inbox01 : secondaryIcons[tab.key],
   }));
   const phoneQueueKeys = mechanicQueueTabsForViewport(true);
@@ -295,13 +313,16 @@ export function MechanicWorkspace({
                     renderItem={(workorder) => (
                       <WorkorderRow
                         workorder={workorder}
-                        available={workorder.queueType !== "inspection" && (activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id)))}
+                        available={workorder.queueType === "inspection"
+                          ? workorder.status === "requested" && ["openWork", "activeWork"].includes(activeTab) && productModuleCapabilities(actor, "inspections", workorder.inspection.locationId).canWrite
+                          : activeTab === "openWork" || (activeTab === "activeWork" && !workorder.mechanicIds?.includes(actor.id))}
                         busy={acceptingId === workorder.id}
-                        acceptLabel={activeTab === "activeWork" ? t("queue.joinWork") : t("queue.acceptWork")}
-                        busyLabel={activeTab === "activeWork" ? t("queue.joining") : t("queue.accepting")}
+                        acceptLabel={workorder.queueType === "inspection" ? t("mechanic.acceptInspection") : activeTab === "activeWork" ? t("queue.joinWork") : t("queue.acceptWork")}
+                        busyLabel={workorder.queueType === "inspection" ? t("mechanic.acceptingInspection") : activeTab === "activeWork" ? t("queue.joining") : t("queue.accepting")}
                         locale={locale}
+                        openLabel={workorder.queueType === "inspection" ? `Open inspection ${workorder.inspection.number || workorder.id}` : undefined}
                         onOpen={() => openQueueItem(workorder)}
-                        onAccept={() => acceptFromCard(workorder.id)}
+                        onAccept={() => workorder.queueType === "inspection" ? claimInspectionFromCard(workorder) : acceptFromCard(workorder.id)}
                       />
                     )}
                   />

@@ -95,7 +95,7 @@ test("frame detector prefers native barcode detection when available", async () 
   }
 
   const detector = createInventoryFrameDetector({ BarcodeDetector: NativeDetector });
-  assert.deepEqual(detector.options.formats, ["qr_code", "code_128"]);
+  assert.deepEqual(detector.options.formats, ["qr_code"]);
   assert.deepEqual(await detector.detect({}), [{ rawValue: "native-code" }]);
 });
 

@@ -49,6 +49,30 @@
   grid-template-columns: 28px minmax(0, 1.25fr) 116px minmax(0, 1.4fr) minmax(220px, 1fr);
 }
 
+.used-parts-manual-picker {
+  max-width: 30rem;
+  position: relative;
+}
+
+.used-parts-manual-picker > .serialized-unit-nested-dropdown,
+.used-parts-manual-picker > .workorder-serialized-create-panel {
+  left: calc(100% + 8px);
+  top: 0;
+}
+
+@media (max-width: 1024px) {
+  .used-parts-manual-picker {
+    max-width: none;
+  }
+
+  .used-parts-manual-picker > .serialized-unit-nested-dropdown,
+  .used-parts-manual-picker > .workorder-serialized-create-panel {
+    left: 0;
+    top: calc(100% + 6px);
+    width: 100%;
+  }
+}
+
 .used-parts-toolbar {
   display: flex;
   justify-content: flex-end;

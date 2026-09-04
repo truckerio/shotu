@@ -110,7 +110,7 @@ function CompletedFollowUp({ followUp, eligibleWorkorders = [], canResolveFollow
   </article>;
 }
 
-export function InspectionDetail({ inspection = {}, projection = "mechanic", actor, mechanicReinspect = false, initialReinspection = false, mechanics = [], eligibleWorkorders = null, actionError = "", onCorrect, onReinspect, onAssign, onStart, onCancelInspection, onLinkWorkorder, onBack, onResponse, onReload, onComplete, onCreateOrLinkWorkorder, onResolveFollowUp, canResolveFollowUpWorkorders = false, canResolveFollowUps = false, onOpenWorkorder, onPrint, onDownload, workorderLinksAuthorized = false, workorderActionsAuthorized = false }) {
+export function InspectionDetail({ inspection = {}, projection = "mechanic", actor, mechanicReinspect = false, initialReinspection = false, mechanics = [], eligibleWorkorders = null, actionError = "", onCorrect, onReinspect, onAssign, onClaim, onStart, onCancelInspection, onLinkWorkorder, onBack, onResponse, onReload, onComplete, onCreateOrLinkWorkorder, onResolveFollowUp, canResolveFollowUpWorkorders = false, canResolveFollowUps = false, onOpenWorkorder, onPrint, onDownload, workorderLinksAuthorized = false, workorderActionsAuthorized = false }) {
   const template = inspection.template || weeklyInspectionTemplate(inspection.unitType);
   const [responses, setResponses] = useState(inspection.responses || {});
   const [saveState, setSaveState] = useState(inspection.saveState || "Saved");
@@ -121,6 +121,7 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
   const [activeSection, setActiveSection] = useState(() => template.sections?.[0]?.key || "");
   const [selectedFindingIds, setSelectedFindingIds] = useState([]);
   const [resolvingWorkorder, setResolvingWorkorder] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   useEffect(() => {
     setResponses(inspection.responses || {});
     setSaveState(inspection.saveState || "Saved");
@@ -130,6 +131,7 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
     setActiveSection(template.sections?.find((section) => section.items.some((item) => !responseIsComplete(item, inspection.responses?.[item.key])))?.key || template.sections?.[0]?.key || "");
     setSelectedFindingIds([]);
     setResolvingWorkorder(false);
+    setClaiming(false);
     setLineageReason(""); setCorrectedNotes(inspection.finalNotes||""); setCorrectedResponses(inspection.responses||{}); setLineageMode(initialReinspection && inspection.reinspectionEligible ? "reinspect" : ""); setReinspectAssignee(inspection.mechanic?.id||inspection.mechanicId||""); setLineageBusy(false);
   }, [inspection.id]);
   const progress = useMemo(() => inspectionProgress(template, responses), [responses, template]);
@@ -139,6 +141,7 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
   const showChecklist = editable || inspection.status === "completed";
   const canCancel = Boolean(onCancelInspection) && ["requested", "assigned", "in_progress"].includes(inspection.status);
   const canStart = Boolean(onStart) && ["requested", "assigned"].includes(inspection.status);
+  const canClaim = Boolean(onClaim) && inspection.status === "requested";
 
   async function updateResponse(item, value, commit = true) {
     const next = { ...responses, [item.key]: value };
@@ -185,6 +188,7 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
     setSaveState("Saved");
   }
   async function assign() { if (!assignmentId) return; await onAssign?.(assignmentId); }
+  async function claim() { setClaiming(true); try { await onClaim?.(); } finally { setClaiming(false); } }
   async function linkFinding(findingId) { if (workorderId) await onLinkWorkorder?.({ findingId, workorderId }); }
   const result = inspectionResult(template, responses);
   const linkedFindingIds = new Set((inspection.workorderLinks || []).map((link) => link.findingId));
@@ -230,10 +234,11 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
       <div className="inspection-detail-heading"><div><span>{template.label}</span><h1>{inspection.unitNo || "Unit not recorded"}</h1></div><span className={`inspection-status is-${inspection.status || "unknown"}`}>{inspection.status === "completed" && inspection.result ? inspectionResultLabel(inspection.result) : inspectionStatusLabel(inspection.status)}</span></div>
       <dl className="inspection-detail-meta"><div><dt>Inspection</dt><dd>{inspection.number || "Not recorded"}</dd></div><div><dt>Location</dt><dd>{inspection.locationName || "Not recorded"}</dd></div><div><dt>Mechanic</dt><dd>{inspection.mechanicName || "Unassigned"}</dd></div>{inspection.dueAt ? <div><dt>Due</dt><dd>{formatUiDate(inspection.dueAt)}</dd></div> : null}</dl>
     </header>
+    {actionError && canClaim ? <p className="inspection-action-error" role="alert">{actionError}</p> : null}
     <div className={`inspection-detail-layout ${showSupportingPane ? "has-supporting" : ""}`.trim()}>
       <section className="inspection-detail-primary" aria-label="Inspection checklist">
         <div className="inspection-progress" role="status"><div className="inspection-progress-copy"><span><strong>{progress.answered} of {progress.total}</strong> checked</span><span>{progress.issues} issue{progress.issues === 1 ? "" : "s"}</span>{editable ? <span className={`inspection-save-state is-${saveState.toLowerCase().replaceAll(" ", "-")}`}>{saveState}</span> : null}</div><progress value={progress.answered} max={progress.total || 1} aria-label="Inspection completion progress" />{editable && !progress.complete ? <Button type="button" onClick={nextUnchecked}>Next unchecked</Button> : null}</div>
-        {restrictedReadOnly && inspection.status !== "completed" ? <p className="inspection-restricted">This inspection is not complete. Checklist details are not available.</p> : canStart ? <InspectionStart inspection={inspection} onStart={onStart} onStarted={startFirstIncomplete} /> : !showChecklist ? <section className="inspection-waiting"><Clock aria-hidden="true" /><div><strong>Checklist not started</strong><span>The assigned mechanic will complete the checks here.</span></div></section> : (template.sections || []).map((section) => {
+        {restrictedReadOnly && inspection.status !== "completed" ? <p className="inspection-restricted">This inspection is not complete. Checklist details are not available.</p> : canClaim ? <section className="inspection-start"><div><h2>Available inspection</h2><p>Accept this inspection before starting the checklist.</p></div><Button variant="primary" type="button" disabled={claiming} onClick={claim}>{claiming ? "Accepting…" : "Accept inspection"}</Button></section> : canStart ? <InspectionStart inspection={inspection} onStart={onStart} onStarted={startFirstIncomplete} /> : !showChecklist ? <section className="inspection-waiting"><Clock aria-hidden="true" /><div><strong>Checklist not started</strong><span>The assigned mechanic will complete the checks here.</span></div></section> : (template.sections || []).map((section) => {
           const sectionProgress = inspectionSectionSummary(section, responses);
           const open = activeSection === section.key;
           const sectionId = `inspection-section-${section.key}`;

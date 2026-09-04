@@ -15,6 +15,8 @@ test("quantity control exposes a searchable grouped unit listbox", () => {
   assert.match(picker, /aria-pressed=\{unit\.code === code\}/);
   assert.doesNotMatch(picker, /role="listbox"|role="option"/);
   assert.match(component, /onValueChange\(\{\s*quantity:\s*model\.quantity,\s*uomCode:\s*nextCode\s*\}\)/);
+  assert.match(component, /readOnly=\{quantityReadOnly\}/);
+  assert.match(component, /aria-readonly=\{quantityReadOnly \|\| undefined\}/);
   assert.doesNotMatch(component, /quantity:\s*normalized,\s*uomCode:\s*nextCode/);
 });
 

@@ -1,0 +1,202 @@
+.serialized-unit-nested-dropdown {
+  background: var(--surface-primary, #fff);
+  border: 1px solid var(--border-subtle, #d0d5dd);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgb(16 24 40 / 18%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(34rem, calc(100dvh - 32px));
+  overflow: hidden;
+  position: absolute;
+  width: min(29rem, calc(100vw - 32px));
+  z-index: 40;
+}
+
+.serialized-unit-nested-dropdown > header {
+  align-items: start;
+  border-bottom: 1px solid var(--border-subtle, #e4e7ec);
+  display: block;
+  padding: 12px 14px 10px;
+}
+
+.serialized-unit-nested-dropdown > header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.serialized-unit-nested-dropdown > header span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.serialized-unit-nested-dropdown > header strong {
+  color: #101828;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.serialized-unit-nested-dropdown > header small {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.serialized-unit-nested-search input:focus-visible {
+  outline: 3px solid rgb(46 144 250 / 30%);
+  outline-offset: 2px;
+}
+
+.serialized-unit-nested-content {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  scroll-padding-block: 12px;
+}
+
+.serialized-unit-nested-search {
+  align-items: end;
+  display: grid;
+  gap: 6px 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.serialized-unit-nested-search label {
+  color: #344054;
+  font-size: 12px;
+  font-weight: 600;
+  grid-column: 1 / -1;
+}
+
+.serialized-unit-nested-search input {
+  border: 1px solid var(--border-default, #98a2b3);
+  border-radius: 7px;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 42px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.serialized-unit-nested-search .button {
+  min-height: 42px;
+}
+
+.serialized-unit-nested-message {
+  background: #fef3f2;
+  border-radius: 7px;
+  color: #b42318;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.serialized-unit-nested-state,
+.serialized-unit-nested-empty {
+  color: #475467;
+  font-size: 13px;
+  margin: 0;
+}
+
+.serialized-unit-nested-empty {
+  align-items: center;
+  background: #f9fafb;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.serialized-unit-nested-dropdown > footer {
+  align-items: center;
+  background: #fff;
+  border-top: 1px solid var(--border-subtle, #e4e7ec);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 10px 14px;
+}
+
+.serialized-unit-nested-dropdown > footer > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.serialized-unit-nested-dropdown > footer .button {
+  min-height: 40px;
+}
+
+@media (max-width: 1024px) {
+  .serialized-unit-nested-dropdown {
+    left: 0;
+    max-height: min(28rem, 58dvh);
+    top: calc(100% + 6px);
+    width: min(100%, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 640px) {
+  .serialized-unit-nested-dropdown {
+    max-height: min(24rem, calc(100dvh - 9rem));
+    width: 100%;
+  }
+
+  .serialized-unit-nested-dropdown > header {
+    padding: 9px 12px 8px;
+  }
+
+  .serialized-unit-nested-content {
+    gap: 9px;
+    padding: 10px 12px;
+  }
+
+  .serialized-unit-nested-search {
+    display: block;
+  }
+
+  .serialized-unit-nested-search label {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .serialized-unit-nested-dropdown .serialized-unit-nested-search input,
+  .serialized-unit-nested-search .button,
+  .serialized-unit-nested-dropdown > footer .button {
+    min-height: 44px;
+  }
+
+  .serialized-unit-nested-dropdown > footer {
+    align-items: center;
+    padding: 8px 12px;
+  }
+
+  .serialized-unit-nested-dropdown > footer > div {
+    justify-content: flex-end;
+  }
+
+  .serialized-unit-nested-dropdown > footer .button {
+    justify-content: center;
+    min-width: 6rem;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .serialized-unit-nested-dropdown {
+    scroll-behavior: auto;
+  }
+}

@@ -37,6 +37,9 @@ export const inspectionVersionActionSchema = z.object({
   engineHours: z.number().finite().min(0).max(9_999_999.9).optional(),
   previousReportReviewed: z.boolean(),
 }).strict();
+export const claimInspectionSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+}).strict();
 export const cancelInspectionSchema = z.object({ expectedVersion: z.number().int().positive(), reason: z.string().trim().min(2).max(1000) }).strict();
 export const completeInspectionSchema = z.object({ expectedVersion: z.number().int().positive(), finalNotes: z.string().trim().max(5000).default(""), actingAsInspector: z.literal(true).optional() }).strict();
 export const assignInspectionSchema = z.object({

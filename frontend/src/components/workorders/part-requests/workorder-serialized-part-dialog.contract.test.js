@@ -5,20 +5,25 @@ import test from "node:test";
 const dialog = readFileSync(new URL("./WorkorderSerializedPartDialog.jsx", import.meta.url), "utf8");
 const editor = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
 const scanner = readFileSync(new URL("./SerializedPartsScanner.jsx", import.meta.url), "utf8");
+const childPicker = readFileSync(new URL("./SerializedUnitChildPicker.jsx", import.meta.url), "utf8");
+const childPickerCss = readFileSync(new URL("./serialized-unit-child-picker.css", import.meta.url), "utf8");
+const nestedDropdown = readFileSync(new URL("./SerializedUnitNestedDropdown.jsx", import.meta.url), "utf8");
+const nestedCss = readFileSync(new URL("./serialized-unit-nested-dropdown.css", import.meta.url), "utf8");
 const css = readFileSync(new URL("./workorder-serialized-part-dialog.css", import.meta.url), "utf8");
+const editorCss = readFileSync(new URL("../used-parts-editor.css", import.meta.url), "utf8");
 
-test("inventory finder routes countable catalog selections to one serialized-unit dialog without creating a manual row", () => {
+test("inventory finder routes countable catalog selections to one nested serialized-unit dropdown without creating a manual row", () => {
   assert.match(editor, /purpose="workorder_assignment"/);
   assert.match(editor, /value=\{catalogQuery\}/);
-  assert.match(editor, /onChange=\{setCatalogQuery\}/);
+  assert.match(editor, /className="used-parts-manual-picker"/);
+  assert.match(editor, /setCatalogQuery\(catalogPart\.partNumber\)/);
   assert.match(editor, /setSerializedDialogPart\(catalogPart\)/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.doesNotMatch(editor, /addUsedPart|usedPartsAutosave|recoveredUnsavedEntries/);
   assert.match(editor, /<WorkorderSerializedPartDialog/);
-  assert.match(dialog, /<ModalOverlay/);
-  assert.match(dialog, /<Modal/);
-  assert.match(dialog, /<Dialog/);
-  assert.doesNotMatch(dialog, /<ModalOverlay[\s\S]*<ModalOverlay/);
+  assert.match(dialog, /<SerializedUnitNestedDropdown/);
+  assert.doesNotMatch(dialog, /<ModalOverlay|<Modal|<Dialog/);
+  assert.match(editorCss, /used-parts-manual-picker > \.serialized-unit-nested-dropdown[\s\S]*left:\s*calc\(100% \+ 8px\)/);
 });
 
 test("dialog keeps on-demand intake explicit and bounded", () => {
@@ -41,33 +46,32 @@ test("dialog keeps on-demand intake explicit and bounded", () => {
   assert.match(dialog, /target="_blank"/);
 });
 
-test("dialog only closes from explicit controls and preserves post-create label state", () => {
-  assert.match(dialog, /isDismissable=\{false\}/);
-  assert.doesNotMatch(dialog, /onOpenChange/);
+test("nested dropdown dismisses predictably and preserves post-create label state", () => {
+  assert.match(nestedDropdown, /document\.addEventListener\("pointerdown", closeFromOutside\)/);
+  assert.match(nestedDropdown, /event\.key === "Escape"/);
+  assert.doesNotMatch(nestedDropdown, /serialized-unit-nested-close/);
   assert.match(dialog, /event\.key === "Escape" && !busy/);
   assert.match(dialog, /setData\(result\);[\s\S]*setView\("created"\)/);
   assert.match(dialog, /href=\{batch\.printUrl\}[\s\S]*target="_blank"/);
   assert.match(dialog, /if \(!busy\) onClose\?\.\(\)/);
 });
 
-test("dialog centralizes supported locale copy and focuses the first useful control", () => {
+test("dialog centralizes supported locale copy and the shared dropdown focuses serial search", () => {
   assert.match(dialog, /const DIALOG_TEXT =/);
   for (const locale of ["en", "es", "pa"]) assert.match(dialog, new RegExp(`${locale}: \\{ title:`));
   assert.match(dialog, /DIALOG_TEXT\[normalizeLocale\(locale\)\] \|\| DIALOG_TEXT\.en/);
   assert.match(dialog, /const canCreate = data\?\.canCreateSerializedUnits === true;/);
-  assert.ok(dialog.indexOf("const canCreate") < dialog.indexOf("useEffect(() => {\n    if (!open || view !== \"units\""), "permission state must exist before the focus effect reads it");
   assert.match(dialog, /quantityRef\.current\?\.focus/);
-  assert.match(dialog, /\.inventory-code-manual-action/);
-  assert.match(dialog, /: canCreate \? addUnitsRef\.current : emptyStatusRef\.current/);
+  assert.match(nestedDropdown, /searchRef\.current\?\.focus/);
+  assert.match(nestedDropdown, /if \(!autoFocusSearch\) return undefined/);
 });
 
-test("manual code and one camera scan keep immediate single-unit reservation behavior", () => {
-  assert.match(dialog, /function reserve\(\{ unitId, code \} = \{\}\)/);
-  assert.match(dialog, /inventory-units\/issue/);
-  assert.match(dialog, /unitId \? unitRequestKeysRef\.current\.get\(unitId\) : requestKeyRef\.current\.key/);
-  assert.match(dialog, /onScan=\{\(code\) => reserve\(\{ code \}\)\}/);
-  assert.match(dialog, /if \(unitId\) \{[\s\S]*unitRequestKeysRef\.current\.has\(unitId\)/);
-  assert.match(dialog, /Retain the key for a retry of this exact unit\/code/);
+test("camera scanning stays in the dedicated scanner while manual selection stays in the part dialog", () => {
+  assert.doesNotMatch(dialog, /InventoryCodeScanner/);
+  assert.match(scanner, /<InventoryCodeScanner/);
+  assert.match(scanner, /autoStart/);
+  assert.match(scanner, /onScan=\{resolve\}/);
+  assert.match(scanner, /inventory-units\/issue/);
   assert.match(scanner, /async function recordUsage\(usage\)/);
   assert.match(scanner, /recordUsage,/);
   assert.match(editor, /serializedParts\?\.recordUsage\?\.\(usage\)/);
@@ -78,10 +82,12 @@ test("manual code and one camera scan keep immediate single-unit reservation beh
 
 test("catalog units are independently selectable and submit every selected eligible serial in sequence", () => {
   assert.match(dialog, /const \[selectedUnitIds, setSelectedUnitIds\] = useState\(\(\) => new Set\(\)\)/);
-  assert.doesNotMatch(dialog, /type="radio" name="serialized-unit"/);
-  assert.match(dialog, /type="checkbox" value=\{unit\.id\} checked=\{selectedUnitIds\.has\(unit\.id\)\}/);
-  assert.match(dialog, /selectAllEligibleUnitIds\(units\)/);
-  assert.match(dialog, /text\.selectAll/);
+  assert.match(dialog, /<SerializedUnitNestedDropdown/);
+  assert.match(nestedDropdown, /<SerializedUnitChildPicker/);
+  assert.match(dialog, /onSelectionChange=\{setSelectedUnitIds\}/);
+  assert.doesNotMatch(childPicker, /type="radio"/);
+  assert.match(childPicker, /type="checkbox"/);
+  assert.match(childPicker, /eligibleUnits\.slice\(0, maxSelected\)/);
   assert.match(dialog, /async function reserveSelectedUnits\(\)/);
   assert.match(dialog, /issueSelectedSerializedUnits\(\{/);
   assert.match(dialog, /keyByUnitId: unitRequestKeysRef\.current/);
@@ -104,34 +110,33 @@ test("the parent records each serialized usage without taking ownership of dialo
   assert.match(onReserved[1], /await serializedParts\?\.recordUsage\?\.\(usage\)/);
   assert.match(onReserved[1], /Part added; refresh the workorder if the serialized row is not visible/);
   assert.doesNotMatch(onReserved[1], /setSerializedDialogPart\(null\)/);
-  assert.match(dialog, /await onReserved\?\.\(result\.usage, result\);[\s\S]*onClose\?\.\(\)/);
+  assert.match(dialog, /onIssued: \(result\) => onReserved\?\.\(result\.usage, result\)/);
+  assert.match(dialog, /if \(!failures\.length\) \{[\s\S]*onClose\?\.\(\)/);
 });
 
-test("dialog is touch-safe, full-screen on phone, and retains a single content scroller", () => {
-  assert.match(css, /min-height: 44px/);
-  assert.match(css, /@media \(max-width: 640px\)[\s\S]*height: 100dvh/);
-  assert.match(css, /overflow: auto/);
-  assert.match(css, /prefers-reduced-motion: reduce/);
-  assert.match(css, /scroll-padding-block-end: 88px/);
-  assert.match(css, /footer \.button:last-child \{[\s\S]*flex-basis: 100%/);
+test("nested dropdown is touch-safe, responsive, and retains one content scroller", () => {
+  assert.match(nestedCss, /min-height:\s*44px/);
+  assert.match(nestedCss, /@media \(max-width: 640px\)/);
+  assert.match(nestedCss, /\.serialized-unit-nested-content\s*\{[\s\S]*overflow:\s*auto/s);
+  assert.match(nestedCss, /prefers-reduced-motion: reduce/);
+  assert.match(nestedCss, /max-height:\s*min\(24rem, calc\(100dvh - 9rem\)\)/);
+  assert.match(nestedDropdown, /max-width: 640px[\s\S]*\? 120 : 16/);
+  assert.match(nestedCss, /\.serialized-unit-nested-dropdown \.serialized-unit-nested-search input,[\s\S]*min-height:\s*44px/);
+  assert.match(nestedCss, /> footer \.button\s*\{[\s\S]*width:\s*auto/s);
+  assert.match(childPickerCss, /\.serialized-unit-child-actions \.button\s*\{[^}]*width:\s*fit-content/s);
 });
 
-test("dialog uses one compact hierarchy across chooser, intake, and label-ready states", () => {
-  assert.match(dialog, /className="workorder-serialized-context"/);
+test("manual intake uses one shared nested hierarchy across chooser and label-ready states", () => {
+  assert.match(nestedDropdown, /className="serialized-unit-nested-dropdown"/);
   assert.match(dialog, /showDescription/);
-  assert.match(dialog, /className="workorder-serialized-find"/);
   assert.match(dialog, /className="workorder-serialized-ready"/);
-  assert.match(dialog, /className="workorder-serialized-empty"/);
-  assert.match(css, /\.workorder-serialized-scan \.inventory-code-scanner \{[\s\S]*height: auto;[\s\S]*padding: 0;/);
-  assert.match(css, /\.workorder-serialized-scan \.inventory-code-camera-stage \{[\s\S]*display: none;/);
-  assert.match(css, /\.workorder-serialized-scan \.inventory-code-camera-stage\.is-active \{[\s\S]*display: flex;/);
+  assert.match(nestedDropdown, /className="serialized-unit-nested-empty"/);
+  assert.match(nestedDropdown, /<SerializedUnitChildPicker/);
+  assert.doesNotMatch(dialog, /workorder-serialized-scan/);
 });
 
 test("zero-stock state presents one next action without an unusable selection footer", () => {
-  const emptyState = dialog.match(/!loading && !units\.length \? <div className="workorder-serialized-empty"[\s\S]*?<\/div> : null/);
-  assert.ok(emptyState);
-  assert.match(emptyState[0], /text\.addUnits/);
-  assert.doesNotMatch(emptyState[0], /text\.selected/);
-  assert.match(dialog, /\{units\.length \? <footer>/);
-  assert.doesNotMatch(dialog, /<footer><Button type="button" onClick=\{close\}/);
+  assert.match(dialog, /emptyAction=\{canCreate \? <Button[\s\S]*text\.addUnits/);
+  assert.match(nestedDropdown, /!loading && !error && !visibleUnits\.length/);
+  assert.match(nestedDropdown, /disabled=\{busy \|\| \(onConfirm && selectedCount === 0\)\}/);
 });

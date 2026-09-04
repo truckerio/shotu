@@ -55,6 +55,7 @@ export function buildMechanicHomeView(dashboard = {}) {
 
 function inspectionQueueState(inspection = {}) {
   if (["assigned", "in_progress"].includes(inspection.status)) return "myWork";
+  if (inspection.status === "requested") return "openWork";
   if (inspection.status === "completed") return "done";
   return "waiting";
 }
@@ -80,7 +81,7 @@ export function mixedMechanicQueue(dashboard = {}, inspections = []) {
       updatedAt: inspection.completedAt || inspection.startedAt || inspection.requestedAt,
     };
     groups[key].push(item);
-    if (["assigned", "in_progress"].includes(inspection.status)) groups.activeWork.push(item);
+    if (["requested", "assigned", "in_progress"].includes(inspection.status)) groups.activeWork.push(item);
   });
   Object.values(groups).forEach((items) => items.sort(compareMechanicJobs));
   return groups;

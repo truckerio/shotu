@@ -134,6 +134,34 @@ test("workorder part-unit routes list safe children and create a printable batch
   assert.equal(createResponse.payload.workorderId, WORKORDER_ID);
 });
 
+test("create-workorder part route lists exact units using location and catalog scope", async () => {
+  const locationId = "00000000-0000-4000-8000-000000000006";
+  const catalogPartId = "00000000-0000-4000-8000-000000000008";
+  const response = {};
+  let listed;
+  await handleInventoryUnitWorkorderApi(
+    { method: "GET" }, response,
+    new URL(`http://localhost/api/workorders/create-inventory/locations/${locationId}/parts/${catalogPartId}/units?limit=100`),
+    helpers(), dependencies({
+      getLocation: async () => ({ id: locationId, company_id: "00000000-0000-4000-8000-000000000005" }),
+      authorizeCreate: async () => {},
+      listAvailableUnits: async (input) => {
+        listed = input;
+        return {
+          kind: "found",
+          serialRequired: true,
+          units: [{ id: UNIT_ID, serialNumber: "SERIAL-1" }],
+        };
+      },
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.payload.units[0].serialNumber, "SERIAL-1");
+  assert.equal(listed.locationId, locationId);
+  assert.equal(listed.catalogPartId, catalogPartId);
+  assert.equal(listed.limit, 100);
+});
+
 test("mechanics can list units but are not offered the inventory-creation action", async () => {
   const catalogPartId = "00000000-0000-4000-8000-000000000008";
   const response = {};

@@ -37,7 +37,7 @@ test("labor editing remains separate from actual-part editing when Parts is View
   assert.match(section, /laborEditable=\{laborEditable\}/);
   assert.match(editor, /!partsEditable && !laborEditable/);
   assert.match(editor, /disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
-  assert.match(editor, /\{partsEditable \? <PartCatalogCombobox/);
+  assert.match(editor, /\{partsEditable \? <div className="used-parts-manual-picker">[\s\S]*<PartCatalogCombobox/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.match(accessModel, /Actual parts are read-only/);
 });

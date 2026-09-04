@@ -341,16 +341,9 @@ export function SerializedPartsScanner({ workorderId, actorId = "", onChanged, l
                   onScan={resolve}
                   resetKey={`${workorderId}:${resetKey}`}
                   disabled={Boolean(busy)}
+                  locale={locale}
                   labels={{
                     cameraLabel: t("parts.scannerCamera"),
-                    enterCode: t("parts.enterCode"),
-                    codeLabel: t("parts.codeLabel"),
-                    codePlaceholder: t("parts.codePlaceholder"),
-                    checking: t("parts.checking"),
-                    openPart: t("parts.openPart"),
-                    openError: t("parts.openError"),
-                    cameraUnavailable: t("parts.cameraUnavailable"),
-                    cameraAccessUnavailable: t("parts.cameraAccessUnavailable"),
                   }}
                 />
               ) : null}

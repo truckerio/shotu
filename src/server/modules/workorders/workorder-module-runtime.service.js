@@ -357,6 +357,7 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
         ...(laborProduct ? { laborProduct } : { laborProduct: null }),
       },
       createdByUserId: context.actor.id,
+      createdByRole: context.actor.role,
       mechanicUserIds: mechanic ? [context.actor.id] : input.mechanicUserIds,
       startImmediately: mechanic,
     });

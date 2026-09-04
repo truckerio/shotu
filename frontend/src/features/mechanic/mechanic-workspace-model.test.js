@@ -29,6 +29,19 @@ test("mixed queue keeps assigned inspection and workorder work together with det
   assert.match(queue.myWork[0].serial, /^Inspection · INS-1$/);
 });
 
+test("mixed queue makes unassigned inspections available and keeps every open lifecycle active", () => {
+  const queue = mixedMechanicQueue({}, [
+    { id:"requested", number:"INS-1", status:"requested", unitNo:"1017", requestedAt:"2026-09-04" },
+    { id:"assigned", number:"INS-2", status:"assigned", unitNo:"1018", requestedAt:"2026-09-04" },
+    { id:"started", number:"INS-3", status:"in_progress", unitNo:"1019", startedAt:"2026-09-04" },
+  ]);
+
+  assert.deepEqual(queue.openWork.map(({ id }) => id), ["requested"]);
+  assert.deepEqual(queue.myWork.map(({ id }) => id), ["started", "assigned"]);
+  assert.deepEqual(new Set(queue.activeWork.map(({ id }) => id)), new Set(["requested", "assigned", "started"]));
+  assert.deepEqual(queue.waiting, []);
+});
+
 test("mechanic next-job action matches lifecycle", () => {
   assert.equal(mechanicJobActionLabel({ lifecycle: "accepted" }), "Start job");
   assert.equal(mechanicJobActionLabel({ lifecycle: "in_progress" }), "Continue job");

@@ -2,6 +2,7 @@ import { getPool, query } from "../pool.js";
 import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventory-provider.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
+const CREATE_RESERVATION_STATUSES = new Set(["open", "accepted", "in_progress"]);
 const FINALIZE_STATUSES = new Set(["accepted", "in_progress", "waiting_office", "parts_requested"]);
 const RETURN_STATUSES = new Set([...FINALIZE_STATUSES, "mechanic_done"]);
 const REMOVAL_STATUSES = new Set(["closed", "odoo_entered"]);
@@ -248,6 +249,178 @@ export async function listAvailableSerializedUnitsForWorkorder({
     })),
     nextCursor: hasMore ? page.at(-1)?.serial_number || null : null,
   };
+}
+
+export async function listAvailableSerializedUnitsForCreate({
+  companyId,
+  locationId,
+  catalogPartId,
+  queryText = "",
+  after = "",
+  limit = 50,
+}) {
+  const result = await query(
+    `with selected_part as (
+       select part.id, part.part_number, part.description, part.uom_code,
+              location.id as location_id, location.name as location_name,
+              uom.category as uom_category, uom.decimal_scale,
+              exists (
+                select 1
+                  from inventory_receipt_lines tracking_line
+                  join inventory_receipts tracking_receipt
+                    on tracking_receipt.company_id = tracking_line.company_id
+                   and tracking_receipt.id = tracking_line.receipt_id
+                 where tracking_line.company_id = part.company_id
+                   and tracking_line.catalog_part_id = part.id
+                   and tracking_line.uom_code = part.uom_code
+                   and tracking_line.tracking_mode = 'serial'
+                   and tracking_receipt.location_id = location.id
+                   and tracking_receipt.provider in ('local', 'local_count', 'local_serialization')
+              ) as serialization_required
+       from parts_catalog part
+       join locations location on location.company_id = part.company_id
+       join units_of_measure uom on uom.code = part.uom_code
+       where part.company_id = $1 and location.id = $2 and part.id = $3
+     )
+     select selected_part.id as selected_part_id,
+            selected_part.part_number as selected_part_number,
+            selected_part.description as selected_part_description,
+            selected_part.uom_code as selected_part_uom_code,
+            selected_part.location_id, selected_part.location_name,
+            selected_part.uom_category, selected_part.decimal_scale,
+            selected_part.serialization_required,
+            child.id, child.serial_number, child.status, child.updated_at,
+            child.catalog_part_id, child.part_number, child.description, child.uom_code
+     from selected_part
+     left join lateral (
+       select unit.id, unit.serial_number, unit.status, unit.updated_at,
+              line.catalog_part_id, line.part_number, line.description, line.uom_code
+       from inventory_serialized_units unit
+       join inventory_receipt_lines line
+         on line.company_id = unit.company_id and line.id = unit.receipt_line_id
+       join inventory_receipts receipt
+         on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
+        and receipt.provider in ('local', 'local_count', 'local_serialization')
+       where unit.company_id = $1 and unit.location_id = $2
+         and line.catalog_part_id = selected_part.id and unit.status = 'in_stock'
+         and ($4::text = '' or unit.serial_number ilike '%' || replace(replace(replace($4, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' escape '\\')
+         and ($5::text = '' or unit.serial_number > $5)
+       order by unit.serial_number, unit.id
+       limit $6
+     ) child on true
+     order by child.serial_number, child.id`,
+    [companyId, locationId, catalogPartId, queryText, after, limit + 1],
+  );
+  if (!result.rows.length) return { kind: "missing", units: [] };
+  const selected = result.rows[0];
+  const candidates = result.rows.filter((row) => row.id);
+  const hasMore = candidates.length > limit;
+  const page = candidates.slice(0, limit);
+  return {
+    kind: "found",
+    part: {
+      catalogPartId: selected.selected_part_id,
+      partNumber: selected.selected_part_number,
+      description: selected.selected_part_description || "",
+      uomCode: selected.selected_part_uom_code,
+    },
+    location: { locationId: selected.location_id, name: selected.location_name || "" },
+    serialRequired: selected.serialization_required === true
+      && ["count", "packaging"].includes(selected.uom_category)
+      && Number(selected.decimal_scale) === 0,
+    units: page.map((row) => ({
+      id: row.id,
+      serialNumber: row.serial_number,
+      status: row.status,
+      catalogPartId: row.catalog_part_id,
+      partNumber: row.part_number,
+      description: row.description || "",
+      uomCode: row.uom_code,
+      locationName: selected.location_name || "",
+      eligible: true,
+      updatedAt: row.updated_at,
+    })),
+    nextCursor: hasMore ? page.at(-1)?.serial_number || null : null,
+  };
+}
+
+export async function reserveSerializedUnitsForCreatedWorkorder(input, client) {
+  const workorder = await lockWorkorder(client, { ...input, actorRole: input.actorRole || "office" });
+  if (!workorder) return { kind: "missing" };
+  if (!CREATE_RESERVATION_STATUSES.has(workorder.status)) return { kind: "workorder_state" };
+  if (!workorder.asset_id) return { kind: "asset_required" };
+
+  const unitIds = input.selections.flatMap((selection) => selection.unitIds);
+  const unitsResult = await client.query(
+    `select unit.id, unit.status, line.catalog_part_id, line.uom_code, receipt.provider
+       from inventory_serialized_units unit
+       join inventory_receipt_lines line
+         on line.company_id = unit.company_id and line.id = unit.receipt_line_id
+       join inventory_receipts receipt
+         on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
+      where unit.company_id = $1 and unit.location_id = $2 and unit.id = any($3::uuid[])
+      order by unit.id
+      for update of unit`,
+    [workorder.company_id, workorder.location_id, unitIds],
+  );
+  if (unitsResult.rows.length !== unitIds.length) return { kind: "missing" };
+  const unitsById = new Map(unitsResult.rows.map((unit) => [unit.id, unit]));
+  if (unitsResult.rows.some((unit) => !isApplicationOwnedInventoryProvider(unit.provider))) return { kind: "provider_not_local" };
+  if (unitsResult.rows.some((unit) => unit.status !== "in_stock")) return { kind: "unit_state" };
+
+  for (const selection of input.selections) {
+    const units = selection.unitIds.map((unitId) => unitsById.get(unitId));
+    if (units.some((unit) => unit.catalog_part_id !== selection.catalogPartId)) return { kind: "missing" };
+    const uomCode = units[0].uom_code;
+    const itemResult = await client.query(
+      `select id, quantity_on_hand, quantity_reserved
+         from inventory_items
+        where company_id = $1 and location_id = $2 and catalog_part_id = $3
+          and uom_code = $4 and source_provider = 'local'
+        order by updated_at desc, id
+        limit 1 for update`,
+      [workorder.company_id, workorder.location_id, selection.catalogPartId, uomCode],
+    );
+    const item = itemResult.rows[0];
+    if (!item || Number(item.quantity_on_hand) - Number(item.quantity_reserved) < units.length) return { kind: "stock_mismatch" };
+
+    for (const unit of units) {
+      const inserted = await client.query(
+        `insert into workorder_serialized_part_usages (
+           company_id, workorder_id, asset_id, location_id, unit_id, catalog_part_id,
+           uom_code, repair_order, status, issued_by_user_id, issue_idempotency_key, issue_request_hash
+         ) values ($1,$2,$3,$4,$5,$6,$7,$8,'reserved',$9,$10,$11)
+         returning id`,
+        [workorder.company_id, workorder.id, workorder.asset_id, workorder.location_id,
+          unit.id, unit.catalog_part_id, unit.uom_code, selection.repairOrder || "", input.actorId,
+          `create:${workorder.id}:${unit.id}`, input.requestHash],
+      );
+      await client.query(
+        `insert into inventory_unit_events (
+           company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
+         ) values ($1,$2,'reserved',$3,$4,$5,$6,$7::jsonb)`,
+        [workorder.company_id, unit.id, input.actorId, inserted.rows[0].id, workorder.id,
+          workorder.asset_id, JSON.stringify({ source: "workorder_create", actorRole: input.actorRole })],
+      );
+    }
+    const updatedUnits = await client.query(
+      `update inventory_serialized_units
+          set status = 'reserved', updated_at = now()
+        where company_id = $1 and id = any($2::uuid[]) and status = 'in_stock'
+        returning id`,
+      [workorder.company_id, selection.unitIds],
+    );
+    if (updatedUnits.rowCount !== units.length) return { kind: "unit_state" };
+    const updatedItem = await client.query(
+      `update inventory_items
+          set quantity_reserved = quantity_reserved + $2, updated_at = now()
+        where id = $1 and quantity_on_hand - quantity_reserved >= $2
+        returning id`,
+      [item.id, units.length],
+    );
+    if (!updatedItem.rows[0]) return { kind: "stock_mismatch" };
+  }
+  return { kind: "reserved", count: unitIds.length };
 }
 
 export async function listWorkorderInstalledSerializedParts({

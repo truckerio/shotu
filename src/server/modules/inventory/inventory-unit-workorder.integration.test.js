@@ -10,6 +10,7 @@ import {
 } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 import {
   closeOperationalWorkorder,
+  createOperationalWorkorder,
   getWorkorderTimeline,
 } from "../../db/repositories/operational-workorders.repo.js";
 import { closePool, query } from "../../db/pool.js";
@@ -23,6 +24,121 @@ after(async () => {
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
+
+test("real PostgreSQL creates a workorder and reserves its exact serialized units atomically", { skip: !runPostgres }, async () => {
+  const suffix = randomUUID().replaceAll("-", "");
+  const companyId = randomUUID();
+  const locationId = randomUUID();
+  const officeId = randomUUID();
+  const mechanicId = randomUUID();
+  const assetId = randomUUID();
+  const catalogPartId = randomUUID();
+  const receiptId = randomUUID();
+  const receiptLineId = randomUUID();
+  const runId = randomUUID();
+  const unitIds = [randomUUID(), randomUUID()];
+  try {
+    await query("insert into companies (id, slug, name) values ($1,$2,'Atomic serialized create')", [companyId, `atomic-serialized-${suffix}`]);
+    await query("insert into locations (id, company_id, name) values ($1,$2,'Atomic shop')", [locationId, companyId]);
+    await query("insert into user_profiles (id, display_name) values ($1,'Atomic office'),($2,'Atomic mechanic')", [officeId, mechanicId]);
+    await query("insert into user_company_memberships (user_id,company_id,role) values ($1,$3,'office'),($2,$3,'mechanic')", [officeId, mechanicId, companyId]);
+    await query("insert into user_location_memberships (user_id,location_id,company_id) values ($1,$3,$4),($2,$3,$4)", [officeId, mechanicId, locationId, companyId]);
+    await query("insert into assets (id,company_id,location_id,provider,name,unit_no) values ($1,$2,$3,'manual','Atomic truck',$4)", [assetId, companyId, locationId, `AT-${suffix.slice(0, 8)}`]);
+    await query(
+      "insert into parts_catalog (id,company_id,normalized_part_number,part_number,description,uom_code) values ($1,$2,$3,$4,'Atomic tires','ea')",
+      [catalogPartId, companyId, `ATOMIC${suffix}`, `ATOMIC-${suffix}`],
+    );
+    await query(
+      `insert into invoice_extraction_runs (
+         id,company_id,location_id,created_by,reviewed_by,document_hash,file_name,mime_type,
+         byte_size,idempotency_key,status,provider,model,prompt_version,reviewed_draft,reviewed_at
+       ) values ($1,$2,$3,$4,$4,$5,'atomic.pdf','application/pdf',1,$6,'reviewed','local-test','local-test','local-v1','{}'::jsonb,now())`,
+      [runId, companyId, locationId, officeId, digest(suffix), `atomic-run-${suffix}`],
+    );
+    await query(
+      `insert into inventory_receipts (
+         id,company_id,location_id,invoice_run_id,created_by,idempotency_key,provider,provider_marker,
+         provider_picking_name,status,confirmed_at
+       ) values ($1,$2,$3,$4,$5,$6,'local',$7,'Atomic serialized intake','confirmed',now())`,
+      [receiptId, companyId, locationId, runId, officeId, `atomic-receipt-${suffix}`, `ATOMIC-${suffix}`],
+    );
+    await query(
+      `insert into inventory_receipt_lines (
+         id,company_id,receipt_id,line_index,catalog_part_id,product_external_id,
+         part_number,description,quantity,uom_code,tracking_mode
+       ) values ($1,$2,$3,0,$4,$5,$6,'Atomic tires',2,'ea','serial')`,
+      [receiptLineId, companyId, receiptId, catalogPartId, `local:${catalogPartId}`, `ATOMIC-${suffix}`],
+    );
+    await query(
+      `insert into inventory_serialized_units (
+         id,company_id,location_id,receipt_id,receipt_line_id,unit_ordinal,serial_number,status
+       ) values ($1,$3,$4,$5,$6,1,$7,'in_stock'),($2,$3,$4,$5,$6,2,$8,'in_stock')`,
+      [unitIds[0], unitIds[1], companyId, locationId, receiptId, receiptLineId, `AT-${suffix}-1`, `AT-${suffix}-2`],
+    );
+    await query(
+      `insert into inventory_items (
+         company_id,location_id,catalog_part_id,normalized_part_number,part_number,
+         description,quantity_on_hand,quantity_reserved,uom_code,source_provider,external_id
+       ) values ($1,$2,$3,$4,$5,'Atomic tires',2,0,'ea','local',$6)`,
+      [companyId, locationId, catalogPartId, `ATOMIC${suffix}`, `ATOMIC-${suffix}`, `local:${suffix}`],
+    );
+    const createInput = {
+      companyId,
+      locationId,
+      assetId,
+      createdByUserId: officeId,
+      createdByRole: "office",
+      concern: "Replace two serialized tires.",
+      mechanicUserIds: [],
+      formData: { parts: [{ catalogPartId, partNo: `ATOMIC-${suffix}`, qty: "2", uomCode: "ea", repairOrder: "Replace tires" }] },
+    };
+
+    await assert.rejects(
+      createOperationalWorkorder(createInput),
+      (error) => error?.code === "WORKORDER_SERIALIZED_SELECTION_REQUIRED",
+    );
+    assert.equal((await query("select count(*)::integer as count from operational_workorders where company_id=$1", [companyId])).rows[0].count, 0);
+
+    const created = await createOperationalWorkorder({
+      ...createInput,
+      inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds }],
+    });
+    const snapshot = (await query(
+      `select wo.status, wo.form_data->'parts' as parts,
+              (select count(*)::integer from workorder_serialized_part_usages usage where usage.workorder_id=wo.id and usage.status='reserved') as reserved_usages,
+              (select count(*)::integer from inventory_serialized_units unit where unit.company_id=$2 and unit.id=any($3::uuid[]) and unit.status='reserved') as reserved_units,
+              (select quantity_reserved from inventory_items item where item.company_id=$2 and item.location_id=$4 and item.catalog_part_id=$5) as quantity_reserved
+         from operational_workorders wo where wo.id=$1`,
+      [created.id, companyId, unitIds, locationId, catalogPartId],
+    )).rows[0];
+    assert.deepEqual(snapshot, {
+      status: "open",
+      parts: [],
+      reserved_usages: 2,
+      reserved_units: 2,
+      quantity_reserved: "2.000",
+    });
+  } finally {
+    await query("delete from inventory_unit_events where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from workorder_serialized_part_usages where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from workorder_assignment_events where workorder_id in (select id from operational_workorders where company_id=$1)", [companyId]).catch(() => {});
+    await query("delete from workorder_mechanic_assignments where workorder_id in (select id from operational_workorders where company_id=$1)", [companyId]).catch(() => {});
+    await query("delete from operational_workorders where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from workorder_serial_counters where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_serialized_units where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_receipt_lines where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_receipts where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_items where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from parts_catalog where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from invoice_extraction_runs where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from assets where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from user_location_memberships where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from user_company_memberships where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from user_profiles where id=any($1::uuid[])", [[officeId, mechanicId]]).catch(() => {});
+    await query("delete from locations where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from companies where id=$1", [companyId]).catch(() => {});
+  }
+});
 
 test("real PostgreSQL reserves until approval, returns unused parts, and rejects legacy removal shortcuts", { skip: !runPostgres }, async () => {
   const suffix = randomUUID().replaceAll("-", "");

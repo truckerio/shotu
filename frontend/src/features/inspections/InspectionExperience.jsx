@@ -17,10 +17,10 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   const initialReinspection = inspectionReturnContext()?.anchor === "reinspect";
   const fullProjection = projection === "office" || projection === "admin";
   const readOnly = projection === "read_only";
-  const allowedInitialStatuses = fullProjection ? ["needs_action", "in_progress", "completed"] : ["completed", "not_completed"];
+  const allowedInitialStatuses = fullProjection ? ["not_completed", "needs_action", "in_progress", "completed"] : ["not_completed", "completed"];
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState(initialSession.search);
-  const [status, setStatus] = useState(allowedInitialStatuses.includes(initialSession.status) ? initialSession.status : (fullProjection ? "needs_action" : ""));
+  const [status, setStatus] = useState(allowedInitialStatuses.includes(initialSession.status) ? initialSession.status : (readOnly ? "" : "not_completed"));
   const [active, setActive] = useState(null);
   const [mechanics, setMechanics] = useState([]);
   const [eligibleWorkorders, setEligibleWorkorders] = useState(null);
@@ -170,6 +170,22 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
       return next;
     } catch (error) {
       setState((state) => ({ ...state, error: error.message }));
+      throw error;
+    }
+  }
+
+  async function claimInspection() {
+    const current = activeRef.current;
+    if (!current) throw new Error("Inspection is no longer open.");
+    setState((value) => ({ ...value, error:"" }));
+    try {
+      const result = await api(`/api/inspections/${encodeURIComponent(current.id)}/actions/claim`, { method:"POST", body:JSON.stringify({ expectedVersion:current.version }) });
+      const next = inspectionFromApi(result.inspection);
+      activeRef.current = next;
+      setActive(next);
+      return next;
+    } catch (error) {
+      setState((value) => ({ ...value, error:error.message }));
       throw error;
     }
   }
@@ -368,10 +384,11 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     }));
   }
 
-  if (active) return <InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} actionError={state.error} onCorrect={fullProjection&&active.status==="completed"&&activeInspectionAccess.canWrite?correctCompletedInspection:null} onReinspect={(fullProjection||projection==="mechanic")&&active.status==="completed"&&activeInspectionAccess.canWrite?reinspectCompletedInspection:null} mechanicReinspect={projection==="mechanic"} initialReinspection={initialReinspection} actor={actor} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onStart={activeInspectionAccess.canWrite && (projection === "mechanic" || projection === "admin") ? startInspection : null} onCancelInspection={fullProjection && activeInspectionAccess.canWrite ? cancelInspection : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onResolveFollowUp={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite ? resolveFollowUp : null} canResolveFollowUpWorkorders={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite} canResolveFollowUps={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite} onOpenWorkorder={onOpenWorkorder ? (workorderId) => onOpenWorkorder(workorderId, { from: "inspection", inspectionId: active.id, anchor: "summary" }) : null} onPrint={active.status === "completed" ? print : null} onDownload={active.status === "completed" ? downloadPrintPdf : null} workorderLinksAuthorized={activeWorkorderAccess.canRead} workorderActionsAuthorized={activeWorkorderAccess.canWrite} />;
+  if (active) return <InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} actionError={state.error} onCorrect={fullProjection&&active.status==="completed"&&activeInspectionAccess.canWrite?correctCompletedInspection:null} onReinspect={(fullProjection||projection==="mechanic")&&active.status==="completed"&&activeInspectionAccess.canWrite?reinspectCompletedInspection:null} mechanicReinspect={projection==="mechanic"} initialReinspection={initialReinspection} actor={actor} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onClaim={projection === "mechanic" && active.status === "requested" && activeInspectionAccess.canWrite ? claimInspection : null} onStart={activeInspectionAccess.canWrite && (projection === "admin" || (projection === "mechanic" && active.status !== "requested")) ? startInspection : null} onCancelInspection={fullProjection && activeInspectionAccess.canWrite ? cancelInspection : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onResolveFollowUp={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite ? resolveFollowUp : null} canResolveFollowUpWorkorders={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite} canResolveFollowUps={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite} onOpenWorkorder={onOpenWorkorder ? (workorderId) => onOpenWorkorder(workorderId, { from: "inspection", inspectionId: active.id, anchor: "summary" }) : null} onPrint={active.status === "completed" ? print : null} onDownload={active.status === "completed" ? downloadPrintPdf : null} workorderLinksAuthorized={activeWorkorderAccess.canRead} workorderActionsAuthorized={activeWorkorderAccess.canWrite} />;
   return <section className="inspection-experience" aria-label="Inspection workspace" ref={queueFocusRef}>
     {onBack ? <button className="inspection-back" type="button" onClick={onBack}>Back</button> : null}
-    {fullProjection ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "needs_action", label: "Needs action" }, { id: "in_progress", label: "In progress" }, { id: "completed", label: "Completed" }]} /> : null}
+    {fullProjection ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "not_completed", label: "Active" }, { id: "needs_action", label: "Needs action" }, { id: "in_progress", label: "In progress" }, { id: "completed", label: "Completed" }]} /> : null}
+    {projection === "mechanic" ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "not_completed", label: "Active" }, { id: "completed", label: "Completed" }]} /> : null}
     {readOnly ? <label className="inspection-status-filter">Status<Dropdown value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All</option><option value="completed">Completed</option><option value="not_completed">Not completed</option></Dropdown></label> : null}
     {state.error ? <p className="inspection-error" role="alert">{state.error}</p> : null}
     {state.loading ? <p role="status">Loading inspections…</p> : <><InspectionQueue inspections={items} projection={projection} projectionForInspection={projectionFor} search={search} onSearchChange={setSearch} onOpen={open} />{nextCursor && items.length < MAX_LIVE_INSPECTION_ROWS ? <button className="inspection-load-more" type="button" onClick={() => load({ cursor: nextCursor, append: true })}>Load more inspections</button> : null}</>}

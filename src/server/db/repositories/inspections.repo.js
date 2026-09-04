@@ -177,7 +177,9 @@ export async function listInspections(input, dependencies = {}) {
       and ($3::text[] is null or inspection.status=any($3::text[])) and ($4::text is null or inspection.unit_type=$4) and ($5::text is null or inspection.result=$5)
       and ($6::uuid is null or exists(select 1 from inspection_assignments ia where ia.inspection_id=inspection.id and ia.mechanic_user_id=$6 and ia.active))
       and (not $13::boolean or inspection.status in ('requested','assigned') or (inspection.status='completed' and exists(select 1 from inspection_finding_follow_ups action where action.company_id=inspection.company_id and action.inspection_id=inspection.id and action.status in ('open','reopened'))))
-      and (not (inspection.company_id=any($11::uuid[])) or exists(select 1 from inspection_assignments restricted_assignment where restricted_assignment.inspection_id=inspection.id and restricted_assignment.company_id=inspection.company_id and restricted_assignment.mechanic_user_id=$12::uuid and restricted_assignment.active))
+      and (not (inspection.company_id=any($11::uuid[]))
+        or (inspection.status='requested' and not exists(select 1 from inspection_assignments available_assignment where available_assignment.inspection_id=inspection.id and available_assignment.company_id=inspection.company_id and available_assignment.active))
+        or exists(select 1 from inspection_assignments restricted_assignment where restricted_assignment.inspection_id=inspection.id and restricted_assignment.company_id=inspection.company_id and restricted_assignment.mechanic_user_id=$12::uuid and restricted_assignment.active))
       and ($7='' or inspection.inspection_number ilike '%'||$7||'%' or coalesce(inspection.asset_snapshot->>'unitNo','') ilike '%'||$7||'%' or coalesce(inspection.asset_snapshot->>'vin','') ilike '%'||$7||'%' or coalesce(inspection.asset_snapshot->>'licensePlate','') ilike '%'||$7||'%')
       and ($8::timestamptz is null or (inspection.updated_at,inspection.id)<($8::timestamptz,$9::uuid))
     order by inspection.updated_at desc,inspection.id desc limit $10`, values);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { catalogPopupWidth, catalogSearchPlan } from "./part-catalog-popup-model.js";
+import { normalizeCatalogPart } from "./catalog-parts-model.js";
 
 const source = readFileSync(new URL("./PartCatalogCombobox.jsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./part-catalog-combobox.css", import.meta.url), "utf8");
@@ -29,6 +30,16 @@ test("catalog popup presents locally backed identities as our inventory", () => 
   assert.match(source, /parts\.searchingOurInventory/);
   assert.doesNotMatch(source, /part\.source === "odoo"/);
   assert.doesNotMatch(source, />Odoo</);
+});
+
+test("catalog normalization preserves serialized inventory tracking for create flows", () => {
+  const part = normalizeCatalogPart({
+    id: "part-1",
+    partNumber: "TIRE",
+    uomCode: "ea",
+    inventory: { available: 6, serializationRequired: true },
+  });
+  assert.equal(part.inventory.serializationRequired, true);
 });
 
 test("master matching uses a neutral master catalog label", () => {
@@ -87,6 +98,18 @@ test("saved part values stay closed until the user interacts with the combobox",
   assert.match(source, /closeFromOutside[\s\S]*?setInteracting\(false\)/);
   assert.match(source, /event\.key === "Escape"[\s\S]*?setInteracting\(false\)/);
   assert.match(source, /event\.key === "Tab"[\s\S]*?setInteracting\(false\)/);
+});
+
+test("a populated serialized parent can hand focus directly to its child dropdown", () => {
+  assert.match(source, /onSelectedValueOpen/);
+  assert.match(source, /onSelectedValueClose/);
+  assert.match(source, /selectedValueOpen = false/);
+  assert.match(source, /aria-expanded=\{showPopup \|\| selectedValueOpen\}/);
+  assert.match(source, /onClick=\{\(\) => \{[\s\S]*?onSelectedValueOpen && !selectedValueOpen/);
+  assert.match(source, /onSelectedValueOpen && !selectedValueOpen && \["ArrowDown", "Enter"\]/);
+  assert.match(source, /event\.key === "Escape"[\s\S]*?onSelectedValueClose\?\.\(\)/);
+  assert.match(source, /onFocus=\{\(\) => \{[\s\S]*?if \(onSelectedValueOpen\)[\s\S]*?setOpen\(false\);[\s\S]*?return;/);
+  assert.doesNotMatch(source, /onFocus=\{\(\) => \{[\s\S]*?onSelectedValueOpen\(\)/);
 });
 
 test("combobox exposes listbox semantics and complete keyboard selection", () => {

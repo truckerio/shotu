@@ -12,7 +12,7 @@ import {
   shouldApplyUsageSnapshot,
 } from "./inventory-code-scanner-model.js";
 
-test("scanner model normalizes manual input and requires camera capture without native barcode detection", () => {
+test("scanner model normalizes decoded input and requires camera capture without native barcode detection", () => {
   assert.equal(normalizeInventoryCode("  label-code  "), "label-code");
   assert.equal(inventoryScannerAvailable({ navigator: { mediaDevices: { getUserMedia() {} } } }), true);
   assert.equal(inventoryScannerAvailable({ BarcodeDetector: class {}, navigator: {} }), false);

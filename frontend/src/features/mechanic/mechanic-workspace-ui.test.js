@@ -52,3 +52,11 @@ test("mechanic home keeps a readable desktop column and overflow-safe children",
   assert.match(css, /\.mechanic-next-job[\s\S]*overflow-wrap:\s*anywhere/);
   assert.match(css, /@media \(max-width:\s*1366px\)/);
 });
+
+test("combined inspection queues expose accurate counts and explicit claim actions", () => {
+  assert.match(workspace, /dashboard\?\.counts\[tab\.countKey\][\s\S]*item\.queueType === "inspection"/);
+  assert.match(workspace, /workorder\.status === "requested"[\s\S]*productModuleCapabilities\(actor, "inspections", workorder\.inspection\.locationId\)\.canWrite/);
+  assert.match(workspace, /\/actions\/claim/);
+  assert.match(workspace, /expectedVersion:item\.inspection\.version/);
+  assert.match(workspace, /mechanic\.acceptInspection/);
+});

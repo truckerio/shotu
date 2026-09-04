@@ -116,7 +116,7 @@ export async function authorizeWorkorderModuleActions(
 
 export async function authorizeWorkorderCreate(
   context,
-  { companyId, locationId, moduleKeys = ["concern"] },
+  { companyId, locationId, moduleKeys = ["concern"], enforceRequired = true },
   dependencies = {},
 ) {
   const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
@@ -134,7 +134,7 @@ export async function authorizeWorkorderCreate(
       locationPolicy: policies?.locationPolicy,
       userId: context.actor.id,
     });
-    if (decision.access === WORKORDER_ACCESS_MODES.REQUIRED && !requested.has(moduleKey)) {
+    if (enforceRequired && decision.access === WORKORDER_ACCESS_MODES.REQUIRED && !requested.has(moduleKey)) {
       throw invalidRequest(`${module.label} is required to create this workorder.`);
     }
     if (!requested.has(moduleKey)) return { moduleKey, ...decision };

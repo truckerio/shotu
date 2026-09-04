@@ -118,6 +118,21 @@ test("workorder print renders and escapes exact serialized identity below part n
   assert.match(workorderTemplateStyles, /\.wo-part-serial/);
 });
 
+test("create-workorder serialized selections project their exact serials into the preview", () => {
+  const html = renderWorkorderPagesHtml({
+    parts: [{
+      partNo: "FILTER-2",
+      serializedSerialNumbers: ["SER-<2>", "SER-3"],
+      qty: "2",
+      uomCode: "ea",
+      repairOrder: "Replace",
+    }],
+  }, "WO-000105");
+
+  assert.match(html, /FILTER-2/);
+  assert.match(html, /Serial: SER-&lt;2&gt;, SER-3/);
+});
+
 test("workorder quantity totals add used parts without counting labor or blank rows", () => {
   const totals = workorderQuantityTotals({
     laborHours: "3.25",

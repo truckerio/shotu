@@ -1,6 +1,6 @@
 import jsQR from "jsqr";
 
-const NATIVE_FORMATS = ["qr_code", "code_128"];
+const NATIVE_FORMATS = ["qr_code"];
 const MAX_FALLBACK_EDGE = 1280;
 
 export function inventoryCameraAvailable(environment = globalThis) {
@@ -26,15 +26,7 @@ function createNativeDetector(BarcodeDetector) {
   try {
     return new BarcodeDetector({ formats: NATIVE_FORMATS });
   } catch {
-    try {
-      return new BarcodeDetector({ formats: ["qr_code"] });
-    } catch {
-      try {
-        return new BarcodeDetector();
-      } catch {
-        return null;
-      }
-    }
+    return null;
   }
 }
 

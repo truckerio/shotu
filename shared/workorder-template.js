@@ -74,7 +74,14 @@ export function printableLaborRepairOrder(workPerformed, parts = []) {
 }
 
 function inputPartRows(form) {
-  const inputParts = Array.isArray(form.parts) ? form.parts : [];
+  const inputParts = (Array.isArray(form.parts) ? form.parts : []).map((part) => {
+    const selectedSerials = [...new Set((Array.isArray(part?.serializedSerialNumbers) ? part.serializedSerialNumbers : [])
+      .map((serial) => String(serial || "").trim())
+      .filter(Boolean))];
+    return selectedSerials.length && !String(part?.serialNumber || "").trim()
+      ? { ...part, serialNumber: selectedSerials.join(", ") }
+      : part;
+  });
   const laborHours = String(form.laborHours || "").trim();
   const workPerformed = printableLaborRepairOrder(form.workPerformed, inputParts);
   const rows = laborHours || workPerformed ? [{

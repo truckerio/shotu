@@ -5,19 +5,20 @@ import test from "node:test";
 const scanner = readFileSync(new URL("../../../features/inventory/InventoryCodeScanner.jsx", import.meta.url), "utf8");
 const surface = readFileSync(new URL("./SerializedPartsScanner.jsx", import.meta.url), "utf8");
 const partsModule = readFileSync(new URL("../../../features/workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
+const createScanner = readFileSync(new URL("../../../features/workorder-modules/parts/CreatePartScanner.jsx", import.meta.url), "utf8");
 const usedPartsEditor = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./mechanic-serialized-parts.css", import.meta.url), "utf8");
 const mechanicLocales = ["en", "es", "pa"].map((locale) => readFileSync(new URL(`../../../i18n/locales/${locale}.js`, import.meta.url), "utf8"));
 
-test("shared scanner has camera-first auto-start and manual fallback", () => {
+test("shared scanner is camera-only and automatically recovers after a rejected scan", () => {
   assert.match(scanner, /inFlightRef\.current/);
   assert.match(scanner, /autoStart = false/);
   assert.match(scanner, /if \(autoStart\) startCamera\(\);/);
-  assert.match(scanner, /manualEntry/);
-  assert.match(scanner, /stopCamera\(\); setManualEntry\(true\);/);
-  assert.match(scanner, /setMessage\(text\.cameraUnavailable\);\s*setManualEntry\(true\);/);
-  assert.match(scanner, /setMessage\(text\.cameraAccessUnavailable\);\s*setManualEntry\(true\);/);
-  assert.match(scanner, /Enter code manually/);
+  assert.doesNotMatch(scanner, /manualEntry|Enter code manually|<form|<input/);
+  assert.match(scanner, /restartAfterError = true/);
+  assert.match(scanner, /window\.setTimeout/);
+  assert.match(scanner, /startCamera\(\{ preserveMessage: true \}\)/);
+  assert.match(scanner, /if \(streamRef\.current\) return/);
   assert.match(scanner, /role="alert"/);
   assert.match(scanner, /getTracks\(\)\.forEach/);
   assert.match(scanner, /cameraSessionRef/);
@@ -25,7 +26,6 @@ test("shared scanner has camera-first auto-start and manual fallback", () => {
   assert.match(scanner, /session\.stopIfStale\(token, stream\)/);
   assert.match(scanner, /cameraSessionRef\.current\.cancel\(\);/);
   assert.match(scanner, /scanGenerationRef/);
-  assert.match(scanner, /useId\(\)/);
   assert.match(surface, /workorderGenerationRef/);
   assert.match(surface, /scannerOpen/);
   assert.match(surface, /scannerOpen \? \(/);
@@ -51,28 +51,27 @@ test("parts surface opens a dedicated, accessible scanner overlay", () => {
   assert.match(css, /content: attr\(data-tooltip\)/);
 });
 
-test("minimal scanner is camera-first with only close and manual recovery controls", () => {
+test("minimal scanner is camera-first with only close before a scan result", () => {
   assert.match(surface, /<ModalOverlay[\s\S]*<InventoryCodeScanner[\s\S]*autoStart/);
   assert.match(surface, /className="mechanic-scanner-close"/);
   assert.match(surface, /aria-label=\{t\("parts\.closeScanner"\)\}/);
   assert.match(surface, /onClick=\{closeScanner\}/);
   assert.match(surface, /<InventoryCodeScanner[\s\S]*onScan=\{resolve\}/);
 
-  // Scanner chrome stays invisible; camera and recovery controls remain.
+  // Scanner chrome stays invisible; camera and Close remain.
   assert.doesNotMatch(scanner, /<h[1-6][^>]*>.*\{title\}/);
   assert.doesNotMatch(scanner, /inventory-code-scan-guide/);
   assert.doesNotMatch(scanner, /inventory-code-camera-status/);
   assert.doesNotMatch(scanner, /\{text\.stopCamera\}/);
   assert.doesNotMatch(scanner, /inventory-code-qr-note/);
+  assert.doesNotMatch(scanner, /inventory-code-manual-action/);
+  assert.doesNotMatch(scanner, /codeLabel|codePlaceholder|openPart|checking/);
   assert.doesNotMatch(surface, /stopCamera:/);
   assert.doesNotMatch(surface, /cameraReady:/);
   assert.doesNotMatch(surface, /qrOnly:/);
 });
 
-test("scanner stops camera before manual entry and before delivering a QR result", () => {
-  const manualAction = scanner.indexOf("stopCamera(); setManualEntry(true);");
-  assert.ok(manualAction >= 0, "manual entry must stop the camera first");
-
+test("scanner stops camera before delivering a QR result", () => {
   const detected = scanner.indexOf("result?.rawValue");
   const stopBeforeSubmit = scanner.indexOf("stopCamera();", detected);
   const submitAfterDetection = scanner.indexOf("await submit(result.rawValue);", detected);
@@ -81,9 +80,14 @@ test("scanner stops camera before manual entry and before delivering a QR result
   assert.ok(submitAfterDetection > stopBeforeSubmit, "QR delivery must happen after camera stop");
 });
 
-test("camera denial or unavailable support enters manual recovery", () => {
-  assert.match(scanner, /!inventoryScannerAvailable\(window\)[\s\S]*setManualEntry\(true\)/);
-  assert.match(scanner, /catch[\s\S]*setMessage\(text\.cameraAccessUnavailable\)[\s\S]*setManualEntry\(true\)/);
+test("camera denial or unavailable support remains a camera-only error", () => {
+  assert.match(scanner, /!inventoryScannerAvailable\(window\)[\s\S]*setMessage\(text\.cameraUnavailable\)/);
+  assert.match(scanner, /catch[\s\S]*setMessage\(text\.cameraAccessUnavailable\)/);
+  assert.doesNotMatch(scanner, /Paste|paste|manual|Manual/);
+  assert.doesNotMatch(surface, /parts\.(?:enterCode|codeLabel|codePlaceholder|checking|openPart|cameraUnavailable|cameraAccessUnavailable)/);
+  assert.doesNotMatch(createScanner, /parts\.(?:enterCode|codeLabel|codePlaceholder|checking|openPart|cameraUnavailable|cameraAccessUnavailable)/);
+  assert.match(surface, /locale=\{locale\}/);
+  assert.match(createScanner, /locale=\{locale\}/);
 });
 
 test("authorized parts surfaces reserve exact units and route removal through custody", () => {
@@ -165,7 +169,8 @@ test("minimal scanner CSS is edge-to-edge, safe-area aware, touch-safe, and guid
   assert.match(css, /height:\s*100dvh/);
   assert.match(css, /env\(safe-area-inset-(top|right|bottom|left)\)/);
   assert.match(css, /min-height:\s*44px/);
-  assert.match(css, /\.inventory-code-scanner form \.button\s*\{\s*min-height:\s*44px;/);
+  assert.doesNotMatch(css, /inventory-code-manual-action|inventory-code-scanner form|inventory-code-scanner input/);
+  assert.doesNotMatch(css, /inventory-code-qr-note/);
   assert.match(css, /overflow:\s*hidden/);
   assert.doesNotMatch(css, /inventory-code-scan-guide/);
 });
@@ -211,9 +216,7 @@ test("scanner result content follows product drawer geometry without a scanner-o
   assert.match(css, /font-size:\s*13px/);
   assert.match(css, /\.mechanic-scanner-result-actions[\s\S]*min-height:\s*44px/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
-  assert.match(css, /\.mechanic-scanner-panel:has\(\.mechanic-scanner-result-drawer\) \.inventory-code-scanner form\s*\{[\s\S]*bottom:\s*calc\(120px \+ env\(safe-area-inset-bottom\)\)/);
-  assert.match(css, /\.inventory-code-scanner form\s*\{[\s\S]*max-height:\s*calc\(100dvh/);
-  assert.match(css, /\.inventory-code-scanner form\s*\{[\s\S]*overflow:\s*auto/);
+  assert.doesNotMatch(css, /inventory-code-manual-action|inventory-code-scanner form|inventory-code-scanner input/);
   assert.match(css, /\.mechanic-scanner-result-details\s*\{[\s\S]*margin:\s*0/);
   assert.match(css, /\.mechanic-scanner-result-details\s*>\s*div\s*\{/);
   assert.doesNotMatch(css, /\.mechanic-scanner-result-details\s+dl/);

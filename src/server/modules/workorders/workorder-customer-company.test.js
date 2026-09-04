@@ -108,6 +108,47 @@ test("create and office snapshots enforce part quantity units", () => {
   assert.equal(valid.formData.parts[0].uomCode, "gal");
 });
 
+test("create validates supplied serialized inventory IDs against their part and quantity", () => {
+  const catalogPartId = "33333333-3333-4333-8333-333333333333";
+  const unitIds = [
+    "44444444-4444-4444-8444-444444444441",
+    "44444444-4444-4444-8444-444444444442",
+    "44444444-4444-4444-8444-444444444443",
+    "44444444-4444-4444-8444-444444444444",
+  ];
+  const base = {
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    concern: "Replace tires.",
+    mechanicUserIds: ["55555555-5555-4555-8555-555555555555"],
+    formData: { parts: [{ catalogPartId, partNo: "Tires", qty: "4", uomCode: "ea", repairOrder: "Replace" }] },
+  };
+
+  assert.doesNotThrow(() => createWorkorderSchema.parse(base));
+  assert.throws(() => createWorkorderSchema.parse({
+    ...base,
+    inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds: unitIds.slice(0, 3) }],
+  }), /match the part quantity/i);
+
+  const parsed = createWorkorderSchema.parse({
+    ...base,
+    inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds }],
+  });
+  assert.deepEqual(parsed.inventoryUnitSelections[0].unitIds, unitIds);
+});
+
+test("create keeps manual count parts and measured catalog parts compatible", () => {
+  assert.doesNotThrow(() => createWorkorderSchema.parse({
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    concern: "Use supplies.",
+    formData: { parts: [
+      { partNo: "Shop supply", qty: "1", uomCode: "ea" },
+      { catalogPartId: "33333333-3333-4333-8333-333333333333", partNo: "Oil", qty: "2.5", uomCode: "gal" },
+    ] },
+  }));
+});
+
 test("public workorder projection exposes asset owner and a canonical form snapshot", () => {
   const workorder = publicWorkorderRow({
     id: "33333333-3333-4333-8333-333333333333",

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { reserveWorkorderSerials } from "./serial-counters.repo.js";
@@ -8,7 +8,10 @@ import { normalizeWorkorderFormData } from "../../../../shared/workorder-templat
 import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js";
 import { publicOdooRecordUrl } from "../../integrations/odoo/odoo.navigation.js";
-import { consumePendingSerializedInstallationsForApproval } from "./inventory-unit-workorder-usage.repo.js";
+import {
+  consumePendingSerializedInstallationsForApproval,
+  reserveSerializedUnitsForCreatedWorkorder,
+} from "./inventory-unit-workorder-usage.repo.js";
 import {
   consumeAggregateUsagesForApproval,
   markAggregateUsagesPending,
@@ -517,7 +520,50 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       [input.assetId, companyId],
     )
     : { rows: [] };
-  const formData = normalizeWorkorderFormData(input.formData, {
+  const sourceFormData = input.formData || {};
+  const sourceParts = Array.isArray(sourceFormData.parts) ? sourceFormData.parts : [];
+  const selections = input.inventoryUnitSelections || [];
+  const selectionsByPartIndex = new Map(selections.map((selection) => [selection.partIndex, selection]));
+  const catalogPartIds = [...new Set(sourceParts.map((part) => part?.catalogPartId).filter(Boolean))];
+  const serializedCatalogResult = catalogPartIds.length && input.locationId
+    ? await client.query(
+      `select distinct line.catalog_part_id
+         from inventory_receipt_lines line
+         join inventory_receipts receipt
+           on receipt.company_id = line.company_id and receipt.id = line.receipt_id
+        where line.company_id = $1 and receipt.location_id = $2
+          and line.catalog_part_id = any($3::uuid[]) and line.tracking_mode = 'serial'
+          and receipt.provider in ('local', 'local_count', 'local_serialization')`,
+      [companyId, input.locationId, catalogPartIds],
+    )
+    : { rows: [] };
+  const serializedCatalogPartIds = new Set(serializedCatalogResult.rows.map((row) => row.catalog_part_id));
+  for (const [partIndex, part] of sourceParts.entries()) {
+    const selection = selectionsByPartIndex.get(partIndex);
+    const serialized = serializedCatalogPartIds.has(part?.catalogPartId);
+    if (serialized && !selection) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SERIALIZED_SELECTION_REQUIRED",
+        "Choose the exact serialized units for each serialized inventory part.",
+      );
+    }
+    if (!serialized && selection) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SERIALIZED_SELECTION_INVALID",
+        "Serialized units can only be selected for inventory tracked by individual units.",
+      );
+    }
+  }
+  const selectedPartIndexes = new Set(selections.map(({ partIndex }) => partIndex));
+  const formData = normalizeWorkorderFormData({
+    ...sourceFormData,
+    parts: Array.isArray(sourceFormData.parts)
+      ? sourceFormData.parts.filter((_, index) => !selectedPartIndexes.has(index)).map((part) => {
+        const { serializedUnitIds: _unitIds, serializedSerialNumbers: _serialNumbers, ...savedPart } = part || {};
+        return savedPart;
+      })
+      : sourceFormData.parts,
+  }, {
     assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
   });
   const reservation = await reserveWorkorderSerials({ companyId, count: 1 }, client);
@@ -574,6 +620,37 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       changedByUserId: input.createdByUserId,
       note: input.startImmediately ? "Mechanic created and started workorder." : INITIAL_ASSIGNMENT_REASON,
     });
+  }
+  if (input.inventoryUnitSelections?.length) {
+    const selectionResult = await reserveSerializedUnitsForCreatedWorkorder({
+      workorderId: result.rows[0].id,
+      companyId,
+      locationId: input.locationId,
+      actorId: input.createdByUserId,
+      actorRole: input.createdByRole,
+      selections: input.inventoryUnitSelections.map((selection) => ({
+        ...selection,
+        repairOrder: String(sourceFormData.parts?.[selection.partIndex]?.repairOrder || "").trim(),
+      })),
+      requestHash: createHash("sha256").update(JSON.stringify({
+        workorderId: result.rows[0].id,
+        selections: input.inventoryUnitSelections,
+      })).digest("hex"),
+    }, client);
+    if (selectionResult.kind !== "reserved") {
+      const messages = {
+        asset_required: "Link an exact unit before selecting serialized parts.",
+        workorder_state: "Serialized parts can only be selected for an open or active workorder.",
+        missing: "One or more selected serial numbers no longer belong to this location and part.",
+        unit_state: "One or more selected serial numbers are no longer available.",
+        provider_not_local: "One or more selected serial numbers are not managed by local inventory.",
+        stock_mismatch: "Serialized identities and local stock balance no longer match. Inventory review is required.",
+      };
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SERIALIZED_SELECTION_CONFLICT",
+        messages[selectionResult.kind] || "The selected serialized parts could not be reserved.",
+      );
+    }
   }
   return { id: result.rows[0].id, serial };
 }

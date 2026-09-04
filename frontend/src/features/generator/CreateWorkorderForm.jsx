@@ -5,6 +5,12 @@ import { interfaceText } from "../../i18n/index.js";
 
 export const CREATE_WORKORDER_FORM_ID = "create-workorder-form";
 
+const SERIAL_SELECTION_ERROR = {
+  en: "Choose one exact serial number for each countable inventory part.",
+  es: "Elige un número de serie exacto para cada pieza de inventario contable.",
+  pa: "ਹਰ ਗਿਣਤੀ ਵਾਲੇ ਇਨਵੈਂਟਰੀ ਪਾਰਟ ਲਈ ਇੱਕ ਸਹੀ ਸੀਰੀਅਲ ਨੰਬਰ ਚੁਣੋ।",
+};
+
 export function CreateWorkorderForm({
   assignment,
   busy,
@@ -39,7 +45,9 @@ export function CreateWorkorderForm({
   const t = (key) => interfaceText(locale, key);
   const localizedErrors = Object.fromEntries(Object.entries(errors || {}).map(([key, value]) => [
     key,
-    interfaceText(locale, `create.validation.${key}`) === `create.validation.${key}`
+    key === "parts" && /exact serial/i.test(value)
+      ? SERIAL_SELECTION_ERROR[locale] || SERIAL_SELECTION_ERROR.en
+      : interfaceText(locale, `create.validation.${key}`) === `create.validation.${key}`
       ? value
       : interfaceText(locale, `create.validation.${key}`),
   ]));

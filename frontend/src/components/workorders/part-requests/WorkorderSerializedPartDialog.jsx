@@ -1,14 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Dialog, Modal, ModalOverlay } from "react-aria-components";
 import { Button } from "../../ui/Button.jsx";
-import { InventoryCodeScanner } from "../../../features/inventory/InventoryCodeScanner.jsx";
 import { api } from "../../../lib/api.js";
 import { normalizeLocale } from "../../../i18n/index.js";
+import { SerializedUnitNestedDropdown } from "./SerializedUnitNestedDropdown.jsx";
 import {
   eligibleSelectedUnitIds,
-  isEligibleSerializedUnit,
   issueSelectedSerializedUnits,
-  selectAllEligibleUnitIds,
 } from "./workorder-serialized-part-selection.js";
 import "./workorder-serialized-part-dialog.css";
 
@@ -81,14 +78,11 @@ export function WorkorderSerializedPartDialog({
   const [physicallyPresent, setPhysicallyPresent] = useState(false);
   const [selectedUnitIds, setSelectedUnitIds] = useState(() => new Set());
   const [serialQuery, setSerialQuery] = useState("");
-  const requestKeyRef = useRef({ identity: "", key: "" });
   const unitRequestKeysRef = useRef(new Map());
   const createKeyRef = useRef({ identity: "", key: "" });
   const quantityRef = useRef(null);
   const addUnitsRef = useRef(null);
-  const emptyStatusRef = useRef(null);
   const printRef = useRef(null);
-  const contentRef = useRef(null);
   const dialogId = useId();
   const partId = catalogPart?.id || catalogPart?.catalogPartId;
   const endpoint = partId && workorderId
@@ -134,7 +128,6 @@ export function WorkorderSerializedPartDialog({
     setPhysicallyPresent(false);
     setSelectedUnitIds(new Set());
     setSerialQuery("");
-    requestKeyRef.current = { identity: "", key: "" };
     unitRequestKeysRef.current = new Map();
     createKeyRef.current = { identity: "", key: "" };
     load({ query: "" });
@@ -144,14 +137,6 @@ export function WorkorderSerializedPartDialog({
     if (view === "create") window.requestAnimationFrame(() => quantityRef.current?.focus());
     if (view === "created") window.requestAnimationFrame(() => printRef.current?.focus());
   }, [view]);
-
-  useEffect(() => {
-    if (!open || view !== "units" || loading || !data) return;
-    const target = units.length
-      ? contentRef.current?.querySelector(".inventory-code-manual-action")
-      : canCreate ? addUnitsRef.current : emptyStatusRef.current;
-    window.requestAnimationFrame(() => target?.focus());
-  }, [open, view, loading, data, units.length, canCreate]);
 
   function close() {
     if (!busy) onClose?.();
@@ -201,32 +186,6 @@ export function WorkorderSerializedPartDialog({
     }
   }
 
-  async function reserve({ unitId, code } = {}) {
-    if (busy || (!unitId && !code)) return;
-    const identity = unitId ? `unit:${unitId}` : `code:${code}`;
-    if (unitId) {
-      if (!unitRequestKeysRef.current.has(unitId)) unitRequestKeysRef.current.set(unitId, key("workorder-serialized-issue"));
-    } else if (requestKeyRef.current.identity !== identity) {
-      requestKeyRef.current = { identity, key: key("workorder-serialized-issue") };
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      const result = await api(`/api/workorders/${encodeURIComponent(workorderId)}/inventory-units/issue`, {
-        method: "POST",
-        body: JSON.stringify({ unitId, code, idempotencyKey: unitId ? unitRequestKeysRef.current.get(unitId) : requestKeyRef.current.key }),
-      });
-      await onReserved?.(result.usage, result);
-      onClose?.();
-    } catch (error) {
-      // Retain the key for a retry of this exact unit/code. A different unit gets
-      // a new key so it cannot collide with the prior reservation request.
-      setMessage(errorText(error, text));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function reserveSelectedUnits() {
     if (busy || !eligibleSelectedUnitIds(units, selectedUnitIds).length) return;
     setBusy(true);
@@ -253,36 +212,46 @@ export function WorkorderSerializedPartDialog({
     setBusy(false);
   }
 
-  function toggleUnit(unitId) {
-    setSelectedUnitIds((current) => {
-      const next = new Set(current);
-      if (next.has(unitId)) next.delete(unitId);
-      else next.add(unitId);
-      return next;
-    });
-  }
-
-  function selectAllAvailable() {
-    setSelectedUnitIds(selectAllEligibleUnitIds(units));
-  }
-
-  function search(event) {
-    event.preventDefault();
+  function search(query) {
     setSelectedUnitIds(new Set());
-    load({ query: serialQuery });
+    load({ query });
   }
 
   const batch = data?.batch || data?.labelBatch;
-  const selectedCount = eligibleSelectedUnitIds(units, selectedUnitIds).length;
-  const canReserve = selectedCount > 0;
+  if (!open) return null;
+  if (view !== "create") {
+    return (
+      <SerializedUnitNestedDropdown
+        busy={busy}
+        confirmLabel={busy ? text.adding : text.selected}
+        description={showDescription ? partDescription : ""}
+        emptyAction={canCreate ? <Button ref={addUnitsRef} type="button" variant="primary" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : null}
+        emptyMessage={`${text.none} ${locationName}.${canCreate ? "" : ` ${text.ask}`}`}
+        error={message}
+        footerAction={<>{data?.nextCursor ? <Button type="button" onClick={() => load({ cursor: data.nextCursor, append: true })} disabled={loading || busy}>{text.more}</Button> : null}{canCreate && units.length ? <Button type="button" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : null}</>}
+        loading={loading}
+        locale={locale}
+        locationName={`${text.location}: ${locationName}`}
+        maxSelected={100}
+        onClose={close}
+        onConfirm={reserveSelectedUnits}
+        onQueryChange={setSerialQuery}
+        onSearch={search}
+        onSelectionChange={setSelectedUnitIds}
+        partNumber={partNumber}
+        query={serialQuery}
+        selectedUnitIds={selectedUnitIds}
+        topContent={view === "created" && batch?.printUrl ? <div className="workorder-serialized-ready"><strong>{text.ready}</strong><a ref={printRef} className="button primary" href={batch.printUrl} target="_blank" rel="noreferrer">{text.printed} {batch.itemCount || units.length} {text.labels}</a></div> : null}
+        units={units}
+      />
+    );
+  }
 
   return (
-    <ModalOverlay className="workorder-serialized-dialog-overlay" isOpen={open} isDismissable={false}>
-      <Modal className="workorder-serialized-dialog-modal">
-        <Dialog className="workorder-serialized-dialog" aria-labelledby={`${dialogId}-title`} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}>
+        <section className="workorder-serialized-dialog workorder-serialized-create-panel" role="dialog" aria-modal="false" aria-labelledby={`${dialogId}-title`} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}>
           <header>
             <div className="workorder-serialized-heading">
-              <h2 id={`${dialogId}-title`}>{view === "create" ? text.add : view === "created" ? text.ready : text.choose}</h2>
+              <h2 id={`${dialogId}-title`}>{text.add}</h2>
               <div className="workorder-serialized-context" aria-label={text.title}>
                 <div className="workorder-serialized-part-identity">
                   <strong>{partNumber}</strong>
@@ -296,9 +265,9 @@ export function WorkorderSerializedPartDialog({
             </div>
             <button type="button" className="workorder-serialized-close" onClick={close} disabled={busy} aria-label={text.close}>×</button>
           </header>
-          <div className="workorder-serialized-dialog-content" ref={contentRef}>
+          <div className="workorder-serialized-dialog-content">
             {message ? <p className="workorder-serialized-message" role="alert">{message}</p> : null}
-            {view === "create" ? <form onSubmit={createUnits} className="workorder-serialized-create">
+            <form onSubmit={createUnits} className="workorder-serialized-create">
               <div className="workorder-serialized-field">
                 <label>{text.quantity}<input ref={quantityRef} type="number" min="1" max="25" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
                 <p>{text.creates}</p>
@@ -306,31 +275,8 @@ export function WorkorderSerializedPartDialog({
               </div>
               <label className="workorder-serialized-check"><input type="checkbox" checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /><span>{text.confirm} <strong>{locationName}</strong>.</span></label>
               <footer><Button type="button" onClick={() => { setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type="submit" variant="primary" disabled={busy || !physicallyPresent}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
-            </form> : <>
-              {view === "created" && batch?.printUrl ? <div className="workorder-serialized-ready"><strong>{text.ready}</strong><a ref={printRef} className="button primary" href={batch.printUrl} target="_blank" rel="noreferrer">{text.printed} {batch.itemCount || units.length} {text.labels}</a></div> : null}
-              <section className="workorder-serialized-find" aria-labelledby={`${dialogId}-find-heading`}>
-                <div className="workorder-serialized-section-heading">
-                  <h3 id={`${dialogId}-find-heading`}>{text.scan}</h3>
-                  <span>{text.manual}</span>
-                </div>
-                <div className="workorder-serialized-scan">
-                  <InventoryCodeScanner autoStart resetKey={`${workorderId}:${partId}:${open}`} disabled={busy} onScan={(code) => reserve({ code })} labels={{ enterCode: text.manual, codeLabel: text.code, openError: text.error }} />
-                </div>
-                <form className="workorder-serialized-search" onSubmit={search}><label>{text.search}<input value={serialQuery} onChange={(event) => setSerialQuery(event.target.value)} placeholder="Full or beginning of serial" disabled={busy} /></label><Button type="submit" disabled={loading || busy}>{loading ? text.searching : text.searchButton}</Button></form>
-              </section>
-              {loading ? <p role="status">{text.loading}</p> : null}
-              {!loading && !units.length ? <div className="workorder-serialized-empty" ref={canCreate ? undefined : emptyStatusRef} tabIndex={canCreate ? undefined : -1}>
-                <span className="workorder-serialized-empty-count" aria-hidden="true">0</span>
-                <div><strong>{text.none} {locationName}.</strong>{!canCreate ? <p>{text.ask}</p> : null}</div>
-                {canCreate ? <Button ref={addUnitsRef} type="button" variant="primary" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : null}
-              </div> : null}
-              {units.length ? <fieldset className="workorder-serialized-unit-list"><legend><span>{text.available}</span><small role="status">{units.length} {text.availability}</small></legend><Button type="button" className="workorder-serialized-select-all" onClick={selectAllAvailable} disabled={busy || !units.some(isEligibleSerializedUnit)}>{text.selectAll}</Button>{units.map((unit) => <label key={unit.id} className="workorder-serialized-unit"><input type="checkbox" value={unit.id} checked={selectedUnitIds.has(unit.id)} onChange={() => toggleUnit(unit.id)} disabled={busy || !isEligibleSerializedUnit(unit)} /><span><strong>{unit.partNumber || part.partNumber}</strong><code>{unit.serialNumber || unit.serial}</code><small>{unit.status === "in_stock" ? text.stock : unit.status}{unit.locationName ? ` · ${unit.locationName}` : ""}</small></span></label>)}</fieldset> : null}
-              {data?.nextCursor ? <Button type="button" onClick={() => load({ cursor: data.nextCursor, append: true })} disabled={loading || busy}>{text.more}</Button> : null}
-              {units.length ? <footer>{canCreate ? <Button type="button" onClick={() => setView("create")} disabled={busy}>{text.addUnits}</Button> : <span /> }<Button type="button" variant="primary" onClick={reserveSelectedUnits} disabled={!canReserve || busy}>{busy ? text.adding : `${text.selected} (${selectedCount})`}</Button></footer> : null}
-            </>}
+            </form>
           </div>
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+        </section>
   );
 }

@@ -1,4 +1,8 @@
-import { invalidCreatePartIndex } from "../workorder-modules/parts/create-parts-model.js";
+import {
+  createPartRequiresSerializedUnits,
+  invalidCreatePartIndex,
+  serializedSelectionMatchesQuantity,
+} from "../workorder-modules/parts/create-parts-model.js";
 
 export const CREATE_WORKORDER_FIELD_IDS = Object.freeze({
   locationId: "workorder-location",
@@ -9,7 +13,11 @@ export const CREATE_WORKORDER_FIELD_IDS = Object.freeze({
 });
 
 export function validateCreateWorkorder(form = {}) {
-  const invalidPartIndex = invalidCreatePartIndex(Array.isArray(form.parts) ? form.parts : []);
+  const parts = Array.isArray(form.parts) ? form.parts : [];
+  const invalidPartIndex = invalidCreatePartIndex(parts);
+  const serializedSelectionMissing = parts.some((part) => (
+    createPartRequiresSerializedUnits(part) && !serializedSelectionMatchesQuantity(part)
+  ));
   return {
     ...(!String(form.locationId || "").trim() ? { locationId: "Select the repair location." } : {}),
     ...(!String(form.unitNo || "").trim() ? { unitNo: "Enter or select the unit." } : {}),
@@ -19,7 +27,11 @@ export function validateCreateWorkorder(form = {}) {
     ...(!String(form.mechanicConcern || "").trim()
       ? { mechanicConcern: "Describe what needs to be inspected or repaired." }
       : {}),
-    ...(invalidPartIndex >= 0 ? { parts: "Enter a valid quantity and unit for each known part." } : {}),
+    ...(invalidPartIndex >= 0 ? {
+      parts: serializedSelectionMissing
+        ? "Choose one exact serial number for each countable inventory part."
+        : "Enter a valid quantity and unit for each known part.",
+    } : {}),
   };
 }
 

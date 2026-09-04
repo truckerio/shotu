@@ -94,6 +94,8 @@ export const en = Object.freeze({
   "mechanic.waiting": "Waiting",
   "mechanic.history": "History",
   "mechanic.allActive": "All active",
+  "mechanic.acceptInspection": "Accept inspection",
+  "mechanic.acceptingInspection": "Accepting inspection…",
   "mechanic.searchAndFilters": "Search and filters",
   "mechanic.createWorkorder": "Create workorder",
   "mechanic.noAssignedJobs": "No assigned jobs",

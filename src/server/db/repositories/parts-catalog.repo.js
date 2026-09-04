@@ -23,6 +23,7 @@ function publicInventory(row) {
     quantityOnHand: publicQuantity(row.quantity_on_hand),
     quantityReserved: publicQuantity(row.quantity_reserved),
     available: publicQuantity(row.quantity_available),
+    serializationRequired: row.serialization_required === true,
     binLocation: row.bin_location || "",
     uomCode: row.inventory_uom_code || row.uom_code || DEFAULT_UOM_CODE,
     updatedAt: row.inventory_updated_at,
@@ -187,6 +188,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         inventory.quantity_on_hand,
         inventory.quantity_reserved,
         inventory.quantity_available,
+        inventory.serialization_required,
         inventory.bin_location,
         inventory.uom_code as inventory_uom_code,
         inventory.updated_at as inventory_updated_at,
@@ -211,7 +213,20 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
           greatest(item.quantity_on_hand - item.quantity_reserved, 0) as quantity_available,
           item.bin_location,
           item.uom_code,
-          item.updated_at
+          item.updated_at,
+          exists (
+            select 1
+              from inventory_receipt_lines serialized_line
+              join inventory_receipts serialized_receipt
+                on serialized_receipt.company_id = serialized_line.company_id
+               and serialized_receipt.id = serialized_line.receipt_id
+             where serialized_line.company_id = item.company_id
+               and serialized_line.catalog_part_id = item.catalog_part_id
+               and serialized_line.uom_code = item.uom_code
+               and serialized_line.tracking_mode = 'serial'
+               and serialized_receipt.location_id = item.location_id
+               and serialized_receipt.provider in ('local', 'local_count', 'local_serialization')
+          ) as serialization_required
         from inventory_items item
         left join locations location
           on location.id = item.location_id

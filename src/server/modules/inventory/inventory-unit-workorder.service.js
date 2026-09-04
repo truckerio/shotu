@@ -7,6 +7,7 @@ import {
   issueSerializedUnitToWorkorder,
   listWorkorderSerializedUnitUsages,
   listAvailableSerializedUnitsForWorkorder,
+  listAvailableSerializedUnitsForCreate,
   resolveWorkorderSerializedUnit,
   updateSerializedUsageRepairOrder,
 } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
@@ -18,10 +19,13 @@ import {
   inventoryWorkorderEntityIdSchema,
   issueWorkorderInventoryUnitSchema,
   createWorkorderInventoryUnitsSchema,
+  listCreateInventoryUnitsSchema,
   listWorkorderInventoryUnitsSchema,
   resolveWorkorderInventoryUnitSchema,
   updateSerializedUsageRepairOrderSchema,
 } from "./inventory-unit-workorder.schemas.js";
+import { getLocationById } from "../../db/repositories/locations.repo.js";
+import { authorizeWorkorderCreate } from "../workorders/workorder-module-access.service.js";
 import { createSerializedUnitsForPart } from "./inventory-part-serialization.service.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
@@ -156,6 +160,31 @@ export async function readAvailableSerializedUnitsForWorkorder(workorderId, rawI
     units: result.units,
     nextCursor: result.nextCursor,
   };
+}
+
+export async function readAvailableSerializedUnitsForCreate(rawInput, context, dependencies = {}) {
+  const input = listCreateInventoryUnitsSchema.parse(rawInput);
+  const loadLocation = dependencies.getLocation || getLocationById;
+  const location = await loadLocation(input.locationId, [...(context.companyIds || [])]);
+  if (!location) throw inventoryNotFound();
+  requireLocationAccess(context, input.locationId);
+  const authorizeCreate = dependencies.authorizeCreate || authorizeWorkorderCreate;
+  await authorizeCreate(context, {
+    companyId: location.company_id,
+    locationId: location.id,
+    moduleKeys: ["parts"],
+    enforceRequired: false,
+  });
+  const result = await (dependencies.listAvailableUnits || listAvailableSerializedUnitsForCreate)({
+    companyId: location.company_id,
+    locationId: location.id,
+    catalogPartId: input.catalogPartId,
+    queryText: input.q,
+    after: input.after,
+    limit: input.limit,
+  });
+  if (result.kind === "missing" || result.serialRequired !== true) throw inventoryNotFound();
+  return result;
 }
 
 export async function createSerializedUnitsForWorkorder(workorderId, rawInput, context, dependencies = {}) {

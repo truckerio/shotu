@@ -17,6 +17,7 @@ function normalizeInventory(raw = {}) {
     locationName: raw.locationName || raw.location?.name || "",
     binLocation: raw.binLocation || raw.bin || "",
     available,
+    serializationRequired: raw.serializationRequired === true,
     uomCode: normalizeUomCode(raw.uomCode || raw.unit || raw.unitCode),
   };
 }

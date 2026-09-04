@@ -291,7 +291,6 @@ export function UsedPartsEditor({
         ) : activeSerializedParts.length ? null : <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p>}
         {serializedHistory}
         <AggregatePartUsageRows actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} locale={locale} onChanged={onChanged} />
-        {serializedDialog}
         {measuredDialog}
       </div>
     );
@@ -301,26 +300,32 @@ export function UsedPartsEditor({
     <div className="used-parts-editor">
       {serializedToolbar}
       {serializedFeedback}
-      {partsEditable ? <PartCatalogCombobox
-        workorderId={detail.workorder.id}
-        purpose="workorder_assignment"
-        value={catalogQuery}
-        onChange={setCatalogQuery}
-        onSelect={(catalogPart) => {
-          const category = getUnitDefinition(catalogPart.uomCode)?.category;
-          setCatalogQuery("");
-          setMessage("");
-          if (MEASURED_UOM_CATEGORIES.has(category)) setMeasuredDialogPart(catalogPart);
-          else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
-          else setSerializedDialogPart(catalogPart);
-        }}
-        label={t("parts.partNumber")}
-        inputAriaLabel={t("parts.partNumber")}
-        inputPolicy="identifier"
-        placeholder={t("parts.partNumber")}
-        allowManualEntry={false}
-        locale={locale}
-      /> : null}
+      {partsEditable ? <div className="used-parts-manual-picker">
+        <PartCatalogCombobox
+          workorderId={detail.workorder.id}
+          purpose="workorder_assignment"
+          value={catalogQuery}
+          onChange={(value) => {
+            setCatalogQuery(value);
+            setSerializedDialogPart(null);
+          }}
+          onSelect={(catalogPart) => {
+            const category = getUnitDefinition(catalogPart.uomCode)?.category;
+            setCatalogQuery(catalogPart.partNumber);
+            setMessage("");
+            if (MEASURED_UOM_CATEGORIES.has(category)) setMeasuredDialogPart(catalogPart);
+            else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
+            else setSerializedDialogPart(catalogPart);
+          }}
+          label={t("parts.partNumber")}
+          inputAriaLabel={t("parts.partNumber")}
+          inputPolicy="identifier"
+          placeholder={t("parts.partNumber")}
+          allowManualEntry={false}
+          locale={locale}
+        />
+        {serializedDialog}
+      </div> : null}
       <div className="parts-editor">
         <div className="part-row part-row-head" aria-hidden="true">
           <span>{t("parts.serialNumber")}</span>
@@ -380,7 +385,6 @@ export function UsedPartsEditor({
       <div className="used-parts-feedback" aria-live="polite">
         {message ? <span>{message}</span> : <span></span>}
       </div>
-      {serializedDialog}
       {measuredDialog}
     </div>
   );

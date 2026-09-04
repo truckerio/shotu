@@ -4,6 +4,7 @@ import {
   finalizeSerializedUnitForWorkorder,
   createSerializedUnitsForWorkorder,
   issueSerializedUnitForWorkorder,
+  readAvailableSerializedUnitsForCreate,
   readAvailableSerializedUnitsForWorkorder,
   readSerializedUnitUsagesForWorkorder,
   resolveSerializedUnitForWorkorder,
@@ -134,6 +135,47 @@ test("module denial, empty location scope, invalid identities, and cross-scope m
   await assert.rejects(
     resolveSerializedUnitForWorkorder(WORKORDER_ID, { code: "inventory-code" }, context(), dependencies({ resolveUnit: async () => null })),
     (error) => error.statusCode === 404 && error.code === "inventory_not_found",
+  );
+});
+
+test("create picker derives tenant and location scope before listing serialized units", async () => {
+  const catalogPartId = "00000000-0000-4000-8000-000000000008";
+  let listed;
+  const result = await readAvailableSerializedUnitsForCreate(
+    { locationId: LOCATION_ID, catalogPartId },
+    context(),
+    {
+      getLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      authorizeCreate: async (_context, input) => {
+        assert.equal(input.companyId, COMPANY_ID);
+        assert.deepEqual(input.moduleKeys, ["parts"]);
+        assert.equal(input.enforceRequired, false);
+      },
+      listAvailableUnits: async (input) => {
+        listed = input;
+        return { kind: "found", serialRequired: true, units: [unit()] };
+      },
+    },
+  );
+  assert.equal(result.units[0].id, UNIT_ID);
+  assert.equal(listed.companyId, COMPANY_ID);
+  assert.equal(listed.locationId, LOCATION_ID);
+
+  await assert.rejects(
+    readAvailableSerializedUnitsForCreate(
+      { locationId: LOCATION_ID, catalogPartId },
+      context("office", new Set()),
+      { getLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }) },
+    ),
+    (error) => error.statusCode === 403,
+  );
+  await assert.rejects(
+    readAvailableSerializedUnitsForCreate(
+      { locationId: LOCATION_ID, catalogPartId },
+      context(),
+      { getLocation: async () => null },
+    ),
+    (error) => error.statusCode === 404,
   );
 });
 

@@ -16,6 +16,7 @@ export function QuantityUnitInput({
   quantityLabel = "Quantity",
   unitLabel = "Unit",
   disabled = false,
+  quantityReadOnly = false,
   unitReadOnly = false,
   compact = false,
   max,
@@ -64,6 +65,8 @@ export function QuantityUnitInput({
           placeholder={t("uom.quantityShort")}
           aria-label={quantityLabel}
           disabled={disabled}
+          readOnly={quantityReadOnly}
+          aria-readonly={quantityReadOnly || undefined}
         />
       </label>
       <div className="quantity-unit-picker"><span>{unitLabel}</span><UnitOfMeasurePicker id={`${inputId}-unit`} uomCode={model.code} onChange={selectUnit} label={unitLabel} disabled={disabled} readOnly={unitReadOnly} locale={locale} /></div>

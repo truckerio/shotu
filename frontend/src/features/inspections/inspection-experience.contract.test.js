@@ -30,6 +30,7 @@ test("opening an assigned inspection leaves lifecycle start to the explicit deta
 
 test("full projections have compact lifecycle filters while read-only exposes the operator status choices", () => {
   assert.match(experience, /<OperationalCollectionTabs/);
+  assert.match(experience, /id: "not_completed", label: "Active"/);
   assert.match(experience, /id: "needs_action", label: "Needs action"/);
   assert.match(experience, /id: "in_progress", label: "In progress"/);
   assert.match(experience, /id: "completed", label: "Completed"/);
@@ -39,6 +40,16 @@ test("full projections have compact lifecycle filters while read-only exposes th
   assert.match(experience, /nextCursor/);
   assert.match(experience, /Load more inspections/);
   assert.match(experience, /params\.set\("status", status\)/);
+});
+
+test("mechanic available inspections use explicit claim before start", () => {
+  assert.match(experience, /async function claimInspection\(\)/);
+  assert.match(experience, /\/actions\/claim/);
+  assert.match(experience, /onClaim=\{projection === "mechanic" && active\.status === "requested"/);
+  assert.match(detail, /Available inspection/);
+  assert.match(detail, /Accept this inspection before starting the checklist/);
+  assert.match(detail, /Accept inspection/);
+  assert.match(detail, /actionError && canClaim[\s\S]*role="alert"/);
 });
 
 test("detail shows office instructions only to authorized operational projections", () => {
@@ -106,6 +117,15 @@ test("inspection session state safely preserves queue state across an unmount/re
   try {
     writeInspectionSession("office", { search: "125", status: "needs_action", activeId: "inspection-1", scrollY: 240 });
     assert.deepEqual(readInspectionSession("office"), { search: "125", status: "needs_action", activeId: "inspection-1", scrollY: 240 });
+  } finally { globalThis.window = previousWindow; }
+});
+
+test("legacy queue sessions reset once so the new Active default is not hidden by the former Needs action default", () => {
+  const previousWindow = globalThis.window;
+  const entries = new Map([["workorder-generator.inspections.office", JSON.stringify({ search:"1017", status:"needs_action", activeId:"old", scrollY:120 })]]);
+  globalThis.window = { sessionStorage: { getItem: (key) => entries.get(key) || null, setItem: (key, value) => entries.set(key, value) } };
+  try {
+    assert.deepEqual(readInspectionSession("office"), { search:"", status:"", activeId:"", scrollY:0 });
   } finally { globalThis.window = previousWindow; }
 });
 

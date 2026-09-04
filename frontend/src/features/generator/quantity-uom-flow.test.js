@@ -19,7 +19,7 @@ const usedPartsEditor = readFileSync(new URL("../../components/workorders/UsedPa
 test("create and mechanic save paths serialize uomCode", () => {
   assert.match(createForm, /WorkorderCreateModuleHost/);
   assert.match(createPartsModule, /<QuantityUnitInput/);
-  assert.match(createPartsModule, /onChange\(index, "uomCode", value\)/);
+  assert.match(createPartsModule, /onChange\(index, \{ uomCode: value,[^}]*serializedUnitIds: \[\]/);
   assert.match(formController, /qty:\s*part\.qty,\s*\n\s*uomCode:\s*part\.uomCode,/);
 });
 
@@ -66,8 +66,10 @@ test("create workorder uses the location-scoped catalog selector and retains sel
   assert.match(createPartsModule, /<PartCatalogCombobox/);
   assert.match(createPartsModule, /locationId=\{locationId\}/);
   assert.match(createPartsModule, /catalogPartId:\s*catalogPart\.id/);
-  assert.match(createPartsModule, /qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
-  assert.match(createPartsModule, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart\)/);
+  assert.match(createPartsModule, /qty:\s*serializationRequired \? "" : defaultUsedPartQuantity\(part\.qty\)/);
+  assert.match(createPartsModule, /repairOrder:\s*repairOrderAfterNestedSelection\(part\.repairOrder, catalogPart\)/);
+  assert.match(createPartsModule, /setSerialPickerIndex\(catalogPart\.inventory\?\.serializationRequired === true \? index : -1\)/);
+  assert.match(createPartsModule, /quantityReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
   assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
 });
 

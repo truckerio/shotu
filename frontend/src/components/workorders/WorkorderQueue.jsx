@@ -122,7 +122,7 @@ export function WorkorderTableHeader({ office = false, variant = office ? "offic
   );
 }
 
-export function WorkorderRow({ workorder, available = false, busy = false, featured = false, office = false, variant = office ? "office" : "mechanic", acceptLabel, busyLabel, locale = "en", onOpen, onAccept }) {
+export function WorkorderRow({ workorder, available = false, busy = false, featured = false, office = false, variant = office ? "office" : "mechanic", acceptLabel, busyLabel, openLabel: openLabelOverride, locale = "en", onOpen, onAccept }) {
   const t = (key) => interfaceText(locale, key);
   const lifecycle = normalizedLifecycle(workorder);
   const attention = normalizedAttention(workorder);
@@ -151,9 +151,9 @@ export function WorkorderRow({ workorder, available = false, busy = false, featu
     : lifecycle;
   const rowStatusLabel = isSurveillance && hasOdooStage ? odooLabel(workorder.odooStatus) : localizedStatusLabel;
   const mobileMeta = workorderMobileMeta({ location: knownLocation, mechanic: knownMechanic });
-  const openLabel = variant === "mechanic"
+  const openLabel = openLabelOverride || (variant === "mechanic"
     ? `${t("queue.openWorkorder")} ${workorder.serial || unit}${workorder.concern ? `: ${workorder.concern}` : ""}`
-    : workorderOpenLabel({ serial: workorder.serial, unit, concern: workorder.concern });
+    : workorderOpenLabel({ serial: workorder.serial, unit, concern: workorder.concern }));
 
   return (
     <article className={`mechanic-work-row queue-row-${variant} ${workorder.unread ? "is-unread" : ""} ${featured ? "is-current" : ""}`}>

@@ -184,7 +184,7 @@ export async function submitUserWorkorderDraft(context, id, input, dependencies 
       prepareCreateInput: async (draft) => {
         if (!draft.locationId) throw invalidRequest("Location is required before creating the workorder.");
         await accessibleLocation(context, draft.locationId, dependencies);
-        return finalCreateInput(draft);
+        return { ...finalCreateInput(draft), createdByRole: actor.role };
       },
     });
     if (!result) throw resourceNotFound("Draft");

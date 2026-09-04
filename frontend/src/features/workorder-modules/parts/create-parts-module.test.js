@@ -4,6 +4,10 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./CreatePartsModule.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./create-parts-module.css", import.meta.url), "utf8");
+const serializedPicker = readFileSync(new URL("./CreateSerializedUnitPicker.jsx", import.meta.url), "utf8");
+const nestedDropdown = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitNestedDropdown.jsx", import.meta.url), "utf8");
+const nestedCss = readFileSync(new URL("../../../components/workorders/part-requests/serialized-unit-nested-dropdown.css", import.meta.url), "utf8");
+const childPicker = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitChildPicker.jsx", import.meta.url), "utf8");
 
 test("compact Create Parts hides untouched placeholders behind one editor", () => {
   assert.match(source, /COMPACT_PARTS_QUERY = "\(max-width: 1024px\)"/);
@@ -51,6 +55,42 @@ test("desktop retains the existing create Parts grid", () => {
   assert.match(source, /<LegacyCreatePartsEditor/);
   assert.match(source, /className="operational-part-row has-quantity-unit"/);
   assert.match(source, /compactLayout \? \(/);
+});
+
+test("serialized parent selection opens one shared nested dropdown and derives quantity from selected units", () => {
+  assert.match(source, /onOpenSerialPicker\(catalogPart\.inventory\?\.serializationRequired === true \? index : -1\)/);
+  assert.match(source, /onSelectedValueOpen=\{createPartRequiresSerializedUnits\(part\) \? \(\) => onOpenSerialPicker\(index\) : undefined\}/);
+  assert.match(source, /onSelectedValueClose=\{\(\) => onOpenSerialPicker\(-1\)\}/);
+  assert.match(source, /selectedValueOpen=\{serialPickerIndex === index\}/);
+  assert.doesNotMatch(source, /Choose serial numbers|Select at least one exact serial number/);
+  assert.doesNotMatch(css, /create-serial-selection/);
+  assert.match(source, /<CreateSerializedUnitPicker[\s\S]*open=\{active\}/);
+  assert.match(source, /quantityReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
+  assert.match(source, /unitReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
+  assert.match(serializedPicker, /serializedSelectionPatch\(units, nextIds\)/);
+  assert.match(serializedPicker, /<SerializedUnitNestedDropdown/);
+  assert.match(serializedPicker, /autoFocusSearch=\{false\}/);
+  assert.match(serializedPicker, /onConfirm=\{commitSelection\}/);
+  assert.match(serializedPicker, /selectedIdsRef\.current/);
+  assert.match(serializedPicker, /showConfirmCount=\{false\}/);
+  assert.match(source, /className="create-part-serial-summary"/);
+  assert.match(source, /serializedPartSummary\(part, locale\)/);
+  assert.match(nestedDropdown, /<SerializedUnitChildPicker/);
+  assert.match(nestedDropdown, /type="search"/);
+  assert.match(nestedDropdown, /event\.key === "Escape"/);
+  assert.match(nestedDropdown, /selectedUnitIds instanceof Set/);
+  assert.match(childPicker, /type="checkbox"/);
+  assert.match(childPicker, /onSelectionChange\?\.\(new Set\(next\)\)/);
+  assert.match(css, /\.create-part-identity-field \.serialized-unit-nested-dropdown\s*\{[^}]*left:\s*calc\(100% \+ 8px\)/s);
+  assert.match(nestedCss, /\.serialized-unit-nested-dropdown\s*\{[^}]*position:\s*absolute/s);
+  assert.match(nestedCss, /max-height:\s*min\(34rem, calc\(100dvh - 32px\)\)/);
+});
+
+test("catalog selection never writes the description into Repair order", () => {
+  assert.match(source, /function repairOrderAfterNestedSelection/);
+  assert.match(source, /repairOrder:\s*repairOrderAfterNestedSelection\(part\.repairOrder, catalogPart\)/);
+  assert.match(source, /current\.localeCompare\(description/);
+  assert.doesNotMatch(source, /repairOrderAfterCatalogSelection/);
 });
 
 test("help aligns with the visible Parts heading in both layouts", () => {

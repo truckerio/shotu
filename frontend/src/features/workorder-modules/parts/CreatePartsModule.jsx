@@ -4,7 +4,6 @@ import { QuantityUnitInput } from "../../../components/forms/index.js";
 import { formatQuantityUnit } from "../../../components/forms/quantity-unit-model.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
-import { repairOrderAfterCatalogSelection } from "../../../components/workorders/part-requests/catalog-parts-model.js";
 import {
   defaultUsedPartQuantity,
   usedPartQuantityAfterPartNumberChange,
@@ -17,15 +16,65 @@ import { laborProductLabel } from "../../../../../shared/labor-product.js";
 import { interfaceText } from "../../../i18n/index.js";
 import {
   createPartHasContent,
+  createPartRequiresSerializedUnits,
   createPartRenderIndexes,
   filledCreatePartIndexes,
   firstBlankCreatePartIndex,
   invalidCreatePartIndex,
 } from "./create-parts-model.js";
 import { CreatePartScanner } from "./CreatePartScanner.jsx";
+import { CreateSerializedUnitPicker } from "./CreateSerializedUnitPicker.jsx";
 import "./create-parts-module.css";
 
 const COMPACT_PARTS_QUERY = "(max-width: 1024px)";
+
+const SERIAL_LABEL = { en: "Serial", es: "Serie", pa: "ਸੀਰੀਅਲ" };
+
+function serializedPartSummary(part, locale = "en") {
+  const serials = [...new Set((Array.isArray(part?.serializedSerialNumbers) ? part.serializedSerialNumbers : [])
+    .map((serial) => String(serial || "").trim())
+    .filter(Boolean))];
+  return serials.length ? `${SERIAL_LABEL[locale] || SERIAL_LABEL.en}: ${serials.join(", ")}` : "";
+}
+
+function repairOrderAfterNestedSelection(currentValue, catalogPart) {
+  const current = String(currentValue || "").trim();
+  const description = String(catalogPart?.description || "").trim();
+  return current && description && current.localeCompare(description, undefined, { sensitivity: "base" }) === 0
+    ? ""
+    : currentValue;
+}
+
+function catalogPartSelection(part, catalogPart) {
+  const serializationRequired = catalogPart.inventory?.serializationRequired === true;
+  return {
+    catalogPartId: catalogPart.id,
+    partNo: catalogPart.partNumber,
+    qty: serializationRequired ? "" : defaultUsedPartQuantity(part.qty),
+    uomCode: catalogPart.uomCode || part.uomCode,
+    repairOrder: repairOrderAfterNestedSelection(part.repairOrder, catalogPart),
+    serializationRequired,
+    serializedUnitIds: [],
+    serializedSerialNumbers: [],
+  };
+}
+
+function SerializedSelectionDropdown({ active, index, locationId, locale, onChange, onClose, part }) {
+  if (!createPartRequiresSerializedUnits(part)) return null;
+  return (
+    <>
+      {serializedPartSummary(part, locale) ? <small className="create-part-serial-summary">{serializedPartSummary(part, locale)}</small> : null}
+      <CreateSerializedUnitPicker
+        locationId={locationId}
+        locale={locale}
+        onClose={onClose}
+        onSelectionChange={(selection) => onChange(index, selection)}
+        open={active}
+        part={part}
+      />
+    </>
+  );
+}
 
 function LegacyCreatePartsEditor({
   canAddPart,
@@ -40,7 +89,9 @@ function LegacyCreatePartsEditor({
   onLaborHoursChange,
   onLaborRepairOrderChange,
   onRemove,
+  onOpenSerialPicker,
   parts = [],
+  serialPickerIndex,
   t,
 }) {
   return (
@@ -75,7 +126,7 @@ function LegacyCreatePartsEditor({
         {parts.map((part, index) => (
           <div className="operational-part-row has-quantity-unit" key={index}>
             <strong>{index + 2}</strong>
-            <PartCatalogCombobox
+            <div className="create-part-identity-field"><PartCatalogCombobox
               locationId={locationId}
               purpose="issue"
               value={part.partNo}
@@ -83,21 +134,24 @@ function LegacyCreatePartsEditor({
                 catalogPartId: null,
                 partNo: value,
                 qty: usedPartQuantityAfterPartNumberChange(part, value),
+                serializationRequired: false,
+                serializedUnitIds: [],
+                serializedSerialNumbers: [],
               })}
-              onSelect={(catalogPart) => onChange(index, {
-                catalogPartId: catalogPart.id,
-                partNo: catalogPart.partNumber,
-                qty: defaultUsedPartQuantity(part.qty),
-                uomCode: catalogPart.uomCode || part.uomCode,
-                repairOrder: repairOrderAfterCatalogSelection(part.repairOrder, catalogPart),
-              })}
+              onSelect={(catalogPart) => {
+                onChange(index, catalogPartSelection(part, catalogPart));
+                onOpenSerialPicker(catalogPart.inventory?.serializationRequired === true ? index : -1);
+              }}
+              onSelectedValueClose={() => onOpenSerialPicker(-1)}
+              onSelectedValueOpen={createPartRequiresSerializedUnits(part) ? () => onOpenSerialPicker(index) : undefined}
+              selectedValueOpen={serialPickerIndex === index}
               label=""
               inputAriaLabel={`${t("create.parts.partNumber")} ${index + 1}`}
               placeholder={t("create.parts.numberOrDescription")}
               inputPolicy="identifier"
               locale={locale}
-            />
-            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, "qty", value)} onUomCodeChange={(value) => onChange(index, "uomCode", value)} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} compact />
+            /><SerializedSelectionDropdown active={serialPickerIndex === index} index={index} locationId={locationId} locale={locale} onChange={onChange} onClose={() => onOpenSerialPicker(-1)} part={part} /></div>
+            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
             <input {...textEntryProps("identifier")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
             <button type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1}>{t("create.parts.remove")}</button>
           </div>
@@ -117,6 +171,9 @@ function LegacyCreatePartsEditor({
             qty: "1",
             uomCode: unit.uomCode,
             repairOrder: "",
+            serializedUnitIds: [unit.id],
+            serializedSerialNumbers: [unit.serialNumber],
+            serializationRequired: true,
           })}
         />
       </div>
@@ -144,8 +201,10 @@ export function CreatePartsModule({
   const rootRef = useRef(null);
   const summaryRefs = useRef({});
   const pendingReturnFocusRef = useRef(null);
+  const previousLocationRef = useRef(locationId);
   const [editingPartIndex, setEditingPartIndex] = useState(-1);
   const [laborOpen, setLaborOpen] = useState(false);
+  const [serialPickerIndex, setSerialPickerIndex] = useState(-1);
 
   const t = (key) => interfaceText(locale, key);
   const configuredLaborLabel = laborProductLabel(laborProduct);
@@ -157,6 +216,17 @@ export function CreatePartsModule({
   const renderIndexes = createPartRenderIndexes(parts, editingPartIndex);
   const hasLabor = Boolean(String(laborHours || "").trim() || String(laborRepairOrder || "").trim());
   const canAddPart = parts.length < 18 || firstBlankIndex >= 0;
+
+  useEffect(() => {
+    if (previousLocationRef.current === locationId) return;
+    previousLocationRef.current = locationId;
+    parts.forEach((part, index) => {
+      if (part.serializedUnitIds?.length) {
+        onChange(index, { qty: "", serializedUnitIds: [], serializedSerialNumbers: [] });
+      }
+    });
+    setSerialPickerIndex(-1);
+  }, [locationId, onChange, parts]);
 
   useEffect(() => {
     if (!compactLayout || !errors?.parts) return;
@@ -209,6 +279,9 @@ export function CreatePartsModule({
         partNo: "",
         qty: "",
         repairOrder: "",
+        serializationRequired: false,
+        serializedUnitIds: [],
+        serializedSerialNumbers: [],
       });
     } else {
       onRemove(index);
@@ -225,6 +298,9 @@ export function CreatePartsModule({
       qty: "1",
       uomCode: unit.uomCode,
       repairOrder: "",
+      serializedUnitIds: [unit.id],
+      serializedSerialNumbers: [unit.serialNumber],
+      serializationRequired: true,
     });
     setLaborOpen(false);
     setEditingPartIndex(targetIndex);
@@ -235,6 +311,7 @@ export function CreatePartsModule({
       const quantity = String(part.qty || "").trim()
         ? formatQuantityUnit(part.qty, part.uomCode)
         : t("create.parts.quantityMissing");
+      const serialSummary = serializedPartSummary(part, locale);
       return (
         <button
           className="create-part-summary"
@@ -249,7 +326,7 @@ export function CreatePartsModule({
         >
           <span className="create-part-summary-main">
             <strong>{part.partNo || `${t("create.parts.part")} ${ordinal}`}</strong>
-            <small>{quantity}</small>
+            <small>{[quantity, serialSummary].filter(Boolean).join(" · ")}</small>
           </span>
           <span className={`create-part-summary-repair ${part.repairOrder ? "" : "is-missing"}`.trim()}>
             {part.repairOrder || t("create.parts.repairOrderMissing")}
@@ -268,7 +345,7 @@ export function CreatePartsModule({
           </div>
         </header>
         <div className="create-part-editor-fields">
-          <PartCatalogCombobox
+          <div className="create-part-identity-field"><PartCatalogCombobox
             locationId={locationId}
             purpose="issue"
             value={part.partNo}
@@ -276,29 +353,34 @@ export function CreatePartsModule({
               catalogPartId: null,
               partNo: value,
               qty: usedPartQuantityAfterPartNumberChange(part, value),
+              serializationRequired: false,
+              serializedUnitIds: [],
+              serializedSerialNumbers: [],
             })}
-            onSelect={(catalogPart) => onChange(index, {
-              catalogPartId: catalogPart.id,
-              partNo: catalogPart.partNumber,
-              qty: defaultUsedPartQuantity(part.qty),
-              uomCode: catalogPart.uomCode || part.uomCode,
-              repairOrder: repairOrderAfterCatalogSelection(part.repairOrder, catalogPart),
-            })}
+            onSelect={(catalogPart) => {
+              onChange(index, catalogPartSelection(part, catalogPart));
+              setSerialPickerIndex(catalogPart.inventory?.serializationRequired === true ? index : -1);
+            }}
+            onSelectedValueClose={() => setSerialPickerIndex(-1)}
+            onSelectedValueOpen={createPartRequiresSerializedUnits(part) ? () => setSerialPickerIndex(index) : undefined}
+            selectedValueOpen={serialPickerIndex === index}
             label={t("create.parts.numberOrDescription")}
             inputAriaLabel={`${t("create.parts.partNumber")} ${ordinal}`}
             placeholder={t("create.parts.numberOrDescription")}
             inputPolicy="identifier"
             locale={locale}
-          />
+          /><SerializedSelectionDropdown active={serialPickerIndex === index} index={index} locationId={locationId} locale={locale} onChange={onChange} onClose={() => setSerialPickerIndex(-1)} part={part} /></div>
           <QuantityUnitInput
             id={`known-part-quantity-${index}`}
             quantity={part.qty}
             uomCode={part.uomCode}
-            onQuantityChange={(value) => onChange(index, "qty", value)}
-            onUomCodeChange={(value) => onChange(index, "uomCode", value)}
+            onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })}
+            onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })}
             quantityLabel={t("create.parts.quantity")}
             unitLabel={t("create.parts.unit")}
             locale={locale}
+            quantityReadOnly={createPartRequiresSerializedUnits(part)}
+            unitReadOnly={createPartRequiresSerializedUnits(part)}
           />
           <label className="create-part-repair-field">
             <span>{t("create.parts.repairOrder")}</span>
@@ -436,7 +518,9 @@ export function CreatePartsModule({
           onLaborHoursChange={onLaborHoursChange}
           onLaborRepairOrderChange={onLaborRepairOrderChange}
           onRemove={onRemove}
+          onOpenSerialPicker={setSerialPickerIndex}
           parts={parts}
+          serialPickerIndex={serialPickerIndex}
           t={t}
         />
       )}

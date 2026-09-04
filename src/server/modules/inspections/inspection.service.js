@@ -21,11 +21,12 @@ function completedSlip(record, includeWorkorderLinks = false) { return { ...summ
 function assigned(record, actorId) { return (record.assignments||[]).some((assignment)=>assignment.mechanicUserId===actorId); }
 function primaryAssigned(record, actorId) { return (record.assignments||[]).some((assignment)=>assignment.mechanicUserId===actorId&&assignment.role==="primary"); }
 function inspectionConflict(code,message){const error=new Error(message);error.statusCode=409;error.code=code;return error;}
-async function scoped(context, inspectionId, dependencies) {
+async function scoped(context, inspectionId, dependencies, { allowMechanicAvailable = false } = {}) {
   const actor=requireActor(context); const load=dependencies.load||getInspectionById; const record=await load({inspectionId,companyIds:[...(context.companyIds||[])]});
   if(!record)throw resourceNotFound("Inspection"); const role=context.companyRoles?.get(record.companyId); if(!role)throw resourceNotFound("Inspection");
   if(role!=="admin"&&!context.locationIds?.has(record.locationId))throw resourceNotFound("Inspection");
-  if(role==="mechanic"&&!assigned(record,actor.id))throw resourceNotFound("Inspection"); return {actor,record,role};
+  const mechanicAvailable = allowMechanicAvailable && record.status === "requested" && !(record.assignments || []).length;
+  if(role==="mechanic"&&!assigned(record,actor.id)&&!mechanicAvailable)throw resourceNotFound("Inspection"); return {actor,record,role};
 }
 
 export async function requestInspection(context,input,dependencies={}){
@@ -90,7 +91,7 @@ export async function inspectionCreateContext(context, input = {}, dependencies 
 }
 
 export async function readInspection(context,inspectionId,dependencies={}){
-  const {record:scopedRecord,role,actor}=await scoped(context,inspectionId,dependencies); const record=role==="mechanic"&&!primaryAssigned(scopedRecord,actor.id)?{...scopedRecord,reinspectionEligible:false,reinspectionBlockerCode:"primary_required"}:scopedRecord; const decision=await (dependencies.authorizeProduct||authorizeProductModule)(context,{companyId:record.companyId,locationId:record.locationId,moduleKey:"inspections"},"read");
+  const {record:scopedRecord,role,actor}=await scoped(context,inspectionId,dependencies,{allowMechanicAvailable:true}); const record=role==="mechanic"&&!primaryAssigned(scopedRecord,actor.id)?{...scopedRecord,reinspectionEligible:false,reinspectionBlockerCode:"primary_required"}:scopedRecord; const decision=await (dependencies.authorizeProduct||authorizeProductModule)(context,{companyId:record.companyId,locationId:record.locationId,moduleKey:"inspections"},"read");
   let includeWorkorderLinks=false;
   if (["mechanic", "office", "admin"].includes(role)) try { await (dependencies.authorizeWorkorders||authorizeProductModule)(context,{companyId:record.companyId,locationId:record.locationId,moduleKey:"workorders"},"read"); includeWorkorderLinks=true; } catch(error) { if(error?.statusCode!==403) throw error; }
   if(decision.mode==="read") return record.status==="completed"?completedSlip(record,includeWorkorderLinks):summary(record);
@@ -212,6 +213,14 @@ export async function assignInspection(context, inspectionId, input, dependencie
   if (!["office", "admin"].includes(role)) throw permissionDenied();
   if(record.status==="in_progress"&&!input.mechanicUserIds.length)throw inspectionConflict("INSPECTION_PRIMARY_REQUIRED","An in-progress inspection must retain one primary mechanic.");
   return (dependencies.assign || replaceInspectionAssignments)({ ...input, inspectionId, companyIds:[...(context.companyIds || [])], actorId:actor.id });
+}
+export async function claimInspection(context, inspectionId, input, dependencies = {}) {
+  const { actor, record, role } = await scoped(context, inspectionId, dependencies, { allowMechanicAvailable:true });
+  await (dependencies.authorizeProduct || authorizeProductModule)(context, { companyId:record.companyId, locationId:record.locationId, moduleKey:"inspections" }, "write");
+  if (role !== "mechanic") throw permissionDenied();
+  if (assigned(record, actor.id) && ["assigned", "in_progress"].includes(record.status)) return record;
+  if (record.status !== "requested" || (record.assignments || []).length) throw inspectionConflict("INSPECTION_NOT_AVAILABLE", "This inspection is no longer available.");
+  return (dependencies.assign || replaceInspectionAssignments)({ expectedVersion:input.expectedVersion, mechanicUserIds:[actor.id], inspectionId, companyIds:[...(context.companyIds || [])], actorId:actor.id });
 }
 export async function linkInspectionToWorkorder(context, inspectionId, findingId, input, dependencies = {}) {
   const { actor, record, role } = await scoped(context, inspectionId, dependencies);

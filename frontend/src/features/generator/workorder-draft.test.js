@@ -104,6 +104,40 @@ test("draft quantity serialization preserves units and defaults legacy parts to 
   }, { parts: [] }).parts[0].uomCode, "pc");
 });
 
+test("create draft carries exact unit selections outside printable form rows", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      parts: [{
+        catalogPartId: "11111111-1111-4111-8111-111111111111",
+        partNo: "Tire",
+        qty: "2",
+        uomCode: "ea",
+        repairOrder: "Replace tires",
+        serializationRequired: true,
+        serializedUnitIds: [
+          "22222222-2222-4222-8222-222222222222",
+          "33333333-3333-4333-8333-333333333333",
+        ],
+        serializedSerialNumbers: ["SER-1", "SER-2"],
+      }],
+    },
+  });
+
+  assert.deepEqual(payload.inventoryUnitSelections, [{
+    partIndex: 0,
+    catalogPartId: "11111111-1111-4111-8111-111111111111",
+    unitIds: [
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
+    ],
+  }]);
+  assert.deepEqual(payload.formData.parts[0].serializedSerialNumbers, ["SER-1", "SER-2"]);
+  assert.equal(payload.formData.parts[0].serializationRequired, true);
+  assert.equal(formValuesFromWorkorderDraft(payload, { parts: [] }).parts[0].serializationRequired, true);
+});
+
 test("location and template changes make create drafts meaningful after baseline", () => {
   const actor = { companyIds: ["company-1"], locationIds: ["location-1"] };
   const form = {

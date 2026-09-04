@@ -68,15 +68,9 @@ export function CreatePartScanner({ disabled = false, locationId, locale = "en",
                 autoStart
                 resetKey={`create-part:${resetKey}`}
                 onScan={resolve}
+                locale={locale}
                 labels={{
                   cameraLabel: t("parts.scannerCamera"),
-                  enterCode: t("parts.enterCode"),
-                  codeLabel: t("parts.codeLabel"),
-                  codePlaceholder: t("parts.codePlaceholder"),
-                  checking: t("parts.checking"),
-                  openPart: t("parts.openPart"),
-                  cameraUnavailable: t("parts.cameraUnavailable"),
-                  cameraAccessUnavailable: t("parts.cameraAccessUnavailable"),
                 }}
               />
             </Dialog>

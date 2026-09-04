@@ -5,11 +5,18 @@ import {
   issueSerializedUnitForWorkorder,
   readSerializedUnitUsagesForWorkorder,
   readAvailableSerializedUnitsForWorkorder,
+  readAvailableSerializedUnitsForCreate,
   createSerializedUnitsForWorkorder,
   resolveSerializedUnitForWorkorder,
 } from "../modules/inventory/inventory-unit-workorder.service.js";
 
 function matchPath(pathname) {
+  const createPartUnits = /^\/api\/workorders\/create-inventory\/locations\/([^/]+)\/parts\/([^/]+)\/units$/.exec(pathname);
+  if (createPartUnits) return {
+    action: "createPartUnits",
+    locationId: decodeURIComponent(createPartUnits[1]),
+    catalogPartId: decodeURIComponent(createPartUnits[2]),
+  };
   const partUnits = /^\/api\/workorders\/([^/]+)\/inventory-parts\/([^/]+)\/units$/.exec(pathname);
   if (partUnits) return {
     action: "partUnits",
@@ -54,6 +61,20 @@ export async function handleInventoryUnitWorkorderApi(req, res, url, helpers, de
   const route = matchPath(url.pathname);
   if (!route) return false;
   try {
+    if (req.method === "GET" && route.action === "createPartUnits") {
+      helpers.sendJson(res, 200, await readAvailableSerializedUnitsForCreate(
+        {
+          locationId: route.locationId,
+          catalogPartId: route.catalogPartId,
+          q: url.searchParams.get("q") || undefined,
+          after: url.searchParams.get("cursor") || url.searchParams.get("after") || undefined,
+          limit: url.searchParams.get("limit") || undefined,
+        },
+        helpers.requestContext,
+        dependencies,
+      ));
+      return true;
+    }
     if (req.method === "GET" && route.action === "partUnits") {
       helpers.sendJson(res, 200, await readAvailableSerializedUnitsForWorkorder(
         route.workorderId,

@@ -26,6 +26,13 @@
   overflow: hidden;
 }
 
+.workorder-serialized-create-panel {
+  max-height: min(34rem, calc(100dvh - 32px));
+  position: absolute;
+  width: min(29rem, calc(100vw - 32px));
+  z-index: 40;
+}
+
 .workorder-serialized-dialog > header {
   align-items: start;
   border-bottom: 1px solid var(--border-subtle, #e4e7ec);

@@ -16,9 +16,7 @@
 
 .mechanic-serialized-candidate,
 .mechanic-serialized-usage,
-.inventory-code-scanner,
-.inventory-code-scanner form,
-.inventory-code-scanner label {
+.inventory-code-scanner {
   display: grid;
   gap: 8px;
 }
@@ -186,46 +184,6 @@
   position: absolute;
 }
 
-.inventory-code-manual-action,
-.inventory-code-scanner form {
-  width: 100%;
-}
-
-.inventory-code-manual-action {
-  background: transparent;
-  border: 0;
-  color: #fff;
-  font: inherit;
-  min-height: 44px;
-  padding: 10px 12px;
-  text-decoration: underline;
-}
-
-.inventory-code-manual-action:focus-visible {
-  outline: 3px solid rgb(255 255 255 / 72%);
-  outline-offset: -3px;
-}
-
-.inventory-code-scanner form {
-  color: #fff;
-}
-
-.inventory-code-scanner form .button {
-  min-height: 44px;
-}
-
-.inventory-code-scanner input {
-  box-sizing: border-box;
-  min-height: 44px;
-  width: 100%;
-}
-
-.inventory-code-qr-note {
-  color: rgb(255 255 255 / 72%);
-  font-size: 13px;
-  margin: 0;
-}
-
 .inventory-code-message {
   margin: 0;
 }
@@ -234,7 +192,7 @@
   color: #fecdca;
 }
 
-/* Active scan: camera is the entire surface. Only close and manual entry remain visible. */
+/* Active scan: camera is the entire surface. Close remains visible above it. */
 .mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) {
   overflow: hidden;
 }
@@ -245,37 +203,26 @@
   padding: 0;
 }
 
-.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-scanner h4,
-.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-scanner > .button,
-.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-qr-note,
-.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-message {
-  display: none;
-}
-
 .mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-camera-stage {
   display: block;
   inset: 0;
   position: fixed;
 }
 
-.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-manual-action {
-  bottom: max(12px, env(safe-area-inset-bottom));
-  left: max(12px, env(safe-area-inset-left));
-  position: fixed;
-  right: max(12px, env(safe-area-inset-right));
-  width: auto;
-  z-index: 2;
-}
-
 .mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-camera {
   height: 100%;
 }
 
-.inventory-code-scanner:has(.inventory-code-camera-stage.is-active) .inventory-code-manual-action {
-  background: rgb(16 24 40 / 76%);
-  border: 1px solid rgb(255 255 255 / 72%);
+.mechanic-scanner-panel:has(.inventory-code-camera-stage.is-active) .inventory-code-message {
+  background: rgb(16 24 40 / 86%);
+  bottom: max(16px, env(safe-area-inset-bottom));
   border-radius: 8px;
-  text-decoration: none;
+  box-sizing: border-box;
+  left: max(16px, env(safe-area-inset-left));
+  padding: 10px 12px;
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
 }
 
 /* The shared sheet owns the overlay surface and motion. These rules only lay
@@ -286,24 +233,6 @@
 
 .mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) .mechanic-scanner-header {
   z-index: 5;
-}
-
-.mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) .inventory-code-manual-action {
-  bottom: calc(120px + env(safe-area-inset-bottom));
-  z-index: 4;
-}
-
-.mechanic-scanner-panel:has(.mechanic-scanner-result-drawer) .inventory-code-scanner form {
-  bottom: calc(120px + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-  left: max(16px, env(safe-area-inset-left));
-  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 196px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  width: auto;
-  z-index: 4;
 }
 
 .mechanic-scanner-result-drawer {

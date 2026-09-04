@@ -19,6 +19,14 @@ export const listWorkorderInventoryUnitsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(25),
 }).strict();
 
+export const listCreateInventoryUnitsSchema = z.object({
+  locationId: inventoryWorkorderEntityIdSchema,
+  catalogPartId: inventoryWorkorderEntityIdSchema,
+  q: z.string().trim().max(120).optional().default(""),
+  after: z.string().trim().max(200).optional().default(""),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(25),
+}).strict();
+
 export const createWorkorderInventoryUnitsSchema = z.object({
   catalogPartId: inventoryWorkorderEntityIdSchema,
   quantity: z.coerce.number().int().min(1).max(25),

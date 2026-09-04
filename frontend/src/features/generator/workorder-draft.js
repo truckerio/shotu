@@ -13,6 +13,11 @@ function filledParts(parts) {
     .filter((part) => text(part?.partNo) || text(part?.qty) || text(part?.repairOrder))
     .map((part) => ({
       ...(part?.catalogPartId ? { catalogPartId: part.catalogPartId } : {}),
+      ...(part?.serializationRequired === true ? { serializationRequired: true } : {}),
+      ...(Array.isArray(part?.serializedUnitIds) && part.serializedUnitIds.length ? {
+        serializedUnitIds: [...new Set(part.serializedUnitIds.filter(Boolean))],
+        serializedSerialNumbers: [...new Set((part.serializedSerialNumbers || []).filter(Boolean))],
+      } : {}),
       partNo: text(part.partNo),
       qty: text(part.qty),
       uomCode: normalizeUomCode(part.uomCode),
@@ -33,6 +38,7 @@ export function buildWorkorderDraftPayload({
     || selectedLocation?.company_id
     || selectedLocation?.companyId
     || "";
+  const parts = filledParts(form.parts);
   return {
     companyId: selectedCompanyId
       || actor.companyMemberships?.[0]?.companyId
@@ -45,6 +51,11 @@ export function buildWorkorderDraftPayload({
     ...(!isMechanicCreate ? {
       mechanicUserIds: [...new Set(mechanicUserIds.filter(Boolean))],
     } : {}),
+    inventoryUnitSelections: parts.flatMap((part, partIndex) => (
+      part.catalogPartId && part.serializedUnitIds?.length
+        ? [{ partIndex, catalogPartId: part.catalogPartId, unitIds: part.serializedUnitIds }]
+        : []
+    )),
     formData: {
       companyName: text(form.customerCompanyName),
       customerCompanyName: text(form.customerCompanyName),
@@ -75,7 +86,7 @@ export function buildWorkorderDraftPayload({
         customerSignature: text(form.customerSignature),
         authorizedBy: text(form.authorizedBy),
       } : {}),
-      parts: filledParts(form.parts),
+      parts,
     },
   };
 }
