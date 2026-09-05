@@ -105,7 +105,9 @@ test("part identity editing remains inside the part detail drawer", async () => 
   assert.match(workspace, /Discard part identity edits/);
   assert.match(workspace, /<SecondaryDetailSection\s+title="Part identity"/);
   assert.match(workspace, /Reference numbers/);
-  assert.match(workspace, /Managed in Odoo/);
+  assert.match(workspace, /<dt>Part name<\/dt>/);
+  assert.match(workspace, /<dt>In Odoo<\/dt>/);
+  assert.match(workspace, /In Odoo: \{item\.odooName/);
   assert.match(editor, /\/api\/office\/inventory\/parts\/\$\{encodeURIComponent\(part\.catalogPartId\)\}/);
   assert.match(editor, /method: "PATCH"/);
   assert.match(editor, /partIdentityPayload\(draft, part\.version\)/);
@@ -124,6 +126,9 @@ test("part identity editing remains inside the part detail drawer", async () => 
   assert.match(editor, /allowedUomCodes/);
   assert.match(editor, /Choose an equivalent label; inventory quantities stay unchanged/);
   assert.match(editor, /inventory-part-editor-summary/);
+  assert.match(editor, /label="Part name" hint=\{providerManaged/);
+  assert.match(editor, /part\.odooName \|\| "Name not provided by Odoo"/);
+  assert.match(editor, /Your Part name is saved only in this system/);
   assert.match(model, /uomCode/);
   assert.match(styles, /\.inventory-part-editor-reference-row/);
   assert.match(styles, /\.inventory-part-editor-grid/);

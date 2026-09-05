@@ -122,17 +122,32 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       catalogPartId: providerPartId,
       expectedVersion: 1,
       description: "Changed locally",
-      partNumber: `ODOO-${suffix}`,
+      partNumber: `ODOO${suffix}`.toUpperCase(),
+      category: "",
       barcode: "",
       referenceNumbers: [],
     });
-    assert.equal(providerManaged.kind, "provider_managed");
+    assert.equal(providerManaged.kind, "updated");
+    assert.equal(providerManaged.part.description, "Changed locally");
+    assert.equal(providerManaged.part.odooName, "Provider part");
+    assert.deepEqual(providerManaged.part.editableFields, ["description", "manufacturer", "uomCode", "referenceNumbers"]);
+
+    const providerIdentityLocked = await updateCompanyCatalogPart({
+      ...base,
+      catalogPartId: providerPartId,
+      expectedVersion: 2,
+      description: "Changed locally",
+      partNumber: `LOCAL-${suffix}`,
+      barcode: "",
+      referenceNumbers: [],
+    });
+    assert.equal(providerIdentityLocked.kind, "provider_managed");
 
     const providerEnrichment = await updateCompanyCatalogPart({
       ...base,
       catalogPartId: providerPartId,
-      expectedVersion: 1,
-      description: "Provider part",
+      expectedVersion: 2,
+      description: "Changed locally",
       partNumber: `ODOO${suffix}`.toUpperCase(),
       category: "",
       barcode: "",
@@ -143,7 +158,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     assert.equal(providerEnrichment.kind, "updated");
     assert.equal(providerEnrichment.part.uomCode, "pc");
     assert.equal(providerEnrichment.part.canonicalUomCode, "ea");
-    assert.deepEqual(providerEnrichment.part.editableFields, ["manufacturer", "uomCode", "referenceNumbers"]);
+    assert.deepEqual(providerEnrichment.part.editableFields, ["description", "manufacturer", "uomCode", "referenceNumbers"]);
     const providerUnits = await query("select uom_code, inventory_display_uom_code from parts_catalog where id=$1", [providerPartId]);
     assert.deepEqual(providerUnits.rows[0], { uom_code: "ea", inventory_display_uom_code: "pc" });
 
@@ -151,7 +166,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
       "select count(*)::int as count, min(version_before)::int as first_version from part_catalog_edit_events where company_id = $1",
       [companyId],
     );
-    assert.equal(evidence.rows[0].count, 4);
+    assert.equal(evidence.rows[0].count, 5);
     assert.equal(evidence.rows[0].first_version, 1);
   } finally {
     await query("delete from companies where id in ($1, $2)", [companyId, otherCompanyId]).catch(() => {});

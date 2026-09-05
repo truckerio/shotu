@@ -9,7 +9,7 @@ function state(row, references) {
 }
 
 function editableFields(providerManaged, uomLocked) {
-  if (providerManaged) return ["manufacturer", "uomCode", "referenceNumbers"];
+  if (providerManaged) return ["description", "manufacturer", "uomCode", "referenceNumbers"];
   return ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "referenceNumbers"];
 }
 
@@ -38,14 +38,18 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     if (!scoped.rows[0]) { await client.query("rollback"); return { kind: "not_found" }; }
     await lockCompanyPartIdentity(client, scoped.rows[0].company_id);
     const selected = await client.query(
-      `select catalog.*, exists (select 1 from odoo_product_mappings mapping where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id) as provider_managed
+      `select catalog.*,
+              exists (select 1 from odoo_product_mappings mapping where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id) as provider_managed,
+              coalesce((select mapping.display_name from odoo_product_mappings mapping
+                where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id
+                order by mapping.active desc, mapping.updated_at desc, mapping.external_id limit 1), '') as odoo_name
        from parts_catalog catalog where catalog.id = $1 and catalog.company_id = any($2::uuid[]) limit 1 for update`,
       [catalogPartId, companyIds],
     );
     const current = selected.rows[0];
     if (!current) { await client.query("rollback"); return { kind: "not_found" }; }
     if (Number(current.version) !== Number(expectedVersion)) { await client.query("rollback"); return { kind: "stale" }; }
-    if (current.provider_managed && (description !== current.description || partNumber !== current.part_number || category !== current.category || barcode !== current.barcode)) {
+    if (current.provider_managed && (partNumber !== current.part_number || category !== current.category || barcode !== current.barcode)) {
       await client.query("rollback"); return { kind: "provider_managed" };
     }
     const displayOnlyUom = current.provider_managed || current.uom_locked_at !== null;
@@ -99,11 +103,19 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
        select $1,$2,input.reference,input.normalized from unnest($3::text[],$4::text[]) input(reference,normalized)`,
       [current.company_id, catalogPartId, referenceNumbers, normalizedReferences],
     );
-    if (!current.provider_managed) await client.query(
-      `update inventory_items set normalized_part_number=$3, part_number=$4, description=$5, manufacturer=$6, updated_at=now()
-       where company_id=$1 and catalog_part_id=$2`,
-      [current.company_id, catalogPartId, normalizedPartNumber, partNumber, description, manufacturer],
-    );
+    if (current.provider_managed) {
+      await client.query(
+        `update inventory_items set description=$3, manufacturer=$4, updated_at=now()
+         where company_id=$1 and catalog_part_id=$2`,
+        [current.company_id, catalogPartId, description, manufacturer],
+      );
+    } else {
+      await client.query(
+        `update inventory_items set normalized_part_number=$3, part_number=$4, description=$5, manufacturer=$6, updated_at=now()
+         where company_id=$1 and catalog_part_id=$2`,
+        [current.company_id, catalogPartId, normalizedPartNumber, partNumber, description, manufacturer],
+      );
+    }
     const row = updated.rows[0];
     const after = state(row, referenceNumbers);
     await client.query(
@@ -112,7 +124,7 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
       [current.company_id, catalogPartId, actorId, current.version, row.version, JSON.stringify(before), JSON.stringify(after)],
     );
     await client.query("commit");
-    return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, uomCode: preferredUom(row), canonicalUomCode: row.uom_code, uomLocked: row.uom_locked_at !== null, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: editableFields(current.provider_managed, row.uom_locked_at !== null) } };
+    return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, odooName: current.odoo_name || "", manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, uomCode: preferredUom(row), canonicalUomCode: row.uom_code, uomLocked: row.uom_locked_at !== null, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: editableFields(current.provider_managed, row.uom_locked_at !== null) } };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     if (error?.constraint === "parts_catalog_uom_locked" || error?.constraint === "catalog_uom_activity_uom_mismatch") return { kind: "uom_locked" };

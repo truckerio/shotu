@@ -335,7 +335,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
             ariaLabel={`Open details for ${item.partNumber}, ${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
             onAction={() => setSelectedStockKey(stockItemKey(item))}
           >
-            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span></span><small>{item.description || "No description"}</small></OperationalCollectionCell>
+            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span></span><small>{item.description || "No part name"}</small>{item.providerManaged ? <small>In Odoo: {item.odooName || "Name not provided"}</small> : null}</OperationalCollectionCell>
             <OperationalCollectionCell label="Our on hand">{quantity(item.quantityOnHand)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell label="Reserved">{quantity(item.quantityReserved)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell className="inventory-available-cell" label="Our available"><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</small></OperationalCollectionCell>
@@ -396,13 +396,14 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
               onSaved={handlePartIdentitySaved}
             /> : <dl className="inventory-detail-facts">
               <div><dt>Part name</dt><dd>{selectedItem.description || "Not set"}</dd></div>
+              {selectedItem.providerManaged ? <div><dt>In Odoo</dt><dd>{selectedItem.odooName || "Name not provided"}</dd></div> : null}
               <div><dt>Primary part number</dt><dd>{selectedItem.partNumber || "Not set"}</dd></div>
               <div><dt>Manufacturer</dt><dd>{selectedItem.manufacturer || "Not set"}</dd></div>
               <div><dt>Category</dt><dd>{selectedItem.category || "Not set"}</dd></div>
               <div><dt>Catalog barcode</dt><dd>{selectedItem.barcode || "Not set"}</dd></div>
               <div><dt>Reference numbers</dt><dd>{selectedItem.referenceNumbers?.length ? selectedItem.referenceNumbers.join(", ") : "None"}</dd></div>
               <div><dt>Unit</dt><dd>{selectedItem.uomCode}</dd></div>
-              {selectedItem.providerManaged ? <div><dt>Identity source</dt><dd>Managed in Odoo</dd></div> : null}
+              {selectedItem.providerManaged ? <div><dt>Mapping</dt><dd>Odoo name and identifiers are read-only</dd></div> : null}
             </dl>}
           </SecondaryDetailSection>
 

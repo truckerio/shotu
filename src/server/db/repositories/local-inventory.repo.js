@@ -499,6 +499,9 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
        select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
               catalog.normalized_part_number, catalog.description, catalog.manufacturer, catalog.category,
               catalog.barcode, catalog.uom_code, catalog.inventory_display_uom_code, catalog.uom_locked_at, catalog.version,
+              coalesce((select mapping.display_name from odoo_product_mappings mapping
+                where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id
+                order by mapping.active desc, mapping.updated_at desc, mapping.external_id limit 1), '') as odoo_name,
               coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id)
                 from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id), '[]'::jsonb) as reference_numbers,
               case when exists (
@@ -579,6 +582,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
     catalogPartId: row.catalog_part_id,
     partNumber: row.part_number,
     description: row.description || "",
+    odooName: row.odoo_name || "",
     manufacturer: row.manufacturer || "",
     category: row.category || "",
     barcode: row.barcode || "",
@@ -586,7 +590,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
     referenceNumbers: row.reference_numbers || [],
     providerManaged: row.provider_managed === true,
     uomLocked: row.uom_locked_at !== null,
-    editableFields: row.provider_managed === true ? ["manufacturer", "uomCode", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "referenceNumbers"],
+    editableFields: row.provider_managed === true ? ["description", "manufacturer", "uomCode", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "referenceNumbers"],
     uomCode: row.inventory_display_uom_code || row.uom_code,
     canonicalUomCode: row.uom_code,
     sourceProvider: row.source_provider || "",

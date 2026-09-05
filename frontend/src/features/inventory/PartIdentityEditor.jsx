@@ -120,14 +120,14 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         {conflict.kind === "stale" ? <Button type="button" onClick={reloadDetails} disabled={busy}>Reload details</Button> : null}
       </div> : null}
       {providerManaged ? <section className="inventory-part-editor-summary" aria-label="Odoo part identity">
-        <div><span>Part</span><strong>{draft.partNumber}</strong></div>
-        <p>{draft.description}</p>
+        <div><span>In Odoo</span><strong>{draft.partNumber}</strong></div>
+        <p>{part.odooName || "Name not provided by Odoo"}</p>
         {draft.category ? <small>{draft.category}</small> : null}
       </section> : null}
       <div className="inventory-part-editor-grid">
-        {!providerManaged ? <FormField id="inventory-part-name" label="Part name" error={errors.description} required>
+        <FormField id="inventory-part-name" label="Part name" hint={providerManaged ? "Your name in this system. The Odoo name stays unchanged." : "Name used in this system."} error={errors.description} required>
           <input {...textEntryProps("name")} maxLength={1000} value={draft.description} onChange={(event) => update("description", event.target.value)} disabled={busy || !fieldIsEditable(part, "description")} />
-        </FormField> : null}
+        </FormField>
         {!providerManaged ? <FormField id="inventory-primary-part-number" label="Primary part number" error={errors.partNumber} required>
           <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} disabled={busy || !fieldIsEditable(part, "partNumber")} />
         </FormField> : null}
@@ -157,7 +157,7 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         {!draft.referenceNumbers.length ? <p className="inventory-part-editor-empty">No reference numbers added.</p> : null}
         </div>
       </details>
-      {providerManaged ? <p className="inventory-part-editor-managed">Name, number, category, and barcode stay managed in Odoo.</p> : null}
+      {providerManaged ? <p className="inventory-part-editor-managed">Odoo name, number, category, and barcode stay read-only. Your Part name is saved only in this system.</p> : null}
       <ActionFooter stickyOnMobile message={busy ? "Saving part details…" : ""}>
         <Button type="button" onClick={onCancel} disabled={busy}>Cancel</Button>
         <Button type="submit" variant="primary" disabled={busy}>{busy ? "Saving" : "Save changes"}</Button>
