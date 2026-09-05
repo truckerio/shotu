@@ -7,6 +7,8 @@ import {
   filledCreatePartIndexes,
   firstBlankCreatePartIndex,
   invalidCreatePartIndex,
+  independentSerializedPartRows,
+  replacePartWithSerializedUnitRows,
   serializedSelectionMatchesQuantity,
   serializedSelectionPatch,
 } from "./create-parts-model.js";
@@ -19,6 +21,54 @@ test("create Parts presentation hides untouched placeholder rows", () => {
   assert.deepEqual(filledCreatePartIndexes(parts), []);
   assert.equal(firstBlankCreatePartIndex(parts), 0);
   assert.deepEqual(createPartRenderIndexes(parts), []);
+});
+
+test("serialized selections become one quantity-one row per exact unit", () => {
+  const source = {
+    catalogPartId: "part-1",
+    partNo: "Tire",
+    qty: "3",
+    uomCode: "ea",
+    repairOrder: "Replace tire",
+    serializationRequired: true,
+    serializedUnitIds: ["unit-1", "unit-2", "unit-3"],
+    serializedSerialNumbers: ["SER-1", "SER-2", "SER-3"],
+  };
+
+  const rows = independentSerializedPartRows([source, blank(), blank()]);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.filter(createPartHasContent).map((row) => [row.qty, row.serializedUnitIds, row.serializedSerialNumbers]), [
+    ["1", ["unit-1"], ["SER-1"]],
+    ["1", ["unit-2"], ["SER-2"]],
+    ["1", ["unit-3"], ["SER-3"]],
+  ]);
+  assert.ok(rows.filter(createPartHasContent).every((row) => row.partNo === "Tire" && row.repairOrder === "Replace tire"));
+});
+
+test("serialized row replacement preserves other work and rejects duplicate unit identity", () => {
+  const parts = [
+    { catalogPartId: "part-1", partNo: "Tire", qty: "1", uomCode: "ea", repairOrder: "Replace", serializationRequired: true, serializedUnitIds: ["unit-1"], serializedSerialNumbers: ["SER-1"] },
+    { partNo: "Oil", qty: "2", uomCode: "gal", repairOrder: "Refill" },
+    blank(),
+  ];
+  const next = replacePartWithSerializedUnitRows(parts, 0, {
+    serializedUnitIds: ["unit-1", "unit-2", "unit-2"],
+    serializedSerialNumbers: ["SER-1", "SER-2", "SER-2 duplicate"],
+  });
+
+  assert.deepEqual(next.slice(0, 2).map((row) => row.serializedUnitIds), [["unit-1"], ["unit-2"]]);
+  assert.deepEqual(next[2], parts[1]);
+  assert.equal(next.length, 3);
+});
+
+test("serialized row replacement fails closed instead of partially dropping an over-capacity selection", () => {
+  const serialized = { catalogPartId: "part-1", partNo: "Tire", qty: "1", uomCode: "ea", serializationRequired: true, serializedUnitIds: ["unit-1"] };
+  const parts = [serialized, ...Array.from({ length: 17 }, (_, index) => ({ partNo: `PART-${index}`, qty: "1", uomCode: "ea" }))];
+
+  assert.equal(replacePartWithSerializedUnitRows(parts, 0, {
+    serializedUnitIds: ["unit-1", "unit-2"],
+    serializedSerialNumbers: ["SER-1", "SER-2"],
+  }), parts);
 });
 
 test("one active blank editor is visible without exposing the other placeholders", () => {

@@ -1,4 +1,5 @@
 import { normalizeUomCode } from "../../../../shared/units-of-measure.js";
+import { independentSerializedPartRows } from "../workorder-modules/parts/create-parts-model.js";
 
 function text(value) {
   return String(value || "").trim();
@@ -9,8 +10,8 @@ function initialFieldChanged(form, initialForm, field) {
 }
 
 function filledParts(parts) {
-  return (Array.isArray(parts) ? parts : [])
-    .filter((part) => text(part?.partNo) || text(part?.qty) || text(part?.repairOrder))
+  return independentSerializedPartRows((Array.isArray(parts) ? parts : [])
+    .filter((part) => text(part?.partNo) || text(part?.qty) || text(part?.repairOrder)))
     .map((part) => ({
       ...(part?.catalogPartId ? { catalogPartId: part.catalogPartId } : {}),
       ...(part?.serializationRequired === true ? { serializationRequired: true } : {}),
@@ -130,7 +131,8 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
 export function formValuesFromWorkorderDraft(payload, currentForm) {
   const saved = payload?.formData || {};
   const savedParts = Array.isArray(saved.parts)
-    ? saved.parts.map((part) => ({ ...part, uomCode: normalizeUomCode(part?.uomCode) }))
+    ? independentSerializedPartRows(saved.parts)
+      .map((part) => ({ ...part, uomCode: normalizeUomCode(part?.uomCode) }))
     : [];
   return {
     ...currentForm,

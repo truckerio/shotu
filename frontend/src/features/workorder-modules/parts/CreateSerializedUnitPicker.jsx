@@ -11,8 +11,10 @@ const TEXT = {
 };
 
 export function CreateSerializedUnitPicker({
+  excludedUnitIds = [],
   locationId,
   locale = "en",
+  maxSelected = 18,
   onClose,
   onSelectionChange,
   open,
@@ -20,29 +22,39 @@ export function CreateSerializedUnitPicker({
 }) {
   const text = TEXT[normalizeLocale(locale)] || TEXT.en;
   const [units, setUnits] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(() => new Set(Array.isArray(part.serializedUnitIds) ? part.serializedUnitIds : []));
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const selectedIdsRef = useRef(new Set(part.serializedUnitIds || []));
+  const selectedIdsRef = useRef(new Set(Array.isArray(part.serializedUnitIds) ? part.serializedUnitIds : []));
   const endpoint = locationId && part.catalogPartId
     ? `/api/workorders/create-inventory/locations/${encodeURIComponent(locationId)}/parts/${encodeURIComponent(part.catalogPartId)}/units?limit=100`
     : "";
+  const partSelectedUnitIds = Array.isArray(part.serializedUnitIds) ? part.serializedUnitIds : [];
+  const excludedIds = excludedUnitIds instanceof Set
+    ? excludedUnitIds
+    : new Set(Array.isArray(excludedUnitIds) ? excludedUnitIds : []);
+  const selectedUnitKey = partSelectedUnitIds.join("|");
+  const excludedUnitKey = [...excludedIds].sort().join("|");
 
   useEffect(() => {
     if (!open || !endpoint) return undefined;
     let active = true;
+    const initialSelected = new Set(partSelectedUnitIds);
+    selectedIdsRef.current = initialSelected;
+    setSelectedIds(initialSelected);
+    setUnits([]);
     setLoading(true);
     setMessage("");
     api(endpoint).then((result) => {
       if (!active) return;
-      const nextUnits = Array.isArray(result?.units) ? result.units : [];
+      const currentIds = new Set(partSelectedUnitIds);
+      const nextUnits = (Array.isArray(result?.units) ? result.units : [])
+        .filter((unit) => !excludedIds.has(unit.id) || currentIds.has(unit.id));
       const availableIds = new Set(nextUnits.map((unit) => unit.id));
-      const retainedIds = (part.serializedUnitIds || []).filter((id) => availableIds.has(id));
-      const selection = serializedSelectionPatch(nextUnits, retainedIds);
+      const retainedIds = partSelectedUnitIds.filter((id) => availableIds.has(id));
       selectedIdsRef.current = new Set(retainedIds);
+      setSelectedIds(new Set(retainedIds));
       setUnits(nextUnits);
-      if (retainedIds.length !== (part.serializedUnitIds || []).length || String(part.qty || "") !== selection.qty) {
-        onSelectionChange?.(selection);
-      }
     }).catch((error) => {
       if (!active) return;
       setUnits([]);
@@ -51,11 +63,11 @@ export function CreateSerializedUnitPicker({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [endpoint, open]);
+  }, [endpoint, excludedUnitKey, open, selectedUnitKey]);
 
   function updateSelection(nextIds) {
     selectedIdsRef.current = new Set(nextIds);
-    onSelectionChange?.(serializedSelectionPatch(units, nextIds));
+    setSelectedIds(new Set(nextIds));
   }
 
   function commitSelection() {
@@ -70,13 +82,13 @@ export function CreateSerializedUnitPicker({
       error={message}
       loading={loading}
       locale={locale}
-      maxSelected={18}
+      maxSelected={maxSelected}
       emptyMessage={text.empty}
       onClose={onClose}
       onConfirm={commitSelection}
       onSelectionChange={updateSelection}
       partNumber={part.partNo}
-      selectedUnitIds={part.serializedUnitIds || []}
+      selectedUnitIds={selectedIds}
       showConfirmCount={false}
       units={units}
     />

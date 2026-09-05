@@ -107,6 +107,34 @@ test("scanned approved parts replace a blank draft row and preserve exact catalo
   });
 });
 
+test("confirmed multi-unit selection becomes independent serialized draft rows", () => {
+  let update;
+  const controller = createRoleRouterFormController({
+    activeWorkorder: null,
+    actorId: "office-1",
+    form: { workEndDate: "" },
+    isOfficeDetail: false,
+    officeActionsRef: { current: null },
+    setActiveWorkorder: () => {},
+    setCreateErrors: () => {},
+    setForm: (next) => { update = next; },
+    setUsedPartsDirty: () => {},
+  });
+  const current = {
+    parts: [{ catalogPartId: "part-1", partNo: "TIRE-1", qty: "", uomCode: "ea", repairOrder: "Replace", serializationRequired: true }],
+  };
+
+  controller.replacePartSerializedUnits(0, {
+    serializedUnitIds: ["unit-1", "unit-2"],
+    serializedSerialNumbers: ["SER-1", "SER-2"],
+  });
+
+  assert.deepEqual(update(current).parts.map((part) => [part.qty, part.serializedUnitIds, part.serializedSerialNumbers]), [
+    ["1", ["unit-1"], ["SER-1"]],
+    ["1", ["unit-2"], ["SER-2"]],
+  ]);
+});
+
 test("shared form callbacks remain stable across unrelated router renders", () => {
   assert.match(source, /return useMemo\(\(\) => createRoleRouterFormController/);
   assert.match(source, /form: \{ workEndDate: form\.workEndDate \}/);

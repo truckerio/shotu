@@ -68,6 +68,7 @@ export function CreateWorkorderPage({
   openFullscreenPreview,
   reloadOfficeLocations,
   removePartRow,
+  replacePartSerializedUnits,
   saveDraftAndLeave,
   setCreateAssignment,
   setDraftLeaveOpen,
@@ -271,6 +272,7 @@ export function CreateWorkorderPage({
               onReloadLocations={reloadOfficeLocations}
               onPartChange={updatePart}
               onRemovePart={removePartRow}
+              onReplacePartSerializedUnits={replacePartSerializedUnits}
               onSubmit={createOfficeWorkorder}
               onUnitChange={updateUnitNumber}
               onVehicleSelect={applyVehicle}

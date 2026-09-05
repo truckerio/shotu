@@ -283,6 +283,52 @@ test("canonical authenticated create and create-context routes are role neutral"
   assert.equal(contextTarget.responses[0].payload.locations.length, 1);
 });
 
+test("canonical create accepts independent serialized rows and rejects grouped unit IDs", async () => {
+  const catalogPartId = "33333333-3333-4333-8333-333333333333";
+  const unitIds = [
+    "44444444-4444-4444-8444-444444444441",
+    "44444444-4444-4444-8444-444444444442",
+  ];
+  const body = {
+    companyId: WORKORDER_ID,
+    locationId: "22222222-2222-4222-8222-222222222222",
+    concern: "Replace both sensors",
+    formData: {
+      parts: unitIds.map((unitId) => ({
+        catalogPartId,
+        partNo: "SENSOR-1",
+        qty: "1",
+        uomCode: "ea",
+        serializedUnitIds: [unitId],
+      })),
+    },
+    inventoryUnitSelections: unitIds.map((unitId, partIndex) => ({
+      partIndex,
+      catalogPartId,
+      unitIds: [unitId],
+    })),
+  };
+  let createInput;
+  const target = await runRoute({
+    method: "POST",
+    pathname: "/api/workorders",
+    body,
+    dependencies: { createWorkorder: async (_context, input) => { createInput = input; return { id: "wo-serialized" }; } },
+  });
+
+  assert.equal(target.responses[0].status, 201);
+  assert.deepEqual(createInput.inventoryUnitSelections.map((selection) => selection.unitIds), unitIds.map((unitId) => [unitId]));
+  await assert.rejects(runRoute({
+    method: "POST",
+    pathname: "/api/workorders",
+    body: {
+      ...body,
+      formData: { parts: [{ ...body.formData.parts[0], qty: "2", serializedUnitIds: unitIds }] },
+      inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds }],
+    },
+  }), (error) => error.statusCode === 400 && /own part row/i.test(error.message));
+});
+
 test("mechanic creation uses the same canonical role-neutral create route", async () => {
   const mechanicContext = { actor: { id: "mechanic-one", role: "mechanic" } };
   const target = harness({

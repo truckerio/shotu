@@ -15,7 +15,7 @@ export { userRoleSchema };
 const inventoryUnitSelectionSchema = z.object({
   partIndex: z.number().int().min(0).max(17),
   catalogPartId: z.string().uuid(),
-  unitIds: z.array(z.string().uuid()).min(1).max(18)
+  unitIds: z.array(z.string().uuid()).length(1, "Each serialized unit must use its own part row.")
     .refine((ids) => new Set(ids).size === ids.length, "Choose each serialized unit once."),
 }).strict();
 

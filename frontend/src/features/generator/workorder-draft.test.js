@@ -125,17 +125,16 @@ test("create draft carries exact unit selections outside printable form rows", (
     },
   });
 
-  assert.deepEqual(payload.inventoryUnitSelections, [{
-    partIndex: 0,
-    catalogPartId: "11111111-1111-4111-8111-111111111111",
-    unitIds: [
-      "22222222-2222-4222-8222-222222222222",
-      "33333333-3333-4333-8333-333333333333",
-    ],
-  }]);
-  assert.deepEqual(payload.formData.parts[0].serializedSerialNumbers, ["SER-1", "SER-2"]);
-  assert.equal(payload.formData.parts[0].serializationRequired, true);
-  assert.equal(formValuesFromWorkorderDraft(payload, { parts: [] }).parts[0].serializationRequired, true);
+  assert.deepEqual(payload.inventoryUnitSelections, [
+    { partIndex: 0, catalogPartId: "11111111-1111-4111-8111-111111111111", unitIds: ["22222222-2222-4222-8222-222222222222"] },
+    { partIndex: 1, catalogPartId: "11111111-1111-4111-8111-111111111111", unitIds: ["33333333-3333-4333-8333-333333333333"] },
+  ]);
+  assert.deepEqual(payload.formData.parts.map((part) => ({ qty: part.qty, serials: part.serializedSerialNumbers })), [
+    { qty: "1", serials: ["SER-1"] },
+    { qty: "1", serials: ["SER-2"] },
+  ]);
+  assert.ok(payload.formData.parts.every((part) => part.serializationRequired === true));
+  assert.equal(formValuesFromWorkorderDraft(payload, { parts: [] }).parts.length, 2);
 });
 
 test("location and template changes make create drafts meaningful after baseline", () => {

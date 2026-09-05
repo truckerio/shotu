@@ -121,20 +121,20 @@ test("create validates supplied serialized inventory IDs against their part and 
     locationId: LOCATION_ID,
     concern: "Replace tires.",
     mechanicUserIds: ["55555555-5555-4555-8555-555555555555"],
-    formData: { parts: [{ catalogPartId, partNo: "Tires", qty: "4", uomCode: "ea", repairOrder: "Replace" }] },
+    formData: { parts: unitIds.map(() => ({ catalogPartId, partNo: "Tires", qty: "1", uomCode: "ea", repairOrder: "Replace" })) },
   };
 
   assert.doesNotThrow(() => createWorkorderSchema.parse(base));
   assert.throws(() => createWorkorderSchema.parse({
     ...base,
     inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds: unitIds.slice(0, 3) }],
-  }), /match the part quantity/i);
+  }), /own part row/i);
 
   const parsed = createWorkorderSchema.parse({
     ...base,
-    inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds }],
+    inventoryUnitSelections: unitIds.map((unitId, partIndex) => ({ partIndex, catalogPartId, unitIds: [unitId] })),
   });
-  assert.deepEqual(parsed.inventoryUnitSelections[0].unitIds, unitIds);
+  assert.deepEqual(parsed.inventoryUnitSelections.map((selection) => selection.unitIds), unitIds.map((unitId) => [unitId]));
 });
 
 test("create keeps manual count parts and measured catalog parts compatible", () => {

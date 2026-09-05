@@ -34,6 +34,25 @@ test("create preview projects the selected mechanic names from assignment truth"
   );
 });
 
+test("create preview separates serialized units into independent repair lines", () => {
+  const preview = createWorkorderPreviewForm({
+    parts: [{
+      partNo: "TIRE-1",
+      qty: "2",
+      uomCode: "ea",
+      repairOrder: "Replace tires",
+      serializationRequired: true,
+      serializedUnitIds: ["unit-1", "unit-2"],
+      serializedSerialNumbers: ["SER-1", "SER-2"],
+    }],
+  });
+
+  assert.deepEqual(preview.parts.map((part) => [part.qty, part.serializedSerialNumbers]), [
+    ["1", ["SER-1"]],
+    ["1", ["SER-2"]],
+  ]);
+});
+
 test("serial parser keeps prefix, number, and padding width", () => {
   assert.deepEqual(splitSerial("WO-000009"), { prefix: "WO-", nextNumber: 9, digits: 6 });
   assert.deepEqual(splitSerial("bad"), { prefix: "WO-", nextNumber: 1, digits: 6 });

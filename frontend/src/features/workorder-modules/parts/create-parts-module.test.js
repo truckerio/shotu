@@ -67,7 +67,12 @@ test("serialized parent selection opens one shared nested dropdown and derives q
   assert.match(source, /<CreateSerializedUnitPicker[\s\S]*open=\{active\}/);
   assert.match(source, /quantityReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
   assert.match(source, /unitReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
-  assert.match(serializedPicker, /serializedSelectionPatch\(units, nextIds\)/);
+  assert.match(serializedPicker, /serializedSelectionPatch\(units, selectedIdsRef\.current\)/);
+  assert.match(serializedPicker, /setSelectedIds\(new Set\(nextIds\)\)/);
+  assert.match(serializedPicker, /setUnits\(\[\]\);[\s\S]*setLoading\(true\)/);
+  assert.match(source, /onReplaceSerializedUnits/);
+  assert.match(source, /serializedUnitSlots\(parts, index\)/);
+  assert.match(source, /serializedUnitIdsOutsidePart\(parts, index\)/);
   assert.match(serializedPicker, /<SerializedUnitNestedDropdown/);
   assert.match(serializedPicker, /autoFocusSearch=\{false\}/);
   assert.match(serializedPicker, /onConfirm=\{commitSelection\}/);

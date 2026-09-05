@@ -1,3 +1,5 @@
+import { independentSerializedPartRows } from "../workorder-modules/parts/create-parts-model.js";
+
 export function todayIso() {
   const date = new Date();
   const offset = date.getTimezoneOffset() * 60_000;
@@ -52,6 +54,7 @@ export function selectedCreateMechanicNames(assignment = {}) {
 export function createWorkorderPreviewForm(form = {}, assignment = {}) {
   return {
     ...form,
+    ...(Array.isArray(form.parts) ? { parts: independentSerializedPartRows(form.parts) } : {}),
     mechanicName: selectedCreateMechanicNames(assignment),
   };
 }

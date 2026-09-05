@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { writeOfficeWorkorderEditBackup } from "../../features/workorder-detail/office-workorder-autosave-storage.js";
 import { api } from "../../lib/api.js";
 import { emptyPart } from "../../../../shared/workorder-template.js";
+import { replacePartWithSerializedUnitRows } from "../../features/workorder-modules/parts/create-parts-model.js";
 
 const MODULE_OWNED_AUTOSAVE_FIELDS = new Set(["diagnosis", "workPerformed"]);
 
@@ -90,6 +91,13 @@ export function createRoleRouterFormController({
     }));
   }
 
+  function replacePartSerializedUnits(index, selection) {
+    setForm((current) => ({
+      ...current,
+      parts: replacePartWithSerializedUnitRows(current.parts, index, selection),
+    }));
+  }
+
   function updateActiveUsedParts(parts, options = {}) {
     const saved = options.saved === true;
     setUsedPartsDirty(!saved);
@@ -128,6 +136,7 @@ export function createRoleRouterFormController({
     addPartRow,
     clearCreateErrors,
     removePartRow,
+    replacePartSerializedUnits,
     saveActiveUsedParts,
     stageOfficeAutosave,
     updateActiveUsedParts,
