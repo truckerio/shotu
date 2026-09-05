@@ -136,6 +136,14 @@ test("parts-visible scanning projects usage state and actions into the canonical
   assert.match(usedPartsEditor, /<details/);
 });
 
+test("editable serialized rows pass an explicit ordinal instead of Array.map's source array", () => {
+  assert.doesNotMatch(usedPartsEditor, /activeSerializedParts\.map\(renderSerializedPartRow\)/);
+  assert.match(
+    usedPartsEditor,
+    /activeSerializedParts\.map\(\(part, index\) => renderSerializedPartRow\(part, index, index \+ 2\)\)/,
+  );
+});
+
 test("scanner-only access retains its compact standalone lifecycle surface", () => {
   assert.match(partsModule, /\{partsVisible \? renderPartsPanel : null\}/);
   assert.match(surface, /if \(tablePresentation\)[\s\S]*return \([\s\S]*children\(\{/);

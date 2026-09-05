@@ -359,7 +359,7 @@ export function UsedPartsEditor({
           </div>
           <span aria-hidden="true"></span>
         </WorkorderPartsRow>
-        {activeSerializedParts.map(renderSerializedPartRow)}
+        {activeSerializedParts.map((part, index) => renderSerializedPartRow(part, index, index + 2))}
         {recordedManualParts.map((part, index) => renderRecordedPartRow(part, index, index + activeSerializedParts.length + 2))}
         {partsEditable ? <WorkorderPartsRow className="used-part-intake-row" ref={intakeRowRef}>
           <strong>{activeSerializedParts.length + recordedManualParts.length + 2}</strong>
