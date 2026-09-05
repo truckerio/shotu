@@ -62,7 +62,10 @@ const fixtureMarkup = `
           </div>
         </section>
         <section class="used-parts-section used-parts-items-section">
-          <h3>Parts used</h3>
+          <div class="used-parts-section-heading" data-testid="parts-heading">
+            <h3>Parts used</h3>
+            <button class="button fixture-button mechanic-scan-trigger is-table-action" type="button"><span aria-hidden="true">⌗</span> Scan part</button>
+          </div>
           <div class="operational-parts-editor detail-operational-parts-editor used-parts-items-table">
             <div class="used-parts-column-head"><span>#</span><span>Part</span><span>Qty / unit</span><span>Repair order</span><span>Status / action</span></div>
             <div class="operational-part-row has-quantity-unit detail-operational-part-row used-part-recorded-row" data-testid="recorded-row">
@@ -83,8 +86,7 @@ const fixtureMarkup = `
             </div>
           </div>
           <div class="workorder-parts-actions used-parts-actions">
-            <button class="button fixture-button create-parts-compact-action" type="button">+ Add approved part</button>
-            <button class="button fixture-button mechanic-scan-trigger is-table-action" type="button"><span aria-hidden="true">⌗</span> Scan parts</button>
+            <button class="button fixture-button create-parts-compact-action" type="button">+ Add part</button>
           </div>
         </section>
       </div>
@@ -122,6 +124,8 @@ async function verifyViewport(page, viewport) {
     const columnHead = document.querySelector(".used-parts-column-head");
     const addPart = document.querySelector(".create-parts-compact-action");
     const scan = document.querySelector(".mechanic-scan-trigger");
+    const partsHeading = document.querySelector('[data-testid="parts-heading"]');
+    const partsHeadingTitle = partsHeading.querySelector("h3");
     const labor = document.querySelector('[data-testid="labor-row"]');
     const recorded = document.querySelector('[data-testid="recorded-row"]');
     const serialized = document.querySelector('[data-testid="serialized-row"]');
@@ -158,6 +162,8 @@ async function verifyViewport(page, viewport) {
       columnHeadDisplay: getComputedStyle(columnHead).display,
       addPart: rect(addPart),
       scan: rect(scan),
+      partsHeading: rect(partsHeading),
+      partsHeadingTitle: rect(partsHeadingTitle),
       labor: rect(labor),
       recorded: rect(recorded),
       recordedIdentity: rect(recordedIdentity),
@@ -182,6 +188,9 @@ async function verifyViewport(page, viewport) {
   assert.ok(geometry.parts.width > 0 && geometry.preview.width > 0, `${viewport.name}: owned surfaces must have positive width`);
   assert.ok(geometry.parts.left >= 0 && geometry.parts.right <= viewport.width, `${viewport.name}: parts panel must remain in the viewport`);
   assert.ok(geometry.addPart.width >= 44 && geometry.scan.width >= 44 && geometry.scan.height >= 44, `${viewport.name}: add and scan controls must remain usable`);
+  assert.ok(geometry.partsHeadingTitle.right <= geometry.scan.left, `${viewport.name}: Parts title and Scan action must not overlap`);
+  assert.ok(geometry.scan.right <= geometry.partsHeading.right && geometry.scan.left >= geometry.partsHeading.left, `${viewport.name}: Scan action must stay inside the Parts heading`);
+  assert.ok(Math.abs((geometry.scan.top + geometry.scan.height / 2) - (geometry.partsHeading.top + geometry.partsHeading.height / 2)) <= 1, `${viewport.name}: Scan action must remain vertically centered in the Parts heading`);
   assert.ok(geometry.labor.left >= geometry.parts.left && geometry.labor.right <= geometry.parts.right, `${viewport.name}: labor row must remain inside Parts`);
   assert.ok(geometry.recorded.left >= geometry.parts.left && geometry.recorded.right <= geometry.parts.right, `${viewport.name}: recorded row must remain inside Parts`);
   assert.ok(geometry.serialized.left >= geometry.parts.left && geometry.serialized.right <= geometry.parts.right, `${viewport.name}: serialized row must remain inside Parts`);
@@ -198,8 +207,7 @@ async function verifyViewport(page, viewport) {
   }
 
   if (viewport.width <= 700) {
-    assert.ok(Math.abs(geometry.addPart.width - geometry.scan.width) <= 1, `${viewport.name}: Add and Scan must fill balanced action columns`);
-    assert.ok(Math.abs(geometry.addPart.top - geometry.scan.top) <= 1, `${viewport.name}: Add and Scan must align vertically`);
+    assert.ok(Math.abs(geometry.addPart.width - geometry.partsHeading.width) <= 1, `${viewport.name}: Add part must fill its mobile action row`);
   }
   assert.ok(Math.abs(geometry.planningHeading.top - geometry.planningAction.top) < 16, `${viewport.name}: planning heading and action must share a compact row`);
   assert.ok(geometry.preview.left >= 0 && geometry.preview.right <= viewport.width, `${viewport.name}: preview panel must remain in the viewport`);

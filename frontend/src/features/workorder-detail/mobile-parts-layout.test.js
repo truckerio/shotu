@@ -101,7 +101,8 @@ test("phone parts editor uses the same shared responsive row and action geometry
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-part-repair\s*\{[^}]*grid-column:\s*2 \/ -1;/s);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-parts-items-table > \.used-part-recorded-row,[\s\S]*?grid-template-columns:\s*24px minmax\(0, 1fr\) minmax\(76px, auto\);/s);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-part-recorded-value,[\s\S]*?grid-column:\s*3;[^}]*justify-items:\s*end;/s);
-  assert.match(phonePartsCss(), /\.used-parts-actions \.mechanic-scan-trigger\.is-table-action\s*\{[^}]*font-size:\s*inherit;[^}]*justify-content:\s*center;[^}]*justify-self:\s*stretch;[^}]*width:\s*100%;/s);
+  assert.match(css, /\.used-parts-section-heading \.mechanic-scan-trigger\.is-table-action\s*\{[^}]*justify-content:\s*center;[^}]*margin-left:\s*auto;[^}]*min-height:\s*44px;/s);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.used-parts-actions\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
 });
 
 test("used-parts intake and labor stay compact without hiding accessible names", () => {
@@ -109,7 +110,9 @@ test("used-parts intake and labor stay compact without hiding accessible names",
   assert.match(editor, /inputAriaLabel=\{t\("parts\.numberOrDescription"\)\}/);
   assert.doesNotMatch(editor, /part-row-head/);
   assert.match(editor, /<WorkorderPartsRow className="used-part-labor-row" aria-label=\{t\("parts\.laborHours"\)\}>\s*<strong>1<\/strong>/);
-  assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">[\s\S]*?t\("create\.parts\.add"\)[\s\S]*?\{serializedToolbar\}/);
+  assert.match(editor, /<div className="used-parts-section-heading">\s*<h3 id=\{partsSectionTitleId\}>\{t\("parts\.usedTitle"\)\}<\/h3>\s*\{serializedToolbar\}\s*<\/div>/);
+  assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">[\s\S]*?t\("parts\.addPart"\)[\s\S]*?<\/WorkorderPartsActions> : null/);
+  assert.equal((editor.match(/\{serializedToolbar\}/g) || []).length, 2);
   assert.match(editor, /const \[intakeOpen, setIntakeOpen\] = useState\(false\)/);
   assert.match(editor, /function focusIntakeRow\(\)\s*\{\s*if \(!intakeOpen\) \{[\s\S]*?setIntakeOpen\(true\)/);
   assert.match(editor, /function closeIntakeRow\(\)[\s\S]*?setIntakeOpen\(false\)[\s\S]*?workorder-add-approved-part/);

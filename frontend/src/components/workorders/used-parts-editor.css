@@ -41,12 +41,29 @@
   padding-top: 14px;
 }
 
-.used-parts-section > h3 {
+.used-parts-section > h3,
+.used-parts-section-heading > h3 {
   color: var(--text-primary, #101828);
   font-size: var(--text-body, 14px);
   font-weight: 700;
   line-height: 1.3;
   margin: 0;
+}
+
+.used-parts-section-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.used-parts-section-heading .mechanic-scan-trigger.is-table-action {
+  flex: 0 0 auto;
+  justify-content: center;
+  margin-left: auto;
+  min-height: 44px;
 }
 
 .used-parts-labor-table .used-part-labor-row {
@@ -528,13 +545,8 @@
   }
 }
 
-@media (max-width: 640px) {
-  .used-parts-actions .mechanic-scan-trigger.is-table-action {
-    font-size: inherit;
-    gap: 8px;
-    justify-content: center;
-    justify-self: stretch;
-    padding: 0 12px;
-    width: 100%;
+@media (max-width: 700px) {
+  .used-parts-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

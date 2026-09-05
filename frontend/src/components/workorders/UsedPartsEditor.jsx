@@ -351,8 +351,10 @@ export function UsedPartsEditor({
           </WorkorderPartsTable>
         </section> : null}
         <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
-          <h3 id={partsSectionTitleId}>{t("parts.usedTitle")}</h3>
-          {serializedToolbar}
+          <div className="used-parts-section-heading">
+            <h3 id={partsSectionTitleId}>{t("parts.usedTitle")}</h3>
+            {serializedToolbar}
+          </div>
           {serializedFeedback}
           {activeSerializedParts.length || savedParts.length ? <WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">
             {renderPartsColumnHead()}
@@ -407,7 +409,10 @@ export function UsedPartsEditor({
         </WorkorderPartsTable>
       </section>
       <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
-        <h3 id={partsSectionTitleId}>{t("parts.usedTitle")}</h3>
+        <div className="used-parts-section-heading">
+          <h3 id={partsSectionTitleId}>{t("parts.usedTitle")}</h3>
+          {serializedToolbar}
+        </div>
         {serializedFeedback}
         {hasTablePartRows || intakeOpen ? <WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">
           {renderPartsColumnHead()}
@@ -450,10 +455,9 @@ export function UsedPartsEditor({
         {!activeSerializedParts.length && !recordedManualParts.length && !aggregatePartUsages.length && !intakeOpen ? <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p> : null}
         {partsEditable ? <WorkorderPartsActions className="used-parts-actions">
           <Button id="workorder-add-approved-part" type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={focusIntakeRow} aria-expanded={intakeOpen} aria-controls="workorder-part-intake-row">
-            {t("create.parts.add")}
+            {t("parts.addPart")}
           </Button>
-          {serializedToolbar}
-        </WorkorderPartsActions> : serializedToolbar}
+        </WorkorderPartsActions> : null}
         {serializedHistory}
         <AggregatePartUsageRows actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} locale={locale} onChanged={onChanged} />
         <div className="used-parts-feedback" aria-live="polite">

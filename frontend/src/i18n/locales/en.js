@@ -204,6 +204,7 @@ export const en = Object.freeze({
   "parts.validation.wholeNumber": "Use a whole number for this unit.",
   "parts.validation.quantity": "Enter a quantity greater than 0.",
   "parts.usedTitle": "Parts used",
+  "parts.addPart": "Add part",
   "parts.recorded": "recorded",
   "parts.awaitingAction": "awaiting action",
   "parts.serialized": "Serialized parts",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { interfaceText } from "../../i18n/index.js";
 
 const editor = readFileSync(new URL("./UsedPartsEditor.jsx", import.meta.url), "utf8");
 const section = readFileSync(new URL("./part-requests/UsedPartsSection.jsx", import.meta.url), "utf8");
@@ -16,6 +17,10 @@ test("mechanic used-parts interface text is owned by the selected locale", () =>
   assert.match(editor, /parts\.noUsedPartsRecorded/);
   assert.match(editor, /progress\.saving/);
   assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
+  assert.equal(interfaceText("en", "parts.addPart"), "Add part");
+  assert.equal(interfaceText("es", "parts.addPart"), "Agregar pieza");
+  assert.equal(interfaceText("pa", "parts.addPart"), "ਪਾਰਟ ਜੋੜੋ");
+  assert.equal(interfaceText("en", "create.parts.add"), "Add approved part");
 });
 
 test("installed serialized summaries keep identity locked, edit only repair wording, and feed every preview", () => {
