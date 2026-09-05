@@ -185,6 +185,10 @@ test("Odoo sync imports catalog mappings without provider quantities or local id
   assert.match(importer, /provider_updated_at, last_seen_at, updated_at[\s\S]*\$8, \$9, now\(\)/);
   assert.doesNotMatch(importer, /update odoo_product_mappings[\s\S]*set active = false/);
   assert.match(importer, /product\.active !== false/);
+  assert.match(importer, /from part_reference_numbers reference/);
+  assert.match(importer, /reference\.normalized_reference_number=\$2/);
+  assert.match(importer, /lockCompanyPartIdentity\(client, tenantId\)/);
+  assert.match(importer, /having count\(distinct candidate\.id\)=1/);
 });
 
 test("Odoo catalog sync fetches inactive products explicitly and never infers state from absence", async () => {

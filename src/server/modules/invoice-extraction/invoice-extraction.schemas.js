@@ -14,6 +14,7 @@ function evidenceField(valueSchema) {
 
 export const invoiceLineSchema = z.object({
   id: z.string().trim().min(1).max(80),
+  catalogPartId: z.string().uuid().optional(),
   partNumber: evidenceField(boundedText(200)),
   description: evidenceField(boundedText(1000)),
   quantity: evidenceField(z.number().finite().nullable()),

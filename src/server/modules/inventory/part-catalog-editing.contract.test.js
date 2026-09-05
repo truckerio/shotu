@@ -67,9 +67,20 @@ test("catalog mutations share the identity lock while Odoo remains insert-only f
     assert.match(source, /version = parts_catalog\.version \+ case when/);
   }
   const importer = odoo.slice(odoo.indexOf("export async function importOdooInventory"));
+  assert.match(importer, /lockCompanyPartIdentity\(client, tenantId\)/);
   assert.match(importer, /assertPrimaryPartIdentityAvailable\(client,/);
   assert.match(importer, /insert into parts_catalog/);
   assert.doesNotMatch(importer, /on conflict \(company_id, normalized_part_number\) do update/);
   assert.doesNotMatch(importer, /version = parts_catalog\.version|update parts_catalog/i);
   assert.match(local, /normalized_reference_number like \$11/);
+});
+
+test("fast catalog creation is transactional and never creates stock or Odoo records", async () => {
+  const source = await readFile(new URL("../../db/repositories/parts-catalog-edit.repo.js", import.meta.url), "utf8");
+  const create = source.slice(source.indexOf("export async function createCompanyCatalogPart"), source.indexOf("export async function updateCompanyCatalogPart"));
+  assert.match(create, /lockCompanyPartIdentity/);
+  assert.match(create, /insert into parts_catalog/);
+  assert.match(create, /source_provider,updated_at\)[\s\S]*'local',now\(\)/);
+  assert.match(create, /part_reference_numbers/);
+  assert.doesNotMatch(create, /insert into inventory_items|insert into odoo_product_mappings/);
 });

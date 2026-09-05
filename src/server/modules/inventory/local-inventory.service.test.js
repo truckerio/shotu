@@ -11,6 +11,7 @@ const LOCATION_ID = "00000000-0000-4000-8000-000000000102";
 const OTHER_LOCATION_ID = "00000000-0000-4000-8000-000000000103";
 const ACTOR_ID = "00000000-0000-4000-8000-000000000104";
 const RUN_ID = "00000000-0000-4000-8000-000000000105";
+const CATALOG_PART_ID = "00000000-0000-4000-8000-000000000106";
 const SIGNING_KEY = Buffer.alloc(32, 23).toString("base64");
 
 function context(role = "office") {
@@ -42,6 +43,7 @@ function reviewedInvoice(overrides = {}) {
       total: { value: 20, confidence: 100, evidence: "Total" },
       lines: [{
         id: "line-1",
+        catalogPartId: CATALOG_PART_ID,
         partNumber: { value: "FILTER-1", confidence: 100, evidence: "Part" },
         description: { value: "Oil filter", confidence: 100, evidence: "Description" },
         quantity: { value: 2, confidence: 100, evidence: "Quantity" },
@@ -89,6 +91,7 @@ test("posts a reviewed invoice to local inventory without provider dependencies"
   assert.equal(posted.companyIds[0], COMPANY_ID);
   assert.equal(posted.locationIds[0], LOCATION_ID);
   assert.equal(posted.lines[0].normalizedPartNumber, "FILTER1");
+  assert.equal(posted.lines[0].catalogPartId, CATALOG_PART_ID);
   assert.equal(posted.lines[0].quantity, 2);
   assert.equal(posted.lines[0].uomCode, "ea");
   assert.equal(posted.lines[0].serializedUnits.length, 2);
@@ -216,6 +219,20 @@ test("surfaces reserved legacy balance authority conflicts", async () => {
     (error) => error.code === "INVENTORY_AUTHORITY_CONFLICT"
       && error.statusCode === 409
       && /reserved stock/i.test(error.message),
+  );
+});
+
+test("requires a fresh match when a selected catalog part changed", async () => {
+  await assert.rejects(
+    postReviewedInvoiceToLocalInventory(
+      RUN_ID,
+      { idempotencyKey: "local-catalog-changed", expectedVersion: 3, confirmation: "all_received_undamaged" },
+      context(),
+      { loadInvoice: async () => reviewedInvoice(), postReceipt: async () => ({ kind: "catalog_changed" }), qrOptions: { signingKey: SIGNING_KEY } },
+    ),
+    (error) => error.code === "INVENTORY_CATALOG_PART_CHANGED"
+      && error.statusCode === 409
+      && error.retryable === true,
   );
 });
 

@@ -30,6 +30,53 @@ export async function assertPrimaryPartIdentityAvailable(client, companyId, norm
   }
 }
 
+export async function createCompanyCatalogPart({ companyId, actorId: _actorId, description, partNumber, manufacturer, category, barcode, uomCode, referenceNumbers }) {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await lockCompanyPartIdentity(client, companyId);
+    const normalizedPartNumber = normalizePartNumber(partNumber);
+    const normalizedReferences = referenceNumbers.map(normalizePartNumber);
+    const identities = [normalizedPartNumber, ...normalizedReferences];
+    const normalizedBarcode = normalizePartNumber(barcode);
+    const conflict = await client.query(
+      `select 1 from parts_catalog c where c.company_id=$1 and c.normalized_part_number=any($2::text[])
+       union all select 1 from part_reference_numbers r where r.company_id=$1 and r.normalized_reference_number=any($2::text[])
+       union all select 1 from parts_catalog c where c.company_id=$1 and lower(c.barcode)=lower($3) and $3<>''
+       union all select 1 from odoo_product_mappings m where m.company_id=$1 and (upper(regexp_replace(coalesce(m.default_code,''),'[^A-Za-z0-9]','','g'))=any($2::text[]) or upper(regexp_replace(coalesce(m.barcode,''),'[^A-Za-z0-9]','','g'))=any($2::text[]) or (lower(m.barcode)=lower($3) and $3<>''))
+       union all select 1 from parts_catalog c where c.company_id=$1 and c.normalized_part_number=$4 and $4<>''
+       union all select 1 from part_reference_numbers r where r.company_id=$1 and r.normalized_reference_number=$4 and $4<>'' limit 1`,
+      [companyId, identities, barcode, normalizedBarcode],
+    );
+    if (conflict.rows[0]) { await client.query("rollback"); return { kind: "identity_conflict" }; }
+    const inserted = await client.query(
+      `insert into parts_catalog(company_id,normalized_part_number,part_number,description,manufacturer,category,barcode,uom_code,source_provider,updated_at)
+       select $1,$2,$3,$4,$5,$6,$7,$8,'local',now()
+       where exists(select 1 from units_of_measure where code=$8 and active=true)
+       returning *`,
+      [companyId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode, uomCode],
+    );
+    const row = inserted.rows[0];
+    if (!row) { await client.query("rollback"); return { kind: "uom_invalid" }; }
+    if (referenceNumbers.length) await client.query(
+      `insert into part_reference_numbers(company_id,catalog_part_id,reference_number,normalized_reference_number)
+       select $1,$2,input.reference,input.normalized from unnest($3::text[],$4::text[]) input(reference,normalized)`,
+      [companyId, row.id, referenceNumbers, normalizedReferences],
+    );
+    await client.query("commit");
+    return { kind: "created", part: {
+      id: row.id, catalogPartId: row.id, partNumber: row.part_number, normalizedPartNumber: row.normalized_part_number,
+      description: row.description, manufacturer: row.manufacturer, category: row.category, barcode: row.barcode,
+      uomCode: row.uom_code, canonicalUomCode: row.uom_code, version: Number(row.version || 1), providerManaged: false,
+      referenceNumbers, editableFields: ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "referenceNumbers"],
+    } };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    if (error?.code === "23505") return { kind: "identity_conflict" };
+    throw error;
+  } finally { client.release(); }
+}
+
 export async function updateCompanyCatalogPart({ catalogPartId, companyIds, actorId, expectedVersion, description, partNumber, manufacturer, category, barcode, uomCode, referenceNumbers }) {
   const client = await getPool().connect();
   try {

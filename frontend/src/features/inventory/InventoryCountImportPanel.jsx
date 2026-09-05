@@ -8,6 +8,7 @@ import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from ".
 import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { api } from "../../lib/api.js";
+import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
 
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_ROWS = 500;
@@ -98,6 +99,7 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
   const [binLocation, setBinLocation] = useState(line.binLocation || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   async function update(action, part = null) {
     setSaving(true);
@@ -161,7 +163,14 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
         suggestionQuery={useSpreadsheetSuggestions ? automaticSearchQuery : ""}
       />
       <small className="inventory-count-match-hint">Select to view suggested matches</small>
+      {line.matchStatus === "unmatched" ? <Button type="button" onClick={() => setCreateOpen(true)} disabled={saving || !validQuantity}>Create this part</Button> : null}
       {error ? <p className="ops-error" role="alert" aria-live="assertive">{error}</p> : null}
+      {createOpen ? <CreateInventoryPartDialog
+        locationId={stocktake.locationId}
+        defaults={{ partNumber: line.sourcePartNumber, description: line.sourcePartName || line.sourceDescription, uomCode: "ea" }}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(part) => update("match", part)}
+      /> : null}
     </OperationalDataCell>
     <OperationalDataCell label="Action" className="inventory-count-action-cell">
       <Button type="button" aria-label={`Ignore ${partLabel} from row ${line.sourceRow}`} onClick={() => update("ignore")} disabled={saving}>{saving ? "Saving…" : "Ignore"}</Button>

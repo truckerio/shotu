@@ -1,0 +1,26 @@
+.create-inventory-part-overlay { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 24px; background: rgb(16 24 40 / 55%); }
+.create-inventory-part-modal { width: min(560px, 100%); max-height: min(760px, calc(100dvh - 48px)); overflow: auto; border-radius: 12px; background: #fff; box-shadow: 0 24px 48px rgb(16 24 40 / 24%); }
+.create-inventory-part-dialog { outline: none; }
+.create-inventory-part-dialog form { display: grid; gap: 20px; padding: 24px; }
+.create-inventory-part-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.create-inventory-part-dialog header h2 { margin: 0; color: #101828; font-size: 20px; }
+.create-inventory-part-dialog header p { margin: 6px 0 0; color: #475467; font-size: 14px; line-height: 1.45; }
+.create-inventory-part-dialog header > button { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 8px; background: transparent; color: #475467; }
+.create-inventory-part-dialog header > button:hover { background: #f2f4f7; }
+.create-inventory-part-fields { display: grid; gap: 14px; }
+.create-inventory-part-fields > label, .create-inventory-part-unit { display: grid; gap: 6px; color: #344054; font-size: 13px; font-weight: 600; }
+.create-inventory-part-fields input { min-height: 42px; width: 100%; border: 1px solid #d0d5dd; border-radius: 8px; padding: 9px 12px; color: #101828; background: #fff; }
+.create-inventory-part-fields small { color: #667085; font-weight: 400; }
+.create-inventory-part-dialog details { border-top: 1px solid #eaecf0; padding-top: 14px; }
+.create-inventory-part-dialog details summary { min-height: 40px; cursor: pointer; color: #344054; font-weight: 600; }
+.create-inventory-part-dialog details[open] summary { margin-bottom: 14px; }
+.create-inventory-part-error { margin: 0; border-radius: 8px; padding: 10px 12px; background: #fef3f2; color: #b42318; }
+.create-inventory-part-dialog footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #eaecf0; padding-top: 18px; }
+.create-inventory-part-dialog :focus-visible { outline: 3px solid #84caff; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .create-inventory-part-overlay { align-items: end; padding: 0; }
+  .create-inventory-part-modal { max-height: calc(100dvh - 16px); border-radius: 14px 14px 0 0; }
+  .create-inventory-part-dialog form { padding: 20px 16px max(20px, env(safe-area-inset-bottom)); }
+  .create-inventory-part-dialog header > button, .create-inventory-part-dialog button, .create-inventory-part-fields input { min-height: 44px; }
+  .create-inventory-part-dialog footer > * { flex: 1; }
+}

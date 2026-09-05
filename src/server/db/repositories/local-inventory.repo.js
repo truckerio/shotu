@@ -155,31 +155,48 @@ export async function postLocalInventoryReceipt({
 
     const preparedLines = [];
     for (const line of lines) {
-      await assertPrimaryPartIdentityAvailable(client, source.company_id, line.normalizedPartNumber);
-      const catalog = await client.query(
-        `insert into parts_catalog (
-           company_id, normalized_part_number, part_number, description, uom_code, updated_at
-         ) values ($1, $2, $3, $4, $5, now())
-         on conflict (company_id, normalized_part_number) do update
-         set part_number = case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
-             description = case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end,
-             version = parts_catalog.version + case when
-               row(parts_catalog.part_number, parts_catalog.description)
-               is distinct from row(
-                 case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
-                 case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end
-               ) then 1 else 0 end,
-             updated_at = now()
-         returning id`,
-        [source.company_id, line.normalizedPartNumber, line.partNumber, line.description, line.uomCode],
-      );
-      const catalogPartId = catalog.rows[0].id;
+      let catalogPartId;
+      let effectiveLine = line;
+      if (line.catalogPartId) {
+        const selectedCatalog = await client.query(
+          `select id,normalized_part_number,part_number,description,uom_code from parts_catalog
+           where company_id=$1 and id=$2 limit 1 for key share`,
+          [source.company_id, line.catalogPartId],
+        );
+        const selected = selectedCatalog.rows[0];
+        if (!selected || selected.uom_code !== line.uomCode) {
+          await client.query("rollback");
+          return { kind: "catalog_changed" };
+        }
+        catalogPartId = selected.id;
+        effectiveLine = { ...line, normalizedPartNumber: selected.normalized_part_number, partNumber: selected.part_number, description: line.description || selected.description };
+      } else {
+        await assertPrimaryPartIdentityAvailable(client, source.company_id, line.normalizedPartNumber);
+        const catalog = await client.query(
+          `insert into parts_catalog (
+             company_id, normalized_part_number, part_number, description, uom_code, updated_at
+           ) values ($1, $2, $3, $4, $5, now())
+           on conflict (company_id, normalized_part_number) do update
+           set part_number = case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
+               description = case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end,
+               version = parts_catalog.version + case when
+                 row(parts_catalog.part_number, parts_catalog.description)
+                 is distinct from row(
+                   case when btrim(parts_catalog.part_number) = '' then excluded.part_number else parts_catalog.part_number end,
+                   case when btrim(parts_catalog.description) = '' then excluded.description else parts_catalog.description end
+                 ) then 1 else 0 end,
+               updated_at = now()
+           returning id`,
+          [source.company_id, line.normalizedPartNumber, line.partNumber, line.description, line.uomCode],
+        );
+        catalogPartId = catalog.rows[0].id;
+      }
       const authorityClaim = await inspectInventoryAuthority(client, {
         companyId: source.company_id,
         locationId: source.location_id,
         catalogPartId,
-        normalizedPartNumber: line.normalizedPartNumber,
-        uomCode: line.uomCode,
+        normalizedPartNumber: effectiveLine.normalizedPartNumber,
+        uomCode: effectiveLine.uomCode,
       });
       if (authorityClaim.kind !== "claimable") {
         await recordInventoryAuthorityException(client, {
@@ -187,14 +204,14 @@ export async function postLocalInventoryReceipt({
           companyId: source.company_id,
           locationId: source.location_id,
           catalogPartId,
-          normalizedPartNumber: line.normalizedPartNumber,
-          uomCode: line.uomCode,
+          normalizedPartNumber: effectiveLine.normalizedPartNumber,
+          uomCode: effectiveLine.uomCode,
         });
         await client.query("commit");
         return { kind: authorityClaim.kind === "reservation_blocked" ? "authority_conflict" : "authority_unmatched" };
       }
       preparedLines.push({
-        ...line,
+        ...effectiveLine,
         catalogPartId,
         authorityClaim,
       });

@@ -193,6 +193,7 @@ test("real PostgreSQL posts one local balance under concurrent invoice retries",
     const lines = [{
       id: lineId,
       lineIndex: 0,
+      catalogPartId,
       normalizedPartNumber: `FILTER${suffix}`,
       partNumber: `FILTER-${suffix}`,
       description: "Integration filter",

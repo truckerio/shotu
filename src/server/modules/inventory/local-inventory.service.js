@@ -78,6 +78,7 @@ function prepareLocalLines(draft) {
     return {
       id: randomUUID(),
       lineIndex,
+      catalogPartId: line.catalogPartId || null,
       normalizedPartNumber,
       partNumber,
       description: String(line.description.value || "").trim(),
@@ -185,6 +186,9 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
       "A legacy inventory identity conflicts with this catalog part. Reconcile it before receiving stock.",
       409,
     );
+  }
+  if (result.kind === "catalog_changed") {
+    throw publicError("INVENTORY_CATALOG_PART_CHANGED", `A matched inventory part changed or no longer uses the invoice unit. Reopen the review and match it again.`, 409, true);
   }
   return {
     receipt: withInventoryLabels(result.receipt, dependencies.qrOptions),

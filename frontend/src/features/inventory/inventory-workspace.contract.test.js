@@ -244,3 +244,23 @@ test("invoice approval uses local posting instead of the Odoo receipt action", a
   assert.doesNotMatch(workspace, /\/post-inventory/);
   assert.doesNotMatch(workspace, /Receive in Odoo & create labels/);
 });
+
+test("unmatched inventory count rows can create and immediately match a local part", async () => {
+  const [panel, dialog] = await Promise.all([
+    readFile(new URL("./InventoryCountImportPanel.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./CreateInventoryPartDialog.jsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(panel, /line\.matchStatus === "unmatched"[\s\S]*>Create this part<\/Button>/);
+  assert.match(panel, /defaults=\{\{ partNumber: line\.sourcePartNumber, description: line\.sourcePartName \|\| line\.sourceDescription/);
+  assert.match(panel, /onCreated=\{\(part\) => update\("match", part\)\}/);
+  assert.match(dialog, /method: "POST"/);
+  assert.match(dialog, /\/api\/office\/inventory\/parts/);
+  assert.match(dialog, /No quantity or Odoo record will be created/);
+});
+
+test("the main inventory page can create a zero-stock local catalog part", async () => {
+  const source = await readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8");
+  assert.match(source, />New part<\/Button>/);
+  assert.match(source, /<CreateInventoryPartDialog[\s\S]*locations=\{locations\}/);
+  assert.match(source, /setQuery\(part\.partNumber\)/);
+});

@@ -655,6 +655,26 @@ test("part edit route returns the committed projection and emits supplemental au
   assert.deepEqual(events, [{ type: "inventory_part_updated", requestId: "request-part-edit", actorId: ACTOR_ID, catalogPartId: "33333333-3333-4333-8333-333333333333", version: 3 }]);
 });
 
+test("part create route returns catalog identity and emits supplemental audit", async () => {
+  const response = {};
+  const events = [];
+  const body = { locationId: LOCATION_ID, description: "Air valve", partNumber: "A-1", uomCode: "ea" };
+  const routeHelpers = helpers(body);
+  routeHelpers.emitAdministrativeAuditEvent = async (event) => events.push(event);
+  const handled = await handleInventoryApi(
+    { method: "POST", requestId: "request-part-create" }, response,
+    new URL("http://localhost/api/office/inventory/parts"), routeHelpers,
+    {
+      findLocation: async () => ({ company_id: COMPANY_ID }),
+      createPart: async () => ({ kind: "created", part: { id: RUN_ID, partNumber: "A-1", uomCode: "ea" } }),
+    },
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 201);
+  assert.equal(response.payload.part.id, RUN_ID);
+  assert.deepEqual(events, [{ type: "inventory_part_created", requestId: "request-part-create", actorId: ACTOR_ID, catalogPartId: RUN_ID, locationId: LOCATION_ID }]);
+});
+
 test("catalog UOM trigger conflicts return an actionable retryable response", async () => {
   const response = {};
   const body = { expectedVersion: 2, description: "Air valve", partNumber: "A-1", manufacturer: "Bendix", category: "Air", barcode: "123", uomCode: "ea", referenceNumbers: [] };

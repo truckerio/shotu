@@ -1,13 +1,53 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, test } from "node:test";
-import { updateCompanyCatalogPart } from "../../db/repositories/parts-catalog-edit.repo.js";
+import { createCompanyCatalogPart, updateCompanyCatalogPart } from "../../db/repositories/parts-catalog-edit.repo.js";
+import { importOdooInventory } from "../../integrations/odoo/odoo.admin.repo.js";
 import { closePool, query } from "../../db/pool.js";
 
 const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
 after(async () => {
   if (runPostgres) await closePool();
+});
+
+test("real PostgreSQL creates local catalog identity without stock and protects references", { skip: !runPostgres }, async () => {
+  const suffix = randomUUID().replaceAll("-", "");
+  const actorId = randomUUID();
+  const companyId = randomUUID();
+  try {
+    await query("insert into user_profiles (id, display_name) values ($1, $2)", [actorId, `Part creator ${suffix}`]);
+    await query("insert into companies (id, slug, name) values ($1, $2, 'Part creator')", [companyId, `part-creator-${suffix}`]);
+    const created = await createCompanyCatalogPart({
+      companyId, actorId, description: "Local-only valve", partNumber: `LOCAL-${suffix}`, manufacturer: "Bendix",
+      category: "Air", barcode: `BAR-${suffix}`, uomCode: "ea", referenceNumbers: [`ODOO-${suffix}`],
+    });
+    assert.equal(created.kind, "created");
+    assert.equal(created.part.providerManaged, false);
+    const persisted = await query(
+      `select catalog.source_provider, reference.reference_number,
+              (select count(*)::int from inventory_items item where item.company_id=catalog.company_id and item.catalog_part_id=catalog.id) as stock_count,
+              (select count(*)::int from odoo_product_mappings mapping where mapping.company_id=catalog.company_id and mapping.catalog_part_id=catalog.id) as mapping_count
+       from parts_catalog catalog join part_reference_numbers reference on reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id
+       where catalog.company_id=$1 and catalog.id=$2`,
+      [companyId, created.part.id],
+    );
+    assert.deepEqual(persisted.rows[0], { source_provider: "local", reference_number: `ODOO-${suffix}`, stock_count: 0, mapping_count: 0 });
+    await importOdooInventory(companyId, { products: [{
+      id: `product-${suffix}`, default_code: `ODOO-${suffix}`, barcode: "", name: "Odoo valve",
+      uom_id: [1, "Units"], categ_id: [1, "Parts"], active: true, write_date: "2026-09-05 12:00:00",
+    }] });
+    const mapped = await query("select catalog_part_id from odoo_product_mappings where company_id=$1 and external_id=$2", [companyId, `product-${suffix}`]);
+    assert.equal(mapped.rows[0].catalog_part_id, created.part.id);
+    assert.equal((await query("select count(*)::int as count from parts_catalog where company_id=$1", [companyId])).rows[0].count, 1);
+    const conflict = await createCompanyCatalogPart({
+      companyId, actorId, description: "Duplicate", partNumber: `ODOO-${suffix}`, manufacturer: "", category: "", barcode: "", uomCode: "ea", referenceNumbers: [],
+    });
+    assert.equal(conflict.kind, "identity_conflict");
+  } finally {
+    await query("delete from companies where id=$1", [companyId]).catch(() => {});
+    await query("delete from user_profiles where id=$1", [actorId]).catch(() => {});
+  }
 });
 
 test("real PostgreSQL edits local identity atomically and protects tenant and Odoo ownership", { skip: !runPostgres }, async () => {

@@ -195,3 +195,10 @@
   .inventory-unit-label { border:1px solid #000; grid-template-columns:28mm minmax(0,1fr); min-height:32mm; padding:3mm; }
   .inventory-unit-label img { height:28mm; width:28mm; }
 }
+.invoice-line-catalog-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 12px; margin-bottom: 14px; border-bottom: 1px solid #eaecf0; padding-bottom: 14px; }
+.invoice-line-catalog-tools > small { grid-column: 1 / -1; color: #667085; }
+@media (max-width: 640px) {
+  .invoice-line-catalog-tools { grid-template-columns: 1fr; }
+  .invoice-line-catalog-tools > button { width: 100%; min-height: 44px; }
+  .invoice-line-catalog-tools > small { grid-column: 1; }
+}

@@ -184,6 +184,25 @@ test("reviewed invoice values are locked before physical confirmation", async ()
   assert.doesNotMatch(source, /inventory\/receipts\/\$\{encodeURIComponent\(receipt\.id\)\}\/labels/);
 });
 
+test("invoice lines can match or create local catalog identity before review", async () => {
+  const [source, dialog, styles] = await Promise.all([
+    readFile(workspaceUrl, "utf8"),
+    readFile(new URL("../inventory/CreateInventoryPartDialog.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../inventory/create-inventory-part-dialog.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /<PartCatalogCombobox[\s\S]*catalogEndpoint="\/api\/office\/inventory\/catalog"/);
+  assert.match(source, />Create new part<\/Button>/);
+  assert.match(source, /Inventory is unchanged/);
+  assert.match(source, /updateInvoiceLineField\(current, lineId, "partNumber", part\.partNumber\)/);
+  assert.match(source, /updateInvoiceLineField\(next, lineId, "unitOfMeasure", part\.uomCode \|\| "ea"\)/);
+  assert.match(source, /catalogPartId: part\.id/);
+  assert.match(source, /\["partNumber", "unitOfMeasure"\][\s\S]*catalogPartId: _removed/);
+  assert.match(dialog, /aria-labelledby=\{titleId\} aria-describedby=\{descriptionId\}/);
+  assert.match(dialog, /No quantity or Odoo record will be created/);
+  assert.match(dialog, /Odoo or supplier number/);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*min-height: 44px/);
+});
+
 test("completed invoice can be re-extracted from retained source without overwriting history or inventory", async () => {
   const source = await readFile(new URL("./InvoiceExtractionWorkspace.jsx", import.meta.url), "utf8");
   const reextractDialog = source.slice(source.indexOf("const reextractDialog"), source.indexOf("if (draft)"));

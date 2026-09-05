@@ -1,7 +1,7 @@
 import { getPool, query } from "../../db/pool.js";
 import { requireCompanyId } from "../../db/company.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
-import { assertPrimaryPartIdentityAvailable } from "../../db/repositories/parts-catalog-edit.repo.js";
+import { assertPrimaryPartIdentityAvailable, lockCompanyPartIdentity } from "../../db/repositories/parts-catalog-edit.repo.js";
 import {
   readIntegrationCredentialForProvider,
   saveIntegrationCredential,
@@ -1369,10 +1369,16 @@ export async function importOdooInventory(companyId, { products }) {
       );
       let catalogPartId = existingMapping.rows[0]?.catalog_part_id || null;
       if (!catalogPartId) {
+        await lockCompanyPartIdentity(client, tenantId);
         const existingCatalog = await client.query(
-          `select id from parts_catalog
-           where company_id = $1 and normalized_part_number = $2
-           limit 1`,
+          `select min(candidate.id::text)::uuid as id from (
+             select catalog.id from parts_catalog catalog
+             where catalog.company_id=$1 and catalog.normalized_part_number=$2
+             union all
+             select reference.catalog_part_id as id from part_reference_numbers reference
+             where reference.company_id=$1 and reference.normalized_reference_number=$2
+           ) candidate
+           having count(distinct candidate.id)=1`,
           [tenantId, normalized],
         );
         catalogPartId = existingCatalog.rows[0]?.id || null;

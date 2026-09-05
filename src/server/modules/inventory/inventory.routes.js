@@ -31,7 +31,7 @@ import {
   searchInventoryMasterParts,
   uploadInventoryCount,
 } from "./inventory-count-imports.service.js";
-import { updateInventoryPart } from "./inventory-part-details.service.js";
+import { createInventoryPart, updateInventoryPart } from "./inventory-part-details.service.js";
 import {
   readInventoryAuthorityException,
   readInventoryAuthorityExceptions,
@@ -89,6 +89,13 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
   try {
     if (req.method === "GET" && url.pathname === "/api/office/inventory/catalog") {
       helpers.sendJson(res, 200, await searchInventoryMasterParts(url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    if (req.method === "POST" && url.pathname === "/api/office/inventory/parts") {
+      const body = await helpers.readBody(req);
+      const part = await createInventoryPart(body, helpers.requestContext, dependencies);
+      await emitInventoryAudit(helpers, { type: "inventory_part_created", requestId: req.requestId || null, actorId: helpers.requestContext.actor.id, catalogPartId: part.id, locationId: body.locationId });
+      helpers.sendJson(res, 201, { part });
       return true;
     }
     if (req.method === "GET" && url.pathname === "/api/office/inventory/authority-exceptions") {

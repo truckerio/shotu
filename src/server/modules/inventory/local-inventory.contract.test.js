@@ -39,6 +39,8 @@ test("local posting serializes invoice creation while Odoo sync remains catalog-
   const genericTracking = await readFile(new URL("../../db/migrations/080_inventory_receipt_line_tracking.sql", import.meta.url), "utf8");
   const odoo = await readFile(new URL("../../integrations/odoo/odoo.admin.repo.js", import.meta.url), "utf8");
   assert.match(repository, /pg_advisory_xact_lock\(hashtext\(\$1\)\)/);
+  assert.match(repository, /where company_id=\$1 and id=\$2 limit 1 for key share/);
+  assert.match(repository, /return \{ kind: "catalog_changed" \}/);
   assert.match(repository, /run\.company_id = any\(\$2::uuid\[\]\)/);
   assert.match(repository, /\$4::boolean or run\.location_id = any\(\$3::uuid\[\]\)/);
   assert.match(repository, /movement_type, quantity_delta/);

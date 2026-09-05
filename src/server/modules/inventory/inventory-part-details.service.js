@@ -1,7 +1,28 @@
-import { updateCompanyCatalogPart } from "../../db/repositories/parts-catalog-edit.repo.js";
+import { createCompanyCatalogPart, updateCompanyCatalogPart } from "../../db/repositories/parts-catalog-edit.repo.js";
+import { findAuthorizedInventoryLocation } from "../../db/repositories/inventory-count-imports.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
-import { updateInventoryPartSchema } from "./inventory.schemas.js";
+import { createInventoryPartSchema, updateInventoryPartSchema } from "./inventory.schemas.js";
 import { z } from "zod";
+
+export async function createInventoryPart(input, requestContext, dependencies = {}) {
+  if (!["office", "admin"].includes(requestContext.actor.role)) {
+    throw new InventoryError("Parts can only be created by Office or Admin.", { code: "INVENTORY_PART_FORBIDDEN", statusCode: 403 });
+  }
+  const parsed = createInventoryPartSchema.parse(input);
+  const location = await (dependencies.findLocation || findAuthorizedInventoryLocation)({
+    locationId: parsed.locationId,
+    companyIds: [...(requestContext.companyIds || [])],
+    locationIds: [...(requestContext.locationIds || [])],
+    isAdmin: requestContext.actor.role === "admin",
+  });
+  if (!location) throw inventoryNotFound();
+  const result = await (dependencies.createPart || createCompanyCatalogPart)({
+    ...parsed, companyId: location.company_id, actorId: requestContext.actor.id,
+  });
+  if (result.kind === "identity_conflict") throw new InventoryError("That part, barcode, or reference number is already used.", { code: "INVENTORY_PART_IDENTITY_CONFLICT", statusCode: 409 });
+  if (result.kind === "uom_invalid") throw new InventoryError("Choose an active inventory unit.", { code: "INVENTORY_PART_UOM_INVALID", statusCode: 422 });
+  return result.part;
+}
 
 export async function updateInventoryPart(catalogPartId, input, requestContext, dependencies = {}) {
   if (!["office", "admin"].includes(requestContext.actor.role)) {

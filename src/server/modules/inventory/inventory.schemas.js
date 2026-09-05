@@ -44,6 +44,20 @@ export const updateInventoryPartSchema = z.object({
   if (new Set(normalized).size !== normalized.length) context.addIssue({ code: "custom", path: ["referenceNumbers"], message: "Reference numbers must be unique." });
 });
 
+export const createInventoryPartSchema = z.object({
+  locationId: z.string().uuid(),
+  description: z.string().trim().min(1).max(1000),
+  partNumber: z.string().trim().min(1).max(200).regex(/[A-Za-z0-9]/, "Part number must contain a letter or number."),
+  manufacturer: z.string().trim().max(240).optional().default(""),
+  category: z.string().trim().max(240).optional().default(""),
+  barcode: z.string().trim().max(200).optional().default(""),
+  uomCode: uomCodeSchema.removeDefault(),
+  referenceNumbers: z.array(z.string().trim().min(1).max(200).regex(/[A-Za-z0-9]/, "Reference number must contain a letter or number.")).max(20).optional().default([]),
+}).strict().superRefine((value, context) => {
+  const identities = [value.partNumber, ...value.referenceNumbers].map((item) => item.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+  if (new Set(identities).size !== identities.length) context.addIssue({ code: "custom", path: ["referenceNumbers"], message: "Part and reference numbers must be unique." });
+});
+
 export const inventoryLabelItemsQuerySchema = z.object({
   after: z.coerce.number().int().min(0).max(500).optional().default(0),
   limit: z.coerce.number().int().min(1).max(100).optional().default(100),

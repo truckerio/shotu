@@ -9,6 +9,8 @@ import { api } from "../../lib/api.js";
 import { InvoiceDocumentViewer } from "./InvoiceDocumentViewer.jsx";
 import { InvoiceHistoryPanel } from "./InvoiceHistoryPanel.jsx";
 import { PhysicalReceiptConfirmation } from "./PhysicalReceiptConfirmation.jsx";
+import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
+import { CreateInventoryPartDialog } from "../inventory/CreateInventoryPartDialog.jsx";
 import {
   confidenceState,
   invoiceFieldNeedsReview,
@@ -119,6 +121,8 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const [reviewDirty, setReviewDirty] = useState(false);
   const [leaveReviewOpen, setLeaveReviewOpen] = useState(false);
   const [reextractOpen, setReextractOpen] = useState(false);
+  const [catalogQueries, setCatalogQueries] = useState({});
+  const [createPartLineId, setCreatePartLineId] = useState("");
   const fileInputRef = useRef(null);
   const reviewTitleRef = useRef(null);
   const reviewKeyRef = useRef("");
@@ -559,7 +563,24 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   function updateLine(lineId, name, value, type = "text") {
     reviewKeyRef.current = "";
     setReviewDirty(true);
-    setDraft((current) => updateInvoiceLineField(current, lineId, name, type === "number" ? parseReviewNumber(value) : value));
+    setDraft((current) => {
+      const next = updateInvoiceLineField(current, lineId, name, type === "number" ? parseReviewNumber(value) : value);
+      if (!["partNumber", "unitOfMeasure"].includes(name)) return next;
+      return { ...next, lines: next.lines.map((line) => line.id === lineId ? (({ catalogPartId: _removed, ...rest }) => rest)(line) : line) };
+    });
+  }
+
+  function useCatalogPart(lineId, part) {
+    reviewKeyRef.current = "";
+    setReviewDirty(true);
+    setCatalogQueries((current) => ({ ...current, [lineId]: part.partNumber }));
+    setDraft((current) => {
+      let next = updateInvoiceLineField(current, lineId, "partNumber", part.partNumber);
+      next = updateInvoiceLineField(next, lineId, "description", part.description || "");
+      next = updateInvoiceLineField(next, lineId, "unitOfMeasure", part.uomCode || "ea");
+      return { ...next, lines: next.lines.map((line) => line.id === lineId ? { ...line, catalogPartId: part.id } : line) };
+    });
+    setMessage(`${part.partNumber} matched to this invoice line. Inventory is unchanged.`);
   }
 
   const uploadDialog = (
@@ -672,6 +693,23 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
               {draft.lines.map((line, index) => (
                 <fieldset className="invoice-line-card" key={line.id}>
                   <legend>Line {index + 1}</legend>
+                  {run.status !== "reviewed" ? <div className="invoice-line-catalog-tools">
+                    <PartCatalogCombobox
+                      locationId={run.locationId || locationId}
+                      purpose="master_match"
+                      value={catalogQueries[line.id] ?? String(line.partNumber.value || "")}
+                      onChange={(value) => setCatalogQueries((current) => ({ ...current, [line.id]: value }))}
+                      onSelect={(part) => useCatalogPart(line.id, part)}
+                      label="Inventory part"
+                      inputAriaLabel={`Find inventory part for invoice line ${index + 1}`}
+                      placeholder="Find existing inventory part"
+                      catalogEndpoint="/api/office/inventory/catalog"
+                      resultLimit={12}
+                      popupAriaLabel={`Inventory parts for invoice line ${index + 1}`}
+                    />
+                    <Button type="button" onClick={() => setCreatePartLineId(line.id)}>Create new part</Button>
+                    <small>Choose an existing part or create one. Review save and inventory receipt remain separate.</small>
+                  </div> : null}
                   {["partNumber", "description", "quantity", "unitOfMeasure", "unitPrice", "lineTotal"].map((name) => {
                     const label = { partNumber: "Part number", description: "Description", quantity: "Quantity", unitOfMeasure: "Unit", unitPrice: "Unit price", lineTotal: "Line total" }[name];
                     const type = ["quantity", "unitPrice", "lineTotal"].includes(name) ? "number" : "text";
@@ -681,6 +719,15 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
                 </fieldset>
               ))}
             </div>
+            {createPartLineId ? (() => {
+              const sourceLine = draft.lines.find((line) => line.id === createPartLineId);
+              return sourceLine ? <CreateInventoryPartDialog
+                locationId={run.locationId || locationId}
+                defaults={{ partNumber: sourceLine.partNumber.value, description: sourceLine.description.value, uomCode: sourceLine.unitOfMeasure.value }}
+                onClose={() => setCreatePartLineId("")}
+                onCreated={(part) => useCatalogPart(sourceLine.id, part)}
+              /> : null;
+            })() : null}
           </div>
         </div>
         <footer className={`invoice-review-actions${run.status === "reviewed" ? " is-receiving" : ""}`}>

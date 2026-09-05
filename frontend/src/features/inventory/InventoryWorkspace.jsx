@@ -1,6 +1,6 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, FileCheck02, Package, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
+import { ChevronRight, FileCheck02, Package, Plus, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
@@ -18,6 +18,7 @@ import {
 import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
 import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
+import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
 import { InventoryAuthorityExceptionsPanel } from "./InventoryAuthorityExceptionsPanel.jsx";
 import {
@@ -90,6 +91,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [partIdentityBusy, setPartIdentityBusy] = useState(false);
   const [partIdentityOverride, setPartIdentityOverride] = useState(null);
   const [partIdentityRefreshPending, setPartIdentityRefreshPending] = useState(null);
+  const [createPartOpen, setCreatePartOpen] = useState(false);
   const [stockPage, setStockPage] = useState(1);
   const [stockMeta, setStockMeta] = useState({ pageCount: 1, total: 0, counts: { all: 0, available: 0, reserved: 0, out: 0 } });
 
@@ -266,6 +268,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     !workflowDetail ? <Button className="inventory-invoice-upload-button" type="button" icon={UploadCloud02} aria-label="Upload invoices" title="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} /> : null
   ) : <>
     <Button className="inventory-refresh-button" type="button" icon={RefreshCw01} aria-label="Refresh inventory" title="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
+    <Button type="button" icon={Plus} onClick={() => setCreatePartOpen(true)} disabled={!locations.length}>New part</Button>
     <Button id="inventory-count-action" type="button" icon={FileCheck02} onClick={openCountWorkflow}>Count</Button>
     <Button id="inventory-invoice-action" type="button" variant="primary" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Invoice</Button>
   </>;
@@ -279,6 +282,12 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       leading={inventoryLeading}
       actions={inventoryActions}
     >
+      {createPartOpen ? <CreateInventoryPartDialog
+        locationId={locations.some((location) => location.id === locationId) ? locationId : ""}
+        locations={locations}
+        onClose={() => setCreatePartOpen(false)}
+        onCreated={(part) => { setQuery(part.partNumber); setRefreshKey((value) => value + 1); }}
+      /> : null}
 
       {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading inventory files</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 

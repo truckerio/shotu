@@ -44,7 +44,7 @@ export function correctionEvents(predicted, reviewed) {
     if (Array.isArray(before) || Array.isArray(after)) return;
     if (before && after && typeof before === "object" && typeof after === "object") {
       for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-        if (["confidence", "evidence", "warnings"].includes(key)) continue;
+        if (["confidence", "evidence", "warnings", "catalogPartId"].includes(key)) continue;
         compare(before[key], after[key], path ? `${path}.${key}` : key);
       }
       return;
