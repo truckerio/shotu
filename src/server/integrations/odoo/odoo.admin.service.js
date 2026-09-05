@@ -3,6 +3,7 @@ import {
   importOdooInventory,
   importOdooServiceHistory,
   listOdooOutboundAdminReadiness,
+  listOdooMappedProductExternalIds,
   listOdooOutboundProviderVehicles,
   listOdooOutboundVehicleMappings,
   listOdooLocationMappings,
@@ -27,6 +28,7 @@ import { IntegrationHttpError } from "../core/integration-errors.js";
 const HISTORY_PAGE_SIZE = 500;
 const ORDER_ID_BATCH_SIZE = 200;
 const PRODUCT_ID_BATCH_SIZE = 500;
+const CATALOG_PRODUCT_STATE_BATCH_SIZE = 500;
 const MAX_HISTORY_ORDERS = 100_000;
 const MAX_HISTORY_LINES = 500_000;
 const MAX_HISTORY_PRODUCTS = 100_000;
@@ -72,6 +74,31 @@ async function pagedSearchRead(client, model, domain, fields, maxRecords) {
     }
     lastId = nextId;
   }
+}
+
+export async function readOdooCatalogProducts(client, mappedExternalIds = []) {
+  const fields = [
+    "id", "default_code", "barcode", "name", "categ_id", "uom_id", "active", "write_date",
+  ];
+  const products = await client.searchReadAll(
+    "product.product",
+    [["active", "=", true]],
+    fields,
+  );
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const mappedProductIds = [...new Set(mappedExternalIds
+    .map((externalId) => Number(externalId))
+    .filter((externalId) => Number.isSafeInteger(externalId) && externalId > 0))];
+  for (const productIds of batches(mappedProductIds, CATALOG_PRODUCT_STATE_BATCH_SIZE)) {
+    const inactiveProducts = await client.searchReadAll(
+      "product.product",
+      [["id", "in", productIds], ["active", "=", false]],
+      fields,
+      { context: { active_test: false } },
+    );
+    for (const product of inactiveProducts) productsById.set(product.id, product);
+  }
+  return [...productsById.values()];
 }
 
 export async function readOdooServiceHistory(client, { updatedSince = null, reconcile = false } = {}) {
@@ -290,9 +317,8 @@ export async function configureOdooOutboundLaborProduct(companyId, input, actor)
 export async function syncOdooPartsAndInventory(companyId) {
   const client = await configuredClient(companyId);
   await discoverOdooLocations(companyId);
-  const products = await client.searchReadAll("product.product", [], [
-    "id", "default_code", "barcode", "name", "categ_id", "uom_id", "active", "write_date",
-  ], { context: { active_test: false } });
+  const mappedExternalIds = await listOdooMappedProductExternalIds(companyId);
+  const products = await readOdooCatalogProducts(client, mappedExternalIds);
   const inventoryResult = await importOdooInventory(companyId, { products });
   const syncStartedAt = new Date();
   try {

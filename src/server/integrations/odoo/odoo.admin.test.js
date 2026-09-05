@@ -13,7 +13,7 @@ import {
   odooOutboundWarehouseMappingSchema,
 } from "./odoo.admin.schemas.js";
 import { buildOdooInventoryBalances, repairTextFromOdooLine } from "./odoo.admin.repo.js";
-import { readOdooServiceHistory } from "./odoo.admin.service.js";
+import { readOdooCatalogProducts, readOdooServiceHistory } from "./odoo.admin.service.js";
 
 test("Odoo configuration requires a complete connection without accepting extra secrets", () => {
   assert.equal(odooConfigurationSchema.parse({
@@ -191,15 +191,45 @@ test("Odoo sync imports catalog mappings without provider quantities or local id
   assert.match(importer, /having count\(distinct candidate\.id\)=1/);
 });
 
-test("Odoo catalog sync fetches inactive products explicitly and never infers state from absence", async () => {
+test("Odoo catalog sync fetches active products and explicitly reconciles only mapped inactive products", async () => {
   const service = await readFile(new URL("./odoo.admin.service.js", import.meta.url), "utf8");
   const repository = await readFile(new URL("./odoo.admin.repo.js", import.meta.url), "utf8");
   const sync = service.slice(service.indexOf("export async function syncOdooPartsAndInventory"));
   const importer = repository.slice(repository.indexOf("export async function importOdooInventory"));
-  assert.match(sync, /searchReadAll\("product\.product", \[\],[\s\S]*active_test: false/);
-  assert.match(sync, /"active"/);
+  assert.match(sync, /listOdooMappedProductExternalIds\(companyId\)/);
+  assert.match(sync, /readOdooCatalogProducts\(client, mappedExternalIds\)/);
+  assert.match(service, /\[\["active", "=", true\]\]/);
+  assert.match(service, /\[\["id", "in", productIds\], \["active", "=", false\]\][\s\S]*active_test: false/);
+  assert.match(repository, /select external_id[\s\S]*from odoo_product_mappings[\s\S]*where company_id = \$1/);
   assert.doesNotMatch(importer, /last_seen_at is distinct from|not in\s*\(/i);
   assert.match(importer, /active = excluded\.active/);
+});
+
+test("Odoo catalog product read batches mapped inactive checks without loading the archived catalog", async () => {
+  const calls = [];
+  const client = {
+    async searchReadAll(model, domain, fields, options) {
+      calls.push({ model, domain, fields, options });
+      if (domain[0][0] === "active") return [{ id: 7, active: true }, { id: 42, active: true }];
+      return domain[0][2].includes(42) ? [{ id: 42, active: false }] : [];
+    },
+  };
+  const mappedExternalIds = [
+    ...Array.from({ length: 501 }, (_, index) => String(index + 1)),
+    "42",
+    "not-an-odoo-id",
+  ];
+
+  const products = await readOdooCatalogProducts(client, mappedExternalIds);
+
+  assert.deepEqual(products, [{ id: 7, active: true }, { id: 42, active: false }]);
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[0].domain, [["active", "=", true]]);
+  assert.equal(calls[0].options, undefined);
+  assert.equal(calls[1].domain[0][2].length, 500);
+  assert.equal(calls[2].domain[0][2].length, 1);
+  assert.deepEqual(calls[1].domain[1], ["active", "=", false]);
+  assert.deepEqual(calls[1].options, { context: { active_test: false } });
 });
 
 test("Odoo repair text keeps work performed and does not treat generic labor product names as repairs", () => {

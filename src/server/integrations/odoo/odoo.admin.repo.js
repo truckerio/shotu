@@ -112,6 +112,18 @@ export async function odooAdminStatus(companyId) {
   } : { configured: false, status: "disconnected", locationCount: 0, mappedCount: 0, unmatchedCount: 0 };
 }
 
+export async function listOdooMappedProductExternalIds(companyId) {
+  const tenantId = requireCompanyId(companyId);
+  const result = await query(
+    `select external_id
+     from odoo_product_mappings
+     where company_id = $1
+     order by external_id`,
+    [tenantId],
+  );
+  return result.rows.map((row) => row.external_id);
+}
+
 export async function upsertDiscoveredOdooLocations(companyId, records) {
   const tenantId = requireCompanyId(companyId);
   const client = await getPool().connect();
