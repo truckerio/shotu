@@ -10,6 +10,13 @@ test("reuse requests stay within the selected unit company and location", () => 
   assert.equal(reuseOperationPath("operation / 1", scope), "/api/inventory-reuse/operations/operation%20%2F%201?companyId=company-1&locationId=location-1");
 });
 
+test("custody uses the serialized lifecycle location instead of the unit home location", () => {
+  assert.deepEqual(
+    reuseScope({ companyId: "company-1", locationId: "home-location", custodyLocationId: "installed-at-location" }),
+    { companyId: "company-1", locationId: "installed-at-location" },
+  );
+});
+
 test("pending installation may be removed on its original active workorder, unlike approved installation", () => {
   const workorders = [{ id: "original" }, { id: "new" }];
   assert.deepEqual(eligibleRemovalWorkorders({ status: "installed_pending_approval", workorderId: "original" }, workorders), workorders);

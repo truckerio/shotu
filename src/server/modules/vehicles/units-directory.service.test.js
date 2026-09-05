@@ -41,15 +41,26 @@ test("directory rejects an invalid cursor before querying", async () => {
 
 test("directory keeps office rows location-scoped and returns a keyset next cursor", async () => {
   let received;
-  const first = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyId, unitNo: "TRK-1", unitType: "Truck", name: "Truck 1", vin: null, licensePlate: null, make: null, model: null, year: null, sortKey: "TRK-1" };
+  const first = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyId, locationId, custodyLocationId: locationId, unitNo: "TRK-1", unitType: "Truck", name: "Truck 1", vin: null, licensePlate: null, make: null, model: null, year: null, sortKey: "TRK-1" };
   const second = { ...first, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", unitNo: "TRK-2", sortKey: "TRK-2" };
   const response = await listUnitsDirectory({ companyIds: [companyId], locationIds: [locationId], isAdmin: false, q: "", unitType: null, limit: 1, cursor: null }, {
     query: async (text, values) => (received = { text, values }, { rows: [first, second] }),
   });
   assert.match(received.text, /a\.location_id = any\(\$3::uuid\[\]\)/);
   assert.deepEqual(received.values.slice(0, 4), [[companyId], false, [locationId], null]);
-  assert.deepEqual(response.items, [{ id: first.id, companyId, unitNo: "TRK-1", unitType: "Truck", name: "Truck 1", vin: null, licensePlate: null, make: null, model: null, year: null }]);
+  assert.deepEqual(response.items, [{ id: first.id, companyId, locationId, custodyLocationId: locationId, unitNo: "TRK-1", unitType: "Truck", name: "Truck 1", vin: null, licensePlate: null, make: null, model: null, year: null }]);
   assert.ok(response.nextCursor);
+});
+
+test("directory derives custody location from the latest active serialized installation", async () => {
+  let sql = "";
+  await listUnitsDirectory({ companyIds: [companyId], locationIds: [], isAdmin: true, q: "G2020", unitType: null, limit: 25, cursor: null }, {
+    query: async (text) => { sql = text; return { rows: [] }; },
+  });
+  assert.match(sql, /usage\.asset_id = a\.id/);
+  assert.match(sql, /usage\.status in \('installed_pending_approval', 'installed', 'removed'\)/);
+  assert.match(sql, /case when usage\.status in \('installed_pending_approval', 'installed'\) then 0 else 1 end/);
+  assert.match(sql, /limit 1\s*\),\s*a\.location_id\s*\) as "custodyLocationId"/);
 });
 
 test("directory LIKE query escapes backslash before wildcard characters", async () => {

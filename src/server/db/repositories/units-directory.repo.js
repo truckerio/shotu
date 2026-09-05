@@ -4,6 +4,21 @@ const IDENTITY_FIELDS = `
   a.id as "id",
   a.company_id as "companyId",
   a.location_id as "locationId",
+  coalesce(
+    (
+      select usage.location_id
+      from workorder_serialized_part_usages usage
+      where usage.company_id = a.company_id
+        and usage.asset_id = a.id
+        and usage.status in ('installed_pending_approval', 'installed', 'removed')
+      order by
+        case when usage.status in ('installed_pending_approval', 'installed') then 0 else 1 end,
+        usage.issued_at desc,
+        usage.id desc
+      limit 1
+    ),
+    a.location_id
+  ) as "custodyLocationId",
   a.unit_no as "unitNo",
   a.unit_type as "unitType",
   a.name as "name",

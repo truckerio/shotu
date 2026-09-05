@@ -5,6 +5,7 @@ import { createInventoryReuseFixture, reuseDigest } from "./inventory-reuse.fixt
 import { closePool, getPool, query } from "../../db/pool.js";
 import { mutateInventoryReuse, readInventoryReuse, configureInventoryReuse } from "../../db/repositories/inventory-reuse.repo.js";
 import { issueSerializedUnitToWorkorder, finalizeSerializedUnitUsage, consumePendingSerializedInstallationsForApproval } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
+import { listUnitsDirectory } from "../../db/repositories/units-directory.repo.js";
 const run = process.env.RUN_POSTGRES_INTEGRATION === "1";
 after(async()=>{if(run) await closePool();});
 
@@ -90,6 +91,37 @@ test("PostgreSQL pending company-owned installation follows physical custody and
     assert.deepEqual((await query("select quantity_on_hand,quantity_reserved from inventory_items where company_id=$1",[f.companyId])).rows[0],{quantity_on_hand:"2.000",quantity_reserved:"0.000"});
     assert.equal((await query("select count(*)::int n from inventory_stock_movements where company_id=$1 and usage_id=$2",[f.companyId,issued.usage.id])).rows[0].n,2);
   } finally {await f.cleanup();}
+});
+
+test("PostgreSQL Units custody finds two serialized installations independently when the asset has no home location",{skip:!run},async()=>{
+  const f=await createInventoryReuseFixture({installed:false});
+  const scope={companyId:f.companyId,locationId:f.locationId,workorderId:f.workorderId,actorId:f.removerId,actorRole:"office"};
+  try {
+    const usages=[];
+    for (const [index,unitId] of [f.unitId,f.pendingUnitId].entries()) {
+      const issued=await issueSerializedUnitToWorkorder({...scope,unitId,idempotencyKey:`two-issued-${index}-${f.suffix}`,requestHash:reuseDigest(`two-issued-${index}-${f.suffix}`)});
+      usages.push(issued.usage);
+      await finalizeSerializedUnitUsage({...scope,usageId:issued.usage.id,disposition:"installed",idempotencyKey:`two-installed-${index}-${f.suffix}`,requestHash:reuseDigest(`two-installed-${index}-${f.suffix}`)});
+    }
+    const client=await getPool().connect();
+    try {
+      await client.query("begin");
+      assert.equal(await consumePendingSerializedInstallationsForApproval(client,{workorderId:f.workorderId,companyId:f.companyId,officeUserId:f.adminId}),2);
+      await client.query("update operational_workorders set status='closed' where id=$1",[f.workorderId]);
+      await client.query("update assets set location_id=null where company_id=$1 and id=$2",[f.companyId,f.assetId]);
+      await client.query("commit");
+    } catch(error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
+
+    const directory=await listUnitsDirectory({companyIds:[f.companyId],locationIds:[],isAdmin:true,q:`CQ-A-${f.suffix.slice(0,8)}`,unitType:null,limit:25,cursor:null});
+    const unit=directory.items.find((item)=>item.id===f.assetId);
+    assert.equal(unit.locationId,null);
+    assert.equal(unit.custodyLocationId,f.locationId);
+    const custody=await readInventoryReuse({companyId:f.companyId,locationId:unit.custodyLocationId,assetId:f.assetId,actorId:f.adminId,view:"asset"});
+    assert.equal(custody.installedParts.length,2);
+    assert.deepEqual(new Set(custody.installedParts.map((part)=>part.usageId)),new Set(usages.map((usage)=>usage.id)));
+    assert.equal(new Set(custody.installedParts.map((part)=>part.serialNumber)).size,2);
+  } finally { await f.cleanup(); }
 });
 
 test("PostgreSQL office/admin can remove against a newly created open workorder; assigned mechanics cannot",{skip:!run},async()=>{

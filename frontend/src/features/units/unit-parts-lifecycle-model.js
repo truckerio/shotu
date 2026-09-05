@@ -1,7 +1,7 @@
 export function reuseScope(unit) {
   return {
     companyId: unit?.companyId || unit?.company_id || "",
-    locationId: unit?.locationId || unit?.location_id || "",
+    locationId: unit?.custodyLocationId || unit?.custody_location_id || unit?.locationId || unit?.location_id || "",
   };
 }
 
