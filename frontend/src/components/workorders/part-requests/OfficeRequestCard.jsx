@@ -72,6 +72,7 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
                 catalogPartId={review.form.catalogPartId}
                 partNumber={review.form.partNumber}
                 assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                currentRepairOrder={review.form.repairOrder}
                 onApply={(text) => review.update("repairOrder", text)}
                 disabled={Boolean(review.busy)}
               />

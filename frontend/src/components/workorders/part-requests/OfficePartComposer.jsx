@@ -182,6 +182,7 @@ export function OfficePartComposer({ detail, onChanged }) {
             catalogPartId={selectedPart?.id}
             partNumber={selectedPart?.partNumber}
             assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+            currentRepairOrder={draft.repairOrder}
             onApply={(text) => update("repairOrder", text)}
             disabled={Boolean(busy)}
           />

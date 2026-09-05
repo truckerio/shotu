@@ -254,6 +254,13 @@ export function SerializedPartsScanner({ workorderId, actorId = "", onChanged, l
     await onChanged?.();
   }
 
+  function updateUsage(usage) {
+    if (!usage?.id) return;
+    usageRevisionRef.current += 1;
+    setUsages((current) => replaceUsage(current, usage));
+    setUsageSnapshotReady(true);
+  }
+
   function openScanner() {
     setScannerOpen(true);
     setMessage("");
@@ -414,6 +421,7 @@ export function SerializedPartsScanner({ workorderId, actorId = "", onChanged, l
           finalize,
           requestRemove,
           recordUsage,
+          updateUsage,
           custodyUsageId: custodyUsage?.id || "",
         })}
       </>

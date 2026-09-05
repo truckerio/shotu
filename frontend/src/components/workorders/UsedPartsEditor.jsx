@@ -53,12 +53,12 @@ export function UsedPartsEditor({
   const focusedSerializedUsageId = serializedParts?.focusUsageId || "";
   const serializedRepairContextRef = useRef(null);
   const serializedRepairAutosaveRef = useRef(null);
-  serializedRepairContextRef.current = { detail, locale, onChanged };
+  serializedRepairContextRef.current = { detail, locale, onChanged, serializedParts };
   if (!serializedRepairAutosaveRef.current) {
     serializedRepairAutosaveRef.current = createSerializedRepairAutosave({
       save: async (part, repairOrder) => {
         const context = serializedRepairContextRef.current;
-        await api(`/api/workorders/${encodeURIComponent(context.detail.workorder.id)}/modules/parts/actions/record`, {
+        const result = await api(`/api/workorders/${encodeURIComponent(context.detail.workorder.id)}/modules/parts/actions/record`, {
           method: "POST",
           body: JSON.stringify({
             operation: "serializedUsageRepairOrder",
@@ -66,6 +66,7 @@ export function UsedPartsEditor({
             repairOrder,
           }),
         });
+        context.serializedParts?.updateUsage?.(result.result?.usage);
         await context.onChanged();
       },
       onSaving: (usageId, saving) => setSavingSerializedUsageId((current) => (
@@ -168,6 +169,7 @@ export function UsedPartsEditor({
                   catalogPartId={part.catalogPartId}
                   partNumber={part.partNo}
                   assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                  currentRepairOrder={serializedRepairOrder(part)}
                   onApply={(text) => updateSerializedRepairOrder(part, text)}
                   disabled={disabled || !part.usageId || savingSerializedUsageId === part.usageId}
                   locale={locale}

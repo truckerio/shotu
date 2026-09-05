@@ -15,7 +15,7 @@ test("history lookup is bounded, cancellable, stale-safe, and explicit apply onl
   assert.match(component, /window\.setTimeout/);
   assert.match(component, /limit: "5"/);
   assert.match(component, /repair-suggestions\?/);
-  assert.match(component, /onClick=\{\(\) => onApply\(suggestion\.text\)\}/);
+  assert.match(component, /onClick=\{\(\) => \{\s*onApply\(suggestion\.text\);/s);
   assert.match(component, /interfaceText\(locale, key\)/);
   assert.match(component, /parts\.repairSuggestionHelp/);
 });
@@ -25,8 +25,18 @@ test("history suggestions can be dismissed and reopened without changing repair 
   assert.match(component, /onClick=\{\(\) => setExpanded\(false\)\}/);
   assert.match(component, /parts\.showPreviousWork/);
   assert.match(component, /onClick=\{\(\) => setExpanded\(true\)\}/);
-  assert.match(component, /useEffect\(\(\) => \{\s*setExpanded\(true\);\s*\}, \[catalogPartId, normalizedPartNumber\]\)/s);
+  assert.match(component, /currentRepairOrder = ""/);
+  assert.match(component, /useState\(\(\) => !normalizedRepairOrder\)/);
+  assert.match(component, /setExpanded\(!normalizedRepairOrder\)/);
+  assert.match(component, /\[catalogPartId, normalizedPartNumber, normalizedRepairOrder\]/);
   assert.doesNotMatch(component, /setExpanded\(false\)[\s\S]{0,120}onApply/);
+});
+
+test("existing or newly applied repair wording keeps history collapsed", () => {
+  assert.match(office, /currentRepairOrder=\{draft\.repairOrder\}/);
+  assert.match(officeRequest, /currentRepairOrder=\{review\.form\.repairOrder\}/);
+  assert.match(used, /currentRepairOrder=\{serializedRepairOrder\(part\)\}/);
+  assert.match(component, /onApply\(suggestion\.text\);\s*setExpanded\(false\);/s);
 });
 
 test("catalog selection does not silently apply repair-history or AI repair suggestions", () => {

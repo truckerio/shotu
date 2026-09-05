@@ -16,6 +16,7 @@ export function RepairHistorySuggestions({
   catalogPartId,
   partNumber,
   assetId,
+  currentRepairOrder = "",
   onApply,
   disabled = false,
   locale = "en",
@@ -23,14 +24,15 @@ export function RepairHistorySuggestions({
   const t = (key) => interfaceText(locale, key);
   const panelId = useId();
   const requestSequence = useRef(0);
-  const [expanded, setExpanded] = useState(true);
+  const normalizedRepairOrder = String(currentRepairOrder || "").trim();
+  const [expanded, setExpanded] = useState(() => !normalizedRepairOrder);
   const [state, setState] = useState("idle");
   const [suggestions, setSuggestions] = useState([]);
   const normalizedPartNumber = String(partNumber || "").trim();
 
   useEffect(() => {
-    setExpanded(true);
-  }, [catalogPartId, normalizedPartNumber]);
+    setExpanded(!normalizedRepairOrder);
+  }, [catalogPartId, normalizedPartNumber, normalizedRepairOrder]);
 
   useEffect(() => {
     const sequence = ++requestSequence.current;
@@ -116,7 +118,10 @@ export function RepairHistorySuggestions({
               </div>
               <button
                 type="button"
-                onClick={() => onApply(suggestion.text)}
+                onClick={() => {
+                  onApply(suggestion.text);
+                  setExpanded(false);
+                }}
                 disabled={disabled}
                 aria-label={`${t("parts.applyRepairSuggestion")}: ${suggestion.text}`}
               >

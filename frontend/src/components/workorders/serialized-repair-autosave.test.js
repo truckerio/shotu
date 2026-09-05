@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
+import { readFileSync } from "node:fs";
+
+const editor = readFileSync(new URL("./UsedPartsEditor.jsx", import.meta.url), "utf8");
+const scanner = readFileSync(new URL("./part-requests/SerializedPartsScanner.jsx", import.meta.url), "utf8");
 
 function harness({ fail = false } = {}) {
   const timers = new Map();
@@ -50,4 +54,10 @@ test("blank repair wording remains a persistable draft for completion validation
 
   assert.equal(await controller.flushAll(), true);
   assert.deepEqual(calls, [["usage-1", ""]]);
+});
+
+test("successful serialized repair saves update scanner-owned usage state before reloading detail", () => {
+  assert.match(editor, /const result = await api\([\s\S]*context\.serializedParts\?\.updateUsage\?\.\(result\.result\?\.usage\);\s*await context\.onChanged\(\);/s);
+  assert.match(scanner, /function updateUsage\(usage\)[\s\S]*replaceUsage\(current, usage\)[\s\S]*setUsageSnapshotReady\(true\)/s);
+  assert.match(scanner, /recordUsage,\s*updateUsage,/s);
 });
