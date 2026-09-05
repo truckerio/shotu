@@ -8,6 +8,8 @@ const serializedPicker = readFileSync(new URL("./CreateSerializedUnitPicker.jsx"
 const nestedDropdown = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitNestedDropdown.jsx", import.meta.url), "utf8");
 const nestedCss = readFileSync(new URL("../../../components/workorders/part-requests/serialized-unit-nested-dropdown.css", import.meta.url), "utf8");
 const childPicker = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitChildPicker.jsx", import.meta.url), "utf8");
+const sharedParts = readFileSync(new URL("../../../components/workorders/WorkorderPartsTable.jsx", import.meta.url), "utf8");
+const sharedPartsCss = readFileSync(new URL("../../../components/workorders/workorder-parts-table.css", import.meta.url), "utf8");
 
 test("compact Create Parts hides untouched placeholders behind one editor", () => {
   assert.match(source, /COMPACT_PARTS_QUERY = "\(max-width: 1024px\)"/);
@@ -48,12 +50,15 @@ test("compact Parts keeps touch geometry and one-column phone editing", () => {
   assert.match(css, /\.create-part-editor-actions \.button\s*\{[^}]*min-height:\s*44px/s);
   assert.match(css, /\.create-labor-editor \.create-part-repair-field input,[\s\S]*?min-height:\s*44px/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-part-editor-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
-  assert.match(css, /\.create-parts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(sharedPartsCss, /@media \(max-width: 700px\)[\s\S]*?\.workorder-parts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
 });
 
 test("desktop retains the existing create Parts grid", () => {
   assert.match(source, /<LegacyCreatePartsEditor/);
-  assert.match(source, /className="operational-part-row has-quantity-unit"/);
+  assert.match(source, /<WorkorderPartsTable id="create-known-parts-editor"/);
+  assert.match(source, /<WorkorderPartsRow key=\{index\}>/);
+  assert.match(source, /<WorkorderPartsActions className="create-parts-actions">/);
+  assert.match(sharedParts, /"operational-part-row", "has-quantity-unit"/);
   assert.match(source, /compactLayout \? \(/);
 });
 

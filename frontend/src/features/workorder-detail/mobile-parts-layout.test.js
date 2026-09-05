@@ -14,6 +14,22 @@ const globalCss = readFileSync(
   new URL("../../styles.css", import.meta.url),
   "utf8",
 );
+const sharedParts = readFileSync(
+  new URL("../../components/workorders/WorkorderPartsTable.jsx", import.meta.url),
+  "utf8",
+);
+const sharedPartsCss = readFileSync(
+  new URL("../../components/workorders/workorder-parts-table.css", import.meta.url),
+  "utf8",
+);
+const operationalCss = readFileSync(
+  new URL("../../components/forms/operational-form.css", import.meta.url),
+  "utf8",
+);
+const quantityCss = readFileSync(
+  new URL("../../components/forms/quantity-unit-input.css", import.meta.url),
+  "utf8",
+);
 
 function phonePartsCss() {
   const marker = "@media (max-width: 640px)";
@@ -23,7 +39,8 @@ function phonePartsCss() {
 }
 
 test("shared parts editor keeps legacy manual rows immutable without extra evidence labels or remove actions", () => {
-  assert.match(editor, /readonlyUsedParts\(parts\)\.map/);
+  assert.match(editor, /const recordedManualParts = readonlyUsedParts\(parts\)/);
+  assert.match(editor, /recordedManualParts\.map\(\(part, index\) => renderRecordedPartRow/);
   assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
   assert.doesNotMatch(editor, /className="remove-row"/);
   assert.doesNotMatch(editor, /Trash01/);
@@ -31,15 +48,15 @@ test("shared parts editor keeps legacy manual rows immutable without extra evide
   assert.doesNotMatch(css, /\.remove-row::before/);
 });
 
-test("serialized repair order uses one visible heading and accessible editable control", () => {
-  assert.match(editor, /<span>\{t\("parts\.repairOrder"\)\}<\/span>/);
+test("serialized repair order follows the header-free Create table and retains an accessible editable control", () => {
+  assert.doesNotMatch(editor, /part-row-head/);
   assert.doesNotMatch(editor, /<span className="used-part-label">\{t\("parts\.repairOrder"\)\}<\/span>/);
   assert.match(editor, /aria-label=\{`\$\{t\("parts\.repairOrder"\)\} \$\{index \+ 2\}`\}/);
   assert.match(editor, /placeholder=\{t\("parts\.describeRepair"\)\}/);
   assert.doesNotMatch(editor, /aria-label=\{`Work performed \$\{index \+ 1\}`\}/);
   assert.match(globalCss, /\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
   assert.doesNotMatch(globalCss, /\.used-part-field\s*>\s*span\s*\{[^}]*display:\s*none;/s);
-  assert.match(editor, /className="part-row used-part-serialized-row"/);
+  assert.match(editor, /<WorkorderPartsRow[\s\S]*?className="used-part-serialized-row"/);
   assert.match(css, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*34px;[^}]*padding:\s*6px 8px;/s);
 });
 
@@ -53,15 +70,14 @@ test("serialized part identity uses separate wrapping lines and top-aligned row 
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*small\s*\{[^}]*display:\s*block;[^}]*overflow-wrap:\s*anywhere;/s);
 });
 
-test("desktop and tablet rows keep content-independent columns across lifecycle stages", () => {
-  assert.match(
-    css,
-    /\.used-parts-editor\s+\.part-row\s*\{[^}]*column-gap:\s*12px;[^}]*grid-template-columns:\s*28px minmax\(0,\s*1\.25fr\) 116px minmax\(0,\s*1\.4fr\) minmax\(220px,\s*1fr\);/s,
-  );
-  assert.doesNotMatch(
-    css,
-    /\.used-parts-editor\s+\.part-row\s*\{[^}]*grid-template-columns:[^;]*\bauto\b/s,
-  );
+test("detail rows reuse the Create Workorder operational table geometry across lifecycle stages", () => {
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor">/);
+  assert.match(editor, /<WorkorderPartsRow[\s\S]*?className="used-part-recorded-row"/);
+  assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">/);
+  assert.match(sharedParts, /"operational-parts-editor"/);
+  assert.match(sharedParts, /"operational-part-row", "has-quantity-unit"/);
+  assert.match(sharedParts, /"workorder-parts-actions"/);
+  assert.match(quantityCss, /\.operational-part-row\.has-quantity-unit\s*\{[^}]*grid-template-columns:\s*24px minmax\(0, 1\.1fr\) minmax\(126px, 0\.85fr\) minmax\(0, 1fr\) 64px;/s);
   assert.match(
     css,
     /\.used-parts-editor\s+\.used-part-serialized-actions\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
@@ -76,28 +92,24 @@ test("desktop and tablet rows keep content-independent columns across lifecycle 
   );
 });
 
-test("phone parts editor removes desktop labels", () => {
-  const mobileCss = phonePartsCss();
+test("phone parts editor uses the same shared responsive row and action geometry", () => {
+  assert.match(quantityCss, /@container \(max-width: 520px\)[\s\S]*?\.operational-part-row\.has-quantity-unit\s*\{[^}]*grid-template-columns:\s*24px minmax\(0, 1fr\) minmax\(120px, 0\.75fr\) 64px;/s);
+  assert.match(sharedPartsCss, /@media \(max-width: 700px\)[\s\S]*?\.workorder-parts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-part-repair\s*\{[^}]*grid-column:\s*2 \/ 4;/s);
+  assert.match(phonePartsCss(), /\.used-parts-actions \.mechanic-scan-trigger\.is-table-action\s*\{[^}]*width:\s*44px;/s);
+});
 
-  assert.match(mobileCss, /\.used-parts-editor\s+\.part-row\.part-row-head\s*\{[^}]*display:\s*none;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-field\s*>\s*\.used-part-label\s*\{[^}]*display:\s*none;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-repair\s+\.narrative-field-control\s*\{[^}]*min-height:\s*44px;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-status\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/s);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-height:\s*44px;/s);
-  assert.match(mobileCss, /\.used-part-serialized-confirmation\s*\{[^}]*margin-left:\s*0;/s);
+test("used-parts intake and labor stay compact without hiding accessible names", () => {
+  assert.match(editor, /<WorkorderPartsRow className="used-part-intake-row" ref=\{intakeRowRef\}>/);
+  assert.match(editor, /inputAriaLabel=\{t\("parts\.numberOrDescription"\)\}/);
+  assert.doesNotMatch(editor, /part-row-head/);
+  assert.match(editor, /<WorkorderPartsRow className="used-part-labor-row" aria-label=\{t\("parts\.laborHours"\)\}>\s*<strong>1<\/strong>/);
+  assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">[\s\S]*?t\("create\.parts\.add"\)[\s\S]*?\{serializedToolbar\}/);
+  assert.match(editor, /function resetIntakeRow\(\)[\s\S]*?setCatalogQuery\(""\)/);
 });
 
 test("phone parts row fits 390px and 430px viewports without control overlap", () => {
-  const mobileCss = phonePartsCss();
-
-  assert.match(mobileCss, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+124px;/);
-  assert.match(mobileCss, /padding:\s*12px;/);
-  assert.match(mobileCss, /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-height:\s*44px;/s);
-
-  for (const viewportWidth of [390, 430]) {
-    const cardWidth = viewportWidth - 48;
-    const availableControlWidth = cardWidth - 24 - 8 - 124;
-    assert.ok(availableControlWidth > 150);
-  }
+  assert.match(operationalCss, /@media \(max-width: 700px\)[\s\S]*?\.operational-part-row\s*\{[^}]*grid-template-columns:\s*24px minmax\(0, 1fr\) 70px;/s);
+  assert.match(quantityCss, /\.operational-part-row\.has-quantity-unit\s*\{[^}]*min-width:\s*0;/s);
+  assert.match(sharedPartsCss, /\.workorder-parts-actions > \.button\s*\{[^}]*justify-content:\s*center;[^}]*width:\s*100%;/s);
 });

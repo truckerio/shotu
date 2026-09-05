@@ -111,7 +111,7 @@ export function OfficePartComposer({ detail, onChanged }) {
 
   if (!open) {
     return (
-      <Button icon={Plus} aria-controls={formId} aria-expanded={false} onClick={() => setOpen(true)}>
+      <Button icon={Plus} className="office-part-plan-trigger" aria-controls={formId} aria-expanded={false} onClick={() => setOpen(true)}>
         {t("parts.planSourcePart")}
       </Button>
     );

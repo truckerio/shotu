@@ -37,7 +37,7 @@ test("labor editing remains separate from actual-part editing when Parts is View
   assert.match(section, /laborEditable=\{laborEditable\}/);
   assert.match(editor, /!partsEditable && !laborEditable/);
   assert.match(editor, /disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
-  assert.match(editor, /\{partsEditable \? <div className="used-parts-manual-picker">[\s\S]*<PartCatalogCombobox/);
+  assert.match(editor, /\{partsEditable \? <WorkorderPartsRow className="used-part-intake-row"[\s\S]*className="create-part-identity-field used-parts-manual-picker"[\s\S]*<PartCatalogCombobox/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.match(accessModel, /Actual parts are read-only/);
 });
@@ -66,6 +66,10 @@ test("office planning follows actual used parts and cannot use the used-part end
   assert.match(officeComposer, /t\("parts\.planSourcePart"\)/);
   assert.doesNotMatch(officeComposer, /t\("parts\.planningDoesNotRecordUse"\)/);
   assert.match(officeSurface, /<SectionHelpDisclosure label=\{t\("parts\.planningDoesNotRecordUse"\)\}>/);
+  assert.match(officeComposer, /className="office-part-plan-trigger"/);
+  assert.match(officeSurface, /\{requests\.length \? <div className="office-part-overview">/);
+  assert.match(legacyCss, /\.office-part-planning\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s);
+  assert.match(legacyCss, /> \.office-part-plan-trigger\s*\{[^}]*width:\s*auto;/s);
 });
 
 test("mechanic request labels remain owned by every supported locale", () => {

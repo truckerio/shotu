@@ -15,7 +15,7 @@ const editorCss = readFileSync(new URL("../used-parts-editor.css", import.meta.u
 test("inventory finder routes countable catalog selections to one nested serialized-unit dropdown without creating a manual row", () => {
   assert.match(editor, /purpose="workorder_assignment"/);
   assert.match(editor, /value=\{catalogQuery\}/);
-  assert.match(editor, /className="used-parts-manual-picker"/);
+  assert.match(editor, /className="create-part-identity-field used-parts-manual-picker"/);
   assert.match(editor, /setCatalogQuery\(catalogPart\.partNumber\)/);
   assert.match(editor, /setSerializedDialogPart\(catalogPart\)/);
   assert.doesNotMatch(editor, /used-part-quantity-/);

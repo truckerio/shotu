@@ -44,14 +44,19 @@
   color: var(--text-secondary, #475467);
 }
 
-.used-parts-editor .part-row {
-  column-gap: 12px;
-  grid-template-columns: 28px minmax(0, 1.25fr) 116px minmax(0, 1.4fr) minmax(220px, 1fr);
+.used-parts-manual-picker {
+  min-width: 0;
+  position: relative;
 }
 
-.used-parts-manual-picker {
-  max-width: 30rem;
-  position: relative;
+.used-parts-manual-picker .part-catalog-field > label {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .used-parts-manual-picker > .serialized-unit-nested-dropdown,
@@ -60,22 +65,13 @@
   top: 0;
 }
 
-@media (max-width: 1024px) {
-  .used-parts-manual-picker {
-    max-width: none;
-  }
-
+@container (max-width: 520px) {
   .used-parts-manual-picker > .serialized-unit-nested-dropdown,
   .used-parts-manual-picker > .workorder-serialized-create-panel {
     left: 0;
     top: calc(100% + 6px);
     width: 100%;
   }
-}
-
-.used-parts-toolbar {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .used-parts-serialized-feedback {
@@ -97,8 +93,8 @@
   min-width: 0;
 }
 
-.used-part-labor-row {
-  background: var(--surface-subtle, #f9fafb);
+.used-parts-editor .used-part-labor-row {
+  min-width: 0;
 }
 
 .used-parts-editor .used-part-serialized-row {
@@ -136,6 +132,27 @@
   align-items: center;
   display: flex;
   min-height: 34px;
+}
+
+.used-parts-editor .used-part-recorded-identity,
+.used-parts-editor .used-part-recorded-value,
+.used-parts-editor .used-part-recorded-repair {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.used-parts-editor .used-part-recorded-value {
+  align-items: center;
+  display: flex;
+  min-height: 34px;
+}
+
+.used-parts-editor .used-part-recorded-repair {
+  color: var(--text-secondary, #475467);
+}
+
+.used-parts-editor .used-part-recorded-status {
+  min-height: 1px;
 }
 
 .used-parts-editor .used-part-serialized-status {
@@ -284,34 +301,9 @@
   min-width: 0;
 }
 
-@media (max-width: 640px) {
-  .used-parts-editor .part-row.part-row-head {
-    display: none;
-  }
-
-  .used-parts-editor .part-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 124px;
-    gap: 8px;
-    padding: 12px;
-    border: 1px solid var(--border-subtle, #e4e7ec);
-    border-radius: 12px;
-  }
-
-  .used-parts-editor .part-row > strong {
-    display: none;
-  }
-
-  .used-parts-editor .used-part-field {
-    min-width: 0;
-  }
-
-  .used-parts-editor .used-part-field > .used-part-label {
-    display: none;
-  }
-
+@container (max-width: 520px) {
   .used-parts-editor .used-part-repair {
-    grid-column: 1 / -1;
+    grid-column: 2 / 4;
   }
 
   .used-parts-editor .used-part-history {
@@ -331,6 +323,11 @@
     grid-column: 1 / -1;
   }
 
+  .used-parts-editor .used-part-recorded-repair,
+  .used-parts-editor .used-part-recorded-status {
+    grid-column: 2 / 4;
+  }
+
   .used-parts-editor .used-part-serialized-actions .button {
     min-height: 44px;
   }
@@ -347,10 +344,6 @@
   .used-parts-editor .used-part-repair .narrative-field-control {
     min-height: 44px;
     padding: 9px 12px;
-  }
-
-  .used-parts-editor .used-part-quantity .quantity-unit-input {
-    grid-template-columns: minmax(50px, 1fr) minmax(64px, auto);
   }
 
   .used-parts-editor .remove-row {
@@ -373,5 +366,14 @@
 
   .used-parts-readonly-list li span:last-child {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .used-parts-actions .mechanic-scan-trigger.is-table-action {
+    font-size: 0;
+    gap: 0;
+    padding: 0;
+    width: 44px;
   }
 }

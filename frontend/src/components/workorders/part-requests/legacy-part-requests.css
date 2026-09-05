@@ -354,6 +354,20 @@
   gap: 10px;
 }
 
+.office-part-planning {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.office-part-planning > .office-part-plan-trigger {
+  justify-self: end;
+  width: auto;
+}
+
+.office-part-planning > .office-add-part {
+  grid-column: 1 / -1;
+}
+
 .office-part-planning .button,
 .office-add-part-head button {
   min-height: 44px;
@@ -364,6 +378,17 @@
   display: flex;
   gap: 8px;
   justify-content: space-between;
+}
+
+@media (max-width: 640px) {
+  .office-part-planning {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .office-part-planning > .office-part-plan-trigger {
+    min-width: 44px;
+    width: auto;
+  }
 }
 
 .part-request-section h3,

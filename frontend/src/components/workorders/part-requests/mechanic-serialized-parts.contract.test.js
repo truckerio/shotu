@@ -34,8 +34,9 @@ test("shared scanner is camera-only and automatically recovers after a rejected 
 
 test("parts surface opens a dedicated, accessible scanner overlay", () => {
   assert.match(surface, /className=\{`mechanic-scan-trigger/);
-  assert.match(surface, /aria-label=\{t\("parts\.scanParts"\)\}/);
-  assert.match(surface, /data-tooltip=\{tablePresentation \? undefined : t\("parts\.scanParts"\)\}/);
+  assert.match(surface, /const scanLabel = t\(tablePresentation \? "create\.parts\.scan" : "parts\.scanParts"\)/);
+  assert.match(surface, /aria-label=\{scanLabel\}/);
+  assert.match(surface, /data-tooltip=\{tablePresentation \? undefined : scanLabel\}/);
   assert.match(surface, /aria-controls=\{scannerPanelId\}/);
   assert.match(surface, /aria-expanded=\{scannerOpen\}/);
   assert.match(surface, /<ModalOverlay/);

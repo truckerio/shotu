@@ -306,19 +306,20 @@ export function SerializedPartsScanner({ workorderId, actorId = "", onChanged, l
   }
 
   const tablePresentation = typeof children === "function";
+  const scanLabel = t(tablePresentation ? "create.parts.scan" : "parts.scanParts");
   const scanControl = !scannerOpen ? (
     <button
       type="button"
       ref={scanTriggerRef}
       className={`mechanic-scan-trigger${tablePresentation ? " is-table-action" : ""}`}
-      aria-label={t("parts.scanParts")}
+      aria-label={scanLabel}
       aria-controls={scannerPanelId}
       aria-expanded={scannerOpen}
-      data-tooltip={tablePresentation ? undefined : t("parts.scanParts")}
+      data-tooltip={tablePresentation ? undefined : scanLabel}
       onClick={openScanner}
     >
       <Scan aria-hidden="true" focusable="false" />
-      {tablePresentation ? <span>{t("parts.scanParts")}</span> : null}
+      {tablePresentation ? <span>{scanLabel}</span> : null}
     </button>
   ) : null;
   const scannerOverlay = scannerOpen ? (

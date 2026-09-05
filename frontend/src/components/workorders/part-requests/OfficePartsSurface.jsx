@@ -75,9 +75,9 @@ export function OfficePartsSurface({
           <OfficePartComposer detail={detail} onChanged={onChanged} />
         </section>
       ) : null}
-      <div className="office-part-overview">
+      {requests.length ? <div className="office-part-overview">
         <strong>{officeQueueText(requests, locale)}</strong>
-      </div>
+      </div> : null}
       <div className="part-request-list">
         {requests.length ? requests.map((request) => (
           <div

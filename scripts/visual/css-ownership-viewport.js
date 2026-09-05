@@ -19,6 +19,12 @@ const outputDirectory = process.env.CSS_VISUAL_OUTPUT_DIR
 
 const cssFiles = [
   "frontend/src/styles/foundation.css",
+  "frontend/src/components/forms/operational-form.css",
+  "frontend/src/components/forms/quantity-unit-input.css",
+  "frontend/src/components/workorders/part-requests/part-catalog-combobox.css",
+  "frontend/src/components/workorders/legacy-used-parts-editor.css",
+  "frontend/src/components/workorders/workorder-parts-table.css",
+  "frontend/src/components/workorders/used-parts-editor.css",
   "frontend/src/components/workorders/part-requests/legacy-part-requests.css",
   "frontend/src/components/preview/legacy-responsive-preview.css",
 ];
@@ -34,11 +40,40 @@ const fixtureCss = `
   .preview-page-card { background: #fff; border: 1px solid #d0d5dd; min-height: 240px; }
   .workorder-preview-shell { min-height: 220px; width: 100%; }
   .fixture-field { border: 1px solid #d0d5dd; min-height: 44px; width: 100%; }
+  .fixture-button { align-items: center; background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; display: inline-flex; gap: 8px; justify-content: center; min-height: 44px; padding: 8px 12px; }
 `;
 
 const fixtureMarkup = `
   <main class="visual-shell">
     <section class="part-requests-panel" data-testid="parts-panel">
+      <div class="used-parts-editor">
+        <div class="used-parts-intake-bar" data-testid="parts-intake">
+          <div class="used-parts-manual-picker">
+            <div class="part-catalog-field"><label for="part-search">Part number or description</label><input id="part-search" class="fixture-field" placeholder="Part number or description"></div>
+          </div>
+          <div class="used-parts-toolbar"><button class="fixture-button mechanic-scan-trigger is-table-action" type="button"><span aria-hidden="true">⌗</span> Scan parts</button></div>
+        </div>
+        <div class="operational-parts-editor detail-operational-parts-editor">
+          <div class="operational-part-row has-quantity-unit detail-operational-part-row used-part-labor-row" data-testid="labor-row">
+            <strong>1</strong>
+            <div class="used-part-field"><strong class="used-part-labor-name">[PTR001] Labor hours</strong></div>
+            <div class="used-part-field used-part-quantity"><div class="quantity-unit-input"><input class="fixture-field" aria-label="Labor quantity"><select class="fixture-field" aria-label="Labor unit"><option>hr</option></select></div></div>
+            <div class="used-part-field used-part-repair"><input class="fixture-field used-part-labor-repair" aria-label="Labor repair order" placeholder="Repair order / work performed"></div>
+            <span></span>
+          </div>
+          <div class="operational-part-row has-quantity-unit detail-operational-part-row used-part-recorded-row" data-testid="recorded-row">
+            <strong>2</strong>
+            <div class="used-part-field used-part-recorded-identity"><strong>FUEL-FILTER</strong></div>
+            <div class="used-part-field used-part-recorded-value"><strong>1 pc</strong></div>
+            <div class="used-part-field used-part-recorded-repair">Replace fuel filter</div>
+            <span class="used-part-recorded-status"></span>
+          </div>
+        </div>
+      </div>
+      <section class="office-part-planning" data-testid="parts-planning">
+        <div class="office-part-planning-heading"><h3>Requests &amp; supply</h3><button class="fixture-button" type="button" aria-label="About requests and supply">?</button></div>
+        <button class="button fixture-button office-part-plan-trigger" type="button">+ Plan / source part</button>
+      </section>
       <div class="part-request-list">
         <article class="part-request-card">
           <div class="part-request-summary"><strong>Requested part</strong><span class="part-state part-state-submitted">Submitted</span></div>
@@ -66,6 +101,14 @@ async function verifyViewport(page, viewport) {
   const geometry = await page.evaluate(() => {
     const documentElement = document.documentElement;
     const parts = document.querySelector('[data-testid="parts-panel"]');
+    const intake = document.querySelector('[data-testid="parts-intake"]');
+    const search = document.querySelector("#part-search");
+    const scan = document.querySelector(".mechanic-scan-trigger");
+    const labor = document.querySelector('[data-testid="labor-row"]');
+    const recorded = document.querySelector('[data-testid="recorded-row"]');
+    const planning = document.querySelector('[data-testid="parts-planning"]');
+    const planningHeading = planning.querySelector(".office-part-planning-heading");
+    const planningAction = planning.querySelector(".office-part-plan-trigger");
     const preview = document.querySelector('[data-testid="preview-panel"]');
     const previewGrid = document.querySelector(".preview-grid");
     const previewPage = document.querySelector(".preview-page-card");
@@ -75,6 +118,13 @@ async function verifyViewport(page, viewport) {
       documentClientWidth: documentElement.clientWidth,
       documentScrollWidth: documentElement.scrollWidth,
       parts: rect(parts),
+      intake: rect(intake),
+      search: rect(search),
+      scan: rect(scan),
+      labor: rect(labor),
+      recorded: rect(recorded),
+      planningHeading: rect(planningHeading),
+      planningAction: rect(planningAction),
       preview: rect(preview),
       previewGridClientWidth: previewGrid.clientWidth,
       previewGridScrollWidth: previewGrid.scrollWidth,
@@ -82,9 +132,16 @@ async function verifyViewport(page, viewport) {
     };
   });
 
+  console.log(`${viewport.name}: parts=${Math.round(geometry.parts.left)}..${Math.round(geometry.parts.right)} intake=${Math.round(geometry.intake.left)}..${Math.round(geometry.intake.right)} labor=${Math.round(geometry.labor.left)}..${Math.round(geometry.labor.right)} scan=${Math.round(geometry.scan.width)}x${Math.round(geometry.scan.height)}`);
+
   assert.equal(geometry.documentScrollWidth, geometry.documentClientWidth, `${viewport.name}: document must not overflow horizontally`);
   assert.ok(geometry.parts.width > 0 && geometry.preview.width > 0, `${viewport.name}: owned surfaces must have positive width`);
   assert.ok(geometry.parts.left >= 0 && geometry.parts.right <= viewport.width, `${viewport.name}: parts panel must remain in the viewport`);
+  assert.ok(geometry.intake.left >= geometry.parts.left && geometry.intake.right <= geometry.parts.right, `${viewport.name}: intake row must remain inside Parts`);
+  assert.ok(geometry.search.width > 0 && geometry.scan.width >= 44 && geometry.scan.height >= 44, `${viewport.name}: search and scan must remain usable`);
+  assert.ok(geometry.labor.left >= geometry.parts.left && geometry.labor.right <= geometry.parts.right, `${viewport.name}: labor row must remain inside Parts`);
+  assert.ok(geometry.recorded.left >= geometry.parts.left && geometry.recorded.right <= geometry.parts.right, `${viewport.name}: recorded row must remain inside Parts`);
+  assert.ok(Math.abs(geometry.planningHeading.top - geometry.planningAction.top) < 16, `${viewport.name}: planning heading and action must share a compact row`);
   assert.ok(geometry.preview.left >= 0 && geometry.preview.right <= viewport.width, `${viewport.name}: preview panel must remain in the viewport`);
   assert.ok(geometry.previewPage.width > 0 && geometry.previewPage.height > 0, `${viewport.name}: preview page must have positive geometry`);
 

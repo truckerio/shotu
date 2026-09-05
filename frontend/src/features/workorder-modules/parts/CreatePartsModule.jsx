@@ -10,6 +10,7 @@ import {
 } from "../../../components/workorders/used-parts-model.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
+import { WorkorderPartsActions, WorkorderPartsRow, WorkorderPartsTable } from "../../../components/workorders/WorkorderPartsTable.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { laborProductLabel } from "../../../../../shared/labor-product.js";
@@ -100,10 +101,10 @@ function LegacyCreatePartsEditor({
   t,
 }) {
   return (
-    <div className="create-known-parts-content">
+    <div className="create-known-parts-content workorder-parts-surface">
       {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
-      <div className="operational-parts-editor" id="create-known-parts-editor" tabIndex={-1}>
-        <div className="operational-part-row has-quantity-unit operational-part-labor-row">
+      <WorkorderPartsTable id="create-known-parts-editor" tabIndex={-1}>
+        <WorkorderPartsRow className="operational-part-labor-row">
           <strong>1</strong>
           <div className="operational-part-labor-name"><strong>{laborLabel}</strong></div>
           <QuantityUnitInput
@@ -127,9 +128,9 @@ function LegacyCreatePartsEditor({
             placeholder={t("create.parts.repairWork")}
           />
           <span aria-hidden="true"></span>
-        </div>
+        </WorkorderPartsRow>
         {parts.map((part, index) => (
-          <div className="operational-part-row has-quantity-unit" key={index}>
+          <WorkorderPartsRow key={index}>
             <strong>{index + 2}</strong>
             <div className="create-part-identity-field"><PartCatalogCombobox
               locationId={locationId}
@@ -169,10 +170,10 @@ function LegacyCreatePartsEditor({
             <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
             <input {...textEntryProps("identifier")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
             <button type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1}>{t("create.parts.remove")}</button>
-          </div>
+          </WorkorderPartsRow>
         ))}
-      </div>
-      <div className="create-parts-actions">
+      </WorkorderPartsTable>
+      <WorkorderPartsActions className="create-parts-actions">
         <Button type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={() => onAdd()} disabled={parts.length >= 18}>
           {t("create.parts.add")}
         </Button>
@@ -191,7 +192,7 @@ function LegacyCreatePartsEditor({
             serializationRequired: true,
           })}
         />
-      </div>
+      </WorkorderPartsActions>
     </div>
   );
 }
@@ -522,12 +523,12 @@ export function CreatePartsModule({
               </div>
             )}
 
-            <div className="create-parts-actions">
+            <WorkorderPartsActions className="create-parts-actions">
               <Button type="button" className="create-parts-compact-action create-parts-add-button" variant="primary" icon={Plus} onClick={startAddingPart} disabled={!canAddPart}>
                 {filledIndexes.length ? t("create.parts.addAnother") : t("create.parts.add")}
               </Button>
               <CreatePartScanner disabled={!canAddPart} locationId={locationId} locale={locale} onScanned={addScannedPart} />
-            </div>
+            </WorkorderPartsActions>
           </section>
         </div>
       ) : (

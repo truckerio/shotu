@@ -11,6 +11,7 @@ const createForm = readFileSync(new URL("./CreateWorkorderForm.jsx", import.meta
 const createPartsModule = readFileSync(new URL("../workorder-modules/parts/CreatePartsModule.jsx", import.meta.url), "utf8");
 const createPartScanner = readFileSync(new URL("../workorder-modules/parts/CreatePartScanner.jsx", import.meta.url), "utf8");
 const createPartsCss = readFileSync(new URL("../workorder-modules/parts/create-parts-module.css", import.meta.url), "utf8");
+const sharedPartsCss = readFileSync(new URL("../../components/workorders/workorder-parts-table.css", import.meta.url), "utf8");
 const detailPartsModule = readFileSync(new URL("../workorder-modules/parts/WorkorderPartsModule.jsx", import.meta.url), "utf8");
 const formController = readFileSync(new URL("../../app/routes/useRoleRouterFormController.js", import.meta.url), "utf8");
 const readOnlyParts = readFileSync(new URL("../../components/workorders/part-requests/ReadOnlyPartsSurface.jsx", import.meta.url), "utf8");
@@ -83,8 +84,8 @@ test("create parts place compact approved and scan actions together without clai
   assert.match(createPartScanner, /unit\.locationId !== locationId/);
   assert.match(createPartScanner, /unit\.status !== "in_stock"/);
   assert.doesNotMatch(createPartScanner, /inventory-units\/issue/);
-  assert.match(createPartsCss, /min-height:\s*44px/);
-  assert.match(createPartsCss, /@media \(max-width: 420px\)/);
+  assert.match(sharedPartsCss, /min-height:\s*44px/);
+  assert.match(sharedPartsCss, /@media \(max-width: 420px\)/);
 });
 
 test("create parts show configured labor first and avoid duplicate visible row numbering", () => {

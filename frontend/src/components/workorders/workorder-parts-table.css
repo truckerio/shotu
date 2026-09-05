@@ -1,0 +1,91 @@
+.workorder-parts-surface {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.operational-part-labor-row {
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.operational-part-labor-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.operational-part-labor-name strong,
+.operational-part-labor-repair {
+  overflow-wrap: anywhere;
+}
+
+.operational-part-labor-repair {
+  color: #475467;
+}
+
+.workorder-parts-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@container (max-width: 520px) {
+  .operational-part-labor-row .operational-part-labor-repair {
+    grid-column: 2 / 4;
+  }
+
+  .operational-part-labor-row > span[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+.workorder-parts-actions .create-parts-compact-action.button {
+  flex: 0 1 auto;
+  font-size: 12px;
+  min-height: 44px;
+  padding: 6px 10px;
+  width: auto;
+}
+
+.workorder-parts-actions .create-parts-compact-action.button > svg {
+  height: 16px;
+  width: 16px;
+}
+
+@media (max-width: 700px) {
+  .operational-part-labor-row .operational-part-labor-repair {
+    grid-column: 2 / -1;
+  }
+
+  .operational-part-labor-row > span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .workorder-parts-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workorder-parts-actions > .button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .workorder-parts-actions > .create-parts-action-message,
+  .workorder-parts-actions > .create-parts-scan-help {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .workorder-parts-actions > .button {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+}

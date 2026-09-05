@@ -20,7 +20,7 @@ test("mechanic used-parts interface text is owned by the selected locale", () =>
 
 test("installed serialized summaries keep identity locked, edit only repair wording, and feed every preview", () => {
   assert.match(editor, /installedParts\.map/);
-  assert.match(editor, /className="part-row used-part-serialized-row"/);
+  assert.match(editor, /<WorkorderPartsRow[\s\S]*?className="used-part-serialized-row"/);
   assert.match(editor, /<strong>\{part\.partNo\}<\/strong>/);
   assert.match(editor, /value=\{serializedRepairOrder\(part\)\}/);
   assert.match(editor, /operation: "serializedUsageRepairOrder"/);

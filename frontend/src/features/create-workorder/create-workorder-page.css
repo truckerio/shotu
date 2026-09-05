@@ -18,48 +18,6 @@
   min-width: 0;
 }
 
-.operational-part-labor-row {
-  background: #f9fafb;
-  border: 1px solid #eaecf0;
-  border-radius: 6px;
-  padding: 8px;
-}
-
-.operational-part-labor-name {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.operational-part-labor-name strong,
-.operational-part-labor-repair {
-  overflow-wrap: anywhere;
-}
-
-.operational-part-labor-repair {
-  color: #475467;
-}
-
-@container (max-width: 520px) {
-  .operational-part-labor-row .operational-part-labor-repair {
-    grid-column: 2 / 4;
-  }
-
-  .operational-part-labor-row > span[aria-hidden="true"] {
-    display: none;
-  }
-}
-
-@media (max-width: 700px) {
-  .operational-part-labor-row .operational-part-labor-repair {
-    grid-column: 2 / -1;
-  }
-
-  .operational-part-labor-row > span[aria-hidden="true"] {
-    display: none;
-  }
-}
-
 .create-assignment-content .operational-mechanic-select > legend {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
