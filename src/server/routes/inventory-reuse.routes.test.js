@@ -3,13 +3,14 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { handleInventoryReuseApi } from "./inventory-reuse.routes.js";
 import { InventoryError } from "../modules/inventory/inventory.errors.js";
+import { DEFAULT_COMPANY_ID } from "../db/company.js";
 const companyId=randomUUID(),locationId=randomUUID(),actorId=randomUUID(),caseId=randomUUID();
 const scope={companyId,locationId};
 const context={actor:{id:actorId,role:"office"},companyIds:new Set([companyId]),locationIds:new Set([locationId])};
-async function request(path,method,body,deps={}) {
+async function request(path,method,body,deps={},requestContext=context) {
   let result;
   const handled=await handleInventoryReuseApi({method},{},new URL(path,"http://localhost"),{
-    requestContext:context,readBody:async()=>body,sendJson:(_res,status,data)=>{result={status,data};},
+    requestContext,readBody:async()=>body,sendJson:(_res,status,data)=>{result={status,data};},
   },{authorizeProduct:async()=>{},authorizeWorkorder:async()=>{},...deps});
   return {handled,...result};
 }
@@ -31,6 +32,18 @@ test("asset, operation, config and explicit configuration actions map exact endp
   assert.deepEqual(views,["queue","asset","operation","config"]);
   assert.equal((await request("/api/inventory-reuse/config/grant","POST",{...scope,userId:actorId,capabilities:[],reason:"Revoke"},deps)).data.saved,true);
   assert.equal((await request("/api/inventory-reuse/config/policy","POST",{...scope,catalogPartId:randomUUID(),reuseAllowed:false,evidence:"Single use only"},deps)).data.saved,true);
+});
+test("asset custody accepts the canonical legacy company UUID without relaxing entity IDs",async()=>{
+  const legacyScope={companyId:DEFAULT_COMPANY_ID,locationId};
+  const legacyContext={...context,companyIds:new Set([DEFAULT_COMPANY_ID])};
+  let readInput;
+  const deps={read:async(input)=>{readInput=input;return {installedParts:[]};}};
+  const assetId=randomUUID();
+  const search=`?companyId=${DEFAULT_COMPANY_ID}&locationId=${locationId}`;
+  assert.equal((await request(`/api/inventory-reuse/asset/${assetId}${search}`,"GET",null,deps,legacyContext)).status,200);
+  assert.equal(readInput.companyId,DEFAULT_COMPANY_ID);
+  assert.equal((await request(`/api/inventory-reuse/asset/not-an-id${search}`,"GET",null,deps,legacyContext)).status,400);
+  assert.equal((await request(`/api/inventory-reuse/asset/${assetId}?companyId=not-a-company&locationId=${locationId}`,"GET",null,deps,legacyContext)).status,400);
 });
 test("schema and guarded transition errors retain actionable statuses without raw failure leaks",async()=>{
   assert.equal((await request("/api/inventory-reuse/remove","POST",scope)).status,400);

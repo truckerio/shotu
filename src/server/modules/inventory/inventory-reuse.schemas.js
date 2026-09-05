@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { DATABASE_UUID_PATTERN } from "../../db/company.js";
 
 export const reuseId = z.string().uuid();
 export const reuseKey = z.string().trim().min(8).max(120);
 const evidence = z.string().trim().min(1).max(2000);
-const scope = { companyId: reuseId, locationId: reuseId };
+const scope = { companyId: z.string().regex(DATABASE_UUID_PATTERN), locationId: reuseId };
 export const reuseScopeSchema = z.object(scope).strict();
 export const reuseRemoveSchema = z.object({
   ...scope, usageId: reuseId, removalWorkorderId: reuseId, reason: evidence,
