@@ -68,6 +68,13 @@ const fixtureMarkup = `
             <div class="used-part-field used-part-recorded-repair">Replace fuel filter</div>
             <span class="used-part-recorded-status"></span>
           </div>
+          <div class="operational-part-row has-quantity-unit used-part-serialized-row" data-testid="serialized-row">
+            <strong>3</strong>
+            <div class="used-part-field used-part-serialized-identity"><strong>Tires</strong><small>WG-S-D77D3209C3694DEE-5</small><small>Serialized parts</small></div>
+            <div class="used-part-field used-part-serialized-value"><strong>1 ea</strong></div>
+            <div class="used-part-field used-part-repair"><span class="used-part-pending-repair">Available after installation</span></div>
+            <div class="used-part-serialized-actions"><span class="used-part-serialized-status">Reserved — awaiting Office approval</span><button class="button fixture-button" type="button">Mark installed</button><button class="button fixture-button" type="button">Return unused</button></div>
+          </div>
         </div>
       </div>
       <section class="office-part-planning" data-testid="parts-planning">
@@ -106,13 +113,28 @@ async function verifyViewport(page, viewport) {
     const scan = document.querySelector(".mechanic-scan-trigger");
     const labor = document.querySelector('[data-testid="labor-row"]');
     const recorded = document.querySelector('[data-testid="recorded-row"]');
+    const serialized = document.querySelector('[data-testid="serialized-row"]');
+    const serializedActions = serialized.querySelector(".used-part-serialized-actions");
+    const serializedButtons = [...serializedActions.querySelectorAll("button")];
     const planning = document.querySelector('[data-testid="parts-planning"]');
     const planningHeading = planning.querySelector(".office-part-planning-heading");
     const planningAction = planning.querySelector(".office-part-plan-trigger");
     const preview = document.querySelector('[data-testid="preview-panel"]');
     const previewGrid = document.querySelector(".preview-grid");
     const previewPage = document.querySelector(".preview-page-card");
-    const rect = (element) => element.getBoundingClientRect();
+    const rect = (element) => {
+      const bounds = element.getBoundingClientRect();
+      return {
+        bottom: bounds.bottom,
+        clientWidth: element.clientWidth,
+        height: bounds.height,
+        left: bounds.left,
+        right: bounds.right,
+        scrollWidth: element.scrollWidth,
+        top: bounds.top,
+        width: bounds.width,
+      };
+    };
 
     return {
       documentClientWidth: documentElement.clientWidth,
@@ -123,6 +145,10 @@ async function verifyViewport(page, viewport) {
       scan: rect(scan),
       labor: rect(labor),
       recorded: rect(recorded),
+      serialized: rect(serialized),
+      serializedChildren: [...serialized.children].map(rect),
+      serializedActions: rect(serializedActions),
+      serializedButtons: serializedButtons.map(rect),
       planningHeading: rect(planningHeading),
       planningAction: rect(planningAction),
       preview: rect(preview),
@@ -132,7 +158,7 @@ async function verifyViewport(page, viewport) {
     };
   });
 
-  console.log(`${viewport.name}: parts=${Math.round(geometry.parts.left)}..${Math.round(geometry.parts.right)} intake=${Math.round(geometry.intake.left)}..${Math.round(geometry.intake.right)} labor=${Math.round(geometry.labor.left)}..${Math.round(geometry.labor.right)} scan=${Math.round(geometry.scan.width)}x${Math.round(geometry.scan.height)}`);
+  console.log(`${viewport.name}: parts=${Math.round(geometry.parts.left)}..${Math.round(geometry.parts.right)} intake=${Math.round(geometry.intake.left)}..${Math.round(geometry.intake.right)} labor=${Math.round(geometry.labor.left)}..${Math.round(geometry.labor.right)} actions=${Math.round(geometry.serializedActions.width)}/${geometry.serializedActions.clientWidth}/${geometry.serializedActions.scrollWidth} buttons=${geometry.serializedButtons.map((button) => Math.round(button.width)).join("+")} scan=${Math.round(geometry.scan.width)}x${Math.round(geometry.scan.height)}`);
 
   assert.equal(geometry.documentScrollWidth, geometry.documentClientWidth, `${viewport.name}: document must not overflow horizontally`);
   assert.ok(geometry.parts.width > 0 && geometry.preview.width > 0, `${viewport.name}: owned surfaces must have positive width`);
@@ -141,6 +167,10 @@ async function verifyViewport(page, viewport) {
   assert.ok(geometry.search.width > 0 && geometry.scan.width >= 44 && geometry.scan.height >= 44, `${viewport.name}: search and scan must remain usable`);
   assert.ok(geometry.labor.left >= geometry.parts.left && geometry.labor.right <= geometry.parts.right, `${viewport.name}: labor row must remain inside Parts`);
   assert.ok(geometry.recorded.left >= geometry.parts.left && geometry.recorded.right <= geometry.parts.right, `${viewport.name}: recorded row must remain inside Parts`);
+  assert.ok(geometry.serialized.left >= geometry.parts.left && geometry.serialized.right <= geometry.parts.right, `${viewport.name}: serialized row must remain inside Parts`);
+  assert.ok(geometry.serializedChildren.every((child) => child.left >= geometry.serialized.left && child.right <= geometry.serialized.right), `${viewport.name}: serialized content must remain in its row columns`);
+  assert.ok(geometry.serializedActions.scrollWidth <= geometry.serializedActions.clientWidth, `${viewport.name}: serialized actions must not overflow their column`);
+  assert.ok(geometry.serializedButtons[0].right <= geometry.serializedButtons[1].left, `${viewport.name}: serialized action buttons must not overlap`);
   assert.ok(Math.abs(geometry.planningHeading.top - geometry.planningAction.top) < 16, `${viewport.name}: planning heading and action must share a compact row`);
   assert.ok(geometry.preview.left >= 0 && geometry.preview.right <= viewport.width, `${viewport.name}: preview panel must remain in the viewport`);
   assert.ok(geometry.previewPage.width > 0 && geometry.previewPage.height > 0, `${viewport.name}: preview page must have positive geometry`);

@@ -64,7 +64,7 @@ test("serialized part identity uses separate wrapping lines and top-aligned row 
   assert.match(editor, /className="used-part-field used-part-serialized-identity"/);
   assert.match(editor, /className="used-part-serialized-serial"/);
   assert.match(editor, /className="used-part-serialized-kind"/);
-  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;/s);
+  assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-row\s*\{[^}]*align-items:\s*start;[^}]*grid-template-columns:\s*24px minmax\(0, 1\.1fr\) minmax\(126px, 0\.85fr\) minmax\(0, 1fr\) minmax\(220px, 0\.9fr\);/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;[^}]*min-width:\s*0;/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*strong\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*left;/s);
   assert.match(css, /\.used-parts-editor\s+\.used-part-serialized-identity\s*>\s*small\s*\{[^}]*display:\s*block;[^}]*overflow-wrap:\s*anywhere;/s);
@@ -88,8 +88,10 @@ test("detail rows reuse the Create Workorder operational table geometry across l
   );
   assert.match(
     css,
-    /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
+    /\.used-parts-editor\s+\.used-part-serialized-actions\s+\.button\s*\{[^}]*min-width:\s*0;[^}]*white-space:\s*nowrap;[^}]*width:\s*100%;/s,
   );
+  assert.match(css, /@container \(max-width: 760px\)[\s\S]*?\.used-parts-editor \.used-part-serialized-row\s*\{[^}]*grid-template-columns:\s*24px minmax\(0, 1fr\) minmax\(110px, 0\.6fr\) minmax\(0, 1fr\);/s);
+  assert.match(css, /@container \(max-width: 760px\)[\s\S]*?\.used-parts-editor \.used-part-serialized-actions\s*\{[^}]*grid-column:\s*2 \/ -1;/s);
 });
 
 test("phone parts editor uses the same shared responsive row and action geometry", () => {

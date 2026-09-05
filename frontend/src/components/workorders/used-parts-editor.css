@@ -100,6 +100,7 @@
 .used-parts-editor .used-part-serialized-row {
   align-items: start;
   background: var(--surface-subtle, #f9fafb);
+  grid-template-columns: 24px minmax(0, 1.1fr) minmax(126px, 0.85fr) minmax(0, 1fr) minmax(220px, 0.9fr);
   padding-block: 10px;
 }
 
@@ -179,8 +180,18 @@
   min-width: 0;
   min-height: 34px;
   padding: 6px 10px;
-  white-space: normal;
+  white-space: nowrap;
   width: 100%;
+}
+
+@container (max-width: 760px) {
+  .used-parts-editor .used-part-serialized-row {
+    grid-template-columns: 24px minmax(0, 1fr) minmax(110px, 0.6fr) minmax(0, 1fr);
+  }
+
+  .used-parts-editor .used-part-serialized-actions {
+    grid-column: 2 / -1;
+  }
 }
 
 .used-part-pending-repair {
