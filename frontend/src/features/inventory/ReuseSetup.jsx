@@ -9,7 +9,8 @@ import "./reuse-setup.css";
 const actionLabels = { remove: "Record removal", receive: "Receive returned parts", route: "Inspect and route", release: "Inspect and release for reuse", repair: "Start or complete repair", disposition: "Confirm core return or scrap", quarantine: "Resolve quarantine" };
 
 // Configuration stays separate from physical return actions. No grants are implicit.
-export function ReuseSetup({ companyId, locationId, onSaved }) {
+export function ReuseSetup({ companyId, locationId, requestedPolicyPart = null, onSaved }) {
+  const setupRef = useRef(null);
   const policyRequestSequence = useRef(0);
   const policyRequestController = useRef(null);
   const [open, setOpen] = useState(false);
@@ -89,7 +90,17 @@ export function ReuseSetup({ companyId, locationId, onSaved }) {
     }
   }
 
-  return <details className="reuse-setup" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+  useEffect(() => {
+    if (!requestedPolicyPart?.id) return;
+    setOpen(true);
+    void selectPolicyPart(requestedPolicyPart);
+    window.requestAnimationFrame(() => {
+      setupRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setupRef.current?.querySelector("summary")?.focus();
+    });
+  }, [requestedPolicyPart?.requestId]);
+
+  return <details ref={setupRef} className="reuse-setup" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Reuse settings</summary>
     {error ? <div role="alert"><p>{error}</p>{!data ? <Button onClick={() => setRevision((value) => value + 1)}>Try again</Button> : null}</div> : null}
     {message ? <p role="status">{message}</p> : null}

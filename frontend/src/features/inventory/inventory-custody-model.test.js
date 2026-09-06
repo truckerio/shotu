@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { custodyCommandBody, custodyExpectedVersion, custodyRoute } from "./inventory-custody-model.js";
+import { custodyCommandBody, custodyExpectedVersion, custodyReleaseBlocker, custodyRoute } from "./inventory-custody-model.js";
 
 test("custody commands retain authoritative case version and normalize legacy route spelling", () => {
   assert.equal(custodyExpectedVersion({ caseVersion: 7, version: 2 }, {}), 7);
@@ -34,4 +34,18 @@ test("one return command carries only exact identity, outcome, and optional note
     outcome: "reuse",
     note: "tread is good",
   });
+});
+
+test("release blocker explains missing reuse approval and routes each role to a usable next step", () => {
+  const held = { status: "hold", reuseAllowed: null, partNumber: "Tire", description: "295/75R22.5" };
+  const admin = custodyReleaseBlocker(held, { release: true, configure: true });
+  assert.equal(admin.title, "Release blocked: reuse approval needed");
+  assert.match(admin.message, /will stay on hold/);
+  assert.match(admin.nextStep, /Open Reuse settings/);
+  assert.match(admin.nextStep, /policy evidence/);
+
+  const operator = custodyReleaseBlocker(held, { release: true, configure: false });
+  assert.match(operator.nextStep, /Ask an administrator/);
+  assert.equal(custodyReleaseBlocker({ ...held, reuseAllowed: true }, { release: true, configure: true }), null);
+  assert.equal(custodyReleaseBlocker(held, { release: false, configure: true }), null);
 });

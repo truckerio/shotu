@@ -6,6 +6,9 @@
 .inventory-custody-units li:first-child, .inventory-custody-timeline li:first-child { border-top: 0; }
 .inventory-custody-units span, .inventory-custody-timeline span { color: #667085; font-size: 12px; }
 .inventory-custody-actions, .inventory-custody-form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.inventory-custody-guidance { box-sizing: border-box; display: grid; width: 100%; gap: 8px; padding: 12px; border: 1px solid #f0c36d; border-radius: 8px; background: #fffaeb; color: #344054; }
+.inventory-custody-guidance strong { color: #7a2e0e; }
+.inventory-custody-guidance p { margin: 0; }
 .inventory-custody-form { display: grid; gap: 12px; }
 .inventory-custody-form label { display: grid; gap: 6px; color: #344054; font-size: 12px; font-weight: 700; }
 .inventory-custody-form textarea, .inventory-custody-form input, .inventory-custody-form select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #98a2b3; border-radius: 8px; background: #fff; color: #101828; font: inherit; }

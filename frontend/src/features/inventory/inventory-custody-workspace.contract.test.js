@@ -65,7 +65,24 @@ test("a release-only operator can release reviewed and completed-repair cases", 
   assert.match(source, /"repair_complete_pending_review"/);
   assert.match(source, /capabilities\.release/);
   assert.match(source, /return "release"/);
-  assert.match(source, /return "Release to stock"/);
+  assert.match(source, /"Release to stock"/);
+});
+
+test("blocked release names the missing setup and gives admins a direct recovery action", async () => {
+  const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
+  const setup = await readFile(new URL("./ReuseSetup.jsx", import.meta.url), "utf8");
+  assert.match(source, /custodyReleaseBlocker/);
+  assert.match(source, /Reuse setup required/);
+  assert.match(source, /releaseBlocker\.message/);
+  assert.match(source, /releaseBlocker\.nextStep/);
+  assert.match(source, /Open Reuse settings for this part/);
+  assert.match(source, /requestedPolicyPart=\{requestedPolicyPart\}/);
+  assert.match(source, /nextAction !== "release" \? releaseGuidance/);
+  assert.match(setup, /requestedPolicyPart\?\.id/);
+  assert.match(setup, /setOpen\(true\)/);
+  assert.match(setup, /selectPolicyPart\(requestedPolicyPart\)/);
+  assert.match(setup, /scrollIntoView/);
+  assert.doesNotMatch(setup, /<summary tabIndex=\{-1\}>Reuse settings/);
 });
 
 test("custody history and available exact units use the server custody projection", async () => {

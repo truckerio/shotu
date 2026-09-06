@@ -11,6 +11,26 @@ export function custodyRoute(value) {
   return value === "inspect_reuse" ? "inspect_for_reuse" : value;
 }
 
+export function custodyReleaseBlocker(caseItem = {}, capabilities = {}) {
+  const status = caseItem.workflowStatus || caseItem.status;
+  if (
+    !["received_pending_review", "hold", "repair_complete_pending_review"].includes(status) ||
+    !capabilities.release ||
+    caseItem.reuseAllowed === true
+  )
+    return null;
+  const part = [caseItem.partNumber, caseItem.description]
+    .filter(Boolean)
+    .join(" · ") || "This part";
+  return {
+    title: "Release blocked: reuse approval needed",
+    message: `${part} is not approved for reuse at this inventory location. It will stay on hold and will not be added to available stock.`,
+    nextStep: capabilities.configure
+      ? "Open Reuse settings, review the part, enable May be reused after inspection only when shop policy allows it, enter policy evidence, and save. Then reopen this return and release it."
+      : "Ask an administrator to approve this part in Reuse settings for this inventory location. Then reopen this return and release it.",
+  };
+}
+
 export function custodyCommandBody({
   action,
   scope,

@@ -20,6 +20,7 @@ import { ReuseSetup } from "./ReuseSetup.jsx";
 import {
   clearCustodyRecovery,
   custodyCommandBody,
+  custodyReleaseBlocker,
   readCustodyRecovery,
   saveCustodyRecovery,
 } from "./inventory-custody-model.js";
@@ -118,7 +119,9 @@ function commandLabel(caseItem, capabilities = {}) {
     ["received_pending_review", "hold", "repair_complete_pending_review"].includes(status) &&
     capabilities.release
   )
-    return "Release to stock";
+    return caseItem?.reuseAllowed === true
+      ? "Release to stock"
+      : "Reuse setup required";
   if (status === "repair" && capabilities.repair)
     return caseItem?.repairStarted ? "Complete repair" : "Start repair";
   if (status === "core_pending_return" && capabilities.disposition)
@@ -264,6 +267,7 @@ export function InventoryCustodyWorkspace({
   const [exactIdentityId, setExactIdentityId] = useState("");
   const [pendingRequest, setPendingRequest] = useState(null);
   const [retryAllowed, setRetryAllowed] = useState(false);
+  const [requestedPolicyPart, setRequestedPolicyPart] = useState(null);
   const refreshRef = useRef(0);
   const scope = useMemo(
     () => locations.find((location) => location.id === scopeId) || null,
@@ -709,6 +713,32 @@ export function InventoryCustodyWorkspace({
     {};
   const activeCase = detail?.case || selectedCase;
   const nextAction = statusForAction(activeCase, caps);
+  const releaseBlocker = custodyReleaseBlocker(activeCase, caps);
+  const releaseGuidance = releaseBlocker ? (
+    <div className="inventory-custody-guidance" role="status" aria-live="polite">
+      <strong>{releaseBlocker.title}</strong>
+      <p>{releaseBlocker.message}</p>
+      <p>{releaseBlocker.nextStep}</p>
+      {caps.configure ? (
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => {
+            setRequestedPolicyPart({
+              requestId: crypto.randomUUID(),
+              id: activeCase.catalogPartId,
+              partNumber: activeCase.partNumber,
+              description: activeCase.description,
+            });
+            setSelectedCase(null);
+            setDetail(null);
+          }}
+        >
+          Open Reuse settings for this part
+        </Button>
+      ) : null}
+    </div>
+  ) : null;
   const isAwaitingReturn =
     (activeCase?.workflowStatus || activeCase?.status) === "awaiting_handoff";
   const page = tab === "stock" ? stockCursor.length : queueCursor.length;
@@ -924,6 +954,7 @@ export function InventoryCustodyWorkspace({
             <ReuseSetup
               companyId={companyId}
               locationId={locationId}
+              requestedPolicyPart={requestedPolicyPart}
               onSaved={() => {
                 refreshRef.current += 1;
                 setQueueCursor([""]);
@@ -1167,34 +1198,37 @@ export function InventoryCustodyWorkspace({
           >
             {!action ? (
               <div className="inventory-custody-actions">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => {
-                    setAction(nextAction);
-                    setDraft({
-                      evidence: "",
-                      binLocation: "",
-                      route: "inspect_for_reuse",
-                      handlerType: "internal",
-                      handlerReference: "",
-                      externalReference: "",
-                      dispositionDate: "",
-                      reason: "",
-                      outcome: defaultReturnOutcome(activeCase, caps),
-                      note: "",
-                      serial: "",
-                    });
-                  }}
-                >
-                  {commandLabel(activeCase, caps)}
-                </Button>
+                {nextAction === "release" && releaseGuidance ? releaseGuidance : (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => {
+                      setAction(nextAction);
+                      setDraft({
+                        evidence: "",
+                        binLocation: "",
+                        route: "inspect_for_reuse",
+                        handlerType: "internal",
+                        handlerReference: "",
+                        externalReference: "",
+                        dispositionDate: "",
+                        reason: "",
+                        outcome: defaultReturnOutcome(activeCase, caps),
+                        note: "",
+                        serial: "",
+                      });
+                    }}
+                  >
+                    {commandLabel(activeCase, caps)}
+                  </Button>
+                )}
                 {["route", "repair/complete"].includes(nextAction) &&
-                caps.release ? (
+                caps.release && !releaseBlocker ? (
                   <Button type="button" onClick={() => setAction("release")}>
                     Release to stock
                   </Button>
                 ) : null}
+                {nextAction !== "release" ? releaseGuidance : null}
               </div>
             ) : (
               <div className="inventory-custody-form">
