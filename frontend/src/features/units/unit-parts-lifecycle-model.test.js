@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assetReusePath, canReleaseCase, caseStage, clearReuseRecovery, readReuseRecovery, restoreReuseRecovery, reuseOperationPath, reuseScope, saveReuseRecovery } from "./unit-parts-lifecycle-model.js";
+import { assetReusePath, clearReuseRecovery, readReuseRecovery, restoreReuseRecovery, reuseOperationPath, reuseScope, saveReuseRecovery } from "./unit-parts-lifecycle-model.js";
 
 test("reuse requests stay within the selected unit company and location", () => {
   const scope = reuseScope({ company_id: "company-1", locationId: "location-1" });
@@ -22,7 +22,7 @@ test("removal stays on Unit detail and never asks for or creates a workorder", (
   const workspace = readFileSync(new URL("./UnitsWorkspace.jsx", import.meta.url), "utf8");
   assert.match(surface, /unit-parts-lifecycle--focused/);
   assert.match(surface, /removalFormRef\.current\?\.scrollIntoView\(\{ block: "start" \}\)/);
-  assert.match(surface, /onModeChange\?\.\(active\?\.kind === "remove" \? "remove" : ""\)/);
+  assert.match(surface, /onModeChange\?\.\(activePart \? "remove" : ""\)/);
   assert.match(workspace, /selected && !detailMode/);
   assert.match(workspace, /className=\{detailMode \? "unit-parts-focused-section" : ""\}/);
   assert.doesNotMatch(surface, /Workorder will be created automatically/);
@@ -35,7 +35,18 @@ test("removal stays on Unit detail and never asks for or creates a workorder", (
   assert.match(surface, /expectedVersion: item\.custodyVersion/);
   assert.doesNotMatch(surface, /removalWorkorderId/);
   assert.match(surface, />Remove part</);
+  const removalEntries = [...surface.matchAll(/<Button(?:(?!<\/Button>)[\s\S])*?onClick=\{\(\) => openRemoval\(part\)\}(?:(?!<\/Button>)[\s\S])*?<\/Button>/g)];
+  assert.equal(removalEntries.length, 2, "both installed-part states need a removal entry point");
+  for (const [entry] of removalEntries) {
+    assert.match(entry, /variant="primary"/);
+    assert.match(entry, />\s*Remove part\s*<\/Button>/);
+  }
   assert.match(surface, /<summary>Add note<\/summary>/);
+  assert.doesNotMatch(surface, /Returned parts/);
+  assert.doesNotMatch(surface, /Receive returned part/);
+  assert.doesNotMatch(surface, /Review returned part/);
+  assert.doesNotMatch(surface, /ReuseSetup/);
+  assert.doesNotMatch(surface, /InventoryCodeScanner/);
 });
 
 test("unit lifecycle never renders stale parts or dereferences capabilities before its scope loads", () => {
@@ -47,7 +58,7 @@ test("unit lifecycle never renders stale parts or dereferences capabilities befo
 
 test("proven inventory hides ownership while unproven legacy inventory still asks", () => {
   const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
-  assert.match(surface, /active\.item\.ownershipRequired/);
+  assert.match(surface, /activePart\.ownershipRequired/);
   assert.match(surface, /item\.inferredOwnership/);
   assert.match(surface, /<option value="company">Company<\/option>/);
   assert.match(surface, /ownership: "unknown"/);
@@ -60,7 +71,7 @@ test("custody guidance uses collapsed shared help while operational errors stay 
   const lifecycle = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
   const workspace = readFileSync(new URL("./UnitsWorkspace.jsx", import.meta.url), "utf8");
   const help = readFileSync(new URL("../../components/workorders/SectionHelpDisclosure.jsx", import.meta.url), "utf8");
-  assert.match(workspace, /<SectionHelpDisclosure label="Parts custody help">/);
+  assert.match(workspace, /<SectionHelpDisclosure label="Installed parts help">/);
   assert.match(help, /useState\(false\)/);
   assert.match(help, /hidden=\{!open\}/);
   assert.match(lifecycle, /className="unit-parts-error" role="alert"/);
@@ -83,20 +94,8 @@ test("uncertain custody command recovery round-trips only in the original actor 
   assert.equal(readReuseRecovery(storage, scope), null);
 });
 
-test("only physically received, known-ownership cases can be released", () => {
-  assert.equal(canReleaseCase({ status: "received_pending_review", ownership: "company" }, { release: true }), true);
-  assert.equal(canReleaseCase({ status: "hold", ownership: "company" }, { release: true }), true);
-  assert.equal(canReleaseCase({ status: "received_pending_review", ownership: "customer" }, { release: true }), false);
-  assert.equal(canReleaseCase({ status: "received_pending_review", ownership: "unknown" }, { release: true }), false);
-  assert.equal(canReleaseCase({ status: "awaiting_handoff", ownership: "company" }, { release: true }), false);
-  assert.equal(caseStage("awaiting_handoff"), "Receive");
-  assert.equal(caseStage("received_pending_review"), "Review");
-  assert.equal(caseStage("hold"), "On hold");
-  assert.equal(caseStage("released"), "Released to stock");
-});
-
 test("admin reuse setup exposes explicit route, repair, disposition, quarantine, and policy controls", () => {
-  const setup = readFileSync(new URL("./ReuseSetup.jsx", import.meta.url), "utf8");
+  const setup = readFileSync(new URL("../inventory/ReuseSetup.jsx", import.meta.url), "utf8");
   for (const capability of ["route", "repair", "disposition", "quarantine"]) assert.match(setup, new RegExp(`\\b${capability}\\b`));
   for (const policy of ["repairAllowed", "coreReturnAllowed", "scrapAllowed", "evidence"]) assert.match(setup, new RegExp(`\\b${policy}\\b`));
   assert.match(setup, /Save permissions/);

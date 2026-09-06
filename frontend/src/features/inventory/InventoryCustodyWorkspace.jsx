@@ -16,6 +16,7 @@ import {
 } from "../../components/operations/OperationalCollectionPage.jsx";
 import { api } from "../../lib/api.js";
 import { InventoryCodeScanner } from "./InventoryCodeScanner.jsx";
+import { ReuseSetup } from "./ReuseSetup.jsx";
 import {
   clearCustodyRecovery,
   custodyCommandBody,
@@ -40,6 +41,20 @@ const ROUTES = [
   ["scrap", "Scrap"],
   ["not_sure", "Not sure"],
 ];
+const RETURN_OUTCOMES = [
+  ["reuse", "Ready to reuse"],
+  ["repair", "Needs repair"],
+  ["core_return", "Return as core"],
+  ["scrap", "Scrap"],
+  ["hold", "Keep on hold"],
+];
+const RETURN_BUTTONS = {
+  reuse: "Return to inventory",
+  repair: "Send to repair",
+  core_return: "Prepare core return",
+  scrap: "Mark for scrap",
+  hold: "Keep on hold",
+};
 const CONDITIONS = {
   new: "New",
   serviceable_used: "Reusable",
@@ -87,7 +102,13 @@ function apiPath(path, values) {
 
 function commandLabel(caseItem, capabilities = {}) {
   const status = caseItem?.workflowStatus || caseItem?.status;
-  if (status === "awaiting_handoff" && capabilities.receive) return "Receive";
+  if (
+    status === "awaiting_handoff" &&
+    RETURN_OUTCOMES.some(([outcome]) =>
+      returnOutcomeAllowed(outcome, caseItem, capabilities),
+    )
+  )
+    return "Return part";
   if (
     ["received_pending_review", "needs_inspection"].includes(status) &&
     capabilities.route
@@ -111,7 +132,13 @@ function commandLabel(caseItem, capabilities = {}) {
 
 function statusForAction(caseItem, capabilities) {
   const status = caseItem?.workflowStatus || caseItem?.status;
-  if (status === "awaiting_handoff" && capabilities.receive) return "receive";
+  if (
+    status === "awaiting_handoff" &&
+    RETURN_OUTCOMES.some(([outcome]) =>
+      returnOutcomeAllowed(outcome, caseItem, capabilities),
+    )
+  )
+    return "return";
   if (
     ["received_pending_review", "needs_inspection"].includes(status) &&
     capabilities.route
@@ -131,6 +158,52 @@ function statusForAction(caseItem, capabilities) {
   if (status === "quarantine" && capabilities.quarantine)
     return "quarantine/resolve";
   return "";
+}
+
+function returnOutcomeAllowed(outcome, caseItem, capabilities) {
+  if (!capabilities.receive) return false;
+  if (outcome === "reuse")
+    return Boolean(
+      capabilities.release &&
+        caseItem?.reuseAllowed &&
+        caseItem?.ownership === "company" &&
+        caseItem?.ownershipEvidence,
+    );
+  if (outcome === "hold") return Boolean(capabilities.release);
+  const policy = {
+    repair: "repairAllowed",
+    core_return: "coreReturnAllowed",
+    scrap: "scrapAllowed",
+  }[outcome];
+  return Boolean(capabilities.route && policy && caseItem?.[policy]);
+}
+
+function returnOutcomeReason(outcome, caseItem, capabilities) {
+  if (!capabilities.receive) return "You do not have permission to receive returns.";
+  if (outcome === "reuse" && caseItem?.ownership !== "company")
+    return "Only company-owned parts can return to stock.";
+  if (outcome === "reuse" && !caseItem?.reuseAllowed)
+    return "Reuse is not approved for this part type.";
+  if (outcome === "repair" && !caseItem?.repairAllowed)
+    return "Repair is not approved for this part type.";
+  if (outcome === "core_return" && !caseItem?.coreReturnAllowed)
+    return "Core return is not approved for this part type.";
+  if (outcome === "scrap" && !caseItem?.scrapAllowed)
+    return "Scrap is not approved for this part type.";
+  return "You do not have permission for this outcome.";
+}
+
+function defaultReturnOutcome(caseItem, capabilities) {
+  const preferred = {
+    inspect_for_reuse: "reuse",
+    repair: "repair",
+    core_return: "core_return",
+    scrap: "scrap",
+    not_sure: "hold",
+  }[caseItem?.intendedRoute];
+  return [preferred, "hold", "reuse", "repair", "core_return", "scrap"].find(
+    (outcome) => outcome && returnOutcomeAllowed(outcome, caseItem, capabilities),
+  ) || "hold";
 }
 
 export function InventoryCustodyWorkspace({
@@ -182,6 +255,9 @@ export function InventoryCustodyWorkspace({
     dispositionDate: "",
     holderType: "inventory_location",
     reason: "",
+    outcome: "hold",
+    note: "",
+    serial: "",
   });
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -395,14 +471,29 @@ export function InventoryCustodyWorkspace({
       caseItem.serializedUnitId || caseItem.unitId || caseItem.inventoryUnitId;
     if (!unitId || !scopeReady) return;
     try {
-      setDetail(
-        await api(
-          apiPath(`/api/inventory-reuse/units/${encodeURIComponent(unitId)}`, {
-            companyId,
-            locationId,
-          }),
-        ),
+      const loaded = await api(
+        apiPath(`/api/inventory-reuse/units/${encodeURIComponent(unitId)}`, {
+          companyId,
+          locationId,
+        }),
       );
+      setDetail(loaded);
+      const loadedCase = loaded.case || caseItem;
+      if (
+        !saved &&
+        (loadedCase.workflowStatus || loadedCase.status) === "awaiting_handoff" &&
+        RETURN_OUTCOMES.some(([outcome]) =>
+          returnOutcomeAllowed(outcome, loadedCase, loaded.capabilities || {}),
+        )
+      ) {
+        setAction("return");
+        setDraft((current) => ({
+          ...current,
+          outcome: defaultReturnOutcome(loadedCase, loaded.capabilities || {}),
+          note: "",
+          serial: "",
+        }));
+      }
     } catch (error) {
       setActionError(
         error.message || "Exact-unit details could not be loaded.",
@@ -419,10 +510,14 @@ export function InventoryCustodyWorkspace({
       pendingRequest
     )
       return;
-    if (["receive", "repair/complete"].includes(action) && !exactIdentityId) {
+    if (["return", "receive", "repair/complete"].includes(action) && !exactIdentityId) {
       setActionError(
         "Scan or validate the exact QR or serial before receiving this part.",
       );
+      return;
+    }
+    if (action === "return" && !returnOutcomeAllowed(draft.outcome, activeCase, caps)) {
+      setActionError(returnOutcomeReason(draft.outcome, activeCase, caps));
       return;
     }
     const body = custodyCommandBody({
@@ -431,6 +526,7 @@ export function InventoryCustodyWorkspace({
       caseItem,
       detail,
       draft,
+      exactIdentityId,
       idempotencyKey: crypto.randomUUID(),
     });
     if (action === "receive")
@@ -607,9 +703,14 @@ export function InventoryCustodyWorkspace({
     setDetail((current) => ({ ...(current || {}), unit: scanned }));
     setExactIdentityId(scanned.id);
   }
-  const caps = detail?.capabilities || queue.capabilities || {};
+  const caps =
+    detail?.capabilities ||
+    (tab === "stock" ? stock.capabilities : queue.capabilities) ||
+    {};
   const activeCase = detail?.case || selectedCase;
   const nextAction = statusForAction(activeCase, caps);
+  const isAwaitingReturn =
+    (activeCase?.workflowStatus || activeCase?.status) === "awaiting_handoff";
   const page = tab === "stock" ? stockCursor.length : queueCursor.length;
   const state = tab === "stock" ? stock : queue;
   return (
@@ -819,6 +920,16 @@ export function InventoryCustodyWorkspace({
             label="records"
             loading={state.loading}
           />
+          {caps.configure ? (
+            <ReuseSetup
+              companyId={companyId}
+              locationId={locationId}
+              onSaved={() => {
+                refreshRef.current += 1;
+                setQueueCursor([""]);
+              }}
+            />
+          ) : null}
         </>
       )}
       <SecondaryDetailPanel
@@ -904,6 +1015,7 @@ export function InventoryCustodyWorkspace({
           </Button>
         }
       >
+        {!isAwaitingReturn || pendingRequest ? (
         <SecondaryDetailSection title="Current status">
           <dl className="inventory-detail-facts">
             <div>
@@ -944,6 +1056,7 @@ export function InventoryCustodyWorkspace({
             </p>
           ) : null}
         </SecondaryDetailSection>
+        ) : null}
       {!pendingRequest && detail?.unit && caps.route && canCorrectLocationDetail(detail.unit) ? (
           <SecondaryDetailSection title="Correct location detail">
             {action !== "location-correction" ? (
@@ -1026,7 +1139,7 @@ export function InventoryCustodyWorkspace({
             )}
           </SecondaryDetailSection>
         ) : null}
-        {detail?.timeline?.length ? (
+        {!isAwaitingReturn && detail?.timeline?.length ? (
           <SecondaryDetailSection title="History">
             <ol className="inventory-custody-timeline">
               {detail.timeline.map((event, index) => (
@@ -1050,7 +1163,7 @@ export function InventoryCustodyWorkspace({
         ) : null}
         {!pendingRequest && nextAction ? (
           <SecondaryDetailSection
-            title={action ? "Complete action" : "Next action"}
+            title={action === "return" ? "Return part" : action ? "Complete action" : "Next action"}
           >
             {!action ? (
               <div className="inventory-custody-actions">
@@ -1068,6 +1181,9 @@ export function InventoryCustodyWorkspace({
                       externalReference: "",
                       dispositionDate: "",
                       reason: "",
+                      outcome: defaultReturnOutcome(activeCase, caps),
+                      note: "",
+                      serial: "",
                     });
                   }}
                 >
@@ -1082,7 +1198,7 @@ export function InventoryCustodyWorkspace({
               </div>
             ) : (
               <div className="inventory-custody-form">
-                {["receive", "repair/complete"].includes(action) ? (
+                {["return", "receive", "repair/complete"].includes(action) ? (
                   <>
                     <p>
                       Scan the exact QR first. Manual entry remains available
@@ -1124,20 +1240,64 @@ export function InventoryCustodyWorkspace({
                     {action === "repair/complete" ? <><label>Physical return evidence<textarea rows="2" value={draft.receiptEvidence || ""} onChange={(event) => setDraft((current) => ({ ...current, receiptEvidence: event.target.value }))} disabled={saving} /></label><label>Bin or shelf<input value={draft.binLocation} onChange={(event) => setDraft((current) => ({ ...current, binLocation: event.target.value }))} disabled={saving} /></label></> : null}
                   </>
                 ) : null}
-                <label>
-                  Evidence
-                  <textarea
-                    rows="3"
-                    value={draft.evidence}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        evidence: event.target.value,
-                      }))
-                    }
-                    disabled={saving}
-                  />
-                </label>
+                {action === "return" ? (
+                  <>
+                    <label>
+                      Condition
+                      <Dropdown
+                        aria-label="Returned part condition"
+                        value={draft.outcome}
+                        onChange={(event) => {
+                          setActionError("");
+                          setDraft((current) => ({ ...current, outcome: event.target.value }));
+                        }}
+                        disabled={saving}
+                      >
+                        {RETURN_OUTCOMES.map(([value, label]) => (
+                          <option
+                            key={value}
+                            value={value}
+                            disabled={!returnOutcomeAllowed(value, activeCase, caps)}
+                          >
+                            {label}
+                          </option>
+                        ))}
+                      </Dropdown>
+                    </label>
+                    {!returnOutcomeAllowed(draft.outcome, activeCase, caps) ? (
+                      <p className="inventory-custody-guidance" role="status">
+                        {returnOutcomeReason(draft.outcome, activeCase, caps)}
+                      </p>
+                    ) : null}
+                    <details className="inventory-custody-optional">
+                      <summary>Add note</summary>
+                      <label>
+                        Note
+                        <textarea
+                          rows="2"
+                          value={draft.note}
+                          onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
+                          disabled={saving}
+                        />
+                      </label>
+                    </details>
+                  </>
+                ) : (
+                  <label>
+                    Evidence
+                    <textarea
+                      rows="3"
+                      value={draft.evidence}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          evidence: event.target.value,
+                        }))
+                      }
+                      disabled={saving}
+                    />
+                  </label>
+                )}
                 {["receive", "route", "quarantine/resolve"].includes(action) ? (
                   <label>
                     Route
@@ -1272,7 +1432,10 @@ export function InventoryCustodyWorkspace({
                     variant="primary"
                     disabled={
                       saving ||
-                      !draft.evidence.trim() ||
+                      (action !== "return" && !draft.evidence.trim()) ||
+                      (action === "return" &&
+                        (!exactIdentityId ||
+                          !returnOutcomeAllowed(draft.outcome, activeCase, caps))) ||
                       (action === "receive" && !exactIdentityId) ||
                       (action === "repair/complete" && (!exactIdentityId || !draft.receiptEvidence?.trim())) ||
                       (action === "repair/start" && !draft.handlerReference.trim()) ||
@@ -1283,7 +1446,11 @@ export function InventoryCustodyWorkspace({
                     }
                     onClick={execute}
                   >
-                    {saving ? "Saving…" : "Confirm"}
+                    {saving
+                      ? "Saving…"
+                      : action === "return"
+                        ? RETURN_BUTTONS[draft.outcome] || "Return part"
+                        : "Confirm"}
                   </Button>
                   <Button
                     type="button"

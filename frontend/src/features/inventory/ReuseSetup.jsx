@@ -8,7 +8,7 @@ import "./reuse-setup.css";
 
 const actionLabels = { remove: "Record removal", receive: "Receive returned parts", route: "Inspect and route", release: "Inspect and release for reuse", repair: "Start or complete repair", disposition: "Confirm core return or scrap", quarantine: "Resolve quarantine" };
 
-// Configuration is optional and separate from physical actions. No grants are implicit.
+// Configuration stays separate from physical return actions. No grants are implicit.
 export function ReuseSetup({ companyId, locationId, onSaved }) {
   const policyRequestSequence = useRef(0);
   const policyRequestController = useRef(null);
@@ -90,14 +90,14 @@ export function ReuseSetup({ companyId, locationId, onSaved }) {
   }
 
   return <details className="reuse-setup" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary>Reuse permissions and part policy</summary>
+    <summary>Reuse settings</summary>
     {error ? <div role="alert"><p>{error}</p>{!data ? <Button onClick={() => setRevision((value) => value + 1)}>Try again</Button> : null}</div> : null}
     {message ? <p role="status">{message}</p> : null}
     {!data && !error ? <p role="status">Loading settings…</p> : null}
     {data ? <>
       {data.possiblyTruncated ? <p role="status">The staff or saved-policy list is large. Search for the exact part below; ask your administrator if a staff member is missing.</p> : null}
       <form onSubmit={(event) => { event.preventDefault(); void save("grant", { userId, capabilities, reason }); }}>
-        <div className="reuse-setup-heading"><h4>Staff permissions</h4><SectionHelpDisclosure label="About reuse permissions"><p>Choose who can handle returned parts at this location. The person removing a part cannot receive or approve its reuse. Changing settings does not change inventory.</p></SectionHelpDisclosure></div>
+        <div className="reuse-setup-heading"><h4>Staff permissions</h4><SectionHelpDisclosure label="About reuse permissions"><p>Choose who can remove, return, route, and dispose of parts at this location. Every action is recorded.</p></SectionHelpDisclosure></div>
         <label>Staff member<Dropdown aria-label="Staff member" value={userId} onChange={(event) => {
           const id = event.target.value; setUserId(id);
           setCapabilities(data.staff.find((staff) => staff.id === id)?.capabilities || []);

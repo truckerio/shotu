@@ -21,6 +21,13 @@ export const reuseReceiveSchema = z.object({ ...command, evidence,
   actualHolderType: z.enum(["inventory_location", "handoff", "internal_repair", "external_repair", "core_vendor", "scrap_area", "unknown"]).default("inventory_location"),
   actualLocationId: reuseId.optional(), binLocation: z.string().trim().max(200).default(""), correctedRoute: route.optional(),
 }).strict();
+export const reuseReturnSchema = z.object({
+  ...command,
+  exactUnitId: reuseId,
+  outcome: z.enum(["reuse", "repair", "core_return", "scrap", "hold"]),
+  note: z.string().trim().max(2000).default(""),
+  binLocation: z.string().trim().max(200).default(""),
+}).strict();
 export const reuseReviewSchema = z.object({ ...command, decision: z.enum(["release", "hold"]), inspectionEvidence: evidence, reason: evidence, binLocation: z.string().trim().max(200).default("") }).strict();
 export const reuseRouteSchema = z.object({ ...command, route, evidence }).strict();
 export const reuseRepairStartSchema = z.object({ ...command, handlerType: z.enum(["internal", "external"]), handlerReference: evidence, evidence }).strict();

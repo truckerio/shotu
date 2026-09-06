@@ -17,6 +17,7 @@ export function custodyCommandBody({
   caseItem,
   detail,
   draft,
+  exactIdentityId,
   idempotencyKey,
 }) {
   const body = {
@@ -25,6 +26,14 @@ export function custodyCommandBody({
     idempotencyKey,
     evidence: draft.evidence.trim(),
   };
+  if (action === "return") {
+    delete body.evidence;
+    Object.assign(body, {
+      exactUnitId: exactIdentityId,
+      outcome: draft.outcome,
+      ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
+    });
+  }
   if (action === "release") {
     delete body.evidence;
     Object.assign(body, {

@@ -7,8 +7,6 @@ import {
 } from "../../app/routes/route-state.js";
 import {
   assetReusePath,
-  canReleaseCase,
-  caseStage,
   clearReuseRecovery,
   lifecycleIdempotencyKey,
   restoreReuseRecovery,
@@ -16,9 +14,7 @@ import {
   reuseScope,
   saveReuseRecovery,
 } from "./unit-parts-lifecycle-model.js";
-import { ReuseSetup } from "./ReuseSetup.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
-import { InventoryCodeScanner } from "../inventory/InventoryCodeScanner.jsx";
 
 function partLabel(part) {
   return (
@@ -64,16 +60,13 @@ export function UnitPartsLifecycle({
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [active, setActive] = useState(null);
+  const [activePart, setActivePart] = useState(null);
   const [draft, setDraft] = useState({
     reason: "",
     intendedRoute: "inspect_for_reuse",
     note: "",
     ownership: "",
     ownershipEvidence: "",
-    evidence: "",
-    inspectionEvidence: "",
-    reviewReason: "",
   });
   const [pendingRequest, setPendingRequest] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -89,7 +82,6 @@ export function UnitPartsLifecycle({
     note: "",
   });
   const [legacyPartQuery, setLegacyPartQuery] = useState("");
-  const [receivedExactUnitId, setReceivedExactUnitId] = useState("");
   const keys = useRef(new Map());
   const openedInitialRef = useRef("");
   const loadControllerRef = useRef(null);
@@ -126,7 +118,7 @@ export function UnitPartsLifecycle({
   }
 
   useEffect(() => {
-    setActive(null);
+    setActivePart(null);
     setPendingRequest(null);
     setNeedsReconcile(false);
     setData(null);
@@ -137,9 +129,6 @@ export function UnitPartsLifecycle({
       note: "",
       ownership: "unknown",
       ownershipEvidence: "",
-      evidence: "",
-      inspectionEvidence: "",
-      reviewReason: "",
     });
     if (!hasScope || !unit?.id) return undefined;
     void load();
@@ -196,7 +185,7 @@ export function UnitPartsLifecycle({
     );
     if (!part) return;
     openedInitialRef.current = initial;
-    openForm("remove", part);
+    openRemoval(part);
   }, [data, initialUsageId, unit?.id]);
 
   useEffect(() => {
@@ -204,38 +193,34 @@ export function UnitPartsLifecycle({
   }, [busy, pendingRequest, needsReconcile, onBusyChange]);
 
   useEffect(() => {
-    onModeChange?.(active?.kind === "remove" ? "remove" : "");
+    onModeChange?.(activePart ? "remove" : "");
     return () => onModeChange?.("");
-  }, [active?.kind, onModeChange]);
+  }, [activePart, onModeChange]);
 
   useEffect(() => {
-    if (active?.kind !== "remove") return undefined;
+    if (!activePart) return undefined;
     const frame = window.requestAnimationFrame(() => {
       removalFormRef.current?.scrollIntoView({ block: "start" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [active?.kind, active?.item?.usageId]);
+  }, [activePart?.usageId]);
 
-  function openForm(kind, item) {
+  function openRemoval(item) {
     if (busy || pendingRequest) return;
     setPendingRequest(null);
     setNeedsReconcile(false);
     setError("");
-    setReceivedExactUnitId("");
-    setActive({ kind, item });
+    setActivePart(item);
     setDraft({
       reason: "",
       intendedRoute: "inspect_for_reuse",
       note: "",
       ownership: "unknown",
       ownershipEvidence: "",
-      evidence: "",
-      inspectionEvidence: "",
-      reviewReason: "",
     });
   }
   function closeForm() {
-    setActive(null);
+    setActivePart(null);
     setPendingRequest(null);
   }
 
@@ -320,7 +305,7 @@ export function UnitPartsLifecycle({
   }
 
   function remove() {
-    const { item } = active;
+    const item = activePart;
     if (!draft.reason.trim()) return;
     const identity = `remove:${item.usageId}:unit-detail:${draft.reason}:${draft.intendedRoute}:${item.ownershipRequired ? draft.ownership : item.inferredOwnership}:${draft.ownershipEvidence}:${draft.note}`;
     const request = {
@@ -338,52 +323,6 @@ export function UnitPartsLifecycle({
             }
           : {}),
         expectedVersion: item.custodyVersion ?? item.version,
-        idempotencyKey: lifecycleIdempotencyKey(keys.current, identity),
-      },
-    };
-    setPendingRequest(request);
-    submit(request);
-  }
-  function receive() {
-    if (!draft.evidence.trim() || !receivedExactUnitId) return;
-    const identity = `receive:${active.item.id}:${draft.evidence}`;
-    const request = {
-      path: `/api/inventory-reuse/${encodeURIComponent(active.item.id)}/receive`,
-      body: {
-        ...scope,
-        evidence: draft.evidence.trim(),
-        exactUnitId: receivedExactUnitId,
-        expectedVersion: active.item.caseVersion ?? active.item.version,
-        idempotencyKey: lifecycleIdempotencyKey(keys.current, identity),
-      },
-    };
-    setPendingRequest(request);
-    submit(request);
-  }
-  async function resolveReceivedExact(code) {
-    const result = await api(
-      `/api/inventory-reuse/scan?${new URLSearchParams({ ...scope, code })}`,
-    );
-    const scanned = result.unit || result;
-    const expectedId =
-      active?.item?.unitId ||
-      active?.item?.serializedUnitId ||
-      active?.item?.inventoryUnitId;
-    if (!scanned?.id || (expectedId && scanned.id !== expectedId))
-      throw new Error("That QR or serial does not match this returned part.");
-    setReceivedExactUnitId(scanned.id);
-  }
-  function review(decision) {
-    if (!draft.inspectionEvidence.trim() || !draft.reviewReason.trim()) return;
-    const identity = `review:${active.item.id}:${decision}:${draft.inspectionEvidence}:${draft.reviewReason}`;
-    const request = {
-      path: `/api/inventory-reuse/${encodeURIComponent(active.item.id)}/review`,
-      body: {
-        ...scope,
-        decision,
-        inspectionEvidence: draft.inspectionEvidence.trim(),
-        reason: draft.reviewReason.trim(),
-        expectedVersion: active.item.caseVersion ?? active.item.version,
         idempotencyKey: lifecycleIdempotencyKey(keys.current, identity),
       },
     };
@@ -449,11 +388,10 @@ export function UnitPartsLifecycle({
   const approvedParts = installedParts.filter(
     (part) => part.status !== "installed_pending_approval",
   );
-  const cases = data?.cases || [];
   return (
     <div
       className={`unit-parts-lifecycle${
-        active?.kind === "remove" ? " unit-parts-lifecycle--focused" : ""
+        activePart ? " unit-parts-lifecycle--focused" : ""
       }`}
     >
       {error ? (
@@ -494,14 +432,15 @@ export function UnitPartsLifecycle({
                 </div>
                 <Button
                   type="button"
+                  variant="primary"
                   disabled={
                     busy ||
                     Boolean(pendingRequest) ||
                     !data?.capabilities?.remove
                   }
-                  onClick={() => openForm("remove", part)}
+                  onClick={() => openRemoval(part)}
                 >
-                  Remove
+                  Remove part
                 </Button>
               </li>
             ))}
@@ -526,98 +465,27 @@ export function UnitPartsLifecycle({
                 </div>
                 <Button
                   type="button"
+                  variant="primary"
                   disabled={
                     busy ||
                     Boolean(pendingRequest) ||
                     !data?.capabilities?.remove
                   }
-                  onClick={() => openForm("remove", part)}
+                  onClick={() => openRemoval(part)}
                 >
-                  Remove
+                  Remove part
                 </Button>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
-      <section aria-labelledby="returned-parts">
-        <div className="unit-parts-section-heading">
-          <div>
-            <h4 id="returned-parts">Returned parts</h4>
-          </div>
-        </div>
-        {!cases.length ? (
-          <p className="unit-parts-notice">
-            No returned parts are awaiting custody or review.
-          </p>
-        ) : (
-          <ul className="unit-parts-list">
-            {cases.map((caseItem) => (
-              <li key={caseItem.id}>
-                <div>
-                  <strong>
-                    {[
-                      caseItem.partNumber,
-                      caseItem.description,
-                      caseItem.serialNumber,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "Returned part"}
-                  </strong>
-                  <span>
-                    {caseStage(caseItem.status)} · original workorder{" "}
-                    <WorkorderLink
-                      workorder={{
-                        workorderId: caseItem.originalWorkorderId,
-                        workorderSerial: caseItem.originalWorkorderSerial,
-                      }}
-                    />
-                  </span>
-                </div>
-                {caseItem.status === "awaiting_handoff" ? (
-                  <Button
-                    type="button"
-                    disabled={
-                      busy ||
-                      Boolean(pendingRequest) ||
-                      !data?.capabilities?.receive
-                    }
-                    onClick={() => openForm("receive", caseItem)}
-                  >
-                    Receive
-                  </Button>
-                ) : null}
-                {["received_pending_review", "hold"].includes(
-                  caseItem.status,
-                ) ? (
-                  <Button
-                    type="button"
-                    disabled={
-                      busy ||
-                      Boolean(pendingRequest) ||
-                      !data?.capabilities?.release
-                    }
-                    onClick={() => openForm("review", caseItem)}
-                  >
-                    {caseItem.status === "hold" ? "Review again" : "Review"}
-                  </Button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-        {data?.capabilities?.configure ? (
-          <ReuseSetup
-            companyId={scope.companyId}
-            locationId={scope.locationId}
-            onSaved={load}
-          />
-        ) : null}
-      </section>
-      <section
-        className="unit-parts-form"
-        aria-label="Track untracked removed part"
-      >
+      <details className="unit-parts-optional unit-parts-legacy">
+        <summary>Part not listed?</summary>
+        <section
+          className="unit-parts-form"
+          aria-label="Track untracked removed part"
+        >
         <h4>Track an untracked removed part</h4>
         <p>
           Earlier physical history unavailable. This records today’s removal and
@@ -770,8 +638,9 @@ export function UnitPartsLifecycle({
             </div>
           </>
         )}
-      </section>
-      {active?.kind === "remove" ? (
+        </section>
+      </details>
+      {activePart ? (
         <section
           className="unit-parts-form unit-parts-removal-form"
           aria-label="Remove tracked part"
@@ -780,9 +649,9 @@ export function UnitPartsLifecycle({
           <div className="unit-parts-removal-heading">
             <div>
               <h4>Remove part</h4>
-              <strong>{partLabel(active.item)}</strong>
+              <strong>{partLabel(activePart)}</strong>
               <span>
-                Installed on <WorkorderLink workorder={active.item} />
+                Installed on <WorkorderLink workorder={activePart} />
               </span>
             </div>
             <Button
@@ -833,7 +702,7 @@ export function UnitPartsLifecycle({
               <option value="not_sure">Not sure</option>
             </Dropdown>
           </label>
-          {active.item.ownershipRequired ? (
+          {activePart.ownershipRequired ? (
             <>
               <label>
                 Owner
@@ -891,156 +760,13 @@ export function UnitPartsLifecycle({
                 busy ||
                 Boolean(pendingRequest) ||
                 !draft.reason ||
-                (active.item.ownershipRequired && !draft.ownership) ||
-                (active.item.ownershipRequired &&
+                (activePart.ownershipRequired && !draft.ownership) ||
+                (activePart.ownershipRequired &&
                   draft.ownership === "company" &&
                   !draft.ownershipEvidence.trim())
               }
             >
               {busy ? "Removing…" : "Remove part"}
-            </Button>
-          </div>
-        </section>
-      ) : null}
-      {active?.kind === "receive" ? (
-        <section className="unit-parts-form" aria-label="Receive returned part">
-          <h4>2. Receive</h4>
-          <p>
-            Scan the exact QR first. Manual serial entry is available when the
-            camera cannot be used.
-          </p>
-          <InventoryCodeScanner
-            autoStart
-            disabled={busy || Boolean(pendingRequest)}
-            onScan={(code) =>
-              resolveReceivedExact(code).catch((failure) =>
-                setError(failure.message),
-              )
-            }
-            labels={{
-              openError: "This code could not be matched to the returned part.",
-            }}
-          />
-          <label>
-            Exact QR or serial <span>(manual fallback)</span>
-            <input
-              disabled={busy || Boolean(pendingRequest)}
-              onChange={() => setReceivedExactUnitId("")}
-              onBlur={(event) =>
-                event.target.value.trim() &&
-                resolveReceivedExact(event.target.value).catch((failure) =>
-                  setError(failure.message),
-                )
-              }
-            />
-          </label>
-          {receivedExactUnitId ? (
-            <p role="status">Exact returned unit confirmed.</p>
-          ) : (
-            <p className="unit-parts-notice">
-              Scan or validate the exact QR or serial before receiving.
-            </p>
-          )}
-          <label>
-            Receipt evidence
-            <textarea
-              disabled={busy || Boolean(pendingRequest)}
-              rows="2"
-              value={draft.evidence}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  evidence: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <div>
-            <Button
-              type="button"
-              onClick={receive}
-              disabled={
-                busy ||
-                Boolean(pendingRequest) ||
-                !draft.evidence.trim() ||
-                !receivedExactUnitId
-              }
-            >
-              {busy ? "Saving…" : "Confirm receipt"}
-            </Button>
-            <Button
-              type="button"
-              disabled={busy || Boolean(pendingRequest)}
-              onClick={closeForm}
-            >
-              Cancel
-            </Button>
-          </div>
-        </section>
-      ) : null}
-      {active?.kind === "review" ? (
-        <section className="unit-parts-form" aria-label="Review returned part">
-          <h4>3. Review</h4>
-          <label>
-            Inspection evidence
-            <textarea
-              disabled={busy || Boolean(pendingRequest)}
-              rows="2"
-              value={draft.inspectionEvidence}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  inspectionEvidence: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            Review reason <span>(required)</span>
-            <textarea
-              disabled={busy || Boolean(pendingRequest)}
-              rows="2"
-              value={draft.reviewReason}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  reviewReason: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <div>
-            <Button
-              type="button"
-              onClick={() => review("release")}
-              disabled={
-                busy ||
-                Boolean(pendingRequest) ||
-                !canReleaseCase(active.item, data?.capabilities) ||
-                !draft.inspectionEvidence.trim() ||
-                !draft.reviewReason.trim()
-              }
-            >
-              Release to stock
-            </Button>
-            <Button
-              type="button"
-              onClick={() => review("hold")}
-              disabled={
-                busy ||
-                Boolean(pendingRequest) ||
-                !draft.inspectionEvidence.trim() ||
-                !draft.reviewReason.trim()
-              }
-            >
-              Hold part
-            </Button>
-            <Button
-              type="button"
-              disabled={busy || Boolean(pendingRequest)}
-              onClick={closeForm}
-            >
-              Cancel
             </Button>
           </div>
         </section>

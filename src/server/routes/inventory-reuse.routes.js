@@ -17,9 +17,9 @@ export async function handleInventoryReuseApi(req, res, url, helpers, dependenci
       if (suffix === "/remove") { helpers.sendJson(res, 200, await commandInventoryReuse("remove", null, await helpers.readBody(req), helpers.requestContext, dependencies)); return true; }
       if (suffix === "/legacy-track") { helpers.sendJson(res, 200, await commandInventoryReuse("legacy_track", null, await helpers.readBody(req), helpers.requestContext, dependencies)); return true; }
       if (suffix === "/location-correction") { helpers.sendJson(res, 200, await commandInventoryReuse("correct_location", null, await helpers.readBody(req), helpers.requestContext, dependencies)); return true; }
-      const command = /^\/([^/]+)\/(receive|review|release|route|repair\/start|repair\/complete|core-return|scrap|quarantine\/resolve)$/.exec(suffix);
+      const command = /^\/([^/]+)\/(receive|return|review|release|route|repair\/start|repair\/complete|core-return|scrap|quarantine\/resolve)$/.exec(suffix);
       if (command) {
-        const action = { receive: "receive", review: "release", release: "release", route: "route", "repair/start": "repair_start", "repair/complete": "repair_complete", "core-return": "core_return", scrap: "scrap", "quarantine/resolve": "quarantine_resolve" }[command[2]];
+        const action = { receive: "receive", return: "return", review: "release", release: "release", route: "route", "repair/start": "repair_start", "repair/complete": "repair_complete", "core-return": "core_return", scrap: "scrap", "quarantine/resolve": "quarantine_resolve" }[command[2]];
         const body = await helpers.readBody(req);
         helpers.sendJson(res, 200, await commandInventoryReuse(action, command[1], body, helpers.requestContext, dependencies)); return true;
       }

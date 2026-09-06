@@ -10,6 +10,8 @@
 .inventory-custody-form label { display: grid; gap: 6px; color: #344054; font-size: 12px; font-weight: 700; }
 .inventory-custody-form textarea, .inventory-custody-form input, .inventory-custody-form select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #98a2b3; border-radius: 8px; background: #fff; color: #101828; font: inherit; }
 .inventory-custody-form textarea { min-height: 80px; resize: vertical; }
+.inventory-custody-optional { border-top: 1px solid #e4e7ec; }
+.inventory-custody-optional summary { color: #475467; cursor: pointer; display: flex; align-items: center; min-height: 44px; font-size: 13px; font-weight: 600; }
 .inventory-workspace .page-header-actions .inventory-refresh-button > span { display: none; }
 .inventory-workspace .page-header-actions .inventory-invoice-upload-button { width: 40px; padding-inline: 0; }
 .inventory-workspace .page-header-actions .inventory-invoice-upload-button > span { display: none; }

@@ -92,7 +92,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
         {selected && !detailMode ? <SecondaryDetailSection title="Overview"><dl className="units-overview">
           {[["Unit number", selected.unitNo], ["Type", selected.unitType], ["Name", selected.name], ["VIN", selected.vin], ["License plate", selected.licensePlate], ["Make", selected.make], ["Model", selected.model], ["Year", selected.year]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not recorded"}</dd></div>)}
         </dl></SecondaryDetailSection> : null}
-        {selected ? <SecondaryDetailSection className={detailMode ? "unit-parts-focused-section" : ""} title="Parts custody" action={!detailMode ? <SectionHelpDisclosure label="Parts custody help"><p>Removal records custody; it does not make stock available.</p><p>Receive the physical part, then inspect it before release.</p><p>Document company ownership before release. Unknown or customer-owned parts can be held.</p></SectionHelpDisclosure> : null}><UnitPartsLifecycle unit={selected} actorId={actorId} onBusyChange={setDetailBusy} onModeChange={setDetailMode} /></SecondaryDetailSection> : null}
+        {selected ? <SecondaryDetailSection className={detailMode ? "unit-parts-focused-section" : ""} title="Installed parts" action={!detailMode ? <SectionHelpDisclosure label="Installed parts help"><p>Remove a tracked part here. Return it through Inventory when it reaches the shop.</p></SectionHelpDisclosure> : null}><UnitPartsLifecycle unit={selected} actorId={actorId} onBusyChange={setDetailBusy} onModeChange={setDetailMode} /></SecondaryDetailSection> : null}
       </SecondaryDetailPanel>
     </OperationalCollectionPage>
   );

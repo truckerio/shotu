@@ -21,7 +21,7 @@ test("custody inventory reads server-derived stock and every queue through scope
 
 test("custody actions include concurrency and idempotency guards and leave errors visible", async () => {
   const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
-  for (const route of ["receive", "route", "repair/start", "repair/complete", "release", "core-return", "scrap", "quarantine/resolve"]) assert.match(source, new RegExp(route.replace("/", "\\/")));
+  for (const route of ["return", "receive", "route", "repair/start", "repair/complete", "release", "core-return", "scrap", "quarantine/resolve"]) assert.match(source, new RegExp(route.replace("/", "\\/")));
   assert.match(source, /custodyCommandBody/);
   assert.match(source, /idempotencyKey: crypto\.randomUUID\(\)/);
   assert.match(source, /error\.status === 409/);
@@ -34,7 +34,7 @@ test("receipt cannot be submitted until the exact scanned identity matches the r
   const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
   assert.match(source, /const \[exactIdentityId, setExactIdentityId\]/);
   assert.match(source, /expectedId && scanned\.id !== expectedId/);
-  assert.match(source, /\["receive", "repair\/complete"\]\.includes\(action\) && !exactIdentityId/);
+  assert.match(source, /\["return", "receive", "repair\/complete"\]\.includes\(action\) && !exactIdentityId/);
   assert.match(source, /exactUnitId: exactIdentityId/);
   assert.match(source, /Scan or validate the exact QR or serial before receiving this part/);
   assert.match(source, /setExactIdentityId\(\"\"\)/);
@@ -42,6 +42,17 @@ test("receipt cannot be submitted until the exact scanned identity matches the r
   assert.match(source, /aria-label="Next action"/);
   assert.match(source, /aria-label="Repair handler"/);
   assert.match(source, /receiptEvidence/);
+});
+
+test("awaiting handoff is one minimal policy-aware return action", async () => {
+  const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
+  assert.match(source, /return "Return part"/);
+  assert.match(source, /setAction\("return"\)/);
+  assert.match(source, /Ready to reuse/);
+  assert.match(source, /<summary>Add note<\/summary>/);
+  assert.match(source, /action !== "return" && !draft\.evidence\.trim\(\)/);
+  assert.match(source, /returnOutcomeAllowed/);
+  assert.match(source, /import \{ ReuseSetup \}/);
 });
 
 test("queue and repair actions use the lifecycle statuses returned by the server", async () => {

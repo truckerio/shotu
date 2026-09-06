@@ -10,18 +10,6 @@ export function assetReusePath(assetId, scope) {
   return `/api/inventory-reuse/asset/${encodeURIComponent(assetId)}?${params}`;
 }
 
-export function caseStage(status) {
-  if (status === "awaiting_handoff") return "Receive";
-  if (status === "received_pending_review") return "Review";
-  if (status === "hold") return "On hold";
-  if (status === "released") return "Released to stock";
-  return "Pending";
-}
-
-export function canReleaseCase(caseItem, capabilities) {
-  return Boolean(capabilities?.release && ["received_pending_review", "hold"].includes(caseItem?.status) && caseItem?.ownership === "company");
-}
-
 export function reuseOperationPath(key, scope) {
   const params = new URLSearchParams({ companyId: scope.companyId, locationId: scope.locationId });
   return `/api/inventory-reuse/operations/${encodeURIComponent(key)}?${params}`;

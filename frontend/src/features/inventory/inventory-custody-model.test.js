@@ -14,3 +14,24 @@ test("release and quarantine payloads meet their distinct strict contracts", () 
   assert.deepEqual(custodyCommandBody({ ...base, action: "release" }), { companyId: "company", locationId: "location", expectedVersion: 3, idempotencyKey: "idempotency-123", decision: "release", inspectionEvidence: "inspected", reason: "safe", binLocation: "A-1" });
   assert.deepEqual(custodyCommandBody({ ...base, action: "quarantine/resolve" }).resolution, "inspect_for_reuse");
 });
+
+test("one return command carries only exact identity, outcome, and optional note", () => {
+  const body = custodyCommandBody({
+    action: "return",
+    scope: { companyId: "company", locationId: "location" },
+    caseItem: { caseVersion: 5 },
+    detail: {},
+    exactIdentityId: "unit-1",
+    idempotencyKey: "idempotency-123",
+    draft: { evidence: "hidden noise", outcome: "reuse", note: "  tread is good  " },
+  });
+  assert.deepEqual(body, {
+    companyId: "company",
+    locationId: "location",
+    expectedVersion: 5,
+    idempotencyKey: "idempotency-123",
+    exactUnitId: "unit-1",
+    outcome: "reuse",
+    note: "tread is good",
+  });
+});

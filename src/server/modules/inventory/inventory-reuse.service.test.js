@@ -51,6 +51,24 @@ test("versioned receive requires an exact unit confirmation before mutation",asy
   await assert.rejects(commandInventoryReuse("receive",randomUUID(),{companyId,locationId,evidence:"seen",expectedVersion:1,idempotencyKey:"receive-versioned-1"},context,{...auth,mutate:async()=>{mutated=true;}}),{code:"INVENTORY_REUSE_EXACT_UNIT_REQUIRED"});
   assert.equal(mutated,false);
 });
+test("atomic return accepts only an exact unit and a supported outcome", async () => {
+  const caseId = randomUUID();
+  const unitId = randomUUID();
+  let captured;
+  const result = await commandInventoryReuse("return", caseId, {
+    companyId, locationId, exactUnitId: unitId, outcome: "reuse", note: "Passed inspection",
+    expectedVersion: 2, idempotencyKey: "atomic-return-test",
+  }, context, { ...auth, mutate: async (input) => { captured = input; return { case: { status: "released" } }; } });
+  assert.equal(result.case.status, "released");
+  assert.equal(captured.capability, "receive");
+  assert.equal(captured.caseId, caseId);
+  assert.equal(captured.exactUnitId, unitId);
+  assert.equal(captured.outcome, "reuse");
+  await assert.rejects(commandInventoryReuse("return", caseId, {
+    companyId, locationId, exactUnitId: unitId, outcome: "invented",
+    expectedVersion: 2, idempotencyKey: "atomic-return-invalid",
+  }, context, { ...auth, mutate: async () => {} }), { name: "ZodError" });
+});
 test("handoff detail clearing reaches the guarded correction command without becoming a holder transfer", async () => {
   const unitId = randomUUID();
   let captured;
