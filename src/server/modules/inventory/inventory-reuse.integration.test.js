@@ -16,6 +16,7 @@ test("PostgreSQL custody prevents bypass, separates duties, retries exactly once
   const remove = command("remove",f.removerId,{usageId:f.usageId,removalWorkorderId:f.removalWorkorderId,reason:"Bench inspection",ownership:"company",ownershipEvidence:"Original company purchase verified"});
   const stock = async()=> (await query("select quantity_on_hand,quantity_reserved from inventory_items where company_id=$1",[f.companyId])).rows[0];
   try {
+    await query("update inventory_serialized_units set custody_bin_location='OLD-SHELF',custody_external_reference='old holder' where company_id=$1 and id=$2",[f.companyId,f.unitId]);
     await assert.rejects(mutateInventoryReuse({...remove,actorId:f.adminId}),{code:"INVENTORY_REUSE_FORBIDDEN"});
     await assert.rejects(mutateInventoryReuse({...remove,removalWorkorderId:f.secondWorkorderId}),{code:"INVENTORY_REUSE_CHANGED"});
     assert.equal((await finalizeSerializedUnitUsage({...base,workorderId:f.workorderId,usageId:f.usageId,disposition:"removed",actorId:f.removerId,actorRole:"office",idempotencyKey:randomUUID(),requestHash:reuseDigest("old-remove")})).kind,"custody_required");
@@ -23,6 +24,7 @@ test("PostgreSQL custody prevents bypass, separates duties, retries exactly once
     assert.deepEqual(results.map((r)=>r.replayed).sort(),[false,true]);
     const c = results[0].case;
     assert.equal(c.status,"awaiting_handoff");
+    assert.deepEqual((await query("select custody_holder_type,custody_bin_location,custody_external_reference from inventory_serialized_units where company_id=$1 and id=$2",[f.companyId,f.unitId])).rows[0],{custody_holder_type:"handoff",custody_bin_location:"",custody_external_reference:null});
     assert.equal((await stock()).quantity_on_hand,"1.000");
     await assert.rejects(mutateInventoryReuse({...remove,reason:"changed",requestHash:reuseDigest("changed")}),{code:"INVENTORY_REUSE_REPLAY_CONFLICT"});
     const issueScope = {...base,workorderId:f.secondWorkorderId,actorRole:"office",actorId:f.removerId};

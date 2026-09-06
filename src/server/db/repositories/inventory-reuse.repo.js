@@ -181,7 +181,9 @@ export async function mutateInventoryReuse(input) {
       [input.companyId,input.locationId,usage.unit_id,usage.id,usage.asset_id,usage.workorder_id,workorder.id,input.actorId,input.reason,input.ownership,input.ownershipEvidence,usage.status,input.intendedRoute || "not_sure"]);
       caseId = created.rows[0].id;
       await client.query(`update workorder_serialized_part_usages set status='removed',updated_at=now() where company_id=$1 and id=$2`,[input.companyId,usage.id]);
-      await client.query(`update inventory_serialized_units set status='removed',custody_holder_type='handoff',custody_asset_id=null,custody_location_id=$3,condition_code='unknown',custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,usage.unit_id,input.locationId]);
+      await client.query(`update inventory_serialized_units set status='removed',custody_holder_type='handoff',custody_asset_id=null,custody_location_id=$3,
+        custody_bin_location='',custody_external_reference=null,condition_code='unknown',custody_version=custody_version+1,updated_at=now()
+        where company_id=$1 and id=$2`,[input.companyId,usage.unit_id,input.locationId]);
       await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details)
         values($1,$2,'removed',$3,$4,$5,$6,$7::jsonb)`,[input.companyId,usage.unit_id,input.actorId,usage.id,workorder.id,usage.asset_id,JSON.stringify({caseId,originalWorkorderId:usage.workorder_id,custody:"awaiting_handoff",reason:input.reason})]);
     } else if (input.action === "correct_location") {
@@ -256,7 +258,7 @@ export async function mutateInventoryReuse(input) {
         if (current.status !== "repair") changed();
         const policy=await client.query(`select repair_allowed from inventory_reuse_catalog_policies where company_id=$1 and location_id=$2 and catalog_part_id=$3 for share`,[input.companyId,input.locationId,current.catalog_part_id]); if (!policy.rows[0]?.repair_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED","Catalog repair approval is missing.");
         const started=await client.query(`insert into inventory_reuse_repairs(company_id,case_id,handler_type,handler_reference,evidence) values($1,$2,$3,$4,$5) on conflict do nothing returning id`,[input.companyId,caseId,input.handlerType,input.handlerReference,input.evidence]); if (!started.rows[0]) changed();
-        await client.query(`update inventory_serialized_units set custody_holder_type=$3,custody_external_reference=$4,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.handlerType === "external" ? "external_repair" : "internal_repair",input.handlerReference]);
+        await client.query(`update inventory_serialized_units set custody_holder_type=$3,custody_bin_location='',custody_external_reference=$4,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.handlerType === "external" ? "external_repair" : "internal_repair",input.handlerReference]);
         await client.query(`update inventory_reuse_cases set case_version=case_version+1,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId]);
       } else if (input.action === "repair_complete") {
         if (current.status !== "repair") changed();
@@ -273,7 +275,7 @@ export async function mutateInventoryReuse(input) {
         const policy=await client.query(`select core_return_allowed,scrap_allowed from inventory_reuse_catalog_policies where company_id=$1 and location_id=$2 and catalog_part_id=$3 for share`,[input.companyId,input.locationId,current.catalog_part_id]); if (input.action === "core_return" && !policy.rows[0]?.core_return_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED","Catalog core-return approval is missing."); if (input.action === "scrap" && !policy.rows[0]?.scrap_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED","Catalog scrap approval is missing.");
         const next = input.action === "core_return" ? "core_returned" : "scrapped";
         await client.query(`update inventory_reuse_cases set status=$4,external_reference=$5,review_reason=$6,disposition_occurred_on=$7::date,completed_at=now(),case_version=case_version+1,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId,next,input.externalReference,input.evidence,input.dispositionDate]);
-        await client.query(`update inventory_serialized_units set status=$3,custody_holder_type=$4,custody_external_reference=$5,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.action === "scrap" ? "scrapped" : "removed",input.action === "scrap" ? "disposed" : "core_vendor",input.externalReference || ""]);
+        await client.query(`update inventory_serialized_units set status=$3,custody_holder_type=$4,custody_bin_location='',custody_external_reference=$5,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.action === "scrap" ? "scrapped" : "removed",input.action === "scrap" ? "disposed" : "core_vendor",input.externalReference || ""]);
       }
     }
     const result = await loadCase(client,input,caseId);
