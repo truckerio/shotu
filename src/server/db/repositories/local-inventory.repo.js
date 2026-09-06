@@ -280,15 +280,15 @@ export async function postLocalInventoryReceipt({
         await client.query(
           `insert into inventory_serialized_units (
              id, company_id, location_id, receipt_id, receipt_line_id,
-             unit_ordinal, serial_number, status
+             unit_ordinal, serial_number, status, condition_code, custody_holder_type, custody_location_id
            )
-           select input.id, $1, $2, $3, $4, input.ordinal, input.serial_number, 'in_stock'
-           from unnest($5::uuid[], $6::integer[], $7::text[])
-             as input(id, ordinal, serial_number)`,
+           select input.id, $1, $2, $3, $4, input.ordinal, input.serial_number, 'in_stock', input.condition_code, 'inventory_location', $2
+           from unnest($5::uuid[], $6::integer[], $7::text[], $8::text[])
+             as input(id, ordinal, serial_number, condition_code)`,
           [source.company_id, source.location_id, receiptId, line.id,
             line.serializedUnits.map((unit) => unit.id),
             line.serializedUnits.map((unit) => unit.ordinal),
-            line.serializedUnits.map((unit) => unit.serialNumber)],
+            line.serializedUnits.map((unit) => unit.serialNumber), line.serializedUnits.map((unit) => unit.conditionCode || "unknown")],
         );
         await client.query(
           `insert into inventory_unit_events (company_id, unit_id, event_type, actor_id, details)

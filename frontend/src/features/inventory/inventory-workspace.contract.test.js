@@ -49,7 +49,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /event\.preventDefault\(\)/);
   assert.match(workspace, /document\.getElementById\(returnFocusId\)\?\.focus/);
   assert.doesNotMatch(workspace, />Back to inventory<\/Button>/);
-  assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
+  assert.match(office, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
   assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
   assert.doesNotMatch(office, /<InvoiceExtractionWorkspace \/>/);
   assert.doesNotMatch(admin, />Invoices<\/button>/);
@@ -176,11 +176,23 @@ test("part location drilldown creates and prints serialized child QR labels", as
   assert.match(panel, /canCreateAtLocation/);
   assert.match(panel, /No serialized children yet/);
   assert.match(panel, /createOpen/);
-  assert.match(panel, />Add units<\/Button>/);
+  assert.match(panel, />\s*Add units\s*<\/Button>/);
   assert.match(panel, /aria-label="Close add units"/);
-  assert.match(panel, /autoFocus type="number"/);
+  assert.match(panel, /autoFocus\s+type="number"/);
   assert.doesNotMatch(panel, /Add serialized physical units/);
   assert.doesNotMatch(panel, /Application inventory and Odoo reference are kept separate/);
+});
+
+test("stock holder corrections preserve one saved operation until its outcome is known", async () => {
+  const panel = await readFile(new URL("./PartSerializationPanel.jsx", import.meta.url), "utf8");
+  assert.match(panel, /inventory-bin-correction:\$\{actorId\}:\$\{companyId\}/);
+  assert.match(panel, /const request = pendingCorrection \|\|/);
+  assert.match(panel, /INVENTORY_REUSE_OPERATION_NOT_FOUND/);
+  assert.match(panel, /setCorrectionRetryAllowed\(true\)/);
+  assert.match(panel, />\s*Retry saved correction\s*</);
+  assert.match(panel, /Boolean\(pendingCorrection\)/);
+  assert.match(panel, /custodyLegacyAvailable === true/);
+  assert.match(panel, /details\.receiptEvidence/);
 });
 
 test("inventory files use server pagination and accessible upload dialog", async () => {
@@ -218,7 +230,7 @@ test("only the admin workspace enables applying physically counted inventory", a
     readFile(new URL("../office/OfficeWorkspace.jsx", import.meta.url), "utf8"),
   ]);
   assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
-  assert.match(office, /<InventoryWorkspace canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
+  assert.match(office, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
   assert.match(workspace, /canApplyInventoryCount=\{canApplyInventoryCount\}/);
   assert.match(panel, /stocktake\.readyCount && canApplyInventoryCount/);
   assert.match(panel, /An administrator must confirm the physical count before adding inventory/);

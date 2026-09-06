@@ -67,7 +67,12 @@ export const createPartSerializedUnitsSchema = z.object({
   quantity: z.number().int().min(1).max(500),
   idempotencyKey: z.string().trim().min(8).max(120),
   confirmation: z.literal("physically_present_at_location"),
-}).strict();
+  conditionCode: z.enum(["new", "serviceable_used", "refurbished", "unknown"]).optional().default("unknown"),
+  conditionEvidence: z.string().trim().max(2000).optional().default(""),
+  binLocation: z.string().trim().max(200).optional().default(""),
+}).strict().superRefine((value, context) => {
+  if (value.conditionCode !== "unknown" && !value.conditionEvidence) context.addIssue({ code: "custom", path: ["conditionEvidence"], message: "Condition evidence is required when asserting a condition." });
+});
 
 export const resolveInventoryCodeSchema = z.object({
   code: z.string().trim().min(8).max(2000),

@@ -24,11 +24,33 @@ test("pending installation may be removed on its original active workorder, unli
   assert.deepEqual(eligibleRemovalWorkorders({ status: "installed", workorderId: "original" }, []), []);
 });
 
-test("empty removal workorders offer existing creation navigation but never while outcome is unknown", () => {
+test("removal derives safe workorder context and exposes creation only as an exception", () => {
   const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
   assert.match(surface, /createWorkorderSearch\(\)/);
-  assert.match(surface, /Ask your office team to create or activate a workorder for this unit/);
-  assert.match(surface, /!pendingRequest \? <a className="button secondary" href=\{createWorkorderSearch\(\)\}/);
+  assert.match(surface, /Office or Admin can create the removal workorder with this\s+removal/);
+  assert.match(surface, /createWorkorderSearch\(\)/);
+  assert.match(surface, /intendedRoute/);
+  assert.match(surface, /<option value="inspect_for_reuse">Inspect for reuse<\/option>/);
+  assert.doesNotMatch(surface, /<option value="inspect_reuse">/);
+  assert.match(surface, /expectedVersion: item\.custodyVersion/);
+  assert.match(surface, /eligibleWorkorders\.length === 1 \? eligibleWorkorders\[0\]\.id : ""/);
+  assert.match(surface, /\.\.\.\(removalWorkorderId\s+\? \{ removalWorkorderId \}/);
+});
+
+test("unit lifecycle never renders stale parts or dereferences capabilities before its scope loads", () => {
+  const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
+  assert.match(surface, /setData\(null\);\s+setError\(""\);/);
+  assert.match(surface, /if \(!data\)\s+return \(/);
+  assert.doesNotMatch(surface, /!data\.capabilities/);
+});
+
+test("every tracked removal declares ownership and fails closed without request storage", () => {
+  const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(surface, /active\.item\.ownershipRequired/);
+  assert.match(surface, /<option value="company">Company<\/option>/);
+  assert.match(surface, /ownership: "unknown"/);
+  assert.match(surface, /if \(!saveReuseRecovery\(recoveryStorage\(\), recoveryScope, request\)\)/);
+  assert.match(surface, /This action cannot be saved until session storage is available/);
 });
 
 test("custody guidance uses collapsed shared help while operational errors stay visible", () => {
@@ -68,4 +90,23 @@ test("only physically received, known-ownership cases can be released", () => {
   assert.equal(caseStage("received_pending_review"), "Review");
   assert.equal(caseStage("hold"), "On hold");
   assert.equal(caseStage("released"), "Released to stock");
+});
+
+test("admin reuse setup exposes explicit route, repair, disposition, quarantine, and policy controls", () => {
+  const setup = readFileSync(new URL("./ReuseSetup.jsx", import.meta.url), "utf8");
+  for (const capability of ["route", "repair", "disposition", "quarantine"]) assert.match(setup, new RegExp(`\\b${capability}\\b`));
+  for (const policy of ["repairAllowed", "coreReturnAllowed", "scrapAllowed", "evidence"]) assert.match(setup, new RegExp(`\\b${policy}\\b`));
+  assert.match(setup, /Save permissions/);
+  assert.match(setup, /Save part policy/);
+});
+
+test("legacy tracking uses the catalog selector and never accepts a typed catalog ID", () => {
+  const source = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
+  assert.match(source, /<PartCatalogCombobox/);
+  assert.match(source, /catalogEndpoint="\/api\/office\/inventory\/catalog"/);
+  assert.match(source, /catalogPartId: part\.id/);
+  assert.match(source, /catalogPartId: ""/);
+  assert.match(source, /Earlier physical history unavailable/);
+  assert.match(source, /aria-label="Legacy next action"/);
+  assert.match(source, /aria-label="Legacy ownership"/);
 });

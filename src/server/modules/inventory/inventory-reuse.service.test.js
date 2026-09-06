@@ -5,7 +5,7 @@ import { commandInventoryReuse, getInventoryReuse, saveInventoryReuseConfigurati
 import { InventoryError } from "./inventory.errors.js";
 const companyId=randomUUID(),locationId=randomUUID(),actorId=randomUUID(),usageId=randomUUID(),removalWorkorderId=randomUUID();
 const context={actor:{id:actorId,role:"office"},companyIds:new Set([companyId]),locationIds:new Set([locationId])};
-const payload={companyId,locationId,usageId,removalWorkorderId,reason:"Bench test",ownership:"company",ownershipEvidence:"Purchase verified",idempotencyKey:"remove-test-1"};
+const payload={companyId,locationId,usageId,removalWorkorderId,reason:"Bench test",ownership:"company",ownershipEvidence:"Purchase verified",expectedVersion:1,idempotencyKey:"remove-test-1"};
 const auth={authorizeProduct:async()=>{},authorizeWorkorder:async()=>{}};
 test("removal schema freezes command identity, evidence, actor, scope and stable replay hash",async()=>{
   const calls=[];
@@ -39,4 +39,17 @@ test("reads/configuration carry current actor and explicit scope; repository aut
   const result=await getInventoryReuse("asset",scope,assetId,context,{...auth,read:async(input)=>input});
   assert.equal(result.actorId,actorId);assert.equal(result.assetId,assetId);
   await assert.rejects(saveInventoryReuseConfiguration("grant",{...scope,userId:actorId,capabilities:["release"],reason:"Grant"},context,{...auth,configure:async()=>{throw new InventoryError("No explicit admin scope",{code:"INVENTORY_REUSE_FORBIDDEN",statusCode:403});}}),{code:"INVENTORY_REUSE_FORBIDDEN"});
+});
+test("versioned receive requires an exact unit confirmation before mutation",async()=>{
+  let mutated=false;
+  await assert.rejects(commandInventoryReuse("receive",randomUUID(),{companyId,locationId,evidence:"seen",expectedVersion:1,idempotencyKey:"receive-versioned-1"},context,{...auth,mutate:async()=>{mutated=true;}}),{code:"INVENTORY_REUSE_EXACT_UNIT_REQUIRED"});
+  assert.equal(mutated,false);
+});
+test("terminal disposition rejects impossible calendar dates before mutation", async () => {
+  let mutated = false;
+  await assert.rejects(commandInventoryReuse("scrap", randomUUID(), {
+    companyId, locationId, expectedVersion: 1, idempotencyKey: "invalid-disposition-date",
+    evidence: "Disposed", externalReference: "Scrap yard", dispositionDate: "2026-02-30",
+  }, context, { ...auth, mutate: async () => { mutated = true; } }), { name: "ZodError" });
+  assert.equal(mutated, false);
 });

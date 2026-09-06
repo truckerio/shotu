@@ -208,9 +208,11 @@ export async function listAvailableSerializedUnitsForWorkorder({
          on line.company_id = unit.company_id and line.id = unit.receipt_line_id
        join inventory_receipts receipt
          on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
-        and receipt.provider in ('local', 'local_count', 'local_serialization')
+        and receipt.provider in ('local', 'local_count', 'local_serialization', 'legacy_tracking')
        where unit.company_id = $2 and unit.location_id = $3
          and line.catalog_part_id = selected_part.id and unit.status = 'in_stock'
+         and unit.custody_holder_type = 'inventory_location'
+         and (unit.condition_code in ('new','serviceable_used','refurbished') or (unit.condition_code='unknown' and unit.custody_legacy_available))
          and ($5::text = '' or unit.serial_number ilike '%' || replace(replace(replace($5, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' escape '\\')
          and ($6::text = '' or unit.serial_number > $6)
        order by unit.serial_number, unit.id
@@ -275,7 +277,7 @@ export async function listAvailableSerializedUnitsForCreate({
                    and tracking_line.uom_code = part.uom_code
                    and tracking_line.tracking_mode = 'serial'
                    and tracking_receipt.location_id = location.id
-                   and tracking_receipt.provider in ('local', 'local_count', 'local_serialization')
+                   and tracking_receipt.provider in ('local', 'local_count', 'local_serialization', 'legacy_tracking')
               ) as serialization_required
        from parts_catalog part
        join locations location on location.company_id = part.company_id
@@ -300,9 +302,11 @@ export async function listAvailableSerializedUnitsForCreate({
          on line.company_id = unit.company_id and line.id = unit.receipt_line_id
        join inventory_receipts receipt
          on receipt.company_id = unit.company_id and receipt.id = unit.receipt_id
-        and receipt.provider in ('local', 'local_count', 'local_serialization')
+        and receipt.provider in ('local', 'local_count', 'local_serialization', 'legacy_tracking')
        where unit.company_id = $1 and unit.location_id = $2
          and line.catalog_part_id = selected_part.id and unit.status = 'in_stock'
+         and unit.custody_holder_type = 'inventory_location'
+         and (unit.condition_code in ('new','serviceable_used','refurbished') or (unit.condition_code='unknown' and unit.custody_legacy_available))
          and ($4::text = '' or unit.serial_number ilike '%' || replace(replace(replace($4, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' escape '\\')
          and ($5::text = '' or unit.serial_number > $5)
        order by unit.serial_number, unit.id
@@ -405,10 +409,11 @@ export async function reserveSerializedUnitsForCreatedWorkorder(input, client) {
     }
     const updatedUnits = await client.query(
       `update inventory_serialized_units
-          set status = 'reserved', updated_at = now()
-        where company_id = $1 and id = any($2::uuid[]) and status = 'in_stock'
+          set status = 'reserved', custody_holder_type='inventory_location', custody_location_id=$3, custody_asset_id=null, custody_version=custody_version+1, updated_at = now()
+        where company_id = $1 and id = any($2::uuid[]) and status = 'in_stock' and custody_holder_type='inventory_location'
+          and (condition_code in ('new','serviceable_used','refurbished') or (condition_code='unknown' and custody_legacy_available))
         returning id`,
-      [workorder.company_id, selection.unitIds],
+      [workorder.company_id, selection.unitIds, workorder.location_id],
     );
     if (updatedUnits.rowCount !== units.length) return { kind: "unit_state" };
     const updatedItem = await client.query(
@@ -624,8 +629,8 @@ export async function issueSerializedUnitToWorkorder(input) {
     );
     const usageId = inserted.rows[0].id;
     const updatedUnit = await client.query(
-      "update inventory_serialized_units set status = 'reserved', updated_at = now() where company_id = $1 and id = $2 and status = 'in_stock' returning id",
-      [workorder.company_id, unit.id],
+      "update inventory_serialized_units set status = 'reserved', custody_holder_type='inventory_location', custody_location_id=$3, custody_asset_id=null, custody_version=custody_version+1, updated_at = now() where company_id = $1 and id = $2 and status = 'in_stock' and custody_holder_type='inventory_location' and (condition_code in ('new','serviceable_used','refurbished') or (condition_code='unknown' and custody_legacy_available)) returning id",
+      [workorder.company_id, unit.id, workorder.location_id],
     );
     if (!updatedUnit.rows[0]) throw new Error("Serialized inventory unit changed while it was being reserved.");
     const updatedItem = await client.query(
@@ -773,9 +778,13 @@ export async function finalizeSerializedUnitUsage(input) {
       : nextStatus;
     const nextUnitStatus = nextStatus === "returned" ? "in_stock" : nextStatus;
     await client.query(
-      `update inventory_serialized_units set status = $3, updated_at = now()
+      `update inventory_serialized_units set status = $3::text,
+         custody_holder_type=case when $3::text in ('installed','installed_pending_approval') then 'asset' else 'inventory_location' end,
+         custody_asset_id=case when $3::text in ('installed','installed_pending_approval') then $5::uuid else null end,
+         custody_location_id=case when $3::text in ('installed','installed_pending_approval') then null else $6::uuid end,
+         custody_version=custody_version+1, updated_at = now()
        where company_id = $1 and id = $2 and status = $4`,
-      [workorder.company_id, usage.unit_id, nextUnitStatus, usage.unit_status],
+      [workorder.company_id, usage.unit_id, nextUnitStatus, usage.unit_status, workorder.asset_id, workorder.location_id],
     );
     await client.query(
       `update workorder_serialized_part_usages
@@ -842,8 +851,8 @@ export async function consumePendingSerializedInstallationsForApproval(client, {
     );
     if (!consumed.rows[0]) throw new Error("Serialized installation reservation does not match local inventory balance.");
     await client.query(
-      "update inventory_serialized_units set status = 'installed', updated_at = now() where company_id = $1 and id = $2 and status = 'installed_pending_approval'",
-      [companyId, usage.unit_id],
+      "update inventory_serialized_units set status = 'installed', custody_holder_type='asset', custody_asset_id=$3, custody_location_id=null, custody_version=custody_version+1, updated_at = now() where company_id = $1 and id = $2 and status = 'installed_pending_approval'",
+      [companyId, usage.unit_id, usage.asset_id],
     );
     await client.query(
       "update workorder_serialized_part_usages set status = 'installed', finalized_by_user_id = $3, finalized_at = now(), updated_at = now() where company_id = $1 and id = $2 and status = 'installed_pending_approval'",

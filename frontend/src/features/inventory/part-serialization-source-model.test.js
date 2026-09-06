@@ -32,3 +32,11 @@ test("invoice source falls back to its file while non-invoice sources stay unlin
     href: "",
   });
 });
+
+test("legacy tracking keeps the unknown history visible instead of presenting an internal ID as a supplier serial", () => {
+  assert.deepEqual(serializedUnitSourceView({ type: "legacy_tracking", id: "tracking-1" }), {
+    label: "Earlier physical history unavailable",
+    details: "Tracking begins with the recorded removal.",
+    href: "",
+  });
+});

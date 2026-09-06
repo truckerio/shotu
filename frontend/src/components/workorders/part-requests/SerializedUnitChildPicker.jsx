@@ -13,6 +13,14 @@ function selectedSet(value) {
   return value instanceof Set ? value : new Set(Array.isArray(value) ? value : []);
 }
 
+function conditionLabel(unit) {
+  return { new: "New", serviceable_used: "Reusable", refurbished: "Refurbished", unknown: "Unclassified" }[unit?.conditionCode] || "";
+}
+
+function holderLabel(unit) {
+  return unit?.custodyBinLocation ? `${unit.custodyHolderLabel || unit.custodyHolderType || unit.locationName || "Location"} · ${unit.custodyBinLocation}` : unit?.custodyHolderLabel || unit?.custodyHolderType || unit?.locationName || "";
+}
+
 export function SerializedUnitChildPicker({
   disabled = false,
   locale = "en",
@@ -66,7 +74,7 @@ export function SerializedUnitChildPicker({
               />
               <span>
                 <strong>{unit.serialNumber || unit.serial}</strong>
-                <small>{unit.status === "in_stock" ? text.stock : unit.status}{unit.locationName ? ` · ${unit.locationName}` : ""}</small>
+                <small>{[unit.status === "in_stock" ? text.stock : unit.status, conditionLabel(unit), holderLabel(unit)].filter(Boolean).join(" · ")}</small>
               </span>
               {partNumber ? <small className="serialized-unit-child-part">{partNumber}</small> : null}
             </label>

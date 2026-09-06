@@ -21,6 +21,7 @@ import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
 import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
 import { InventoryAuthorityExceptionsPanel } from "./InventoryAuthorityExceptionsPanel.jsx";
+import { InventoryCustodyWorkspace } from "./InventoryCustodyWorkspace.jsx";
 import {
   DEFAULT_STOCK_SORT,
   STOCK_FILTER_OPTIONS,
@@ -93,6 +94,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [partIdentityRefreshPending, setPartIdentityRefreshPending] = useState(null);
   const [createPartOpen, setCreatePartOpen] = useState(false);
   const [stockPage, setStockPage] = useState(1);
+  const [inventorySection, setInventorySection] = useState("stock");
   const [stockMeta, setStockMeta] = useState({ pageCount: 1, total: 0, counts: { all: 0, available: 0, reserved: 0, out: 0 } });
 
   useEffect(() => {
@@ -291,7 +293,10 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
 
       {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading inventory files</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 
-      <OperationalCollectionTabs
+      <OperationalCollectionTabs ariaLabel="Inventory sections" activeId={inventorySection} onChange={setInventorySection} items={[{ id: "stock", label: "Stock" }, { id: "returns", label: "Returns & repairs" }]} />
+      {inventorySection === "returns" ? <InventoryCustodyWorkspace locations={locations} actorId={actorId} initialTab="returns" hidePrimaryTabs /> : null}
+
+      {inventorySection === "stock" ? <><OperationalCollectionTabs
         className="inventory-stock-tabs"
         ariaLabel="Filter stock by availability"
         activeId={stockFilter}
@@ -372,6 +377,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         {selectedItem ? selectedLocation ? <PartSerializationPanel
           item={selectedItem}
           location={selectedLocation}
+          companyId={selectedItem.companyId}
+          actorId={actorId}
           onBack={() => setSelectedLocationId("")}
           onInventoryChanged={() => setRefreshKey((value) => value + 1)}
         /> : <>
@@ -417,7 +424,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           </SecondaryDetailSection>
 
         </> : null}
-      </SecondaryDetailPanel>
+      </SecondaryDetailPanel></> : null}
       </>}
     </OperationalCollectionPage>
   );

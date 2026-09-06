@@ -14,7 +14,7 @@ export async function createInventoryReuseFixture({installed = true, configured 
   };
   f.cleanup = async () => {
     // Restrict every delete to this fresh random company, in FK order.
-    for (const table of ["inventory_reuse_operations","inventory_reuse_audit_events","inventory_reuse_cases","inventory_reuse_capability_grants","inventory_reuse_catalog_policies","inventory_unit_events","inventory_stock_movements","workorder_serialized_part_usage_commands","workorder_serialized_part_usages","inventory_serialized_units","inventory_receipt_lines","inventory_receipts","inventory_items","parts_catalog"]) {
+    for (const table of ["inventory_reuse_operations","inventory_reuse_audit_events","inventory_reuse_repairs","inventory_reuse_cases","inventory_reuse_capability_grants","inventory_reuse_catalog_policies","inventory_unit_events","inventory_stock_movements","workorder_serialized_part_usage_commands","workorder_serialized_part_usages","inventory_serialized_units","inventory_receipt_lines","inventory_receipts","inventory_items","parts_catalog"]) {
       await query(`delete from ${table} where company_id=$1`,[f.companyId]);
     }
     await query("delete from workorder_mechanic_assignments where workorder_id=any($1::uuid[])",[[f.workorderId,f.removalWorkorderId,f.secondWorkorderId]]);
@@ -48,8 +48,8 @@ export async function createInventoryReuseFixture({installed = true, configured 
       values($1,$2,$3,$4,$5,$6,'local',$7,'Custody original purchase','confirmed',now())`,[f.receiptId,f.companyId,f.locationId,f.runId,f.adminId,`receipt-${suffix}`,`LOCAL-${suffix}`]);
     await query(`insert into inventory_receipt_lines(id,company_id,receipt_id,line_index,catalog_part_id,product_external_id,part_number,description,quantity,uom_code,tracking_mode)
       values($1,$2,$3,0,$4,$5,$6,'Reusable QA alternator',2,'ea','serial')`,[f.lineId,f.companyId,f.receiptId,f.catalogPartId,`local:${f.catalogPartId}`,`CQ-${suffix}`]);
-    await query(`insert into inventory_serialized_units(id,company_id,location_id,receipt_id,receipt_line_id,unit_ordinal,serial_number,status)
-      values($1,$3,$4,$5,$6,1,$7,'in_stock'),($2,$3,$4,$5,$6,2,$8,'in_stock')`,[f.unitId,f.pendingUnitId,f.companyId,f.locationId,f.receiptId,f.lineId,`CQ-SERIAL-${suffix}-1`,`CQ-SERIAL-${suffix}-2`]);
+    await query(`insert into inventory_serialized_units(id,company_id,location_id,receipt_id,receipt_line_id,unit_ordinal,serial_number,status,condition_code,custody_holder_type,custody_location_id)
+      values($1,$3,$4,$5,$6,1,$7,'in_stock','new','inventory_location',$4),($2,$3,$4,$5,$6,2,$8,'in_stock','new','inventory_location',$4)`,[f.unitId,f.pendingUnitId,f.companyId,f.locationId,f.receiptId,f.lineId,`CQ-SERIAL-${suffix}-1`,`CQ-SERIAL-${suffix}-2`]);
     await query(`insert into inventory_items(company_id,location_id,catalog_part_id,normalized_part_number,part_number,description,quantity_on_hand,quantity_reserved,uom_code,source_provider,external_id)
       values($1,$2,$3,$4,$5,'Reusable QA alternator',2,0,'ea','local',$6)`,[f.companyId,f.locationId,f.catalogPartId,`CQ${suffix}`,`CQ-${suffix}`,`local:${suffix}`]);
     if (configured) await query("insert into inventory_reuse_catalog_policies(company_id,location_id,catalog_part_id,reuse_allowed,evidence,updated_by_user_id) values($1,$2,$3,true,'QA approved reusable catalog item',$4)",[f.companyId,f.locationId,f.catalogPartId,f.adminId]);

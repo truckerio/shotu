@@ -1,4 +1,15 @@
 .inventory-workspace .page-header-actions .inventory-refresh-button { width: 40px; padding-inline: 0; }
+.inventory-custody { display: grid; gap: 16px; }
+.inventory-custody-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.inventory-custody-units, .inventory-custody-timeline { display: grid; gap: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid #e4e7ec; border-radius: 8px; list-style: none; }
+.inventory-custody-units li, .inventory-custody-timeline li { display: grid; gap: 3px; padding: 11px 12px; border-top: 1px solid #eaecf0; }
+.inventory-custody-units li:first-child, .inventory-custody-timeline li:first-child { border-top: 0; }
+.inventory-custody-units span, .inventory-custody-timeline span { color: #667085; font-size: 12px; }
+.inventory-custody-actions, .inventory-custody-form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.inventory-custody-form { display: grid; gap: 12px; }
+.inventory-custody-form label { display: grid; gap: 6px; color: #344054; font-size: 12px; font-weight: 700; }
+.inventory-custody-form textarea, .inventory-custody-form input, .inventory-custody-form select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #98a2b3; border-radius: 8px; background: #fff; color: #101828; font: inherit; }
+.inventory-custody-form textarea { min-height: 80px; resize: vertical; }
 .inventory-workspace .page-header-actions .inventory-refresh-button > span { display: none; }
 .inventory-workspace .page-header-actions .inventory-invoice-upload-button { width: 40px; padding-inline: 0; }
 .inventory-workspace .page-header-actions .inventory-invoice-upload-button > span { display: none; }
@@ -224,6 +235,8 @@
   .inventory-workspace .page-header-actions .inventory-refresh-button,
   .inventory-workspace .page-header-actions .inventory-invoice-upload-button { width: 44px; }
   .inventory-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .inventory-custody-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .inventory-custody-actions .button, .inventory-custody-form > div .button { width: 100%; justify-content: center; min-height: 44px; }
   .inventory-results-line { align-items: flex-start; flex-wrap: wrap; }
   .inventory-stock-row { grid-template-columns: 1fr auto; min-height: 58px; }
   .inventory-stock-row > .operational-collection-cell:nth-child(2), .inventory-stock-row > .operational-collection-cell:nth-child(3) { display: none; }

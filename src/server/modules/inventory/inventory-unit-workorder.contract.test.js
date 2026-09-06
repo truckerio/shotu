@@ -117,7 +117,7 @@ test("workorder inline intake locks active lifecycle before durable writes", () 
 test("available child listing stays workorder, company, location, catalog, provider, and size scoped", () => {
   assert.match(repository, /workorder\.id = \$1 and workorder\.company_id = \$2/);
   assert.match(repository, /workorder\.location_id = \$3 and part\.id = \$4/);
-  assert.match(repository, /receipt\.provider in \('local', 'local_count', 'local_serialization'\)/);
+  assert.match(repository, /receipt\.provider in \('local', 'local_count', 'local_serialization', 'legacy_tracking'\)/);
   assert.match(repository, /unit\.status = 'in_stock'/);
   assert.match(repository, /limit \$7/);
   assert.doesNotMatch(repository, /vendor_name|invoice_number|qr_token/i);

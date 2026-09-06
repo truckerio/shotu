@@ -6,7 +6,7 @@ import {
 } from "./inventory-provider.js";
 
 test("application-owned inventory provider policy is explicit and fail-closed", () => {
-  assert.deepEqual(APPLICATION_OWNED_INVENTORY_PROVIDERS, ["local", "local_count", "local_serialization"]);
+  assert.deepEqual(APPLICATION_OWNED_INVENTORY_PROVIDERS, ["local", "local_count", "local_serialization", "legacy_tracking"]);
   for (const provider of APPLICATION_OWNED_INVENTORY_PROVIDERS) {
     assert.equal(isApplicationOwnedInventoryProvider(provider), true);
   }

@@ -141,6 +141,7 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
           id: randomUUID(),
           ordinal: index + 1,
           serialNumber: `WG-L-${receiptId.replaceAll("-", "").slice(0, 16).toUpperCase()}-${line.lineIndex + 1}-${index + 1}`,
+          conditionCode: "unknown",
         }))
         : [],
     };

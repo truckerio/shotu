@@ -376,7 +376,7 @@ export function OfficeWorkspace({
           {activeTab === "units" ? (
             <UnitsWorkspace actorId={actor?.id} presentation="embedded" />
           ) : activeTab === "inventory" ? (
-            <InventoryWorkspace canApplyInventoryCount={false} presentation="embedded" />
+            <InventoryWorkspace actorId={actor?.id} canApplyInventoryCount={false} presentation="embedded" />
           ) : activeTab === "drafts" ? (
             <WorkorderDraftQueue
               role={actor.role}

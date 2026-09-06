@@ -8,7 +8,7 @@ export const OPERATION_CATEGORIES = [
   { id: "needs_attention", label: "Needs attention", countKey: "needsAttention" },
   { id: "unassigned", label: "Unassigned", countKey: "unassigned" },
   { id: "active", label: "Active", countKey: "active" },
-  { id: "parts", label: "Parts", countKey: "parts" },
+  { id: "parts", label: "Part requests", countKey: "parts" },
   { id: "ready_review", label: "Ready review", countKey: "readyReview" },
   { id: "drafts", label: "Drafts", countKey: "drafts" },
   { id: "odoo_backlog", label: "Odoo backlog", countKey: "odooBacklog" },

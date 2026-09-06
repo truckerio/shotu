@@ -599,9 +599,9 @@ export async function applyInventoryCountImport({
         await client.query(
           `insert into inventory_serialized_units (
              id, company_id, location_id, receipt_id, receipt_line_id,
-             unit_ordinal, serial_number, status
+             unit_ordinal, serial_number, status, condition_code, custody_holder_type, custody_location_id
            )
-           select input.id, $1, $2, $3, $4, input.ordinal, input.serial_number, 'in_stock'
+           select input.id, $1, $2, $3, $4, input.ordinal, input.serial_number, 'in_stock', 'unknown', 'inventory_location', $2
            from unnest($5::uuid[], $6::integer[], $7::text[])
              as input(id, ordinal, serial_number)`,
           [stocktake.company_id, stocktake.location_id, receiptId, receiptLineId,

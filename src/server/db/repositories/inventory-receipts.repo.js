@@ -206,9 +206,9 @@ export async function stageInventoryReceipt({
     );
     await client.query(
       `insert into inventory_serialized_units (
-         id, company_id, location_id, receipt_id, receipt_line_id, unit_ordinal, serial_number
+         id, company_id, location_id, receipt_id, receipt_line_id, unit_ordinal, serial_number, condition_code, custody_holder_type, custody_location_id
        )
-       select input.id, $1, $2, $3, input.receipt_line_id, input.unit_ordinal, input.serial_number
+       select input.id, $1, $2, $3, input.receipt_line_id, input.unit_ordinal, input.serial_number, 'unknown', 'inventory_location', $2
        from unnest($4::uuid[], $5::uuid[], $6::integer[], $7::text[])
          as input(id, receipt_line_id, unit_ordinal, serial_number)`,
       [companyId, locationId, receiptId, units.map((unit) => unit.id), units.map((unit) => unit.receiptLineId),

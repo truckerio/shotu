@@ -140,7 +140,16 @@ export async function setupInventoryCustodyFixture({ environment = process.env, 
       releaser: await RoleApiClient.create({ role: "office", baseUrl: config.baseUrl, timeoutMs: config.timeoutMs }),
     };
     try {
-      await Promise.all(Object.entries(clients).map(([name, client]) => client.authenticate(credentials[name])));
+      for (const [name, client] of Object.entries(clients)) {
+        for (let attempt = 0; ; attempt += 1) {
+          try { await client.authenticate(credentials[name]); break; }
+          catch (error) {
+            if (error.status !== 429 || attempt >= 4) throw error;
+            logger.log("[inventory-custody] respecting local authentication rate limit");
+            await new Promise((resolve) => setTimeout(resolve, 20_000));
+          }
+        }
+      }
     } catch (error) {
       try {
         await disposeAll(clients);
@@ -203,7 +212,8 @@ export async function runInventoryCustodyLocal({ environment = process.env, logg
     await ready.createRemovalWorkorder();
     assert.equal((await stockSnapshot(pool, ready)).on_hand, "1.000", "Approved installed stock must be consumed exactly once.");
 
-    const removeBody = { ...scope, usageId: originalUsageId, removalWorkorderId: ready.removalWorkorderId, reason: "Local QA removal after verified service.", ownership: "company", ownershipEvidence: "Fixture inventory is company-owned.", idempotencyKey: key(runId, "remove") };
+    const expectedVersion = (await pool.query("select custody_version from inventory_serialized_units where company_id=$1 and id=$2", [ready.companyId, ready.unitId])).rows[0].custody_version;
+    const removeBody = { ...scope, expectedVersion, usageId: originalUsageId, removalWorkorderId: ready.removalWorkorderId, reason: "Local QA removal after verified service.", ownership: "company", ownershipEvidence: "Fixture inventory is company-owned.", idempotencyKey: key(runId, "remove") };
     const removed = await clients.admin.request("/api/inventory-reuse/remove", { method: "POST", body: removeBody });
     const custodyCase = assertCase(removed, "awaiting_handoff", "removal");
     const duplicate = await clients.admin.request("/api/inventory-reuse/remove", { method: "POST", body: removeBody });
@@ -214,19 +224,19 @@ export async function runInventoryCustodyLocal({ environment = process.env, logg
     const duplicateState = await clients.admin.request("/api/inventory-reuse/remove", { method: "POST", expectedStatuses: [409], body: { ...removeBody, idempotencyKey: key(runId, "remove-again") } });
     assertCode(duplicateState, "INVENTORY_REUSE_CHANGED", "new-key duplicate removal");
 
-    const selfApprove = await clients.admin.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", expectedStatuses: [403], body: { ...scope, evidence: "Improper self-handoff.", idempotencyKey: key(runId, "self-receive") } });
+    const selfApprove = await clients.admin.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", expectedStatuses: [403], body: { ...scope, exactUnitId: ready.unitId, expectedVersion: custodyCase.caseVersion, evidence: "Improper self-handoff.", idempotencyKey: key(runId, "self-receive") } });
     assertCode(selfApprove, "INVENTORY_REUSE_SEPARATION_REQUIRED", "self receive");
     const tenantDenied = await clients.receiver.request(`/api/inventory-reuse?companyId=${randomUUID()}&locationId=${ready.locationId}`, { expectedStatuses: [403] });
     assert.equal(tenantDenied.status, 403, "A non-admin fixture actor unexpectedly bypassed tenant scope.");
-    const received = await clients.receiver.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", body: { ...scope, evidence: "Physical handoff received by a separate office actor.", idempotencyKey: key(runId, "receive") } });
+    const received = await clients.receiver.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", body: { ...scope, exactUnitId: ready.unitId, expectedVersion: custodyCase.caseVersion, evidence: "Physical handoff received by a separate office actor.", idempotencyKey: key(runId, "receive") } });
     assertCase(received, "received_pending_review", "receive");
     await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.receiverId, capabilities: [], reason: "Local QA verifies revoked capability." } });
     const revoked = await clients.receiver.request(`/api/inventory-reuse/operations/${encodeURIComponent(key(runId, "receive"))}?companyId=${ready.companyId}&locationId=${ready.locationId}`, { expectedStatuses: [403] });
     assert.equal(revoked.status, 403, "Revoked receiver capability still read an operation confirmation.");
 
-    const released = await clients.releaser.request(`/api/inventory-reuse/${custodyCase.id}/review`, { method: "POST", body: { ...scope, decision: "release", inspectionEvidence: "Inspection passed and serial identity matched.", reason: "Reusable company-owned serialized part released to stock.", idempotencyKey: key(runId, "release") } });
+    const released = await clients.releaser.request(`/api/inventory-reuse/${custodyCase.id}/review`, { method: "POST", body: { ...scope, decision: "release", expectedVersion: received.body.case.caseVersion, inspectionEvidence: "Inspection passed and serial identity matched.", reason: "Reusable company-owned serialized part released to stock.", idempotencyKey: key(runId, "release") } });
     assertCase(released, "released", "release");
-    const releaseReplay = await clients.releaser.request(`/api/inventory-reuse/${custodyCase.id}/review`, { method: "POST", body: { ...scope, decision: "release", inspectionEvidence: "Inspection passed and serial identity matched.", reason: "Reusable company-owned serialized part released to stock.", idempotencyKey: key(runId, "release") } });
+    const releaseReplay = await clients.releaser.request(`/api/inventory-reuse/${custodyCase.id}/review`, { method: "POST", body: { ...scope, decision: "release", expectedVersion: received.body.case.caseVersion, inspectionEvidence: "Inspection passed and serial identity matched.", reason: "Reusable company-owned serialized part released to stock.", idempotencyKey: key(runId, "release") } });
     assert.equal(releaseReplay.body?.replayed, true, "Duplicate release must replay without duplicate stock.");
     assert.deepEqual(await stockSnapshot(pool, ready), { on_hand: "2.000", reserved: "0.000", issues: 1, returns: 1, unit_status: "in_stock", receipt_id: ready.receiptId, invoice_run_id: ready.invoiceRunId }, "Released stock snapshot or invoice lineage changed unexpectedly.");
 

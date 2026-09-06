@@ -54,9 +54,9 @@ export function SerializedUnitNestedDropdown({
     : new Set(Array.isArray(selectedUnitIds) ? selectedUnitIds : []);
   const selectedCount = eligibleSelectedUnitIds(units, selected).length;
   const visibleUnits = useMemo(() => {
-    if (onSearch || !searchQuery.trim()) return units;
-    const normalized = searchQuery.trim().toLocaleLowerCase();
-    return units.filter((unit) => serialText(unit).toLocaleLowerCase().includes(normalized));
+    const matching = onSearch || !searchQuery.trim() ? units : units.filter((unit) => serialText(unit).toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
+    const rank = { serviceable_used: 0, refurbished: 1, new: 2, unknown: 3 };
+    return [...matching].sort((left, right) => (rank[left?.conditionCode] ?? 4) - (rank[right?.conditionCode] ?? 4) || serialText(left).localeCompare(serialText(right)));
   }, [onSearch, searchQuery, units]);
 
   useEffect(() => {

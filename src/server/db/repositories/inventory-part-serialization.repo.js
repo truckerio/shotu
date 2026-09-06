@@ -101,10 +101,10 @@ export async function createPartSerializedUnits({
   companyIds,
   locationIds = [],
   isAdmin = false,
-  workorderId = null,
+  workorderId = null, conditionCode = "unknown", conditionEvidence = "", binLocation = "",
 }) {
   const client = await getPool().connect();
-  const hash = hashRequest({ catalogPartId, locationId, quantity, confirmation });
+  const hash = hashRequest({ catalogPartId, locationId, quantity, confirmation, conditionCode, conditionEvidence, binLocation });
   let workorderStatus = null;
   try {
     await client.query("begin");
@@ -250,19 +250,19 @@ export async function createPartSerializedUnits({
     await client.query(
       `insert into inventory_serialized_units (
          id, company_id, location_id, receipt_id, receipt_line_id,
-         unit_ordinal, serial_number, status
+         unit_ordinal, serial_number, status, condition_code, custody_holder_type, custody_location_id, custody_bin_location
        )
-       select input.id, $1, $2, $3, $4, input.ordinal, input.serial_number, 'in_stock'
+       select input.id, $1, $2, $3, $4, input.ordinal, input.serial_number, 'in_stock', $8, 'inventory_location', $2, $9
        from unnest($5::uuid[], $6::integer[], $7::text[])
          as input(id, ordinal, serial_number)`,
-      [part.company_id, part.location_id, receiptId, receiptLineId, unitIds, ordinals, serials],
+      [part.company_id, part.location_id, receiptId, receiptLineId, unitIds, ordinals, serials, conditionCode, binLocation],
     );
     await client.query(
       `insert into inventory_unit_events (company_id, unit_id, event_type, actor_id, details)
        select $1, input.id, 'receipt_recorded', $2,
-              jsonb_build_object('source', 'part_detail_serialization', 'serializationBatchId', $3::text)
+              jsonb_build_object('source', 'part_detail_serialization', 'serializationBatchId', $3::text, 'conditionCode', $5, 'conditionEvidence', $6, 'binLocation', $7)
        from unnest($4::uuid[]) as input(id)`,
-      [part.company_id, actorId, serializationBatchId, unitIds],
+      [part.company_id, actorId, serializationBatchId, unitIds, conditionCode, conditionEvidence, binLocation],
     );
     const balance = await client.query(
       `insert into inventory_items (
