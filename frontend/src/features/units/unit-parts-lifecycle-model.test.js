@@ -98,6 +98,10 @@ test("admin reuse setup exposes explicit route, repair, disposition, quarantine,
   for (const policy of ["repairAllowed", "coreReturnAllowed", "scrapAllowed", "evidence"]) assert.match(setup, new RegExp(`\\b${policy}\\b`));
   assert.match(setup, /Save permissions/);
   assert.match(setup, /Save part policy/);
+  assert.match(setup, /<PartCatalogCombobox/);
+  assert.match(setup, /catalogEndpoint="\/api\/office\/inventory\/catalog"/);
+  assert.match(setup, /catalogPartId: part\.id/);
+  assert.doesNotMatch(setup, /data\.parts\.map/);
 });
 
 test("legacy tracking uses the catalog selector and never accepts a typed catalog ID", () => {

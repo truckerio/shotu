@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { SectionHelpDisclosure } from "../../components/workorders/SectionHelpDisclosure.jsx";
+import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { api } from "../../lib/api.js";
 import "./reuse-setup.css";
 
@@ -9,6 +10,8 @@ const actionLabels = { remove: "Record removal", receive: "Receive returned part
 
 // Configuration is optional and separate from physical actions. No grants are implicit.
 export function ReuseSetup({ companyId, locationId, onSaved }) {
+  const policyRequestSequence = useRef(0);
+  const policyRequestController = useRef(null);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState(null);
   const [revision, setRevision] = useState(0);
@@ -16,6 +19,7 @@ export function ReuseSetup({ companyId, locationId, onSaved }) {
   const [capabilities, setCapabilities] = useState([]);
   const [reason, setReason] = useState("");
   const [catalogPartId, setCatalogPartId] = useState("");
+  const [catalogPartQuery, setCatalogPartQuery] = useState("");
   const [reuseAllowed, setReuseAllowed] = useState(false);
   const [repairAllowed, setRepairAllowed] = useState(false);
   const [coreReturnAllowed, setCoreReturnAllowed] = useState(false);
@@ -24,6 +28,20 @@ export function ReuseSetup({ companyId, locationId, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    policyRequestSequence.current += 1;
+    policyRequestController.current?.abort();
+    policyRequestController.current = null;
+    setCatalogPartId(""); setCatalogPartQuery("");
+    setReuseAllowed(false); setRepairAllowed(false); setCoreReturnAllowed(false); setScrapAllowed(false); setEvidence("");
+    setBusy(false);
+    return () => {
+      policyRequestSequence.current += 1;
+      policyRequestController.current?.abort();
+      policyRequestController.current = null;
+    };
+  }, [companyId, locationId]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -48,13 +66,36 @@ export function ReuseSetup({ companyId, locationId, onSaved }) {
     finally { setBusy(false); }
   }
 
+  async function selectPolicyPart(part) {
+    policyRequestController.current?.abort();
+    const controller = new AbortController();
+    policyRequestController.current = controller;
+    const sequence = ++policyRequestSequence.current;
+    setCatalogPartId(part.id);
+    setCatalogPartQuery([part.partNumber, part.description].filter(Boolean).join(" · "));
+    setReuseAllowed(false); setRepairAllowed(false); setCoreReturnAllowed(false); setScrapAllowed(false); setEvidence("");
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const result = await api(`/api/inventory-reuse/config?${new URLSearchParams({ companyId, locationId, catalogPartId: part.id })}`, { signal: controller.signal });
+      if (sequence !== policyRequestSequence.current) return;
+      const policy = result.policies.find((item) => item.catalogPartId === part.id);
+      setReuseAllowed(policy?.reuseAllowed === true); setRepairAllowed(policy?.repairAllowed === true); setCoreReturnAllowed(policy?.coreReturnAllowed === true); setScrapAllowed(policy?.scrapAllowed === true); setEvidence(policy?.evidence || "");
+    } catch (failure) { if (sequence === policyRequestSequence.current) setError(failure.message); }
+    finally {
+      if (sequence === policyRequestSequence.current) {
+        policyRequestController.current = null;
+        setBusy(false);
+      }
+    }
+  }
+
   return <details className="reuse-setup" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Reuse permissions and part policy</summary>
     {error ? <div role="alert"><p>{error}</p>{!data ? <Button onClick={() => setRevision((value) => value + 1)}>Try again</Button> : null}</div> : null}
     {message ? <p role="status">{message}</p> : null}
     {!data && !error ? <p role="status">Loading settings…</p> : null}
     {data ? <>
-      {data.possiblyTruncated ? <p role="status">This setup list is limited to {data.limits?.staff || 200} staff and {data.limits?.parts || 500} parts. If your item is missing, ask your administrator before continuing.</p> : null}
+      {data.possiblyTruncated ? <p role="status">The staff or saved-policy list is large. Search for the exact part below; ask your administrator if a staff member is missing.</p> : null}
       <form onSubmit={(event) => { event.preventDefault(); void save("grant", { userId, capabilities, reason }); }}>
         <div className="reuse-setup-heading"><h4>Staff permissions</h4><SectionHelpDisclosure label="About reuse permissions"><p>Choose who can handle returned parts at this location. The person removing a part cannot receive or approve its reuse. Changing settings does not change inventory.</p></SectionHelpDisclosure></div>
         <label>Staff member<Dropdown aria-label="Staff member" value={userId} onChange={(event) => {
@@ -67,11 +108,28 @@ export function ReuseSetup({ companyId, locationId, onSaved }) {
       </form>
       <form onSubmit={(event) => { event.preventDefault(); void save("policy", { catalogPartId, reuseAllowed, repairAllowed, coreReturnAllowed, scrapAllowed, evidence }); }}>
         <div className="reuse-setup-heading"><h4>Part reuse policy</h4><SectionHelpDisclosure label="About part reuse policy"><p>Approve only parts your shop may safely reuse. Physical receipt and inspection are still required before a returned part becomes available.</p></SectionHelpDisclosure></div>
-        <label>Part<Dropdown aria-label="Part reuse policy" value={catalogPartId} onChange={(event) => {
-          const id = event.target.value; setCatalogPartId(id);
-          const policy = data.policies.find((item) => item.catalogPartId === id);
-          setReuseAllowed(policy?.reuseAllowed === true); setRepairAllowed(policy?.repairAllowed === true); setCoreReturnAllowed(policy?.coreReturnAllowed === true); setScrapAllowed(policy?.scrapAllowed === true); setEvidence(policy?.evidence || "");
-        }} required disabled={busy}><option value="">Choose a part</option>{data.parts.map((part) => <option key={part.id} value={part.id}>{part.partNumber} · {part.description}</option>)}</Dropdown></label>
+        <PartCatalogCombobox
+          locationId={locationId}
+          catalogEndpoint="/api/office/inventory/catalog"
+          purpose="master_match"
+          value={catalogPartQuery}
+          onChange={(value) => {
+            policyRequestSequence.current += 1;
+            policyRequestController.current?.abort();
+            policyRequestController.current = null;
+            setCatalogPartQuery(value); setCatalogPartId("");
+            setReuseAllowed(false); setRepairAllowed(false); setCoreReturnAllowed(false); setScrapAllowed(false); setEvidence("");
+            setBusy(false);
+          }}
+          onSelect={(part) => { void selectPolicyPart(part); }}
+          allowManualEntry={false}
+          resultLimit={12}
+          label="Part"
+          inputAriaLabel="Part reuse policy"
+          placeholder="Search part number or description"
+          popupAriaLabel="Matching inventory parts"
+          disabled={busy}
+        />
         <label className="reuse-setup-check"><input type="checkbox" checked={reuseAllowed} onChange={(event) => setReuseAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be reused after inspection</label>
         <label className="reuse-setup-check"><input type="checkbox" checked={repairAllowed} onChange={(event) => setRepairAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be repaired or refurbished</label>
         <label className="reuse-setup-check"><input type="checkbox" checked={coreReturnAllowed} onChange={(event) => setCoreReturnAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be returned as a core</label>

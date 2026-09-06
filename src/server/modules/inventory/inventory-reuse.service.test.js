@@ -38,6 +38,9 @@ test("reads/configuration carry current actor and explicit scope; repository aut
   const assetId=randomUUID();
   const result=await getInventoryReuse("asset",scope,assetId,context,{...auth,read:async(input)=>input});
   assert.equal(result.actorId,actorId);assert.equal(result.assetId,assetId);
+  const catalogPartId=randomUUID();
+  const targetedConfig=await getInventoryReuse("config",{...scope,catalogPartId},"",context,{...auth,read:async(input)=>input});
+  assert.equal(targetedConfig.catalogPartId,catalogPartId);
   await assert.rejects(saveInventoryReuseConfiguration("grant",{...scope,userId:actorId,capabilities:["release"],reason:"Grant"},context,{...auth,configure:async()=>{throw new InventoryError("No explicit admin scope",{code:"INVENTORY_REUSE_FORBIDDEN",statusCode:403});}}),{code:"INVENTORY_REUSE_FORBIDDEN"});
 });
 test("versioned receive requires an exact unit confirmation before mutation",async()=>{

@@ -9,6 +9,7 @@ const condition = z.enum(["new", "serviceable_used", "refurbished", "needs_repai
 const scope = { companyId: z.string().regex(DATABASE_UUID_PATTERN), locationId: reuseId };
 const command = { ...scope, expectedVersion: z.number().int().positive().optional(), idempotencyKey: reuseKey };
 export const reuseScopeSchema = z.object(scope).strict();
+export const reuseConfigReadSchema = z.object({ ...scope, catalogPartId: reuseId.optional() }).strict();
 export const reuseRemoveSchema = z.object({
   ...command, usageId: reuseId, removalWorkorderId: reuseId.optional(), reason: evidence,
   ownership: z.enum(["company", "customer", "unknown"]), ownershipEvidence: z.string().trim().max(2000).default(""),

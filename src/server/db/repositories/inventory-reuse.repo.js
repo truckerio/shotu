@@ -308,11 +308,15 @@ export async function readInventoryReuse(input) {
         where m.company_id=$1 and m.active and p.active and p.deleted_at is null
           and (m.role='admin' or exists(select 1 from user_location_memberships lm where lm.company_id=$1 and lm.location_id=$2 and lm.user_id=p.id and lm.active))
         order by p.display_name,p.id limit 200`,[input.companyId,input.locationId]);
-      const parts = await client.query(`select id,part_number,description from parts_catalog where company_id=$1 order by part_number,id limit 500`,[input.companyId]);
-      const policies = await client.query(`select p.catalog_part_id,c.part_number,c.description,p.reuse_allowed,p.repair_allowed,p.core_return_allowed,p.scrap_allowed,p.evidence
-        from inventory_reuse_catalog_policies p join parts_catalog c on c.company_id=p.company_id and c.id=p.catalog_part_id
-        where p.company_id=$1 and p.location_id=$2 order by c.part_number,c.id limit 500`,[input.companyId,input.locationId]);
-      return {staff:staff.rows,parts:parts.rows.map(publicReuseCase),policies:policies.rows.map(publicReuseCase),limits:{staff:200,parts:500,policies:500},possiblyTruncated:staff.rows.length===200 || parts.rows.length===500 || policies.rows.length===500};
+      const parts = input.catalogPartId
+        ? await client.query(`select id,part_number,description from parts_catalog where company_id=$1 and id=$2`,[input.companyId,input.catalogPartId])
+        : { rows: [] };
+      const policies = input.catalogPartId
+        ? await client.query(`select p.catalog_part_id,c.part_number,c.description,p.reuse_allowed,p.repair_allowed,p.core_return_allowed,p.scrap_allowed,p.evidence
+          from inventory_reuse_catalog_policies p join parts_catalog c on c.company_id=p.company_id and c.id=p.catalog_part_id
+          where p.company_id=$1 and p.location_id=$2 and p.catalog_part_id=$3`,[input.companyId,input.locationId,input.catalogPartId])
+        : { rows: [] };
+      return {staff:staff.rows,parts:parts.rows.map(publicReuseCase),policies:policies.rows.map(publicReuseCase),limits:{staff:200},possiblyTruncated:staff.rows.length===200};
     }
     if (["stock", "units", "unit", "scan"].includes(input.view)) {
       // Inventory-wide exact-stock reads are never a mechanic shortcut around

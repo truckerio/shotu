@@ -4,7 +4,7 @@ import { authorizeProductModule } from "../access/product-module-access.service.
 import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
 import { configureInventoryReuse, mutateInventoryReuse, readInventoryReuse } from "../../db/repositories/inventory-reuse.repo.js";
 import { InventoryError } from "./inventory.errors.js";
-import { reuseGrantSchema, reuseId, reusePolicySchema, reuseReceiveSchema, reuseRemoveSchema, reuseReviewSchema, reuseRouteSchema, reuseRepairStartSchema, reuseRepairCompleteSchema, reuseDispositionSchema, reuseQuarantineSchema, reuseCorrectionSchema, reuseLegacyTrackSchema, reuseReadSchema, reuseScopeSchema } from "./inventory-reuse.schemas.js";
+import { reuseConfigReadSchema, reuseGrantSchema, reuseId, reusePolicySchema, reuseReceiveSchema, reuseRemoveSchema, reuseReviewSchema, reuseRouteSchema, reuseRepairStartSchema, reuseRepairCompleteSchema, reuseDispositionSchema, reuseQuarantineSchema, reuseCorrectionSchema, reuseLegacyTrackSchema, reuseReadSchema, reuseScopeSchema } from "./inventory-reuse.schemas.js";
 
 const commandSchemas = { remove: reuseRemoveSchema, legacy_track: reuseLegacyTrackSchema, receive: reuseReceiveSchema, release: reuseReviewSchema, route: reuseRouteSchema, repair_start: reuseRepairStartSchema, repair_complete: reuseRepairCompleteSchema, core_return: reuseDispositionSchema, scrap: reuseDispositionSchema, quarantine_resolve: reuseQuarantineSchema, correct_location: reuseCorrectionSchema };
 const capabilities = { remove: "remove", legacy_track: "remove", receive: "receive", release: "release", route: "route", repair_start: "repair", repair_complete: "repair", core_return: "disposition", scrap: "disposition", quarantine_resolve: "quarantine", correct_location: "route" };
@@ -27,7 +27,12 @@ export async function commandInventoryReuse(action, caseId, rawInput, context, d
   return (dependencies.mutate || mutateInventoryReuse)({ ...repositoryInput(input, context), requestHash });
 }
 export async function getInventoryReuse(view, rawInput, entityId, context, dependencies = {}) {
-  const input = { ...(view === "queue" || view === "stock" || view === "units" || view === "unit" || view === "scan" ? reuseReadSchema : reuseScopeSchema).parse(rawInput), view };
+  const schema = view === "config"
+    ? reuseConfigReadSchema
+    : view === "queue" || view === "stock" || view === "units" || view === "unit" || view === "scan"
+      ? reuseReadSchema
+      : reuseScopeSchema;
+  const input = { ...schema.parse(rawInput), view };
   if (view === "asset") input.assetId = reuseId.parse(entityId);
   if (view === "operation") input.idempotencyKey = entityId;
   if (view === "unit") input.unitId = reuseId.parse(entityId);
