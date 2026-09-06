@@ -27,6 +27,14 @@ test("print endpoint returns the persisted browser-print job contract", () => {
   assert.doesNotMatch(serverSource, /status:\s*"printed"|print_failed_serials_consumed/);
 });
 
+test("workorder PDF generation recreates ephemeral temp storage at request time", () => {
+  const writer = serverSource.slice(
+    serverSource.indexOf("async function writeWorkorderPdf"),
+    serverSource.indexOf("const writeInspectionPdf"),
+  );
+  assert.ok(writer.indexOf("await mkdir(tempDir, { recursive: true })") < writer.indexOf("await writeFile(htmlPath"));
+});
+
 test("print downloads and operational reprints are resource scoped", () => {
   assert.match(serverSource, /canReadArchiveJob\(requestContext, job\)/);
   assert.match(serverSource, /requireWorkorderAccess\(requestContext,\s*job\.workorderId\)/);

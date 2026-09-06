@@ -42,5 +42,7 @@ export async function updateInventoryPart(catalogPartId, input, requestContext, 
   if (result.kind === "provider_managed") throw new InventoryError("Odoo-managed part fields must be edited in Odoo.", { code: "INVENTORY_PART_FIELD_PROVIDER_MANAGED", statusCode: 422 });
   if (result.kind === "uom_locked") throw new InventoryError("Unit is locked after inventory activity.", { code: "INVENTORY_PART_UOM_LOCKED", statusCode: 422 });
   if (result.kind === "uom_incompatible") throw new InventoryError("Choose a unit with the same quantity value as the current inventory unit.", { code: "INVENTORY_PART_UOM_INCOMPATIBLE", statusCode: 422 });
+  if (result.kind === "tracking_locked") throw new InventoryError("Tracking cannot be changed after inventory activity. Start a reviewed conversion instead.", { code: "INVENTORY_PART_TRACKING_LOCKED", statusCode: 422 });
+  if (result.kind === "tracking_history_conflict") throw new InventoryError("This part already has serialized history. Keep it Serialized or start a reviewed conversion.", { code: "INVENTORY_PART_TRACKING_HISTORY_CONFLICT", statusCode: 422 });
   return result.part;
 }

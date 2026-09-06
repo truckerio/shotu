@@ -32,6 +32,7 @@ import {
   uploadInventoryCount,
 } from "./inventory-count-imports.service.js";
 import { createInventoryPart, updateInventoryPart } from "./inventory-part-details.service.js";
+import { updateInventoryStockRule } from "./inventory-stocking-policy.service.js";
 import {
   readInventoryAuthorityException,
   readInventoryAuthorityExceptions,
@@ -243,6 +244,13 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
       const part = await updateInventoryPart(editablePartId, await helpers.readBody(req), helpers.requestContext, dependencies);
       await emitInventoryAudit(helpers, { type: "inventory_part_updated", requestId: req.requestId || null, actorId: helpers.requestContext.actor.id, catalogPartId: editablePartId, version: part.version });
       helpers.sendJson(res, 200, { part });
+      return true;
+    }
+    const stockRulePartId = pathId(url.pathname, /^\/api\/office\/inventory\/parts\/([^/]+)\/stock-rule$/);
+    if (req.method === "PATCH" && stockRulePartId) {
+      const result = await updateInventoryStockRule(stockRulePartId, await helpers.readBody(req), helpers.requestContext, dependencies);
+      await emitInventoryAudit(helpers, { type: "inventory_stock_rule_updated", requestId: req.requestId || null, actorId: helpers.requestContext.actor.id, catalogPartId: stockRulePartId });
+      helpers.sendJson(res, 200, result);
       return true;
     }
     const partLocationMatch = /^\/api\/office\/inventory\/parts\/([^/]+)\/locations\/([^/]+)\/units$/.exec(url.pathname);

@@ -14,6 +14,15 @@ test("catalog editing migration provides versions, tenant references and transac
   assert.match(sql, /part_reference_numbers_reference_trgm_idx/i);
 });
 
+test("part tracking policy is explicit, constrained, and legacy compatible", async () => {
+  const sql = await readFile(new URL("../../db/migrations/127_part_tracking_policy.sql", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../db/repositories/parts-catalog-edit.repo.js", import.meta.url), "utf8");
+  assert.match(sql, /tracking_mode in \('quantity', 'serialized', 'measured_bulk'\)/i);
+  assert.match(sql, /tracking_mode is null/i);
+  assert.match(source, /tracking_history_conflict/);
+  assert.match(source, /tracking_locked/);
+});
+
 test("approved workorder requests preserve curated nonblank catalog identity", async () => {
   const source = await readFile(new URL("../../db/repositories/part-requests.repo.js", import.meta.url), "utf8");
   assert.match(source, /part_number = case when btrim\(parts_catalog\.part_number\) = '' then excluded\.part_number else parts_catalog\.part_number end/i);

@@ -140,5 +140,5 @@ test("inventory stock keeps local part names separate from read-only Odoo names"
   const repository = await readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8");
   assert.match(repository, /mapping\.display_name[\s\S]*as odoo_name/i);
   assert.match(repository, /odooName: row\.odoo_name \|\| ""/);
-  assert.match(repository, /row\.provider_managed === true \? \["description", "manufacturer", "uomCode", "referenceNumbers"\]/);
+  assert.match(repository, /row\.provider_managed === true \? \["description", "manufacturer", "uomCode", "trackingMode", "referenceNumbers"\]/);
 });

@@ -9,6 +9,12 @@ import {
   recordInventoryAuthorityException,
 } from "./inventory-authority.repo.js";
 
+export async function getCatalogTrackingModes({ companyIds, catalogPartIds }) {
+  if (!catalogPartIds.length) return [];
+  const result = await query("select id, tracking_mode from parts_catalog where company_id=any($1::uuid[]) and id=any($2::uuid[])", [companyIds, catalogPartIds]);
+  return result.rows.map((row) => ({ catalogPartId: row.id, trackingMode: row.tracking_mode || null }));
+}
+
 function publicReceipt(row, lines = [], units = [], labelBatch = null) {
   if (!row) return null;
   return {
@@ -515,7 +521,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
      ), stock as (
        select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
               catalog.normalized_part_number, catalog.description, catalog.manufacturer, catalog.category,
-              catalog.barcode, catalog.uom_code, catalog.inventory_display_uom_code, catalog.uom_locked_at, catalog.version,
+              catalog.barcode, catalog.uom_code, catalog.inventory_display_uom_code, catalog.tracking_mode, catalog.uom_locked_at, catalog.version,
               coalesce((select mapping.display_name from odoo_product_mappings mapping
                 where mapping.company_id = catalog.company_id and mapping.catalog_part_id = catalog.id
                 order by mapping.active desc, mapping.updated_at desc, mapping.external_id limit 1), '') as odoo_name,
@@ -527,6 +533,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
                   and provider.catalog_part_id = catalog.id and provider.active = true
               ) then 'odoo' else catalog.source_provider end as source_provider,
               exists (select 1 from odoo_product_mappings ownership where ownership.company_id=catalog.company_id and ownership.catalog_part_id=catalog.id) as provider_managed,
+              exists (select 1 from inventory_replenishment_alerts alert where alert.company_id=catalog.company_id and alert.catalog_part_id=catalog.id and alert.resolved_at is null) as low_stock,
               coalesce(sum(balance.quantity_on_hand), 0) as quantity_on_hand,
               coalesce(sum(balance.quantity_reserved), 0) as quantity_reserved,
               coalesce(sum(balance.quantity_available), 0) as quantity_available,
@@ -543,6 +550,11 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
                 'quantityReserved', coalesce(balance.quantity_reserved, 0),
                 'quantityAvailable', coalesce(balance.quantity_available, 0),
                 'odooQuantityOnHand', coalesce(balance.odoo_quantity_on_hand, 0),
+                'minimumAvailable', (select policy.minimum_available from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
+                'targetQuantity', (select policy.target_quantity from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
+                'alertEnabled', coalesce((select policy.alert_enabled from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id), false),
+                'policyVersion', (select policy.version from inventory_stocking_policies policy where policy.company_id=catalog.company_id and policy.location_id=catalog_location.id and policy.catalog_part_id=catalog.id),
+                'lowStock', exists(select 1 from inventory_replenishment_alerts alert where alert.company_id=catalog.company_id and alert.location_id=catalog_location.id and alert.catalog_part_id=catalog.id and alert.resolved_at is null),
                 'updatedAt', coalesce(balance.updated_at, catalog.updated_at)
               ) order by catalog_location.name, catalog_location.id), '[]'::jsonb) as locations
        from parts_catalog catalog
@@ -607,7 +619,9 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
     referenceNumbers: row.reference_numbers || [],
     providerManaged: row.provider_managed === true,
     uomLocked: row.uom_locked_at !== null,
-    editableFields: row.provider_managed === true ? ["description", "manufacturer", "uomCode", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "referenceNumbers"],
+    trackingMode: row.tracking_mode || null,
+    lowStock: row.low_stock === true,
+    editableFields: row.provider_managed === true ? ["description", "manufacturer", "uomCode", "trackingMode", "referenceNumbers"] : ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "trackingMode", "referenceNumbers"],
     uomCode: row.inventory_display_uom_code || row.uom_code,
     canonicalUomCode: row.uom_code,
     sourceProvider: row.source_provider || "",

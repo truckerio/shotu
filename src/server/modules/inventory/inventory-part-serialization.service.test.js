@@ -145,3 +145,17 @@ test("repository replay and unit errors map to stable public errors", async () =
     (error) => error.code === "INVENTORY_SERIALIZATION_UNIT_UNSUPPORTED" && error.statusCode === 422,
   );
 });
+
+test("quantity policy cannot create serialized identities", async () => {
+  await assert.rejects(
+    createSerializedUnitsForPart(PART_ID, ASSIGNED_LOCATION_ID, {
+      quantity: 1,
+      confirmation: "physically_present_at_location",
+      idempotencyKey: "quantity-policy-no-serial",
+    }, context(), {
+      qrOptions: { signingKey: SIGNING_KEY },
+      create: async () => ({ kind: "tracking_policy" }),
+    }),
+    (error) => error.code === "INVENTORY_SERIALIZATION_TRACKING_POLICY" && error.statusCode === 422,
+  );
+});

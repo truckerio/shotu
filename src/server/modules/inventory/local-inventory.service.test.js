@@ -102,6 +102,22 @@ test("posts a reviewed invoice to local inventory without provider dependencies"
   assert.equal(Object.hasOwn(posted, "provider"), false);
 });
 
+test("a reviewed Quantity policy prevents per-piece serial creation on receipt", async () => {
+  let posted;
+  await postReviewedInvoiceToLocalInventory(
+    RUN_ID,
+    { idempotencyKey: "quantity-policy-receipt", expectedVersion: 3, confirmation: "all_received_undamaged" },
+    context(),
+    {
+      loadInvoice: async () => reviewedInvoice(),
+      loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "quantity" }],
+      postReceipt: async (input) => { posted = input; return { kind: "posted", receipt: { id: input.receiptId, status: "posted", units: [] } }; },
+    },
+  );
+  assert.equal(posted.lines[0].trackingMode, "quantity");
+  assert.deepEqual(posted.lines[0].serializedUnits, []);
+});
+
 test("returns the existing receipt for an exact idempotent replay", async () => {
   const result = await postReviewedInvoiceToLocalInventory(
     RUN_ID,

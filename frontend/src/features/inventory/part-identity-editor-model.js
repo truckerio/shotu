@@ -46,6 +46,7 @@ export function createPartIdentityDraft(part = {}) {
     category: String(part.category || ""),
     barcode: String(part.barcode || ""),
     uomCode: String(part.uomCode || "ea"),
+    trackingMode: String(part.trackingMode || ""),
     referenceNumbers: (part.referenceNumbers || []).map((value) => ({
       id: crypto.randomUUID(),
       value: String(value || ""),
@@ -62,6 +63,7 @@ export function validatePartIdentityDraft(draft) {
 
   if (!description) errors.description = "Enter a part name.";
   if (!partNumber) errors.partNumber = "Enter a primary part number.";
+  if (!["quantity", "serialized", "measured_bulk"].includes(draft.trackingMode)) errors.trackingMode = "Choose how this part is tracked.";
 
   references.forEach((reference, index) => {
     const value = text(reference.value);
@@ -88,6 +90,7 @@ export function partIdentityPayload(draft, expectedVersion) {
     category: text(draft.category),
     barcode: text(draft.barcode),
     uomCode: text(draft.uomCode),
+    trackingMode: text(draft.trackingMode),
     referenceNumbers: (draft.referenceNumbers || []).map((reference) => text(reference.value)).filter(Boolean),
   };
 }

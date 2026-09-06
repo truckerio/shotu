@@ -1,6 +1,18 @@
 import { z } from "zod";
 import { uomCodeSchema } from "../parts/quantity-uom.js";
 
+export const inventoryTrackingModeSchema = z.enum(["quantity", "serialized", "measured_bulk"]);
+
+export const updateInventoryStockRuleSchema = z.object({
+  locationId: z.string().uuid(),
+  expectedVersion: z.number().int().min(1).nullable().optional().default(null),
+  minimumAvailable: z.number().min(0).max(999999999),
+  targetQuantity: z.number().min(0).max(999999999).nullable().optional().default(null),
+  alertEnabled: z.boolean().optional().default(true),
+}).strict().superRefine((value, context) => {
+  if (value.targetQuantity !== null && value.targetQuantity < value.minimumAvailable) context.addIssue({ code: "custom", path: ["targetQuantity"], message: "Target quantity must be at least the minimum." });
+});
+
 export const receiveInvoiceSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(120),
 }).strict();
@@ -38,6 +50,7 @@ export const updateInventoryPartSchema = z.object({
   category: z.string().trim().max(240),
   barcode: z.string().trim().max(200),
   uomCode: uomCodeSchema.removeDefault(),
+  trackingMode: inventoryTrackingModeSchema.optional(),
   referenceNumbers: z.array(z.string().trim().min(1).max(200).regex(/[A-Za-z0-9]/, "Reference number must contain a letter or number.")).max(20),
 }).strict().superRefine((value, context) => {
   const normalized = value.referenceNumbers.map((item) => item.toUpperCase().replace(/[^A-Z0-9]/g, ""));
@@ -52,6 +65,7 @@ export const createInventoryPartSchema = z.object({
   category: z.string().trim().max(240).optional().default(""),
   barcode: z.string().trim().max(200).optional().default(""),
   uomCode: uomCodeSchema.removeDefault(),
+  trackingMode: inventoryTrackingModeSchema.optional().default("quantity"),
   referenceNumbers: z.array(z.string().trim().min(1).max(200).regex(/[A-Za-z0-9]/, "Reference number must contain a letter or number.")).max(20).optional().default([]),
 }).strict().superRefine((value, context) => {
   const identities = [value.partNumber, ...value.referenceNumbers].map((item) => item.toUpperCase().replace(/[^A-Z0-9]/g, ""));

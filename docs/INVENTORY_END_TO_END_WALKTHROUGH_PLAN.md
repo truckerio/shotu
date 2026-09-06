@@ -2,12 +2,14 @@
 
 **Status:** Draft for refinement
 **Created:** 2026-08-26
-**Scope:** Invoice intake, receiving, serialized inventory, QR labels, mechanic use, transfers, warranty, and audit history
+**Scope:** Invoice intake, receiving, configurable part tracking, QR labels, replenishment alerts, mechanic use, transfers, warranty, and audit history
 **Implementation authority (2026-09-04):** User authorized implementation with user experience and simplicity first. This document does not mark proposed behavior as implemented. Production mutation/deployment and Git delivery require separate authority.
 
 **Simplicity-first delivery contract:** Users see Units, Inventory, and existing Workorders—not a screen for every scenario. Units offers search, truck detail, tracked parts and history. Inventory starts with search, stock and Add invoice; batch filters and invoice evidence are nearby. Use/remove remains in the workorder flow. Transfer, Return, and Warranty open only from relevant records under More. Costs appear in authorized detail, with a simple price-history view. Prefill known facts, show one consequential confirmation, and disclose extra questions only when needed. Safety scenarios remain backend rules and tests, not required user setup or a dashboard of choices. Advanced saved views, a comprehensive follow-up dashboard, costing-method menus, offline mutation, formal valuation, and intercompany workflows are not requirements for the first usable release. Unsupported exceptional cases remain clearly held for review; do not fake a successful action. Deliver the core capabilities in verified increments without presenting a partial implementation as the whole plan.
 
 **Controlling revision — 2026-09-04:** Section 17 defines the required Units module, opening installed-part records, shared lifecycle rules, independent document states, credit allocation, proposed permissions, and online-only mutation policy. It takes precedence over earlier walkthrough shorthand and linked addenda on these subjects. The UI addendum owns layout; the search addendum owns filter semantics; the cost addendum owns calculation/reporting rules, subject to Section 17 safeguards. Section 18 records the second stress test. No proposal grants access or authorizes implementation.
+
+**Tracking and replenishment revision — 2026-09-06:** Section 19 replaces the earlier assumption that every countable part must be serialized. An authorized user chooses one company-wide tracking mode on each master part: quantity, serialized, or measured/bulk. The same section defines location-specific minimum available quantities, deduplicated Office replenishment alerts, safe tracking-mode changes, and their release gates. This is a product plan, not an implementation claim.
 
 **Cost and price-history addendum (2026-09-03):** [Serialized Unit, Batch Cost, and Price History Plan](specs/SERIALIZED_UNIT_BATCH_COST_AND_PRICE_HISTORY_PLAN.md) defines invoice-linked exact-unit costs, multiselect allocation, batch totals, purchasing/usage reports, core-credit separation, and accessible price trends. It narrows the cost-reporting proposal below without claiming accounting valuation or implementation.
 
@@ -27,8 +29,8 @@ The frontend should show the user one clear next action. The backend should hand
 2. Odoo is an optional import/integration source, not required for daily inventory work.
 3. A master part is shared reference data. It has no quantity, location barcode, or serialized-unit QR.
 4. Quantity belongs to a master part at a specific location.
-5. Every countable physical unit receives a permanent internal serial number and secure QR code.
-6. A unit keeps the same serial number and QR code when transferred.
+5. Each master part has one explicit company tracking mode: quantity, serialized, or measured/bulk. Small interchangeable parts normally use quantity tracking; important individually traceable parts use serialized tracking; divisible fluids and materials use measured/bulk tracking.
+6. Only serialized parts create one permanent internal identity and secure QR per physical unit. A serialized unit keeps that identity when transferred, removed, repaired, reused, or installed on another asset.
 7. An invoice is financial/source evidence. It does not prove that all physical parts arrived.
 8. Receiving, transfers, issues, installations, returns, warranty claims, and corrections are recorded as durable events.
 9. Original documents and historical events are not silently overwritten. Corrections use versioned records or compensating events.
@@ -143,8 +145,8 @@ On confirmation, the backend atomically creates or updates:
 - receipt batch/source-cost history;
 - master-part match or a controlled unmatched-part task;
 - location-part parent records;
-- serialized physical units for countable quantities;
-- aggregate quantity records for measured materials;
+- serialized physical units only for parts whose saved tracking mode is Serialized;
+- aggregate quantity records for Quantity and Measured/bulk parts, using their canonical UOM and precision;
 - append-only inventory events;
 - invoice, receipt, and unit relationships.
 
@@ -318,10 +320,11 @@ Success result: warranty evidence is assembled from existing records instead of 
 
 ### Reference data
 
-- **Master part** — company, normalized part number, description, manufacturer, category, UOM, default cost, aliases, vendor references.
+- **Master part** — company, normalized part number, description, manufacturer, category, inventory UOM, tracking mode, default cost, aliases, vendor references.
 - **Vendor** — identity, contacts, terms, account/reference numbers, and active status.
 - **Location** — company-owned operating location and optional bins.
 - **Asset** — vehicle/equipment receiving installed parts.
+- **Location stocking policy** — company + location + master part minimum available quantity, optional target quantity, enabled state, and notification ownership.
 
 ### Inventory ownership and identity
 
@@ -400,6 +403,8 @@ The backend must:
 - derive location balances from accepted events;
 - keep unit, invoice, receipt, cost, warranty, workorder, and asset lineage;
 - create focused exception tasks instead of exposing backend complexity;
+- derive low-stock state from authorized local Available quantity and create one deduplicated replenishment alert per part/location threshold crossing;
+- preserve the company tracking policy on receipts, counts, issues, transfers, and workorder use instead of allowing each screen to decide whether a part is serialized;
 - recommend a fulfillment route using availability, travel/time, vendor lead time, cost, urgency, and company policy;
 - preserve requested-for location, purchased-by user, physical custody location, and final receiving location as different facts;
 - retain an auditable actor and reason for every correction;
@@ -452,12 +457,14 @@ Acceptance:
 - A reviewed invoice does not change stock.
 - A confirmed receipt changes stock exactly once.
 - Partial receipt creates only received units and keeps the remaining discrepancy visible.
-- Each received countable unit has one permanent serial and printable QR.
+- Each received Serialized unit has one permanent identity and printable QR; Quantity and Measured/bulk receipts create no unwanted exact-unit identities.
 
 ### Phase 2 — Unified Inventory page
 
 - Keep stock/search as the primary page and open a shared secondary right-side part window on selection.
 - Combine stock, invoice history, price history, serialized units, activity, warranty, and documents inside that window.
+- Add a simple authorized **Tracking and stock rules** editor: Quantity / Serialized / Measured or bulk, plus minimum and optional target quantities for each stocked location.
+- Show a quiet Low stock indicator in normal stock results and one actionable Office alert when Available reaches or falls below the configured minimum.
 - Reuse the window for vendor, invoice, unit, transfer, and warranty details without adding top-level navigation.
 - Keep data paginated and location-scoped.
 
@@ -503,11 +510,11 @@ Acceptance:
 
 ### Phase 6 — Operational hardening
 
-- Extend cycle counts, reconciliation, dashboards, alerts, archival/retention policy, and load testing. Authorization, adjustment approval, safe retries, and backup/restore rehearsal are release gates for their first affected slice. Offline mutation is out of V1; a future offline design needs separate approval and conflict-resolution review.
+- Extend cycle counts, reconciliation, location-specific minimum-stock alerts, alert delivery/recovery, dashboards, archival/retention policy, and load testing. Authorization, adjustment approval, safe retries, and backup/restore rehearsal are release gates for their first affected slice. Offline mutation is out of V1; a future offline design needs separate approval and conflict-resolution review.
 
 ## 11. Success Measures
 
-- Percentage of received countable units with a valid serial and label.
+- Percentage of received Serialized units with a valid serial and label, with zero unwanted exact identities for Quantity or Measured/bulk parts.
 - Percentage of invoice lines automatically matched to a master part.
 - Median and p95 extraction time.
 - Receipt retry/duplicate rate.
@@ -515,6 +522,9 @@ Acceptance:
 - Percentage of installations tied to exact asset and workorder.
 - Transfer discrepancy rate and time to resolution.
 - Inventory variance found during cycle counts.
+- Percentage of active parts with an explicitly reviewed tracking mode.
+- Low-stock alert duplication rate, time from threshold crossing to Office visibility, and time to replenishment action.
+- Percentage of low-stock alerts showing an existing purchase/transfer already in progress.
 - Warranty recovery value and claim completion time.
 - Median user actions from invoice upload to printable labels.
 
@@ -531,7 +541,7 @@ Acceptance:
 
 1. Approve or revise the deny-by-default capability assignments and self-approval restrictions in Section 17 before rollout.
 2. Which locations use bins, shelves, or cages, and must they be scanned?
-3. Which UOMs are serialized individually, batched/lotted, or stored only as measured quantity?
+3. Which initial part categories should default to Quantity, Serialized, or Measured/bulk during migration? Section 19 requires per-part confirmation and prohibits inferring physical serial identities from quantity alone.
 4. Which parts require label verification, approval before issue, or installation evidence?
 5. Should office staff receive an invoice before vendor payment, after payment, or both?
 6. Section 17 controls return/core/reuse safeguards; vendor-specific deadlines and reusable-part inspection criteria require company configuration before those actions are enabled.
@@ -561,6 +571,14 @@ Use this section to preserve accepted decisions instead of silently rewriting th
 - Expanded Get parts into local stock, internal transfer, direct-to-destination purchase, stage-then-transfer purchase, emergency purchase, field delivery, exceptions, and intercompany handling.
 - Defined the selected part experience as a reusable secondary right-side detail window, not another main page.
 - Kept external purchasing commitment and backend purchase/transfer execution as planned work, not implemented behavior.
+
+### 2026-09-06 — Configurable tracking and minimum-stock alerts
+
+- Replaced mandatory serialization of all countable parts with an explicit company Part Master choice: Quantity, Serialized, or Measured/bulk.
+- Added guarded tracking-mode conversion rules that retain exact identities, balances, movements, and prior history.
+- Added location-specific Minimum available and optional Target quantity policies.
+- Defined one deduplicated Office replenishment alert per part/location threshold crossing, with replenishment-in-progress state and no automatic purchasing.
+- Added schema/API ownership, migration rules, permissions, adversarial scenarios, and release gates in Section 19. No implementation status changed.
 
 ## 15. Research References
 
@@ -741,3 +759,196 @@ Remaining warnings:
 4. No concurrency, migration, access-control, offline recovery, or rendered usability tests ran. Implement S01–S23 as applicable executable/API/UI fixtures before release; performance budgets need a representative dataset and measurements.
 
 No application code, database, access grants, external vendor actions, or deployment changed in this revision. Existing unrelated frontend work remains outside scope.
+
+## 19. Configurable Part Tracking and Minimum-Stock Replenishment — 2026-09-06
+
+### 19.1 Product decision
+
+An authorized inventory user chooses how each master part is tracked. The choice is a company-wide part policy used consistently at every location and in every receipt, count, issue, transfer, workorder, and return flow. Individual screens and operators do not silently choose a different mode for the same part.
+
+The three user-facing choices are:
+
+| Choice | Use for | System behavior |
+| --- | --- | --- |
+| **Quantity** | Small interchangeable parts such as filters, bulbs, bolts, hoses, and brake hardware | Track decimal-safe or whole quantity by part, UOM, and location. Do not create one serial or QR for every piece. A location-parent/bin label may identify the shelf. |
+| **Serialized** | Tires, engines, transmissions, ECMs, DPFs, expensive components, and any part requiring individual history | Create one permanent exact-unit identity and secure QR per physical unit. Require exact selection for issue, installation, movement, removal, repair, reuse, and disposal. |
+| **Measured or bulk** | Oil, coolant, DEF, grease, refrigerant, and other divisible materials | Track quantity in the canonical inventory UOM with valid product-specific conversions. Do not create physical-unit serials for gallons, liters, pounds, or similar measured quantities. |
+
+The UI asks **How do you track this part?** during New Part and in the authorized part-detail editor. Show the three choices with the examples above. Default suggestions may come from category and UOM, but the saved choice must be explicit and visible. Odoo/provider data may suggest a mode but cannot overwrite an approved local tracking policy.
+
+Normal operators see the result, not the configuration terminology:
+
+- Quantity: **12 available** and one shelf/bin scan option.
+- Serialized: **6 units available** with Scan or Choose exact units.
+- Measured/bulk: **42.5 gal available** with quantity and UOM.
+
+The master part remains identity only. Quantity and minimum levels belong to stocking locations. Serialized QR codes belong to exact physical units; shelf/bin barcodes belong to location-part parents. Never use a master-part barcode as proof of one exact physical unit.
+
+### 19.2 Tracking-mode changes
+
+Changing an unused part with no stock, reservations, receipts, workorder usage, or unit history is a normal authorized catalog edit.
+
+Changing a part with history is a reviewed conversion, never a simple dropdown save:
+
+- **Quantity -> Serialized:** start a physical conversion count at one location at a time. Confirm each physical unit and create exact identities only for the units actually observed. Keep the prior aggregate movements and link the conversion operation; do not manufacture serial history for past usage.
+- **Serialized -> Quantity:** do not erase or merge existing exact-unit identities. Existing serialized units keep their lifetime history until individually issued, disposed, or otherwise closed. The new policy may apply to future receipts only after every active reservation, installation, transfer, custody case, and count discrepancy is resolved and a reviewed cutover records the remaining balance.
+- **Quantity <-> Measured/bulk:** require a valid canonical UOM and product-specific conversion when units differ. Never guess case size, drum capacity, or weight/volume equivalence.
+- A mode change cannot proceed while another actor is receiving, issuing, reserving, transferring, counting, or correcting the same part/location. Lock and version the policy and affected inventory rows.
+
+Every change stores old mode, new mode, actor, reason, effective time, affected locations, conversion/count reference, and exceptions. Admin correction uses a new reviewed event rather than editing history.
+
+### 19.3 Minimum quantity and reorder target
+
+Each stocked part may have a policy for each location:
+
+- **Minimum available** — threshold at which Office needs to replenish.
+- **Target quantity** — optional desired quantity after replenishment; used to suggest how much to order or transfer.
+- **Alert enabled** — whether this part/location produces an Office alert.
+- **Preferred source** — optional preferred vendor or another company location, used as a suggestion only.
+- **Lead time** — optional planning fact; it does not change physical availability.
+
+Example:
+
+```text
+Part: Brake Chamber
+Location: Chino Yard / Main Parts Room
+Available: 4 ea
+Minimum: 5 ea
+Target: 12 ea
+
+Office alert: Minimum reached
+Suggested replenishment: 8 ea
+```
+
+Low stock is calculated from **Available**, not merely On hand:
+
+```text
+Available = On hand - active reservations - other unavailable allocated quantity
+```
+
+The alert opens when `Available <= Minimum available`. A minimum of zero alerts when availability reaches zero. Quantities use the part's canonical inventory UOM and precision rules. Quarantine, receiving hold, return pending, installed, issued, in-transit, customer-owned, vendor-owned, scrapped, and unresolved found inventory do not count as Available.
+
+Minimum and target quantities never reserve stock, change balances, or create a purchase automatically. Target must be equal to or greater than minimum. Blank means no policy; blank is different from zero.
+
+### 19.4 Office experience
+
+Authorized setup from Inventory:
+
+1. Open the part.
+2. Choose **Tracking and stock rules**.
+3. Select Quantity, Serialized, or Measured/bulk.
+4. For each stocked location, enter Minimum available and optional Target quantity.
+5. Save once and review the plain-language summary.
+
+Typical existing-part setup target: five clicks plus value entry. New Part includes the tracking choice in the normal creation flow rather than opening a second setup page.
+
+When a threshold is crossed, Office sees one item under **Needs attention** and an in-app notification:
+
+> Brake Chamber reached its minimum at Chino Yard. 4 available; minimum 5; target 12.
+
+Opening it shows:
+
+- part and location;
+- On hand, Reserved, and Available;
+- minimum and target;
+- current shortage to target;
+- open purchase, transfer, backorder, or receiving activity when known;
+- **Order from vendor**, **Request from another location**, or **Review stock** according to implemented capabilities.
+
+If purchasing is not implemented, the primary action is **Record ordering follow-up** or **Request transfer**. The system must not pretend an order was placed. Acknowledging an alert does not resolve low stock.
+
+Only one open alert exists per company + location + part + policy version. Further issues while already below minimum update its current quantities; they do not notify Office repeatedly. An accepted receipt, unused return, count correction, or transfer receipt resolves the alert only when Available rises above the minimum. A later downward crossing creates a new alert episode and preserves prior history.
+
+An open purchase order or transfer changes the message to **Replenishment in progress** but does not close the alert until accepted stock is physically available. Partial receipts recalculate the shortage. Cancelled or failed replenishment returns the alert to action needed.
+
+Initial notification channels:
+
+1. In-app Office/Admin notification and Needs attention row.
+2. Optional daily low-stock summary after the in-app behavior is proven.
+3. Email, SMS, push, and automatic vendor ordering remain later opt-in capabilities; none is implied by this plan.
+
+Users can mute a specific part/location alert policy only with catalog-policy permission. Muting retains threshold history and displays **Alert off** in part details; it does not delete past alerts.
+
+### 19.5 Data and command contract
+
+Additive implementation should introduce or extend these concepts after confirming the current migration head and canonical owners:
+
+- master-part `tracking_mode` with allowed values equivalent to `quantity`, `serialized`, and `measured_bulk`, plus policy version and audit fields;
+- location-part stocking policy with minimum, optional target, enabled flag, preferred-source references, version, and audit fields;
+- replenishment alert episode with threshold snapshot, opening quantity, current quantity, opened/resolved timestamps, operation/source links, and deduplication identity;
+- append-only part-policy change and mode-conversion events;
+- read projection exposing tracking mode, policy, low-stock state, and replenishment-in-progress facts without per-row N+1 queries.
+
+Routes parse strict input and authorize company/location scope. Domain services own mode-change guards, UOM validation, threshold evaluation, alert episode transitions, and transaction boundaries. Repositories own locks, unique constraints, append-only evidence, and indexed projections. UI never decides that a balance crossed its threshold.
+
+Evaluate a threshold in the same database transaction as every command that changes availability: receipt acceptance, issue, reservation/release, return, transfer send/receive, count posting, adjustment, quarantine/release, and correction. Store an outbox notification intent in that transaction; delivery failure must not roll back correct inventory or create duplicate alerts. Retry delivery idempotently.
+
+Existing rows require an additive migration and explicit policy state:
+
+- Do not convert every existing part to Serialized because exact units happen to exist from an older receipt/count path.
+- Do not infer Quantity from absence of exact units when evidence may be incomplete.
+- Seed only a conservative suggested mode from current factual UOM/tracking evidence; mark unresolved parts **Tracking review needed**.
+- Keep existing serialized identities and history readable throughout dual-read/dual-write rollout.
+- Minimum and target remain blank until explicitly configured or imported through a separately reviewed policy import.
+
+### 19.6 Permissions
+
+- Office/Admin may read tracking mode, location policy, and low-stock state within authorized scope.
+- A named inventory-catalog capability controls changing tracking mode and minimum/target values. Do not grant it to every inventory user merely because they can issue parts.
+- Normal Office users receive and act on low-stock alerts but cannot silently change the threshold to dismiss one.
+- Tracking conversion, bulk policy import, and changes affecting active inventory require elevated approval and audit reason.
+- Mechanics may see whether requested stock is available; they do not see company-wide replenishment queues, supplier cost, or policy controls by default.
+
+### 19.7 Stress-test matrix
+
+| Scenario | Required safe result |
+| --- | --- |
+| Small bolt set to Quantity | One location balance; no per-bolt serials or QR labels. |
+| Tire set to Serialized | Receipt/count creates one exact identity per confirmed tire; issue requires exact selection. |
+| Oil set to Measured/bulk | Decimal quantity and canonical volume UOM; no fake gallon identities. |
+| User changes receipt selection | Saved master-part policy wins; receipt cannot downgrade Serialized to Quantity. |
+| Quantity part changed to Serialized with 20 on hand | Reviewed physical conversion count; identities only for observed units; no invented history. |
+| Serialized part changed while one unit is installed | Block conversion and show the active unit/workflow requiring resolution. |
+| Odoo sync suggests another tracking mode | Keep approved local policy and raise a reviewable mapping exception if needed. |
+| Available falls from 6 to minimum 5 | Open one Office alert in the same committed operation. |
+| Two users issue simultaneously across threshold | Locked balance produces one alert episode, not two. |
+| On hand 10, Reserved 6, Minimum 5 | Available 4; alert opens even though On hand is 10. |
+| Five units in quarantine | They do not satisfy minimum stock. |
+| Transfer is in transit | Destination alert remains open and says replenishment in progress. |
+| Partial receipt reaches exactly minimum | Alert remains open because threshold rule is at or below minimum. |
+| Receipt raises Available above minimum | Resolve alert; retain episode history. |
+| Unused return later raises stock above minimum | Resolve through the same threshold evaluator. |
+| Stock falls below minimum again | Create a new episode; do not reopen or overwrite the historical one. |
+| Open PO later cancelled | Existing alert returns from replenishment in progress to action needed. |
+| Notification delivery fails | Inventory remains correct; outbox retry sends one eventual notification. |
+| User acknowledges but stock stays low | Alert remains open; acknowledgement is audit/UI state only. |
+| Target lower than minimum | Reject with plain validation before save. |
+| Negative or wrong-UOM minimum | Reject; preserve entered values for correction. |
+| Minimum is blank | No alert policy. |
+| Minimum is zero | Alert only at zero available. |
+| Part stocked at Chino and Fontana | Independent thresholds and alert episodes per location. |
+| User loses location access | No alert, policy, counts, or autocomplete leakage for that location. |
+| Policy edited while alert is open | Version and reevaluate atomically; preserve the threshold snapshot that opened the old episode. |
+| Part archived | Prevent new activity; resolve/suppress future evaluations without deleting alert history. |
+
+### 19.8 Delivery slices and acceptance gates
+
+1. **Tracking policy foundation:** add explicit mode, migration review state, read projection, audit events, and safe editor. Prove all existing inventory writers honor the policy.
+2. **Serialized/quantity intake enforcement:** receive, count, label, workorder, scanner, and transfer flows follow the master policy. Prove quantity/bulk parts never create unwanted exact units and serialized parts cannot bypass exact selection.
+3. **Location stocking policies:** add minimum/target editor, canonical UOM validation, role/location scope, and indexed reads.
+4. **Threshold engine:** evaluate every availability-changing command transactionally; add unique alert episodes, outbox intent, idempotent delivery, and reconciliation.
+5. **Office experience:** add Low stock/Needs attention, replenishment-in-progress state, contextual Order/Transfer/Review actions, responsive behavior, and accessible announcements.
+6. **Migration and release:** rehearse against production-shaped data, review every unresolved tracking mode, compare pre/post balances and exact identities, test rollback/feature gates, then enable location by location.
+
+Release requires:
+
+- PostgreSQL concurrency tests for simultaneous issue/reservation/receipt and one alert episode;
+- migration tests proving no exact identity, quantity, event, or provider mapping is lost or fabricated;
+- server tests for every availability writer and tracking-mode guard;
+- role, cross-company, cross-location, stale-version, and revoked-permission negatives;
+- notification outbox retry and deduplication tests;
+- authenticated UI journeys for New Part, Edit tracking, minimum setup, threshold crossing, replenishment in progress, partial receipt, resolution, and repeat crossing;
+- 1440, 768, and 390 CSS-pixel layouts, keyboard operation, visible focus, screen-reader status, 200% zoom, and 44px touch controls;
+- representative-data query plans and measured inventory/alert response times.
+
+This section deliberately does not authorize automatic purchase orders. Office remains responsible for choosing and confirming the replenishment action.

@@ -520,6 +520,10 @@ async function writeWorkorderPdf(form, company, job, serials) {
   const date = new Date().toISOString().slice(0, 10);
   const companyDir = join(outputDir, sanitizeFileName(company.name));
   await mkdir(companyDir, { recursive: true });
+  // The runtime temp directory is ephemeral and may be removed between startup
+  // and a later print request. Recreate it at the point of use so printing does
+  // not depend on startup-time filesystem state.
+  await mkdir(tempDir, { recursive: true });
   const serialRange = serials.length === 1 ? serials[0] : `${serials[0]}_to_${serials.at(-1)}`;
   const artifactKey = job.artifactKey
     ? sanitizeFileName(job.artifactKey).slice(0, 96)

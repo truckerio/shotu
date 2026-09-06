@@ -14,6 +14,7 @@ function initialDraft(defaults) {
     partNumber: String(defaults.partNumber || "").trim(),
     description: String(defaults.description || "").trim(),
     uomCode: getUnitDefinition(proposedUnit) ? proposedUnit : "ea",
+    trackingMode: "",
     manufacturer: "",
     category: "",
     referenceNumber: "",
@@ -41,8 +42,8 @@ export function CreateInventoryPartDialog({ locationId = "", locations = [], def
 
   async function submit(event) {
     event.preventDefault();
-    if (!selectedLocationId || !draft.partNumber.trim() || !draft.description.trim()) {
-      setError("Choose a location and enter a part number and part name.");
+    if (!selectedLocationId || !draft.partNumber.trim() || !draft.description.trim() || !draft.trackingMode) {
+      setError("Choose a location, enter the part details, and choose how the part is tracked.");
       return;
     }
     setBusy(true);
@@ -55,6 +56,7 @@ export function CreateInventoryPartDialog({ locationId = "", locations = [], def
           partNumber: draft.partNumber,
           description: draft.description,
           uomCode: draft.uomCode,
+          trackingMode: draft.trackingMode,
           manufacturer: draft.manufacturer,
           category: draft.category,
           barcode: "",
@@ -84,6 +86,7 @@ export function CreateInventoryPartDialog({ locationId = "", locations = [], def
             <label htmlFor={partNumberId}><span>Part number</span><input id={partNumberId} autoFocus autoComplete="off" required maxLength={200} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} disabled={busy} /></label>
             <label htmlFor={partNameId}><span>Part name</span><input id={partNameId} autoComplete="off" required maxLength={1000} value={draft.description} onChange={(event) => update("description", event.target.value)} disabled={busy} /></label>
             <div className="create-inventory-part-unit"><span>Unit</span><UnitOfMeasurePicker uomCode={draft.uomCode} onChange={(value) => update("uomCode", value)} disabled={busy} /></div>
+            <label><span>How do you track this part?</span><Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy} required><option value="">Choose tracking</option><option value="quantity">Quantity — small interchangeable parts</option><option value="serialized">Serialized — one identity per physical unit</option><option value="measured_bulk">Measured or bulk — fluids and divisible material</option></Dropdown><small>This applies at every location.</small></label>
           </div>
           <details>
             <summary>Optional details</summary>

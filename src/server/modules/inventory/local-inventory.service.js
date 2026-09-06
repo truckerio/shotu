@@ -4,6 +4,7 @@ import {
   listLocalInventoryStock,
   listLocalInvoiceHistory,
   postLocalInventoryReceipt,
+  getCatalogTrackingModes,
 } from "../../db/repositories/local-inventory.repo.js";
 import { loadReviewedInvoiceForReceipt } from "../../db/repositories/inventory-receipts.repo.js";
 import { invoiceDraftSchema } from "../invoice-extraction/invoice-extraction.schemas.js";
@@ -110,10 +111,19 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
     throw publicError("INVOICE_REVIEW_STALE", "This reviewed invoice changed. Refresh it before confirming delivery.", 409, true);
   }
   const draft = invoiceDraftSchema.parse(source.reviewed_draft);
-  const lines = prepareLocalLines(draft);
+  const preparedLines = prepareLocalLines(draft);
+  const loadTrackingModes = dependencies.loadTrackingModes
+    || (dependencies.postReceipt ? async () => [] : getCatalogTrackingModes);
+  const policies = await loadTrackingModes({
+    companyIds: scope.companyIds,
+    catalogPartIds: [...new Set(preparedLines.map((line) => line.catalogPartId).filter(Boolean))],
+  });
+  const trackingByPart = new Map(policies.map((policy) => [policy.catalogPartId, policy.trackingMode]));
+  const lines = preparedLines.map((line) => ({ ...line, trackingMode: line.catalogPartId ? trackingByPart.get(line.catalogPartId) || null : null }));
   const serializedQuantity = lines.reduce((total, line) => {
     const category = getUnitDefinition(line.uomCode)?.category;
-    return category === "count" || category === "packaging" ? total + line.quantity : total;
+    const serialized = line.trackingMode === "serialized" || (line.trackingMode === null && (category === "count" || category === "packaging"));
+    return serialized ? total + line.quantity : total;
   }, 0);
   if (serializedQuantity > 500) {
     throw publicError(
@@ -133,7 +143,7 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
   const labelBatchId = serializedQuantity ? randomUUID() : null;
   const postingLines = lines.map((line) => {
     const category = getUnitDefinition(line.uomCode)?.category;
-    const serializable = category === "count" || category === "packaging";
+    const serializable = line.trackingMode === "serialized" || (line.trackingMode === null && (category === "count" || category === "packaging"));
     return {
       ...line,
       serializedUnits: serializable

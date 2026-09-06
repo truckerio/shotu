@@ -81,6 +81,9 @@ export async function createSerializedUnitsForPart(catalogPartId, locationId, in
   if (result.kind === "unsupported_unit") {
     throw publicError("INVENTORY_SERIALIZATION_UNIT_UNSUPPORTED", "Only whole count or package quantities can create one serialized QR per physical unit.");
   }
+  if (result.kind === "tracking_policy") {
+    throw publicError("INVENTORY_SERIALIZATION_TRACKING_POLICY", "This part uses quantity tracking. Change its reviewed tracking policy before creating exact units.");
+  }
   if (result.kind === "workorder_state") {
     throw publicError("WORKORDER_INVENTORY_NOT_ACTIVE", "Physical units can only be added while this workorder is open or active.", 409);
   }

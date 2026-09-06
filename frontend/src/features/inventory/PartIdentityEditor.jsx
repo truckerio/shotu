@@ -2,6 +2,7 @@ import { MinusCircle, Plus } from "@untitledui/icons";
 import { useEffect, useId, useMemo, useState } from "react";
 import { ActionFooter, FormErrorSummary, FormField, OperationalForm, textEntryProps } from "../../components/forms/index.js";
 import { UnitOfMeasurePicker } from "../../components/forms/UnitOfMeasurePicker.jsx";
+import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import { getUnitDefinition, UNITS_OF_MEASURE } from "../../../../shared/units-of-measure.js";
@@ -142,6 +143,14 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         </FormField> : null}
         <FormField id="inventory-unit" label="Unit" hint={uomHint}>
           <UnitOfMeasurePicker uomCode={draft.uomCode} allowedUomCodes={allowedUomCodes} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={!uomEditable} />
+        </FormField>
+        <FormField id="inventory-tracking-mode" label="How do you track this part?" hint="Quantity is best for small interchangeable parts. Serialized keeps one identity per physical unit. Measured or bulk is for fluids and divisible material." error={errors.trackingMode} required>
+          <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy || !fieldIsEditable(part, "trackingMode")}>
+            <option value="">Choose tracking</option>
+            <option value="quantity">Quantity</option>
+            <option value="serialized">Serialized</option>
+            <option value="measured_bulk">Measured or bulk</option>
+          </Dropdown>
         </FormField>
       </div>
       <details className="inventory-part-editor-references" defaultOpen={draft.referenceNumbers.length > 0}>

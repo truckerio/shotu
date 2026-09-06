@@ -436,13 +436,14 @@ function chunksByUnitLimit(lines, limit = INVENTORY_COUNT_BATCH_UNIT_LIMIT) {
   let current = [];
   let total = 0;
   for (const line of lines) {
-    if (current.length && total + Number(line.quantity) > limit) {
+    const serializedQuantity = line.tracking_mode === "quantity" || line.tracking_mode === "measured_bulk" ? 0 : Number(line.quantity);
+    if (current.length && total + serializedQuantity > limit) {
       chunks.push(current);
       current = [];
       total = 0;
     }
     current.push(line);
-    total += Number(line.quantity);
+    total += serializedQuantity;
   }
   if (current.length) chunks.push(current);
   return chunks;
@@ -485,7 +486,7 @@ export async function applyInventoryCountImport({
     ]);
     const ready = await client.query(
       `select line.*, catalog.part_number, catalog.normalized_part_number,
-              catalog.description as catalog_description, catalog.uom_code
+              catalog.description as catalog_description, catalog.uom_code, catalog.tracking_mode
        from inventory_count_import_lines line
        join parts_catalog catalog
          on catalog.company_id = line.company_id and catalog.id = line.catalog_part_id
@@ -562,16 +563,17 @@ export async function applyInventoryCountImport({
       );
       const labelItems = [];
       for (const [lineIndex, line] of lines.entries()) {
+        const serialized = line.tracking_mode === null || line.tracking_mode === "serialized";
         const receiptLineId = randomUUID();
         await client.query(
           `insert into inventory_receipt_lines (
              id, company_id, receipt_id, line_index, catalog_part_id,
              product_external_id, part_number, description, quantity, uom_code, tracking_mode
-           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'serial')`,
+           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
           [receiptLineId, stocktake.company_id, receiptId, lineIndex, line.catalog_part_id,
             `local-count:${line.catalog_part_id}`, line.part_number,
             line.catalog_description || line.source_part_name || line.source_description || "",
-            line.quantity, line.uom_code],
+            line.quantity, line.uom_code, serialized ? "serial" : "aggregate"],
         );
         await recordInventoryAuthorityCutover(client, {
           claim: authorityClaims.get(line.id),
@@ -591,12 +593,12 @@ export async function applyInventoryCountImport({
             `Opening count from ${stocktake.source_file_name}, row ${line.source_row}`,
             `count-import:${stocktake.id}:row:${line.source_row}`],
         );
-        const unitIds = Array.from({ length: Number(line.quantity) }, () => randomUUID());
+        const unitIds = serialized ? Array.from({ length: Number(line.quantity) }, () => randomUUID()) : [];
         const ordinals = unitIds.map((_, index) => index + 1);
         const serials = ordinals.map((ordinal) => (
           `WG-C-${stocktake.id.replaceAll("-", "").slice(0, 12).toUpperCase()}-${line.source_row}-${ordinal}`
         ));
-        await client.query(
+        if (serialized) await client.query(
           `insert into inventory_serialized_units (
              id, company_id, location_id, receipt_id, receipt_line_id,
              unit_ordinal, serial_number, status, condition_code, custody_holder_type, custody_location_id
@@ -607,7 +609,7 @@ export async function applyInventoryCountImport({
           [stocktake.company_id, stocktake.location_id, receiptId, receiptLineId,
             unitIds, ordinals, serials],
         );
-        await client.query(
+        if (serialized) await client.query(
           `insert into inventory_unit_events (company_id, unit_id, event_type, actor_id, details)
            select $1, input.id, 'receipt_recorded', $2,
                   jsonb_build_object('source', 'opening_count', 'countImportId', $3::text, 'sourceRow', $4::integer)
@@ -650,7 +652,7 @@ export async function applyInventoryCountImport({
           [stocktake.company_id, stocktake.id, line.id, receiptId],
         );
       }
-      await createLabelBatch(client, {
+      if (labelItems.length) await createLabelBatch(client, {
         batchId: labelBatchId,
         companyId: stocktake.company_id,
         locationId: stocktake.location_id,

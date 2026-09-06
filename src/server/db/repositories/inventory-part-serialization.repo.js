@@ -46,7 +46,7 @@ export async function getPartLocationSerialization({ catalogPartId, locationId, 
   const selected = await query(
     `select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
             catalog.description, catalog.normalized_part_number, catalog.uom_code,
-            catalog.inventory_display_uom_code,
+            catalog.inventory_display_uom_code, catalog.tracking_mode,
             location.id as location_id, location.name as location_name,
             coalesce(local.quantity_on_hand, 0) as local_quantity_on_hand,
             coalesce(local.quantity_reserved, 0) as local_quantity_reserved,
@@ -98,6 +98,7 @@ export async function getPartLocationSerialization({ catalogPartId, locationId, 
       partNumber: part.part_number,
       description: part.description || "",
       uomCode: part.inventory_display_uom_code || part.uom_code,
+      trackingMode: part.tracking_mode || null,
     },
     location: {
       locationId: part.location_id,
@@ -106,7 +107,8 @@ export async function getPartLocationSerialization({ catalogPartId, locationId, 
       localQuantityReserved: Number(part.local_quantity_reserved),
       odooQuantityOnHand: Number(part.odoo_quantity_on_hand),
     },
-    canCreateSerializedUnits: ["count", "packaging"].includes(part.uom_category)
+    canCreateSerializedUnits: (part.tracking_mode === null || part.tracking_mode === "serialized")
+      && ["count", "packaging"].includes(part.uom_category)
       && Number(part.decimal_scale) === 0,
     units: units.rows.slice(0, 500).map(publicUnit),
     truncated: units.rows.length > 500,
@@ -148,7 +150,7 @@ export async function createPartSerializedUnits({
     }
     const partResult = await client.query(
       `select catalog.company_id, catalog.id as catalog_part_id, catalog.part_number,
-              catalog.description, catalog.normalized_part_number, catalog.uom_code,
+              catalog.description, catalog.normalized_part_number, catalog.uom_code, catalog.tracking_mode,
               location.id as location_id, location.name as location_name,
               uom.category as uom_category, uom.decimal_scale
        from parts_catalog catalog
@@ -206,6 +208,10 @@ export async function createPartSerializedUnits({
     if (workorderId && !["open", "accepted", "in_progress"].includes(workorderStatus)) {
       await client.query("rollback");
       return { kind: "workorder_state" };
+    }
+    if (part.tracking_mode && part.tracking_mode !== "serialized") {
+      await client.query("rollback");
+      return { kind: "tracking_policy" };
     }
     const authority = await inspectInventoryAuthority(client, {
       companyId: part.company_id,
