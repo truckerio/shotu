@@ -13,7 +13,7 @@ export const reuseScopeSchema = z.object(scope).strict();
 export const reuseConfigReadSchema = z.object({ ...scope, catalogPartId: reuseId.optional() }).strict();
 export const reuseRemoveSchema = z.object({
   ...command, usageId: reuseId, removalWorkorderId: reuseId.optional(), reason: evidence,
-  ownership: z.enum(["company", "customer", "unknown"]), ownershipEvidence: z.string().trim().max(2000).default(""),
+  ownership: z.enum(["company", "customer", "unknown"]).optional(), ownershipEvidence: z.string().trim().max(2000).default(""),
   intendedRoute: route.default("not_sure"), note: z.string().trim().max(2000).default(""),
 }).strict().refine((v) => v.ownership !== "company" || v.ownershipEvidence.length > 0, { message: "Company ownership requires documented evidence.", path: ["ownershipEvidence"] });
 export const reuseReceiveSchema = z.object({ ...command, evidence,

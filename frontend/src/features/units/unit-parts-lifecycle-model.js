@@ -32,11 +32,6 @@ export function lifecycleIdempotencyKey(keys, identity) {
   return keys.get(identity);
 }
 
-export function eligibleRemovalWorkorders(part, workorders = []) {
-  if (part?.status === "installed_pending_approval") return workorders;
-  return workorders.filter((workorder) => workorder.id !== part?.workorderId);
-}
-
 export function reuseRecoveryKey({ actorId, companyId, locationId, assetId }) {
   return `inventory-reuse-recovery:${actorId}:${companyId}:${locationId}:${assetId}`;
 }

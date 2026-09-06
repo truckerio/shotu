@@ -28,17 +28,19 @@ test("PostgreSQL custody prevents bypass, permits an authorized remover to recei
   const f = await createInventoryReuseFixture();
   const base = {companyId:f.companyId,locationId:f.locationId};
   const command = (action,actorId,extra={}) => ({...base,action,actorId,idempotencyKey:randomUUID(),requestHash:reuseDigest(randomUUID()),...extra});
-  const remove = command("remove",f.removerId,{usageId:f.usageId,removalWorkorderId:f.removalWorkorderId,reason:"Bench inspection",ownership:"company",ownershipEvidence:"Original company purchase verified"});
+  const remove = command("remove",f.removerId,{usageId:f.usageId,reason:"Bench inspection"});
   const stock = async()=> (await query("select quantity_on_hand,quantity_reserved from inventory_items where company_id=$1",[f.companyId])).rows[0];
   try {
     await query("update inventory_serialized_units set custody_bin_location='OLD-SHELF',custody_external_reference='old holder' where company_id=$1 and id=$2",[f.companyId,f.unitId]);
     await assert.rejects(mutateInventoryReuse({...remove,actorId:f.adminId}),{code:"INVENTORY_REUSE_FORBIDDEN"});
-    await assert.rejects(mutateInventoryReuse({...remove,removalWorkorderId:f.secondWorkorderId}),{code:"INVENTORY_REUSE_CHANGED"});
     assert.equal((await finalizeSerializedUnitUsage({...base,workorderId:f.workorderId,usageId:f.usageId,disposition:"removed",actorId:f.removerId,actorRole:"office",idempotencyKey:randomUUID(),requestHash:reuseDigest("old-remove")})).kind,"custody_required");
     const results = await Promise.all([mutateInventoryReuse(remove),mutateInventoryReuse(remove)]);
     assert.deepEqual(results.map((r)=>r.replayed).sort(),[false,true]);
     const c = results[0].case;
     assert.equal(c.status,"awaiting_handoff");
+    assert.equal(c.removalWorkorderId,null);
+    assert.equal(c.ownership,"company");
+    assert.match(c.ownershipEvidence,new RegExp(f.receiptId));
     assert.deepEqual((await query("select custody_holder_type,custody_bin_location,custody_external_reference from inventory_serialized_units where company_id=$1 and id=$2",[f.companyId,f.unitId])).rows[0],{custody_holder_type:"handoff",custody_bin_location:"",custody_external_reference:null});
     assert.equal((await stock()).quantity_on_hand,"1.000");
     await assert.rejects(mutateInventoryReuse({...remove,reason:"changed",requestHash:reuseDigest("changed")}),{code:"INVENTORY_REUSE_REPLAY_CONFLICT"});
@@ -75,11 +77,13 @@ test("PostgreSQL custody prevents bypass, permits an authorized remover to recei
     for(const event of ["removed","reuse_received","reuse_hold","reuse_released"]) assert.ok(events.includes(event));
 
     // Physically fitted preapproval parts also require custody; no unused shortcut.
+    await query("update inventory_receipts set provider='legacy_tracking',invoice_run_id=null,count_import_id=null,serialization_batch_id=null where company_id=$1 and id=$2",[f.companyId,f.receiptId]);
     const pending=await issueSerializedUnitToWorkorder({...issueScope,unitId:f.pendingUnitId,idempotencyKey:randomUUID(),requestHash:reuseDigest("pending")});
     await finalizeSerializedUnitUsage({...issueScope,usageId:pending.usage.id,disposition:"installed",idempotencyKey:randomUUID(),requestHash:reuseDigest("pending-install")});
     assert.equal((await finalizeSerializedUnitUsage({...issueScope,usageId:pending.usage.id,disposition:"returned",idempotencyKey:randomUUID(),requestHash:reuseDigest("pending-return")})).kind,"custody_required");
-    const held=(await mutateInventoryReuse(command("remove",f.removerId,{usageId:pending.usage.id,removalWorkorderId:f.secondWorkorderId,reason:"Fitted but damaged",ownership:"customer",ownershipEvidence:"Customer title retained"}))).case;
+    const held=(await mutateInventoryReuse(command("remove",f.removerId,{usageId:pending.usage.id,reason:"Fitted but damaged",ownership:"customer",ownershipEvidence:"Customer title retained"}))).case;
     assert.equal(held.installationStatus,"installed_pending_approval");
+    assert.equal(held.ownership,"customer");
     assert.deepEqual(await stock(),{quantity_on_hand:"0.000",quantity_reserved:"0.000"});
     await mutateInventoryReuse(command("receive",f.receiverId,{caseId:held.id,evidence:"Observed damaged serial"}));
     await assert.rejects(mutateInventoryReuse(command("release",f.releaseId,{caseId:held.id,decision:"release",inspectionEvidence:"Condition okay",reason:"Attempt customer property release"})),{code:"INVENTORY_REUSE_OWNERSHIP_REQUIRED"});
@@ -98,8 +102,10 @@ test("PostgreSQL pending company-owned installation follows physical custody and
   try {
     const issued=await issueSerializedUnitToWorkorder({...scope,unitId:f.unitId,idempotencyKey:randomUUID(),requestHash:reuseDigest("pending-stock")});
     await finalizeSerializedUnitUsage({...scope,usageId:issued.usage.id,disposition:"installed",idempotencyKey:randomUUID(),requestHash:reuseDigest("pending-fit")});
-    const removed=await mutateInventoryReuse(command("remove",f.removerId,{usageId:issued.usage.id,removalWorkorderId:f.workorderId,reason:"Remove fitted test unit",ownership:"company",ownershipEvidence:"Verified company purchase"}));
+    const removed=await mutateInventoryReuse(command("remove",f.removerId,{usageId:issued.usage.id,reason:"Remove fitted test unit"}));
     assert.equal(removed.case.installationStatus,"installed_pending_approval");
+    assert.equal(removed.case.removalWorkorderId,null);
+    assert.equal(removed.case.ownership,"company");
     assert.deepEqual((await query("select quantity_on_hand,quantity_reserved from inventory_items where company_id=$1",[f.companyId])).rows[0],{quantity_on_hand:"1.000",quantity_reserved:"0.000"});
     await mutateInventoryReuse(command("receive",f.receiverId,{caseId:removed.case.id,evidence:"Exact serial physically received"}));
     const release=command("release",f.releaseId,{caseId:removed.case.id,decision:"release",inspectionEvidence:"Bench test passed; no repair outstanding",reason:"Return inspected serial"});
@@ -140,31 +146,24 @@ test("PostgreSQL Units custody finds two serialized installations independently 
   } finally { await f.cleanup(); }
 });
 
-test("PostgreSQL office/admin can remove against a newly created open workorder; assigned mechanics cannot",{skip:!run},async()=>{
-  for (const role of ["office","admin"]) {
-    const f=await createInventoryReuseFixture();
-    const base={companyId:f.companyId,locationId:f.locationId,actorId:f.removerId};
-    const removal={...base,action:"remove",usageId:f.usageId,removalWorkorderId:f.removalWorkorderId,
-      ownership:"company",ownershipEvidence:"Verified purchase",reason:"New open removal workorder",
-      idempotencyKey:randomUUID(),requestHash:reuseDigest(randomUUID())};
-    try {
-      await query("update operational_workorders set status='open' where id=$1",[f.removalWorkorderId]);
-      // Explicit mechanic module grant ensures denial is the open lifecycle guard,
-      // not a hidden default module masking a permissive repository transition.
-      const policyId=randomUUID();
-      await query("insert into workorder_module_policy_scopes(id,scope_type,company_id) values($1,'company',$2)",[policyId,f.companyId]);
-      await query(`insert into workorder_module_access_rules(scope_id,subject_type,subject_id,role_key,surface,module_key,access)
-        values($1,'role','mechanic','mechanic','detail','partsScanning','write')`,[policyId]);
-      await query("update user_company_memberships set role='mechanic' where company_id=$1 and user_id=$2",[f.companyId,f.removerId]);
-      await query(`insert into workorder_mechanic_assignments(workorder_id,mechanic_user_id,assignment_role,active,assigned_by_user_id)
-        values($1,$2,'primary',true,$3)`,[f.removalWorkorderId,f.removerId,f.adminId]);
-      await assert.rejects(mutateInventoryReuse(removal),{code:"INVENTORY_REUSE_CHANGED"});
-      await assert.rejects(readInventoryReuse({...base,view:"asset",assetId:f.assetId}),{code:"INVENTORY_REUSE_FORBIDDEN"});
-      await query("update user_company_memberships set role=$3 where company_id=$1 and user_id=$2",[f.companyId,f.removerId,role]);
-      const view=await readInventoryReuse({...base,view:"asset",assetId:f.assetId});
-      assert.equal(view.canCreateRemovalWorkorder,true);
-      assert.ok(view.removalWorkorders.some((w)=>w.id===f.removalWorkorderId && w.status==="open"));
-      assert.equal((await mutateInventoryReuse(removal)).case.status,"awaiting_handoff");
-    } finally {await f.cleanup();}
-  }
+test("PostgreSQL explicit removal capability works from Unit detail without workorder write access",{skip:!run},async()=>{
+  const f=await createInventoryReuseFixture();
+  const base={companyId:f.companyId,locationId:f.locationId,actorId:f.removerId};
+  const removal={...base,action:"remove",usageId:f.usageId,reason:"Direct Unit removal",
+    idempotencyKey:randomUUID(),requestHash:reuseDigest(randomUUID())};
+  try {
+    const policyId=randomUUID();
+    await query("insert into workorder_module_policy_scopes(id,scope_type,company_id) values($1,'company',$2)",[policyId,f.companyId]);
+    await query(`insert into workorder_module_access_rules(scope_id,subject_type,subject_id,role_key,surface,module_key,access)
+      values($1,'role','office','office','detail','partsScanning','read')`,[policyId]);
+    const view=await readInventoryReuse({...base,view:"asset",assetId:f.assetId});
+    assert.equal(view.installedParts[0].ownershipRequired,false);
+    assert.equal(view.installedParts[0].inferredOwnership,"company");
+    assert.equal("removalWorkorders" in view,false);
+    const before=(await query("select count(*)::int n from operational_workorders where company_id=$1",[f.companyId])).rows[0].n;
+    const removed=(await mutateInventoryReuse(removal)).case;
+    assert.equal(removed.status,"awaiting_handoff");
+    assert.equal(removed.removalWorkorderId,null);
+    assert.equal((await query("select count(*)::int n from operational_workorders where company_id=$1",[f.companyId])).rows[0].n,before);
+  } finally {await f.cleanup();}
 });

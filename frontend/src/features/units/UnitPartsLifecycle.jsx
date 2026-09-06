@@ -10,7 +10,6 @@ import {
   canReleaseCase,
   caseStage,
   clearReuseRecovery,
-  eligibleRemovalWorkorders,
   lifecycleIdempotencyKey,
   restoreReuseRecovery,
   reuseOperationPath,
@@ -57,7 +56,6 @@ export function UnitPartsLifecycle({
   unit,
   actorId = "",
   initialUsageId = "",
-  initialWorkorderId = "",
   onChanged,
   onBusyChange,
   onModeChange,
@@ -190,7 +188,7 @@ export function UnitPartsLifecycle({
   ]);
 
   useEffect(() => {
-    const initial = `${unit?.id}:${initialUsageId}:${initialWorkorderId}`;
+    const initial = `${unit?.id}:${initialUsageId}`;
     if (!data || !initialUsageId || openedInitialRef.current === initial)
       return;
     const part = (data.installedParts || []).find(
@@ -198,12 +196,8 @@ export function UnitPartsLifecycle({
     );
     if (!part) return;
     openedInitialRef.current = initial;
-    openForm("remove", {
-      ...part,
-      removalWorkorderId:
-        part.status === "installed_pending_approval" ? initialWorkorderId : "",
-    });
-  }, [data, initialUsageId, initialWorkorderId, unit?.id]);
+    openForm("remove", part);
+  }, [data, initialUsageId, unit?.id]);
 
   useEffect(() => {
     onBusyChange?.(busy || Boolean(pendingRequest) || needsReconcile);
@@ -328,26 +322,16 @@ export function UnitPartsLifecycle({
   function remove() {
     const { item } = active;
     if (!draft.reason.trim()) return;
-    const eligibleWorkorders = eligibleRemovalWorkorders(
-      item,
-      data?.removalWorkorders || [],
-    );
-    const removalWorkorderId =
-      item.removalWorkorderId ||
-      (eligibleWorkorders.length === 1 ? eligibleWorkorders[0].id : "");
-    const identity = `remove:${item.usageId}:${removalWorkorderId || "derived"}:${draft.reason}:${draft.intendedRoute}:${draft.ownership}:${draft.ownershipEvidence}:${draft.note}`;
+    const identity = `remove:${item.usageId}:unit-detail:${draft.reason}:${draft.intendedRoute}:${item.ownershipRequired ? draft.ownership : item.inferredOwnership}:${draft.ownershipEvidence}:${draft.note}`;
     const request = {
       path: "/api/inventory-reuse/remove",
       body: {
         ...scope,
         usageId: item.usageId,
-        ...(removalWorkorderId
-          ? { removalWorkorderId }
-          : {}),
         reason: draft.reason.trim(),
         intendedRoute: draft.intendedRoute,
         ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
-        ...(draft.ownership
+        ...(item.ownershipRequired && draft.ownership
           ? {
               ownership: draft.ownership,
               ownershipEvidence: draft.ownershipEvidence.trim(),
@@ -466,11 +450,6 @@ export function UnitPartsLifecycle({
     (part) => part.status !== "installed_pending_approval",
   );
   const cases = data?.cases || [];
-  const removalWorkorders = data?.removalWorkorders || [];
-  const eligibleRemovalWorkordersForActive =
-    active?.kind === "remove"
-      ? eligibleRemovalWorkorders(active.item, removalWorkorders)
-      : [];
   return (
     <div
       className={`unit-parts-lifecycle${
@@ -814,39 +793,6 @@ export function UnitPartsLifecycle({
               Back
             </Button>
           </div>
-          {eligibleRemovalWorkordersForActive.length > 1 ? (
-            <label>
-              Removal workorder
-              <Dropdown
-                aria-label="Removal workorder"
-                disabled={busy || Boolean(pendingRequest)}
-                value={active.item.removalWorkorderId || ""}
-                onChange={(event) =>
-                  setActive((current) => ({
-                    ...current,
-                    item: {
-                      ...current.item,
-                      removalWorkorderId: event.target.value,
-                    },
-                  }))
-                }
-              >
-                <option value="">Choose workorder</option>
-                {eligibleRemovalWorkordersForActive.map((workorder) => (
-                  <option value={workorder.id} key={workorder.id}>
-                    {workorderLabel(workorder)}
-                  </option>
-                ))}
-              </Dropdown>
-            </label>
-          ) : null}
-          {!eligibleRemovalWorkordersForActive.length ? (
-            <p className="unit-parts-notice">
-              {data?.canCreateRemovalWorkorder
-                ? "Workorder will be created automatically."
-                : "Ask Office or Admin to assign an active workorder before removing this part."}
-            </p>
-          ) : null}
           <label>
             Reason
             <Dropdown
@@ -887,38 +833,40 @@ export function UnitPartsLifecycle({
               <option value="not_sure">Not sure</option>
             </Dropdown>
           </label>
-          <label>
-            Owner
-            <Dropdown
-              aria-label="Part ownership"
-              disabled={busy || Boolean(pendingRequest)}
-              value={draft.ownership}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  ownership: event.target.value,
-                }))
-              }
-            >
-              <option value="company">Company</option>
-              <option value="customer">Customer</option>
-              <option value="unknown">Not sure</option>
-            </Dropdown>
-          </label>
-          {draft.ownership === "company" ? (
-            <label>
-              Ownership proof
-              <input
-                disabled={busy || Boolean(pendingRequest)}
-                value={draft.ownershipEvidence}
-                onChange={(event) =>
-                  setDraft((value) => ({
-                    ...value,
-                    ownershipEvidence: event.target.value,
-                  }))
-                }
-              />
-            </label>
+          {active.item.ownershipRequired ? (
+            <>
+              <label>
+                Owner
+                <Dropdown
+                  aria-label="Part ownership"
+                  disabled={busy || Boolean(pendingRequest)}
+                  value={draft.ownership}
+                  onChange={(event) =>
+                    setDraft((value) => ({
+                      ...value,
+                      ownership: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="company">Company</option>
+                  <option value="customer">Customer</option>
+                  <option value="unknown">Not sure</option>
+                </Dropdown>
+              </label>
+              {draft.ownership === "company" ? <label>
+                Ownership proof
+                <input
+                  disabled={busy || Boolean(pendingRequest)}
+                  value={draft.ownershipEvidence}
+                  onChange={(event) =>
+                    setDraft((value) => ({
+                      ...value,
+                      ownershipEvidence: event.target.value,
+                    }))
+                  }
+                />
+              </label> : null}
+            </>
           ) : null}
           <details className="unit-parts-optional">
             <summary>Add note</summary>
@@ -943,12 +891,9 @@ export function UnitPartsLifecycle({
                 busy ||
                 Boolean(pendingRequest) ||
                 !draft.reason ||
-                (eligibleRemovalWorkordersForActive.length > 1 &&
-                  !active.item.removalWorkorderId) ||
-                (!eligibleRemovalWorkordersForActive.length &&
-                  !data?.canCreateRemovalWorkorder) ||
-                !draft.ownership ||
-                (draft.ownership === "company" &&
+                (active.item.ownershipRequired && !draft.ownership) ||
+                (active.item.ownershipRequired &&
+                  draft.ownership === "company" &&
                   !draft.ownershipEvidence.trim())
               }
             >

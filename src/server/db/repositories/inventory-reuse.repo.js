@@ -51,7 +51,7 @@ async function scopeAccess(client, input, capability, admin = false) {
   const capabilities = Object.fromEntries(["remove","receive","release","route","repair","disposition","quarantine"].map((key) => [key,grants.rows.some((r) => r.capability===key)]));
   if (capability && !capabilities[capability]) denied();
   capabilities.configure = role === "admin";
-  await moduleAccess(client,input,role,Boolean(capability || admin && input.kind));
+  if (input.action !== "remove") await moduleAccess(client,input,role,Boolean(capability || admin && input.kind));
   return { role, capabilities };
 }
 
@@ -128,31 +128,7 @@ export async function mutateInventoryReuse(input) {
       const created=await client.query(`insert into inventory_reuse_cases(company_id,location_id,unit_id,usage_id,asset_id,original_workorder_id,removal_workorder_id,installation_status,status,removed_by_user_id,reason,ownership,ownership_evidence,intended_route) values($1,$2,$3,$4,$5,$6,$6,'installed_pending_approval','awaiting_handoff',$7,$8,$9,$10,$11) returning id`,[input.companyId,input.locationId,id.unit_id,id.usage_id,input.assetId,workorderId,input.actorId,input.reason,input.ownership,input.ownershipEvidence,input.intendedRoute]); caseId=created.rows[0].id;
       await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details) values($1,$2,'removed',$3,$4,$5,$6,$7::jsonb)`,[input.companyId,id.unit_id,input.actorId,id.usage_id,workorderId,input.assetId,JSON.stringify({caseId,origin:'legacy_tracking_started_at_removal',earlierPhysicalHistoryUnavailable:true,note:input.note})]);
     } else if (input.action === "remove") {
-      let removalWorkorderId = input.removalWorkorderId;
-      if (!removalWorkorderId && ["office", "admin"].includes(role)) {
-        const usageForWorkorder = await client.query(`select asset_id from workorder_serialized_part_usages where company_id=$1 and location_id=$2 and id=$3 for share`, [input.companyId,input.locationId,input.usageId]);
-        if (!usageForWorkorder.rows[0]) changed();
-        const existingWorkorders = await client.query(`select id from operational_workorders where company_id=$1 and location_id=$2 and asset_id=$3 and status in ('open','accepted','in_progress') order by id limit 2 for update`, [input.companyId,input.locationId,usageForWorkorder.rows[0].asset_id]);
-        if (existingWorkorders.rows.length > 1) fail("INVENTORY_REUSE_WORKORDER_REQUIRED", "Choose the workorder that records this removal.");
-        if (existingWorkorders.rows.length === 1) removalWorkorderId = existingWorkorders.rows[0].id;
-        else {
-          const serial = `RM-${Date.now()}-${input.usageId.slice(0, 8)}`;
-          const createdWorkorder = await client.query(`insert into operational_workorders(company_id,serial,asset_id,location_id,created_by_user_id,concern,office_notes,form_data,work_performed)
-            values($1,$2,$3,$4,$5,$6,$7,'{}'::jsonb,'') returning id`, [input.companyId,serial,usageForWorkorder.rows[0].asset_id,input.locationId,input.actorId,"Removed part custody",input.reason]);
-          removalWorkorderId = createdWorkorder.rows[0].id;
-        }
-      }
-      const workorders = await client.query(`select id,asset_id,status from operational_workorders
-        where company_id=$1 and location_id=$2 and id=$3 for update`, [input.companyId,input.locationId,removalWorkorderId]);
-      const workorder = workorders.rows[0];
-      const removalStatuses = ["office","admin"].includes(role) ? ["open","accepted","in_progress"] : ["accepted","in_progress"];
-      if (!workorder || !removalStatuses.includes(workorder.status)) changed();
-      if (role === "mechanic") {
-        const assigned = await client.query(`select mechanic_user_id from workorder_mechanic_assignments
-          where workorder_id=$1 and mechanic_user_id=$2 and active for share`,[workorder.id,input.actorId]);
-        if (!assigned.rows[0]) denied();
-      }
-      const result = await client.query(`select s.*,u.status as unit_status,u.custody_version,r.provider
+      const result = await client.query(`select s.*,u.status as unit_status,u.custody_version,u.receipt_id,r.provider
         from workorder_serialized_part_usages s
         join inventory_serialized_units u on u.company_id=s.company_id and u.id=s.unit_id and u.location_id=s.location_id
         join inventory_receipts r on r.company_id=u.company_id and r.id=u.receipt_id
@@ -161,8 +137,15 @@ export async function mutateInventoryReuse(input) {
       if (input.expectedVersion && usage?.custody_version !== input.expectedVersion) changed();
       const pending = usage?.status === "installed_pending_approval" && usage.unit_status === "installed_pending_approval";
       if (!usage || !(pending || usage.status === "installed" && usage.unit_status === "installed")
-        || usage.asset_id !== workorder.asset_id || !pending && usage.workorder_id === workorder.id
         || !isApplicationOwnedInventoryProvider(usage.provider)) changed();
+      const ownershipKnown = usage.provider !== "legacy_tracking";
+      const ownership = ownershipKnown ? "company" : input.ownership || "unknown";
+      const ownershipEvidence = ownershipKnown
+        ? `Inventory receipt ${usage.receipt_id} (${usage.provider})`
+        : input.ownershipEvidence || "";
+      if (ownership === "company" && !ownershipEvidence.trim()) {
+        fail("INVENTORY_REUSE_OWNERSHIP_REQUIRED", "Company ownership requires documented evidence.");
+      }
       if (pending) {
         const item = await client.query(`select id from inventory_items where company_id=$1 and location_id=$2
           and catalog_part_id=$3 and uom_code=$4 and source_provider='local' order by updated_at desc,id limit 1 for update`,[input.companyId,input.locationId,usage.catalog_part_id,usage.uom_code]);
@@ -173,19 +156,19 @@ export async function mutateInventoryReuse(input) {
         await client.query(`insert into inventory_stock_movements(company_id,location_id,catalog_part_id,movement_type,quantity_delta,uom_code,
           actor_id,reason,idempotency_key,unit_id,usage_id,workorder_id,asset_id)
           values($1,$2,$3,'issue',-1,$4,$5,$6,$7,$8,$9,$10,$11)`,[input.companyId,input.locationId,usage.catalog_part_id,usage.uom_code,input.actorId,
-          "Physically fitted pending part removed into custody hold",`reuse-pending:${usage.id}`,usage.unit_id,usage.id,workorder.id,usage.asset_id]);
+          "Physically fitted pending part removed into custody hold",`reuse-pending:${usage.id}`,usage.unit_id,usage.id,usage.workorder_id,usage.asset_id]);
       }
       const created = await client.query(`insert into inventory_reuse_cases(company_id,location_id,unit_id,usage_id,asset_id,
           original_workorder_id,removal_workorder_id,status,removed_by_user_id,reason,ownership,ownership_evidence,installation_status,intended_route)
-        values($1,$2,$3,$4,$5,$6,$7,'awaiting_handoff',$8,$9,$10,$11,$12,$13) returning id`,
-      [input.companyId,input.locationId,usage.unit_id,usage.id,usage.asset_id,usage.workorder_id,workorder.id,input.actorId,input.reason,input.ownership,input.ownershipEvidence,usage.status,input.intendedRoute || "not_sure"]);
+        values($1,$2,$3,$4,$5,$6,null,'awaiting_handoff',$7,$8,$9,$10,$11,$12) returning id`,
+      [input.companyId,input.locationId,usage.unit_id,usage.id,usage.asset_id,usage.workorder_id,input.actorId,input.reason,ownership,ownershipEvidence,usage.status,input.intendedRoute || "not_sure"]);
       caseId = created.rows[0].id;
       await client.query(`update workorder_serialized_part_usages set status='removed',updated_at=now() where company_id=$1 and id=$2`,[input.companyId,usage.id]);
       await client.query(`update inventory_serialized_units set status='removed',custody_holder_type='handoff',custody_asset_id=null,custody_location_id=$3,
         custody_bin_location='',custody_external_reference=null,condition_code='unknown',custody_version=custody_version+1,updated_at=now()
         where company_id=$1 and id=$2`,[input.companyId,usage.unit_id,input.locationId]);
       await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details)
-        values($1,$2,'removed',$3,$4,$5,$6,$7::jsonb)`,[input.companyId,usage.unit_id,input.actorId,usage.id,workorder.id,usage.asset_id,JSON.stringify({caseId,originalWorkorderId:usage.workorder_id,custody:"awaiting_handoff",reason:input.reason})]);
+        values($1,$2,'removed',$3,$4,$5,$6,$7::jsonb)`,[input.companyId,usage.unit_id,input.actorId,usage.id,usage.workorder_id,usage.asset_id,JSON.stringify({caseId,source:"unit_detail",originalWorkorderId:usage.workorder_id,custody:"awaiting_handoff",reason:input.reason})]);
     } else if (input.action === "correct_location") {
       const unit = await client.query(`select id,status,custody_version,custody_holder_type,custody_location_id,custody_bin_location,custody_external_reference from inventory_serialized_units where company_id=$1 and location_id=$2 and id=$3 for update`,[input.companyId,input.locationId,input.unitId]);
       const current = unit.rows[0];
@@ -238,7 +221,7 @@ export async function mutateInventoryReuse(input) {
           await client.query(`update inventory_items set quantity_on_hand=quantity_on_hand+1,updated_at=now() where id=$1`,[item.rows[0].id]);
           await client.query(`insert into inventory_stock_movements(company_id,location_id,catalog_part_id,movement_type,quantity_delta,uom_code,
             actor_id,reason,idempotency_key,unit_id,usage_id,workorder_id,asset_id)
-            values($1,$2,$3,'return',1,$4,$5,$6,$7,$8,$9,$10,$11)`,[input.companyId,input.locationId,current.catalog_part_id,current.uom_code,input.actorId,input.reason,`reuse-release:${caseId}`,current.unit_id,current.usage_id,current.removal_workorder_id,current.asset_id]);
+            values($1,$2,$3,'return',1,$4,$5,$6,$7,$8,$9,$10,$11)`,[input.companyId,input.locationId,current.catalog_part_id,current.uom_code,input.actorId,input.reason,`reuse-release:${caseId}`,current.unit_id,current.usage_id,current.removal_workorder_id || current.original_workorder_id,current.asset_id]);
           await client.query(`update inventory_serialized_units set status='in_stock',condition_code=$3,custody_holder_type='inventory_location',custody_location_id=$4,custody_asset_id=null,custody_bin_location=$5,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,current.status === "repair_complete_pending_review" ? "refurbished" : "serviceable_used",input.locationId,input.binLocation || current.received_bin_location || ""]);
         }
         await client.query(`update inventory_reuse_cases set status=$4,inspection_evidence=$5,review_reason=$6,
@@ -282,7 +265,7 @@ export async function mutateInventoryReuse(input) {
     const result = await loadCase(client,input,caseId);
     if (!['remove','legacy_track'].includes(input.action)) await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details)
       values($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,[input.companyId,result.unitId,({receive:"reuse_received",release:input.decision === "hold" ? "reuse_hold" : "reuse_released",route:"reuse_routed",repair_start:"reuse_repair_started",repair_complete:"reuse_repair_completed",core_return:"reuse_core_returned",scrap:"reuse_scrapped",quarantine_resolve:"reuse_quarantine_resolved"})[input.action],
-      input.actorId,result.usageId,result.removalWorkorderId,result.assetId,JSON.stringify({caseId,status:result.status,evidence:input.evidence || input.inspectionEvidence,reason:input.reason || null,externalReference:input.externalReference || null,dispositionDate:input.dispositionDate || null})]);
+      input.actorId,result.usageId,result.removalWorkorderId || result.originalWorkorderId,result.assetId,JSON.stringify({caseId,status:result.status,evidence:input.evidence || input.inspectionEvidence,reason:input.reason || null,externalReference:input.externalReference || null,dispositionDate:input.dispositionDate || null})]);
     await audit(client,input,input.action === "release" ? input.decision : input.action,caseId,result);
     await client.query(`insert into inventory_reuse_operations(company_id,location_id,actor_id,idempotency_key,action,request_hash,case_id,result)
       values($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,[input.companyId,input.locationId,input.actorId,input.idempotencyKey,input.action,input.requestHash,caseId,JSON.stringify(result)]);
@@ -388,19 +371,17 @@ export async function readInventoryReuse(input) {
       and ($7::uuid is null or c.id>$7) order by c.id limit $8`,[input.companyId,input.locationId,input.assetId || null,queueStatus,input.route || null,input.q || "",input.cursor || null,(input.limit || 50)+1]);
     if (!input.assetId) { const rows=cases.rows.slice(0,input.limit || 50).map(publicReuseCase); const aggregate=await client.query(`select status,count(*)::int n from inventory_reuse_cases where company_id=$1 and location_id=$2 group by status`,[input.companyId,input.locationId]);const by=Object.fromEntries(aggregate.rows.map(r=>[r.status,r.n]));const sum=(xs)=>xs.reduce((n,x)=>n+(by[x]||0),0);const counts={awaiting_handoff:sum(['awaiting_handoff']),needs_inspection:sum(['received_pending_review','hold','repair_complete_pending_review']),repair_refurbish:sum(['repair']),core_returns:sum(['core_pending_return']),scrap_approval:sum(['scrap_pending_approval']),quarantine:sum(['quarantine']),completed:sum(['released','core_returned','scrapped'])}; return {items:rows,cases:rows,counts,capabilities:access.capabilities,nextCursor:cases.rows.length>(input.limit || 50) ? rows.at(-1)?.id : null}; }
     const installed = await client.query(`select s.id as usage_id,s.unit_id,u.serial_number,u.custody_version,s.catalog_part_id,l.part_number,l.description,
-      s.workorder_id,w.serial as workorder_serial,s.status,s.asset_id,s.location_id
+      s.workorder_id,w.serial as workorder_serial,s.status,s.asset_id,s.location_id,
+      (r.provider = 'legacy_tracking') as ownership_required,
+      case when r.provider <> 'legacy_tracking' then 'company' else null end as inferred_ownership
       from workorder_serialized_part_usages s join inventory_serialized_units u on u.company_id=s.company_id and u.id=s.unit_id
       join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id
+      join inventory_receipts r on r.company_id=u.company_id and r.id=u.receipt_id
       join operational_workorders w on w.company_id=s.company_id and w.id=s.workorder_id
       where s.company_id=$1 and s.location_id=$2 and s.asset_id=$3 and s.status in ('installed','installed_pending_approval')
       order by s.issued_at desc,s.id limit 100`,[input.companyId,input.locationId,input.assetId]);
-    const workorders = await client.query(`select w.id,w.serial,w.status,w.asset_id,w.location_id from operational_workorders w
-      where w.company_id=$1 and w.location_id=$2 and w.asset_id=$3
-        and (w.status in ('accepted','in_progress') or ($4::text in ('office','admin') and w.status='open'))
-        and ($4::text <> 'mechanic' or exists(select 1 from workorder_mechanic_assignments a where a.workorder_id=w.id and a.mechanic_user_id=$5 and a.active))
-      order by w.created_at desc,w.id limit 100`,[input.companyId,input.locationId,input.assetId,access.role,input.actorId]);
-    return {installedParts:installed.rows.map(publicReuseCase),removalWorkorders:workorders.rows.map(publicReuseCase),cases:cases.rows.map(publicReuseCase),capabilities:access.capabilities,canCreateRemovalWorkorder:["office","admin"].includes(access.role),locationId:input.locationId,
-      possiblyTruncated:installed.rows.length===100 || workorders.rows.length===100 || cases.rows.length===100};
+    return {installedParts:installed.rows.map(publicReuseCase),cases:cases.rows.map(publicReuseCase),capabilities:access.capabilities,locationId:input.locationId,
+      possiblyTruncated:installed.rows.length===100 || cases.rows.length===100};
   });
 }
 

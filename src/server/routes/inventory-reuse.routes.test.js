@@ -20,7 +20,7 @@ test("custody routes ignore unrelated paths and reject unsupported methods",asyn
 });
 test("remove, receive and review cross real schemas into guarded mutation service",async()=>{
   const calls=[];const deps={mutate:async(input)=>{calls.push(input);return {case:{id:caseId,status:"hold"},replayed:false};}};
-  assert.equal((await request("/api/inventory-reuse/remove","POST",{...scope,usageId:randomUUID(),removalWorkorderId:randomUUID(),reason:"Test",ownership:"unknown",expectedVersion:1,idempotencyKey:"remove-test-1"},deps)).status,200);
+  assert.equal((await request("/api/inventory-reuse/remove","POST",{...scope,usageId:randomUUID(),reason:"Test",expectedVersion:1,idempotencyKey:"remove-test-1"},deps)).status,200);
   assert.equal((await request(`/api/inventory-reuse/${caseId}/receive`,"POST",{...scope,evidence:"Actual handoff observed",exactUnitId:randomUUID(),expectedVersion:1,idempotencyKey:"receive-test-1"},deps)).status,200);
   assert.equal((await request(`/api/inventory-reuse/${caseId}/review`,"POST",{...scope,decision:"hold",inspectionEvidence:"Damage seen",reason:"Repair needed",expectedVersion:1,idempotencyKey:"hold-test-1"},deps)).status,200);
   assert.deepEqual(calls.map((c)=>c.action),["remove","receive","release"]);

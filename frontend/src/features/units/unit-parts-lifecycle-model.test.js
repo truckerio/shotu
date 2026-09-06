@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assetReusePath, canReleaseCase, caseStage, clearReuseRecovery, eligibleRemovalWorkorders, readReuseRecovery, restoreReuseRecovery, reuseOperationPath, reuseScope, saveReuseRecovery } from "./unit-parts-lifecycle-model.js";
+import { assetReusePath, canReleaseCase, caseStage, clearReuseRecovery, readReuseRecovery, restoreReuseRecovery, reuseOperationPath, reuseScope, saveReuseRecovery } from "./unit-parts-lifecycle-model.js";
 
 test("reuse requests stay within the selected unit company and location", () => {
   const scope = reuseScope({ company_id: "company-1", locationId: "location-1" });
@@ -17,14 +17,7 @@ test("custody uses the serialized lifecycle location instead of the unit home lo
   );
 });
 
-test("pending installation may be removed on its original active workorder, unlike approved installation", () => {
-  const workorders = [{ id: "original" }, { id: "new" }];
-  assert.deepEqual(eligibleRemovalWorkorders({ status: "installed_pending_approval", workorderId: "original" }, workorders), workorders);
-  assert.deepEqual(eligibleRemovalWorkorders({ status: "installed", workorderId: "original" }, workorders), [{ id: "new" }]);
-  assert.deepEqual(eligibleRemovalWorkorders({ status: "installed", workorderId: "original" }, []), []);
-});
-
-test("removal derives safe workorder context and exposes creation only as an exception", () => {
+test("removal stays on Unit detail and never asks for or creates a workorder", () => {
   const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
   const workspace = readFileSync(new URL("./UnitsWorkspace.jsx", import.meta.url), "utf8");
   assert.match(surface, /unit-parts-lifecycle--focused/);
@@ -32,16 +25,15 @@ test("removal derives safe workorder context and exposes creation only as an exc
   assert.match(surface, /onModeChange\?\.\(active\?\.kind === "remove" \? "remove" : ""\)/);
   assert.match(workspace, /selected && !detailMode/);
   assert.match(workspace, /className=\{detailMode \? "unit-parts-focused-section" : ""\}/);
-  assert.match(surface, /Workorder will be created automatically/);
-  assert.match(surface, /Ask Office or Admin to assign an active workorder/);
+  assert.doesNotMatch(surface, /Workorder will be created automatically/);
+  assert.doesNotMatch(surface, /Ask Office or Admin to assign an active workorder/);
+  assert.doesNotMatch(surface, /Removal workorder/);
   assert.doesNotMatch(surface, /Request workorder/);
   assert.match(surface, /intendedRoute/);
   assert.match(surface, /<option value="inspect_for_reuse">Inspect for reuse<\/option>/);
   assert.doesNotMatch(surface, /<option value="inspect_reuse">/);
   assert.match(surface, /expectedVersion: item\.custodyVersion/);
-  assert.match(surface, /eligibleWorkorders\.length === 1 \? eligibleWorkorders\[0\]\.id : ""/);
-  assert.match(surface, /\.\.\.\(removalWorkorderId\s+\? \{ removalWorkorderId \}/);
-  assert.match(surface, /!data\?\.canCreateRemovalWorkorder/);
+  assert.doesNotMatch(surface, /removalWorkorderId/);
   assert.match(surface, />Remove part</);
   assert.match(surface, /<summary>Add note<\/summary>/);
 });
@@ -53,11 +45,13 @@ test("unit lifecycle never renders stale parts or dereferences capabilities befo
   assert.doesNotMatch(surface, /!data\.capabilities/);
 });
 
-test("every tracked removal declares ownership and fails closed without request storage", () => {
+test("proven inventory hides ownership while unproven legacy inventory still asks", () => {
   const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
-  assert.doesNotMatch(surface, /active\.item\.ownershipRequired/);
+  assert.match(surface, /active\.item\.ownershipRequired/);
+  assert.match(surface, /item\.inferredOwnership/);
   assert.match(surface, /<option value="company">Company<\/option>/);
   assert.match(surface, /ownership: "unknown"/);
+  assert.match(surface, /item\.ownershipRequired && draft\.ownership/);
   assert.match(surface, /if \(!saveReuseRecovery\(recoveryStorage\(\), recoveryScope, request\)\)/);
   assert.match(surface, /This action cannot be saved until session storage is available/);
 });

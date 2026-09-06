@@ -399,7 +399,7 @@ export function SerializedPartsScanner({ workorderId, actorId = "", onChanged, l
   ) : null;
   const custodyPanel = (
     <SecondaryDetailPanel open={Boolean(custodyUsage)} onOpenChange={(open) => { if (!open && !custodyBusy) setCustodyUsage(null); }} onClose={() => { if (!custodyBusy) setCustodyUsage(null); }} closeDisabled={custodyBusy} dismissable={!custodyBusy} title={custodyUsage?.partNumber || "Remove tracked part"} eyebrow="Parts custody">
-      {custodyUsage ? <UnitPartsLifecycle unit={{ id: custodyUsage.assetId, companyId: custodyUsage.companyId, locationId: custodyUsage.locationId }} actorId={actorId} initialUsageId={custodyUsage.id} initialWorkorderId={workorderId} onChanged={refreshAfterCustodyChange} onBusyChange={setCustodyBusy} /> : null}
+      {custodyUsage ? <UnitPartsLifecycle unit={{ id: custodyUsage.assetId, companyId: custodyUsage.companyId, locationId: custodyUsage.locationId }} actorId={actorId} initialUsageId={custodyUsage.id} onChanged={refreshAfterCustodyChange} onBusyChange={setCustodyBusy} /> : null}
     </SecondaryDetailPanel>
   );
 

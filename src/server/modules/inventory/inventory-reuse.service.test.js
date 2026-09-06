@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { commandInventoryReuse, getInventoryReuse, saveInventoryReuseConfiguration } from "./inventory-reuse.service.js";
 import { InventoryError } from "./inventory.errors.js";
-const companyId=randomUUID(),locationId=randomUUID(),actorId=randomUUID(),usageId=randomUUID(),removalWorkorderId=randomUUID();
+const companyId=randomUUID(),locationId=randomUUID(),actorId=randomUUID(),usageId=randomUUID();
 const context={actor:{id:actorId,role:"office"},companyIds:new Set([companyId]),locationIds:new Set([locationId])};
-const payload={companyId,locationId,usageId,removalWorkorderId,reason:"Bench test",ownership:"company",ownershipEvidence:"Purchase verified",expectedVersion:1,idempotencyKey:"remove-test-1"};
+const payload={companyId,locationId,usageId,reason:"Bench test",expectedVersion:1,idempotencyKey:"remove-test-1"};
 const auth={authorizeProduct:async()=>{},authorizeWorkorder:async()=>{}};
 test("removal schema freezes command identity, evidence, actor, scope and stable replay hash",async()=>{
   const calls=[];
@@ -18,17 +18,20 @@ test("removal schema freezes command identity, evidence, actor, scope and stable
   await commandInventoryReuse("remove",null,{...payload,reason:"Different details"},context,deps);
   assert.notEqual(calls[2].requestHash,calls[0].requestHash);
 });
-test("module denial, cross-company and location requests fail before persistence",async()=>{
+test("direct removal uses tenant scope and repository capability instead of workorder authorization",async()=>{
   let called=false;
-  const deps={...auth,mutate:async()=>{called=true;}};
+  let productChecks=0,workorderChecks=0;
+  const deps={authorizeProduct:async()=>{productChecks+=1;throw new Error("Workorders denied");},authorizeWorkorder:async()=>{workorderChecks+=1;throw new Error("Workorder denied");},mutate:async()=>{called=true;return {case:{}};}};
   await assert.rejects(commandInventoryReuse("remove",null,{...payload,companyId:randomUUID()},context,deps));
   await assert.rejects(commandInventoryReuse("remove",null,{...payload,locationId:randomUUID()},context,deps));
-  await assert.rejects(commandInventoryReuse("remove",null,payload,context,{...deps,authorizeWorkorder:async()=>{throw new Error("Denied");}}));
-  assert.equal(called,false);
+  await commandInventoryReuse("remove",null,payload,context,deps);
+  assert.equal(called,true);
+  assert.equal(productChecks,0);
+  assert.equal(workorderChecks,0);
 });
 test("company ownership, receipt and completed inspection require evidence; unknown fields cannot set state",async()=>{
   const deps={...auth,mutate:async()=>{throw new Error("Should not persist invalid payload");}};
-  await assert.rejects(commandInventoryReuse("remove",null,{...payload,ownershipEvidence:" "},context,deps),{name:"ZodError"});
+  await assert.rejects(commandInventoryReuse("remove",null,{...payload,ownership:"company",ownershipEvidence:" "},context,deps),{name:"ZodError"});
   await assert.rejects(commandInventoryReuse("remove",null,{...payload,status:"released"},context,deps),{name:"ZodError"});
   await assert.rejects(commandInventoryReuse("receive",randomUUID(),{companyId,locationId,idempotencyKey:"receive-test",evidence:""},context,deps),{name:"ZodError"});
   await assert.rejects(commandInventoryReuse("release",randomUUID(),{companyId,locationId,idempotencyKey:"release-test",decision:"release",inspectionEvidence:"",reason:"Okay"},context,deps),{name:"ZodError"});

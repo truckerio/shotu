@@ -14,7 +14,6 @@ async function prepareInstalled(ready) {
   await ready.clients.admin.request(`/api/workorders/${workorderId}/inventory-unit-usages/${usageId}/finalize`, { method: "POST", body: { disposition: "installed", idempotencyKey: key("install") } });
   await ready.clients.admin.request(`/api/office/workorders/${workorderId}/mark-done`, { method: "POST", body: { diagnosis: "Browser QA", workPerformed: "Installed exact unit", confirmationName: "QA" } });
   await ready.clients.admin.request(`/api/office/workorders/${workorderId}/close`, { method: "POST", body: { note: "Browser QA approval" } });
-  await ready.createRemovalWorkorder();
   return { scope, usageId };
 }
 
@@ -28,10 +27,10 @@ async function assertRemoved(ready, usageId) {
   const result = await getPool().query(`select u.status as unit_status,c.status as case_status,
     (select count(*)::int from inventory_stock_movements where company_id=$1 and unit_id=$2 and movement_type='return') as returns,
     (select count(*)::int from inventory_unit_events where company_id=$1 and unit_id=$2 and event_type='removed') as removed_events,
-    u.receipt_id=$4::uuid as receipt_preserved
+    u.receipt_id=$4::uuid as receipt_preserved,c.removal_workorder_id is null as direct_removal
     from inventory_serialized_units u join inventory_reuse_cases c on c.company_id=u.company_id and c.unit_id=u.id
     where u.company_id=$1 and u.id=$2 and c.usage_id=$3`, [ready.companyId, ready.unitId, usageId, ready.receiptId]);
-  assert.deepEqual(result.rows[0], { unit_status: "removed", case_status: "awaiting_handoff", returns: 0, removed_events: 1, receipt_preserved: true }, "Installed removal must preserve identity/receipt and create handoff without return stock.");
+  assert.deepEqual(result.rows[0], { unit_status: "removed", case_status: "awaiting_handoff", returns: 0, removed_events: 1, receipt_preserved: true, direct_removal: true }, "Installed removal must preserve identity/receipt and create a direct handoff without return stock.");
 }
 
 async function runViewport({ ready, config, width, logger }) {
@@ -59,7 +58,8 @@ async function runViewport({ ready, config, width, logger }) {
     await page.getByRole("button", { name: "Intended route" }).click();
     await page.getByRole("option", { name: "Inspect for reuse" }).click();
     const ownership = page.getByRole("button", { name: "Part ownership" });
-    if (await ownership.count()) { await ownership.click(); await page.getByRole("option", { name: "Company" }).click(); await page.getByLabel("Ownership proof").fill("Fixture company stock"); }
+    assert.equal(await ownership.count(), 0, "Proven company inventory must not ask for ownership.");
+    assert.equal(await page.getByLabel("Ownership proof").count(), 0, "Proven company inventory must not ask for ownership proof.");
     const primary = page.getByRole("button", { name: "Remove part", exact: true });
     const primaryBox = await primary.boundingBox();
     assert.ok(primaryBox && primaryBox.y + primaryBox.height <= 844, `Primary removal action is below the first viewport at ${width}px: ${JSON.stringify(primaryBox)}.`);

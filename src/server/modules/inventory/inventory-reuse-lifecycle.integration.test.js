@@ -11,14 +11,17 @@ const run = process.env.RUN_POSTGRES_INTEGRATION === "1";
 after(async () => { if (run) await closePool(); });
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 
-test("PostgreSQL removal derives an existing active workorder without creating another", { skip: !run }, async () => {
+test("PostgreSQL removal runs directly from Unit detail without creating or linking a removal workorder", { skip: !run }, async () => {
   const f = await createInventoryReuseFixture();
   try {
     const before = (await query("select count(*)::int n from operational_workorders where company_id=$1", [f.companyId])).rows[0].n;
     const version = (await query("select custody_version from inventory_serialized_units where company_id=$1 and id=$2", [f.companyId, f.unitId])).rows[0].custody_version;
-    const input = { companyId:f.companyId, locationId:f.locationId, action:"remove", capability:"remove", actorId:f.removerId, usageId:f.usageId, expectedVersion:version, reason:"failed", ownership:"company", ownershipEvidence:"purchase", idempotencyKey:randomUUID(), requestHash:digest(randomUUID()) };
+    const input = { companyId:f.companyId, locationId:f.locationId, action:"remove", capability:"remove", actorId:f.removerId, usageId:f.usageId, expectedVersion:version, reason:"failed", idempotencyKey:randomUUID(), requestHash:digest(randomUUID()) };
     const result = await mutateInventoryReuse(input);
-    assert.equal(result.case.removalWorkorderId, f.removalWorkorderId);
+    assert.equal(result.case.removalWorkorderId, null);
+    assert.equal(result.case.originalWorkorderId, f.workorderId);
+    assert.equal(result.case.ownership, "company");
+    assert.match(result.case.ownershipEvidence, new RegExp(f.receiptId));
     assert.equal((await mutateInventoryReuse(input)).replayed, true);
     assert.equal((await query("select count(*)::int n from operational_workorders where company_id=$1", [f.companyId])).rows[0].n, before);
   } finally { await f.cleanup(); }

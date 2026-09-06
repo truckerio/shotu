@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { requireActor, requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import { authorizeProductModule } from "../access/product-module-access.service.js";
-import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
 import { configureInventoryReuse, mutateInventoryReuse, readInventoryReuse } from "../../db/repositories/inventory-reuse.repo.js";
 import { InventoryError } from "./inventory.errors.js";
 import { reuseConfigReadSchema, reuseGrantSchema, reuseId, reusePolicySchema, reuseReceiveSchema, reuseRemoveSchema, reuseReviewSchema, reuseRouteSchema, reuseRepairStartSchema, reuseRepairCompleteSchema, reuseDispositionSchema, reuseQuarantineSchema, reuseCorrectionSchema, reuseLegacyTrackSchema, reuseReadSchema, reuseScopeSchema } from "./inventory-reuse.schemas.js";
@@ -11,8 +10,8 @@ const capabilities = { remove: "remove", legacy_track: "remove", receive: "recei
 
 async function authorization(input, context, dependencies, write = false) {
   requireActor(context); requireCompanyAccess(context, input.companyId); requireLocationAccess(context, input.locationId);
+  if (input.action === "remove") return;
   await (dependencies.authorizeProduct || authorizeProductModule)(context, { companyId: input.companyId, locationId: input.locationId, moduleKey: "workorders" }, write ? "write" : "read");
-  if (input.action === "remove" && input.removalWorkorderId) await (dependencies.authorizeWorkorder || authorizeWorkorderModule)(context, input.removalWorkorderId, { moduleKey: "partsScanning", capability: "write", action: "finalize" });
 }
 function repositoryInput(input, context) { return { ...input, actorId: context.actor.id }; }
 export async function commandInventoryReuse(action, caseId, rawInput, context, dependencies = {}) {
