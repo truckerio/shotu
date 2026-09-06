@@ -120,6 +120,13 @@ test("serialized intake gives PostgreSQL concrete text types for custody event e
   assert.match(serializationRepository, /'binLocation', \$7::text/);
 });
 
+test("part-location serialized rows expose their canonical condition and custody holder", () => {
+  assert.match(serializationRepository, /unit\.condition_code, unit\.custody_holder_type/);
+  assert.match(serializationRepository, /end as custody_holder_label/);
+  assert.match(serializationRepository, /conditionCode: row\.condition_code/);
+  assert.match(serializationRepository, /custodyHolderLabel: row\.custody_holder_label/);
+});
+
 test("available child listing stays workorder, company, location, catalog, provider, and size scoped", () => {
   assert.match(repository, /workorder\.id = \$1 and workorder\.company_id = \$2/);
   assert.match(repository, /workorder\.location_id = \$3 and part\.id = \$4/);

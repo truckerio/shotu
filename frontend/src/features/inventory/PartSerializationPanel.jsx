@@ -78,11 +78,8 @@ function dateTime(value) {
 }
 
 function custodyHolder(unit) {
-  const base =
-    unit?.custodyHolderLabel ||
-    unit?.custodyHolderType ||
-    unit?.locationName ||
-    "Not recorded";
+  if (unit?.custodyHolderLabel) return unit.custodyHolderLabel;
+  const base = unit?.custodyHolderType || unit?.locationName || "";
   return unit?.custodyBinLocation
     ? `${base} · ${unit.custodyBinLocation}`
     : base;
@@ -140,6 +137,7 @@ export function PartSerializationPanel({
   const [unitError, setUnitError] = useState("");
   const [custodyCondition, setCustodyCondition] = useState("");
   const [custodyCursor, setCustodyCursor] = useState([""]);
+  const [custodyRefreshVersion, setCustodyRefreshVersion] = useState(0);
   const [custodyUnits, setCustodyUnits] = useState({
     items: [],
     nextCursor: null,
@@ -237,6 +235,7 @@ export function PartSerializationPanel({
     companyId,
     custodyCondition,
     custodyCursor,
+    custodyRefreshVersion,
     item?.catalogPartId,
     location?.locationId,
   ]);
@@ -466,6 +465,7 @@ export function PartSerializationPanel({
       setQuantityToCreate("1");
       setCreateOpen(false);
       await load();
+      setCustodyRefreshVersion((version) => version + 1);
       onInventoryChanged?.();
     } catch (nextError) {
       setError(nextError.message);

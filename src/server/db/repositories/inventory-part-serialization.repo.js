@@ -20,6 +20,10 @@ function publicUnit(row) {
     id: row.id,
     serialNumber: row.serial_number,
     status: row.status,
+    conditionCode: row.condition_code || "unknown",
+    custodyHolderType: row.custody_holder_type || "unknown",
+    custodyHolderLabel: row.custody_holder_label || "",
+    custodyBinLocation: row.custody_bin_location || "",
     createdAt: row.created_at,
     qrSvgUrl: `/api/office/inventory/units/${encodeURIComponent(row.id)}/qr.svg`,
     printUrl: `/api/office/inventory/units/${encodeURIComponent(row.id)}/label`,
@@ -57,7 +61,16 @@ export async function getPartLocationSerialization({ catalogPartId, locationId, 
   const part = selected.rows[0];
   if (!part) return null;
   const units = await query(
-    `select unit.id, unit.serial_number, unit.status, unit.created_at
+    `select unit.id, unit.serial_number, unit.status, unit.created_at,
+            unit.condition_code, unit.custody_holder_type,
+            unit.custody_bin_location,
+            case
+              when unit.custody_holder_type = 'asset'
+                then concat('Unit ', coalesce((select asset.unit_no from assets asset where asset.company_id = unit.company_id and asset.id = unit.custody_asset_id), 'unknown'))
+              when unit.custody_holder_type = 'inventory_location'
+                then concat(coalesce((select location.name from locations location where location.company_id = unit.company_id and location.id = unit.custody_location_id), 'Inventory'), case when coalesce(unit.custody_bin_location, '') = '' then '' else concat(' · ', unit.custody_bin_location) end)
+              else coalesce(nullif(unit.custody_external_reference, ''), replace(unit.custody_holder_type, '_', ' '))
+            end as custody_holder_label
      from inventory_serialized_units unit
      join inventory_receipt_lines line
        on line.company_id = unit.company_id and line.id = unit.receipt_line_id
