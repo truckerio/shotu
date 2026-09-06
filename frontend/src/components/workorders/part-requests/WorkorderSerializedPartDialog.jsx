@@ -207,7 +207,12 @@ export function WorkorderSerializedPartDialog({
       const succeeded = new Set(successes);
       setData((current) => current ? { ...current, units: unitsFrom(current).filter((unit) => !succeeded.has(unit.id)) } : current);
       setSelectedUnitIds(new Set(failures.map(({ id }) => id)));
-      setMessage(`${successes.length} unit${successes.length === 1 ? " was" : "s were"} added. ${failures.length} unit${failures.length === 1 ? " could" : "s could"} not be added; review and retry the selected units.`);
+      const failureReason = errorText(failures[0]?.error, text);
+      setMessage(
+        successes.length === 0 && failures.length === 1
+          ? failureReason
+          : `${successes.length} unit${successes.length === 1 ? " was" : "s were"} added. ${failures.length} unit${failures.length === 1 ? " could" : "s could"} not be added: ${failureReason}`,
+      );
     }
     setBusy(false);
   }

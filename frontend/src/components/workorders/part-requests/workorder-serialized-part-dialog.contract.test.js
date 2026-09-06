@@ -100,7 +100,9 @@ test("partial multi-unit issue keeps only failed units selected and never reissu
   assert.match(dialog, /const succeeded = new Set\(successes\)/);
   assert.match(dialog, /unitsFrom\(current\)\.filter\(\(unit\) => !succeeded\.has\(unit\.id\)\)/);
   assert.match(dialog, /setSelectedUnitIds\(new Set\(failures\.map\(\(\{ id \}\) => id\)\)\)/);
-  assert.match(dialog, /review and retry the selected units/);
+  assert.match(dialog, /const failureReason = errorText\(failures\[0\]\?\.error, text\)/);
+  assert.match(dialog, /successes\.length === 0 && failures\.length === 1/);
+  assert.match(dialog, /could" : "s could"\} not be added: \$\{failureReason\}/);
   assert.match(dialog, /unitRequestKeysRef\.current = new Map\(\)/);
 });
 
