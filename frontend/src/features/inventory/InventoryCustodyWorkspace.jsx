@@ -726,7 +726,7 @@ export function InventoryCustodyWorkspace({
           onClick={() => {
             setRequestedPolicyPart({
               requestId: crypto.randomUUID(),
-              id: activeCase.catalogPartId,
+              id: activeCase.catalogPartId || detail?.unit?.catalogPartId,
               partNumber: activeCase.partNumber,
               description: activeCase.description,
             });

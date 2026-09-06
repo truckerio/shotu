@@ -76,6 +76,7 @@ test("blocked release names the missing setup and gives admins a direct recovery
   assert.match(source, /releaseBlocker\.message/);
   assert.match(source, /releaseBlocker\.nextStep/);
   assert.match(source, /Open Reuse settings for this part/);
+  assert.match(source, /activeCase\.catalogPartId \|\| detail\?\.unit\?\.catalogPartId/);
   assert.match(source, /requestedPolicyPart=\{requestedPolicyPart\}/);
   assert.match(source, /nextAction !== "release" \? releaseGuidance/);
   assert.match(setup, /requestedPolicyPart\?\.id/);
