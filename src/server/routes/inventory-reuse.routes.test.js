@@ -47,6 +47,6 @@ test("asset custody accepts the canonical legacy company UUID without relaxing e
 });
 test("schema and guarded transition errors retain actionable statuses without raw failure leaks",async()=>{
   assert.equal((await request("/api/inventory-reuse/remove","POST",scope)).status,400);
-  const result=await request(`/api/inventory-reuse/${caseId}/receive`,"POST",{...scope,evidence:"Observed",exactUnitId:randomUUID(),expectedVersion:1,idempotencyKey:"receive-test-1"},{mutate:async()=>{throw new InventoryError("Different receiver required",{code:"INVENTORY_REUSE_SEPARATION_REQUIRED",statusCode:403});}});
-  assert.equal(result.status,403);assert.equal(result.data.code,"INVENTORY_REUSE_SEPARATION_REQUIRED");
+  const result=await request(`/api/inventory-reuse/${caseId}/receive`,"POST",{...scope,evidence:"Observed",exactUnitId:randomUUID(),expectedVersion:1,idempotencyKey:"receive-test-1"},{mutate:async()=>{throw new InventoryError("Exact unit changed",{code:"INVENTORY_REUSE_CHANGED",statusCode:409});}});
+  assert.equal(result.status,409);assert.equal(result.data.code,"INVENTORY_REUSE_CHANGED");
 });

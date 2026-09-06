@@ -193,8 +193,7 @@ export async function runInventoryCustodyLocal({ environment = process.env, logg
     if (!originalWorkorderId || !ready.removalWorkorderId || !ready.secondWorkorderId || !ready.unitId) {
       throw new Error("The custody fixture is missing an active workorder or serialized unit identifier.");
     }
-    await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.adminId, capabilities: ["remove", "receive"], reason: "Local custody QA remover authorization and separation check." } });
-    await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.receiverId, capabilities: ["receive"], reason: "Local custody QA receiver authorization." } });
+    await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.adminId, capabilities: ["remove", "receive"], reason: "Local custody QA removal and receipt authorization." } });
     await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.releaseId, capabilities: ["release"], reason: "Local custody QA reviewer authorization." } });
     await clients.admin.request("/api/inventory-reuse/config/policy", { method: "POST", body: { ...scope, catalogPartId: ready.catalogPartId, reuseAllowed: true, evidence: "Local custody QA reusable-part policy." } });
 
@@ -224,14 +223,12 @@ export async function runInventoryCustodyLocal({ environment = process.env, logg
     const duplicateState = await clients.admin.request("/api/inventory-reuse/remove", { method: "POST", expectedStatuses: [409], body: { ...removeBody, idempotencyKey: key(runId, "remove-again") } });
     assertCode(duplicateState, "INVENTORY_REUSE_CHANGED", "new-key duplicate removal");
 
-    const selfApprove = await clients.admin.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", expectedStatuses: [403], body: { ...scope, exactUnitId: ready.unitId, expectedVersion: custodyCase.caseVersion, evidence: "Improper self-handoff.", idempotencyKey: key(runId, "self-receive") } });
-    assertCode(selfApprove, "INVENTORY_REUSE_SEPARATION_REQUIRED", "self receive");
     const tenantDenied = await clients.receiver.request(`/api/inventory-reuse?companyId=${randomUUID()}&locationId=${ready.locationId}`, { expectedStatuses: [403] });
     assert.equal(tenantDenied.status, 403, "A non-admin fixture actor unexpectedly bypassed tenant scope.");
-    const received = await clients.receiver.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", body: { ...scope, exactUnitId: ready.unitId, expectedVersion: custodyCase.caseVersion, evidence: "Physical handoff received by a separate office actor.", idempotencyKey: key(runId, "receive") } });
+    const received = await clients.admin.request(`/api/inventory-reuse/${custodyCase.id}/receive`, { method: "POST", body: { ...scope, exactUnitId: ready.unitId, expectedVersion: custodyCase.caseVersion, evidence: "Exact serial physically received by the authorized remover.", idempotencyKey: key(runId, "receive") } });
     assertCase(received, "received_pending_review", "receive");
-    await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.receiverId, capabilities: [], reason: "Local QA verifies revoked capability." } });
-    const revoked = await clients.receiver.request(`/api/inventory-reuse/operations/${encodeURIComponent(key(runId, "receive"))}?companyId=${ready.companyId}&locationId=${ready.locationId}`, { expectedStatuses: [403] });
+    await clients.admin.request("/api/inventory-reuse/config/grant", { method: "POST", body: { ...scope, userId: ready.adminId, capabilities: ["remove"], reason: "Local QA verifies revoked receive capability." } });
+    const revoked = await clients.admin.request(`/api/inventory-reuse/operations/${encodeURIComponent(key(runId, "receive"))}?companyId=${ready.companyId}&locationId=${ready.locationId}`, { expectedStatuses: [403] });
     assert.equal(revoked.status, 403, "Revoked receiver capability still read an operation confirmation.");
 
     const released = await clients.releaser.request(`/api/inventory-reuse/${custodyCase.id}/review`, { method: "POST", body: { ...scope, decision: "release", expectedVersion: received.body.case.caseVersion, inspectionEvidence: "Inspection passed and serial identity matched.", reason: "Reusable company-owned serialized part released to stock.", idempotencyKey: key(runId, "release") } });

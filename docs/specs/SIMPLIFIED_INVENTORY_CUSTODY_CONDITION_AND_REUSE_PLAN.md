@@ -287,7 +287,7 @@ Receiver records:
 - initial inspection evidence;
 - corrected final route when needed.
 
-One save may both receive and route when the actor has both capabilities and separation from the remover is satisfied. The transaction writes distinct receipt and route events.
+One save may both receive and route when the actor has both capabilities. The transaction still writes distinct receipt and route events.
 
 ### 6.5 Release as reusable
 
@@ -580,7 +580,7 @@ Do not trust client-provided company, location, condition eligibility, availabil
 | Confirm scrap | No default | Explicit disposition capability | Explicit disposition capability |
 | Change lifecycle policy | No | No | Admin only |
 
-The remover cannot receive/release/dispose the same case. A receiver may also route when separately authorized, reducing daily steps without weakening remover separation.
+The same authorized person may remove, receive, route, inspect, release, or dispose the same case. Capabilities, exact-unit confirmation, evidence, version checks, and separate event timestamps remain mandatory; operator identity is preserved in every event instead of forcing an extra employee.
 
 All-location views are read-only summaries. A mutation requires one explicit location context and reauthorization.
 
@@ -766,7 +766,7 @@ Resolution: owning inventory location and current physical holder are separate f
 
 Attack: vendor marks repair complete and unit becomes available without receipt or inspection.
 
-Resolution: repair completion returns to Needs inspection unless a separately authorized receive/inspect/release transaction satisfies all gates.
+Resolution: repair completion returns to Needs inspection unless a properly authorized receive/inspect/release transaction satisfies all gates.
 
 #### Finding E — Scrap becomes a destructive shortcut
 
@@ -890,10 +890,10 @@ All rows lock the scope, case/usage/unit, and aggregate balance in the existing 
 | Remove approved installation | `removed`; holder handoff | `awaiting_handoff` | 0 | 0 | no | It was already consumed on approval. |
 | **Remove pending installation** | `removed`; holder handoff | `awaiting_handoff` | **-1** | **-1** | **one existing-style `issue`** | Required exception: the physically fitted pending part is still on-hand/reserved, so removal consumes both once before custody hold. |
 | Receive handoff | `removed`; actual physical holder/location/bin | `received_pending_review` | 0 | 0 | no | Receipt confirms custody only; it does not restore stock. |
-| Inspect → release reusable | `in_stock`; inventory holder/bin; `serviceable_used` | completed/released | +1 | 0 | one `return` | Only after evidence, policy, ownership and separation gates. |
+| Inspect → release reusable | `in_stock`; inventory holder/bin; `serviceable_used` | completed/released | +1 | 0 | one `return` | Only after evidence, policy, ownership and capability gates. |
 | Route/start repair | `removed`; internal/external repair holder; `needs_repair` | repair | 0 | 0 | no | No return until release. |
 | Repair complete, not released | `removed`; receiving/review holder; condition remains `needs_repair` or `unknown` | needs inspection | 0 | 0 | no | Vendor completion cannot make stock ready. |
-| Repair completion + authorized release | `in_stock`; inventory holder/bin; `refurbished` | completed/released | +1 | 0 | one `return` | Same release guards; a single transaction may receive/inspect/release only if separation remains satisfied. |
+| Repair completion + authorized release | `in_stock`; inventory holder/bin; `refurbished` | completed/released | +1 | 0 | one `return` | Same release guards; one authorized operator may complete the steps while each event remains separately audited. |
 | Route/confirm core return | `removed`; core holding/vendor holder; `unserviceable` | core / completed | 0 | 0 | no | Future credit links financial evidence only. |
 | Route/confirm scrap | `scrapped`; scrap/disposed holder; `unserviceable` | scrap / completed | 0 | 0 | no | Never hard-delete. |
 | Quarantine/resolution without release | exact status remains unavailable; factual holder/condition updated | quarantine or next required state | 0 | 0 | no | Resolution cannot increase stock except an explicit governed release. |
@@ -981,11 +981,11 @@ At implementation kickoff, run a repository-wide search for `inventory_stock_mov
 
 ## 25. Required Test, Monitoring, and Recovery Evidence
 
-Database/integration tests must cover the entire matrix, especially: reserve → pending install → remove (one `issue`, on-hand -1/reserved -1) → receive → release (one `return`); approved install → removal (zero movement) → release (one return); idempotent replay/key mismatch; two concurrent release attempts; stale case/unit version; cross-company/location serial and case IDs; policy/ownership/evidence/revoked capability/separation failures; legacy unknown remains selectable under compatibility but not Ready exact; repair/core/scrap/quarantine cannot enter Ready; and exact identity reuse creates a new installation episode.
+Database/integration tests must cover the entire matrix, especially: reserve → pending install → remove (one `issue`, on-hand -1/reserved -1) → receive → release (one `return`); approved install → removal (zero movement) → same-actor receipt → release (one return); idempotent replay/key mismatch; two concurrent release attempts; stale case/unit version; cross-company/location serial and case IDs; policy/ownership/evidence/revoked-capability failures; legacy unknown remains selectable under compatibility but not Ready exact; repair/core/scrap/quarantine cannot enter Ready; and exact identity reuse creates a new installation episode.
 
 Read/API tests must prove opaque-cursor stability under inserts, filter composition, limits, empty/loading/error values, no fake zero when a count is unavailable, and no unbounded child/queue list. Migration tests must run expand/backfill twice safely, compare pre/post ledger totals and movement counts, emit exception rows instead of invented data, and demonstrate old-reader compatibility before cutover.
 
-Authenticated browser journeys: mechanic removal from assigned active work; Office/Admin removal with exactly one eligible workorder and with atomic minimal-workorder exception; independent receiver scan/manual fallback and location/bin entry; authorized inspector repair/release; core and scrap approvals; quarantine recovery; Stock and Returns filter/cursor/detail retention after refresh/stale conflict; correct counts after pending removal; and 1440/768/390, keyboard, 200% zoom, screen-reader naming, long serial/notes, and camera fallback. Camera hardware/real scanner and production-scale query-plan results remain separately marked **not verified** until actually executed.
+Authenticated browser journeys: mechanic removal from assigned active work; Office/Admin removal with exactly one eligible workorder and with atomic minimal-workorder exception; same-operator receive using scan/manual fallback and location/bin entry; authorized inspector repair/release; optional multi-operator handoff; core and scrap approvals; quarantine recovery; Stock and Returns filter/cursor/detail retention after refresh/stale conflict; correct counts after pending removal; and 1440/768/390, keyboard, 200% zoom, screen-reader naming, long serial/notes, and camera fallback. Camera hardware/real scanner and production-scale query-plan results remain separately marked **not verified** until actually executed.
 
 Operational monitoring: dashboard/alerts for reconciliation exceptions, commands stuck in awaiting handoff/repair/core/scrap/quarantine beyond policy age, command replay conflicts, permission denials spikes, migration batch failures, and queue query p95/error rate. Every alert links to a read-only case/unit/operation view and runbook: freeze affected command via feature gate, reconcile operation by idempotency key, lock/quarantine only the mismatched unit, correct forward with an audit event, and rerun scoped reconciliation. Never mass-adjust balances automatically.
 

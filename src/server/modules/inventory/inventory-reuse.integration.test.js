@@ -9,7 +9,7 @@ import { listUnitsDirectory } from "../../db/repositories/units-directory.repo.j
 const run = process.env.RUN_POSTGRES_INTEGRATION === "1";
 after(async()=>{if(run) await closePool();});
 
-test("PostgreSQL custody prevents bypass, separates duties, retries exactly once, preserves invoice and supports reinstallation",{skip:!run},async()=>{
+test("PostgreSQL custody prevents bypass, permits an authorized remover to receive, retries exactly once, preserves invoice and supports reinstallation",{skip:!run},async()=>{
   const f = await createInventoryReuseFixture();
   const base = {companyId:f.companyId,locationId:f.locationId};
   const command = (action,actorId,extra={}) => ({...base,action,actorId,idempotencyKey:randomUUID(),requestHash:reuseDigest(randomUUID()),...extra});
@@ -30,10 +30,9 @@ test("PostgreSQL custody prevents bypass, separates duties, retries exactly once
     const issueScope = {...base,workorderId:f.secondWorkorderId,actorRole:"office",actorId:f.removerId};
     assert.equal((await issueSerializedUnitToWorkorder({...issueScope,unitId:f.unitId,idempotencyKey:randomUUID(),requestHash:reuseDigest("unsafe")})).kind,"unit_state");
     await assert.rejects(mutateInventoryReuse(command("release",f.releaseId,{caseId:c.id,decision:"release",inspectionEvidence:"Pass",reason:"Inspected"})),{code:"INVENTORY_REUSE_CHANGED"});
-    // Even explicitly granted Admin/remover may not self-receive or self-release.
-    await configureInventoryReuse({...base,actorId:f.adminId,kind:"grant",userId:f.removerId,capabilities:["remove","receive","release"],reason:"Separation test"});
-    await assert.rejects(mutateInventoryReuse(command("receive",f.removerId,{caseId:c.id,evidence:"In shop"})),{code:"INVENTORY_REUSE_SEPARATION_REQUIRED"});
-    const receive = command("receive",f.receiverId,{caseId:c.id,evidence:"Physical serial matched at shop counter"});
+    // Explicit capability and exact-unit confirmation are sufficient; removal and receipt remain separate audited events.
+    await configureInventoryReuse({...base,actorId:f.adminId,kind:"grant",userId:f.removerId,capabilities:["remove","receive"],reason:"Authorized self-receipt test"});
+    const receive = command("receive",f.removerId,{caseId:c.id,evidence:"Physical serial matched at shop counter"});
     assert.equal((await mutateInventoryReuse(receive)).case.status,"received_pending_review");
     assert.equal((await mutateInventoryReuse(receive)).replayed,true);
     await query("delete from inventory_reuse_catalog_policies where company_id=$1",[f.companyId]);

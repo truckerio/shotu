@@ -208,7 +208,6 @@ export async function mutateInventoryReuse(input) {
         where c.company_id=$1 and c.location_id=$2 and c.id=$3 for update of c,s,u`,[input.companyId,input.locationId,caseId]);
       const current = result.rows[0];
       if (!current) fail("INVENTORY_REUSE_NOT_FOUND", "Removed-part case not found.",404);
-      if (current.removed_by_user_id === input.actorId) fail("INVENTORY_REUSE_SEPARATION_REQUIRED", "A different authorized person must receive, release, or dispose this part.",403);
       if (current.unit_status !== "removed" || current.usage_status !== "removed") changed();
       if (input.expectedVersion && current.case_version !== input.expectedVersion) changed();
       if (input.action === "receive") {

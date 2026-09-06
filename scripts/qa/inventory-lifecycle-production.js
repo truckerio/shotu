@@ -243,7 +243,7 @@ export async function browserRepairJourney({ environment = process.env, config =
     await ui.page.getByLabel("Evidence").fill("Browser repair start");
     await confirm(ui.page);
     await ui.context.close();
-    // Completion/release uses a fresh receiver/releaser session to prove persisted state and role separation.
+    // Completion/release uses another authorized session to prove persisted state and optional multi-operator continuity.
     ui = await open(ready.clients.receiver, "Repair/refurbish");
     await ui.page.getByRole("button", { name: "Complete repair" }).click();
     await scan(ui.page);
@@ -308,7 +308,7 @@ export async function browserDispositionJourneys({ environment = process.env, co
 
 export async function runInventoryLifecycleProduction({ environment = process.env, logger = console } = {}) {
   const config = localConfig(environment);
-  // Baseline exercises approved removal, pending accounting, scan/receive, release/reinstall, replay and tenant/separation negatives.
+  // Baseline exercises approved removal, pending accounting, scan/receive, release/reinstall, replay and tenant/permission negatives.
   const baseline = await runInventoryCustodyLocal({ environment, logger });
   const ready = await setupInventoryCustodyFixture({ environment, logger });
   try {
