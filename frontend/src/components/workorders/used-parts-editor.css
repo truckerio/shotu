@@ -383,6 +383,17 @@
   color: var(--text-secondary, #475467);
 }
 
+.used-parts-serialized-history-actions {
+  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.used-parts-serialized-history-actions .button {
+  min-height: 44px;
+}
+
 .used-parts-editor .used-part-serialized-row:focus-visible {
   outline: 3px solid rgba(46, 144, 250, 0.28);
   outline-offset: 2px;

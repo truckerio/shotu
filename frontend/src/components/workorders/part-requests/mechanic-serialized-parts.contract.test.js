@@ -134,6 +134,11 @@ test("parts-visible scanning projects usage state and actions into the canonical
   assert.doesNotMatch(usedPartsEditor, /serializedParts\.removeFromUnit\(usage\)/);
   assert.match(usedPartsEditor, /className="used-parts-serialized-history"/);
   assert.match(usedPartsEditor, /<details/);
+  assert.match(usedPartsEditor, /defaultOpen=\{completedSerializedUsages\.some\(\(usage\) => usage\.status === "returned"\)\}/);
+  assert.match(usedPartsEditor, /key=\{completedSerializedUsages\.filter\(\(usage\) => usage\.status === "returned"\)/);
+  assert.match(usedPartsEditor, /usage\.status === "returned" \? <Button[\s\S]*reuseReturnedUnit\(usage\)/);
+  assert.match(usedPartsEditor, /initialUnitId=\{serializedDialogPart\.initialUnitId\}/);
+  assert.match(usedPartsEditor, /initialSerialNumber=\{serializedDialogPart\.initialSerialNumber\}/);
 });
 
 test("editable serialized rows pass an explicit ordinal instead of Array.map's source array", () => {
@@ -257,6 +262,8 @@ test("drawer controls and result state have complete mechanic locale coverage", 
       "parts.removedReturnedToStock",
       "parts.removedInspectionRequired",
       "parts.previousScannedParts",
+      "parts.returnedToStock",
+      "parts.useOnWorkorder",
       "parts.repairAfterInstalled",
       "parts.statusAction",
     ]) {

@@ -251,13 +251,22 @@ export function UsedPartsEditor({
     </p>
   ) : null;
   const serializedHistory = completedSerializedUsages.length ? (
-    <details className="used-parts-serialized-history">
+    <details
+      key={completedSerializedUsages.filter((usage) => usage.status === "returned").map((usage) => usage.id).join(":")}
+      className="used-parts-serialized-history"
+      defaultOpen={completedSerializedUsages.some((usage) => usage.status === "returned")}
+    >
       <summary>{t("parts.previousScannedParts")} ({completedSerializedUsages.length})</summary>
       <ol aria-label={t("parts.completedSerializedHistory")}>
         {completedSerializedUsages.map((usage) => (
           <li key={usage.id}>
             <span><strong>{usage.partNumber}</strong><code>{usage.serialNumber}</code></span>
-            <small>{serializedParts.statusLabel(usage.status)}</small>
+            <div className="used-parts-serialized-history-actions">
+              <small>{usage.status === "returned" ? t("parts.returnedToStock") : serializedParts.statusLabel(usage.status)}</small>
+              {partsEditable && usage.status === "returned" ? <Button type="button" onClick={() => reuseReturnedUnit(usage)} disabled={serializedParts?.busy}>
+                {t("parts.useOnWorkorder")}
+              </Button> : null}
+            </div>
           </li>
         ))}
       </ol>
@@ -293,6 +302,22 @@ export function UsedPartsEditor({
     window.requestAnimationFrame(() => intakeRowRef.current?.querySelector("input")?.focus());
   }
 
+  function reuseReturnedUnit(usage) {
+    serializedReservationCompletedRef.current = false;
+    setCatalogQuery(usage.partNumber || "");
+    setMessage("");
+    setIntakeOpen(true);
+    setSerializedDialogPart({
+      id: usage.catalogPartId,
+      partNumber: usage.partNumber,
+      description: usage.description || "",
+      uomCode: usage.uomCode,
+      locationName: usage.locationName || "",
+      initialUnitId: usage.unitId,
+      initialSerialNumber: usage.serialNumber,
+    });
+  }
+
   function closeIntakeRow() {
     resetIntakeRow();
     setIntakeOpen(false);
@@ -316,6 +341,8 @@ export function UsedPartsEditor({
     actorId={actorId}
     workorderId={detail.workorder.id}
     catalogPart={serializedDialogPart}
+    initialUnitId={serializedDialogPart.initialUnitId}
+    initialSerialNumber={serializedDialogPart.initialSerialNumber}
     locale={locale}
     onClose={closeSerializedDialog}
     onReserved={async (usage) => {

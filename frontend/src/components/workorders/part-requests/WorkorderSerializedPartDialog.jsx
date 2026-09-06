@@ -66,6 +66,8 @@ export function WorkorderSerializedPartDialog({
   actorId,
   workorderId,
   catalogPart,
+  initialUnitId = "",
+  initialSerialNumber = "",
   onClose,
   onReserved,
   locale = "en",
@@ -131,12 +133,12 @@ export function WorkorderSerializedPartDialog({
     setConditionCode("new");
     setConditionEvidence("");
     setPhysicallyPresent(false);
-    setSelectedUnitIds(new Set());
-    setSerialQuery("");
+    setSelectedUnitIds(new Set(initialUnitId ? [initialUnitId] : []));
+    setSerialQuery(initialSerialNumber);
     unitRequestKeysRef.current = new Map();
     createKeyRef.current = { identity: "", key: "" };
-    load({ query: "" });
-  }, [open, endpoint]);
+    load({ query: initialSerialNumber });
+  }, [open, endpoint, initialUnitId, initialSerialNumber]);
 
   useEffect(() => {
     if (view === "create") window.requestAnimationFrame(() => quantityRef.current?.focus());

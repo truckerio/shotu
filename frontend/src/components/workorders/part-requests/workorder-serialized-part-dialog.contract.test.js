@@ -40,6 +40,9 @@ test("dialog keeps on-demand intake explicit and bounded", () => {
   assert.match(dialog, /createKeyRef\.current\.identity !== identity/);
   assert.match(dialog, /idempotencyKey: createKeyRef\.current\.key/);
   assert.match(dialog, /function pendingCreateStorageKey/);
+  assert.match(dialog, /initialUnitId = ""/);
+  assert.match(dialog, /setSelectedUnitIds\(new Set\(initialUnitId \? \[initialUnitId\] : \[\]\)\)/);
+  assert.match(dialog, /load\(\{ query: initialSerialNumber \}\)/);
   assert.match(dialog, /actorId \|\| "session"/);
   assert.match(dialog, /window\.sessionStorage\.getItem/);
   assert.match(dialog, /storePendingCreateKey\(storageKey, createKeyRef\.current\.key\)/);
