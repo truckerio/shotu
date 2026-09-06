@@ -124,6 +124,18 @@ export function serializedUsageTableState(usages, actionsFor) {
   return { active, completed };
 }
 
+export function reusableReturnedUsageIds(usages) {
+  const seenUnitIds = new Set();
+  const reusableUsageIds = new Set();
+  for (const usage of Array.isArray(usages) ? usages : []) {
+    const unitId = String(usage?.unitId || "").trim();
+    if (!unitId || seenUnitIds.has(unitId)) continue;
+    seenUnitIds.add(unitId);
+    if (usage.status === "returned" && usage.id) reusableUsageIds.add(usage.id);
+  }
+  return reusableUsageIds;
+}
+
 export function workorderPreviewParts(manualParts, installedParts, aggregateParts = []) {
   const aggregateEvidence = new Set((Array.isArray(aggregateParts) ? aggregateParts : [])
     .map((part) => part?.evidenceId)

@@ -137,7 +137,7 @@ test("parts-visible scanning projects usage state and actions into the canonical
   assert.match(usedPartsEditor, /if \(returnedUsageKey\) setSerializedHistoryOpen\(true\)/);
   assert.match(usedPartsEditor, /open=\{serializedHistoryOpen\}/);
   assert.match(usedPartsEditor, /onToggle=\{\(event\) => setSerializedHistoryOpen\(event\.currentTarget\.open\)\}/);
-  assert.match(usedPartsEditor, /usage\.status === "returned" \? <Button[\s\S]*reuseReturnedUnit\(usage\)/);
+  assert.match(usedPartsEditor, /reusableReturnedIds\.has\(usage\.id\) \? <Button[\s\S]*reuseReturnedUnit\(usage\)/);
   assert.match(usedPartsEditor, /initialUnitId=\{serializedDialogPart\.initialUnitId\}/);
   assert.match(usedPartsEditor, /initialSerialNumber=\{serializedDialogPart\.initialSerialNumber\}/);
 });

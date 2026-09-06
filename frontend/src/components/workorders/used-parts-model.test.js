@@ -7,6 +7,7 @@ import {
   initialUsedPartRows,
   installedSerializedUsedParts,
   serializedUsageTableState,
+  reusableReturnedUsageIds,
   normalizeUsedParts,
   readonlyUsedParts,
   removeUsedPart,
@@ -272,4 +273,20 @@ test("serialized usage table state keeps actionable rows active and completed ro
   ]);
   assert.deepEqual(state.completed, [usages[2]]);
   assert.deepEqual(serializedUsageTableState(null, actionsFor), { active: [], completed: [] });
+});
+
+test("only the latest returned usage for an exact unit offers reuse", () => {
+  const oldReturn = { id: "return-old", unitId: "unit-1", status: "returned" };
+  const latestReturn = { id: "return-latest", unitId: "unit-1", status: "returned" };
+  const otherReturn = { id: "return-other", unitId: "unit-2", status: "returned" };
+
+  assert.deepEqual(
+    [...reusableReturnedUsageIds([latestReturn, oldReturn, otherReturn])],
+    ["return-latest", "return-other"],
+  );
+  assert.deepEqual(
+    [...reusableReturnedUsageIds([{ id: "reserved", unitId: "unit-1", status: "reserved" }, latestReturn, oldReturn])],
+    [],
+  );
+  assert.deepEqual([...reusableReturnedUsageIds(null)], []);
 });

@@ -7,6 +7,7 @@ import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import {
   readonlyUsedParts,
+  reusableReturnedUsageIds,
   serializedUsageTableState,
 } from "./used-parts-model.js";
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
@@ -134,10 +135,8 @@ export function UsedPartsEditor({
     : { active: installedParts.map((part) => ({ ...part, status: "installed" })), completed: [] };
   const activeSerializedParts = serializedUsageState.active;
   const completedSerializedUsages = serializedUsageState.completed;
-  const returnedUsageKey = completedSerializedUsages
-    .filter((usage) => usage.status === "returned")
-    .map((usage) => usage.id)
-    .join(":");
+  const reusableReturnedIds = reusableReturnedUsageIds(serializedParts?.usages);
+  const returnedUsageKey = [...reusableReturnedIds].join(":");
   const aggregatePartUsages = detail?.modules?.parts?.data?.aggregatePartUsages || detail?.aggregatePartUsages || [];
   const recordedManualParts = readonlyUsedParts(parts);
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0;
@@ -268,7 +267,7 @@ export function UsedPartsEditor({
             <span><strong>{usage.partNumber}</strong><code>{usage.serialNumber}</code></span>
             <div className="used-parts-serialized-history-actions">
               <small>{usage.status === "returned" ? t("parts.returnedToStock") : serializedParts.statusLabel(usage.status)}</small>
-              {partsEditable && usage.status === "returned" ? <Button type="button" onClick={() => reuseReturnedUnit(usage)} disabled={serializedParts?.busy}>
+              {partsEditable && reusableReturnedIds.has(usage.id) ? <Button type="button" onClick={() => reuseReturnedUnit(usage)} disabled={serializedParts?.busy}>
                 {t("parts.useOnWorkorder")}
               </Button> : null}
             </div>
