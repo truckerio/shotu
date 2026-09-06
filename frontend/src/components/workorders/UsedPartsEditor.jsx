@@ -403,6 +403,7 @@ export function UsedPartsEditor({
 
   return (
     <div className="used-parts-editor workorder-parts-surface">
+      {!partsEditable ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
       <section className="used-parts-section used-parts-labor-section" aria-labelledby={laborSectionTitleId}>
         <h3 id={laborSectionTitleId}>{t("parts.labor")}</h3>
         <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table">

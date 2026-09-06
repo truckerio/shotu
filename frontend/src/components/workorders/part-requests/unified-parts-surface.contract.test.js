@@ -36,6 +36,7 @@ test("labor editing remains separate from actual-part editing when Parts is View
   assert.match(section, /partsEditable=\{editable\}/);
   assert.match(section, /laborEditable=\{laborEditable\}/);
   assert.match(editor, /!partsEditable && !laborEditable/);
+  assert.match(editor, /!partsEditable \? <p className="used-parts-readonly-state" role="status">\{readOnlyText\}<\/p> : null/);
   assert.match(editor, /disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
   assert.match(editor, /\{partsEditable && intakeOpen \? <WorkorderPartsRow id="workorder-part-intake-row" className="used-part-intake-row"[\s\S]*className="create-part-identity-field used-parts-manual-picker"[\s\S]*<PartCatalogCombobox/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
