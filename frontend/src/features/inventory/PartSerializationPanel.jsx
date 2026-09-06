@@ -1076,7 +1076,7 @@ export function PartSerializationPanel({
                 </Dropdown>
               </label>
               <label>
-                <span>Condition evidence</span>
+                <span>Condition evidence (required)</span>
                 <textarea
                   rows="2"
                   value={conditionEvidence}

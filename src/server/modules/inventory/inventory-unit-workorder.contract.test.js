@@ -114,6 +114,12 @@ test("workorder inline intake locks active lifecycle before durable writes", () 
   assert.match(service, /serializationDependencies \|\| \{\}\), workorderId/);
 });
 
+test("serialized intake gives PostgreSQL concrete text types for custody event evidence", () => {
+  assert.match(serializationRepository, /'conditionCode', \$5::text/);
+  assert.match(serializationRepository, /'conditionEvidence', \$6::text/);
+  assert.match(serializationRepository, /'binLocation', \$7::text/);
+});
+
 test("available child listing stays workorder, company, location, catalog, provider, and size scoped", () => {
   assert.match(repository, /workorder\.id = \$1 and workorder\.company_id = \$2/);
   assert.match(repository, /workorder\.location_id = \$3 and part\.id = \$4/);

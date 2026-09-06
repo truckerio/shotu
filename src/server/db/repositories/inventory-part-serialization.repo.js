@@ -260,7 +260,13 @@ export async function createPartSerializedUnits({
     await client.query(
       `insert into inventory_unit_events (company_id, unit_id, event_type, actor_id, details)
        select $1, input.id, 'receipt_recorded', $2,
-              jsonb_build_object('source', 'part_detail_serialization', 'serializationBatchId', $3::text, 'conditionCode', $5, 'conditionEvidence', $6, 'binLocation', $7)
+              jsonb_build_object(
+                'source', 'part_detail_serialization',
+                'serializationBatchId', $3::text,
+                'conditionCode', $5::text,
+                'conditionEvidence', $6::text,
+                'binLocation', $7::text
+              )
        from unnest($4::uuid[]) as input(id)`,
       [part.company_id, actorId, serializationBatchId, unitIds, conditionCode, conditionEvidence, binLocation],
     );

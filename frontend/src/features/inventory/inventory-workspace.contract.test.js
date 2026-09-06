@@ -172,6 +172,7 @@ test("part location drilldown creates and prints serialized child QR labels", as
   assert.match(panel, /selectedUnit\.labelBatch\.printUrl/);
   assert.match(panel, /Print batch/);
   assert.match(panel, /physically_present_at_location/);
+  assert.match(panel, /Condition evidence \(required\)/);
   assert.match(panel, /crypto\.randomUUID\(\)/);
   assert.match(panel, /canCreateAtLocation/);
   assert.match(panel, /No serialized children yet/);
