@@ -36,3 +36,11 @@ test("stocking migration deduplicates open alerts and reevaluates every balance 
   assert.match(sql, /greatest\(new\.quantity_on_hand-new\.quantity_reserved, 0\)/i);
   assert.match(sql, /target_quantity is null or target_quantity >= minimum_available/i);
 });
+
+test("a catalog-only part is evaluated as zero available when its first stock rule is saved", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const repository = await readFile(new URL("../../db/repositories/inventory-stocking-policy.repo.js", import.meta.url), "utf8");
+  assert.match(repository, /const available = balance\.rows\[0\][\s\S]*?: 0;/);
+  assert.match(repository, /else await client\.query\(`insert into inventory_replenishment_alerts/);
+  assert.doesNotMatch(repository, /if \(balance\.rows\[0\]\)/);
+});
