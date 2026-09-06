@@ -52,6 +52,7 @@ export function UsedPartsEditor({
   const [message, setMessage] = useState("");
   const [serializedDialogPart, setSerializedDialogPart] = useState(null);
   const [measuredDialogPart, setMeasuredDialogPart] = useState(null);
+  const [serializedHistoryOpen, setSerializedHistoryOpen] = useState(false);
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
   const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
   const focusedSerializedUsageId = serializedParts?.focusUsageId || "";
@@ -133,9 +134,17 @@ export function UsedPartsEditor({
     : { active: installedParts.map((part) => ({ ...part, status: "installed" })), completed: [] };
   const activeSerializedParts = serializedUsageState.active;
   const completedSerializedUsages = serializedUsageState.completed;
+  const returnedUsageKey = completedSerializedUsages
+    .filter((usage) => usage.status === "returned")
+    .map((usage) => usage.id)
+    .join(":");
   const aggregatePartUsages = detail?.modules?.parts?.data?.aggregatePartUsages || detail?.aggregatePartUsages || [];
   const recordedManualParts = readonlyUsedParts(parts);
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0;
+
+  useEffect(() => {
+    if (returnedUsageKey) setSerializedHistoryOpen(true);
+  }, [returnedUsageKey]);
 
   function renderSerializedPartRow(part, index, ordinal = index + 2) {
     const usage = part.usage;
@@ -251,11 +260,7 @@ export function UsedPartsEditor({
     </p>
   ) : null;
   const serializedHistory = completedSerializedUsages.length ? (
-    <details
-      key={completedSerializedUsages.filter((usage) => usage.status === "returned").map((usage) => usage.id).join(":")}
-      className="used-parts-serialized-history"
-      defaultOpen={completedSerializedUsages.some((usage) => usage.status === "returned")}
-    >
+    <details className="used-parts-serialized-history" open={serializedHistoryOpen} onToggle={(event) => setSerializedHistoryOpen(event.currentTarget.open)}>
       <summary>{t("parts.previousScannedParts")} ({completedSerializedUsages.length})</summary>
       <ol aria-label={t("parts.completedSerializedHistory")}>
         {completedSerializedUsages.map((usage) => (

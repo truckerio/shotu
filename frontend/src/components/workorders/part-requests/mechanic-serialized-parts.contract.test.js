@@ -134,8 +134,9 @@ test("parts-visible scanning projects usage state and actions into the canonical
   assert.doesNotMatch(usedPartsEditor, /serializedParts\.removeFromUnit\(usage\)/);
   assert.match(usedPartsEditor, /className="used-parts-serialized-history"/);
   assert.match(usedPartsEditor, /<details/);
-  assert.match(usedPartsEditor, /defaultOpen=\{completedSerializedUsages\.some\(\(usage\) => usage\.status === "returned"\)\}/);
-  assert.match(usedPartsEditor, /key=\{completedSerializedUsages\.filter\(\(usage\) => usage\.status === "returned"\)/);
+  assert.match(usedPartsEditor, /if \(returnedUsageKey\) setSerializedHistoryOpen\(true\)/);
+  assert.match(usedPartsEditor, /open=\{serializedHistoryOpen\}/);
+  assert.match(usedPartsEditor, /onToggle=\{\(event\) => setSerializedHistoryOpen\(event\.currentTarget\.open\)\}/);
   assert.match(usedPartsEditor, /usage\.status === "returned" \? <Button[\s\S]*reuseReturnedUnit\(usage\)/);
   assert.match(usedPartsEditor, /initialUnitId=\{serializedDialogPart\.initialUnitId\}/);
   assert.match(usedPartsEditor, /initialSerialNumber=\{serializedDialogPart\.initialSerialNumber\}/);
