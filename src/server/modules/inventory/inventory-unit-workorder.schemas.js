@@ -31,6 +31,8 @@ export const createWorkorderInventoryUnitsSchema = z.object({
   catalogPartId: inventoryWorkorderEntityIdSchema,
   quantity: z.coerce.number().int().min(1).max(25),
   confirmation: z.literal("physically_present_at_location"),
+  conditionCode: z.enum(["new", "serviceable_used", "refurbished"]),
+  conditionEvidence: z.string().trim().min(1).max(2000),
   idempotencyKey,
 }).strict();
 

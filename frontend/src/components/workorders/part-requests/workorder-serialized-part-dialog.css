@@ -286,6 +286,7 @@
 }
 
 .workorder-serialized-field input[type="number"],
+.workorder-serialized-field textarea,
 .workorder-serialized-search input,
 .workorder-serialized-scan input {
   border: 1px solid var(--border-default, #98a2b3);
@@ -295,6 +296,15 @@
   min-height: 44px;
   padding: 8px 10px;
   width: 100%;
+}
+
+.workorder-serialized-field textarea {
+  min-height: 68px;
+  resize: vertical;
+}
+
+.workorder-serialized-field .dropdown-select-trigger {
+  min-height: 44px;
 }
 
 .workorder-serialized-check {

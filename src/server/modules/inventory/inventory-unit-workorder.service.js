@@ -201,6 +201,8 @@ export async function createSerializedUnitsForWorkorder(workorderId, rawInput, c
   return create(input.catalogPartId, authorization.locationId, {
     quantity: input.quantity,
     confirmation: input.confirmation,
+    conditionCode: input.conditionCode,
+    conditionEvidence: input.conditionEvidence,
     idempotencyKey: input.idempotencyKey,
   }, context, { ...(dependencies.serializationDependencies || {}), workorderId });
 }

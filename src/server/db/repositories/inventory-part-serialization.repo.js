@@ -169,7 +169,8 @@ export async function createPartSerializedUnits({
     );
     if (replay.rows[0]) {
       const replayedUnits = await client.query(
-        `select unit.id, unit.serial_number, unit.status, unit.created_at
+        `select unit.id, unit.serial_number, unit.status, unit.created_at,
+                unit.condition_code, unit.custody_holder_type, unit.custody_bin_location
          from inventory_serialized_units unit
          where unit.company_id = $1 and unit.receipt_id = $2
          order by unit.unit_ordinal, unit.id`,
@@ -346,6 +347,10 @@ export async function createPartSerializedUnits({
         id,
         serial_number: serials[index],
         status: "in_stock",
+        condition_code: conditionCode,
+        custody_holder_type: "inventory_location",
+        custody_holder_label: part.location_name,
+        custody_bin_location: binLocation,
         created_at: null,
       })),
     };

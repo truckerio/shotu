@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Dropdown } from "../../forms/Dropdown.jsx";
 import { Button } from "../../ui/Button.jsx";
 import { api } from "../../../lib/api.js";
 import { normalizeLocale } from "../../../i18n/index.js";
@@ -10,9 +11,9 @@ import {
 import "./workorder-serialized-part-dialog.css";
 
 const DIALOG_TEXT = {
-  en: { title: "Serialized unit", choose: "Choose serialized units", add: "Add serialized units", ready: "QR labels ready", location: "Workorder location", close: "Close", quantity: "Quantity", creates: "Creates one permanent serial number and QR label per unit.", confirm: "I confirm these units are physically present at", back: "Back to units", scan: "Scan a label", manual: "Enter code manually", code: "Label link or exact serial", search: "Find exact serial", searchButton: "Search", searching: "Searching…", loading: "Loading serialized units…", none: "No serialized units are available at", addUnits: "Add units", ask: "Ask an authorized inventory user to add physical units at this location.", available: "Available serialized units", availability: "serialized units available", stock: "In stock", selectAll: "Select all available", selected: "Use selected units", adding: "Adding parts…", more: "Load more", printed: "Print", labels: "QR labels", error: "Something went wrong. Try again." },
-  es: { title: "Unidad serializada", choose: "Elegir unidades serializadas", add: "Agregar unidades serializadas", ready: "Etiquetas QR listas", location: "Ubicación de la orden", close: "Cerrar", quantity: "Cantidad", creates: "Crea un número de serie permanente y una etiqueta QR por unidad.", confirm: "Confirmo que estas unidades están físicamente presentes en", back: "Volver a unidades", scan: "Escanear una etiqueta", manual: "Ingresar código manualmente", code: "Enlace de etiqueta o número de serie exacto", search: "Buscar número de serie exacto", searchButton: "Buscar", searching: "Buscando…", loading: "Cargando unidades serializadas…", none: "No hay unidades serializadas disponibles en", addUnits: "Agregar unidades", ask: "Pida a un usuario autorizado que agregue unidades físicas en esta ubicación.", available: "Unidades serializadas disponibles", availability: "unidades serializadas disponibles", stock: "En stock", selectAll: "Seleccionar todas las disponibles", selected: "Usar unidades seleccionadas", adding: "Agregando piezas…", more: "Cargar más", printed: "Imprimir", labels: "etiquetas QR", error: "Algo salió mal. Inténtelo de nuevo." },
-  pa: { title: "ਸੀਰੀਅਲ ਯੂਨਿਟ", choose: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਚੁਣੋ", add: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਜੋੜੋ", ready: "QR ਲੇਬਲ ਤਿਆਰ ਹਨ", location: "ਵਰਕਆਰਡਰ ਟਿਕਾਣਾ", close: "ਬੰਦ ਕਰੋ", quantity: "ਮਾਤਰਾ", creates: "ਹਰ ਯੂਨਿਟ ਲਈ ਇੱਕ ਪੱਕਾ ਸੀਰੀਅਲ ਨੰਬਰ ਅਤੇ QR ਲੇਬਲ ਬਣਾਉਂਦਾ ਹੈ।", confirm: "ਮੈਂ ਪੁਸ਼ਟੀ ਕਰਦਾ ਹਾਂ ਕਿ ਇਹ ਯੂਨਿਟ ਇੱਥੇ ਮੌਜੂਦ ਹਨ", back: "ਯੂਨਿਟਾਂ ਤੇ ਵਾਪਸ", scan: "ਲੇਬਲ ਸਕੈਨ ਕਰੋ", manual: "ਕੋਡ ਹੱਥੀਂ ਦਰਜ ਕਰੋ", code: "ਲੇਬਲ ਲਿੰਕ ਜਾਂ ਸਹੀ ਸੀਰੀਅਲ", search: "ਸਹੀ ਸੀਰੀਅਲ ਲੱਭੋ", searchButton: "ਲੱਭੋ", searching: "ਲੱਭ ਰਿਹਾ ਹੈ…", loading: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਲੋਡ ਹੋ ਰਹੇ ਹਨ…", none: "ਇਸ ਟਿਕਾਣੇ ਤੇ ਕੋਈ ਸੀਰੀਅਲ ਯੂਨਿਟ ਨਹੀਂ ਹੈ", addUnits: "ਯੂਨਿਟ ਜੋੜੋ", ask: "ਅਧਿਕਾਰਤ ਇਨਵੈਂਟਰੀ ਉਪਭੋਗਤਾ ਨੂੰ ਇਸ ਟਿਕਾਣੇ ਤੇ ਅਸਲ ਯੂਨਿਟ ਜੋੜਨ ਲਈ ਕਹੋ।", available: "ਉਪਲਬਧ ਸੀਰੀਅਲ ਯੂਨਿਟ", availability: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਉਪਲਬਧ ਹਨ", stock: "ਸਟਾਕ ਵਿੱਚ", selectAll: "ਸਾਰੀਆਂ ਉਪਲਬਧ ਚੁਣੋ", selected: "ਚੁਣੀਆਂ ਯੂਨਿਟਾਂ ਵਰਤੋ", adding: "ਪਾਰਟ ਜੋੜੇ ਜਾ ਰਹੇ ਹਨ…", more: "ਹੋਰ ਲੋਡ ਕਰੋ", printed: "ਛਾਪੋ", labels: "QR ਲੇਬਲ", error: "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ।" },
+  en: { title: "Serialized unit", choose: "Choose serialized units", add: "Add serialized units", ready: "QR labels ready", location: "Workorder location", close: "Close", quantity: "Quantity", creates: "Creates one permanent serial number and QR label per unit.", condition: "Condition", newCondition: "New", usedCondition: "Reusable used", refurbishedCondition: "Refurbished", conditionEvidence: "Condition evidence", conditionEvidencePlaceholder: "Inspection, supplier statement, or refurbishment record", conditionEvidenceRequired: "Describe how the condition was confirmed.", confirm: "I confirm these units are physically present at", back: "Back to units", scan: "Scan a label", manual: "Enter code manually", code: "Label link or exact serial", search: "Find exact serial", searchButton: "Search", searching: "Searching…", loading: "Loading serialized units…", none: "No serialized units are available at", addUnits: "Add units", ask: "Ask an authorized inventory user to add physical units at this location.", available: "Available serialized units", availability: "serialized units available", stock: "In stock", selectAll: "Select all available", selected: "Use selected units", adding: "Adding parts…", more: "Load more", printed: "Print", labels: "QR labels", error: "Something went wrong. Try again." },
+  es: { title: "Unidad serializada", choose: "Elegir unidades serializadas", add: "Agregar unidades serializadas", ready: "Etiquetas QR listas", location: "Ubicación de la orden", close: "Cerrar", quantity: "Cantidad", creates: "Crea un número de serie permanente y una etiqueta QR por unidad.", condition: "Condición", newCondition: "Nueva", usedCondition: "Usada reutilizable", refurbishedCondition: "Reacondicionada", conditionEvidence: "Evidencia de condición", conditionEvidencePlaceholder: "Inspección, declaración del proveedor o registro de reacondicionamiento", conditionEvidenceRequired: "Describa cómo se confirmó la condición.", confirm: "Confirmo que estas unidades están físicamente presentes en", back: "Volver a unidades", scan: "Escanear una etiqueta", manual: "Ingresar código manualmente", code: "Enlace de etiqueta o número de serie exacto", search: "Buscar número de serie exacto", searchButton: "Buscar", searching: "Buscando…", loading: "Cargando unidades serializadas…", none: "No hay unidades serializadas disponibles en", addUnits: "Agregar unidades", ask: "Pida a un usuario autorizado que agregue unidades físicas en esta ubicación.", available: "Unidades serializadas disponibles", availability: "unidades serializadas disponibles", stock: "En stock", selectAll: "Seleccionar todas las disponibles", selected: "Usar unidades seleccionadas", adding: "Agregando piezas…", more: "Cargar más", printed: "Imprimir", labels: "etiquetas QR", error: "Algo salió mal. Inténtelo de nuevo." },
+  pa: { title: "ਸੀਰੀਅਲ ਯੂਨਿਟ", choose: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਚੁਣੋ", add: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਜੋੜੋ", ready: "QR ਲੇਬਲ ਤਿਆਰ ਹਨ", location: "ਵਰਕਆਰਡਰ ਟਿਕਾਣਾ", close: "ਬੰਦ ਕਰੋ", quantity: "ਮਾਤਰਾ", creates: "ਹਰ ਯੂਨਿਟ ਲਈ ਇੱਕ ਪੱਕਾ ਸੀਰੀਅਲ ਨੰਬਰ ਅਤੇ QR ਲੇਬਲ ਬਣਾਉਂਦਾ ਹੈ।", condition: "ਹਾਲਤ", newCondition: "ਨਵਾਂ", usedCondition: "ਦੁਬਾਰਾ ਵਰਤਣ ਯੋਗ", refurbishedCondition: "ਮੁੜ ਤਿਆਰ ਕੀਤਾ", conditionEvidence: "ਹਾਲਤ ਦਾ ਸਬੂਤ", conditionEvidencePlaceholder: "ਜਾਂਚ, ਸਪਲਾਇਰ ਬਿਆਨ ਜਾਂ ਮੁਰੰਮਤ ਰਿਕਾਰਡ", conditionEvidenceRequired: "ਦੱਸੋ ਕਿ ਹਾਲਤ ਦੀ ਪੁਸ਼ਟੀ ਕਿਵੇਂ ਹੋਈ।", confirm: "ਮੈਂ ਪੁਸ਼ਟੀ ਕਰਦਾ ਹਾਂ ਕਿ ਇਹ ਯੂਨਿਟ ਇੱਥੇ ਮੌਜੂਦ ਹਨ", back: "ਯੂਨਿਟਾਂ ਤੇ ਵਾਪਸ", scan: "ਲੇਬਲ ਸਕੈਨ ਕਰੋ", manual: "ਕੋਡ ਹੱਥੀਂ ਦਰਜ ਕਰੋ", code: "ਲੇਬਲ ਲਿੰਕ ਜਾਂ ਸਹੀ ਸੀਰੀਅਲ", search: "ਸਹੀ ਸੀਰੀਅਲ ਲੱਭੋ", searchButton: "ਲੱਭੋ", searching: "ਲੱਭ ਰਿਹਾ ਹੈ…", loading: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਲੋਡ ਹੋ ਰਹੇ ਹਨ…", none: "ਇਸ ਟਿਕਾਣੇ ਤੇ ਕੋਈ ਸੀਰੀਅਲ ਯੂਨਿਟ ਨਹੀਂ ਹੈ", addUnits: "ਯੂਨਿਟ ਜੋੜੋ", ask: "ਅਧਿਕਾਰਤ ਇਨਵੈਂਟਰੀ ਉਪਭੋਗਤਾ ਨੂੰ ਇਸ ਟਿਕਾਣੇ ਤੇ ਅਸਲ ਯੂਨਿਟ ਜੋੜਨ ਲਈ ਕਹੋ।", available: "ਉਪਲਬਧ ਸੀਰੀਅਲ ਯੂਨਿਟ", availability: "ਸੀਰੀਅਲ ਯੂਨਿਟ ਉਪਲਬਧ ਹਨ", stock: "ਸਟਾਕ ਵਿੱਚ", selectAll: "ਸਾਰੀਆਂ ਉਪਲਬਧ ਚੁਣੋ", selected: "ਚੁਣੀਆਂ ਯੂਨਿਟਾਂ ਵਰਤੋ", adding: "ਪਾਰਟ ਜੋੜੇ ਜਾ ਰਹੇ ਹਨ…", more: "ਹੋਰ ਲੋਡ ਕਰੋ", printed: "ਛਾਪੋ", labels: "QR ਲੇਬਲ", error: "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ। ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ।" },
 };
 
 function key(prefix) {
@@ -27,8 +28,8 @@ function unitsFrom(result) {
   return result?.units || result?.items || [];
 }
 
-function pendingCreateStorageKey({ actorId, workorderId, partId, quantity, confirmation }) {
-  return ["workorder-serialized-create", actorId || "session", workorderId, partId, quantity, confirmation].join(":");
+function pendingCreateStorageKey({ actorId, workorderId, partId, quantity, confirmation, conditionCode, conditionEvidence }) {
+  return ["workorder-serialized-create", actorId || "session", workorderId, partId, quantity, confirmation, conditionCode, conditionEvidence].join(":");
 }
 
 function storedPendingCreateKey(storageKey) {
@@ -75,6 +76,8 @@ export function WorkorderSerializedPartDialog({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [conditionCode, setConditionCode] = useState("new");
+  const [conditionEvidence, setConditionEvidence] = useState("");
   const [physicallyPresent, setPhysicallyPresent] = useState(false);
   const [selectedUnitIds, setSelectedUnitIds] = useState(() => new Set());
   const [serialQuery, setSerialQuery] = useState("");
@@ -125,6 +128,8 @@ export function WorkorderSerializedPartDialog({
     setData(null);
     setMessage("");
     setQuantity("1");
+    setConditionCode("new");
+    setConditionEvidence("");
     setPhysicallyPresent(false);
     setSelectedUnitIds(new Set());
     setSerialQuery("");
@@ -153,9 +158,14 @@ export function WorkorderSerializedPartDialog({
       setMessage(`${text.confirm} ${locationName}.`);
       return;
     }
+    const evidence = conditionEvidence.trim();
+    if (!evidence) {
+      setMessage(text.conditionEvidenceRequired);
+      return;
+    }
     const confirmation = "physically_present_at_location";
-    const identity = `${partId}:${amount}:${confirmation}`;
-    const storageKey = pendingCreateStorageKey({ actorId, workorderId, partId, quantity: amount, confirmation });
+    const identity = JSON.stringify({ partId, amount, confirmation, conditionCode, conditionEvidence: evidence });
+    const storageKey = pendingCreateStorageKey({ actorId, workorderId, partId, quantity: amount, confirmation, conditionCode, conditionEvidence: evidence });
     if (createKeyRef.current.identity !== identity) {
       createKeyRef.current = {
         identity,
@@ -171,6 +181,8 @@ export function WorkorderSerializedPartDialog({
         body: JSON.stringify({
           quantity: amount,
           confirmation,
+          conditionCode,
+          conditionEvidence: evidence,
           idempotencyKey: createKeyRef.current.key,
         }),
       });
@@ -278,8 +290,12 @@ export function WorkorderSerializedPartDialog({
                 <p>{text.creates}</p>
                 {Number(quantity) > 10 ? <p className="workorder-serialized-notice">This will permanently create {quantity} serial numbers and {quantity} labels.</p> : null}
               </div>
+              <div className="workorder-serialized-field">
+                <label>{text.condition}<Dropdown value={conditionCode} onChange={(event) => setConditionCode(event.target.value)} disabled={busy}><option value="new">{text.newCondition}</option><option value="serviceable_used">{text.usedCondition}</option><option value="refurbished">{text.refurbishedCondition}</option></Dropdown></label>
+                <label>{text.conditionEvidence}<textarea rows="2" maxLength="2000" value={conditionEvidence} onChange={(event) => setConditionEvidence(event.target.value)} placeholder={text.conditionEvidencePlaceholder} disabled={busy} /></label>
+              </div>
               <label className="workorder-serialized-check"><input type="checkbox" checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /><span>{text.confirm} <strong>{locationName}</strong>.</span></label>
-              <footer><Button type="button" onClick={() => { setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type="submit" variant="primary" disabled={busy || !physicallyPresent}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
+              <footer><Button type="button" onClick={() => { setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type="submit" variant="primary" disabled={busy || !physicallyPresent || !conditionEvidence.trim()}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
             </form>
           </div>
         </section>

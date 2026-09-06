@@ -72,6 +72,8 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
       locationId,
       quantity: 2,
       confirmation: "physically_present_at_location",
+      conditionCode: "new",
+      conditionEvidence: "Supplier packaging verified in integration test.",
       idempotencyKey,
       actorId,
       companyIds: [companyId],
@@ -83,9 +85,11 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
     assert.equal(created.kind, "created");
     assert.equal(created.replayed, false);
     assert.equal(created.batch.itemCount, 2);
+    assert.ok(created.units.every((unit) => unit.conditionCode === "new" && unit.custodyHolderType === "inventory_location"));
 
     const replay = await command();
     assert.equal(replay.replayed, true);
+    assert.ok(replay.units.every((unit) => unit.conditionCode === "new" && unit.custodyHolderType === "inventory_location"));
 
     await query("update parts_catalog set inventory_display_uom_code='pc' where id=$1", [partId]);
     const detail = await getPartLocationSerialization({ catalogPartId: partId, locationId, companyIds: [companyId] });
@@ -94,6 +98,7 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
     assert.equal(detail.location.odooQuantityOnHand, 4);
     assert.equal(detail.units.length, 2);
     assert.ok(detail.units.every((unit) => unit.serialNumber.startsWith("WG-S-") && unit.status === "in_stock"));
+    assert.ok(detail.units.every((unit) => unit.conditionCode === "new"));
 
     const unitDetail = await getSerializedInventoryUnit({
       unitId: detail.units[0].id,

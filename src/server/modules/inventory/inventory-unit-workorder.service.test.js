@@ -257,6 +257,8 @@ test("workorder intake passes its identity to the locked repository path and den
     catalogPartId: unit().catalogPartId,
     quantity: 2,
     confirmation: "physically_present_at_location",
+    conditionCode: "new",
+    conditionEvidence: "Supplier marked both units new.",
     idempotencyKey: "workorder-create-two",
   }, context(), dependencies({
     createUnits: async (_partId, locationId, input, _context, receivedDependencies) => {
@@ -267,12 +269,16 @@ test("workorder intake passes its identity to the locked repository path and den
   }));
   assert.equal(result.batch.itemCount, 2);
   assert.equal(createInput.locationId, LOCATION_ID);
+  assert.equal(createInput.conditionCode, "new");
+  assert.equal(createInput.conditionEvidence, "Supplier marked both units new.");
   assert.equal(createDependencies.workorderId, WORKORDER_ID);
   await assert.rejects(
     createSerializedUnitsForWorkorder(WORKORDER_ID, {
       catalogPartId: unit().catalogPartId,
       quantity: 1,
       confirmation: "physically_present_at_location",
+      conditionCode: "new",
+      conditionEvidence: "Supplier marked unit new.",
       idempotencyKey: "mechanic-create-denied",
     }, context("mechanic"), dependencies()),
     (error) => error.code === "INVENTORY_CREATE_FORBIDDEN" && error.statusCode === 403,
@@ -286,6 +292,8 @@ test("workorder intake rejects stale lifecycle before calling creation", async (
       catalogPartId: unit().catalogPartId,
       quantity: 1,
       confirmation: "physically_present_at_location",
+      conditionCode: "new",
+      conditionEvidence: "Supplier marked unit new.",
       idempotencyKey: "closed-create-denied",
     }, context(), dependencies({
       authorize: async () => ({ workorder: workorder({ status: "mechanic_done" }), companyId: COMPANY_ID, locationId: LOCATION_ID }),

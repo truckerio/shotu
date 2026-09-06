@@ -32,6 +32,11 @@ test("dialog keeps on-demand intake explicit and bounded", () => {
   assert.match(dialog, /min="1" max="25"/);
   assert.match(dialog, /const confirmation = "physically_present_at_location"/);
   assert.match(dialog, /confirmation,/);
+  assert.match(dialog, /conditionCode,/);
+  assert.match(dialog, /conditionEvidence: evidence/);
+  assert.match(dialog, /conditionEvidenceRequired/);
+  assert.match(dialog, /JSON\.stringify\(\{ partId, amount, confirmation, conditionCode, conditionEvidence: evidence \}\)/);
+  assert.match(dialog, /disabled=\{busy \|\| !physicallyPresent \|\| !conditionEvidence\.trim\(\)\}/);
   assert.match(dialog, /createKeyRef\.current\.identity !== identity/);
   assert.match(dialog, /idempotencyKey: createKeyRef\.current\.key/);
   assert.match(dialog, /function pendingCreateStorageKey/);
@@ -124,6 +129,7 @@ test("nested dropdown is touch-safe, responsive, and retains one content scrolle
   assert.match(nestedCss, /max-height:\s*min\(24rem, calc\(100dvh - 9rem\)\)/);
   assert.match(nestedDropdown, /max-width: 640px[\s\S]*\? 120 : 16/);
   assert.match(nestedCss, /\.serialized-unit-nested-dropdown \.serialized-unit-nested-search input,[\s\S]*min-height:\s*44px/);
+  assert.match(css, /\.workorder-serialized-field \.dropdown-select-trigger\s*\{[\s\S]*min-height:\s*44px/s);
   assert.match(nestedCss, /> footer \.button\s*\{[\s\S]*width:\s*auto/s);
   assert.match(childPickerCss, /\.serialized-unit-child-actions \.button\s*\{[^}]*width:\s*fit-content/s);
 });

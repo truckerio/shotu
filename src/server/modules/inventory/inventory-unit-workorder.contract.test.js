@@ -12,6 +12,7 @@ const partsModule = readFileSync(new URL("../../../../frontend/src/features/work
 const service = readFileSync(new URL("./inventory-unit-workorder.service.js", import.meta.url), "utf8");
 const providerPolicy = readFileSync(new URL("../../../../shared/inventory-provider.js", import.meta.url), "utf8");
 const serializationRepository = readFileSync(new URL("../../db/repositories/inventory-part-serialization.repo.js", import.meta.url), "utf8");
+const intakeRepairMigration = readFileSync(new URL("../../db/migrations/124_workorder_serialized_intake_condition_repair.sql", import.meta.url), "utf8");
 
 test("serialized usage migration enforces tenant FKs, one unresolved unit, and exact idempotency", () => {
   assert.match(migration, /foreign key \(company_id, workorder_id\) references operational_workorders\(company_id, id\)/i);
@@ -134,4 +135,15 @@ test("available child listing stays workorder, company, location, catalog, provi
   assert.match(repository, /unit\.status = 'in_stock'/);
   assert.match(repository, /limit \$7/);
   assert.doesNotMatch(repository, /vendor_name|invoice_number|qr_token/i);
+});
+
+test("workorder intake repair exposes only confirmed local serialized stock without inventing condition", () => {
+  assert.match(intakeRepairMigration, /receipt\.provider = 'local_serialization'/i);
+  assert.match(intakeRepairMigration, /batch\.physical_confirmation = 'physically_present_at_location'/i);
+  assert.match(intakeRepairMigration, /unit\.condition_code = 'unknown'/i);
+  assert.match(intakeRepairMigration, /unit\.custody_legacy_available = false/i);
+  assert.match(intakeRepairMigration, /unit\.status = 'in_stock'/i);
+  assert.match(intakeRepairMigration, /unit\.custody_holder_type = 'inventory_location'/i);
+  assert.match(intakeRepairMigration, /set custody_legacy_available = true/i);
+  assert.doesNotMatch(intakeRepairMigration, /set\s+condition_code|inventory_items|inventory_stock_movements|inventory_unit_events/i);
 });

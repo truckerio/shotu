@@ -120,7 +120,7 @@ test("workorder part-unit routes list safe children and create a printable batch
   await handleInventoryUnitWorkorderApi(
     { method: "POST" }, createResponse,
     new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-parts/${catalogPartId}/units`),
-    helpers({ quantity: 2, confirmation: "physically_present_at_location", idempotencyKey: "create-parts-key" }),
+    helpers({ quantity: 2, confirmation: "physically_present_at_location", conditionCode: "new", conditionEvidence: "Supplier marked units new.", idempotencyKey: "create-parts-key" }),
     dependencies({
       createUnits: async (_partId, _locationId, _input, _context, receivedDependencies) => ({
         batch: { id: "batch-1", itemCount: 2, printUrl: "/labels/batch-1" },
@@ -181,6 +181,25 @@ test("mechanics can list units but are not offered the inventory-creation action
   );
   assert.equal(response.status, 200);
   assert.equal(response.payload.canCreateSerializedUnits, false);
+});
+
+test("workorder intake rejects unclassified units and missing condition evidence before inventory mutation", async () => {
+  const catalogPartId = "00000000-0000-4000-8000-000000000008";
+  for (const body of [
+    { quantity: 1, confirmation: "physically_present_at_location", conditionCode: "unknown", conditionEvidence: "Checked", idempotencyKey: "create-invalid-condition" },
+    { quantity: 1, confirmation: "physically_present_at_location", conditionCode: "new", conditionEvidence: "", idempotencyKey: "create-missing-evidence" },
+  ]) {
+    let wrote = false;
+    const response = {};
+    await handleInventoryUnitWorkorderApi(
+      { method: "POST" }, response,
+      new URL(`http://localhost/api/workorders/${WORKORDER_ID}/inventory-parts/${catalogPartId}/units`),
+      helpers(body), dependencies({ createUnits: async () => { wrote = true; } }),
+    );
+    assert.equal(response.status, 400);
+    assert.equal(response.payload.code, "validation_error");
+    assert.equal(wrote, false);
+  }
 });
 
 test("handler returns stable validation and inventory errors", async () => {
