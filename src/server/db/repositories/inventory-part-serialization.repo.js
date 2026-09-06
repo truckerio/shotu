@@ -11,8 +11,20 @@ function hashRequest(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-function generatedSerial(batchId, ordinal) {
-  return `WG-S-${batchId.replaceAll("-", "").slice(0, 16).toUpperCase()}-${ordinal}`;
+function serialPartToken(partNumber) {
+  const token = String(partNumber || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24)
+    .replace(/-+$/g, "");
+  return token || "PART";
+}
+
+function generatedSerial(partNumber, batchId, ordinal) {
+  return `WG-${serialPartToken(partNumber)}-${batchId.replaceAll("-", "").slice(0, 16).toUpperCase()}-${ordinal}`;
 }
 
 function publicUnit(row) {
@@ -225,7 +237,7 @@ export async function createPartSerializedUnits({
     const labelBatchId = randomUUID();
     const unitIds = Array.from({ length: quantity }, () => randomUUID());
     const ordinals = unitIds.map((_, index) => index + 1);
-    const serials = ordinals.map((ordinal) => generatedSerial(serializationBatchId, ordinal));
+    const serials = ordinals.map((ordinal) => generatedSerial(part.part_number, serializationBatchId, ordinal));
 
     await client.query(
       `insert into inventory_serialization_batches (
@@ -362,4 +374,4 @@ export async function createPartSerializedUnits({
   }
 }
 
-export const inventoryPartSerializationInternals = { generatedSerial, hashRequest };
+export const inventoryPartSerializationInternals = { generatedSerial, hashRequest, serialPartToken };

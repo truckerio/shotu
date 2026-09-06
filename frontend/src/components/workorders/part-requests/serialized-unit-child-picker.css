@@ -70,6 +70,27 @@
   min-width: 0;
 }
 
+.serialized-unit-child-identity {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.serialized-unit-child-condition {
+  border-radius: 999px;
+  color: #344054;
+  background: #f2f4f7;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 2px 7px;
+}
+
+.serialized-unit-child-condition.is-new { color: #175cd3; background: #eff8ff; }
+.serialized-unit-child-condition.is-serviceable_used { color: #067647; background: #ecfdf3; }
+.serialized-unit-child-condition.is-refurbished { color: #6941c6; background: #f4f3ff; }
+
 .serialized-unit-child-list strong,
 .serialized-unit-child-list small {
   overflow-wrap: anywhere;

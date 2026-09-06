@@ -43,6 +43,8 @@ function item() {
     serialNumber: "WG-L-TEST-1-1",
     locationName: "Chino Yard",
     qrFormatVersion: 1,
+    conditionCode: "serviceable_used",
+    status: "in_stock",
   };
 }
 
@@ -66,6 +68,7 @@ test("print output preserves immutable identity and escapes label snapshots", as
   });
   assert.match(html, /FILTER-1/);
   assert.match(html, /WG-L-TEST-1-1/);
+  assert.match(html, /Reusable · In stock/);
   assert.match(html, /Oil &lt;filter&gt;/);
   assert.match(html, /<svg/);
   assert.doesNotMatch(html, /Oil <filter>/);
@@ -93,11 +96,13 @@ test("Office can print serialized unit and part-location labels across its compa
         description: "Oil filter",
         serialNumber: "WG-S-1",
         locationName: "Remote Yard",
+        conditionCode: "refurbished",
       };
     },
     qrOptions: { signingKey: SIGNING_KEY, origin: "https://inventory.example.test" },
   });
   assert.match(unitHtml, /WG-S-1/);
+  assert.match(unitHtml, /Refurbished · In stock/);
 
   const locationHtml = await renderPartLocationLabels(UNIT_ID, LOCATION_ID, unassignedContext, {
     readPart: async (scope) => {
@@ -105,11 +110,12 @@ test("Office can print serialized unit and part-location labels across its compa
       return {
         part: { partNumber: "FILTER-1", description: "Oil filter" },
         location: { locationName: "Remote Yard" },
-        units: [{ id: UNIT_ID, serialNumber: "WG-S-1", status: "in_stock" }],
+        units: [{ id: UNIT_ID, serialNumber: "WG-S-1", status: "in_stock", conditionCode: "new" }],
       };
     },
     qrOptions: { signingKey: SIGNING_KEY, origin: "https://inventory.example.test" },
   });
   assert.match(locationHtml, /1 serialized unit/);
   assert.match(locationHtml, /Remote Yard/);
+  assert.match(locationHtml, /New · In stock/);
 });

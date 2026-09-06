@@ -19,6 +19,29 @@ function actorScope(requestContext) {
   };
 }
 
+function conditionLabel(value) {
+  return ({
+    new: "New",
+    serviceable_used: "Reusable",
+    refurbished: "Refurbished",
+    needs_repair: "Needs repair",
+    unserviceable: "Unserviceable",
+    unknown: "Not classified",
+  })[value] || "Not classified";
+}
+
+function statusLabel(value) {
+  return ({
+    in_stock: "In stock",
+    reserved: "Reserved",
+    installed_pending_approval: "Install pending approval",
+    installed: "Installed",
+    removed: "Removed",
+    returned: "Returned",
+    scrapped: "Scrapped",
+  })[value] || String(value || "").replaceAll("_", " ");
+}
+
 async function labelMarkup(items, qrOptions) {
   return Promise.all(items.map(async (item) => {
     const token = createInventoryQrToken(item.unitId, qrOptions);
@@ -28,12 +51,13 @@ async function labelMarkup(items, qrOptions) {
       margin: 2,
       width: 256,
     });
-    return `<article class="label">${svg}<div><strong>${escapeHtml(item.partNumber)}</strong><span>${escapeHtml(item.description || "Inventory part")}</span><code>${escapeHtml(item.serialNumber)}</code><small>${escapeHtml(item.locationName)}</small></div></article>`;
+    const liveState = [conditionLabel(item.conditionCode), statusLabel(item.status)].filter(Boolean).join(" · ");
+    return `<article class="label">${svg}<div><strong>${escapeHtml(item.partNumber)}</strong><span>${escapeHtml(item.description || "Inventory part")}</span><code>${escapeHtml(item.serialNumber)}</code><b>${escapeHtml(liveState)}</b><small>${escapeHtml(item.locationName)}</small></div></article>`;
   }));
 }
 
 function labelsPage(title, subtitle, labels) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;margin:8mm}.labels{display:grid;grid-template-columns:repeat(2,80mm);gap:8mm}.label{border:1px solid #000;display:grid;grid-template-columns:28mm minmax(0,1fr);gap:3mm;min-height:32mm;padding:3mm;break-inside:avoid}.label svg{height:28mm;width:28mm}.label div{display:grid;align-content:center;gap:1mm;min-width:0}.label strong,.label span,.label code,.label small{overflow-wrap:anywhere}@media(max-width:600px){body{margin:8px}.labels{grid-template-columns:1fr}.label{grid-template-columns:96px minmax(0,1fr)}.label svg{height:96px;width:96px}}@media print{body{margin:8mm}}</style></head><body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p><section class="labels">${labels.join("")}</section></main></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;margin:8mm}.labels{display:grid;grid-template-columns:repeat(2,80mm);gap:8mm}.label{border:1px solid #000;display:grid;grid-template-columns:28mm minmax(0,1fr);gap:3mm;min-height:32mm;padding:3mm;break-inside:avoid}.label svg{height:28mm;width:28mm}.label div{display:grid;align-content:center;gap:1mm;min-width:0}.label strong,.label span,.label code,.label b,.label small{overflow-wrap:anywhere}.label b{font-size:11px;text-transform:uppercase;letter-spacing:.03em}@media(max-width:600px){body{margin:8px}.labels{grid-template-columns:1fr}.label{grid-template-columns:96px minmax(0,1fr)}.label svg{height:96px;width:96px}}@media print{body{margin:8mm}}</style></head><body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p><section class="labels">${labels.join("")}</section></main></body></html>`;
 }
 
 function escapeHtml(value) {
@@ -87,6 +111,8 @@ export async function renderInventoryUnitLabel(unitId, requestContext, dependenc
     description: unit.description,
     serialNumber: unit.serialNumber,
     locationName: unit.locationName,
+    conditionCode: unit.conditionCode,
+    status: unit.status,
   }], dependencies.qrOptions || {});
   return labelsPage("Inventory QR label", `${unit.partNumber} · ${unit.locationName}`, labels);
 }
@@ -108,6 +134,8 @@ export async function renderPartLocationLabels(catalogPartId, locationId, reques
     description: data.part.description,
     serialNumber: unit.serialNumber,
     locationName: data.location.locationName,
+    conditionCode: unit.conditionCode,
+    status: unit.status,
   })), dependencies.qrOptions || {});
   return labelsPage(
     `${data.part.partNumber} QR labels`,

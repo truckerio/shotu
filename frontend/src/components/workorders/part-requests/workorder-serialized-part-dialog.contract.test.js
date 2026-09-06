@@ -104,6 +104,12 @@ test("catalog units are independently selectable and submit every selected eligi
   assert.match(dialog, /if \(!failures\.length\) \{[\s\S]*onClose\?\.\(\)/);
 });
 
+test("serialized-unit choices show live condition as a visible badge", () => {
+  assert.match(childPicker, /serialized-unit-child-condition/);
+  assert.match(childPicker, /conditionLabel\(unit\)/);
+  assert.match(childPickerCss, /\.serialized-unit-child-condition\.is-serviceable_used/);
+});
+
 test("partial multi-unit issue keeps only failed units selected and never reissues successes", () => {
   assert.match(dialog, /const succeeded = new Set\(successes\)/);
   assert.match(dialog, /unitsFrom\(current\)\.filter\(\(unit\) => !succeeded\.has\(unit\.id\)\)/);

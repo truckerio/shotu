@@ -73,8 +73,15 @@ export function SerializedUnitChildPicker({
                 onChange={() => toggle(unit.id)}
               />
               <span>
-                <strong>{unit.serialNumber || unit.serial}</strong>
-                <small>{[unit.status === "in_stock" ? text.stock : unit.status, conditionLabel(unit), holderLabel(unit)].filter(Boolean).join(" · ")}</small>
+                <span className="serialized-unit-child-identity">
+                  <strong>{unit.serialNumber || unit.serial}</strong>
+                  {conditionLabel(unit) ? (
+                    <span className={`serialized-unit-child-condition is-${unit.conditionCode}`}>
+                      {conditionLabel(unit)}
+                    </span>
+                  ) : null}
+                </span>
+                <small>{[unit.status === "in_stock" ? text.stock : unit.status, holderLabel(unit)].filter(Boolean).join(" · ")}</small>
               </span>
               {partNumber ? <small className="serialized-unit-child-part">{partNumber}</small> : null}
             </label>

@@ -133,6 +133,8 @@ test("available child listing stays workorder, company, location, catalog, provi
   assert.match(repository, /workorder\.location_id = \$3 and part\.id = \$4/);
   assert.match(repository, /receipt\.provider in \('local', 'local_count', 'local_serialization', 'legacy_tracking'\)/);
   assert.match(repository, /unit\.status = 'in_stock'/);
+  assert.match(repository, /child\.condition_code/);
+  assert.match(repository, /conditionCode: row\.condition_code \|\| "unknown"/);
   assert.match(repository, /limit \$7/);
   assert.doesNotMatch(repository, /vendor_name|invoice_number|qr_token/i);
 });

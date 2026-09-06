@@ -156,6 +156,12 @@ export function PartSerializationPanel({
   const selectedUnitUsesInternalTrackingId =
     selectedUnit?.source?.type === "legacy_tracking" ||
     /^LEGACY-/.test(selectedUnit?.serialNumber || "");
+  const filteredFallbackUnits = (data?.units || []).filter(
+    (unit) => !custodyCondition || unit.conditionCode === custodyCondition,
+  );
+  const visibleUnits = companyId && !custodyUnits.error
+    ? custodyUnits.items
+    : filteredFallbackUnits;
 
   const endpoint = `/api/office/inventory/parts/${encodeURIComponent(item.catalogPartId)}/locations/${encodeURIComponent(location.locationId)}/units`;
   const load = useCallback(async () => {
@@ -902,116 +908,108 @@ export function PartSerializationPanel({
                   {custodyUnits.error}
                 </p>
               ) : null}
-              {custodyUnits.loading ? (
-                <p role="status">Loading exact custody units…</p>
-              ) : custodyUnits.items.length ? (
-                <ul
-                  className="inventory-serial-list"
-                  aria-label="Exact custody units"
-                >
-                  {custodyUnits.items.map((unit) => (
-                    <li key={unit.id}>
-                      <button
-                        type="button"
-                        className="inventory-serial-unit-open"
-                        data-unit-id={unit.id}
-                        onClick={() => setSelectedUnitId(unit.id)}
-                      >
-                        <span>
-                          <code>{unit.serialNumber}</code>
-                          <small>
-                            {[
-                              CONDITION_LABELS[unit.conditionCode] ||
-                                "Not classified",
-                              custodyHolder(unit),
-                              isAvailableForUse(unit)
-                                ? "Available"
-                                : "Not available",
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </small>
-                        </span>
-                        <ChevronRight aria-hidden="true" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No exact units match this condition.</p>
-              )}
-              <Pagination
-                currentPage={custodyCursor.length}
-                pageCount={
-                  custodyUnits.nextCursor
-                    ? custodyCursor.length + 1
-                    : custodyCursor.length
-                }
-                setPage={(next) => {
-                  if (next < custodyCursor.length)
-                    setCustodyCursor((current) => current.slice(0, next));
-                  else if (custodyUnits.nextCursor)
-                    setCustodyCursor((current) => [
-                      ...current,
-                      custodyUnits.nextCursor,
-                    ]);
-                }}
-                total={0}
-                label="exact units"
-                loading={custodyUnits.loading}
-              />
             </section>
           ) : null}
 
-          {data.units.length ? (
-            <div
-              className="inventory-serial-list"
-              aria-label={`Serialized units at ${location.locationName}`}
-            >
-              {data.units.map((unit) => (
-                <article key={unit.id}>
-                  <button
-                    type="button"
-                    className="inventory-serial-unit-open"
-                    data-unit-id={unit.id}
-                    onClick={() => setSelectedUnitId(unit.id)}
-                    aria-label={`View ${unit.serialNumber}`}
-                  >
-                    <span>
-                      <code>{unit.serialNumber}</code>
-                      <small>
-                        {[
-                          unitStatus(unit.status),
-                          unit.conditionCode
-                            ? {
-                                new: "New",
-                                serviceable_used: "Reusable",
-                                refurbished: "Refurbished",
-                                unknown: "Not classified",
-                              }[unit.conditionCode] || unit.conditionCode
-                            : "",
-                          custodyHolder(unit),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </small>
-                    </span>
-                    <ChevronRight aria-hidden="true" />
-                  </button>
-                  <a
-                    href={unit.printUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`Print QR label for ${unit.serialNumber}`}
-                  >
-                    <Printer />
-                    Print QR
-                  </a>
-                </article>
-              ))}
-              {data.truncated ? (
-                <p>Showing the first 500 serialized units.</p>
+          {companyId && custodyUnits.loading ? (
+            <div className="inventory-serial-loading" role="status">
+              <RefreshCw01 className="loading-icon" />
+              Loading serialized units
+            </div>
+          ) : data.units.length && visibleUnits.length ? (
+            <>
+              <div
+                className="inventory-serial-list"
+                aria-label={`Serialized units at ${location.locationName}`}
+              >
+                {visibleUnits.map((unit) => (
+                  <article key={unit.id}>
+                    <button
+                      type="button"
+                      className="inventory-serial-unit-open"
+                      data-unit-id={unit.id}
+                      onClick={() => setSelectedUnitId(unit.id)}
+                      aria-label={`View ${unit.serialNumber}`}
+                    >
+                      <span>
+                        <span className="inventory-serial-identity">
+                          <code>{unit.serialNumber}</code>
+                          <span
+                            className={`inventory-unit-condition is-${unit.conditionCode || "unknown"}`}
+                          >
+                            {CONDITION_LABELS[unit.conditionCode] ||
+                              "Not classified"}
+                          </span>
+                        </span>
+                        <small>
+                          {[
+                            unitStatus(unit.status),
+                            custodyHolder(unit),
+                            isAvailableForUse(unit)
+                              ? "Available"
+                              : "Not available",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                    <a
+                      href={
+                        unit.printUrl ||
+                        `/api/office/inventory/units/${encodeURIComponent(unit.id)}/label`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Print QR label for ${unit.serialNumber}`}
+                    >
+                      <Printer />
+                      Print QR
+                    </a>
+                  </article>
+                ))}
+                {!companyId && data.truncated ? (
+                  <p>Showing the first 500 serialized units.</p>
+                ) : null}
+              </div>
+              {companyId ? (
+                <Pagination
+                  currentPage={custodyCursor.length}
+                  pageCount={
+                    custodyUnits.nextCursor
+                      ? custodyCursor.length + 1
+                      : custodyCursor.length
+                  }
+                  setPage={(next) => {
+                    if (next < custodyCursor.length)
+                      setCustodyCursor((current) => current.slice(0, next));
+                    else if (custodyUnits.nextCursor)
+                      setCustodyCursor((current) => [
+                        ...current,
+                        custodyUnits.nextCursor,
+                      ]);
+                  }}
+                  total={0}
+                  label="serialized units"
+                  loading={custodyUnits.loading}
+                />
               ) : null}
+            </>
+          ) : data.units.length ? (
+            <div className="inventory-serial-empty">
+              <QrCode01 />
+              <strong>No serialized units match this condition</strong>
+              <p>Choose another condition to see its exact units.</p>
+              <Button
+                type="button"
+                onClick={() => {
+                  setCustodyCondition("");
+                  setCustodyCursor([""]);
+                }}
+              >
+                Show all conditions
+              </Button>
             </div>
           ) : (
             <div className="inventory-serial-empty">

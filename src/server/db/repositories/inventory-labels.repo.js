@@ -25,6 +25,8 @@ function publicItem(row) {
     description: row.description_snapshot,
     serialNumber: row.serial_number_snapshot,
     locationName: row.location_name_snapshot,
+    conditionCode: row.condition_code || "unknown",
+    status: row.status || "",
     qrFormatVersion: Number(row.qr_format_version),
     qrSvgUrl: `/api/office/inventory/units/${encodeURIComponent(row.unit_id)}/qr.svg`,
   };
@@ -109,10 +111,12 @@ export async function getInventoryLabelBatch({ batchId, companyIds, locationIds 
 
 export async function listInventoryLabelBatchItems({ batchId, companyIds, locationIds = [], isAdmin = false, afterOrdinal = 0, limit = 100 }) {
   const result = await query(
-    `select item.*
+    `select item.*, unit.condition_code, unit.status
      from inventory_label_batch_items item
      join inventory_label_batches batch
        on batch.company_id = item.company_id and batch.id = item.batch_id
+     join inventory_serialized_units unit
+       on unit.company_id = item.company_id and unit.id = item.unit_id
      where item.batch_id = $1 and item.company_id = any($2::uuid[])
        and ($4::boolean or batch.location_id = any($3::uuid[]))
        and item.ordinal > $5

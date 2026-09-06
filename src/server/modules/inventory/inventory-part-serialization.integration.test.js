@@ -5,6 +5,8 @@ import {
   createPartSerializedUnits,
   getPartLocationSerialization,
 } from "../../db/repositories/inventory-part-serialization.repo.js";
+import { listAllInventoryLabelBatchItems } from "../../db/repositories/inventory-labels.repo.js";
+import { listAvailableSerializedUnitsForCreate } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 import { getSerializedInventoryUnit } from "../../db/repositories/inventory-receipts.repo.js";
 import { listLocalInventoryStock } from "../../db/repositories/local-inventory.repo.js";
 import { closePool, query } from "../../db/pool.js";
@@ -97,8 +99,24 @@ test("real PostgreSQL keeps Odoo reference unchanged while serialized intake add
     assert.equal(detail.location.localQuantityOnHand, 2);
     assert.equal(detail.location.odooQuantityOnHand, 4);
     assert.equal(detail.units.length, 2);
-    assert.ok(detail.units.every((unit) => unit.serialNumber.startsWith("WG-S-") && unit.status === "in_stock"));
+    assert.ok(detail.units.every((unit) => unit.serialNumber.startsWith(`WG-SERIAL-${suffix.slice(0, 17).toUpperCase()}`) && unit.status === "in_stock"));
     assert.ok(detail.units.every((unit) => unit.conditionCode === "new"));
+
+    const candidates = await listAvailableSerializedUnitsForCreate({
+      companyId,
+      locationId,
+      catalogPartId: partId,
+      limit: 10,
+    });
+    assert.equal(candidates.kind, "found");
+    assert.ok(candidates.units.every((unit) => unit.conditionCode === "new"));
+
+    const labelItems = await listAllInventoryLabelBatchItems({
+      batchId: created.batch.id,
+      companyIds: [companyId],
+      isAdmin: true,
+    });
+    assert.ok(labelItems.every((item) => item.conditionCode === "new" && item.status === "in_stock"));
 
     const unitDetail = await getSerializedInventoryUnit({
       unitId: detail.units[0].id,

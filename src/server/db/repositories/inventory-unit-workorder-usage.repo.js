@@ -45,6 +45,7 @@ function publicCandidate(row) {
     id: row.id,
     serialNumber: row.serial_number,
     status: row.status,
+    conditionCode: row.condition_code || "unknown",
     catalogPartId: row.catalog_part_id,
     partNumber: row.part_number,
     description: row.description || "",
@@ -89,7 +90,7 @@ export async function resolveWorkorderSerializedUnit({
   locationId,
 }) {
   const result = await query(
-    `select unit.id, unit.serial_number, unit.status, unit.location_id, unit.updated_at,
+    `select unit.id, unit.serial_number, unit.status, unit.condition_code, unit.location_id, unit.updated_at,
             line.catalog_part_id, line.part_number, line.description, line.uom_code,
             receipt.provider, location.name as location_name
      from operational_workorders workorder
@@ -197,11 +198,11 @@ export async function listAvailableSerializedUnitsForWorkorder({
             selected_part.uom_code as selected_part_uom_code,
             selected_part.location_id, selected_part.location_name,
             selected_part.uom_category, selected_part.decimal_scale,
-            child.id, child.serial_number, child.status, child.updated_at,
+            child.id, child.serial_number, child.status, child.condition_code, child.updated_at,
             child.catalog_part_id, child.part_number, child.description, child.uom_code
      from selected_part
      left join lateral (
-       select unit.id, unit.serial_number, unit.status, unit.updated_at,
+       select unit.id, unit.serial_number, unit.status, unit.condition_code, unit.updated_at,
               line.catalog_part_id, line.part_number, line.description, line.uom_code
        from inventory_serialized_units unit
        join inventory_receipt_lines line
@@ -241,6 +242,7 @@ export async function listAvailableSerializedUnitsForWorkorder({
       id: row.id,
       serialNumber: row.serial_number,
       status: row.status,
+      conditionCode: row.condition_code || "unknown",
       catalogPartId: row.catalog_part_id,
       partNumber: row.part_number,
       description: row.description || "",
@@ -291,11 +293,11 @@ export async function listAvailableSerializedUnitsForCreate({
             selected_part.location_id, selected_part.location_name,
             selected_part.uom_category, selected_part.decimal_scale,
             selected_part.serialization_required,
-            child.id, child.serial_number, child.status, child.updated_at,
+            child.id, child.serial_number, child.status, child.condition_code, child.updated_at,
             child.catalog_part_id, child.part_number, child.description, child.uom_code
      from selected_part
      left join lateral (
-       select unit.id, unit.serial_number, unit.status, unit.updated_at,
+       select unit.id, unit.serial_number, unit.status, unit.condition_code, unit.updated_at,
               line.catalog_part_id, line.part_number, line.description, line.uom_code
        from inventory_serialized_units unit
        join inventory_receipt_lines line
@@ -336,6 +338,7 @@ export async function listAvailableSerializedUnitsForCreate({
       id: row.id,
       serialNumber: row.serial_number,
       status: row.status,
+      conditionCode: row.condition_code || "unknown",
       catalogPartId: row.catalog_part_id,
       partNumber: row.part_number,
       description: row.description || "",
