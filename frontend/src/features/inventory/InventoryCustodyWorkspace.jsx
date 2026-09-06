@@ -26,7 +26,7 @@ import {
 const QUEUES = [
   ["awaiting_handoff", "Awaiting handoff"],
   ["needs_inspection", "Needs inspection"],
-  ["repair", "Repair/refurbish"],
+  ["repair_refurbish", "Repair/refurbish"],
   ["core_returns", "Core returns"],
   ["scrap_approval", "Scrap approval"],
   ["quarantine", "Quarantine"],

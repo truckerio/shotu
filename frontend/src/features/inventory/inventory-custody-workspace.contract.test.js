@@ -12,6 +12,7 @@ test("custody inventory reads server-derived stock and every queue through scope
   assert.match(source, /Awaiting handoff/);
   assert.match(source, /Needs inspection/);
   assert.match(source, /Repair\/refurbish/);
+  assert.match(source, /\["repair_refurbish", "Repair\/refurbish"\]/);
   assert.match(source, /Core returns/);
   assert.match(source, /Scrap approval/);
   assert.match(source, /Quarantine/);
