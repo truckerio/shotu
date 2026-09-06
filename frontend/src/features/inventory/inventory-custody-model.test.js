@@ -37,6 +37,7 @@ test("one return command carries only exact identity, outcome, and optional note
 });
 
 test("release blocker explains missing reuse approval and routes each role to a usable next step", () => {
+  assert.equal(custodyReleaseBlocker(null, { release: true }), null);
   const held = { status: "hold", reuseAllowed: null, partNumber: "Tire", description: "295/75R22.5" };
   const admin = custodyReleaseBlocker(held, { release: true, configure: true });
   assert.equal(admin.title, "Release blocked: reuse approval needed");

@@ -12,14 +12,15 @@ export function custodyRoute(value) {
 }
 
 export function custodyReleaseBlocker(caseItem = {}, capabilities = {}) {
-  const status = caseItem.workflowStatus || caseItem.status;
+  const item = caseItem || {};
+  const status = item.workflowStatus || item.status;
   if (
     !["received_pending_review", "hold", "repair_complete_pending_review"].includes(status) ||
     !capabilities.release ||
-    caseItem.reuseAllowed === true
+    item.reuseAllowed === true
   )
     return null;
-  const part = [caseItem.partNumber, caseItem.description]
+  const part = [item.partNumber, item.description]
     .filter(Boolean)
     .join(" · ") || "This part";
   return {
