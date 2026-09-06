@@ -110,7 +110,7 @@ reporting, cores, or a dedicated Parts role.
 | Company part catalog | IMPLEMENTED | `parts_catalog`; `part_reference_numbers`; catalog/inventory repositories | Company-scoped part search and audited Office/Admin editing. Odoo-managed identity fields remain provider-owned. |
 | Odoo location discovery/mapping | IMPLEMENTED | `src/server/db/migrations/042_odoo_inventory_sync.sql`; `odoo.admin.service.js` | Admin maps Odoo internal locations to app locations. |
 | Odoo product mapping | IMPLEMENTED | migrations `043` and `059` | Stable `product.product` mapping; explicit workorder-line choice when duplicate Odoo products map to one catalog part. |
-| Odoo inventory read sync | IMPLEMENTED, AGGREGATE ONLY | `syncOdooPartsAndInventory`; `importOdooInventory` | Reads active products and internal `stock.quant` balances, then projects aggregated availability locally. |
+| Odoo catalog read sync | IMPLEMENTED | `syncOdooPartsAndInventory`; `importOdooInventory` | Reads active products, reconciles only explicitly mapped inactive products, and upserts catalog/product mappings without changing local stock. |
 | Lot/serial/package projection | PARTIAL, LOCAL AND ODOO RECEIPTS VERIFIED | `inventory_serialized_units`; migrations `064` and `066`; local and Odoo receipt repositories | Whole count/package local receipts and Odoo serialized receipts preserve exact unit identities in one canonical table. Measured local quantities remain aggregate; general lot/package lifecycle is still absent. |
 | Mechanic part request | IMPLEMENTED | mechanic parts route, `MechanicPartRequestForm.jsx` | Mechanic submits structured request inside a workorder. |
 | Office review and supply recommendation | PARTIAL, LOCAL VERIFIED | `part-fulfillment.service.js`; `OfficeRequestCard.jsx`; `GetPartsFlow.jsx` | Office can ask the backend for a location-scoped local-stock recommendation and approve that recommendation. Approval is audit evidence only; it does not reserve or move stock. Legacy aggregate allocation remains separate. |
@@ -179,19 +179,24 @@ Admin route:
 ```text
 POST /api/integrations/odoo/sync
   -> syncOdooPartsAndInventory(companyId)
-  -> reads product.product
-  -> reads internal stock.quant
-  -> importOdooInventory(companyId, { products, quants })
+  -> reads active product.product records
+  -> reads inactive state only for existing Odoo product mappings
+  -> importOdooInventory(companyId, { products })
   -> upserts catalog/product mappings
-  -> aggregates mapped balances into inventory_items
-  -> separately imports service history
+  -> queues durable odoo/service_history_sync integration job
+  -> returns catalog success without waiting for history reconciliation
+
+Integration worker:
+
+  odoo/service_history_sync
+  -> syncOdooServiceHistory(companyId)
+  -> incrementally imports or periodically reconciles service history
+  -> records success/failure state and uses bounded job retries
 ```
 
 Current product fields: ID, SKU/default code, barcode, name, category, UOM, and provider update time.
 
-Current quant fields: quant ID, product, internal location, quantity, reserved quantity, and provider update time.
-
-Aggregation collapses provider stock into catalog part + mapped app location + UOM. Quant ID is fetched but is not preserved or used as physical-item identity. Lot/serial/package identity and exact Odoo bin remain unavailable.
+The catalog sync does not read `stock.quant`, alter local balances, or infer inactivity from a product missing from the active-product response.
 
 All `/api/integrations/*` routes require `integration:admin`; only Admin currently receives that permission.
 

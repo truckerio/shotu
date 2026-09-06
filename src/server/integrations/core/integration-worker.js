@@ -1,5 +1,6 @@
 import { runNextIntegrationJob } from "./integration-jobs.js";
 import "../samsara/samsara.adapter.js";
+import "../odoo/odoo.adapter.js";
 
 const DEFAULT_POLL_MS = 5_000;
 let timer = null;

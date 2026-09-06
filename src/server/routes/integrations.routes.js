@@ -158,7 +158,7 @@ export async function handleIntegrationsApi(req, res, url, helpers) {
 
   if (req.method === "POST" && url.pathname === "/api/integrations/odoo/sync") {
     const companyId = selectedCompanyId(url, requestContext);
-    sendJson(res, 200, await syncOdooPartsAndInventory(companyId));
+    sendJson(res, 200, await syncOdooPartsAndInventory(companyId, { requestId: req.requestId }));
     return true;
   }
 

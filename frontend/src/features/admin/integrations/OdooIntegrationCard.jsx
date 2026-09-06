@@ -120,9 +120,9 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
         setMappingData(result);
         setNotice({ error: "", message: "Odoo locations refreshed. New locations are waiting for a match." });
       } else if (name === "sync") {
-        const historySummary = result.historyWarning
-          ? result.historyWarning
-          : `Imported ${result.historyOrderCount || 0} service orders and ${result.historyLineCount || 0} ordered history lines.`;
+        const historySummary = result.historySyncStatus === "completed"
+          ? "Service history was already synchronized recently."
+          : "Service history is syncing in the background.";
         setNotice({ error: "", message: `Imported ${result.changedCount} catalog records. ${historySummary}` });
       } else {
         setNotice({ error: "", message: "Odoo.sh connection verified." });

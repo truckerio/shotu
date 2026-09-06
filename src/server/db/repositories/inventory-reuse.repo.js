@@ -399,7 +399,7 @@ export async function readInventoryReuse(input) {
         and (w.status in ('accepted','in_progress') or ($4::text in ('office','admin') and w.status='open'))
         and ($4::text <> 'mechanic' or exists(select 1 from workorder_mechanic_assignments a where a.workorder_id=w.id and a.mechanic_user_id=$5 and a.active))
       order by w.created_at desc,w.id limit 100`,[input.companyId,input.locationId,input.assetId,access.role,input.actorId]);
-    return {installedParts:installed.rows.map(publicReuseCase),removalWorkorders:workorders.rows.map(publicReuseCase),cases:cases.rows.map(publicReuseCase),capabilities:access.capabilities,locationId:input.locationId,
+    return {installedParts:installed.rows.map(publicReuseCase),removalWorkorders:workorders.rows.map(publicReuseCase),cases:cases.rows.map(publicReuseCase),capabilities:access.capabilities,canCreateRemovalWorkorder:["office","admin"].includes(access.role),locationId:input.locationId,
       possiblyTruncated:installed.rows.length===100 || workorders.rows.length===100 || cases.rows.length===100};
   });
 }

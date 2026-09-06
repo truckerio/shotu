@@ -24,6 +24,7 @@ import {
   readServiceHistorySyncState,
 } from "../../db/repositories/service-history.repo.js";
 import { IntegrationHttpError } from "../core/integration-errors.js";
+import { enqueueIntegrationJob } from "../core/integration-platform.repo.js";
 
 const HISTORY_PAGE_SIZE = 500;
 const ORDER_ID_BATCH_SIZE = 200;
@@ -35,6 +36,7 @@ const MAX_HISTORY_PRODUCTS = 100_000;
 const ELIGIBLE_HISTORY_STATES = new Set(["sale", "done"]);
 const ODOO_SERVICE_ORDER_FIELD = "is_service_order";
 const HISTORY_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1_000;
+const HISTORY_JOB_DEDUPE_WINDOW_MS = 5 * 60 * 1_000;
 
 async function supportedFields(client, model, candidates) {
   const definitions = await client.execute(model, "fields_get", [], { attributes: ["type", "relation"] });
@@ -314,12 +316,8 @@ export async function configureOdooOutboundLaborProduct(companyId, input, actor)
   return listOdooOutboundAdminReadiness(companyId);
 }
 
-export async function syncOdooPartsAndInventory(companyId) {
+export async function syncOdooServiceHistory(companyId) {
   const client = await configuredClient(companyId);
-  await discoverOdooLocations(companyId);
-  const mappedExternalIds = await listOdooMappedProductExternalIds(companyId);
-  const products = await readOdooCatalogProducts(client, mappedExternalIds);
-  const inventoryResult = await importOdooInventory(companyId, { products });
   const syncStartedAt = new Date();
   try {
     await markServiceHistorySyncAttempted(companyId, "odoo", syncStartedAt);
@@ -337,22 +335,40 @@ export async function syncOdooPartsAndInventory(companyId) {
       providerWatermark: syncStartedAt,
       reconciled: reconcile,
     });
-    return { ...inventoryResult, ...historyResult, historyWarning: "" };
-  } catch {
+    return historyResult;
+  } catch (error) {
     await markServiceHistorySyncFailed(companyId, "odoo", {
       attemptedAt: syncStartedAt,
       code: "ODOO_SERVICE_HISTORY_UNAVAILABLE",
       message: "Odoo service history could not be synchronized.",
     });
-    return {
-      ...inventoryResult,
-      historyOrderCount: 0,
-      historyLineCount: 0,
-      historyContextCount: 0,
-      historyRemovedCount: 0,
-      historyWarning: "Part catalog synced, but service history could not be read. Verify read-only Sales permissions in Odoo.",
-    };
+    const historyError = new Error("Odoo service history could not be synchronized.", { cause: error });
+    historyError.code = "ODOO_SERVICE_HISTORY_UNAVAILABLE";
+    throw historyError;
   }
+}
+
+export async function syncOdooPartsAndInventory(companyId, { requestId = null } = {}) {
+  const client = await configuredClient(companyId);
+  await discoverOdooLocations(companyId);
+  const mappedExternalIds = await listOdooMappedProductExternalIds(companyId);
+  const products = await readOdooCatalogProducts(client, mappedExternalIds);
+  const inventoryResult = await importOdooInventory(companyId, { products });
+  const historyJob = await enqueueIntegrationJob({
+    companyId,
+    provider: "odoo",
+    jobType: "service_history_sync",
+    payload: {},
+    idempotencyKey: `odoo:service-history:${companyId}:${Math.floor(Date.now() / HISTORY_JOB_DEDUPE_WINDOW_MS)}`,
+    requestId,
+    maxAttempts: 3,
+  });
+  return {
+    ...inventoryResult,
+    historyQueued: historyJob.status !== "completed",
+    historySyncStatus: historyJob.status,
+    historyJobId: historyJob.id,
+  };
 }
 
 export { listOdooLocationMappings, odooAdminStatus, setOdooLocationMapping };

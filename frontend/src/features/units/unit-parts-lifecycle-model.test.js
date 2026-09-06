@@ -26,15 +26,24 @@ test("pending installation may be removed on its original active workorder, unli
 
 test("removal derives safe workorder context and exposes creation only as an exception", () => {
   const surface = readFileSync(new URL("./UnitPartsLifecycle.jsx", import.meta.url), "utf8");
-  assert.match(surface, /createWorkorderSearch\(\)/);
-  assert.match(surface, /Office or Admin can create the removal workorder with this\s+removal/);
-  assert.match(surface, /createWorkorderSearch\(\)/);
+  const workspace = readFileSync(new URL("./UnitsWorkspace.jsx", import.meta.url), "utf8");
+  assert.match(surface, /unit-parts-lifecycle--focused/);
+  assert.match(surface, /removalFormRef\.current\?\.scrollIntoView\(\{ block: "start" \}\)/);
+  assert.match(surface, /onModeChange\?\.\(active\?\.kind === "remove" \? "remove" : ""\)/);
+  assert.match(workspace, /selected && !detailMode/);
+  assert.match(workspace, /className=\{detailMode \? "unit-parts-focused-section" : ""\}/);
+  assert.match(surface, /Workorder will be created automatically/);
+  assert.match(surface, /Ask Office or Admin to assign an active workorder/);
+  assert.doesNotMatch(surface, /Request workorder/);
   assert.match(surface, /intendedRoute/);
   assert.match(surface, /<option value="inspect_for_reuse">Inspect for reuse<\/option>/);
   assert.doesNotMatch(surface, /<option value="inspect_reuse">/);
   assert.match(surface, /expectedVersion: item\.custodyVersion/);
   assert.match(surface, /eligibleWorkorders\.length === 1 \? eligibleWorkorders\[0\]\.id : ""/);
   assert.match(surface, /\.\.\.\(removalWorkorderId\s+\? \{ removalWorkorderId \}/);
+  assert.match(surface, /!data\?\.canCreateRemovalWorkorder/);
+  assert.match(surface, />Remove part</);
+  assert.match(surface, /<summary>Add note<\/summary>/);
 });
 
 test("unit lifecycle never renders stale parts or dereferences capabilities before its scope loads", () => {

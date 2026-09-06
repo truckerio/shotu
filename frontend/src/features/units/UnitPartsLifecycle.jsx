@@ -3,7 +3,6 @@ import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { api } from "../../lib/api.js";
 import {
-  createWorkorderSearch,
   workorderDetailSearch,
 } from "../../app/routes/route-state.js";
 import {
@@ -61,6 +60,7 @@ export function UnitPartsLifecycle({
   initialWorkorderId = "",
   onChanged,
   onBusyChange,
+  onModeChange,
 }) {
   const scope = reuseScope(unit);
   const [data, setData] = useState(null);
@@ -97,6 +97,7 @@ export function UnitPartsLifecycle({
   const loadControllerRef = useRef(null);
   const loadGenerationRef = useRef(0);
   const restoredRecoveryKeysRef = useRef(new Set());
+  const removalFormRef = useRef(null);
 
   const hasScope = Boolean(scope.companyId && scope.locationId);
   const recoveryScope = { actorId, ...scope, assetId: unit?.id || "" };
@@ -207,6 +208,19 @@ export function UnitPartsLifecycle({
   useEffect(() => {
     onBusyChange?.(busy || Boolean(pendingRequest) || needsReconcile);
   }, [busy, pendingRequest, needsReconcile, onBusyChange]);
+
+  useEffect(() => {
+    onModeChange?.(active?.kind === "remove" ? "remove" : "");
+    return () => onModeChange?.("");
+  }, [active?.kind, onModeChange]);
+
+  useEffect(() => {
+    if (active?.kind !== "remove") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      removalFormRef.current?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [active?.kind, active?.item?.usageId]);
 
   function openForm(kind, item) {
     if (busy || pendingRequest) return;
@@ -458,7 +472,11 @@ export function UnitPartsLifecycle({
       ? eligibleRemovalWorkorders(active.item, removalWorkorders)
       : [];
   return (
-    <div className="unit-parts-lifecycle">
+    <div
+      className={`unit-parts-lifecycle${
+        active?.kind === "remove" ? " unit-parts-lifecycle--focused" : ""
+      }`}
+    >
       {error ? (
         <div className="unit-parts-error" role="alert">
           <span>{error}</span>
@@ -775,24 +793,27 @@ export function UnitPartsLifecycle({
         )}
       </section>
       {active?.kind === "remove" ? (
-        <section className="unit-parts-form" aria-label="Remove tracked part">
-          <h4>Remove part</h4>
-          <p>
-            {eligibleRemovalWorkordersForActive.length === 1 ? (
-              <>
-                Workorder{" "}
-                <WorkorderLink
-                  workorder={eligibleRemovalWorkordersForActive[0]}
-                />{" "}
-                will be used automatically.
-              </>
-            ) : (
-              <>
-                The original installation is{" "}
-                <WorkorderLink workorder={active.item} />.
-              </>
-            )}
-          </p>
+        <section
+          className="unit-parts-form unit-parts-removal-form"
+          aria-label="Remove tracked part"
+          ref={removalFormRef}
+        >
+          <div className="unit-parts-removal-heading">
+            <div>
+              <h4>Remove part</h4>
+              <strong>{partLabel(active.item)}</strong>
+              <span>
+                Installed on <WorkorderLink workorder={active.item} />
+              </span>
+            </div>
+            <Button
+              type="button"
+              disabled={busy || Boolean(pendingRequest)}
+              onClick={closeForm}
+            >
+              Back
+            </Button>
+          </div>
           {eligibleRemovalWorkordersForActive.length > 1 ? (
             <label>
               Removal workorder
@@ -821,17 +842,13 @@ export function UnitPartsLifecycle({
           ) : null}
           {!eligibleRemovalWorkordersForActive.length ? (
             <p className="unit-parts-notice">
-              Office or Admin can create the removal workorder with this
-              removal. Mechanics need an assigned active workorder.{" "}
-              {!pendingRequest ? (
-                <a className="button secondary" href={createWorkorderSearch()}>
-                  Request workorder
-                </a>
-              ) : null}
+              {data?.canCreateRemovalWorkorder
+                ? "Workorder will be created automatically."
+                : "Ask Office or Admin to assign an active workorder before removing this part."}
             </p>
           ) : null}
           <label>
-            Why was it removed?
+            Reason
             <Dropdown
               aria-label="Removal reason"
               disabled={busy || Boolean(pendingRequest)}
@@ -851,7 +868,7 @@ export function UnitPartsLifecycle({
             </Dropdown>
           </label>
           <label>
-            Where should it go?
+            Next step
             <Dropdown
               aria-label="Intended route"
               disabled={busy || Boolean(pendingRequest)}
@@ -871,55 +888,56 @@ export function UnitPartsLifecycle({
             </Dropdown>
           </label>
           <label>
-            Note <span>(optional)</span>
-            <textarea
+            Owner
+            <Dropdown
+              aria-label="Part ownership"
               disabled={busy || Boolean(pendingRequest)}
-              rows="2"
-              value={draft.note}
+              value={draft.ownership}
               onChange={(event) =>
-                setDraft((value) => ({ ...value, note: event.target.value }))
+                setDraft((value) => ({
+                  ...value,
+                  ownership: event.target.value,
+                }))
               }
-            />
+            >
+              <option value="company">Company</option>
+              <option value="customer">Customer</option>
+              <option value="unknown">Not sure</option>
+            </Dropdown>
           </label>
-          <>
-              <label>
-                Ownership
-                <Dropdown
-                  aria-label="Part ownership"
-                  disabled={busy || Boolean(pendingRequest)}
-                  value={draft.ownership}
-                  onChange={(event) =>
-                    setDraft((value) => ({
-                      ...value,
-                      ownership: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Choose ownership</option>
-                  <option value="company">Company</option>
-                  <option value="customer">Customer</option>
-                  <option value="unknown">Unknown</option>
-                </Dropdown>
-              </label>
-              {draft.ownership === "company" ? (
-                <label>
-                  Ownership evidence
-                  <input
-                    disabled={busy || Boolean(pendingRequest)}
-                    value={draft.ownershipEvidence}
-                    onChange={(event) =>
-                      setDraft((value) => ({
-                        ...value,
-                        ownershipEvidence: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              ) : null}
-          </>
+          {draft.ownership === "company" ? (
+            <label>
+              Ownership proof
+              <input
+                disabled={busy || Boolean(pendingRequest)}
+                value={draft.ownershipEvidence}
+                onChange={(event) =>
+                  setDraft((value) => ({
+                    ...value,
+                    ownershipEvidence: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          ) : null}
+          <details className="unit-parts-optional">
+            <summary>Add note</summary>
+            <label>
+              Note
+              <textarea
+                disabled={busy || Boolean(pendingRequest)}
+                rows="2"
+                value={draft.note}
+                onChange={(event) =>
+                  setDraft((value) => ({ ...value, note: event.target.value }))
+                }
+              />
+            </label>
+          </details>
           <div>
             <Button
               type="button"
+              variant="primary"
               onClick={remove}
               disabled={
                 busy ||
@@ -927,19 +945,14 @@ export function UnitPartsLifecycle({
                 !draft.reason ||
                 (eligibleRemovalWorkordersForActive.length > 1 &&
                   !active.item.removalWorkorderId) ||
+                (!eligibleRemovalWorkordersForActive.length &&
+                  !data?.canCreateRemovalWorkorder) ||
                 !draft.ownership ||
                 (draft.ownership === "company" &&
                   !draft.ownershipEvidence.trim())
               }
             >
-              {busy ? "Saving…" : "Confirm removal"}
-            </Button>
-            <Button
-              type="button"
-              disabled={busy || Boolean(pendingRequest)}
-              onClick={closeForm}
-            >
-              Cancel
+              {busy ? "Removing…" : "Remove part"}
             </Button>
           </div>
         </section>

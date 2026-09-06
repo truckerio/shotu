@@ -26,6 +26,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
   const [retry, setRetry] = useState(0);
   const [selected, setSelected] = useState(null);
   const [detailBusy, setDetailBusy] = useState(false);
+  const [detailMode, setDetailMode] = useState("");
   const cursor = cursorStack.at(-1);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
       setCursorStack([""]);
       setSelected(null);
       setDetailBusy(false);
+      setDetailMode("");
     }
     window.addEventListener("popstate", restoreFilters);
     return () => window.removeEventListener("popstate", restoreFilters);
@@ -59,6 +61,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
     setLoading(true);
     setSelected(null);
     setDetailBusy(false);
+    setDetailMode("");
     window.history.replaceState(window.history.state, "", unitsFilterUrl(window.location.href, next));
   }
 
@@ -73,7 +76,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
       {error ? <div className="units-feedback" role="alert"><p>{error}</p><Button type="button" onClick={() => setRetry((value) => value + 1)}>Try again</Button></div> : null}
       {!loading && !error && !page.items.length ? <p className="units-feedback">{filters.q || filters.type ? "No matching units. Try another number or clear the filters." : "No units are available in your access scope."}</p> : null}
       {!loading && !error && page.items.length > 0 ? <OperationalCollectionTable columns={columns} ariaLabel="Trucks and trailers">
-        {page.items.map((unit) => <OperationalCollectionRow key={unit.id} onAction={() => { setDetailBusy(false); setSelected(unit); }} ariaLabel={`Open ${unitTitle(unit)}`}>
+        {page.items.map((unit) => <OperationalCollectionRow key={unit.id} onAction={() => { setDetailBusy(false); setDetailMode(""); setSelected(unit); }} ariaLabel={`Open ${unitTitle(unit)}`}>
           <OperationalCollectionCell label="Unit"><strong>{unit.unitNo || unit.name || "Unnumbered"}</strong></OperationalCollectionCell>
           <OperationalCollectionCell label="Type">{unit.unitType || "—"}</OperationalCollectionCell>
           <OperationalCollectionCell label="Vehicle">{[unit.year, unit.make, unit.model].filter(Boolean).join(" ") || "—"}</OperationalCollectionCell>
@@ -85,11 +88,11 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
         <span>Page {cursorStack.length}</span>
         <Button type="button" disabled={loading || Boolean(error) || !page.nextCursor} onClick={() => { setLoading(true); setCursorStack((stack) => [...stack, page.nextCursor]); }}>Next</Button>
       </nav>
-      <SecondaryDetailPanel open={Boolean(selected)} dismissable={!detailBusy} closeDisabled={detailBusy} onOpenChange={(open) => { if (!open && !detailBusy) setSelected(null); }} onClose={() => { if (!detailBusy) setSelected(null); }} title={selected ? unitTitle(selected) : "Unit details"} eyebrow="Unit">
-        {selected ? <SecondaryDetailSection title="Overview"><dl className="units-overview">
+      <SecondaryDetailPanel open={Boolean(selected)} dismissable={!detailBusy} closeDisabled={detailBusy} onOpenChange={(open) => { if (!open && !detailBusy) { setSelected(null); setDetailMode(""); } }} onClose={() => { if (!detailBusy) { setSelected(null); setDetailMode(""); } }} title={selected ? unitTitle(selected) : "Unit details"} eyebrow="Unit">
+        {selected && !detailMode ? <SecondaryDetailSection title="Overview"><dl className="units-overview">
           {[["Unit number", selected.unitNo], ["Type", selected.unitType], ["Name", selected.name], ["VIN", selected.vin], ["License plate", selected.licensePlate], ["Make", selected.make], ["Model", selected.model], ["Year", selected.year]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not recorded"}</dd></div>)}
         </dl></SecondaryDetailSection> : null}
-        {selected ? <SecondaryDetailSection title="Parts custody" action={<SectionHelpDisclosure label="Parts custody help"><p>Removal records custody; it does not make stock available.</p><p>Receive the physical part, then inspect it before release.</p><p>Document company ownership before release. Unknown or customer-owned parts can be held.</p></SectionHelpDisclosure>}><UnitPartsLifecycle unit={selected} actorId={actorId} onBusyChange={setDetailBusy} /></SecondaryDetailSection> : null}
+        {selected ? <SecondaryDetailSection className={detailMode ? "unit-parts-focused-section" : ""} title="Parts custody" action={!detailMode ? <SectionHelpDisclosure label="Parts custody help"><p>Removal records custody; it does not make stock available.</p><p>Receive the physical part, then inspect it before release.</p><p>Document company ownership before release. Unknown or customer-owned parts can be held.</p></SectionHelpDisclosure> : null}><UnitPartsLifecycle unit={selected} actorId={actorId} onBusyChange={setDetailBusy} onModeChange={setDetailMode} /></SecondaryDetailSection> : null}
       </SecondaryDetailPanel>
     </OperationalCollectionPage>
   );

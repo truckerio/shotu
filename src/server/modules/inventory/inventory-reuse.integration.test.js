@@ -162,6 +162,7 @@ test("PostgreSQL office/admin can remove against a newly created open workorder;
       await assert.rejects(readInventoryReuse({...base,view:"asset",assetId:f.assetId}),{code:"INVENTORY_REUSE_FORBIDDEN"});
       await query("update user_company_memberships set role=$3 where company_id=$1 and user_id=$2",[f.companyId,f.removerId,role]);
       const view=await readInventoryReuse({...base,view:"asset",assetId:f.assetId});
+      assert.equal(view.canCreateRemovalWorkorder,true);
       assert.ok(view.removalWorkorders.some((w)=>w.id===f.removalWorkorderId && w.status==="open"));
       assert.equal((await mutateInventoryReuse(removal)).case.status,"awaiting_handoff");
     } finally {await f.cleanup();}

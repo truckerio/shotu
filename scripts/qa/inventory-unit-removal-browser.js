@@ -49,14 +49,22 @@ async function runViewport({ ready, config, width, logger }) {
     await page.getByRole("row", { name: new RegExp(`Open .*${unitNo}`, "i") }).click();
     await page.getByRole("button", { name: "Remove", exact: true }).click();
     await page.getByRole("region", { name: "Remove tracked part" }).waitFor({ state: "visible" });
+    assert.equal(await page.getByRole("heading", { name: "Tracked installed parts" }).isVisible(), false, "Removal must hide unrelated custody sections.");
+    assert.equal(await page.getByLabel("Note", { exact: true }).isVisible(), false, "Optional note must stay collapsed.");
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    assert.equal(await page.getByRole("heading", { name: "Overview" }).isVisible(), true, "Back must restore unit context.");
+    await page.getByRole("button", { name: "Remove", exact: true }).click();
     await page.getByRole("button", { name: "Removal reason" }).click();
     await page.getByRole("option", { name: "Failed" }).click();
     await page.getByRole("button", { name: "Intended route" }).click();
     await page.getByRole("option", { name: "Inspect for reuse" }).click();
     const ownership = page.getByRole("button", { name: "Part ownership" });
-    if (await ownership.count()) { await ownership.click(); await page.getByRole("option", { name: "Company" }).click(); await page.getByLabel("Ownership evidence").fill("Fixture company stock"); }
+    if (await ownership.count()) { await ownership.click(); await page.getByRole("option", { name: "Company" }).click(); await page.getByLabel("Ownership proof").fill("Fixture company stock"); }
+    const primary = page.getByRole("button", { name: "Remove part", exact: true });
+    const primaryBox = await primary.boundingBox();
+    assert.ok(primaryBox && primaryBox.y + primaryBox.height <= 844, `Primary removal action is below the first viewport at ${width}px: ${JSON.stringify(primaryBox)}.`);
     const response = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/api/inventory-reuse/remove"));
-    await page.getByRole("button", { name: "Confirm removal" }).click();
+    await primary.click();
     const saved = await response;
     assert.equal(saved.ok(), true, await saved.text());
     assert.equal((await saved.json()).case.status, "awaiting_handoff");

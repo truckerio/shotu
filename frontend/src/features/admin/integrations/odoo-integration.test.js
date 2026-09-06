@@ -16,8 +16,8 @@ test("Odoo settings separates inbound stock locations from explicit outbound set
   assert.doesNotMatch(source, /Sync parts, inventory & history/);
   assert.match(source, /Imported \$\{result\.changedCount\} catalog records/);
   assert.doesNotMatch(source, /catalog and inventory records/);
-  assert.match(source, /historyOrderCount/);
-  assert.match(source, /historyWarning/);
+  assert.match(source, /Service history is syncing in the background/);
+  assert.match(source, /historySyncStatus === "completed"/);
   assert.match(source, /least-privilege Odoo user/);
   assert.match(source, /create\/write access to draft Sales service orders/);
   assert.match(source, /Odoo outbound setup/);

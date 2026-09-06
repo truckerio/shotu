@@ -399,17 +399,34 @@ test("Odoo history defensively excludes ordinary sales from a mixed provider res
   assert.deepEqual(result.inactiveOrderIds, []);
 });
 
-test("inventory sync isolates optional service-history permission failures", async () => {
+test("catalog sync durably queues service history without waiting for its provider reads", async () => {
   const source = await readFile(new URL("./odoo.admin.service.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /searchReadAll\("stock\.quant"/);
   assert.match(source, /searchReadAll\("product\.product"/);
-  assert.match(source, /const inventoryResult = await importOdooInventory[\s\S]*try \{[\s\S]*readOdooServiceHistory/);
-  assert.match(source, /catch \{[\s\S]*\.\.\.inventoryResult[\s\S]*historyWarning:/);
-  assert.match(source, /markServiceHistorySyncSucceeded[\s\S]*providerWatermark: syncStartedAt/);
+  const catalogSync = source.slice(source.indexOf("export async function syncOdooPartsAndInventory"));
+  assert.match(catalogSync, /const inventoryResult = await importOdooInventory[\s\S]*enqueueIntegrationJob/);
+  assert.match(catalogSync, /jobType: "service_history_sync"/);
+  assert.match(catalogSync, /idempotencyKey: `odoo:service-history:/);
+  assert.doesNotMatch(catalogSync, /readOdooServiceHistory/);
+  assert.match(source, /export async function syncOdooServiceHistory[\s\S]*markServiceHistorySyncSucceeded[\s\S]*providerWatermark: syncStartedAt/);
   assert.match(source, /const syncStartedAt = new Date\(\)[\s\S]*markServiceHistorySyncAttempted\(companyId, "odoo", syncStartedAt\)/);
-  assert.match(source, /catch \{[\s\S]*markServiceHistorySyncFailed[\s\S]*ODOO_SERVICE_HISTORY_UNAVAILABLE/);
+  assert.match(source, /catch \(error\) \{[\s\S]*markServiceHistorySyncFailed[\s\S]*ODOO_SERVICE_HISTORY_UNAVAILABLE/);
   assert.match(source, /markServiceHistorySyncFailed\(companyId, "odoo", \{[\s\S]*attemptedAt: syncStartedAt/);
+  assert.match(source, /historyError\.code = "ODOO_SERVICE_HISTORY_UNAVAILABLE"[\s\S]*throw historyError/);
   assert.match(source, /HISTORY_RECONCILE_INTERVAL_MS/);
+});
+
+test("Odoo history jobs are registered with the shared retry worker", async () => {
+  const [adapter, worker, routes] = await Promise.all([
+    readFile(new URL("./odoo.adapter.js", import.meta.url), "utf8"),
+    readFile(new URL("../core/integration-worker.js", import.meta.url), "utf8"),
+    readFile(new URL("../../routes/integrations.routes.js", import.meta.url), "utf8"),
+  ]);
+  assert.match(adapter, /provider: "odoo"/);
+  assert.match(adapter, /async service_history_sync\(job\)/);
+  assert.match(adapter, /syncOdooServiceHistory\(job\.company_id\)/);
+  assert.match(worker, /odoo\/odoo\.adapter\.js/);
+  assert.match(routes, /syncOdooPartsAndInventory\(companyId, \{ requestId: req\.requestId \}\)/);
 });
 
 test("Odoo commitment date remains scheduled and is never imported as completed", async () => {
