@@ -48,6 +48,19 @@ test("versioned receive requires an exact unit confirmation before mutation",asy
   await assert.rejects(commandInventoryReuse("receive",randomUUID(),{companyId,locationId,evidence:"seen",expectedVersion:1,idempotencyKey:"receive-versioned-1"},context,{...auth,mutate:async()=>{mutated=true;}}),{code:"INVENTORY_REUSE_EXACT_UNIT_REQUIRED"});
   assert.equal(mutated,false);
 });
+test("handoff detail clearing reaches the guarded correction command without becoming a holder transfer", async () => {
+  const unitId = randomUUID();
+  let captured;
+  await commandInventoryReuse("correct_location", null, {
+    companyId, locationId, unitId, custodyVersion: 4, expectedVersion: 4,
+    holderType: "handoff", binLocation: "", externalReference: "",
+    evidence: "Clear stale bin copied from an earlier custody record.", idempotencyKey: "handoff-clear-test",
+  }, context, { ...auth, mutate: async (input) => { captured = input; return { unitProjection: {} }; } });
+  assert.equal(captured.action, "correct_location");
+  assert.equal(captured.capability, "route");
+  assert.equal(captured.holderType, "handoff");
+  assert.equal(captured.binLocation, "");
+});
 test("terminal disposition rejects impossible calendar dates before mutation", async () => {
   let mutated = false;
   await assert.rejects(commandInventoryReuse("scrap", randomUUID(), {

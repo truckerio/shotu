@@ -191,7 +191,9 @@ export async function mutateInventoryReuse(input) {
       const current = unit.rows[0];
       if (!current) fail("INVENTORY_REUSE_NOT_FOUND","Exact inventory unit not found.",404);
       if (current.custody_version !== input.custodyVersion) changed();
-      if (current.status !== "in_stock" || current.custody_holder_type !== "inventory_location" || input.holderType !== "inventory_location") fail("INVENTORY_REUSE_LOCATION_CORRECTION_FORBIDDEN","Only an in-stock inventory-held exact unit may have its bin corrected.");
+      const stockBinCorrection = current.status === "in_stock" && current.custody_holder_type === "inventory_location" && input.holderType === "inventory_location";
+      const handoffDetailClear = current.status === "removed" && current.custody_holder_type === "handoff" && input.holderType === "handoff" && !input.binLocation && !input.externalReference;
+      if (!stockBinCorrection && !handoffDetailClear) fail("INVENTORY_REUSE_LOCATION_CORRECTION_FORBIDDEN","Only an in-stock inventory-held exact unit may have its bin corrected, or an awaiting-handoff unit may clear stale location detail.");
       await client.query(`update inventory_serialized_units set custody_bin_location=$3,custody_external_reference=null,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,input.unitId,input.binLocation]);
       await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,details) values($1,$2,'reuse_location_corrected',$3,$4::jsonb)`,[input.companyId,input.unitId,input.actorId,JSON.stringify({before:current,evidence:input.evidence})]);
       const result = publicReuseCase((await client.query(`select id,serial_number,status,condition_code,custody_holder_type,custody_location_id,custody_bin_location,custody_external_reference,custody_version from inventory_serialized_units where company_id=$1 and id=$2`,[input.companyId,input.unitId])).rows[0]);

@@ -57,6 +57,11 @@ const identity = (entry) =>
     .filter(Boolean)
     .join(" · ") || "Tracked part";
 const availableUnit = (unit) => unit?.status === "in_stock" && unit?.custodyHolderType === "inventory_location" && (["new", "serviceable_used", "refurbished"].includes(unit?.conditionCode) || (unit?.conditionCode === "unknown" && unit?.custodyLegacyAvailable === true));
+const hasStaleLocationDetail = (unit) =>
+  Boolean(unit?.custodyBinLocation || unit?.custodyExternalReference);
+const canCorrectLocationDetail = (unit) =>
+  (unit?.status === "in_stock" && unit?.custodyHolderType === "inventory_location") ||
+  (unit?.status === "removed" && unit?.custodyHolderType === "handoff" && hasStaleLocationDetail(unit));
 const custodyEventContext = (event) => {
   const details = event?.details || {};
   return [
@@ -453,7 +458,6 @@ export function InventoryCustodyWorkspace({
         custodyVersion: detail?.unit?.custodyVersion,
         holderType: draft.holderType,
         binLocation: draft.binLocation.trim(),
-        externalReference: draft.externalReference.trim(),
       });
     const request = {
       path:
@@ -940,83 +944,54 @@ export function InventoryCustodyWorkspace({
             </p>
           ) : null}
         </SecondaryDetailSection>
-      {!pendingRequest && detail?.unit && caps.route ? (
-          <SecondaryDetailSection title="Correct physical holder">
+      {!pendingRequest && detail?.unit && caps.route && canCorrectLocationDetail(detail.unit) ? (
+          <SecondaryDetailSection title="Correct location detail">
             {action !== "location-correction" ? (
               <div className="inventory-custody-actions">
                 <Button
                   type="button"
                   onClick={() => {
+                    const isHandoff = detail.unit.status === "removed" && detail.unit.custodyHolderType === "handoff";
                     setAction("location-correction");
                     setExactIdentityId(""); setDraft({
                       evidence: "",
-                      binLocation: detail.unit.custodyBinLocation || "",
+                      binLocation: isHandoff ? "" : detail.unit.custodyBinLocation || "",
                       route: "inspect_for_reuse",
                       handlerType: "internal",
                       handlerReference: "",
-                      externalReference:
-                        detail.unit.custodyExternalReference || "",
-                      holderType:
-                        detail.unit.custodyHolderType || "inventory_location",
+                      externalReference: "",
+                      holderType: detail.unit.custodyHolderType,
                       reason: "",
                     });
                   }}
                 >
-                  Correct holder
+                  {detail.unit.status === "removed" && detail.unit.custodyHolderType === "handoff"
+                    ? "Clear stale location detail"
+                    : "Correct bin"}
                 </Button>
               </div>
             ) : (
               <div className="inventory-custody-form">
-                <p>
-                  This corrects where the physical unit is held. It does not
-                  transfer the owning warehouse or change stock.
-                </p>
-                <label>
-                  Holder type
-                  <Dropdown
-                    aria-label="Correction holder type"
-                    value={draft.holderType}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        holderType: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="inventory_location">
-                      Inventory location
-                    </option>
-                    <option value="internal_repair">Internal repair</option>
-                    <option value="external_repair">External repair</option>
-                    <option value="core_vendor">Core vendor</option>
-                    <option value="scrap_area">Scrap area</option>
-                    <option value="unknown">Unknown</option>
-                  </Dropdown>
-                </label>
-                <label>
-                  Bin or shelf <span>(optional)</span>
-                  <input
-                    value={draft.binLocation}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        binLocation: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  External holder reference <span>(optional)</span>
-                  <input
-                    value={draft.externalReference}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        externalReference: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
+                {detail.unit.status === "removed" && detail.unit.custodyHolderType === "handoff" ? (
+                  <p>
+                    This clears stale bin or external-reference detail while
+                    preserving Handoff custody. It does not receive, route,
+                    release, or transfer this part.
+                  </p>
+                ) : (
+                  <label>
+                    Bin or shelf <span>(optional)</span>
+                    <input
+                      value={draft.binLocation}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          binLocation: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                )}
                 <label>
                   Correction evidence
                   <textarea

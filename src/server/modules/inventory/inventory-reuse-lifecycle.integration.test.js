@@ -66,6 +66,27 @@ test("PostgreSQL correction is versioned, replay-safe, scoped, and mechanic stoc
   } finally { await f.cleanup(); }
 });
 
+test("PostgreSQL handoff correction only clears stale details and preserves custody", { skip: !run }, async () => {
+  const f=await createInventoryReuseFixture(); const base={companyId:f.companyId,locationId:f.locationId};
+  try {
+    await configureInventoryReuse({...base,actorId:f.adminId,kind:"grant",userId:f.adminId,capabilities:["route"],reason:"handoff correction QA"});
+    const removed=(await mutateInventoryReuse({...base,action:"remove",capability:"remove",actorId:f.removerId,usageId:f.usageId,removalWorkorderId:f.removalWorkorderId,reason:"Remove for handoff QA",ownership:"company",ownershipEvidence:"Verified purchase",idempotencyKey:"handoff-remove-qa",requestHash:digest("handoff-remove-qa")})).case;
+    await query("update inventory_serialized_units set custody_bin_location='STALE-BIN',custody_external_reference='STALE-REF' where company_id=$1 and id=$2",[f.companyId,f.unitId]);
+    const before=(await query("select status,custody_holder_type,custody_location_id,custody_version from inventory_serialized_units where company_id=$1 and id=$2",[f.companyId,f.unitId])).rows[0];
+    const input={...base,action:"correct_location",capability:"route",actorId:f.adminId,unitId:f.unitId,custodyVersion:before.custody_version,expectedVersion:before.custody_version,holderType:"handoff",binLocation:"",externalReference:"",evidence:"Clear stale pre-fix location detail",idempotencyKey:"handoff-clear-qa",requestHash:digest("handoff-clear-qa")};
+    const first=await mutateInventoryReuse(input); const replay=await mutateInventoryReuse(input);
+    assert.equal(first.replayed,false); assert.equal(replay.replayed,true);
+    const after=(await query("select status,custody_holder_type,custody_location_id,custody_bin_location,custody_external_reference,custody_version from inventory_serialized_units where company_id=$1 and id=$2",[f.companyId,f.unitId])).rows[0];
+    assert.deepEqual(after,{status:"removed",custody_holder_type:"handoff",custody_location_id:f.locationId,custody_bin_location:"",custody_external_reference:null,custody_version:before.custody_version+1});
+    assert.equal((await query("select count(*)::int n from inventory_unit_events where company_id=$1 and unit_id=$2 and event_type='reuse_location_corrected'",[f.companyId,f.unitId])).rows[0].n,1);
+    await assert.rejects(mutateInventoryReuse({...input,idempotencyKey:"handoff-stale-reject",requestHash:digest("handoff-stale-reject")}),{code:"INVENTORY_REUSE_CHANGED"});
+    const reject={...input,custodyVersion:after.custody_version,expectedVersion:after.custody_version,idempotencyKey:"handoff-transfer-reject",requestHash:digest("handoff-transfer-reject"),holderType:"inventory_location"};
+    await assert.rejects(mutateInventoryReuse(reject),{code:"INVENTORY_REUSE_LOCATION_CORRECTION_FORBIDDEN"});
+    await assert.rejects(mutateInventoryReuse({...reject,idempotencyKey:"handoff-bin-reject",requestHash:digest("handoff-bin-reject"),holderType:"handoff",binLocation:"NEW-BIN"}),{code:"INVENTORY_REUSE_LOCATION_CORRECTION_FORBIDDEN"});
+    assert.equal(removed.status,"awaiting_handoff");
+  } finally { await f.cleanup(); }
+});
+
 test("PostgreSQL receive requires the locked exact unit and scan accepts only scoped exact serials", { skip: !run }, async () => {
   const f=await createInventoryReuseFixture(); const base={companyId:f.companyId,locationId:f.locationId}; const c=(action,actorId,extra={})=>({...base,action,capability:action,actorId,idempotencyKey:randomUUID(),requestHash:digest(randomUUID()),...extra});
   try {

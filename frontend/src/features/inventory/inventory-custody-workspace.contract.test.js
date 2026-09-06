@@ -76,3 +76,15 @@ test("a saved custody request can only be checked or replayed with its original 
   assert.match(source, /!pendingRequest && nextAction/);
   assert.match(source, /!pendingRequest && detail\?\.unit && caps\.route/);
 });
+
+test("location correction is state-appropriate and cannot act as a holder transfer", async () => {
+  const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
+  assert.match(source, /const hasStaleLocationDetail/);
+  assert.match(source, /const canCorrectLocationDetail/);
+  assert.match(source, /unit\?\.status === "removed" && unit\?\.custodyHolderType === "handoff" && hasStaleLocationDetail\(unit\)/);
+  assert.match(source, /Clear stale location detail/);
+  assert.match(source, /preserving Handoff custody/);
+  assert.match(source, /holderType: detail\.unit\.custodyHolderType/);
+  assert.doesNotMatch(source, /aria-label="Correction holder type"/);
+  assert.doesNotMatch(source, /<option value="external_repair">/);
+});
