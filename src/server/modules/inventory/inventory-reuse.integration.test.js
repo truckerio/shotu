@@ -9,6 +9,21 @@ import { listUnitsDirectory } from "../../db/repositories/units-directory.repo.j
 const run = process.env.RUN_POSTGRES_INTEGRATION === "1";
 after(async()=>{if(run) await closePool();});
 
+test("PostgreSQL exact-unit state filters distinguish reusable availability from stored stock",{skip:!run},async()=>{
+  const f=await createInventoryReuseFixture({installed:false});
+  const base={companyId:f.companyId,locationId:f.locationId,actorId:f.adminId,view:"units",catalogPartId:f.catalogPartId,limit:25};
+  try {
+    await query("update inventory_serialized_units set condition_code='needs_repair' where company_id=$1 and id=$2",[f.companyId,f.pendingUnitId]);
+    const available=await readInventoryReuse({...base,unitState:"available"});
+    const inStock=await readInventoryReuse({...base,unitState:"in_stock"});
+    assert.ok(available.items.some((unit)=>unit.id===f.unitId));
+    assert.ok(!available.items.some((unit)=>unit.id===f.pendingUnitId));
+    assert.ok(inStock.items.some((unit)=>unit.id===f.unitId));
+    assert.ok(inStock.items.some((unit)=>unit.id===f.pendingUnitId));
+    assert.deepEqual((await readInventoryReuse({...base,unitState:"in_stock",condition:"needs_repair"})).items.map((unit)=>unit.id),[f.pendingUnitId]);
+  } finally {await f.cleanup();}
+});
+
 test("PostgreSQL custody prevents bypass, permits an authorized remover to receive, retries exactly once, preserves invoice and supports reinstallation",{skip:!run},async()=>{
   const f = await createInventoryReuseFixture();
   const base = {companyId:f.companyId,locationId:f.locationId};

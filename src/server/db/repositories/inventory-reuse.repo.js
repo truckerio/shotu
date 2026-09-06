@@ -350,6 +350,11 @@ export async function readInventoryReuse(input) {
       if (input.catalogPartId) { values.push(input.catalogPartId); where.push(`l.catalog_part_id=$${values.length}`); }
       if (input.condition) { values.push(input.condition); where.push(`u.condition_code=$${values.length}`); }
       if (input.status) { values.push(input.status); where.push(`u.status=$${values.length}`); }
+      if (input.view === "units" && input.unitState === "available") {
+        where.push(`u.status='in_stock' and u.custody_holder_type='inventory_location' and (u.condition_code in ('new','serviceable_used','refurbished') or (u.condition_code='unknown' and u.custody_legacy_available=true))`);
+      } else if (input.view === "units" && input.unitState) {
+        values.push(input.unitState); where.push(`u.status=$${values.length}`);
+      }
       if (input.q) { values.push(`%${input.q}%`); where.push(`(u.serial_number ilike $${values.length} or l.part_number ilike $${values.length} or l.description ilike $${values.length})`); }
       if (input.cursor) { values.push(input.cursor); where.push(`${input.view === "units" ? "u.id" : "l.catalog_part_id"} > $${values.length}`); }
       values.push(input.limit + 1);

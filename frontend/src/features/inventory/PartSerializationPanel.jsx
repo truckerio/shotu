@@ -24,7 +24,9 @@ function unitStatus(status) {
   return (
     {
       in_stock: "In stock",
+      reserved: "Reserved",
       issued: "Issued",
+      installed_pending_approval: "Install pending approval",
       installed: "Installed",
       removed: "Removed",
       returned: "Returned",
@@ -93,6 +95,17 @@ const CONDITION_LABELS = {
   unserviceable: "Unserviceable",
   unknown: "Not classified",
 };
+const UNIT_STATE_OPTIONS = [
+  ["available", "Available"],
+  ["in_stock", "In stock"],
+  ["reserved", "Reserved"],
+  ["issued", "Issued"],
+  ["installed_pending_approval", "Install pending approval"],
+  ["installed", "Installed"],
+  ["removed", "Removed"],
+  ["returned", "Returned"],
+  ["scrapped", "Scrapped"],
+];
 const isAvailableForUse = (unit) =>
   unit?.status === "in_stock" &&
   unit?.custodyHolderType === "inventory_location" &&
@@ -136,6 +149,7 @@ export function PartSerializationPanel({
   const [unitLoading, setUnitLoading] = useState(false);
   const [unitError, setUnitError] = useState("");
   const [custodyCondition, setCustodyCondition] = useState("");
+  const [custodyUnitState, setCustodyUnitState] = useState("");
   const [custodyCursor, setCustodyCursor] = useState([""]);
   const [custodyRefreshVersion, setCustodyRefreshVersion] = useState(0);
   const [custodyUnits, setCustodyUnits] = useState({
@@ -188,6 +202,7 @@ export function PartSerializationPanel({
     setSelectedUnit(null);
     setUnitError("");
     setCustodyCondition("");
+    setCustodyUnitState("");
     setCustodyCursor([""]);
     setCustodyUnits({ items: [], nextCursor: null, loading: false, error: "" });
     setCustodyDetail(null);
@@ -210,6 +225,7 @@ export function PartSerializationPanel({
           companyId,
           locationId: location.locationId,
           condition: custodyCondition,
+          unitState: custodyUnitState,
           limit: 25,
           cursor: custodyCursor.at(-1),
         },
@@ -240,6 +256,7 @@ export function PartSerializationPanel({
   }, [
     companyId,
     custodyCondition,
+    custodyUnitState,
     custodyCursor,
     custodyRefreshVersion,
     item?.catalogPartId,
@@ -867,26 +884,48 @@ export function PartSerializationPanel({
                 <strong id="inventory-custody-exact-title">
                   Condition and exact custody
                 </strong>
-                <label>
-                  <span className="inventory-count-visually-hidden">
-                    Condition
-                  </span>
-                  <Dropdown
-                    value={custodyCondition}
-                    onChange={(event) => {
-                      setCustodyCondition(event.target.value);
-                      setCustodyCursor([""]);
-                    }}
-                    aria-label="Filter exact units by condition"
-                  >
-                    <option value="">All conditions</option>
-                    {Object.entries(CONDITION_LABELS).map(([value, label]) => (
-                      <option value={value} key={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </Dropdown>
-                </label>
+                <div className="inventory-serial-filters">
+                  <label>
+                    <span className="inventory-count-visually-hidden">
+                      Condition
+                    </span>
+                    <Dropdown
+                      value={custodyCondition}
+                      onChange={(event) => {
+                        setCustodyCondition(event.target.value);
+                        setCustodyCursor([""]);
+                      }}
+                      aria-label="Filter exact units by condition"
+                    >
+                      <option value="">All conditions</option>
+                      {Object.entries(CONDITION_LABELS).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </Dropdown>
+                  </label>
+                  <label>
+                    <span className="inventory-count-visually-hidden">
+                      State
+                    </span>
+                    <Dropdown
+                      value={custodyUnitState}
+                      onChange={(event) => {
+                        setCustodyUnitState(event.target.value);
+                        setCustodyCursor([""]);
+                      }}
+                      aria-label="Filter exact units by state"
+                    >
+                      <option value="">All states</option>
+                      {UNIT_STATE_OPTIONS.map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </Dropdown>
+                  </label>
+                </div>
               </div>
               <div className="inventory-detail-metrics" aria-live="polite">
                 {[["new", "New available"], ["reusable", "Reusable available"], ["refurbished", "Refurbished available"]].map(([value, label]) => (
@@ -900,7 +939,7 @@ export function PartSerializationPanel({
               </div>
               <p className="inventory-serial-note">
                 Condition totals are scoped to this part and location. Use the
-                filter to inspect exact units without changing inventory
+                filters to inspect exact units without changing inventory
                 quantities.
               </p>
               {custodyUnits.error ? (
@@ -999,16 +1038,17 @@ export function PartSerializationPanel({
           ) : data.units.length ? (
             <div className="inventory-serial-empty">
               <QrCode01 />
-              <strong>No serialized units match this condition</strong>
-              <p>Choose another condition to see its exact units.</p>
+              <strong>No serialized units match these filters</strong>
+              <p>Choose another condition or state to see exact units.</p>
               <Button
                 type="button"
                 onClick={() => {
                   setCustodyCondition("");
+                  setCustodyUnitState("");
                   setCustodyCursor([""]);
                 }}
               >
-                Show all conditions
+                Clear filters
               </Button>
             </div>
           ) : (

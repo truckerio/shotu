@@ -5,7 +5,7 @@ import { commandInventoryReuse, getInventoryReuse, saveInventoryReuseConfigurati
 export async function handleInventoryReuseApi(req, res, url, helpers, dependencies = {}) {
   if (!/^\/api\/inventory-reuse(?:\/|$)/.test(url.pathname)) return false;
   const suffix = url.pathname.slice("/api/inventory-reuse".length);
-  const scope = Object.fromEntries(["companyId", "locationId", "limit", "cursor", "q", "status", "route", "condition", "catalogPartId", "code"].map((key) => [key, url.searchParams.get(key)]).filter(([, value]) => value !== null));
+  const scope = Object.fromEntries(["companyId", "locationId", "limit", "cursor", "q", "status", "unitState", "route", "condition", "catalogPartId", "code"].map((key) => [key, url.searchParams.get(key)]).filter(([, value]) => value !== null));
   try {
     if (req.method === "GET") {
       const asset = /^\/asset\/([^/]+)$/.exec(suffix), operation = /^\/operations\/([^/]+)$/.exec(suffix), unit = /^\/units\/([^/]+)$/.exec(suffix), children = /^\/stock\/([^/]+)\/units$/.exec(suffix);

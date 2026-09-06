@@ -176,7 +176,12 @@ test("part location drilldown creates and prints serialized child QR labels", as
   assert.match(panel, /setCustodyRefreshVersion\(\(version\) => version \+ 1\)/);
   assert.equal((panel.match(/className="inventory-serial-list"/g) || []).length, 1);
   assert.match(panel, /const visibleUnits = companyId && !custodyUnits\.error/);
-  assert.match(panel, /No serialized units match this condition/);
+  assert.match(panel, /Filter exact units by state/);
+  assert.match(panel, /unitState: custodyUnitState/);
+  assert.match(panel, /\["available", "Available"\]/);
+  assert.match(panel, /\["in_stock", "In stock"\]/);
+  assert.match(panel, /No serialized units match these filters/);
+  assert.match(panel, /setCustodyUnitState\(""\)/);
   assert.match(panel, /inventory-unit-condition/);
   assert.match(panel, /if \(unit\?\.custodyHolderLabel\) return unit\.custodyHolderLabel/);
   assert.match(panel, /crypto\.randomUUID\(\)/);

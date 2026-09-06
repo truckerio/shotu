@@ -33,6 +33,17 @@ test("asset, operation, config and explicit configuration actions map exact endp
   assert.equal((await request("/api/inventory-reuse/config/grant","POST",{...scope,userId:actorId,capabilities:[],reason:"Revoke"},deps)).data.saved,true);
   assert.equal((await request("/api/inventory-reuse/config/policy","POST",{...scope,catalogPartId:randomUUID(),reuseAllowed:false,evidence:"Single use only"},deps)).data.saved,true);
 });
+test("exact-unit state filters cross the route contract and reject unknown future states",async()=>{
+  let readInput;
+  const deps={read:async(input)=>{readInput=input;return {items:[]};}};
+  const partId=randomUUID();
+  const search=`?companyId=${companyId}&locationId=${locationId}&unitState=available`;
+  assert.equal((await request(`/api/inventory-reuse/stock/${partId}/units${search}`,"GET",null,deps)).status,200);
+  assert.equal(readInput.view,"units");
+  assert.equal(readInput.catalogPartId,partId);
+  assert.equal(readInput.unitState,"available");
+  assert.equal((await request(`/api/inventory-reuse/stock/${partId}/units?companyId=${companyId}&locationId=${locationId}&unitState=transferred`,"GET",null,deps)).status,400);
+});
 test("asset custody accepts the canonical legacy company UUID without relaxing entity IDs",async()=>{
   const legacyScope={companyId:DEFAULT_COMPANY_ID,locationId};
   const legacyContext={...context,companyIds:new Set([DEFAULT_COMPANY_ID])};
