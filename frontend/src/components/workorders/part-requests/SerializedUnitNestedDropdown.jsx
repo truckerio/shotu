@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../ui/Button.jsx";
 import { normalizeLocale } from "../../../i18n/index.js";
+import { anchoredOverlayShift } from "./anchored-overlay-position.js";
 import { eligibleSelectedUnitIds } from "./workorder-serialized-part-selection.js";
 import { SerializedUnitChildPicker } from "./SerializedUnitChildPicker.jsx";
 import "./serialized-unit-nested-dropdown.css";
@@ -78,10 +79,13 @@ export function SerializedUnitNestedDropdown({
       const rect = rootRef.current?.getBoundingClientRect();
       if (!rect) return;
       const bottomInset = window.matchMedia("(max-width: 640px)").matches ? 120 : 16;
-      const next = {
-        x: Math.max(0, rect.right + viewportShift.x - window.innerWidth + 16),
-        y: Math.max(0, rect.bottom + viewportShift.y - window.innerHeight + bottomInset),
-      };
+      const next = anchoredOverlayShift({
+        rect,
+        currentShift: viewportShift,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        bottomInset,
+      });
       setViewportShift((current) => current.x === next.x && current.y === next.y ? current : next);
     }
     measure();

@@ -21,7 +21,7 @@ export function useWorkorderPreviewController({
   previewSerialCount,
   setDetailSection,
 }) {
-  const [previewPanelOpen, setPreviewPanelOpen] = useState(true);
+  const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [fullscreenPageIndex, setFullscreenPageIndex] = useState(0);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
@@ -102,7 +102,7 @@ export function useWorkorderPreviewController({
   }, [closePrintMenu, previewPanelOpen]);
 
   const jumpToPreview = useCallback(() => {
-    if (isWorkorderDetail && isCompact) {
+    if (isCompact && (isWorkorderDetail || !isPhone)) {
       setFullscreenPageIndex(0);
       setFullscreenZoom(isPhone ? 0 : 1);
       setPreviewFullscreen(true);

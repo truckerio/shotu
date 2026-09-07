@@ -109,7 +109,7 @@ export function useWorkorderDraftLifecycle({
     setResumedDraft(savedDraft);
     draft.reset(savedDraft);
     setActiveWorkorder(null);
-    setPreviewPanelOpen(true);
+    setPreviewPanelOpen(false);
     setDetailSource(null);
     setMode("admin");
     setWorkspace("generator");

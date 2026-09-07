@@ -5,6 +5,9 @@ import test from "node:test";
 const createCss = readFileSync(new URL("./create-workorder-page.css", import.meta.url), "utf8");
 const createPage = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const createShell = readFileSync(new URL("./CreateWorkorderShell.jsx", import.meta.url), "utf8");
+const previewController = readFileSync(new URL("../workorder-detail/useWorkorderPreviewController.js", import.meta.url), "utf8");
+const routeNavigation = readFileSync(new URL("../../app/routes/useRoleRouteNavigation.js", import.meta.url), "utf8");
+const draftLifecycle = readFileSync(new URL("./useWorkorderDraftLifecycle.js", import.meta.url), "utf8");
 const workorderPanelShell = readFileSync(
   new URL("../../components/workorders/WorkorderPanelShell.jsx", import.meta.url),
   "utf8",
@@ -25,6 +28,14 @@ const sharedNavigationCss = readFileSync(
 test("Create and shared detail navigation use the same phone breakpoint", () => {
   assert.match(createCss, /@media \(max-width: 700px\)/);
   assert.match(sharedNavigationCss, /@media \(max-width: 700px\)/);
+});
+
+test("tablet Create starts collapsed and its Preview toggle opens fullscreen", () => {
+  assert.match(previewController, /const \[previewPanelOpen, setPreviewPanelOpen\] = useState\(false\)/);
+  assert.match(previewController, /if \(isCompact && \(isWorkorderDetail \|\| !isPhone\)\)/);
+  assert.match(routeNavigation, /openCreateWorkspace[\s\S]*setPreviewPanelOpen\(false\)/);
+  assert.match(draftLifecycle, /restoreWorkorderDraft[\s\S]*setPreviewPanelOpen\(false\)/);
+  assert.match(createPage, /previewActive=\{showEmbeddedPreview \|\| previewFullscreen\}/);
 });
 
 test("phone Create select and date fields share the 44px control height", () => {

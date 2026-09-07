@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Dropdown } from "../../forms/Dropdown.jsx";
 import { Button } from "../../ui/Button.jsx";
 import { api } from "../../../lib/api.js";
 import { normalizeLocale } from "../../../i18n/index.js";
+import { anchoredOverlayShift } from "./anchored-overlay-position.js";
 import { SerializedUnitNestedDropdown } from "./SerializedUnitNestedDropdown.jsx";
 import {
   eligibleSelectedUnitIds,
@@ -88,6 +89,8 @@ export function WorkorderSerializedPartDialog({
   const quantityRef = useRef(null);
   const addUnitsRef = useRef(null);
   const printRef = useRef(null);
+  const createPanelRef = useRef(null);
+  const [createPanelShift, setCreatePanelShift] = useState({ x: 0, y: 0 });
   const dialogId = useId();
   const partId = catalogPart?.id || catalogPart?.catalogPartId;
   const endpoint = partId && workorderId
@@ -144,6 +147,26 @@ export function WorkorderSerializedPartDialog({
     if (view === "create") window.requestAnimationFrame(() => quantityRef.current?.focus());
     if (view === "created") window.requestAnimationFrame(() => printRef.current?.focus());
   }, [view]);
+
+  useLayoutEffect(() => {
+    if (view !== "create") return undefined;
+    function measure() {
+      const rect = createPanelRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const bottomInset = window.matchMedia("(max-width: 640px)").matches ? 120 : 16;
+      const next = anchoredOverlayShift({
+        rect,
+        currentShift: createPanelShift,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        bottomInset,
+      });
+      setCreatePanelShift((current) => current.x === next.x && current.y === next.y ? current : next);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [createPanelShift.x, createPanelShift.y, message, view]);
 
   function close() {
     if (!busy) onClose?.();
@@ -267,7 +290,15 @@ export function WorkorderSerializedPartDialog({
   }
 
   return (
-        <section className="workorder-serialized-dialog workorder-serialized-create-panel" role="dialog" aria-modal="false" aria-labelledby={`${dialogId}-title`} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}>
+        <section
+          ref={createPanelRef}
+          className="workorder-serialized-dialog workorder-serialized-create-panel"
+          style={createPanelShift.x || createPanelShift.y ? { transform: `translate(${-createPanelShift.x}px, ${-createPanelShift.y}px)` } : undefined}
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby={`${dialogId}-title`}
+          onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}
+        >
           <header>
             <div className="workorder-serialized-heading">
               <h2 id={`${dialogId}-title`}>{text.add}</h2>

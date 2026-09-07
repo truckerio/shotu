@@ -8,6 +8,7 @@ const scanner = readFileSync(new URL("./SerializedPartsScanner.jsx", import.meta
 const childPicker = readFileSync(new URL("./SerializedUnitChildPicker.jsx", import.meta.url), "utf8");
 const childPickerCss = readFileSync(new URL("./serialized-unit-child-picker.css", import.meta.url), "utf8");
 const nestedDropdown = readFileSync(new URL("./SerializedUnitNestedDropdown.jsx", import.meta.url), "utf8");
+const anchoredPosition = readFileSync(new URL("./anchored-overlay-position.js", import.meta.url), "utf8");
 const nestedCss = readFileSync(new URL("./serialized-unit-nested-dropdown.css", import.meta.url), "utf8");
 const css = readFileSync(new URL("./workorder-serialized-part-dialog.css", import.meta.url), "utf8");
 const editorCss = readFileSync(new URL("../used-parts-editor.css", import.meta.url), "utf8");
@@ -62,6 +63,14 @@ test("nested dropdown dismisses predictably and preserves post-create label stat
   assert.match(dialog, /setData\(result\);[\s\S]*setView\("created"\)/);
   assert.match(dialog, /href=\{batch\.printUrl\}[\s\S]*target="_blank"/);
   assert.match(dialog, /if \(!busy\) onClose\?\.\(\)/);
+});
+
+test("Add units keeps its replacement panel anchored inside the Parts container", () => {
+  assert.match(nestedDropdown, /anchoredOverlayShift/);
+  assert.match(dialog, /ref=\{createPanelRef\}/);
+  assert.match(dialog, /anchoredOverlayShift/);
+  assert.match(dialog, /transform: `translate\(\$\{-createPanelShift\.x\}px, \$\{-createPanelShift\.y\}px\)`/);
+  assert.match(anchoredPosition, /rect\.right \+ currentShift\.x - viewportWidth \+ horizontalInset/);
 });
 
 test("dialog centralizes supported locale copy and the shared dropdown focuses serial search", () => {

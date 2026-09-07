@@ -44,7 +44,7 @@ export function useRoleRouteNavigation({
       createInitialDatesRef.current = createDraftBaselineFromForm(next);
       return next;
     });
-    setPreviewPanelOpen(true);
+    setPreviewPanelOpen(false);
     setDetailSource(null);
     setMode(createMode);
     setCreateErrors({});
