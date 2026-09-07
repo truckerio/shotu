@@ -485,8 +485,16 @@ async function assertActivePartsWalkthrough({ browser, config, workflow }) {
 
 async function selectMechanicLocale(page, optionName) {
   const selector = page.locator(".locale-selector:visible").first();
-  await selector.getByRole("button").click();
+  const trigger = selector.getByRole("button");
+  if ((await trigger.textContent())?.trim() === optionName) return;
+  const saved = page.waitForResponse((response) => (
+    response.url().endsWith("/api/workorder-preferences")
+    && response.request().method() === "PUT"
+    && response.status() === 200
+  ));
+  await trigger.click();
   await page.getByRole("option", { name: optionName, exact: true }).click();
+  await saved;
 }
 
 async function assertRoleSurface({ browser, config, role, workflow }) {
