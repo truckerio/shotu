@@ -357,6 +357,10 @@ async function assertActiveMechanicParts({ browser, config, workflow }) {
   });
   try {
     await signIn(page, config, "mechanic");
+    const localeSelector = page.locator(".locale-selector:visible").first();
+    if (await localeSelector.count()) {
+      await selectMechanicLocale(page, "English");
+    }
     await page.goto(
       new URL(`/?workorder=${encodeURIComponent(workflow.activeWorkorderId)}&section=parts`, config.baseUrl).href,
       { waitUntil: "domcontentloaded" },
