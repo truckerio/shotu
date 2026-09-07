@@ -60,6 +60,29 @@ test("queue and repair actions use the lifecycle statuses returned by the server
   for (const value of ["core_returns", "scrap_approval", "core_pending_return", "scrap_pending_approval", "repairStarted", "repair/start", "repair/complete", "caps.route"]) assert.match(source, new RegExp(value.replace("/", "\\/")));
 });
 
+test("returns and repairs queue presents known reuse statuses without leaking backend values", async () => {
+  const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
+  for (const [status, label] of [
+    ["awaiting_handoff", "Awaiting handoff"],
+    ["received_pending_review", "Needs inspection"],
+    ["hold", "On hold"],
+    ["repair", "Repair/refurbish"],
+    ["repair_complete_pending_review", "Repair complete — needs inspection"],
+    ["core_pending_return", "Core return pending"],
+    ["core_returned", "Core returned"],
+    ["scrap_pending_approval", "Scrap approval"],
+    ["scrapped", "Scrapped"],
+    ["quarantine", "Quarantine"],
+    ["released", "Returned to stock"],
+  ]) {
+    assert.match(source, new RegExp(`${status}: "${label}"`));
+  }
+  assert.match(source, /const reuseCaseStatusLabel/);
+  assert.match(source, /"Status not available"/);
+  assert.match(source, /\{reuseCaseStatusLabel\(item\)\}/);
+  assert.doesNotMatch(source, /\{item\.workflowLabel \|\| item\.workflowStatus \|\| item\.status\}/);
+});
+
 test("a release-only operator can release reviewed and completed-repair cases", async () => {
   const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
   assert.match(source, /"repair_complete_pending_review"/);

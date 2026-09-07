@@ -170,7 +170,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     assert.equal(providerManaged.kind, "updated");
     assert.equal(providerManaged.part.description, "Changed locally");
     assert.equal(providerManaged.part.odooName, "Provider part");
-    assert.deepEqual(providerManaged.part.editableFields, ["description", "manufacturer", "uomCode", "referenceNumbers"]);
+    assert.deepEqual(providerManaged.part.editableFields, ["description", "manufacturer", "uomCode", "trackingMode", "referenceNumbers"]);
 
     const providerIdentityLocked = await updateCompanyCatalogPart({
       ...base,
@@ -198,7 +198,7 @@ test("real PostgreSQL edits local identity atomically and protects tenant and Od
     assert.equal(providerEnrichment.kind, "updated");
     assert.equal(providerEnrichment.part.uomCode, "pc");
     assert.equal(providerEnrichment.part.canonicalUomCode, "ea");
-    assert.deepEqual(providerEnrichment.part.editableFields, ["description", "manufacturer", "uomCode", "referenceNumbers"]);
+    assert.deepEqual(providerEnrichment.part.editableFields, ["description", "manufacturer", "uomCode", "trackingMode", "referenceNumbers"]);
     const providerUnits = await query("select uom_code, inventory_display_uom_code from parts_catalog where id=$1", [providerPartId]);
     assert.deepEqual(providerUnits.rows[0], { uom_code: "ea", inventory_display_uom_code: "pc" });
 

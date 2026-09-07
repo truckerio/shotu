@@ -64,6 +64,22 @@ const CONDITIONS = {
   unserviceable: "Unserviceable",
   unknown: "Not classified",
 };
+const REUSE_CASE_STATUS_LABELS = {
+  awaiting_handoff: "Awaiting handoff",
+  received_pending_review: "Needs inspection",
+  hold: "On hold",
+  repair: "Repair/refurbish",
+  repair_complete_pending_review: "Repair complete — needs inspection",
+  core_pending_return: "Core return pending",
+  core_returned: "Core returned",
+  scrap_pending_approval: "Scrap approval",
+  scrapped: "Scrapped",
+  quarantine: "Quarantine",
+  released: "Returned to stock",
+};
+const reuseCaseStatusLabel = (caseItem) =>
+  REUSE_CASE_STATUS_LABELS[caseItem?.workflowStatus || caseItem?.status] ||
+  "Status not available";
 const holder = (unit) =>
   unit?.custodyBinLocation
     ? `${unit.custodyHolderLabel || unit.custodyHolderType || "Location"} · ${unit.custodyBinLocation}`
@@ -920,7 +936,7 @@ export function InventoryCustodyWorkspace({
                     {holder(item)}
                   </OperationalCollectionCell>
                   <OperationalCollectionCell label="Queue">
-                    {item.workflowLabel || item.workflowStatus || item.status}
+                    {reuseCaseStatusLabel(item)}
                   </OperationalCollectionCell>
                   <OperationalCollectionCell label="Age">
                     {item.ageLabel || item.age || "—"}

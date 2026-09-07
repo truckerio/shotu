@@ -71,8 +71,9 @@ test("real PostgreSQL creates a workorder and reserves its exact serialized unit
     );
     await query(
       `insert into inventory_serialized_units (
-         id,company_id,location_id,receipt_id,receipt_line_id,unit_ordinal,serial_number,status
-       ) values ($1,$3,$4,$5,$6,1,$7,'in_stock'),($2,$3,$4,$5,$6,2,$8,'in_stock')`,
+         id,company_id,location_id,receipt_id,receipt_line_id,unit_ordinal,serial_number,status,
+         condition_code,custody_holder_type,custody_location_id
+       ) values ($1,$3,$4,$5,$6,1,$7,'in_stock','new','inventory_location',$4),($2,$3,$4,$5,$6,2,$8,'in_stock','new','inventory_location',$4)`,
       [unitIds[0], unitIds[1], companyId, locationId, receiptId, receiptLineId, `AT-${suffix}-1`, `AT-${suffix}-2`],
     );
     await query(
@@ -217,8 +218,9 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
     );
     await query(
       `insert into inventory_serialized_units (
-         id, company_id, location_id, receipt_id, receipt_line_id, unit_ordinal, serial_number, status
-       ) values ($1,$3,$4,$5,$6,1,$7,'in_stock'), ($2,$3,$4,$5,$6,2,$8,'in_stock')`,
+         id, company_id, location_id, receipt_id, receipt_line_id, unit_ordinal, serial_number, status,
+         condition_code, custody_holder_type, custody_location_id
+       ) values ($1,$3,$4,$5,$6,1,$7,'in_stock','new','inventory_location',$4), ($2,$3,$4,$5,$6,2,$8,'in_stock','new','inventory_location',$4)`,
       [unitA, unitB, companyId, locationId, receiptId, lineId, `WG-L-${suffix}-1`, `WG-L-${suffix}-2`],
     );
     await query(
