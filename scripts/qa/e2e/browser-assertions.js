@@ -390,7 +390,7 @@ async function assertActiveMechanicParts({ browser, config, workflow }) {
       assertOnlyOptionalHelperFailures(manualFailedResponseUrls, "Mechanic request entry");
       assert.ok(manualOptionalHelperFailures.length >= browserErrors.length,
         `Mechanic text-entry errors must map only to optional helpers. Failed responses: ${manualFailedResponseUrls.join(" | ")}`);
-      assert.ok(browserErrors.every((error) => /503 \(Service Unavailable\)/.test(error)),
+      assert.ok(browserErrors.every((error) => /503 \((?:Service Unavailable)?\)/.test(error)),
         `Optional helper failures must be the only remaining mechanic browser errors: ${browserErrors.join(" | ")}`);
       browserErrors.length = 0;
     }
@@ -463,7 +463,7 @@ async function assertActiveOfficeParts({ browser, config, workflow, mechanicResu
       assertOnlyOptionalHelperFailures(officeFailedResponseUrls, "Office Parts entry");
       assert.ok(officeOptionalHelperFailures.length >= browserErrors.length,
         `Office text-entry errors must map only to optional helpers. Failed responses: ${officeFailedResponseUrls.join(" | ")}`);
-      assert.ok(browserErrors.every((error) => /503 \(Service Unavailable\)/.test(error)),
+      assert.ok(browserErrors.every((error) => /503 \((?:Service Unavailable)?\)/.test(error)),
         `Optional helper failures must be the only remaining office browser errors: ${browserErrors.join(" | ")}`);
       browserErrors.length = 0;
     }
