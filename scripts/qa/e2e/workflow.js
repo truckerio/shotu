@@ -336,7 +336,6 @@ export async function runApiRoleWorkflow({ clients, config, logger = console, on
   activeWorkorder = workorderFrom(activeAccepted, "active Parts mechanic accept");
   assertLifecycle(activeWorkorder, "in_progress", "active Parts mechanic accept");
   const activeSuffix = runId.slice(-8).toUpperCase();
-  const activeManualPartNumber = `MANUAL-${activeSuffix}-USED`;
   const activeRequestDescription = `Browser-requested QA part ${activeSuffix}`;
   const activePlannedPartNumber = `PLAN-${activeSuffix}-BROWSER`;
   record("active-parts-fixture", { workorderId: activeWorkorder.id, serial: activeWorkorder.serial });
@@ -354,7 +353,6 @@ export async function runApiRoleWorkflow({ clients, config, logger = console, on
     emptyConcern,
     activeWorkorderId: activeWorkorder.id,
     activeConcern,
-    activeManualPartNumber,
     activeRequestDescription,
     activePlannedPartNumber,
     odooReadiness: {

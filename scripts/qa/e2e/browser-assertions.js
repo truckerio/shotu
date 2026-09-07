@@ -418,21 +418,13 @@ async function assertActiveOfficeParts({ browser, config, workflow, mechanicResu
     await visibleText(page, workflow.activeConcern);
     const editor = page.locator(".used-parts-editor:not(.is-readonly)");
     await editor.waitFor({ state: "visible", timeout: 15_000 });
-    const savedPartsResponse = page.waitForResponse((response) => (
-      response.url().endsWith(`/api/office/workorders/${workflow.activeWorkorderId}/used-parts`)
-      && response.request().method() === "PATCH"
-      && response.status() === 200
-    ));
-    await editor.getByRole("combobox", { name: "Part number 1" }).fill(workflow.activeManualPartNumber);
-    await editor.getByRole("spinbutton", { name: "Quantity 1" }).fill("2");
-    await editor.getByRole("textbox", { name: "Repair order 1" }).fill("Browser manual used-part entry.");
-    await savedPartsResponse;
-    assert.equal(
-      await editor.getByRole("combobox", { name: "Part number 1" }).inputValue(),
-      workflow.activeManualPartNumber,
-      "Office actual-part entry must remain visible after its saved API response.",
-    );
-    await visibleText(editor, "Saved");
+    assert.equal(await editor.getByRole("combobox", { name: "Part number 1" }).count(), 0,
+      "Office must not receive the retired free-form actual-part editor.");
+    await editor.getByRole("button", { name: "Add part", exact: true }).click();
+    await editor.getByRole("combobox", { name: "Part number or description" }).waitFor({ state: "visible" });
+    assert.equal(await editor.getByRole("spinbutton", { name: "Quantity" }).isDisabled(), true,
+      "Actual-part quantity must remain locked until an inventory-backed identity is selected.");
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
 
     await page.getByRole("button", { name: "Plan / source part", exact: true }).click();
     const composer = page.locator(".office-add-part");
@@ -473,7 +465,6 @@ async function assertActiveOfficeParts({ browser, config, workflow, mechanicResu
     }
     assert.deepEqual(browserErrors, [], `active office Parts browser emitted errors:\n${browserErrors.join("\n")}`);
     return {
-      usedPartNumber: workflow.activeManualPartNumber,
       plannedPartNumber: workflow.activePlannedPartNumber,
       requestId: mechanicResult.requestId,
     };

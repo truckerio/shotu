@@ -159,7 +159,8 @@ test("browser workflow measures real role workorders at release viewports and ca
   assert.match(source, /assertActivePartsWalkthrough/);
   assert.match(source, /Mechanic request UI must create a canonical part request/);
   assert.match(source, /Parts View must not expose actual-part entry to a mechanic/);
-  assert.match(source, /Office actual-part entry must remain visible after its saved API response/);
+  assert.match(source, /Office must not receive the retired free-form actual-part editor/);
+  assert.match(source, /Actual-part quantity must remain locked until an inventory-backed identity is selected/);
   assert.match(source, /Mechanic text-entry errors must map only to optional helpers/);
   assert.match(source, /Office text-entry errors must map only to optional helpers/);
   assert.match(source, /failed response outside the exact optional-helper allowlist/);
@@ -167,7 +168,7 @@ test("browser workflow measures real role workorders at release viewports and ca
   assert.match(source, /pathname === "\/api\/proofreading\/check"/);
   assert.match(source, /Office review UI must reject the mechanic request without allocating inventory/);
   assert.match(source, /Plan \/ source part/);
-  assert.match(source, /Browser manual used-part entry/);
+  assert.match(source, /getByRole\("button", \{ name: "Add part", exact: true \}\)/);
 });
 
 test("account reset proves an already-issued session is rejected", async () => {
