@@ -175,6 +175,7 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
       ["schedule", ["workStartDate", "workEndDate", "startTime", "endTime"]],
       ["assignment", ["mechanicName", "customerSignature", "authorizedBy"]],
       ["concern", ["concern", "officeNotes", "mechanicConcern"]],
+      ["diagnosisRepair", ["laborProduct"]],
     ].filter(([, keys]) => keys.some((key) => Object.hasOwn(rawInput, key) || Object.hasOwn(rawInput.formData || {}, key)));
     sendJson(res, 200, { workorder: await patchModules(
       requestContext, detailId, moduleKeys.map(([moduleKey]) => moduleKey), input,

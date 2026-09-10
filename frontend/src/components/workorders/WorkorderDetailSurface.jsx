@@ -6,6 +6,7 @@ export function WorkorderDetailSurface({
   controlClassName = "",
   context,
   notice,
+  presentation = "panel",
   summary,
   sections,
   supportingPane,
@@ -27,6 +28,7 @@ export function WorkorderDetailSurface({
       locale={locale}
       notice={notice}
       previewOpen={previewOpen}
+      presentation={presentation}
       sections={sections}
       summary={summary}
       supportingPane={supportingPane}

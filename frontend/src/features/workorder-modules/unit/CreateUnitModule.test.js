@@ -28,10 +28,16 @@ test("customer company combobox retains touch and responsive popup geometry", ()
   assert.match(formCss, /\.customer-company-combobox-option \{[\s\S]*min-height: 40px;/);
 });
 
-test("minimal Unit help shares the visible heading row", () => {
-  assert.match(source, /<FormSection[\s\S]*title=\{t\("create\.unit\.unit"\)\}[\s\S]*action=\{\([\s\S]*<SectionHelpDisclosure/);
+test("legacy Unit help retains its heading while one-page omits the section wrapper", () => {
+  assert.match(source, /const UnitSection = onePage \? "div" : FormSection/);
+  assert.match(source, /<UnitSection[\s\S]*title: t\("create\.unit\.unit"\), action: \([\s\S]*<SectionHelpDisclosure/);
   assert.doesNotMatch(source, /headerAction=\{\([\s\S]*create\.unit\.summary/);
   assert.match(formCss, /\.create-unit-card \.operational-form-section:first-child > \.operational-form-section-legend,[\s\S]*align-items: center;/);
+});
+
+test("one-page Unit details start closed, remain user-controlled, and legacy panels stay open", () => {
+  assert.match(source, /open=\{onePage \? unitDetailsOpen : true\}/);
+  assert.match(source, /onToggle=\{onePage \? setUnitDetailsOpen : undefined\}/);
 });
 
 test("unit lookup is a compact keyboard listbox with actionable active workorders", () => {

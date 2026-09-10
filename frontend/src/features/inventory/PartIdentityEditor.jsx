@@ -23,7 +23,7 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
   const providerManaged = Boolean(part.providerManaged);
   const uomEditable = fieldIsEditable(part, "uomCode");
   const canonicalUomCode = part.canonicalUomCode || part.uomCode;
-  const restrictedToEquivalentUnit = providerManaged || part.uomLocked;
+  const restrictedToEquivalentUnit = Boolean(part.uomLocked);
   const allowedUomCodes = useMemo(() => {
     if (!restrictedToEquivalentUnit) return null;
     const canonical = getUnitDefinition(canonicalUomCode);
@@ -144,7 +144,7 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         <FormField id="inventory-unit" label="Unit" hint={uomHint}>
           <UnitOfMeasurePicker uomCode={draft.uomCode} allowedUomCodes={allowedUomCodes} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={!uomEditable} />
         </FormField>
-        <FormField id="inventory-tracking-mode" label="How do you track this part?" hint="Quantity is best for small interchangeable parts. Serialized keeps one identity per physical unit. Measured or bulk is for fluids and divisible material." error={errors.trackingMode} required>
+        <FormField id="inventory-tracking-mode" label="How do you track this part?" hint="Quantity is best for interchangeable parts. Serialized keeps one identity per physical unit. Measured or bulk is for fluids and divisible material." error={errors.trackingMode} required>
           <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy || !fieldIsEditable(part, "trackingMode")}>
             <option value="">Choose tracking</option>
             <option value="quantity">Quantity</option>

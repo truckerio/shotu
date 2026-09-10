@@ -12,6 +12,11 @@
   z-index: 40;
 }
 
+.create-part-identity-field > .serialized-unit-nested-dropdown[data-anchor="part-field"] {
+  max-width: calc(100vw - 32px);
+  width: min(29rem, 100%);
+}
+
 .serialized-unit-nested-dropdown > header {
   align-items: start;
   border-bottom: 1px solid var(--border-subtle, #e4e7ec);

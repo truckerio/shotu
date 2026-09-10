@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
 import { Button } from "../../components/ui/Button.jsx";
@@ -7,6 +7,7 @@ import { ChatComposer } from "../../components/workorders/ChatComposer.jsx";
 import { localizedMechanicHelpActions } from "../../components/workorders/mechanic-help-prompts.js";
 import { ChatThread } from "../../components/workorders/ChatThread.jsx";
 import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
+import { WorkorderToolsPanel } from "../../components/workorders/WorkorderToolsPanel.jsx";
 import { WorkorderDetailSurface } from "../../components/workorders/WorkorderDetailSurface.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
 import { WorkDoneButton } from "../../components/workorders/WorkDoneButton.jsx";
@@ -17,6 +18,7 @@ import { formatUiDateRange } from "../../lib/workorder-presentation.js";
 import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
+import { mainWorkorderSections, requestedWorkorderTool } from "./workorder-tools-model.js";
 import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
 import { LocaleSelector } from "../../i18n/LocaleSelector.jsx";
 import { interfaceText, localizedUnitType } from "../../i18n/index.js";
@@ -190,6 +192,19 @@ export function WorkorderDetailPage({
   vehicleModelText,
 }) {
   const viewport = useVisualViewport();
+  const [officeToolsOpen, setOfficeToolsOpen] = useState(false);
+  const [officeToolView, setOfficeToolView] = useState("chat");
+  const openOfficeTool = (view) => { setOfficeToolView(view); setOfficeToolsOpen(true); };
+  useEffect(() => {
+    if (!isOfficeDetail) return;
+    const requestedTool = requestedWorkorderTool(detailSection);
+    if (requestedTool) {
+      setOfficeToolView(requestedTool);
+      setOfficeToolsOpen(true);
+    } else {
+      setOfficeToolsOpen(false);
+    }
+  }, [activeWorkorder.workorder.id, detailSection, isOfficeDetail]);
   const serializedRepairFlushRef = useRef(async () => true);
   const registerSerializedRepairFlush = useCallback((flush) => {
     serializedRepairFlushRef.current = typeof flush === "function" ? flush : async () => true;
@@ -247,14 +262,14 @@ export function WorkorderDetailPage({
   });
   const visibleDetailSections = useMemo(
     () => {
-      if (isCompact) return buildCompactPhoneDetailSections(detailSections, actor.role, {
+      if (isCompact && !isOfficeDetail) return buildCompactPhoneDetailSections(detailSections, actor.role, {
         locale: isMechanicDetail ? locale : "en",
         policyOverrides,
         userId: actor.id,
       });
       return detailSections;
     },
-    [actor.id, actor.role, detailSections, isCompact, isMechanicDetail, locale, policyOverrides],
+    [actor.id, actor.role, detailSections, isCompact, isMechanicDetail, isOfficeDetail, locale, policyOverrides],
   );
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
@@ -289,12 +304,18 @@ export function WorkorderDetailPage({
     selectDetailSection(renderedDetailSection);
   }, [detailSection, renderedDetailSection, selectDetailSection, visibleDetailSections.length]);
   useChatReceipts({
-    active: chatPolicy.canRead && (renderedDetailSection === "chat" || (!isCompact && effectiveSupportingView === "chat")),
+    active: chatPolicy.canRead && (isOfficeDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && effectiveSupportingView === "chat")),
     currentUserId: actor.id,
     messages: visibleConversationMessages,
     role: isOfficeDetail ? "office" : "mechanic",
     workorderId: activeWorkorder.workorder.id,
   });
+  const earlierNotes = isOfficeDetail && ((concernPolicy.canRead && form.officeNotes) || (diagnosisRepairPolicy.canRead && (form.diagnosis || form.workPerformed))) ? <details className="workorder-earlier-notes">
+        <summary>Earlier notes</summary>
+        {concernPolicy.canRead && form.officeNotes ? <p><strong>Office notes</strong><br />{form.officeNotes}</p> : null}
+        {diagnosisRepairPolicy.canRead && form.diagnosis ? <p><strong>Diagnosis</strong><br />{form.diagnosis}</p> : null}
+        {diagnosisRepairPolicy.canRead && form.workPerformed ? <p><strong>Repair completed</strong><br />{form.workPerformed}</p> : null}
+      </details> : null;
   const workorderChatContent = (
     <div id={isMechanicDetail ? "mechanic-chat-section" : undefined} className="chat-content">
       <ChatThread
@@ -330,6 +351,92 @@ export function WorkorderDetailPage({
     </div>
   );
 
+
+  const detailModules = (<WorkorderDetailSections
+            activeWorkorder={activeWorkorder}
+            actorId={actor.id}
+            actorRole={actor.role}
+            assignedMechanicIds={assignedMechanicIds}
+            conversationMessages={conversationMessages}
+            detailMechanicNames={detailMechanicNames}
+            detailSection={renderedDetailSection}
+            detailSections={visibleDetailSections}
+            modulePolicies={modulePolicies}
+            detailStatus={detailStatus}
+            filledPartCount={filledPartCount}
+            form={form}
+            isCompact={isCompact}
+            isMechanicDetail={isMechanicDetail}
+            isOfficeDetail={isOfficeDetail}
+            mapsConfig={mapsConfig}
+            mechanicAction={mechanicAction}
+            mechanicMapLocation={mechanicMapLocation}
+            mechanicMapVehicle={mechanicMapVehicle}
+            mechanicProgress={mechanicProgress}
+            mechanicValidationField={mechanicValidationActive ? mechanicAction.validationField : ""}
+            mechanicUnitType={mechanicUnitType}
+            mechanicVehicleLabel={mechanicVehicleLabel}
+            officeAssignment={officeAssignment}
+            officeAssignmentChanged={officeAssignmentChanged}
+            officeDetailState={officeDetailState}
+            officeLocations={officeLocations}
+            odooAccess={odooSection?.access}
+            odooController={odooController}
+            pendingPartCount={pendingPartCount}
+            selectedVehicle={selectedVehicle}
+            vehicleLookup={vehicleLookup}
+            visibleTimeline={visibleTimeline}
+            locale={locale}
+            workorderChatContent={workorderChatContent}
+            applyVehicle={applyVehicle}
+            reloadActiveWorkorder={reloadActiveWorkorder}
+            onRegisterSerializedRepairFlush={registerSerializedRepairFlush}
+            saveActiveUsedParts={saveActiveUsedParts}
+            saveOfficeWorkorder={saveOfficeWorkorder}
+            openOfficeCancel={() => { setOfficeToolsOpen(false); openOfficeCancel(); }}
+            openOfficeReturn={() => { setOfficeToolsOpen(false); openOfficeReturn(); }}
+            selectOfficeLocation={selectOfficeLocation}
+            setDetailSection={selectDetailSection}
+            setOfficeAssignment={setOfficeAssignment}
+            updateActiveUsedParts={updateActiveUsedParts}
+            updateActiveLaborHours={updateActiveLaborHours}
+            updateField={updateField}
+            updateOfficeMechanicTeam={updateOfficeMechanicTeam}
+            updateStartDate={updateStartDate}
+            onUnitNumberCommit={commitDetailUnitNumber}
+            unitLookupQuery={unitLookupQuery}
+            updateUnitNumber={updateUnitLookupQuery}
+            unitHistoryController={unitHistoryController}
+            vehicleMileage={vehicleMileage}
+            vehicleModelText={vehicleModelText}
+            acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
+            openMechanicFinish={() => runAfterSerializedRepairFlush(
+              () => setMechanicFinish({ open: true, name: "", message: "" }),
+            )}
+            markOfficeWorkorderDone={() => runAfterSerializedRepairFlush(markOfficeWorkorderDone)}
+            openOfficeClose={() => {
+              setOfficeToolsOpen(false);
+              setOfficeDetailState((current) => ({ ...current, message: "" }));
+              setOfficeCloseOpen(true);
+            }}
+          />);
+  const officeToolViews = [
+    ...(chatPolicy.canRead || earlierNotes ? [{ id: "chat", label: chatPolicy.canRead ? "Chat" : "Notes", content: <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
+    ...(previewPolicy.canRead ? [{
+      id: "preview", label: "Preview", content: <div className="workorder-tools-preview">
+        <div className="workorder-tools-preview-actions">
+          <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); openFullscreenPreview(); }}>Open full preview</Button>
+          {canPrint ? <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); printWorkorders(); }}>{primaryActionLabel}</Button> : null}
+        </div>
+        <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
+      </div>,
+    }] : []),
+    ...["activity", "completion", "odoo"].flatMap((id) => {
+      const section = visibleDetailSections.find((entry) => entry.id === id);
+      return section ? [{ id, label: id === "activity" ? "Activity" : id === "completion" ? "Review" : "Integration", content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
+    }),
+  ];
+
   return (
     <main
       className={`prototype workorder-detail-page ${isMechanicDetail ? "mechanic-detail-page" : ""} ${viewport.keyboardOpen ? "is-keyboard-open" : ""}`.trim()}
@@ -344,7 +451,8 @@ export function WorkorderDetailPage({
       {previewPolicy.canRead ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
       <WorkorderDetailSurface
         locale={isMechanicDetail ? locale : "en"}
-        previewOpen={!isPhone && supportingPaneVisible && showEmbeddedPreview}
+        previewOpen={isOfficeDetail ? officeToolsOpen : !isPhone && supportingPaneVisible && showEmbeddedPreview}
+        presentation={isOfficeDetail ? "one-page" : "panel"}
         controlRef={formRef}
         context={{
           parent: { ...parent, onClick: followDetailParent },
@@ -375,10 +483,7 @@ export function WorkorderDetailPage({
                 <ApproveButton
                   className="detail-close-workorder-button"
                   type="button"
-                  onClick={() => {
-                    setOfficeDetailState((current) => ({ ...current, message: "" }));
-                    setOfficeCloseOpen(true);
-                  }}
+                  onClick={() => openOfficeTool("completion")}
                   busy={officeDetailState.busy}
                   aria-label="Approve workorder"
                   title="Approve workorder"
@@ -396,7 +501,10 @@ export function WorkorderDetailPage({
                   <span>{mechanicAction.busy === "accept" ? t("detail.accepting") : t("detail.acceptWork")}</span>
                 </button>
               ) : null}
-              {!isPhone && supportingPaneVisible ? (
+              {isOfficeDetail && canMarkWorkDone ? <WorkDoneButton type="button" onClick={() => openOfficeTool("completion")} busy={markWorkDoneBusy} /> : null}
+              {isOfficeDetail && !canMarkWorkDone && !activeWorkorder.allowedActions?.approve && officeToolViews.some((view) => view.id === "completion") ? <Button variant="secondary" type="button" onClick={() => openOfficeTool("completion")}>Review</Button> : null}
+              {isOfficeDetail && officeToolViews.length > 0 ? <PreviewToggle open={officeToolsOpen} onToggle={() => setOfficeToolsOpen((open) => !open)} controls="workorder-preview-panel" openLabel="Open workorder tools" closeLabel="Close workorder tools" /> : null}
+              {!isOfficeDetail && !isPhone && supportingPaneVisible ? (
                 <PreviewToggle
                   open={showEmbeddedPreview || previewFullscreen}
                   onToggle={toggleWorkorderTools}
@@ -464,7 +572,7 @@ export function WorkorderDetailPage({
           onSelect: selectDetailSection,
           preferenceKey: `workorder.sectionOrder.v1:${actor.id}:${actor.role}:detail`,
         }}
-        supportingPane={!isCompact && supportingPaneVisible ? (
+        supportingPane={isOfficeDetail ? <WorkorderToolsPanel key={activeWorkorder.workorder.id} open={officeToolsOpen} onClose={() => setOfficeToolsOpen(false)} activeView={officeToolView} onViewChange={setOfficeToolView} views={officeToolViews} /> : !isCompact && supportingPaneVisible ? (
           <PreviewPane
             id="workorder-preview-panel"
             open={showEmbeddedPreview}
@@ -519,74 +627,10 @@ export function WorkorderDetailPage({
             </div>
           ) : null}
 
-          <WorkorderDetailSections
-            activeWorkorder={activeWorkorder}
-            actorId={actor.id}
-            actorRole={actor.role}
-            assignedMechanicIds={assignedMechanicIds}
-            conversationMessages={conversationMessages}
-            detailMechanicNames={detailMechanicNames}
-            detailSection={renderedDetailSection}
-            detailSections={visibleDetailSections}
-            modulePolicies={modulePolicies}
-            detailStatus={detailStatus}
-            filledPartCount={filledPartCount}
-            form={form}
-            isCompact={isCompact}
-            isMechanicDetail={isMechanicDetail}
-            isOfficeDetail={isOfficeDetail}
-            mapsConfig={mapsConfig}
-            mechanicAction={mechanicAction}
-            mechanicMapLocation={mechanicMapLocation}
-            mechanicMapVehicle={mechanicMapVehicle}
-            mechanicProgress={mechanicProgress}
-            mechanicValidationField={mechanicValidationActive ? mechanicAction.validationField : ""}
-            mechanicUnitType={mechanicUnitType}
-            mechanicVehicleLabel={mechanicVehicleLabel}
-            officeAssignment={officeAssignment}
-            officeAssignmentChanged={officeAssignmentChanged}
-            officeDetailState={officeDetailState}
-            officeLocations={officeLocations}
-            odooAccess={odooSection?.access}
-            odooController={odooController}
-            pendingPartCount={pendingPartCount}
-            selectedVehicle={selectedVehicle}
-            vehicleLookup={vehicleLookup}
-            visibleTimeline={visibleTimeline}
-            locale={locale}
-            workorderChatContent={workorderChatContent}
-            applyVehicle={applyVehicle}
-            reloadActiveWorkorder={reloadActiveWorkorder}
-            onRegisterSerializedRepairFlush={registerSerializedRepairFlush}
-            saveActiveUsedParts={saveActiveUsedParts}
-            saveOfficeWorkorder={saveOfficeWorkorder}
-            openOfficeCancel={openOfficeCancel}
-            openOfficeReturn={openOfficeReturn}
-            selectOfficeLocation={selectOfficeLocation}
-            setDetailSection={selectDetailSection}
-            setOfficeAssignment={setOfficeAssignment}
-            updateActiveUsedParts={updateActiveUsedParts}
-            updateActiveLaborHours={updateActiveLaborHours}
-            updateField={updateField}
-            updateOfficeMechanicTeam={updateOfficeMechanicTeam}
-            updateStartDate={updateStartDate}
-            onUnitNumberCommit={commitDetailUnitNumber}
-            unitLookupQuery={unitLookupQuery}
-            updateUnitNumber={updateUnitLookupQuery}
-            unitHistoryController={unitHistoryController}
-            vehicleMileage={vehicleMileage}
-            vehicleModelText={vehicleModelText}
-            acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
-            openMechanicFinish={() => runAfterSerializedRepairFlush(
-              () => setMechanicFinish({ open: true, name: "", message: "" }),
-            )}
-            markOfficeWorkorderDone={() => runAfterSerializedRepairFlush(markOfficeWorkorderDone)}
-            openOfficeClose={() => {
-              setOfficeDetailState((current) => ({ ...current, message: "" }));
-              setOfficeCloseOpen(true);
-            }}
-          />
-          {isCompact && renderedDetailSection === "preview" && previewPolicy.canRead ? (
+          {isOfficeDetail ? cloneElement(detailModules, {
+            detailSections: mainWorkorderSections(visibleDetailSections),
+          }) : detailModules}
+          {!isOfficeDetail && isCompact && renderedDetailSection === "preview" && previewPolicy.canRead ? (
             <CompactWorkorderPreview
               panelRef={previewRef}
               status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}

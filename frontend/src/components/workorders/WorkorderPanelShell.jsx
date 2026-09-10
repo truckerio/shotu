@@ -1,6 +1,6 @@
 import { ArrowLeft } from "@untitledui/icons";
 import { WorkorderDetailLayout } from "./WorkorderDetailLayout.jsx";
-import { WorkorderObjectSummary, WorkorderSectionNav } from "./WorkorderObjectPage.jsx";
+import { WorkorderObjectSummary, WorkorderPresentationContext, WorkorderSectionNav } from "./WorkorderObjectPage.jsx";
 
 /**
  * Canonical workorder editor panel. Create and existing-detail screens supply
@@ -17,16 +17,25 @@ export function WorkorderPanelShell({
   locale = "en",
   notice,
   previewOpen,
+  presentation = "panel",
   sectionClassName = "",
   sections,
   summary,
   supportingPane,
 }) {
   const { children: summaryChildren, ...summaryProps } = summary;
+  const onePage = presentation === "one-page";
+  const coreSectionIds = onePage
+    ? ["unit", "schedule", "concern", "diagnosisRepair", "parts", "assignment", "location"]
+    : [];
 
   return (
-    <WorkorderDetailLayout detail={detail} previewOpen={previewOpen} locale={locale}>
-      <aside className={`control-panel ${controlClassName}`.trim()} ref={controlRef}>
+    <WorkorderDetailLayout detail={detail} previewOpen={previewOpen} locale={locale} tools={detail && onePage}>
+      <aside
+        className={`control-panel ${controlClassName}`.trim()}
+        data-workorder-presentation={presentation}
+        ref={controlRef}
+      >
         <div className={`detail-context-bar ${context.className || ""}`.trim()}>
           <div className="workorder-context-main">
             {context.back ? (
@@ -55,19 +64,26 @@ export function WorkorderPanelShell({
         </div>
 
         {notice}
+        {onePage ? <div className="workorder-one-page-notices">{summaryChildren}</div> : null}
 
-        <WorkorderObjectSummary {...summaryProps} locale={locale}>
-          {summaryChildren}
-        </WorkorderObjectSummary>
-        <WorkorderSectionNav
-          className={sectionClassName}
-          sections={sections.items}
-          activeSection={sections.activeId}
-          onSelect={sections.onSelect}
-          locale={locale}
-          preferenceKey={sections.preferenceKey}
-        />
-        {children}
+        {!onePage ? (
+          <>
+            <WorkorderObjectSummary {...summaryProps} locale={locale}>
+              {summaryChildren}
+            </WorkorderObjectSummary>
+            <WorkorderSectionNav
+              className={sectionClassName}
+              sections={sections.items}
+              activeSection={sections.activeId}
+              onSelect={sections.onSelect}
+              locale={locale}
+              preferenceKey={sections.preferenceKey}
+            />
+          </>
+        ) : null}
+        <WorkorderPresentationContext.Provider value={{ coreSectionIds, mode: presentation }}>
+          {children}
+        </WorkorderPresentationContext.Provider>
         {footer}
       </aside>
       {supportingPane}

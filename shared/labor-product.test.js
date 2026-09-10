@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   configuredLaborProduct,
   laborProductLabel,
+  localLaborProductSnapshot,
   normalizeLaborProduct,
 } from "./labor-product.js";
 
@@ -29,4 +30,19 @@ test("labor product normalization accepts database field names", () => {
 test("configured labor product requires a provider identity", () => {
   assert.equal(configuredLaborProduct({ code: "LAB", name: "Labor" }), null);
   assert.equal(configuredLaborProduct({ externalId: "91", code: "LAB", name: "Labor" }).externalId, "91");
+});
+
+test("local labor snapshot keeps its local identity separate from Odoo", () => {
+  assert.deepEqual(localLaborProductSnapshot({
+    id: "11111111-1111-4111-8111-111111111111",
+    code: "DIAG",
+    name: "Diagnostics",
+    externalId: "unsafe-client-value",
+  }), {
+    productId: "11111111-1111-4111-8111-111111111111",
+    externalId: "",
+    code: "DIAG",
+    name: "Diagnostics",
+    uomCode: "hr",
+  });
 });

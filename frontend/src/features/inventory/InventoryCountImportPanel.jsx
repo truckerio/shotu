@@ -3,12 +3,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, FileCheck02, Package, SearchMd } from "@untitledui/icons";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
 import { Button } from "../../components/ui/Button.jsx";
+import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from "../../components/ui/OperationalDataTable.jsx";
 import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { api } from "../../lib/api.js";
 import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
+import { ReviewInventoryCountPartDialog } from "./ReviewInventoryCountPartDialog.jsx";
 
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_ROWS = 500;
@@ -81,7 +83,7 @@ export async function readInventoryWorkbook(file) {
 
 function statusText(status) {
   return {
-    unmatched: "Choose master part",
+    unmatched: "Choose and review master part",
     duplicate: "Duplicate row",
     invalid_quantity: "Fix quantity",
     ready: "Ready",
@@ -100,6 +102,7 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [reviewPart, setReviewPart] = useState(null);
 
   async function update(action, part = null) {
     setSaving(true);
@@ -152,7 +155,7 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
         purpose="master_match"
         value={query}
         onChange={(nextQuery) => { setQuery(nextQuery); setUseSpreadsheetSuggestions(false); }}
-        onSelect={(part) => update("match", part)}
+        onSelect={(part) => part.trackingMode ? update("match", part) : setReviewPart(part)}
         disabled={saving || !validQuantity}
         label=""
         inputAriaLabel={`Choose master part for ${partLabel} from row ${line.sourceRow}`}
@@ -170,6 +173,12 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
         defaults={{ partNumber: line.sourcePartNumber, description: line.sourcePartName || line.sourceDescription, uomCode: "ea" }}
         onClose={() => setCreateOpen(false)}
         onCreated={(part) => update("match", part)}
+      /> : null}
+      {reviewPart ? <ReviewInventoryCountPartDialog
+        part={reviewPart}
+        quantity={Number(quantity)}
+        onClose={() => setReviewPart(null)}
+        onSaved={async (part) => { setReviewPart(null); await update("match", part); }}
       /> : null}
     </OperationalDataCell>
     <OperationalDataCell label="Action" className="inventory-count-action-cell">
@@ -334,8 +343,8 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     </dl>
 
     {stocktake.readyCount && canApplyInventoryCount ? <section className="inventory-count-apply">
-      <div className="inventory-count-ready-copy"><CheckCircle /><div><strong>{stocktake.readyCount} matched</strong><p>Creates serialized units and QR labels at {stocktake.locationName}.</p></div></div>
-      <fieldset className="inventory-count-confirmation"><legend className="inventory-count-visually-hidden">Physical count confirmation</legend><label className="inventory-count-attestation"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>Counted at {stocktake.locationName}</span></label></fieldset>
+      <div className="inventory-count-ready-copy"><CheckCircle /><div><strong>{stocktake.readyCount} matched</strong><p>Adds counted stock at {stocktake.locationName}. Serialized parts also receive QR labels.</p></div></div>
+      <fieldset className="inventory-count-confirmation"><legend className="inventory-count-visually-hidden">Physical count confirmation</legend><label className="inventory-count-attestation"><Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>Counted at {stocktake.locationName}</span></label></fieldset>
       <Button type="button" variant="primary" onClick={applyReady} disabled={!confirmed || applying}>{applying ? "Adding…" : `Add ${stocktake.readyCount} rows`}</Button>
     </section> : stocktake.readyCount ? <section className="inventory-count-admin-next-action"><strong>{stocktake.readyCount} matched rows are ready.</strong><p>An administrator must confirm the physical count before adding inventory.</p></section> : null}
 

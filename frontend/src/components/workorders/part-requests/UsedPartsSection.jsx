@@ -7,10 +7,12 @@ export function UsedPartsSection({
   parts,
   laborHours,
   laborProduct,
+  locationId,
   laborRepairOrder,
   laborRepairOrderDisabled,
   installedParts,
   onLaborHoursChange,
+  onLaborProductChange,
   onLaborRepairOrderChange,
   onPartsChange,
   onSaveParts,
@@ -24,6 +26,7 @@ export function UsedPartsSection({
   locale,
   id,
   hidden,
+  presentation = "panel",
 }) {
   return (
     <div id={id} hidden={hidden}>
@@ -34,10 +37,12 @@ export function UsedPartsSection({
         parts={parts}
         laborHours={laborHours}
         laborProduct={laborProduct}
+        locationId={locationId}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
         installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
+        onLaborProductChange={onLaborProductChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onChange={onPartsChange}
         onSave={onSaveParts}
@@ -50,6 +55,7 @@ export function UsedPartsSection({
         readonlyMessage={readonlyMessage}
         suggestionsEnabled={suggestionsEnabled}
         locale={locale}
+        presentation={presentation}
       />
     </div>
   );

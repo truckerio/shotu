@@ -141,9 +141,9 @@ test("inventory-only consumers can suppress false manual-entry fallback copy", (
   assert.match(usedParts, /allowManualEntry=\{false\}/);
 });
 
-test("catalog popup stays readable beyond the narrow input column", () => {
+test("catalog popup stays readable at the Part field width", () => {
   assert.match(styles, /\.part-catalog-popup\s*\{[\s\S]*?right:\s*auto;/);
-  assert.match(styles, /width:\s*var\(--part-catalog-popup-width, min\(480px, calc\(100vw - 32px\)\)\);/);
+  assert.match(styles, /width:\s*var\(--part-catalog-popup-width, 100%\);/);
   assert.match(styles, /max-width:\s*calc\(100vw - 32px\);/);
   assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.part-catalog-popup \.part-catalog-option-heading strong\s*\{[^}]*text-align:\s*left;/s);
@@ -151,11 +151,11 @@ test("catalog popup stays readable beyond the narrow input column", () => {
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?max-width:\s*calc\(100vw - 24px\);/);
 });
 
-test("catalog popup follows the parts row and stays inside the viewport", () => {
-  assert.equal(catalogPopupWidth({ anchorLeft: 108, anchorWidth: 396, rowEnd: 1236, viewportWidth: 1498 }), 1128);
-  assert.equal(catalogPopupWidth({ anchorLeft: 80, anchorWidth: 220, rowEnd: 500, viewportWidth: 390 }), 294);
+test("catalog popup follows its field and stays inside the viewport", () => {
+  assert.equal(catalogPopupWidth({ anchorLeft: 108, anchorWidth: 396, rowEnd: 1236, viewportWidth: 1498 }), 396);
+  assert.equal(catalogPopupWidth({ anchorLeft: 80, anchorWidth: 220, rowEnd: 500, viewportWidth: 390 }), 220);
   assert.equal(catalogPopupWidth({ anchorLeft: 100, anchorWidth: 360, rowEnd: 300, viewportWidth: 1200 }), 360);
-  assert.match(source, /closest\("\.part-row, \.operational-part-row"\)/);
-  assert.match(source, /\.used-part-repair, input\[aria-label\^='Repair order'\]/);
+  assert.equal(catalogPopupWidth({ anchorLeft: 80, anchorWidth: 360, viewportWidth: 390 }), 294);
+  assert.doesNotMatch(source, /closest\("\.part-row, \.operational-part-row"\)/);
   assert.match(source, /new ResizeObserver\(measure\)/);
 });

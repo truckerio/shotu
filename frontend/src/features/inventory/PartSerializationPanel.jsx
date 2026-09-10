@@ -9,6 +9,7 @@ import {
   XClose,
 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import { api } from "../../lib/api.js";
@@ -1132,8 +1133,7 @@ export function PartSerializationPanel({
                 />
               </label>
               <label className="inventory-serial-confirm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={confirmed}
                   onChange={(event) => setConfirmed(event.target.checked)}
                   disabled={creating}

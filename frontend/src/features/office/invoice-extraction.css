@@ -136,7 +136,6 @@
 .invoice-learning-option { color:#475467; }
 .invoice-learning-option[open] { min-width:min(100%,360px); }
 .invoice-learning-choice { align-items:center; display:grid!important; gap:8px!important; grid-template-columns:auto minmax(0,1fr); padding:2px 4px 6px; }
-.invoice-learning-choice input { min-height:18px!important; width:18px!important; }
 .invoice-review-complete { color:#067647; font-weight:600; text-align:right; }
 .invoice-review-reversed { color:#b42318; font-weight:600; text-align:right; }
 .invoice-reextract-warning { background:#fffaeb; border:1px solid #fedf89; border-radius:8px; color:#b54708; padding:10px 12px; }

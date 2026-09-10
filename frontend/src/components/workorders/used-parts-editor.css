@@ -66,6 +66,52 @@
   min-height: 44px;
 }
 
+.used-parts-editor.is-one-page {
+  gap: 10px;
+}
+
+.used-parts-one-page-table {
+  --workorder-parts-quantity-track: 158px;
+  --workorder-parts-grid-template: 24px minmax(0, 1.1fr) var(--workorder-parts-quantity-track) minmax(0, 1fr) minmax(140px, 0.55fr);
+  gap: 0;
+}
+
+.used-parts-one-page-table .used-part-labor-row {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-subtle, #e4e7ec);
+  border-radius: 0;
+  padding: 10px 8px;
+}
+
+.used-parts-one-page-table .quantity-unit-input {
+  grid-template-columns: 90px 60px;
+}
+
+.used-parts-one-page-table .quantity-unit-number input,
+.used-parts-one-page-table .quantity-unit-trigger {
+  min-width: 0;
+  width: 100%;
+}
+
+/* Match Create's one-page part identity treatment while leaving quantity and
+   repair-order controls visibly editable. */
+.used-parts-one-page-table .used-parts-manual-picker .part-catalog-field > input {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #d0d5dd;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 44px;
+}
+
+.used-parts-one-page-table .used-parts-manual-picker .part-catalog-field > input:focus {
+  border-color: transparent;
+  border-bottom-color: #1570ef;
+  box-shadow: 0 1px 0 #1570ef;
+  outline: none;
+}
+
 .used-parts-labor-table .used-part-labor-row {
   background: var(--surface-subtle, #f9fafb);
   border: 1px solid var(--border-subtle, #e4e7ec);
@@ -80,6 +126,7 @@
 .used-parts-column-head,
 .used-parts-editor .used-parts-items-table > .operational-part-row {
   grid-template-columns: 24px minmax(0, 1.1fr) minmax(126px, 0.85fr) minmax(0, 1fr) minmax(220px, 0.9fr);
+  grid-template-columns: var(--workorder-parts-grid-template);
 }
 
 .used-parts-column-head {
@@ -181,6 +228,7 @@
   align-items: start;
   background: var(--surface-subtle, #f9fafb);
   grid-template-columns: 24px minmax(0, 1.1fr) minmax(126px, 0.85fr) minmax(0, 1fr) minmax(220px, 0.9fr);
+  grid-template-columns: var(--workorder-parts-grid-template);
   padding-block: 10px;
 }
 

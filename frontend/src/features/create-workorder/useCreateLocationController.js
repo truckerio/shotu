@@ -54,6 +54,7 @@ export function useCreateLocationController({
       const payload = await request(createTemplateEndpoint());
       const model = createLoadedLocationModel({
         currentLocationId: currentFormRef.current.locationId,
+        currentLaborProduct: currentFormRef.current.laborProduct,
         payload,
       });
       setLocations(model.locations);

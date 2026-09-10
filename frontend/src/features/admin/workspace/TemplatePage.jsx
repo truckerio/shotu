@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { Button } from "../../../components/ui/Button.jsx";
+import { Checkbox } from "../../../components/ui/Checkbox.jsx";
 import { emptyPartRows, renderWorkorderPageHtml } from "../../../../../shared/workorder-template.js";
 
 function previewForm(location, template) {
@@ -66,8 +67,7 @@ export function WorkorderRulesPage({ detail, policy, onChange, onOpenModules, on
             <strong>Mechanics can record parts used</strong>
             <small>When off, mechanics can still request parts and message the office.</small>
           </span>
-          <input
-            type="checkbox"
+          <Checkbox
             checked={policy.mechanicCanRecordParts}
             onChange={(event) => updateMechanicParts(event.target.checked)}
           />

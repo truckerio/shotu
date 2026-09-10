@@ -207,6 +207,18 @@ test("readiness calls the labor description a repair order", () => {
   assert.equal(blocker.message, "A repair order is required for the labor description.");
 });
 
+test("selected local labor fails closed instead of using the configured Odoo default", () => {
+  const data = readyData();
+  data.localLaborProductId = "44444444-4444-4444-8444-444444444444";
+  const result = evaluateOdooOutboundReadiness(data, { configured: true });
+  assert.equal(result.ready, false);
+  assert.deepEqual(result.blockers.find((entry) => entry.code === "ODOO_LOCAL_LABOR_UNMAPPED"), {
+    code: "ODOO_LOCAL_LABOR_UNMAPPED",
+    message: "This workorder uses a local labor product. Odoo export is unavailable until labor mapping is supported.",
+    field: "laborProduct",
+  });
+});
+
 test("workorder mileage normalizes for Odoo and invalid values fail before draft creation", () => {
   assert.equal(normalizeOdooOdometer("482,150 mi"), 482150);
   assert.equal(normalizeOdooOdometer(" 482150.5 "), 482150.5);

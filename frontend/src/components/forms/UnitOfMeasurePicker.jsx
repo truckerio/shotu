@@ -4,6 +4,7 @@ import { getUnitDefinition, normalizeUomCode } from "../../../../shared/units-of
 import { unitOptionGroups } from "./quantity-unit-model.js";
 import { textEntryProps } from "./text-entry-policy.js";
 import { interfaceText } from "../../i18n/index.js";
+import { quantityUnitMenuPlacement } from "./quantity-unit-placement-model.js";
 import "./quantity-unit-input.css";
 
 export function UnitOfMeasurePicker({ uomCode, onChange, allowedUomCodes = null, label = "Unit", disabled = false, readOnly = false, id, locale = "en", ...ariaProps }) {
@@ -49,31 +50,33 @@ export function UnitOfMeasurePicker({ uomCode, onChange, allowedUomCodes = null,
       const trigger = triggerRef.current;
       const menu = menuRef.current;
       if (!trigger || !menu) return;
-      const gutter = 16;
-      const gap = 6;
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const visualViewport = window.visualViewport;
+      const viewportHeight = visualViewport?.height || window.innerHeight;
+      const viewportOffsetTop = visualViewport?.offsetTop || 0;
       const triggerRect = trigger.getBoundingClientRect();
-      const availableBelow = viewportHeight - triggerRect.bottom - gap - gutter;
-      const availableAbove = triggerRect.top - gap - gutter;
       const isMobile = window.matchMedia("(max-width: 700px)").matches;
-      const menuHeight = Math.min(menu.scrollHeight, isMobile ? 420 : 360);
-      const minimumUsefulHeight = isMobile ? 180 : 240;
-      const openBelow = availableBelow >= Math.min(menuHeight, minimumUsefulHeight) || availableBelow >= availableAbove;
-      setMenuPlacement(openBelow ? "below" : "above");
-      const boundedHeight = Math.min(isMobile ? 420 : 360, Math.max(160, openBelow ? availableBelow : availableAbove));
-      const nextStyle = { "--quantity-menu-max-height": `${boundedHeight}px` };
+      const placement = quantityUnitMenuPlacement({
+        triggerRect,
+        menuHeight: menu.scrollHeight,
+        viewportHeight,
+        viewportOffsetTop,
+        isMobile,
+      });
+      setMenuPlacement(placement.placement);
+      const nextStyle = { "--quantity-menu-max-height": `${placement.maxHeight}px` };
       if (!isMobile) { setMenuStyle(nextStyle); return; }
-      const top = openBelow ? triggerRect.bottom + gap : Math.max(gutter, triggerRect.top - gap - boundedHeight);
-      setMenuStyle({ ...nextStyle, "--quantity-menu-top": `${top}px` });
+      setMenuStyle({ ...nextStyle, "--quantity-menu-top": `${placement.top}px` });
     }
     positionMenu();
     window.addEventListener("resize", positionMenu);
     window.addEventListener("scroll", positionMenu, true);
     window.visualViewport?.addEventListener("resize", positionMenu);
+    window.visualViewport?.addEventListener("scroll", positionMenu);
     return () => {
       window.removeEventListener("resize", positionMenu);
       window.removeEventListener("scroll", positionMenu, true);
       window.visualViewport?.removeEventListener("resize", positionMenu);
+      window.visualViewport?.removeEventListener("scroll", positionMenu);
     };
   }, [open]);
 

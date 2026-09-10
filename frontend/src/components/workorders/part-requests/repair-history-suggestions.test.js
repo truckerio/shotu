@@ -9,6 +9,14 @@ const officeReview = readFileSync(new URL("./useOfficeRequestReview.js", import.
 const used = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./repair-history-suggestions.css", import.meta.url), "utf8");
 
+test("field history uses an accessible anchored dropdown without a second row", () => {
+  assert.match(component, /if \(!expanded && !dropdown\)/);
+  assert.match(component, /<DialogTrigger isOpen=\{expanded\} onOpenChange=\{setExpanded\}>/);
+  assert.match(component, /<Popover[^>]*placement="bottom end"/);
+  assert.match(component, /aria-label=\{t\("parts.showPreviousWork"\)\}/);
+  assert.match(css, /\.repair-history-field-dropdown\s*\{[^}]*position: absolute/);
+});
+
 test("history lookup is bounded, cancellable, stale-safe, and explicit apply only", () => {
   assert.match(component, /new AbortController\(\)/);
   assert.match(component, /requestSequence/);
@@ -26,9 +34,9 @@ test("history suggestions can be dismissed and reopened without changing repair 
   assert.match(component, /parts\.showPreviousWork/);
   assert.match(component, /onClick=\{\(\) => setExpanded\(true\)\}/);
   assert.match(component, /currentRepairOrder = ""/);
-  assert.match(component, /useState\(\(\) => !normalizedRepairOrder\)/);
-  assert.match(component, /setExpanded\(!normalizedRepairOrder\)/);
-  assert.match(component, /\[catalogPartId, normalizedPartNumber, normalizedRepairOrder\]/);
+  assert.match(component, /useState\(\(\) => !initiallyCollapsed && !normalizedRepairOrder\)/);
+  assert.match(component, /setExpanded\(!initiallyCollapsed && !normalizedRepairOrder\)/);
+  assert.match(component, /\[catalogPartId, normalizedPartNumber, normalizedRepairOrder, initiallyCollapsed, locationId\]/);
   assert.doesNotMatch(component, /setExpanded\(false\)[\s\S]{0,120}onApply/);
 });
 

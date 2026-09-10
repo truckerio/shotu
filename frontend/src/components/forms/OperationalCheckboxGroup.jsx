@@ -1,4 +1,5 @@
 import { joinClassNames } from "./form-utils.js";
+import { Checkbox } from "../ui/Checkbox.jsx";
 import "./operational-form.css";
 
 export function OperationalCheckboxGroup({
@@ -27,8 +28,7 @@ export function OperationalCheckboxGroup({
           const value = String(option.value);
           return (
             <label className="operational-checkbox-option" key={value}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.has(value)}
                 onChange={(event) => toggle(value, event.target.checked)}
               />

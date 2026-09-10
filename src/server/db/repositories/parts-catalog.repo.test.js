@@ -36,6 +36,7 @@ test("operational catalog search is purpose-gated by local availability", async 
   assert.match(source, /inventory\.id is not null[\s\S]*\$11::text = 'request'[\s\S]*inventory\.quantity_available > 0/);
   assert.match(source, /case when inventory\.id is not null then 'local'/);
   assert.match(source, /source: row\.inventory_item_id \? "local"/);
+  assert.match(source, /trackingMode: row\.tracking_mode \|\| null/);
 });
 
 test("catalog search migration indexes partial text, barcode, and location inventory", async () => {

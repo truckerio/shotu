@@ -526,6 +526,30 @@ test("opening-count line review emits structured audit after successful resoluti
   }]);
 });
 
+test("opening-count line review refuses an unreviewed master part at the route boundary", async () => {
+  const response = {};
+  const events = [];
+  await handleInventoryApi(
+    { method: "PATCH", requestId: "request-unreviewed" },
+    response,
+    new URL(`http://localhost/api/office/inventory/count-imports/${COUNT_ID}/lines/${COUNT_LINE_ID}`),
+    {
+      ...helpers({
+        action: "match",
+        expectedVersion: 2,
+        catalogPartId: RUN_ID,
+        quantity: 4,
+        binLocation: "A1",
+      }),
+      emitAdministrativeAuditEvent: async (event) => { events.push(event); },
+    },
+    { resolveLine: async () => ({ kind: "tracking_required" }) },
+  );
+  assert.equal(response.status, 409);
+  assert.equal(response.payload.code, "INVENTORY_COUNT_TRACKING_REQUIRED");
+  assert.deepEqual(events, []);
+});
+
 test("opening-count apply route rejects a missing physical attestation", async () => {
   const response = {};
   await handleInventoryApi(

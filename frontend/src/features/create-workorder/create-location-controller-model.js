@@ -34,7 +34,7 @@ export function normalizeCreateLocationResponse(payload = {}) {
   return { defaultLocationEntry, locations };
 }
 
-export function createLoadedLocationModel({ currentLocationId = "", payload = {} } = {}) {
+export function createLoadedLocationModel({ currentLocationId = "", currentLaborProduct = null, payload = {} } = {}) {
   const { defaultLocationEntry, locations } = normalizeCreateLocationResponse(payload);
   const hadValidLocation = Boolean(resolveCreateLocation(locations, currentLocationId)?.location?.id);
   const selectedEntry = resolveCreateLocation(locations, currentLocationId) || defaultLocationEntry;
@@ -46,7 +46,9 @@ export function createLoadedLocationModel({ currentLocationId = "", payload = {}
       template: defaultLocationEntry.template,
     })
     : {};
-  if (selectedEntry) patch.laborProduct = selectedEntry.laborProduct || null;
+  if (selectedEntry) patch.laborProduct = hadValidLocation && currentLaborProduct?.productId
+    ? currentLaborProduct
+    : selectedEntry.laborProduct || null;
 
   return {
     defaultLocationEntry,

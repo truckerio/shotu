@@ -1,4 +1,5 @@
 import { Button } from "../../ui/Button.jsx";
+import { Checkbox } from "../../ui/Checkbox.jsx";
 import { normalizeLocale } from "../../../i18n/index.js";
 import { isEligibleSerializedUnit } from "./workorder-serialized-part-selection.js";
 import "./serialized-unit-child-picker.css";
@@ -65,8 +66,7 @@ export function SerializedUnitChildPicker({
           const eligible = isEligibleSerializedUnit(unit);
           return (
             <label key={unit.id} className={checked ? "is-selected" : ""}>
-              <input
-                type="checkbox"
+              <Checkbox
                 value={unit.id}
                 checked={checked}
                 disabled={!eligible || (!checked && selected.size >= maxSelected)}

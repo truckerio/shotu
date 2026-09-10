@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Package } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import "./physical-receipt-confirmation.css";
 
 export function PhysicalReceiptConfirmation({ busy = false, disabled = false, onConfirm }) {
@@ -16,9 +17,8 @@ export function PhysicalReceiptConfirmation({ busy = false, disabled = false, on
       </div>
       <div className="physical-receipt-controls">
         <label htmlFor={checkboxId}>
-          <input
+          <Checkbox
             id={checkboxId}
-            type="checkbox"
             checked={attested}
             onChange={(event) => { setAttested(event.target.checked); setMismatch(false); }}
             disabled={busy || disabled}

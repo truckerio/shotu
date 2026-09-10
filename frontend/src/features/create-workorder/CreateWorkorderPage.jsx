@@ -84,6 +84,7 @@ export function CreateWorkorderPage({
   applyVehicle,
 }) {
   const isMechanicCreate = actor.role === "mechanic";
+  const createPresentation = isMechanicCreate ? "panel" : "one-page";
   const t = (key) => interfaceText(locale, key);
   const assignmentPolicy = useMemo(() => resolveWorkorderModulePolicy({
     moduleId: WORKORDER_MODULE_IDS.ASSIGNMENT,
@@ -222,6 +223,7 @@ export function CreateWorkorderPage({
             previewOpen={previewPolicy.canRead && showEmbeddedPreview}
             previewActive={showEmbeddedPreview || previewFullscreen}
             previewVisible={previewPolicy.canRead}
+            presentation={createPresentation}
             sectionPreferenceKey={`workorder.sectionOrder.v1:${actor.id}:${actor.role}:create`}
             sections={createSections}
             workorderDraft={workorderDraft}
@@ -281,6 +283,7 @@ export function CreateWorkorderPage({
               mobileSection={activeSection}
               mobileScrollRef={mobileScrollRef}
               onErrorFocusTarget={ensureFocusedFieldVisible}
+              presentation={createPresentation}
               selectedVehicle={selectedVehicle}
               sections={createSections.filter((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW)}
               vehicleLookup={vehicleLookup}

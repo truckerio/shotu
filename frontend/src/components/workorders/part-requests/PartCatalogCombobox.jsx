@@ -12,7 +12,6 @@ import "./part-catalog-combobox.css";
 
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_DELAY_MS = 250;
-const POPUP_FALLBACK_WIDTH = 480;
 
 export function PartCatalogCombobox({
   workorderId,
@@ -183,17 +182,12 @@ export function PartCatalogCombobox({
   useLayoutEffect(() => {
     if (!showPopup || !rootRef.current) return undefined;
     const root = rootRef.current;
-    const row = root.closest(".part-row, .operational-part-row");
 
     function measure() {
       const anchor = root.getBoundingClientRect();
-      const repairField = row?.querySelector(".used-part-repair, input[aria-label^='Repair order']");
-      const rowEnd = repairField?.getBoundingClientRect().right
-        || anchor.left + Math.max(anchor.width, POPUP_FALLBACK_WIDTH);
       setPopupWidth(catalogPopupWidth({
         anchorLeft: anchor.left,
         anchorWidth: anchor.width,
-        rowEnd,
         viewportWidth: window.innerWidth,
       }));
     }
@@ -202,7 +196,6 @@ export function PartCatalogCombobox({
     const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
     if (observer) {
       observer.observe(root);
-      if (row) observer.observe(row);
     }
     window.addEventListener("resize", measure);
     return () => {

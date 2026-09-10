@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { XClose } from "@untitledui/icons";
+import { ChevronDown, XClose } from "@untitledui/icons";
+import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { api } from "../../../lib/api.js";
 import { interfaceText } from "../../../i18n/index.js";
 import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
@@ -13,6 +14,9 @@ const LOAD_DELAY_MS = 250;
 
 export function RepairHistorySuggestions({
   workorderId,
+  locationId,
+  initiallyCollapsed = false,
+  dropdown = false,
   catalogPartId,
   partNumber,
   assetId,
@@ -25,21 +29,21 @@ export function RepairHistorySuggestions({
   const panelId = useId();
   const requestSequence = useRef(0);
   const normalizedRepairOrder = String(currentRepairOrder || "").trim();
-  const [expanded, setExpanded] = useState(() => !normalizedRepairOrder);
+  const [expanded, setExpanded] = useState(() => !initiallyCollapsed && !normalizedRepairOrder);
   const [state, setState] = useState("idle");
   const [suggestions, setSuggestions] = useState([]);
   const normalizedPartNumber = String(partNumber || "").trim();
 
   useEffect(() => {
-    setExpanded(!normalizedRepairOrder);
-  }, [catalogPartId, normalizedPartNumber, normalizedRepairOrder]);
+    setExpanded(!initiallyCollapsed && !normalizedRepairOrder);
+  }, [catalogPartId, normalizedPartNumber, normalizedRepairOrder, initiallyCollapsed, locationId]);
 
   useEffect(() => {
     const sequence = ++requestSequence.current;
     const controller = new AbortController();
     setSuggestions([]);
 
-    if (disabled || !workorderId || !catalogPartId || !normalizedPartNumber) {
+    if (disabled || (!workorderId && !locationId) || !catalogPartId || !normalizedPartNumber) {
       setState("idle");
       return () => controller.abort();
     }
@@ -49,7 +53,7 @@ export function RepairHistorySuggestions({
       setState("loading");
       try {
         const params = new URLSearchParams({
-          workorderId,
+          ...(workorderId ? { workorderId } : { locationId }),
           catalogPartId,
           partNumber: normalizedPartNumber,
           limit: "5",
@@ -72,11 +76,11 @@ export function RepairHistorySuggestions({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [catalogPartId, disabled, normalizedPartNumber, workorderId]);
+  }, [catalogPartId, disabled, normalizedPartNumber, workorderId, locationId]);
 
   if (state === "idle") return null;
 
-  if (!expanded) {
+  if (!expanded && !dropdown) {
     return (
       <button
         className="repair-history-reopen"
@@ -90,7 +94,7 @@ export function RepairHistorySuggestions({
     );
   }
 
-  return (
+  const content = (
     <section id={panelId} className="repair-history-suggestions" aria-label={t("parts.repairHistorySuggestions")}>
       <div className="repair-history-heading">
         <div className="repair-history-heading-copy">
@@ -140,5 +144,20 @@ export function RepairHistorySuggestions({
         </p>
       )}
     </section>
+  );
+
+  if (!dropdown) return content;
+
+  return (
+    <div className="repair-history-field-dropdown">
+      <DialogTrigger isOpen={expanded} onOpenChange={setExpanded}>
+        <Button type="button" className="repair-history-field-trigger" aria-label={t("parts.showPreviousWork")} isDisabled={disabled}>
+          <ChevronDown aria-hidden="true" />
+        </Button>
+        <Popover className="repair-history-field-popover" placement="bottom end" offset={6}>
+          <Dialog aria-label={t("parts.repairHistorySuggestions")}>{content}</Dialog>
+        </Popover>
+      </DialogTrigger>
+    </div>
   );
 }

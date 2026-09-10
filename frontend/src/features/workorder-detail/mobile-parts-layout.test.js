@@ -112,7 +112,8 @@ test("used-parts intake and labor stay compact without hiding accessible names",
   assert.match(editor, /<WorkorderPartsRow className="used-part-labor-row" aria-label=\{t\("parts\.laborHours"\)\}>\s*<strong>1<\/strong>/);
   assert.match(editor, /<div className="used-parts-section-heading">\s*<h3 id=\{partsSectionTitleId\}>\{t\("parts\.usedTitle"\)\}<\/h3>\s*\{serializedToolbar\}\s*<\/div>/);
   assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">[\s\S]*?t\("parts\.addPart"\)[\s\S]*?<\/WorkorderPartsActions> : null/);
-  assert.equal((editor.match(/\{serializedToolbar\}/g) || []).length, 2);
+  // One toolbar in each exclusive one-page, populated-panel, and empty-panel branch.
+  assert.equal((editor.match(/\{serializedToolbar\}/g) || []).length, 3);
   assert.match(editor, /const \[intakeOpen, setIntakeOpen\] = useState\(false\)/);
   assert.match(editor, /function focusIntakeRow\(\)\s*\{\s*if \(!intakeOpen\) \{[\s\S]*?setIntakeOpen\(true\)/);
   assert.match(editor, /function closeIntakeRow\(\)[\s\S]*?setIntakeOpen\(false\)[\s\S]*?workorder-add-approved-part/);

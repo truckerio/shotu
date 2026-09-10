@@ -4,11 +4,39 @@
   min-width: 0;
 }
 
-.operational-part-labor-row {
-  background: #f9fafb;
-  border: 1px solid #eaecf0;
-  border-radius: 6px;
-  padding: 8px;
+.workorder-parts-column-head {
+  align-items: end;
+  color: #667085;
+  display: grid;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 8px;
+  padding: 0 8px 8px;
+}
+
+.workorder-parts-column-head > span:first-child {
+  text-align: center;
+}
+
+/*
+ * The table keeps content ownership with callers. `columns` only establishes
+ * shared geometry, so new columns can be introduced without replacing rows,
+ * scanner controls, or serialized-picker children with a generic data table.
+ */
+@container (min-width: 701px) {
+  .workorder-parts-grid > .operational-part-row {
+    grid-template-columns: var(--workorder-parts-grid-template);
+  }
+
+  .workorder-parts-grid > .workorder-parts-column-head {
+    grid-template-columns: var(--workorder-parts-grid-template);
+  }
+}
+
+@container (max-width: 700px) {
+  .create-parts-column-head {
+    display: none;
+  }
 }
 
 .operational-part-labor-name {

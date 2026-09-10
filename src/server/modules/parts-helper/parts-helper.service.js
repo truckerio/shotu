@@ -135,11 +135,25 @@ export async function getPartRepairSuggestions(input, requestContext, dependenci
   const parsed = repairSuggestionsInputSchema.parse(input);
   const requireAccess = dependencies.requireWorkorderAccess || requireWorkorderAccess;
   const suggestRepairs = dependencies.suggestCompanyPartRepairs || suggestCompanyPartRepairs;
-  const workorder = await requireAccess(requestContext, parsed.workorderId);
-  const suggestions = await suggestRepairs(workorder.companyId, {
+  let scope;
+  if (parsed.workorderId) {
+    const workorder = await requireAccess(requestContext, parsed.workorderId);
+    scope = { companyId: workorder.companyId, assetId: workorder.assetId || workorder.asset?.id || null };
+  } else {
+    requireActor(requestContext);
+    requirePermission(requestContext, PERMISSION.WORKORDER_OFFICE);
+    const getLocation = dependencies.getLocationById || getLocationById;
+    const location = await getLocation(parsed.locationId, [...(requestContext.companyIds || [])]);
+    if (!location) throw resourceNotFound("Location");
+    requireCompanyAccess(requestContext, location.company_id);
+    requireLocationAccess(requestContext, location.id);
+    // A draft has no trusted workorder/asset yet. Never accept client tenant or asset scope.
+    scope = { companyId: location.company_id, assetId: null };
+  }
+  const suggestions = await suggestRepairs(scope.companyId, {
     catalogPartId: parsed.catalogPartId || null,
     partNumber: parsed.partNumber,
-    assetId: workorder.assetId || workorder.asset?.id || null,
+    assetId: scope.assetId,
     limit: parsed.limit,
   });
 

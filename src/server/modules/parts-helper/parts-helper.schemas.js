@@ -31,10 +31,14 @@ export const catalogSearchInputSchema = z.object({
 });
 
 export const repairSuggestionsInputSchema = z.object({
-  workorderId: z.string().uuid(),
+  workorderId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
   catalogPartId: z.string().uuid().optional(),
   partNumber: z.string().trim().min(1).max(200),
   limit: z.coerce.number().int().min(1).max(5).optional().default(3),
+}).refine((input) => Boolean(input.workorderId) !== Boolean(input.locationId), {
+  message: "Choose workorder or location scope.",
+  path: ["workorderId"],
 });
 
 export const vehicleInputSchema = z.object({

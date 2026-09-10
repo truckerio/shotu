@@ -17,10 +17,19 @@ import { WorkorderSerializedPartDialog } from "./part-requests/WorkorderSerializ
 import { AggregatePartUsageRows, MeasuredPartUsageDialog } from "./part-requests/MeasuredPartUsageDialog.jsx";
 import { RepairHistorySuggestions } from "./part-requests/RepairHistorySuggestions.jsx";
 import { laborProductLabel } from "../../../../shared/labor-product.js";
+import { DEFAULT_PART_ENTRY_ROWS } from "../../../../shared/workorder-template.js";
+import { LaborProductSelector } from "./LaborProductSelector.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
-import { WorkorderPartsActions, WorkorderPartsRow, WorkorderPartsTable } from "./WorkorderPartsTable.jsx";
+import {
+  DETAIL_WORKORDER_PARTS_COLUMNS,
+  WORKORDER_PARTS_COLUMNS,
+  WorkorderPartsActions,
+  WorkorderPartsColumnHead,
+  WorkorderPartsRow,
+  WorkorderPartsTable,
+} from "./WorkorderPartsTable.jsx";
 
 const MEASURED_UOM_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 
@@ -31,10 +40,12 @@ export function UsedPartsEditor({
   parts,
   laborHours = "",
   laborProduct = null,
+  locationId = "",
   laborRepairOrder = "",
   laborRepairOrderDisabled = false,
   installedParts = [],
   onLaborHoursChange = () => {},
+  onLaborProductChange,
   onLaborRepairOrderChange = () => {},
   onChanged = () => {},
   onRegisterSerializedRepairFlush = () => {},
@@ -45,11 +56,19 @@ export function UsedPartsEditor({
   suggestionsEnabled = true,
   locale = "en",
   readonlyMessage = "Used parts are read-only for your role.",
+  presentation = "panel",
 }) {
   const t = (key) => interfaceText(locale, key);
   const readOnlyText = locale === "en" ? readonlyMessage : t("parts.usedPartsReadOnly");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [intakeOpen, setIntakeOpen] = useState(false);
+  // Detail's starter rows are intentionally local. A catalog selection opens
+  // the existing lifecycle dialog; it does not add a form-data part row.
+  const [onePageIntakeCount, setOnePageIntakeCount] = useState(DEFAULT_PART_ENTRY_ROWS);
+  const [onePageIntakeQueries, setOnePageIntakeQueries] = useState(() => (
+    Array.from({ length: DEFAULT_PART_ENTRY_ROWS }, () => "")
+  ));
+  const [activeOnePageIntakeIndex, setActiveOnePageIntakeIndex] = useState(null);
   const [message, setMessage] = useState("");
   const [serializedDialogPart, setSerializedDialogPart] = useState(null);
   const [measuredDialogPart, setMeasuredDialogPart] = useState(null);
@@ -61,6 +80,7 @@ export function UsedPartsEditor({
   const serializedRepairAutosaveRef = useRef(null);
   const serializedReservationCompletedRef = useRef(false);
   const intakeRowRef = useRef(null);
+  const onePageIntakeRowRefs = useRef([]);
   const laborSectionTitleId = useId();
   const partsSectionTitleId = useId();
   serializedRepairContextRef.current = { detail, locale, onChanged, serializedParts };
@@ -140,6 +160,7 @@ export function UsedPartsEditor({
   const aggregatePartUsages = detail?.modules?.parts?.data?.aggregatePartUsages || detail?.aggregatePartUsages || [];
   const recordedManualParts = readonlyUsedParts(parts);
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0;
+  const onePage = presentation === "one-page";
 
   useEffect(() => {
     if (returnedUsageKey) setSerializedHistoryOpen(true);
@@ -328,16 +349,35 @@ export function UsedPartsEditor({
     window.requestAnimationFrame(() => document.getElementById("workorder-add-approved-part")?.focus());
   }
 
+  function updateOnePageIntakeQuery(index, value) {
+    setOnePageIntakeQueries((current) => current.map((query, queryIndex) => (
+      queryIndex === index ? value : query
+    )));
+  }
+
+  function addOnePageIntakeRow() {
+    setOnePageIntakeCount((current) => Math.min(18, current + 1));
+    setOnePageIntakeQueries((current) => [...current, ""]);
+    window.requestAnimationFrame(() => onePageIntakeRowRefs.current.at(-1)?.querySelector("input")?.focus());
+  }
+
+  function clearActiveOnePageIntake() {
+    if (activeOnePageIntakeIndex === null) return;
+    updateOnePageIntakeQuery(activeOnePageIntakeIndex, "");
+    setActiveOnePageIntakeIndex(null);
+  }
+
   function renderPartsColumnHead() {
-    return (
-      <div className="used-parts-column-head" aria-hidden="true">
-        <span>#</span>
-        <span>{t("parts.part")}</span>
-        <span>{t("parts.quantityUnit")}</span>
-        <span>{t("parts.repairOrder")}</span>
-        <span>{t("parts.statusAction")}</span>
-      </div>
-    );
+    return <WorkorderPartsColumnHead
+      className="used-parts-column-head"
+      columns={DETAIL_WORKORDER_PARTS_COLUMNS}
+      labels={{
+        [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("parts.part"),
+        [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
+        [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("parts.repairOrder"),
+        [WORKORDER_PARTS_COLUMNS.STATUS_ACTION]: t("parts.statusAction"),
+      }}
+    />;
   }
 
   const serializedDialog = serializedDialogPart ? <WorkorderSerializedPartDialog
@@ -351,6 +391,7 @@ export function UsedPartsEditor({
     onClose={closeSerializedDialog}
     onReserved={async (usage) => {
       serializedReservationCompletedRef.current = true;
+      clearActiveOnePageIntake();
       try {
         await serializedParts?.recordUsage?.(usage);
       } catch {
@@ -363,11 +404,103 @@ export function UsedPartsEditor({
   const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
     open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart} locale={locale}
     onClose={closeMeasuredDialog} onReserved={async () => {
+      clearActiveOnePageIntake();
       setCatalogQuery("");
       setIntakeOpen(false);
       await onChanged();
     }}
   /> : null;
+
+  if (onePage) {
+    const hasLabor = Boolean(laborHours || laborRepairOrder) || laborEditable;
+    const nextOrdinal = (offset = 0) => activeSerializedParts.length + recordedManualParts.length + offset + (hasLabor ? 2 : 1);
+    const localIntakeRowCount = Math.max(0, onePageIntakeCount - activeSerializedParts.length - recordedManualParts.length);
+    return (
+      <div className="used-parts-editor workorder-parts-surface is-one-page" aria-label={t("parts.usedTitle")}>
+        {!partsEditable ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
+        <WorkorderPartsTable columns={DETAIL_WORKORDER_PARTS_COLUMNS} className="detail-operational-parts-editor used-parts-items-table used-parts-one-page-table">
+          {renderPartsColumnHead()}
+          {hasLabor ? (laborEditable ? <WorkorderPartsRow className="used-part-labor-row" aria-label={t("parts.laborHours")}>
+            <strong>1</strong>
+            <div className="used-part-field operational-part-labor-name">
+              {onLaborProductChange ? <LaborProductSelector
+                locationId={locationId}
+                value={laborProduct}
+                onChange={onLaborProductChange}
+                locale={locale}
+                disabled={!laborEditable || laborRepairOrderDisabled}
+              /> : <strong className="used-part-labor-name">{laborProductLabel(laborProduct)}</strong>}
+            </div>
+            <QuantityUnitInput
+              id="workorder-labor-hours"
+              quantity={laborHours}
+              uomCode="hr"
+              onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
+              quantityLabel={t("parts.laborHours")}
+              unitLabel={t("parts.unit")}
+              disabled={!laborEditable || laborRepairOrderDisabled}
+              unitReadOnly
+              compact
+              max={9999}
+            />
+            <div className="used-part-field used-part-repair">
+              <NarrativeField locale={locale} singleLine value={laborRepairOrder} onChange={(event) => onLaborRepairOrderChange(event.target.value)} aria-label={t("parts.repairOrderWorkPerformed")} placeholder={t("parts.repairOrderWorkPerformed")} disabled={!laborEditable || laborRepairOrderDisabled} />
+            </div>
+            <span aria-hidden="true"></span>
+          </WorkorderPartsRow> : renderReadonlyLaborRow()) : null}
+          {activeSerializedParts.map((part, index) => renderSerializedPartRow(part, index, index + (hasLabor ? 2 : 1)))}
+          {recordedManualParts.map((part, index) => renderRecordedPartRow(part, index, index + activeSerializedParts.length + (hasLabor ? 2 : 1)))}
+          {partsEditable ? Array.from({ length: localIntakeRowCount }, (_, intakeIndex) => <WorkorderPartsRow
+            id={`workorder-part-intake-row-${intakeIndex}`}
+            className="used-part-intake-row"
+            key={`local-intake-${intakeIndex}`}
+            ref={(node) => { onePageIntakeRowRefs.current[intakeIndex] = node; }}
+          >
+            <strong>{nextOrdinal(intakeIndex)}</strong>
+            <div className="create-part-identity-field used-parts-manual-picker">
+              <PartCatalogCombobox
+                workorderId={detail.workorder.id}
+                purpose="workorder_assignment"
+                value={onePageIntakeQueries[intakeIndex] || ""}
+                onChange={(value) => { updateOnePageIntakeQuery(intakeIndex, value); setSerializedDialogPart(null); }}
+                onSelect={(catalogPart) => {
+                  const category = getUnitDefinition(catalogPart.uomCode)?.category;
+                  serializedReservationCompletedRef.current = false;
+                  setActiveOnePageIntakeIndex(intakeIndex);
+                  updateOnePageIntakeQuery(intakeIndex, catalogPart.partNumber);
+                  setMessage("");
+                  if (MEASURED_UOM_CATEGORIES.has(category)) setMeasuredDialogPart(catalogPart);
+                  else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
+                  else setSerializedDialogPart(catalogPart);
+                }}
+                label=""
+                inputAriaLabel={`${t("parts.numberOrDescription")} ${intakeIndex + 1}`}
+                inputPolicy="identifier"
+                placeholder={t("parts.numberOrDescription")}
+                allowManualEntry={false}
+                locale={locale}
+              />
+            </div>
+            <QuantityUnitInput id={`workorder-part-intake-quantity-${intakeIndex}`} quantity="" uomCode="pc" quantityLabel={t("parts.quantity")} unitLabel={t("parts.unit")} disabled unitReadOnly compact />
+            <input {...textEntryProps("identifier")} aria-label={`${t("parts.repairOrder")} ${intakeIndex + 1}`} placeholder={t("parts.repairOrder")} readOnly />
+            <span aria-hidden="true"></span>
+          </WorkorderPartsRow>) : null}
+        </WorkorderPartsTable>
+        {serializedDialog}
+        {serializedFeedback}
+        {(partsEditable || serializedToolbar) ? <WorkorderPartsActions className="used-parts-actions">
+          {partsEditable ? <Button id="workorder-add-approved-part" type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={addOnePageIntakeRow} aria-controls="workorder-part-intake-row-0">
+            {t("parts.addPart")}
+          </Button> : null}
+          {serializedToolbar}
+        </WorkorderPartsActions> : null}
+        {serializedHistory}
+        <AggregatePartUsageRows actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} locale={locale} onChanged={onChanged} />
+        {message ? <div className="used-parts-feedback" aria-live="polite"><span>{message}</span></div> : null}
+        {measuredDialog}
+      </div>
+    );
+  }
 
   if (!partsEditable && !laborEditable) {
     const savedParts = recordedManualParts;

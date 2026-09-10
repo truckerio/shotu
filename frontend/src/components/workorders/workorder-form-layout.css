@@ -1,0 +1,165 @@
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: 24px;
+  align-items: start;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-primary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-location,
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-unit,
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-concern,
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-diagnosis,
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-schedule,
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-parts {
+  min-width: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-parts {
+  --workorder-parts-heading-gap: 24px;
+  border-top: 1px solid #e4e7ec;
+  margin-top: 12px;
+  padding-top: 32px;
+}
+
+/* Create and Detail share this section wrapper and heading treatment. */
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-parts > .workorder-section-panel > .workorder-section-panel-heading {
+  border-bottom: 0;
+  margin-bottom: var(--workorder-parts-heading-gap);
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-location > .workorder-unit-location {
+  max-width: 520px;
+  width: 100%;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-location {
+  display: block;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-compact-unit-readonly output {
+  display: block;
+  min-height: 44px;
+  padding: 10px 0;
+  border-bottom: 1px solid #d0d5dd;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-concern,
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-diagnosis {
+  padding-top: 12px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-concern {
+  max-width: 920px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-schedule {
+  width: 100%;
+  max-width: 420px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-concern textarea {
+  min-height: 80px;
+  height: 80px;
+}
+
+.workorder-fixed-unit {
+  display: block;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.workorder-earlier-notes {
+  font-size: 12px;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-fields > .operational-form-field {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 16px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-fields > .operational-form-field > label {
+  padding-top: 10px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-office-notes > summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 32px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-office-notes .operational-form-field {
+  margin-top: 8px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-diagnosis-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-diagnosis-fields .operational-form-field {
+  margin: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-location-readonly {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-location-readonly > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Use tall desktop space for section and row rhythm, not oversized controls.
+   Keep the compact layout for tablets and shorter split-view windows. */
+@media (min-width: 1280px) and (min-height: 1000px) {
+  .workorder-detail-layout.has-tools-layout .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout {
+    padding-top: clamp(28px, 3vh, 48px);
+  }
+
+  .workorder-detail-layout.has-tools-layout .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-primary {
+    gap: clamp(16px, 2vh, 28px);
+  }
+
+  .workorder-detail-layout.has-tools-layout .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-parts {
+    margin-top: clamp(32px, 6vh, 96px);
+    padding-top: clamp(32px, 3vh, 48px);
+  }
+
+  .workorder-detail-layout.has-tools-layout .used-parts-editor .used-parts-items-table > .operational-part-row,
+  .workorder-detail-layout.has-tools-layout .used-parts-editor .used-parts-items-table > .used-part-serialized-group > .operational-part-row {
+    min-height: clamp(68px, 5.5vh, 84px);
+    align-items: center;
+  }
+}
+
+@container (max-width: 760px) {
+  .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-diagnosis-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

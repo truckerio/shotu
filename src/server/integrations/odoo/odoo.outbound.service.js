@@ -106,7 +106,13 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
   if (!String(workorder?.workPerformed || "").trim()) {
     blockers.push(blocker("ODOO_WORK_PERFORMED_MISSING", "A repair order is required for the labor description.", "workPerformed"));
   }
-  if (!labor?.productExternalId || labor.active === false || labor.uomCode !== "hr") {
+  if (data?.localLaborProductId) {
+    blockers.push(blocker(
+      "ODOO_LOCAL_LABOR_UNMAPPED",
+      "This workorder uses a local labor product. Odoo export is unavailable until labor mapping is supported.",
+      "laborProduct",
+    ));
+  } else if (!labor?.productExternalId || labor.active === false || labor.uomCode !== "hr") {
     blockers.push(blocker("ODOO_LABOR_PRODUCT_INVALID", "Configure an active Odoo labor product using Hours.", "laborProduct"));
   }
   for (const part of parts) {

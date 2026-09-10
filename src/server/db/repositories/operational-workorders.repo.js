@@ -455,6 +455,41 @@ function preserveMechanicOwnedFormData(beforeFormData, proposedFormData) {
   return preserved;
 }
 
+function normalizedUnitNo(formData) {
+  return String(formData?.unitNo || "").trim();
+}
+
+/**
+ * A workorder's selected unit is historical identity, not editable vehicle data.
+ * Keep an existing snapshot during full-form autosaves that omit unitNo, while
+ * allowing legacy workorders that never saved a unit number to remain unchanged.
+ */
+export function guardImmutableWorkorderUnitIdentity(before, input) {
+  if (Object.prototype.hasOwnProperty.call(input, "assetId") && input.assetId !== before.asset_id) {
+    throw lifecycleConflict(
+      "WORKORDER_UNIT_IMMUTABLE",
+      "The workorder unit cannot be changed after creation.",
+    );
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(input, "formData")) return input.formData;
+  const beforeFormData = before.form_data || {};
+  if (!Object.prototype.hasOwnProperty.call(beforeFormData, "unitNo")) return input.formData;
+
+  const savedUnitNo = normalizedUnitNo(beforeFormData);
+  const proposedFormData = input.formData || {};
+  if (
+    Object.prototype.hasOwnProperty.call(proposedFormData, "unitNo")
+    && normalizedUnitNo(proposedFormData) !== savedUnitNo
+  ) {
+    throw lifecycleConflict(
+      "WORKORDER_UNIT_IMMUTABLE",
+      "The workorder unit cannot be changed after creation.",
+    );
+  }
+  return { ...proposedFormData, unitNo: beforeFormData.unitNo };
+}
+
 function changedFields(before, input) {
   const changes = [];
   const compare = (key, oldValue, newValue) => {
@@ -704,6 +739,7 @@ export async function updateOperationalWorkorder(workorderId, input) {
       && !canCorrectClosed) {
       throw lifecycleConflict("WORKORDER_UPDATE_NOT_ALLOWED", "This workorder can no longer be edited.");
     }
+    const guardedFormData = guardImmutableWorkorderUnitIdentity(before, input);
     const changesSerializedScope = (
       Object.prototype.hasOwnProperty.call(input, "assetId") && input.assetId !== before.asset_id
     ) || (
@@ -727,8 +763,8 @@ export async function updateOperationalWorkorder(workorderId, input) {
       : { rows: [] };
     const laborHoursIncluded = Object.prototype.hasOwnProperty.call(input, "laborHours");
     const requestedFormData = laborHoursIncluded
-      ? { ...(input.formData || before.form_data || {}), laborHours: input.laborHours ?? "" }
-      : input.formData;
+      ? { ...(guardedFormData || before.form_data || {}), laborHours: input.laborHours ?? "" }
+      : guardedFormData;
     const normalizedInput = requestedFormData === undefined
       ? input
       : {

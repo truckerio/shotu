@@ -12,10 +12,12 @@ export function OfficePartsSurface({
   parts,
   laborHours,
   laborProduct,
+  locationId,
   laborRepairOrder,
   laborRepairOrderDisabled,
   installedParts = [],
   onLaborHoursChange,
+  onLaborProductChange,
   onLaborRepairOrderChange,
   onPartsChange,
   onSaveParts,
@@ -24,6 +26,7 @@ export function OfficePartsSurface({
   serializedParts,
   usedPartsAccess,
   laborEditable,
+  presentation = "panel",
 }) {
   const locale = "en";
   const t = (key) => interfaceText(locale, key);
@@ -51,10 +54,12 @@ export function OfficePartsSurface({
         parts={parts}
         laborHours={laborHours}
         laborProduct={laborProduct}
+        locationId={locationId}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
         installedParts={installedParts}
         onLaborHoursChange={onLaborHoursChange}
+        onLaborProductChange={onLaborProductChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onPartsChange={onPartsChange}
         onSaveParts={onSaveParts}
@@ -65,9 +70,10 @@ export function OfficePartsSurface({
         laborEditable={laborEditable}
         readonlyMessage={usedPartsAccess.message}
         suggestionsEnabled
+        presentation={presentation}
       />
       {detail.allowedActions?.planParts ? (
-        <section className="office-part-planning" aria-labelledby="requests-supply-heading">
+        <section className={`office-part-planning${presentation === "one-page" ? " is-one-page" : ""}`} aria-labelledby="requests-supply-heading">
           <div className="office-part-planning-heading">
             <h3 id="requests-supply-heading">{t("parts.requestsSupply")}</h3>
             <SectionHelpDisclosure label={t("parts.planningDoesNotRecordUse")}><p>{t("parts.planningDoesNotRecordUse")}</p></SectionHelpDisclosure>
@@ -75,10 +81,10 @@ export function OfficePartsSurface({
           <OfficePartComposer detail={detail} onChanged={onChanged} />
         </section>
       ) : null}
-      {requests.length ? <div className="office-part-overview">
+      {requests.length ? <div className={`office-part-overview${presentation === "one-page" ? " is-one-page" : ""}`}>
         <strong>{officeQueueText(requests, locale)}</strong>
       </div> : null}
-      <div className="part-request-list">
+      <div className={`part-request-list${presentation === "one-page" ? " is-one-page" : ""}`}>
         {requests.length ? requests.map((request) => (
           <div
             id={`part-request-${request.id}`}

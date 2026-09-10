@@ -37,7 +37,8 @@ test("shared workorder names and technical values use conservative keyboard poli
   assert.match(completionModule, /customerSignature/);
   assert.doesNotMatch(detailPage, /mechanicFinish\.name|expectedMechanicName/);
   assert.match(createUnit, /textEntryProps\("search"\)[\s\S]*role="combobox"/);
-  assert.match(unitModule, /textEntryProps\("search"\)[\s\S]*aria-label=\{t\("unit\.number"\)\}/);
+  assert.match(unitModule, /<output className="workorder-fixed-unit">\{form.unitNo/);
+  assert.doesNotMatch(unitModule, /role="combobox"/);
   assert.match(createParts, /value=\{part\.partNo\}[\s\S]*inputPolicy="identifier"/);
   assert.match(usedPartsEditor, /value=\{catalogQuery\}[\s\S]*inputPolicy="identifier"/);
   assert.match(partCatalogCombobox, /textEntryProps\(inputPolicy\)/);

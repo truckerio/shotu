@@ -236,6 +236,197 @@
   color: #fff;
 }
 
+.prototype.workorder-detail-page:has(.control-panel[data-workorder-presentation="one-page"]) {
+  background: #f7f8fa;
+  padding: 0;
+}
+
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] {
+  background: #f7f8fa;
+}
+
+.workorder-one-page-notices:empty { display: none; }
+.workorder-one-page-notices:not(:empty) { padding: 0 32px; }
+@media (min-width: 1280px) {
+  .split-layout.workorder-detail-layout:has(> .workorder-tools-panel-overlay[data-open]) {
+    display: grid;
+    grid-template-columns: minmax(620px, 1fr) var(--detail-resizer-width) minmax(360px, var(--preview-pane-width));
+    align-items: start;
+  }
+}
+@media (max-width: 1279px) {
+  .split-layout.workorder-detail-layout.has-tools-layout {
+    display: block;
+  }
+  .has-tools-layout > .detail-pane-resizer { display: none; }
+}
+.workorder-tools-preview { min-width: 0; overflow: auto; }
+.workorder-tools-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+@media (max-width: 700px) {
+  .workorder-one-page-notices:not(:empty) { padding-inline: 16px; }
+}
+
+.control-panel[data-workorder-presentation="one-page"] .create-workorder-form {
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .create-workorder-form-message {
+  margin: 0;
+  padding: 12px 32px 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .create-parts-card {
+  --workorder-parts-quantity-track: 160px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .create-parts-card .part-catalog-field > input {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #d0d5dd;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 44px;
+}
+
+
+.create-parts-card .create-part-remove-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px;
+}
+
+.create-part-remove-icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.create-part-repair-with-history {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.create-part-repair-with-history > input {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .control-panel[data-workorder-presentation="one-page"] .create-workorder-form-message {
+    padding-inline: 12px;
+  }
+}
+
+.control-panel[data-workorder-presentation="one-page"] :is(.workorder-one-page-stack, .workorder-one-page-unit-context, .workorder-one-page-unit-schedule) > * {
+  order: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack {
+  background: #f7f8fa;
+  container-type: inline-size;
+  gap: 20px;
+  padding: 20px 32px 48px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] #workorder-concern {
+  background: #fff;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-unit-schedule {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(220px, 0.55fr);
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-unit-context {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-section-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-width: 0;
+  padding: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-section-panel-content {
+  padding: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] :is(.workorder-one-page-unit-schedule > .workorder-section-panel, .workorder-one-page-unit-context > .workorder-section-panel) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .operational-form-section,
+.control-panel[data-workorder-presentation="one-page"] .operational-form-section-legend {
+  background: transparent;
+  box-shadow: none;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack > .workorder-section-panel,
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-supporting {
+  border-top: 1px solid #e4e7ec;
+  padding-top: 20px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] :is(.workorder-one-page-unit-context, .workorder-one-page-supporting) .workorder-progressive-section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-unit-context .workorder-progressive-section {
+  border-top: 1px solid #e4e7ec;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .operational-form-section + .operational-form-section {
+  border-top: 1px solid #e4e7ec;
+  box-shadow: none;
+  padding-top: 16px;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-empty-state {
+  color: #475467;
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  grid-column: 1 / -1;
+}
+
+@container (max-width: 760px) {
+  .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-unit-schedule {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack {
+    gap: 16px;
+    padding: 16px 12px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack > .workorder-section-panel,
+  .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-supporting {
+    padding-top: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .workorder-section-nav-desktop > button,
   .workorder-section-more-popover[data-entering] {
@@ -433,5 +624,157 @@
 
   .workorder-detail-page .control-panel:has(> .workorder-compact-preview) > .workorder-progressive-stack {
     display: none;
+  }
+}
+.workorder-one-page-stack .workorder-compact-unit-fields {
+  --unit-label-width: 120px;
+  --unit-field-gap: 16px;
+  position: relative;
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.workorder-compact-unit-fields #workorder-unit { padding-right: 44px; }
+.workorder-compact-unit-fields .operational-unit-results {
+  left: calc(var(--unit-label-width) + var(--unit-field-gap));
+  right: 0;
+  width: auto;
+}
+.workorder-unit-popover { position: absolute; top: 0; right: 0; z-index: 15; }
+.workorder-unit-details-trigger { display: grid; place-items: center; width: 44px; height: 40px; border: 0; background: transparent; color: #667085; cursor: pointer; }
+.workorder-unit-details-trigger svg { width: 18px; height: 18px; }
+.workorder-unit-details-popover { width: min(520px, calc(100vw - 48px)); max-height: min(620px, 70vh); overflow: auto; padding: 20px; background: #fff; border: 1px solid #e4e7ec; border-radius: 12px; box-shadow: 0 12px 32px #10182820; }
+.workorder-unit-details-popover > [role="dialog"] { display: grid; gap: 16px; outline: none; }
+.workorder-unit-details-popover[hidden] { display: none; }
+.create-schedule-one-page-fields, .create-assignment-one-page-field { display: grid; gap: 8px; }
+.create-schedule-one-page-fields { grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 12px; }
+.create-schedule-one-page-label, .create-assignment-one-page-label { font-size: 14px; font-weight: 600; color: #344054; }
+.create-schedule-one-page-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; padding: 0 8px; }
+.create-schedule-one-page-range label { min-width: 0; }
+.control-panel .create-schedule-one-page-range input { border: 0; box-shadow: none; min-width: 0; width: 100%; height: 44px; padding: 6px 0; background: transparent; }
+.control-panel[data-workorder-presentation="one-page"] .create-schedule-one-page-fields,
+.control-panel[data-workorder-presentation="one-page"] .create-assignment-one-page-field { grid-template-columns: 80px minmax(0, 1fr); align-items: center; gap: 12px; }
+.control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field { grid-template-columns: 120px minmax(0, 1fr); gap: 8px 16px; align-items: start; }
+.control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field-label { padding-top: 12px; }
+.control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field-error { grid-column: 2; }
+.control-panel[data-workorder-presentation="one-page"] :is(#workorder-unit, #customer-company-name, .create-schedule-one-page-range, .create-assignment-one-page-dropdown > summary) { border: 0; border-bottom: 1px solid #d0d5dd; border-radius: 0; background: transparent; box-shadow: none; }
+.control-panel[data-workorder-presentation="one-page"] .create-assignment-one-page-dropdown > summary { padding-left: 8px; }
+.control-panel[data-workorder-presentation="one-page"] :is(.workorder-compact-unit-fields, .create-concern-one-page) .operational-form-field-label { font-weight: 500; }
+@container (max-width: 540px) {
+  .control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field { grid-template-columns: minmax(0, 1fr); }
+  .control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field-label { padding-top: 0; }
+  .control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field-error { grid-column: 1; }
+  .control-panel[data-workorder-presentation="one-page"] .create-schedule-one-page-fields { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.create-assignment-one-page-dropdown { position: relative; min-width: 0; }
+.create-assignment-one-page-dropdown > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 8px; cursor: pointer; list-style: none; background: #fff; }
+.create-assignment-one-page-dropdown > summary::-webkit-details-marker { display: none; }
+.create-assignment-one-page-dropdown > summary::after { content: "⌄"; flex-shrink: 0; }
+.create-assignment-one-page-dropdown > .operational-mechanic-select { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 12; max-height: 300px; overflow: auto; padding: 12px; background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; box-shadow: 0 8px 24px #10182820; }
+.create-assignment-one-page-dropdown .operational-mechanic-select > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-assignment { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .55fr); gap: 24px; align-items: start; }
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-assignment > * { order: 0; min-width: 0; }
+.control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack > .create-parts-card { margin-top: 24px; background: transparent; border: 0; border-top: 1px solid #dce1e7; border-radius: 0; padding: 20px 0 0; box-shadow: none; }
+@container (max-width: 760px) {
+  .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-assignment { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
+
+.workorder-compact-unit-fields > .operational-form-field,
+.workorder-compact-unit-fields > .operational-unit-lookup > .operational-form-field {
+  grid-template-columns: var(--unit-label-width) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--unit-field-gap);
+}
+
+.workorder-compact-unit-fields > .operational-form-field > .operational-form-field-error,
+.workorder-compact-unit-fields > .operational-unit-lookup .operational-form-field-error {
+  grid-column: 2;
+}
+
+.workorder-compact-unit-fields > .operational-form-field .operational-form-required,
+.workorder-compact-unit-fields > .operational-unit-lookup .operational-form-required {
+  display: none;
+}
+
+.workorder-one-page-stack .workorder-compact-unit-fields > .operational-optional-section {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.workorder-one-page-stack .workorder-compact-unit-fields > .operational-optional-section > summary {
+  min-height: 44px;
+  padding: 0;
+}
+
+.workorder-unit-location {
+  display: grid;
+  gap: 12px;
+}
+
+.workorder-one-page-location-row { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .55fr); gap: 24px; }
+.workorder-one-page-scheduling { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.workorder-one-page-header-columns { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .55fr); gap: 24px; align-items: start; }
+.workorder-one-page-main-fields { display: grid; gap: 20px; min-width: 0; }
+.workorder-one-page-main-fields > .workorder-one-page-location-row { display: block; }
+.workorder-one-page-location-row > .workorder-unit-location { grid-column: 1; width: 100%; max-width: 520px; }
+.workorder-one-page-location-row .operational-form-field { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 8px 16px; }
+.workorder-one-page-location-row > .create-schedule-one-page { width: 100%; max-width: 400px; }
+.create-assignment-one-page-field { width: 100%; max-width: 400px; }
+.workorder-one-page-location-row .operational-form-required { display: none; }
+/* Selection focus belongs to the entire control, not a rounded input inside it.
+   Writing fields and popup options retain their own focus indicators. */
+.control-panel[data-workorder-presentation="one-page"] :is(
+  .labor-product-control input,
+  .labor-product-control > button,
+  .customer-company-combobox-trigger,
+  .workorder-unit-details-trigger,
+  .create-schedule-one-page-range input
+):focus {
+  outline: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.control-panel[data-workorder-presentation="one-page"] :is(
+  .labor-product-control:focus-within,
+  .customer-company-combobox-control:focus-within,
+  .create-schedule-one-page-range:focus-within,
+  .dropdown-select-trigger:focus,
+  .dropdown-select-trigger[data-focus-visible],
+  .quantity-unit-trigger:focus,
+  .create-assignment-one-page-dropdown:focus-within > summary,
+  .create-parts-card .part-catalog-field > input:focus,
+  #workorder-unit:focus,
+  .operational-unit-lookup:has(.workorder-unit-details-trigger:focus) #workorder-unit,
+  #customer-company-name:focus,
+  .customer-company-combobox:focus-within #customer-company-name
+) {
+  outline: none;
+  border-color: transparent;
+  border-bottom: 1px solid #1570ef;
+  border-radius: 0;
+  box-shadow: 0 1px 0 #1570ef;
+}
+
+.control-panel[data-workorder-presentation="one-page"] .customer-company-combobox-control:focus-within #customer-company-name {
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+.workorder-one-page-location-row .operational-form-field-error { grid-column: 2; }
+.control-panel .workorder-one-page-location-row .dropdown-select-trigger { border: 0; border-bottom: 1px solid #d0d5dd; border-radius: 0; background: transparent; box-shadow: none; min-height: 44px; }
+@container (max-width: 760px) {
+  .workorder-one-page-header-columns { grid-template-columns: minmax(0, 1fr); }
+  .workorder-one-page-location-row { grid-template-columns: minmax(0, 1fr); }
+  .workorder-one-page-location-row > .workorder-unit-location { grid-column: 1; }
+}
+
+@media (max-width: 540px) {
+  .workorder-one-page-location-row .operational-form-field { grid-template-columns: 88px minmax(0, 1fr); column-gap: 8px; }
+  .workorder-one-page-stack .workorder-compact-unit-fields {
+    --unit-label-width: 88px;
+    --unit-field-gap: 8px;
   }
 }

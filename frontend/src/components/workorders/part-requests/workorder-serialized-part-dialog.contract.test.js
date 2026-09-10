@@ -103,7 +103,8 @@ test("catalog units are independently selectable and submit every selected eligi
   assert.match(nestedDropdown, /<SerializedUnitChildPicker/);
   assert.match(dialog, /onSelectionChange=\{setSelectedUnitIds\}/);
   assert.doesNotMatch(childPicker, /type="radio"/);
-  assert.match(childPicker, /type="checkbox"/);
+  assert.match(childPicker, /<Checkbox/);
+  assert.match(childPicker, /import \{ Checkbox \}/);
   assert.match(childPicker, /eligibleUnits\.slice\(0, maxSelected\)/);
   assert.match(dialog, /async function reserveSelectedUnits\(\)/);
   assert.match(dialog, /issueSelectedSerializedUnits\(\{/);

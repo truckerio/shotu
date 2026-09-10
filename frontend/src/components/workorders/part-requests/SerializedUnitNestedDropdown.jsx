@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "re
 import { Button } from "../../ui/Button.jsx";
 import { normalizeLocale } from "../../../i18n/index.js";
 import { anchoredOverlayShift } from "./anchored-overlay-position.js";
+import { serializedPickerMaxHeight, serializedPickerPlacement } from "./serialized-picker-placement.js";
 import { eligibleSelectedUnitIds } from "./workorder-serialized-part-selection.js";
 import { SerializedUnitChildPicker } from "./SerializedUnitChildPicker.jsx";
 import "./serialized-unit-nested-dropdown.css";
@@ -17,6 +18,7 @@ function serialText(unit) {
 }
 
 export function SerializedUnitNestedDropdown({
+  anchorToPartField = false,
   busy = false,
   autoFocusSearch = true,
   confirmLabel = "",
@@ -49,6 +51,7 @@ export function SerializedUnitNestedDropdown({
   onCloseRef.current = onClose;
   const [localQuery, setLocalQuery] = useState("");
   const [viewportShift, setViewportShift] = useState({ x: 0, y: 0 });
+  const [anchorPlacement, setAnchorPlacement] = useState({ side: "below", maxHeight: null });
   const searchQuery = query === undefined ? localQuery : query;
   const selected = selectedUnitIds instanceof Set
     ? selectedUnitIds
@@ -76,22 +79,51 @@ export function SerializedUnitNestedDropdown({
 
   useLayoutEffect(() => {
     function measure() {
-      const rect = rootRef.current?.getBoundingClientRect();
+      const root = rootRef.current;
+      const rect = root?.getBoundingClientRect();
       if (!rect) return;
+      if (anchorToPartField) {
+        const visualViewport = window.visualViewport;
+        const viewportHeight = visualViewport?.height || window.innerHeight;
+        const headerHeight = root.querySelector("header")?.scrollHeight || 0;
+        const contentHeight = root.querySelector(".serialized-unit-nested-content")?.scrollHeight || 0;
+        const footerHeight = root.querySelector("footer")?.scrollHeight || 0;
+        const naturalHeight = Math.max(rect.height, headerHeight + contentHeight + footerHeight);
+        const next = serializedPickerPlacement({
+          anchorRect: root.parentElement?.getBoundingClientRect() || rect,
+          pickerHeight: Math.min(naturalHeight, serializedPickerMaxHeight({
+            viewportWidth: visualViewport?.width || window.innerWidth,
+            viewportHeight,
+          })),
+          viewportHeight,
+          viewportOffsetTop: visualViewport?.offsetTop || 0,
+        });
+        setAnchorPlacement((current) => current.side === next.side && current.maxHeight === next.maxHeight ? current : next);
+        setViewportShift((current) => current.x || current.y ? { x: 0, y: 0 } : current);
+        return;
+      }
       const bottomInset = window.matchMedia("(max-width: 640px)").matches ? 120 : 16;
-      const next = anchoredOverlayShift({
-        rect,
-        currentShift: viewportShift,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-        bottomInset,
+      setViewportShift((current) => {
+        const next = anchoredOverlayShift({
+          rect,
+          currentShift: current,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          bottomInset,
+        });
+        return current.x === next.x && current.y === next.y ? current : next;
       });
-      setViewportShift((current) => current.x === next.x && current.y === next.y ? current : next);
     }
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [error, loading, viewportShift.x, viewportShift.y, visibleUnits.length]);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
+    };
+  }, [anchorToPartField, error, loading, visibleUnits.length]);
 
   function updateQuery(value) {
     if (query === undefined) setLocalQuery(value);
@@ -100,6 +132,7 @@ export function SerializedUnitNestedDropdown({
 
   function submitSearch(event) {
     event.preventDefault();
+    event.stopPropagation();
     onSearch?.(searchQuery);
   }
 
@@ -107,7 +140,17 @@ export function SerializedUnitNestedDropdown({
     <section
       ref={rootRef}
       className="serialized-unit-nested-dropdown"
-      style={viewportShift.x || viewportShift.y ? { transform: `translate(${-viewportShift.x}px, ${-viewportShift.y}px)` } : undefined}
+      data-anchor={anchorToPartField ? "part-field" : undefined}
+      style={anchorToPartField || viewportShift.x || viewportShift.y ? {
+        ...(anchorToPartField ? {
+          left: "0px",
+          ...(anchorPlacement.side === "above"
+            ? { top: "auto", bottom: "calc(100% + 6px)" }
+            : { top: "calc(100% + 6px)", bottom: "auto" }),
+          ...(anchorPlacement.maxHeight === null ? {} : { maxHeight: `${anchorPlacement.maxHeight}px` }),
+        } : {}),
+        ...(viewportShift.x || viewportShift.y ? { transform: `translate(${-viewportShift.x}px, ${-viewportShift.y}px)` } : {}),
+      } : undefined}
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}

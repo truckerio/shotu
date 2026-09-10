@@ -15,6 +15,10 @@ test("normalizes catalog and location inventory without leaking API shape", () =
       normalizedPartNumber: "LF14000NN",
       name: "Oil filter",
       unit: "EA",
+      trackingMode: "measured_bulk",
+      version: 7,
+      providerManaged: true,
+      referenceNumbers: ["ALT-1"],
       inventory: [{ id: "zero", quantityAvailable: 0 }, {
         id: "stock-1",
         locationId: "chino",
@@ -29,6 +33,10 @@ test("normalizes catalog and location inventory without leaking API shape", () =
   assert.equal(result.items[0].partNumber, "LF14000NN");
   assert.equal(result.items[0].inventory.itemId, "stock-1");
   assert.equal(result.items[0].inventory.available, 6);
+  assert.equal(result.items[0].trackingMode, "measured_bulk");
+  assert.equal(result.items[0].version, 7);
+  assert.equal(result.items[0].providerManaged, true);
+  assert.deepEqual(result.items[0].referenceNumbers, ["ALT-1"]);
   assert.equal(catalogInventoryText(result.items[0]), "6 pc available at Chino · Bin A-12");
 });
 

@@ -53,13 +53,16 @@
 .inventory-detail-metrics span, .inventory-detail-locations small, .inventory-detail-facts dt { color: #667085; font-size: 12px; }
 .inventory-detail-metrics strong { font-size: 17px; }
 .inventory-detail-locations { display: grid; overflow: hidden; border: 1px solid #e4e7ec; border-radius: 10px; }
-.inventory-detail-locations > button { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; width: 100%; padding: 14px; border: 0; border-top: 1px solid #eaecf0; color: #101828; background: #fff; text-align: left; cursor: pointer; }
-.inventory-detail-locations > button:first-child { border-top: 0; }
-.inventory-detail-locations > button:hover { background: #f9fafb; }
-.inventory-detail-locations > button:focus-visible { position: relative; outline: 3px solid #84caff; outline-offset: -3px; }
-.inventory-detail-locations > button:disabled { color: #98a2b3; background: #f9fafb; cursor: not-allowed; }
-.inventory-detail-locations > button > div { display: grid; gap: 3px; }
-.inventory-detail-locations > button > svg { grid-column: 2; grid-row: 1; align-self: center; width: 18px; height: 18px; color: #667085; }
+.inventory-detail-location-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: stretch; border-top: 1px solid #eaecf0; }
+.inventory-detail-location-row:first-child { border-top: 0; }
+.inventory-detail-location-row > button:first-child { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; width: 100%; padding: 14px; border: 0; color: #101828; background: #fff; text-align: left; cursor: pointer; }
+.inventory-detail-location-row > button:first-child:hover { background: #f9fafb; }
+.inventory-detail-location-row > button:first-child:focus-visible { position: relative; outline: 3px solid #84caff; outline-offset: -3px; }
+.inventory-detail-location-row > button:first-child:disabled { color: #98a2b3; background: #f9fafb; cursor: not-allowed; }
+.inventory-detail-location-row > button:first-child > div { display: grid; gap: 3px; }
+.inventory-detail-location-row > button:first-child > svg { grid-column: 2; grid-row: 1; align-self: center; width: 18px; height: 18px; color: #667085; }
+.inventory-detail-location-row > .button { align-self: center; width: 40px; min-height: 40px; gap: 0; margin-right: 10px; padding: 0; }
+.inventory-detail-location-row > .button > span { display: none; }
 .inventory-detail-locations dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
 .inventory-detail-locations dl > div { display: grid; gap: 2px; }
 .inventory-detail-locations dt { color: #667085; font-size: 11px; }
@@ -281,14 +284,28 @@
   .inventory-stock-table.is-refreshing { transition: none; }
 }
 .inventory-stock-state.is-low { background:#fff4e5; color:#8a4b08; }
-.inventory-stock-rules { display:grid; gap:12px; }
-.inventory-stock-rules > section { border:1px solid #d9dee8; border-radius:10px; padding:12px; }
-.inventory-stock-rules > section.is-low { border-color:#e6a23c; background:#fffaf2; }
-.inventory-stock-rules header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.inventory-stock-rules header > div { display:grid; gap:2px; }
-.inventory-stock-rules small { color:#667085; }
-.inventory-stock-rule-form { display:grid; gap:12px; margin-top:12px; }
+.inventory-location-settings-overlay { position: fixed; inset: 0; z-index: 1250; display: grid; place-items: center; padding: 24px; background: rgb(16 24 40 / 55%); }
+.inventory-location-settings-modal { width: min(600px, 100%); max-height: min(820px, calc(100dvh - 48px)); overflow: auto; border-radius: 12px; background: #fff; box-shadow: 0 24px 48px rgb(16 24 40 / 24%); }
+.inventory-location-settings-dialog { display: grid; gap: 0; outline: none; }
+.inventory-location-settings-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 18px; border-bottom: 1px solid #eaecf0; }
+.inventory-location-settings-dialog > header h2, .inventory-location-settings-dialog h3, .inventory-location-settings-dialog p { margin: 0; }
+.inventory-location-settings-dialog > header p, .inventory-location-settings-dialog section > div:first-child p { margin-top: 4px; color: #667085; font-size: 13px; }
+.inventory-location-settings-dialog > header > button { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 0; border-radius: 8px; color: #475467; background: transparent; }
+.inventory-location-settings-dialog > header > button:hover { background: #f2f4f7; }
+.inventory-location-settings-dialog > header svg { width: 18px; height: 18px; }
+.inventory-location-settings-dialog > section { display: grid; gap: 14px; padding: 20px 24px; border-bottom: 1px solid #eaecf0; }
+.inventory-location-settings-dialog > section > label { display: grid; gap: 6px; color: #344054; font-size: 13px; font-weight: 650; }
+.inventory-location-settings-message { padding: 10px 12px; border-radius: 8px; color: #344054; background: #f2f4f7; font-size: 13px; }
+.inventory-location-settings-actions, .inventory-location-settings-dialog > footer { display: flex; justify-content: flex-end; }
+.inventory-location-settings-dialog > footer { padding: 16px 24px; }
+.inventory-stock-rule-form { display:grid; gap:12px; }
 .inventory-stock-rule-form label { display:grid; gap:6px; }
 .inventory-stock-rule-form input[type="number"] { min-height:44px; border:1px solid #cfd5df; border-radius:8px; padding:8px 10px; }
 .inventory-stock-rule-form .inventory-stock-rule-toggle { display:flex; align-items:center; min-height:44px; grid-template-columns:24px 1fr; }
-.inventory-stock-rule-form > div { display:flex; justify-content:flex-end; gap:8px; }
+@media (max-width: 640px) {
+  .inventory-detail-location-row { grid-template-columns: minmax(0,1fr); }
+  .inventory-detail-location-row > .button { justify-self: end; width: 44px; min-height: 44px; margin: 0 12px 12px; }
+  .inventory-location-settings-overlay { align-items: end; padding: 0; }
+  .inventory-location-settings-modal { max-height: calc(100dvh - 16px); border-radius: 14px 14px 0 0; }
+  .inventory-location-settings-dialog > header, .inventory-location-settings-dialog > section, .inventory-location-settings-dialog > footer { padding-right: 16px; padding-left: 16px; }
+}

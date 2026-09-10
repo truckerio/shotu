@@ -26,6 +26,7 @@ function publicLine(row) {
     description: row.catalog_description || "",
     manufacturer: row.manufacturer || "",
     uomCode: row.uom_code || "ea",
+    trackingMode: row.tracking_mode || null,
     matchStatus: row.match_status,
     resolutionSource: row.resolution_source,
     appliedReceiptId: row.applied_receipt_id || null,
@@ -89,7 +90,7 @@ async function loadImport(client, { importId, companyIds, locationIds = [], isAd
   if (!source) return null;
   const lines = await client.query(
     `select line.*, catalog.part_number, catalog.description as catalog_description,
-            catalog.manufacturer, catalog.uom_code
+            catalog.manufacturer, catalog.uom_code, catalog.tracking_mode
      from inventory_count_import_lines line
      left join parts_catalog catalog
        on catalog.company_id = line.company_id and catalog.id = line.catalog_part_id
@@ -201,22 +202,23 @@ export async function createInventoryCountImport({
     }
     const normalized = [...new Set(rows.map((row) => row.normalizedPartNumber))];
     const catalog = await client.query(
-      `select id, normalized_part_number
+      `select id, normalized_part_number, tracking_mode
        from parts_catalog
        where company_id = $1 and normalized_part_number = any($2::text[])`,
       [target.company_id, normalized],
     );
-    const catalogByNumber = new Map(catalog.rows.map((part) => [part.normalized_part_number, part.id]));
+    const catalogByNumber = new Map(catalog.rows.map((part) => [part.normalized_part_number, part]));
     const occurrenceCount = new Map();
     for (const row of rows) {
       occurrenceCount.set(row.normalizedPartNumber, (occurrenceCount.get(row.normalizedPartNumber) || 0) + 1);
     }
     const prepared = rows.map((row) => {
-      const catalogPartId = catalogByNumber.get(row.normalizedPartNumber) || null;
+      const matchedPart = catalogByNumber.get(row.normalizedPartNumber) || null;
+      const catalogPartId = matchedPart?.id || null;
       let matchStatus = "ready";
       if (!row.quantity) matchStatus = "invalid_quantity";
       else if ((occurrenceCount.get(row.normalizedPartNumber) || 0) > 1) matchStatus = "duplicate";
-      else if (!catalogPartId) matchStatus = "unmatched";
+      else if (!catalogPartId || !matchedPart.tracking_mode) matchStatus = "unmatched";
       return {
         ...row,
         catalogPartId: matchStatus === "ready" ? catalogPartId : null,
@@ -374,12 +376,16 @@ export async function resolveInventoryCountImportLine({
       );
     } else {
       const catalog = await client.query(
-        `select id from parts_catalog where company_id = $1 and id = $2 limit 1`,
+        `select id, tracking_mode from parts_catalog where company_id = $1 and id = $2 limit 1`,
         [stocktake.company_id, catalogPartId],
       );
       if (!catalog.rows[0]) {
         await client.query("rollback");
         return { kind: "catalog_not_found" };
+      }
+      if (!catalog.rows[0].tracking_mode) {
+        await client.query("rollback");
+        return { kind: "tracking_required" };
       }
       const duplicate = await client.query(
         `select 1 from inventory_count_import_lines
@@ -505,6 +511,11 @@ export async function applyInventoryCountImport({
       await client.query("commit");
       return { kind: "replay", import: value };
     }
+    const unreviewed = ready.rows.find((line) => !line.tracking_mode);
+    if (unreviewed) {
+      await client.query("rollback");
+      return { kind: "tracking_required", sourceRow: Number(unreviewed.source_row) };
+    }
     const authorityClaims = new Map();
     for (const line of ready.rows) {
       const existing = await client.query(
@@ -563,7 +574,7 @@ export async function applyInventoryCountImport({
       );
       const labelItems = [];
       for (const [lineIndex, line] of lines.entries()) {
-        const serialized = line.tracking_mode === null || line.tracking_mode === "serialized";
+        const serialized = line.tracking_mode === "serialized";
         const receiptLineId = randomUUID();
         await client.query(
           `insert into inventory_receipt_lines (

@@ -1,16 +1,25 @@
-import { Plus } from "@untitledui/icons";
+import { Plus, Trash01 } from "@untitledui/icons";
 import { useEffect, useRef, useState } from "react";
 import { QuantityUnitInput } from "../../../components/forms/index.js";
 import { formatQuantityUnit } from "../../../components/forms/quantity-unit-model.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
+import { RepairHistorySuggestions } from "../../../components/workorders/part-requests/RepairHistorySuggestions.jsx";
+import { LaborProductSelector } from "../../../components/workorders/LaborProductSelector.jsx";
 import {
   defaultUsedPartQuantity,
   usedPartQuantityAfterPartNumberChange,
 } from "../../../components/workorders/used-parts-model.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
-import { WorkorderPartsActions, WorkorderPartsRow, WorkorderPartsTable } from "../../../components/workorders/WorkorderPartsTable.jsx";
+import {
+  DEFAULT_WORKORDER_PARTS_COLUMNS,
+  WORKORDER_PARTS_COLUMNS,
+  WorkorderPartsActions,
+  WorkorderPartsColumnHead,
+  WorkorderPartsRow,
+  WorkorderPartsTable,
+} from "../../../components/workorders/WorkorderPartsTable.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { laborProductLabel } from "../../../../../shared/labor-product.js";
@@ -82,16 +91,19 @@ function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationI
 }
 
 function LegacyCreatePartsEditor({
+  historyEnabled = false,
   canAddPart,
   errors,
   laborHours,
   laborLabel,
+  laborProduct,
   laborRepairOrder,
   locale,
   locationId,
   onAdd,
   onChange,
   onLaborHoursChange,
+  onLaborProductChange,
   onLaborRepairOrderChange,
   onRemove,
   onOpenSerialPicker,
@@ -103,10 +115,21 @@ function LegacyCreatePartsEditor({
   return (
     <div className="create-known-parts-content workorder-parts-surface">
       {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
-      <WorkorderPartsTable id="create-known-parts-editor" tabIndex={-1}>
+      <WorkorderPartsTable id="create-known-parts-editor" tabIndex={-1} columns={DEFAULT_WORKORDER_PARTS_COLUMNS}>
+        <WorkorderPartsColumnHead
+          className="create-parts-column-head"
+          columns={DEFAULT_WORKORDER_PARTS_COLUMNS}
+          labels={{
+            [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("create.parts.part"),
+            [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
+            [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("create.parts.repairOrder"),
+          }}
+        />
         <WorkorderPartsRow className="operational-part-labor-row">
           <strong>1</strong>
-          <div className="operational-part-labor-name"><strong>{laborLabel}</strong></div>
+          <div className="operational-part-labor-name">{onLaborProductChange
+            ? <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} />
+            : <strong>{laborLabel}</strong>}</div>
           <QuantityUnitInput
             id="create-workorder-labor-hours"
             quantity={laborHours}
@@ -168,8 +191,11 @@ function LegacyCreatePartsEditor({
               part={part}
             /></div>
             <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
-            <input {...textEntryProps("identifier")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
-            <button type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1}>{t("create.parts.remove")}</button>
+            <div className="create-part-repair-with-history">
+              <input {...textEntryProps("narrative")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
+              {historyEnabled && part.catalogPartId ? <RepairHistorySuggestions locationId={locationId} catalogPartId={part.catalogPartId} partNumber={part.partNo} currentRepairOrder={part.repairOrder} onApply={(text) => onChange(index, "repairOrder", text)} locale={locale} initiallyCollapsed dropdown /> : null}
+            </div>
+            <button className="create-part-remove-icon" type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1} aria-label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")}><Trash01 aria-hidden="true" /></button>
           </WorkorderPartsRow>
         ))}
       </WorkorderPartsTable>
@@ -198,6 +224,7 @@ function LegacyCreatePartsEditor({
 }
 
 export function CreatePartsModule({
+  historyEnabled = false,
   access,
   activeSection,
   errors,
@@ -210,6 +237,7 @@ export function CreatePartsModule({
   onAdd,
   onChange,
   onLaborHoursChange,
+  onLaborProductChange,
   onLaborRepairOrderChange,
   onRemove,
   onReplaceSerializedUnits,
@@ -409,8 +437,9 @@ export function CreatePartsModule({
             quantityReadOnly={createPartRequiresSerializedUnits(part)}
             unitReadOnly={createPartRequiresSerializedUnits(part)}
           />
-          <label className="create-part-repair-field">
+          <div className="create-part-repair-field">
             <span>{t("create.parts.repairOrder")}</span>
+            <div className="create-part-repair-with-history">
             <input
               {...textEntryProps("identifier")}
               value={part.repairOrder}
@@ -418,12 +447,14 @@ export function CreatePartsModule({
               aria-label={`${t("create.parts.repairOrder")} ${ordinal}`}
               placeholder={t("create.parts.repairOrder")}
             />
-          </label>
+              {historyEnabled && part.catalogPartId ? <RepairHistorySuggestions locationId={locationId} catalogPartId={part.catalogPartId} partNumber={part.partNo} currentRepairOrder={part.repairOrder} onApply={(text) => onChange(index, "repairOrder", text)} locale={locale} initiallyCollapsed dropdown /> : null}
+            </div>
+          </div>
         </div>
         <footer className="create-part-editor-actions">
           <Button type="button" variant="primary" onClick={() => finishEditingPart(index)}>{t("common.done")}</Button>
           {createPartHasContent(part) ? (
-            <button className="create-part-remove" type="button" onClick={() => removePart(index)}>{t("create.parts.remove")}</button>
+            <button className="create-part-remove create-part-remove-icon" type="button" onClick={() => removePart(index)} aria-label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")}><Trash01 aria-hidden="true" /></button>
           ) : null}
         </footer>
       </article>
@@ -461,6 +492,7 @@ export function CreatePartsModule({
                   <button type="button" onClick={() => setLaborOpen(false)}>{t("common.done")}</button>
                 </div>
                 <div className="create-labor-editor-fields">
+                  {onLaborProductChange ? <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} /> : null}
                   <QuantityUnitInput
                     id="create-workorder-labor-hours"
                     quantity={laborHours}
@@ -533,16 +565,19 @@ export function CreatePartsModule({
         </div>
       ) : (
         <LegacyCreatePartsEditor
+          historyEnabled={historyEnabled}
           canAddPart={canAddPart}
           errors={errors}
           laborHours={laborHours}
           laborLabel={laborLabel}
+          laborProduct={laborProduct}
           laborRepairOrder={laborRepairOrder}
           locale={locale}
           locationId={locationId}
           onAdd={onAdd}
           onChange={onChange}
           onLaborHoursChange={onLaborHoursChange}
+          onLaborProductChange={onLaborProductChange}
           onLaborRepairOrderChange={onLaborRepairOrderChange}
           onRemove={onRemove}
           onOpenSerialPicker={setSerialPickerIndex}

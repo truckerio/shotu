@@ -121,3 +121,22 @@ test("legacy Office detail does not query or expose summaries when Parts is hidd
   assert.equal("parts" in sent[0].value.modules, false);
   assert.equal("installedSerializedParts" in sent[0].value.workorder, false);
 });
+
+test("legacy Office patch assigns labor selection to the Diagnosis and repair module", async () => {
+  const productId = "44444444-4444-4444-8444-444444444444";
+  let patched;
+  await handleOfficeApi(
+    { method: "PATCH" }, {}, new URL("http://example.test/api/office/workorders/workorder-1"),
+    {
+      requestContext: context,
+      readBody: async () => ({
+        formData: { laborProduct: { productId, externalId: "", code: "LAB", name: "Labor", uomCode: "hr" } },
+      }),
+      sendJson: () => {},
+    },
+    { patchModules: async (...args) => { patched = args; return {}; } },
+  );
+  assert.equal(patched[1], "workorder-1");
+  assert.deepEqual(patched[2], ["diagnosisRepair"]);
+  assert.equal(patched[3].formData.laborProduct.productId, productId);
+});

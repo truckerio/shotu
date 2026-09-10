@@ -1,0 +1,31 @@
+.labor-product-selector { min-width: 0; position: relative; }
+.labor-product-visually-hidden { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+.labor-product-control { align-items: center; border-bottom: 1px solid #98a2b3; display: flex; gap: 6px; min-height: 38px; }
+.labor-product-control:focus-within { border-bottom-color: #1570ef; box-shadow: 0 1px 0 #1570ef; }
+.labor-product-control input { background: transparent; border: 0; color: #182230; font: inherit; min-width: 0; outline: 0; padding: 7px 0; width: 100%; }
+.labor-product-control input:disabled { color: #98a2b3; cursor: not-allowed; }
+.labor-product-clear, .labor-product-toggle, .labor-product-popup button { background: transparent; border: 0; color: #175cd3; cursor: pointer; font: inherit; font-size: 12px; min-height: 44px; padding: 5px; }
+.labor-product-toggle { color: #344054; font-size: 20px; min-width: 44px; }
+.labor-product-toggle:disabled { color: #98a2b3; cursor: not-allowed; }
+.labor-product-popup { background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; box-shadow: 0 10px 24px rgb(16 24 40 / 14%); left: 0; max-height: min(320px, 50vh); overflow: auto; position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; }
+.labor-product-popup p { color: #475467; font-size: 13px; margin: 0; padding: 12px; }
+.labor-product-popup ul { list-style: none; margin: 0; padding: 4px; }
+.labor-product-popup li { align-items: center; border-radius: 6px; display: flex; justify-content: space-between; min-height: 44px; padding: 2px 4px; }
+.labor-product-popup li.is-active, .labor-product-popup li:hover { background: #eff8ff; }
+.labor-product-popup li span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.labor-product-popup li small { color: #667085; font-size: 11px; }
+.labor-product-select-option { align-items: center; color: #182230 !important; display: flex; flex: 1; text-align: left; }
+.labor-product-create-action { border-top: 1px solid #eaecf0 !important; display: block; min-height: 44px; text-align: left; width: 100%; }
+.labor-product-create-overlay { align-items: center; background: rgb(16 24 40 / 48%); display: flex; inset: 0; justify-content: center; padding: 16px; position: fixed; z-index: 80; }
+.labor-product-create-modal { background: #fff; border-radius: 10px; max-width: 440px; padding: 20px; width: min(100%, 440px); }
+.labor-product-create-dialog form { display: grid; gap: 14px; }
+.labor-product-create-dialog h2 { font-size: 18px; margin: 0; }
+.labor-product-create-dialog p { color: #667085; margin: 0; }
+.labor-product-create-dialog label { color: #344054; display: grid; font-size: 14px; font-weight: 600; gap: 5px; }
+.labor-product-create-dialog label span { color: #667085; font-weight: 400; }
+.labor-product-create-dialog input { border: 1px solid #d0d5dd; border-radius: 6px; font: inherit; min-height: 40px; padding: 0 10px; }
+.labor-product-create-dialog footer { display: flex; gap: 8px; justify-content: flex-end; }
+.labor-product-create-dialog footer button { border: 1px solid #d0d5dd; border-radius: 6px; cursor: pointer; min-height: 44px; padding: 0 12px; }
+.labor-product-create-dialog footer button[type="submit"] { background: #1570ef; border-color: #1570ef; color: #fff; }
+.labor-product-error { color: #b42318 !important; }
+@media (max-width: 640px) { .labor-product-control { min-height: 44px; } .labor-product-popup li { min-height: 48px; } }

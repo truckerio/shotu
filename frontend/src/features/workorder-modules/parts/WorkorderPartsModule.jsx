@@ -15,10 +15,13 @@ export function WorkorderPartsModule({
   isMechanicDetail,
   isOfficeDetail,
   locale,
+  locationId,
   pendingPartCount,
+  presentation = "panel",
   onChanged,
   onRegisterSerializedRepairFlush,
   onLaborHoursChange,
+  onLaborProductChange,
   onLaborRepairOrderChange,
   onPartsChange,
   onSaveParts,
@@ -36,14 +39,17 @@ export function WorkorderPartsModule({
       <PartRequestsPanel
         key={activeWorkorder.workorder.id}
         actorId={actorId}
+        presentation={presentation}
         role={isOfficeDetail ? "office" : isMechanicDetail ? "mechanic" : actorRole === "admin" ? "admin" : "read"}
         detail={activeWorkorder}
         parts={form.parts}
         laborHours={form.laborHours || ""}
         laborProduct={form.laborProduct || null}
+        locationId={locationId || activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
         laborRepairOrder={form.workPerformed || ""}
         laborRepairOrderDisabled={!activeWorkorder.allowedActions?.saveNotes}
         onLaborHoursChange={onLaborHoursChange}
+        onLaborProductChange={onLaborProductChange}
         onLaborRepairOrderChange={onLaborRepairOrderChange}
         onPartsChange={onPartsChange}
         onSaveParts={onSaveParts}

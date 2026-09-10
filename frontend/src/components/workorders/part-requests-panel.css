@@ -4,6 +4,17 @@
   gap: 16px;
 }
 
+.office-part-planning.is-one-page,
+.office-part-overview.is-one-page,
+.part-request-list.is-one-page {
+  border-top: 1px solid var(--border-subtle, #e4e7ec);
+  padding-top: 10px;
+}
+
+.office-part-planning.is-one-page {
+  gap: 8px;
+}
+
 .mechanic-part-request-action > button {
   align-items: center;
   background: #fff;

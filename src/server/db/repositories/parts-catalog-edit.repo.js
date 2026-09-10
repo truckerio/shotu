@@ -110,7 +110,7 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
       if (current.tracking_mode && history.rows[0]?.has_activity) { await client.query("rollback"); return { kind: "tracking_locked" }; }
       if (nextTrackingMode !== "serialized" && history.rows[0]?.has_serial_history) { await client.query("rollback"); return { kind: "tracking_history_conflict" }; }
     }
-    const displayOnlyUom = current.provider_managed || current.uom_locked_at !== null;
+    const displayOnlyUom = current.uom_locked_at !== null;
     let canonicalUomCode = uomCode;
     let displayUomCode = null;
     if (displayOnlyUom) {

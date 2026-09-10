@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -18,6 +18,11 @@ import {
 } from "./workorder-section-navigation.js";
 import { interfaceText } from "../../i18n/index.js";
 import "./workorder-object-page.css";
+
+export const WorkorderPresentationContext = createContext({
+  coreSectionIds: [],
+  mode: "panel",
+});
 
 function sectionIcon(sectionId) {
   return workorderModuleDescriptor(sectionId)?.icon || Tool02;
@@ -394,10 +399,18 @@ export function ProgressiveWorkorderSection({
   keepMounted = false,
   showTitle = true,
 }) {
+  const presentation = useContext(WorkorderPresentationContext);
   const panelId = useId();
-  const open = activeSection === id;
+  const [disclosedOpen, setDisclosedOpen] = useState(false);
+  const onePageCore = presentation.mode === "one-page"
+    && presentation.coreSectionIds.includes(id);
+  const onePageSupporting = presentation.mode === "one-page" && !onePageCore;
+  const open = onePageCore || activeSection === id || (onePageSupporting && disclosedOpen);
+  const resolvedDisplayMode = presentation.mode === "one-page" && !onePageCore
+    ? "accordion"
+    : displayMode;
 
-  if (displayMode === "panel") {
+  if (resolvedDisplayMode === "panel") {
     if (!open && !keepMounted) return null;
     return (
       <section
@@ -427,7 +440,10 @@ export function ProgressiveWorkorderSection({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => onSelect(open ? "" : id)}
+        onClick={() => {
+          if (onePageSupporting) setDisclosedOpen((current) => !current);
+          onSelect(open ? "" : id);
+        }}
       >
         <span className="workorder-progressive-label">{title}</span>
         <small>{summary}</small>

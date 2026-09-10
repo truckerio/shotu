@@ -3,6 +3,7 @@ import { Copy01, XClose } from "@untitledui/icons";
 import { NarrativeField } from "../../../components/forms/NarrativeField.jsx";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { Button } from "../../../components/ui/Button.jsx";
+import { Checkbox } from "../../../components/ui/Checkbox.jsx";
 
 function Modal({ title, children, onClose, className = "" }) {
   return (
@@ -30,8 +31,7 @@ export function LocationSelector({ locations, value, onChange, requiredIds = [],
       <div className="admin-location-options">
         {locations.map((location) => (
           <label key={location.id}>
-            <input
-              type="checkbox"
+            <Checkbox
               checked={value.includes(location.id)}
               disabled={requiredIds.includes(location.id)}
               onChange={() => toggle(location.id)}

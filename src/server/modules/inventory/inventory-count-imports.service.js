@@ -194,6 +194,9 @@ export async function resolveInventoryCountLine(importId, lineId, input, request
   if (result.kind === "duplicate") {
     throw inputError("INVENTORY_COUNT_PART_DUPLICATE", "That master part is already used by another row in this count.", 409);
   }
+  if (result.kind === "tracking_required") {
+    throw inputError("INVENTORY_COUNT_TRACKING_REQUIRED", "Choose whether this master part is Quantity, Serialized, or Measured or bulk before adding it.", 409);
+  }
   return { import: result.import };
 }
 
@@ -215,6 +218,13 @@ export async function confirmInventoryCount(importId, input, requestContext, dep
     throw inputError(
       "INVENTORY_COUNT_STOCK_CONFLICT",
       `Spreadsheet row ${result.sourceRow} already has local or reserved stock. Use a cycle-count adjustment instead.`,
+      409,
+    );
+  }
+  if (result.kind === "tracking_required") {
+    throw inputError(
+      "INVENTORY_COUNT_TRACKING_REQUIRED",
+      `Spreadsheet row ${result.sourceRow} uses a master part whose tracking has not been reviewed. Review the part before applying the count.`,
       409,
     );
   }

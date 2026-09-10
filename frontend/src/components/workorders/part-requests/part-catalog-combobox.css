@@ -24,7 +24,7 @@
   position: absolute;
   right: auto;
   top: calc(100% + 4px);
-  width: var(--part-catalog-popup-width, min(480px, calc(100vw - 32px)));
+  width: var(--part-catalog-popup-width, 100%);
   z-index: 30;
 }
 

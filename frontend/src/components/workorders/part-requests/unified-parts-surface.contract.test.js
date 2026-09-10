@@ -68,7 +68,7 @@ test("office planning follows actual used parts and cannot use the used-part end
   assert.doesNotMatch(officeComposer, /t\("parts\.planningDoesNotRecordUse"\)/);
   assert.match(officeSurface, /<SectionHelpDisclosure label=\{t\("parts\.planningDoesNotRecordUse"\)\}>/);
   assert.match(officeComposer, /className="office-part-plan-trigger"/);
-  assert.match(officeSurface, /\{requests\.length \? <div className="office-part-overview">/);
+  assert.match(officeSurface, /\{requests\.length \? <div className=\{`office-part-overview\$\{presentation === "one-page" \? " is-one-page" : ""\}`\}>/);
   assert.match(legacyCss, /\.office-part-planning\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/s);
   assert.match(legacyCss, /> \.office-part-plan-trigger\s*\{[^}]*width:\s*auto;/s);
 });
@@ -84,7 +84,7 @@ test("mechanic request labels remain owned by every supported locale", () => {
 
 test("Office and read-only Parts surfaces remain English regardless of mechanic locale", () => {
   const panel = source("../PartRequestsPanel.jsx");
-  assert.match(panel, /<OfficePartsSurface \{\.\.\.commonProps\} \/>/);
+  assert.match(panel, /<OfficePartsSurface \{\.\.\.commonProps\} presentation=\{presentation\} \/>/);
   assert.match(panel, /<ReadOnlyPartsSurface \{\.\.\.commonProps\} \/>/);
 });
 

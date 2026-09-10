@@ -99,6 +99,7 @@ test("office save patch keeps administrative fields and excludes mechanic-owned 
       officeNotes: "Priority",
       customerSignature: "Customer",
       authorizedBy: "Office",
+      laborProduct: { productId: "11111111-1111-4111-8111-111111111111", name: "Shop labor", code: "LAB", uomCode: "hr" },
       parts: [{ partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" }],
     },
   });
@@ -110,12 +111,29 @@ test("office save patch keeps administrative fields and excludes mechanic-owned 
   assert.equal(payload.expectedUpdatedAt, "2026-08-02T10:00:00.000Z");
   assert.equal(payload.formData.customAdministrativeField, "keep");
   assert.equal(payload.formData.companyName, "Long Haul");
+  assert.deepEqual(payload.formData.laborProduct, { productId: "11111111-1111-4111-8111-111111111111", name: "Shop labor", code: "LAB", uomCode: "hr" });
   assert.deepEqual(payload.formData.parts, [{ partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" }]);
   for (const mechanicOwnedField of ["diagnosis", "workPerformed", "mechanicName", "startTime", "endTime", "managerName"]) {
     assert.equal(Object.hasOwn(payload.formData, mechanicOwnedField), false);
   }
   assert.equal(Object.hasOwn(payload, "actorId"), false);
   assert.equal(Object.hasOwn(payload, "userId"), false);
+});
+
+test("office save patch explicitly clears a previously selected labor product", () => {
+  const payload = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: {
+        id: "wo-1",
+        updatedAt: "2026-08-02T10:00:00.000Z",
+        formData: { laborProduct: { productId: "old", name: "Old labor", uomCode: "hr" } },
+      },
+    },
+    selectedVehicle: null,
+    form: { laborProduct: null, parts: [] },
+  });
+
+  assert.equal(payload.formData.laborProduct, null);
 });
 
 test("manual Unit replacement detaches the previously selected asset", () => {

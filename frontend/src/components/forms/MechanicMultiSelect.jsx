@@ -1,5 +1,6 @@
 import { SearchMd } from "@untitledui/icons";
 import { useId } from "react";
+import { Checkbox } from "../ui/Checkbox.jsx";
 import { joinClassNames } from "./form-utils.js";
 import { textEntryProps } from "./text-entry-policy.js";
 import "./operational-form.css";
@@ -55,8 +56,7 @@ export function MechanicMultiSelect({
           const id = String(mechanic.id);
           return (
             <label className="operational-mechanic-option" key={id}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.has(id)}
                 disabled={disabled || mechanic.disabled}
                 onChange={(event) => toggleMechanic(id, event.target.checked)}

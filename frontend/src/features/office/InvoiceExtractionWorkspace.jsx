@@ -4,6 +4,7 @@ import { CheckCircle, File02, RefreshCw01, Trash01, UploadCloud02, XClose } from
 import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { OptionalSection } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
+import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { api } from "../../lib/api.js";
 import { InvoiceDocumentViewer } from "./InvoiceDocumentViewer.jsx";
@@ -741,7 +742,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
             <>
               <details className="invoice-learning-option">
                 <summary>Learning preference</summary>
-                <label className="invoice-learning-choice"><input type="checkbox" checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setReviewDirty(true); setApproveLearning(event.target.checked); }} /><span>Use my corrections to improve future invoice extraction</span></label>
+                <label className="invoice-learning-choice"><Checkbox checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setReviewDirty(true); setApproveLearning(event.target.checked); }} /><span>Use my corrections to improve future invoice extraction</span></label>
               </details>
               <div className="invoice-review-primary">
                 <span>Saves review only · Inventory stays unchanged</span>

@@ -18,6 +18,7 @@ import {
   sendMessageSchema,
   updateMechanicUsedPartsSchema,
   amendLegacyManualPartEvidenceSchema,
+  laborProductSchema,
 } from "./workorder.schemas.js";
 import { mechanicProgressSchema } from "../mechanic/mechanic-progress.schemas.js";
 import { updateSerializedUsageRepairOrderSchema } from "../inventory/inventory-unit-workorder.schemas.js";
@@ -66,7 +67,11 @@ const PATCH_SCHEMAS = Object.freeze({
     formData: z.object({ mechanicConcern: z.string().trim().max(2000).optional() }).strict().optional(),
     expectedUpdatedAt,
   }).strict(),
-  diagnosisRepair: mechanicProgressSchema,
+  diagnosisRepair: mechanicProgressSchema.extend({
+    formData: z.object({
+      laborProduct: laborProductSchema.nullable(),
+    }).strict().optional(),
+  }),
 });
 
 const id = z.string().uuid();

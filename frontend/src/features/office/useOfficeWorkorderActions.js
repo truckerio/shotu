@@ -93,6 +93,9 @@ export function buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehic
       mechanicConcern: form.mechanicConcern,
       customerSignature: form.customerSignature,
       authorizedBy: form.authorizedBy,
+      // Labor selection is office-owned form data. Keep an explicit null so a
+      // cleared selector does not silently retain the previously saved product.
+      laborProduct: form.laborProduct || null,
       parts: form.parts,
     },
     expectedUpdatedAt: workorder.updatedAt,

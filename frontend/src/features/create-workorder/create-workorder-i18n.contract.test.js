@@ -13,15 +13,16 @@ const panelShell = readFileSync(
   "utf8",
 );
 
-test("mechanic locale reaches Create route, page, shell, navigation, dates, and preview surfaces", () => {
+test("mechanic locale reaches Create route, page, shell, dates, and preview surfaces", () => {
   assert.match(router, /locale: actor\.role === "mechanic" \? interfaceLocale : "en"/);
   assert.match(page, /locale = "en"/);
   assert.match(page, /locale=\{locale\}/);
   assert.match(page, /create\.section\.\$\{section\.id\}/);
   assert.match(shell, /formatUiDateRange\([\s\S]*\{ locale \}\)/);
-  assert.equal((shell.match(/locale=\{locale\}/g) || []).length, 2);
+  assert.ok((shell.match(/locale=\{locale\}/g) || []).length >= 2);
   assert.match(shell, /<WorkorderPanelShell[\s\S]*locale=\{locale\}/);
   assert.match(panelShell, /<WorkorderSectionNav[\s\S]*locale=\{locale\}/);
+  assert.match(page, /const createPresentation = isMechanicCreate \? "panel" : "one-page"/);
 });
 
 test("Create route and shell static states use the shared interface dictionary", () => {

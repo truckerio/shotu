@@ -16,6 +16,42 @@ import { handlePartsHelperApi } from "./parts-helper.routes.js";
 import { requireSupportedTruck, supportedTruckFamily, UnsupportedTruckError } from "./supported-trucks.js";
 import { identifyPartWithOpenAI, PartsHelperProviderError } from "./providers/openai.provider.js";
 
+test("draft repair history requires one authorized office location and ignores client tenant/asset", async () => {
+  const locationId = "33333333-3333-4333-8333-333333333333";
+  const context = { actor: { id: "office-1", role: "office" }, permissions: new Set(["workorder:office"]), companyIds: new Set(["company-1"]), locationIds: new Set([locationId]) };
+  const input = { locationId, partNumber: "46305", companyId: "other", assetId: "other" };
+  let called = 0;
+  const dependencies = {
+    getLocationById: async () => ({ id: locationId, company_id: "company-1" }),
+    suggestCompanyPartRepairs: async (companyId, options) => {
+      called += 1;
+      assert.equal(companyId, "company-1");
+      assert.equal(options.assetId, null);
+      return [{ text: "Replace seal", usageCount: 2 }];
+    },
+  };
+  assert.equal((await getPartRepairSuggestions(input, context, dependencies)).suggestions[0].text, "Replace seal");
+  for (const denied of [null, { ...context, permissions: new Set() }, { ...context, companyIds: new Set(["other"]) }, { ...context, locationIds: new Set() }]) {
+    await assert.rejects(() => getPartRepairSuggestions(input, denied, dependencies));
+  }
+  assert.equal(called, 1);
+  assert.equal(repairSuggestionsInputSchema.safeParse({ ...input, workorderId: "11111111-1111-4111-8111-111111111111" }).success, false);
+  assert.equal(repairSuggestionsInputSchema.safeParse({ partNumber: "46305" }).success, false);
+});
+
+test("draft repair-history route passes only explicit location scope", async () => {
+  const locationId = "33333333-3333-4333-8333-333333333333";
+  let status;
+  let body;
+  await handlePartsHelperApi({ method: "GET" }, {}, new URL(`http://localhost/api/parts-helper/repair-suggestions?locationId=${locationId}&partNumber=46305&companyId=other`), {
+    sendJson: (_res, code, result) => { status = code; body = result; },
+    requestContext: { actor: { role: "office" }, permissions: new Set(["workorder:office"]), companyIds: new Set(["company-1"]), locationIds: new Set([locationId]) },
+    partsHelperDependencies: { getLocationById: async () => ({ id: locationId, company_id: "company-1" }), suggestCompanyPartRepairs: async (companyId) => { assert.equal(companyId, "company-1"); return []; } },
+  });
+  assert.equal(status, 200);
+  assert.deepEqual(body.suggestions, []);
+});
+
 test("AI quantity suggestions respect the selected unit", () => {
   const baseResult = {
     status: "matched",

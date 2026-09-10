@@ -40,7 +40,7 @@ test("stock count migration preserves draft evidence and separates it from selle
   assert.match(authorityAuditMigration, /references inventory_receipt_lines\(company_id, id\)/i);
 });
 
-test("stock count apply is scoped, locked, idempotent, serialized, and fails closed on existing local stock", () => {
+test("stock count apply is scoped, locked, idempotent, classification-aware, and fails closed on existing local stock", () => {
   assert.match(repository, /company_id = any\(\$2::uuid\[\]\)/i);
   assert.match(repository, /pg_advisory_xact_lock/i);
   assert.match(repository, /count-import:\$\{stocktake\.id\}:row:/i);
@@ -58,6 +58,9 @@ test("stock count apply is scoped, locked, idempotent, serialized, and fails clo
   assert.match(repository, /inventory_serialized_units/i);
   assert.match(repository, /purpose: "stock_count"/i);
   assert.match(repository, /chunksByUnitLimit\(ready\.rows\)/i);
+  assert.match(repository, /return \{ kind: "tracking_required" \}/i);
+  assert.match(repository, /ready\.rows\.find\(\(line\) => !line\.tracking_mode\)/i);
+  assert.doesNotMatch(repository, /line\.tracking_mode === null \|\| line\.tracking_mode === "serialized"/i);
   assert.doesNotMatch(repository, /insert into inventory_authority_cutovers/i);
   assert.match(repository, /insert into inventory_count_review_events/i);
   assert.match(repository, /JSON\.stringify\(reviewState\(line\.rows\[0\]\)\)/i);
@@ -96,6 +99,9 @@ test("inventory count review uses the shared accessible table and canonical bin 
   assert.match(panel, /suggestionQuery=\{useSpreadsheetSuggestions \? automaticSearchQuery : ""\}/);
   assert.match(panel, /setUseSpreadsheetSuggestions\(false\)/);
   assert.match(panel, /Select to view suggested matches/);
+  assert.match(panel, /part\.trackingMode \? update\("match", part\) : setReviewPart\(part\)/);
+  assert.match(panel, /<ReviewInventoryCountPartDialog/);
+  assert.match(panel, /Serialized parts also receive QR labels/);
   assert.match(operationalTable, /TableHeader/);
   assert.match(operationalTable, /TableBody/);
   assert.match(operationalTable, /aria-label=\{ariaLabel\}/);

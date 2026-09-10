@@ -73,6 +73,14 @@ test("loaded location model preserves a valid selection without resetting the dr
   assert.equal(model.resetDraftBaseline, false);
 });
 
+test("refreshing locations preserves the selected local labor product in a valid draft", () => {
+  const labor = { productId: "local-labor", name: "Diagnostic labor", uomCode: "hr" };
+  const model = createLoadedLocationModel({ currentLocationId: "loc-chino", currentLaborProduct: labor, payload: { locations } });
+  assert.deepEqual(model.patch.laborProduct, labor);
+  const invalid = createLoadedLocationModel({ currentLocationId: "missing", currentLaborProduct: labor, payload: { locations } });
+  assert.notDeepEqual(invalid.patch.laborProduct, labor);
+});
+
 test("loaded location model applies the default template when selection is empty or invalid", () => {
   const model = createLoadedLocationModel({
     currentLocationId: "missing",

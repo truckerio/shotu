@@ -146,6 +146,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       `select
          wo.id, wo.serial, wo.status, wo.work_performed, wo.updated_at,
          wo.form_data->>'mileage' as mileage,
+         wo.form_data->'laborProduct'->>'productId' as local_labor_product_id,
          case
            when coalesce(wo.form_data->>'laborHours', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$'
              and (wo.form_data->>'laborHours')::numeric > 0
@@ -332,6 +333,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
     && /^hours?$/i.test(String(row.labor_product_uom_name || "").trim())
     && /time/i.test(String(row.labor_product_uom_category_name || ""));
   return {
+    localLaborProductId: row.local_labor_product_id || null,
     workorder: {
       id: row.id,
       serial: row.serial,

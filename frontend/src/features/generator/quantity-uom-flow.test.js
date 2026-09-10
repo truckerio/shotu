@@ -108,6 +108,7 @@ test("detail parts use the same configured labor product label as create and pri
   assert.match(usedPartsEditor, /onLaborRepairOrderChange\(event\.target\.value\)/);
   assert.match(usedPartsEditor, /<WorkorderSerializedPartDialog/);
   assert.match(detailPartsModule, /laborRepairOrderDisabled=\{!activeWorkorder\.allowedActions\?\.saveNotes\}/);
-  assert.equal(usedPartsEditor.match(/disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/g)?.length, 2);
+  // Four labor inputs plus the shared product selector obey the same permission gate.
+  assert.equal(usedPartsEditor.match(/disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/g)?.length, 5);
   assert.doesNotMatch(usedPartsEditor, /\[PTR001\] LABOR HOURS/);
 });

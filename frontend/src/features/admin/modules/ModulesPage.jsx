@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, SearchMd, Settings01, Shield03 } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { Checkbox } from "../../../components/ui/Checkbox.jsx";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
 import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
@@ -160,8 +161,7 @@ function UserExceptions({ companyPolicy, module, policy, scopeType, setPolicy, s
               />
               {surface === WORKORDER_SURFACES.CREATE && moduleSupportsWrite(module, { role: user.role, surface }) ? (
                 <label className="admin-module-required-setting admin-module-user-required-setting">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={effective.access === WORKORDER_ACCESS_MODES.REQUIRED}
                     onChange={(event) => setPolicy((current) => updateUserModuleException(
                       current,
@@ -303,8 +303,7 @@ function ModuleManager({
                 />
                 {surface === WORKORDER_SURFACES.CREATE && moduleSupportsWrite(module, { role, surface }) ? (
                   <label className="admin-module-required-setting">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={effective.access === WORKORDER_ACCESS_MODES.REQUIRED}
                       onChange={(event) => setScopePolicy((current) => updateModuleAccessOverride(
                         current,

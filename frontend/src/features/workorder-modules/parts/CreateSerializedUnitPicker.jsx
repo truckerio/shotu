@@ -78,6 +78,7 @@ export function CreateSerializedUnitPicker({
   if (!open) return null;
   return (
     <SerializedUnitNestedDropdown
+      anchorToPartField
       autoFocusSearch={false}
       error={message}
       loading={loading}

@@ -39,6 +39,7 @@ export function CreateWorkorderForm({
   onSubmit,
   onUnitChange,
   onVehicleSelect,
+  presentation = "panel",
   sections = [],
   selectedVehicle,
   vehicleLookup,
@@ -54,8 +55,8 @@ export function CreateWorkorderForm({
   ]));
   const summaryErrors = createWorkorderSummaryErrors(localizedErrors);
   const moduleProps = {
-    assignment: { activeSection: mobileSection, assignment, locale, onChange: onAssignmentChange },
-    concern: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange },
+    assignment: { activeSection: mobileSection, assignment, locale, onChange: onAssignmentChange, presentation },
+    concern: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange, presentation },
     location: {
       activeSection: mobileSection,
       errors: localizedErrors,
@@ -69,6 +70,7 @@ export function CreateWorkorderForm({
       selectedVehicle,
     },
     parts: {
+      historyEnabled: presentation === "one-page",
       activeSection: mobileSection,
       errors: localizedErrors,
       locale,
@@ -80,19 +82,20 @@ export function CreateWorkorderForm({
       onAdd: onAddPart,
       onChange: onPartChange,
       onLaborHoursChange: (value) => onFieldChange("laborHours", value),
+      onLaborProductChange: presentation === "one-page" ? (value) => onFieldChange("laborProduct", value) : undefined,
       onLaborRepairOrderChange: (value) => onFieldChange("workPerformed", value),
       onRemove: onRemovePart,
       onReplaceSerializedUnits: onReplacePartSerializedUnits,
     },
-    schedule: { activeSection: mobileSection, form, locale, onChange: onFieldChange },
-    unit: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, selectedVehicle, vehicleLookup },
+    schedule: { activeSection: mobileSection, form, locale, onChange: onFieldChange, presentation },
+    unit: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation, selectedVehicle, vehicleLookup },
   };
 
   return (
     <OperationalForm ref={mobileScrollRef} id={CREATE_WORKORDER_FORM_ID} className="create-workorder-form" data-mobile-section={mobileSection} busy={busy} onSubmit={onSubmit} noValidate>
       <FormErrorSummary errors={summaryErrors} focusFirstField focusKey={errorFocusKey} focusOnMount focusReady={errorFocusReady} onFocusTarget={onErrorFocusTarget} title={t("create.checkDetails")} />
       {message ? <p className="create-workorder-form-message" role={error ? "alert" : "status"}>{message}</p> : null}
-      <WorkorderCreateModuleHost sections={sections} moduleProps={moduleProps} />
+      <WorkorderCreateModuleHost presentation={presentation} sections={sections} moduleProps={moduleProps} />
     </OperationalForm>
   );
 }

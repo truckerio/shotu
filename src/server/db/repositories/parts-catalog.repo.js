@@ -39,21 +39,22 @@ function publicCatalogPart(row) {
     description: row.description,
     category: row.category,
     uomCode: row.uom_code || DEFAULT_UOM_CODE,
+    trackingMode: row.tracking_mode || null,
     repairOrder: row.repair_template,
     aliases: Array.isArray(row.aliases) ? row.aliases : [],
     referenceNumbers: Array.isArray(row.reference_numbers) ? row.reference_numbers : [],
     version: Number(row.version || 1),
     matchType: row.match_type,
     matchRank: row.match_rank === undefined ? undefined : Number(row.match_rank),
-    barcode: row.barcode || "",
+    barcode: row.catalog_barcode ?? row.barcode ?? "",
     source: row.inventory_item_id ? "local" : (row.source_provider || (row.odoo_external_id ? "odoo" : "company")),
     externalId: row.odoo_external_id || row.external_id || "",
     providerUpdatedAt: row.provider_updated_at || null,
     lastSeenAt: row.last_seen_at || null,
     providerManaged: row.provider_managed === true || Boolean(row.odoo_external_id),
     editableFields: row.provider_managed === true || row.odoo_external_id
-      ? ["manufacturer", "referenceNumbers"]
-      : ["description", "partNumber", "manufacturer", "category", "barcode", "referenceNumbers"],
+      ? ["description", "manufacturer", "uomCode", "trackingMode", "referenceNumbers"]
+      : ["description", "partNumber", "manufacturer", "category", "barcode", "uomCode", "trackingMode", "referenceNumbers"],
     inventory: publicInventory(row),
   };
 }
@@ -172,6 +173,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
       )
       select
         candidates.*,
+        candidates.barcode as catalog_barcode,
         coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id) from part_reference_numbers reference where reference.company_id=candidates.company_id and reference.catalog_part_id=candidates.id), '[]'::jsonb) as reference_numbers,
         exists (select 1 from odoo_product_mappings ownership where ownership.company_id=candidates.company_id and ownership.catalog_part_id=candidates.id) as provider_managed,
         provider.external_id as odoo_external_id,

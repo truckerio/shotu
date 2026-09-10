@@ -7,8 +7,12 @@ export function anchoredOverlayShift({
   bottomInset = 16,
 }) {
   if (!rect) return currentShift;
+  // DOMRect values can contain sub-pixels. Rounding the correction up makes
+  // the visual adjustment deterministic instead of feeding tiny transform
+  // differences back into a layout-effect state update forever.
+  const correction = (value) => Math.ceil(Math.max(0, value));
   return {
-    x: Math.max(0, rect.right + currentShift.x - viewportWidth + horizontalInset),
-    y: Math.max(0, rect.bottom + currentShift.y - viewportHeight + bottomInset),
+    x: correction(rect.right + currentShift.x - viewportWidth + horizontalInset),
+    y: correction(rect.bottom + currentShift.y - viewportHeight + bottomInset),
   };
 }

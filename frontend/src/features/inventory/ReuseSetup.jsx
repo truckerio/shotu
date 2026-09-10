@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Button } from "../../components/ui/Button.jsx";
+import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import { SectionHelpDisclosure } from "../../components/workorders/SectionHelpDisclosure.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { api } from "../../lib/api.js";
@@ -113,7 +114,7 @@ export function ReuseSetup({ companyId, locationId, requestedPolicyPart = null, 
           const id = event.target.value; setUserId(id);
           setCapabilities(data.staff.find((staff) => staff.id === id)?.capabilities || []);
         }} required disabled={busy}><option value="">Choose staff</option>{data.staff.map((staff) => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}</option>)}</Dropdown></label>
-        <fieldset disabled={busy || !userId}><legend>Allowed actions</legend>{Object.entries(actionLabels).map(([action, label]) => <label className="reuse-setup-check" key={action}><input type="checkbox" checked={capabilities.includes(action)} onChange={(event) => setCapabilities((current) => event.target.checked ? [...current, action] : current.filter((item) => item !== action))} />{label}</label>)}</fieldset>
+        <fieldset disabled={busy || !userId}><legend>Allowed actions</legend>{Object.entries(actionLabels).map(([action, label]) => <label className="reuse-setup-check" key={action}><Checkbox checked={capabilities.includes(action)} onChange={(event) => setCapabilities((current) => event.target.checked ? [...current, action] : current.filter((item) => item !== action))} />{label}</label>)}</fieldset>
         <label>Reason<input value={reason} onChange={(event) => setReason(event.target.value)} required maxLength={2000} disabled={busy} /></label>
         <Button type="submit" disabled={busy || !userId || !reason.trim()}>Save permissions</Button>
       </form>
@@ -141,10 +142,10 @@ export function ReuseSetup({ companyId, locationId, requestedPolicyPart = null, 
           popupAriaLabel="Matching inventory parts"
           disabled={busy}
         />
-        <label className="reuse-setup-check"><input type="checkbox" checked={reuseAllowed} onChange={(event) => setReuseAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be reused after inspection</label>
-        <label className="reuse-setup-check"><input type="checkbox" checked={repairAllowed} onChange={(event) => setRepairAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be repaired or refurbished</label>
-        <label className="reuse-setup-check"><input type="checkbox" checked={coreReturnAllowed} onChange={(event) => setCoreReturnAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be returned as a core</label>
-        <label className="reuse-setup-check"><input type="checkbox" checked={scrapAllowed} onChange={(event) => setScrapAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be scrapped with approval</label>
+        <label className="reuse-setup-check"><Checkbox checked={reuseAllowed} onChange={(event) => setReuseAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be reused after inspection</label>
+        <label className="reuse-setup-check"><Checkbox checked={repairAllowed} onChange={(event) => setRepairAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be repaired or refurbished</label>
+        <label className="reuse-setup-check"><Checkbox checked={coreReturnAllowed} onChange={(event) => setCoreReturnAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be returned as a core</label>
+        <label className="reuse-setup-check"><Checkbox checked={scrapAllowed} onChange={(event) => setScrapAllowed(event.target.checked)} disabled={busy || !catalogPartId} />May be scrapped with approval</label>
         <label>Policy evidence<textarea value={evidence} onChange={(event) => setEvidence(event.target.value)} placeholder="Manufacturer guidance or approved shop policy" required maxLength={2000} disabled={busy} /></label>
         <Button type="submit" disabled={busy || !catalogPartId || !evidence.trim()}>Save part policy</Button>
       </form>

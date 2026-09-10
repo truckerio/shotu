@@ -41,7 +41,8 @@ test("installed serialized summaries keep identity locked, edit only repair word
   assert.match(roleRouterModel, /parts: workorderPreviewParts\(form\.parts, installedSerializedUsedParts\(detail\), aggregateParts\.filter\(\(usage\) => \["consumed", "installed_pending_approval"\]\.includes\(usage\.status\)\)\.map/);
   assert.match(roleRouterModel, /aggregatePartUsages/);
   assert.match(roleRouter, /useWorkorderPrintController\([\s\S]*form: previewForm/);
-  assert.equal((detailPage.match(/form=\{renderedPreviewForm\}/g) || []).length, 5);
+  assert.equal((detailPage.match(/form=\{renderedPreviewForm\}/g) || []).length, 6);
+  assert.doesNotMatch(detailPage, /<WorkorderPreview[^>]*form=\{form\}/);
 });
 
 test("locale reaches the mechanic editor without changing office defaults", () => {

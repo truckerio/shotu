@@ -20,6 +20,7 @@ export function CustomerCompanyField({
   const options = suggestions.map((name, index) => ({ id: `customer-company-${index}`, name }));
   const listboxId = `customer-company-options-${useId().replaceAll(":", "")}`;
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const suggestionKey = suggestions.join("\u0000");
@@ -44,6 +45,7 @@ export function CustomerCompanyField({
     onChange?.(option.name);
     setOpen(false);
     setActiveIndex(-1);
+    inputRef.current?.focus();
   }
 
   function handleKeyDown(event) {
@@ -80,6 +82,7 @@ export function CustomerCompanyField({
         <div className="customer-company-combobox" ref={rootRef}>
           <div className="customer-company-combobox-control">
             <input
+              ref={inputRef}
               {...textEntryProps("name")}
               {...inputProps}
               id={accessibility.id}
@@ -103,8 +106,19 @@ export function CustomerCompanyField({
               className="customer-company-combobox-trigger"
               aria-label={suggestionsLabel}
               aria-expanded={open}
-              aria-controls={listboxId}
+              aria-controls={open ? listboxId : undefined}
+              aria-haspopup="listbox"
               type="button"
+              onKeyDown={(event) => {
+                if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+                  event.preventDefault();
+                  inputRef.current?.focus();
+                  setOpen(true);
+                  setActiveIndex(event.key === "ArrowDown" ? 0 : options.length - 1);
+                  return;
+                }
+                if (["Escape", "Tab", "ArrowDown", "ArrowUp"].includes(event.key)) handleKeyDown(event);
+              }}
               onClick={() => {
                 setOpen((current) => !current);
                 setActiveIndex((current) => current >= 0 ? current : 0);

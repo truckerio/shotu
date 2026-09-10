@@ -1,4 +1,5 @@
 import { AuthError, invalidRequest, permissionDenied } from "../../auth/errors.js";
+import { isDeepStrictEqual } from "node:util";
 import { acknowledgeChatReceipts } from "../chat/chat-receipts.service.js";
 import {
   acceptMechanicWorkorder,
@@ -35,7 +36,9 @@ import {
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
+import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import {
   authorizeWorkorderModule,
   authorizeWorkorderModuleActions,
@@ -160,34 +163,91 @@ export async function protectedWorkorderModule(context, workorderId, moduleKey, 
   );
 }
 
+function hasLaborProductPatch(input) {
+  return Object.prototype.hasOwnProperty.call(input?.formData || {}, "laborProduct");
+}
+
+function laborProductPatchChanged(input, workorder) {
+  if (!hasLaborProductPatch(input)) return false;
+  const requested = input.formData.laborProduct;
+  const saved = workorder?.formData?.laborProduct;
+  if (requested === null && saved == null) return false;
+  return !isDeepStrictEqual(requested, saved);
+}
+
+async function canonicalizeLaborProductPatch(context, input, workorder, dependencies) {
+  if (!laborProductPatchChanged(input, workorder)) return input;
+  if (!["office", "admin"].includes(context.actor.role)) throw permissionDenied();
+  const requested = input.formData.laborProduct;
+  if (requested === null) return input;
+  if (!requested?.productId) {
+    throw invalidRequest("Select a valid local labor product.");
+  }
+  const resolveLaborProduct = dependencies.resolveLaborProduct || trustedLocalLaborProduct;
+  const laborProduct = await resolveLaborProduct({
+    productId: requested.productId,
+    companyId: workorder.companyId,
+    locationId: workorder.locationId || null,
+  }, context);
+  return {
+    ...input,
+    formData: {
+      ...input.formData,
+      laborProduct,
+    },
+  };
+}
+
 export async function patchWorkorderModule(context, workorderId, moduleKey, input, dependencies = {}) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
-  await authorize(context, workorderId, { moduleKey, capability: "write", action: "update" });
+  const authorization = await authorize(context, workorderId, { moduleKey, capability: "write", action: "update" });
   if (["unit", "location", "schedule", "assignment", "concern"].includes(moduleKey)) {
     const update = dependencies.updateOffice || updateOfficeWorkorder;
     return update(workorderId, { ...input, officeUserId: context.actor.id });
   }
   if (moduleKey === "diagnosisRepair") {
+    if (hasLaborProductPatch(input) && !["office", "admin"].includes(context.actor.role)) {
+      throw permissionDenied();
+    }
+    const normalizedInput = await canonicalizeLaborProductPatch(
+      context, input, authorization?.workorder, dependencies,
+    );
     if (["office", "admin"].includes(context.actor.role)) {
       const update = dependencies.updateOffice || updateOfficeWorkorder;
-      return update(workorderId, { ...input, officeUserId: context.actor.id });
+      return update(workorderId, { ...normalizedInput, officeUserId: context.actor.id });
     }
     const update = dependencies.updateMechanic || saveMechanicWorkorderProgress;
-    return update(workorderId, context.actor.id, input);
+    return update(workorderId, context.actor.id, normalizedInput);
   }
   throw permissionDenied();
 }
 
 export async function patchWorkorderModules(context, workorderId, moduleKeys, input, dependencies = {}) {
   if (!moduleKeys.length) throw invalidRequest("No writable module fields were provided.");
+  const loadWorkorder = dependencies.loadWorkorder || requireWorkorderAccess;
+  const submittedLaborProduct = hasLaborProductPatch(input);
+  const loadedWorkorder = submittedLaborProduct
+    ? await loadWorkorder(context, workorderId)
+    : null;
+  const laborProductChanged = submittedLaborProduct
+    && laborProductPatchChanged(input, loadedWorkorder);
+  const effectiveModuleKeys = laborProductChanged
+    ? [...new Set([...moduleKeys, "diagnosisRepair"])]
+    : moduleKeys.filter((moduleKey) => moduleKey !== "diagnosisRepair");
+  if (!effectiveModuleKeys.length) return loadedWorkorder;
   const authorizeMany = dependencies.authorizeMany || authorizeWorkorderModuleActions;
-  await authorizeMany(context, workorderId, moduleKeys.map((moduleKey) => ({
+  const authorization = await authorizeMany(context, workorderId, effectiveModuleKeys.map((moduleKey) => ({
     moduleKey,
     capability: "write",
     action: "update",
   })));
+  const normalizedInput = laborProductChanged
+    ? await canonicalizeLaborProductPatch(
+      context, input, authorization?.workorder || loadedWorkorder, dependencies,
+    )
+    : input;
   const update = dependencies.updateOffice || updateOfficeWorkorder;
-  return update(workorderId, { ...input, officeUserId: context.actor.id });
+  return update(workorderId, { ...normalizedInput, officeUserId: context.actor.id });
 }
 
 export async function runWorkorderModuleAction(
@@ -347,7 +407,15 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
   });
   const create = dependencies.create || createOperationalWorkorder;
   const loadLaborProduct = dependencies.loadLaborProduct || getConfiguredLaborProduct;
-  const laborProduct = await loadLaborProduct(input.companyId);
+  const resolveLocalLaborProduct = dependencies.resolveLaborProduct || trustedLocalLaborProduct;
+  const selectedLocalProductId = input.formData?.laborProduct?.productId || null;
+  const laborProduct = selectedLocalProductId
+    ? await resolveLocalLaborProduct({
+      productId: selectedLocalProductId,
+      companyId: input.companyId,
+      locationId: input.locationId,
+    }, context)
+    : await loadLaborProduct(input.companyId);
   const mechanic = context.actor.role === "mechanic";
   try {
     return await create({

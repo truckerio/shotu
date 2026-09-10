@@ -68,6 +68,8 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.match(workspace, /Odoo · read-only/);
   assert.match(workspace, /Our inventory/);
   assert.match(workspace, /setSelectedLocationId/);
+  assert.match(workspace, /<PartLocationSettings part=\{selectedItem\} location=\{location\}/);
+  assert.doesNotMatch(workspace, /title="Tracking and stock rules"/);
   assert.doesNotMatch(workspace, /Application inventory is separate from the read-only Odoo quantity reference/);
   assert.doesNotMatch(workspace, /These records belong in this part window/);
   assert.doesNotMatch(workspace, /aria-pressed=\{tab ===/);
@@ -79,10 +81,50 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.match(panelStyles, /prefers-reduced-motion: reduce/);
 });
 
+test("stock rules live behind each location settings icon while tracking stays in Edit part", async () => {
+  const [workspace, settings, editor, styles] = await Promise.all([
+    readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./PartLocationSettings.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./PartIdentityEditor.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(workspace, /inventory-detail-location-row/);
+  assert.match(settings, /icon=\{Settings01\} aria-label=\{`Stock settings for \$\{location\.locationName\}`\}/);
+  assert.doesNotMatch(settings, />Settings<\/Button>/);
+  assert.doesNotMatch(settings, />Tracking<\/h3>/);
+  assert.match(settings, />Stock rule<\/h3>/);
+  assert.match(settings, /locationId: location\.locationId/);
+  assert.match(settings, /expectedVersion: location\.policyVersion \?\? null/);
+  assert.match(settings, /"Save stock rule"/);
+  assert.match(editor, /id="inventory-tracking-mode"/);
+  assert.match(editor, /value="quantity"/);
+  assert.match(editor, /value="serialized"/);
+  assert.match(editor, /value="measured_bulk"/);
+  assert.doesNotMatch(workspace, /<dt>Tracking<\/dt>/);
+  assert.match(styles, /\.inventory-location-settings-overlay/);
+  assert.match(styles, /\.inventory-detail-location-row > \.button > span \{ display: none; \}/);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.inventory-location-settings-modal/);
+});
+
 test("inventory selection identity stays stable when a display unit changes", async () => {
   const workspace = await readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8");
   assert.match(workspace, /return `\$\{item\.companyId\}:\$\{item\.catalogPartId\}`/);
   assert.doesNotMatch(workspace, /return `\$\{item\.companyId\}:\$\{item\.catalogPartId\}:\$\{item\.uomCode\}`/);
+});
+
+test("count review classifies unreviewed master parts before matching", async () => {
+  const [panel, dialog] = await Promise.all([
+    readFile(new URL("./InventoryCountImportPanel.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./ReviewInventoryCountPartDialog.jsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(panel, /part\.trackingMode \? update\("match", part\) : setReviewPart\(part\)/);
+  assert.match(dialog, />Unit for the counted quantity</);
+  assert.match(dialog, />Choose tracking</);
+  assert.match(dialog, /value="quantity"/);
+  assert.match(dialog, /value="serialized"/);
+  assert.match(dialog, /value="measured_bulk"/);
+  assert.match(dialog, /method: "PATCH"/);
+  assert.match(dialog, /"Save and match"/);
 });
 
 test("part identity editing remains inside the part detail drawer", async () => {
@@ -107,7 +149,9 @@ test("part identity editing remains inside the part detail drawer", async () => 
   assert.match(workspace, /Reference numbers/);
   assert.match(workspace, /<dt>Part name<\/dt>/);
   assert.match(workspace, /<dt>In Odoo<\/dt>/);
-  assert.match(workspace, /In Odoo: \{item\.odooName/);
+  const inventoryTable = workspace.slice(workspace.indexOf('ariaLabel="Inventory parts"'), workspace.indexOf("<SecondaryDetailPanel"));
+  assert.doesNotMatch(inventoryTable, /In Odoo:/);
+  assert.match(workspace, /<dt>In Odoo<\/dt>/);
   assert.match(editor, /\/api\/office\/inventory\/parts\/\$\{encodeURIComponent\(part\.catalogPartId\)\}/);
   assert.match(editor, /method: "PATCH"/);
   assert.match(editor, /partIdentityPayload\(draft, part\.version\)/);

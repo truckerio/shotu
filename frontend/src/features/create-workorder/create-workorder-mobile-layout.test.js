@@ -127,19 +127,18 @@ test("Create keeps text entry responsive by deferring only live preview work", (
   assert.doesNotMatch(createPage, /useDeferredValue\(form\)[\s\S]*?<CreateWorkorderForm[\s\S]*?form=\{deferredPreviewSource\}/);
 });
 
-test("Create shell uses the canonical workorder panel for summary and section navigation", () => {
+test("Create shell uses one-page mode for office while retaining the mechanic panel navigation", () => {
   assert.match(createShell, /<WorkorderPanelShell/);
   assert.match(workorderPanelShell, /<WorkorderObjectSummary/);
   assert.match(workorderPanelShell, /<WorkorderSectionNav/);
-  assert.match(createShell, /<WorkorderSectionNav/);
+  assert.match(createPage, /const createPresentation = isMechanicCreate \? "panel" : "one-page"/);
+  assert.match(createShell, /presentation=\{presentation\}/);
+  assert.match(createShell, /presentation === "panel"[\s\S]*?<WorkorderSectionNav/s);
+  assert.match(workorderPanelShell, /\{!onePage \? \([\s\S]*?<WorkorderObjectSummary[\s\S]*?<WorkorderSectionNav/s);
   assert.match(createShell, /showPristine/);
   assert.doesNotMatch(createShell, /create-workorder-section-tabs/);
   assert.match(createPage, /<CreateWorkorderShell/);
-  assert.equal((createShell.match(/className="create-workorder-section-nav"/g) || []).length, 1);
-  assert.match(
-    createCss,
-    /\.create-workorder-section-nav\.workorder-section-nav-desktop\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
-  );
+  assert.match(createShell, /className="create-workorder-section-nav"/);
 });
 
 test("mechanic Create omits assignment page while preserving assigned mechanic data", () => {

@@ -1,4 +1,4 @@
-import { NarrativeField } from "../../../components/forms/index.js";
+import { FormField, NarrativeField } from "../../../components/forms/index.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { Field } from "../../generator/GeneratorUi.jsx";
@@ -26,11 +26,13 @@ export function WorkorderConcernModule({
   onOfficeNotesChange,
   onSave,
   onSelect,
+  presentation = "panel",
 }) {
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
   const text = (key, english) => isMechanicDetail ? t(key) : english;
   const canWrite = writable(access) && Boolean(allowedActions.update);
+  const onePage = presentation === "one-page";
 
   return (
     <ProgressiveWorkorderSection
@@ -39,6 +41,7 @@ export function WorkorderConcernModule({
       activeSection={activeSection}
       onSelect={onSelect}
       displayMode="panel"
+      showTitle={presentation !== "one-page"}
     >
       <div className="workorder-review-content">
         {missingInfoAttention ? (
@@ -49,7 +52,11 @@ export function WorkorderConcernModule({
           </div>
         ) : null}
         {canWrite ? (
-          <>
+          onePage ? <div className="workorder-one-page-concern-fields">
+            <FormField id="workorder-concern" label="Concern">
+              <NarrativeField locale={locale} rows={presentation === "one-page" ? 2 : 4} value={concern || ""} onChange={(event) => onChange?.(event.target.value)} />
+            </FormField>
+          </div> : <>
             <Field label={text("detail.mechanicConcern", "Mechanic concern")}>
               <NarrativeField locale={locale} rows="4" value={concern || ""} onChange={(event) => onChange?.(event.target.value)} />
             </Field>

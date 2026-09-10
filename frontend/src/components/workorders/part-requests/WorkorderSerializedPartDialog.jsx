@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Dropdown } from "../../forms/Dropdown.jsx";
 import { Button } from "../../ui/Button.jsx";
+import { Checkbox } from "../../ui/Checkbox.jsx";
 import { api } from "../../../lib/api.js";
 import { normalizeLocale } from "../../../i18n/index.js";
 import { anchoredOverlayShift } from "./anchored-overlay-position.js";
@@ -327,7 +328,7 @@ export function WorkorderSerializedPartDialog({
                 <label>{text.condition}<Dropdown value={conditionCode} onChange={(event) => setConditionCode(event.target.value)} disabled={busy}><option value="new">{text.newCondition}</option><option value="serviceable_used">{text.usedCondition}</option><option value="refurbished">{text.refurbishedCondition}</option></Dropdown></label>
                 <label>{text.conditionEvidence}<textarea rows="2" maxLength="2000" value={conditionEvidence} onChange={(event) => setConditionEvidence(event.target.value)} placeholder={text.conditionEvidencePlaceholder} disabled={busy} /></label>
               </div>
-              <label className="workorder-serialized-check"><input type="checkbox" checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /><span>{text.confirm} <strong>{locationName}</strong>.</span></label>
+              <label className="workorder-serialized-check"><Checkbox checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /><span>{text.confirm} <strong>{locationName}</strong>.</span></label>
               <footer><Button type="button" onClick={() => { setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type="submit" variant="primary" disabled={busy || !physicallyPresent || !conditionEvidence.trim()}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
             </form>
           </div>

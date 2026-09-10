@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   confirmInventoryCount,
   readInventoryCounts,
+  resolveInventoryCountLine,
   searchInventoryMasterParts,
   uploadInventoryCount,
   inventoryCountInternals,
@@ -172,5 +173,26 @@ test("opening-count apply exposes legacy reservation and identity reconciliation
       applyImport: async () => ({ kind: "authority_unmatched", sourceRow: 9 }),
     }),
     (error) => error.code === "INVENTORY_COUNT_AUTHORITY_IDENTITY_UNMATCHED" && /row 9/.test(error.message),
+  );
+});
+
+test("count review and apply expose an explicit unreviewed-tracking error", async () => {
+  await assert.rejects(
+    resolveInventoryCountLine("draft-1", "40000000-0000-4000-8000-000000000004", {
+      action: "match",
+      expectedVersion: 1,
+      catalogPartId: "50000000-0000-4000-8000-000000000005",
+      quantity: 3,
+      binLocation: "A1",
+    }, context(), { resolveLine: async () => ({ kind: "tracking_required" }) }),
+    (error) => error.code === "INVENTORY_COUNT_TRACKING_REQUIRED" && error.statusCode === 409,
+  );
+
+  await assert.rejects(
+    confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, context({ actor: { role: "admin" } }), {
+      qrOptions: { signingKey: Buffer.alloc(32, 4).toString("base64") },
+      applyImport: async () => ({ kind: "tracking_required", sourceRow: 12 }),
+    }),
+    (error) => error.code === "INVENTORY_COUNT_TRACKING_REQUIRED" && /row 12/i.test(error.message),
   );
 });

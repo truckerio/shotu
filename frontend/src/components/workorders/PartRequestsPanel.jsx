@@ -11,9 +11,11 @@ export function PartRequestsPanel({
   parts,
   laborHours,
   laborProduct,
+  locationId,
   laborRepairOrder,
   laborRepairOrderDisabled,
   onLaborHoursChange,
+  onLaborProductChange,
   onLaborRepairOrderChange,
   onPartsChange,
   onSaveParts,
@@ -21,6 +23,7 @@ export function PartRequestsPanel({
   onRegisterSerializedRepairFlush,
   serializedParts = null,
   locale = "en",
+  presentation = "panel",
 }) {
   const usedPartsAccess = usedPartsAccessState(role, detail.allowedActions || {});
   const laborEditable = detail.allowedActions?.saveNotes === true;
@@ -32,10 +35,12 @@ export function PartRequestsPanel({
     parts,
     laborHours,
     laborProduct,
+    locationId,
     laborRepairOrder,
     laborRepairOrderDisabled,
     installedParts,
     onLaborHoursChange,
+    onLaborProductChange,
     onLaborRepairOrderChange,
     onPartsChange,
     onSaveParts,
@@ -51,7 +56,7 @@ export function PartRequestsPanel({
       {role === "mechanic" ? (
         <MechanicPartsSurface {...commonProps} locale={locale} />
       ) : role === "office" ? (
-        <OfficePartsSurface {...commonProps} />
+        <OfficePartsSurface {...commonProps} presentation={presentation} />
       ) : (
         <ReadOnlyPartsSurface {...commonProps} />
       )}

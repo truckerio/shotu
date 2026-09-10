@@ -9,6 +9,13 @@ const WORKORDER_EDITOR_LAYOUT = Object.freeze({
   responsiveToLandscape: true,
   storageKey: "workorder.editorPreviewPercent.v1",
 });
+const WORKORDER_TOOLS_LAYOUT = Object.freeze({
+  defaultPreviewPercent: 32,
+  minControlWidth: 620,
+  minPreviewWidth: 360,
+  responsiveToLandscape: false,
+  storageKey: "workorder.toolsPreviewPercent.v1",
+});
 const RESIZER_WIDTH = 8;
 const WORKORDER_ASPECT_RATIO = 11 / 8.5;
 
@@ -44,9 +51,9 @@ function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-export function WorkorderDetailLayout({ detail, previewOpen, children, locale = "en" }) {
+export function WorkorderDetailLayout({ detail, previewOpen, children, locale = "en", tools = false }) {
   const shellRef = useRef(null);
-  const layout = WORKORDER_EDITOR_LAYOUT;
+  const layout = tools ? WORKORDER_TOOLS_LAYOUT : WORKORDER_EDITOR_LAYOUT;
   const [previewPercent, setPreviewPercent] = useState(() => initialPreviewPercent(layout));
   const [resizing, setResizing] = useState(false);
   const userSizedRef = useRef(Boolean(savedPreviewPercent(layout)));
@@ -128,6 +135,8 @@ export function WorkorderDetailLayout({ detail, previewOpen, children, locale = 
 
   useEffect(() => {
     const fitSavedWidth = () => {
+      // Compact tools are a modal, not a split. Preserve the desktop preference.
+      if (tools && window.innerWidth < 1280) return;
       const limits = bounds();
       const width = shellRef.current?.getBoundingClientRect().width || 0;
       setPreviewPercent((current) => {
@@ -143,16 +152,16 @@ export function WorkorderDetailLayout({ detail, previewOpen, children, locale = 
     fitSavedWidth();
     window.addEventListener("resize", fitSavedWidth);
     return () => window.removeEventListener("resize", fitSavedWidth);
-  }, [layout]);
+  }, [layout, tools]);
 
   const limits = bounds();
   const effectivePercent = previewOpen ? clamp(previewPercent, limits.minimum, limits.maximum) : 0;
   const layoutClass = detail ? "workorder-detail-layout" : "generator-layout";
-  const separatorLabel = interfaceText(locale, detail ? "preview.resizeWorkorder" : "preview.resizeForm");
+  const separatorLabel = tools ? "Resize workorder and tools panels" : interfaceText(locale, detail ? "preview.resizeWorkorder" : "preview.resizeForm");
   return (
     <section
       ref={shellRef}
-      className={`split-layout ${layoutClass} ${previewOpen ? "has-preview" : ""} ${resizing ? "is-resizing" : ""}`}
+      className={`split-layout ${layoutClass} ${tools ? "has-tools-layout" : ""} ${previewOpen ? "has-preview" : ""} ${resizing ? "is-resizing" : ""}`}
       style={{
         "--preview-pane-width": `${effectivePercent}%`,
         "--detail-resizer-width": previewOpen ? `${RESIZER_WIDTH}px` : "0px",

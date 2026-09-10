@@ -50,7 +50,8 @@ export async function handlePartsHelperApi(req, res, url, helpers) {
     }
     if (req.method === "GET" && url.pathname === "/api/parts-helper/repair-suggestions") {
       const input = {
-        workorderId: url.searchParams.get("workorderId"),
+        workorderId: url.searchParams.get("workorderId") || undefined,
+        locationId: url.searchParams.get("locationId") || undefined,
         catalogPartId: url.searchParams.get("catalogPartId") || undefined,
         partNumber: url.searchParams.get("partNumber"),
         limit: url.searchParams.get("limit") || undefined,

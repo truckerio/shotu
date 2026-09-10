@@ -40,6 +40,8 @@ test("catalog edit repository locks scope and atomically cascades current projec
   assert.match(source, /odoo_product_mappings/i);
   assert.match(source, /uom_locked_at/i);
   assert.match(source, /parts_catalog_uom_locked/i);
+  assert.match(source, /const displayOnlyUom = current\.uom_locked_at !== null/);
+  assert.doesNotMatch(source, /const displayOnlyUom = current\.provider_managed \|\|/);
 });
 
 test("catalog UOM lock migration backfills activity and serializes parent and child writes", async () => {

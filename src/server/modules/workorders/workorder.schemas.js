@@ -20,12 +20,14 @@ const inventoryUnitSelectionSchema = z.object({
 }).strict();
 
 const customerCompanyNameSchema = z.string().trim().max(300, "Customer company must be 300 characters or less.");
-const laborProductSchema = z.object({
-  externalId: z.string().trim().max(200).default(""),
+export const laborProductSchema = z.object({
+  productId: z.string().uuid().optional(),
+  externalId: z.string().trim().max(200).optional(),
   code: z.string().trim().max(100).default(""),
   name: z.string().trim().min(1).max(300),
   uomCode: z.literal("hr").default("hr"),
-}).strict();
+  pinned: z.boolean().optional(),
+}).strict().transform(({ pinned: _pinned, ...product }) => product);
 
 /**
  * Typed boundary for printable form snapshots.

@@ -89,7 +89,8 @@ test("serialized parent selection opens one shared nested dropdown and derives q
   assert.match(nestedDropdown, /type="search"/);
   assert.match(nestedDropdown, /event\.key === "Escape"/);
   assert.match(nestedDropdown, /selectedUnitIds instanceof Set/);
-  assert.match(childPicker, /type="checkbox"/);
+  assert.match(childPicker, /<Checkbox/);
+  assert.match(childPicker, /import \{ Checkbox \}/);
   assert.match(childPicker, /onSelectionChange\?\.\(new Set\(next\)\)/);
   assert.match(css, /\.create-part-identity-field \.serialized-unit-nested-dropdown\s*\{[^}]*left:\s*calc\(100% \+ 8px\)/s);
   assert.match(nestedCss, /\.serialized-unit-nested-dropdown\s*\{[^}]*position:\s*absolute/s);

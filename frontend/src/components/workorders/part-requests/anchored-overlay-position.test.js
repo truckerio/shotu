@@ -26,3 +26,18 @@ test("replacement overlay retains correction inside clipped tablet container", (
     viewportHeight: 700,
   }), { x: 208, y: 136 });
 });
+
+test("sub-pixel measurements converge to one stable viewport correction", () => {
+  const first = anchoredOverlayShift({
+    rect: { right: 901.2, bottom: 715.1 },
+    viewportWidth: 900,
+    viewportHeight: 700,
+  });
+  assert.deepEqual(first, { x: 18, y: 32 });
+  assert.deepEqual(anchoredOverlayShift({
+    rect: { right: 883.2, bottom: 683.1 },
+    currentShift: first,
+    viewportWidth: 900,
+    viewportHeight: 700,
+  }), first);
+});

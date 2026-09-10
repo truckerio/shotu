@@ -1,9 +1,10 @@
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { CustomerCompanyField, FormField, FormSection, OptionalSection, UnitSummary } from "../../../components/forms/index.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
+import { UnitDetailsPopover } from "../../../components/workorders/UnitDetailsPopover.jsx";
 import {
   activeWorkorderForVehicle,
   moveVehicleSearchResultIndex,
@@ -28,21 +29,33 @@ export function normalizedVehicleTagNames(tagNames) {
   }, []);
 }
 
-export function CreateUnitModule({ access, activeSection, errors, form, locale = "en", onChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, selectedVehicle, vehicleLookup }) {
+export function CreateUnitModule({ access, activeSection, errors, form, locale = "en", locationContent, onChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation = "panel", selectedVehicle, vehicleLookup }) {
   const [unitDetailsOpen, setUnitDetailsOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const [resultsDismissed, setResultsDismissed] = useState(false);
+  const [lookupFocused, setLookupFocused] = useState(false);
+  const lookupRef = useRef(null);
   const resultIdPrefix = useId().replaceAll(":", "");
   const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
   const vehicleTags = normalizedVehicleTagNames(selectedVehicle?.tag_names);
   const vehicleResults = (vehicleLookup.results || []).slice(0, 6);
-  const resultsOpen = !resultsDismissed && vehicleResults.length > 0;
+  const resultsOpen = lookupFocused && !resultsDismissed && vehicleResults.length > 0;
   const t = (key) => interfaceText(locale, key);
+  const onePage = presentation === "one-page";
   useEffect(() => setUnitDetailsOpen(false), [selectedVehicleId]);
   useEffect(() => {
     setActiveResultIndex(vehicleResults.length ? 0 : -1);
-    setResultsDismissed(false);
   }, [vehicleLookup.results]);
+  useEffect(() => {
+    const dismissOutside = (event) => {
+      if (!lookupRef.current?.contains(event.target)) {
+        setResultsDismissed(true);
+        setLookupFocused(false);
+      }
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    return () => document.removeEventListener("pointerdown", dismissOutside);
+  }, []);
 
   function activateVehicleResult(vehicle) {
     setResultsDismissed(true);
@@ -55,6 +68,16 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
   }
 
   function handleUnitKeyDown(event) {
+    if (event.key === "Tab") {
+      setResultsDismissed(true);
+      return;
+    }
+    if (!resultsOpen && vehicleResults.length && ["ArrowDown", "ArrowUp"].includes(event.key)) {
+      event.preventDefault();
+      setResultsDismissed(false);
+      setActiveResultIndex(event.key === "ArrowDown" ? 0 : vehicleResults.length - 1);
+      return;
+    }
     if (!resultsOpen) return;
     const nextIndex = moveVehicleSearchResultIndex(activeResultIndex, vehicleResults.length, event.key);
     if (nextIndex !== null) {
@@ -64,6 +87,7 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
     }
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       setResultsDismissed(true);
       setActiveResultIndex(-1);
       return;
@@ -75,10 +99,13 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
   }
 
   if (!access) return null;
+  const UnitSection = onePage ? "div" : FormSection;
+  const UnitDetails = onePage ? UnitDetailsPopover : OptionalSection;
+  const customerField = <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required requiredLabel={t("create.required")} />;
   return (
     <ProgressiveWorkorderSection
       id="unit"
-      className="create-unit-card"
+      className={`create-unit-card${onePage ? " workorder-compact-unit" : ""}`}
       title={t("create.unit.title")}
       activeSection={activeSection}
       onSelect={() => {}}
@@ -86,18 +113,24 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
       keepMounted
       showTitle={false}
     >
-      <FormSection
-        title={t("create.unit.unit")}
-        action={(
+      <UnitSection
+        {...(onePage ? { className: "workorder-compact-unit-fields" } : { title: t("create.unit.unit"), action: (
           <SectionHelpDisclosure label={t("create.unit.summary")}>
             <p>{t("create.unit.summary")}</p>
             <p>{t("create.unit.searchHelp")}</p>
             <p>{t("create.unit.detailsHelp")}</p>
             <p>{t("create.unit.customerHint")}</p>
           </SectionHelpDisclosure>
-        )}
+        ) })}
       >
-        <div className="operational-unit-lookup">
+        <div className="operational-unit-lookup" ref={lookupRef}
+          onFocus={() => { setLookupFocused(true); setResultsDismissed(false); }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setLookupFocused(false);
+              setResultsDismissed(true);
+            }
+          }}>
           <FormField id="workorder-unit" label={t("create.unit.unit")} error={errors?.unitNo} required requiredLabel={t("create.required")}>
             <input {...textEntryProps("search")} role="combobox" aria-autocomplete="list" aria-controls={resultsOpen ? "create-vehicle-suggestions" : undefined} aria-expanded={resultsOpen} aria-activedescendant={resultsOpen && activeResultIndex >= 0 ? `${resultIdPrefix}-vehicle-result-${activeResultIndex}` : undefined} autoComplete="off" enterKeyHint="search" value={form.unitNo} onChange={(event) => { setResultsDismissed(false); setActiveResultIndex(-1); onUnitChange(event.target.value); }} onKeyDown={handleUnitKeyDown} placeholder={t("create.unit.searchPlaceholder")} />
           </FormField>
@@ -117,11 +150,15 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
             const title = vehicle.unit_no || vehicle.name || vehicle.vin || t("create.unit.unnamed");
             const metadata = [unitType, vehicle.license_plate || vehicle.vin, [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
             const workorder = [activeWorkorder?.serial || t("create.unit.activeWorkorder"), status].filter(Boolean).join(" · ");
-            return <button key={vehicle.id} id={`${resultIdPrefix}-vehicle-result-${index}`} type="button" role="option" aria-selected={index === activeResultIndex} className={activeWorkorder ? "is-unavailable" : ""} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActiveResultIndex(index)} onClick={() => activateVehicleResult(vehicle)}><span className="operational-unit-result-main"><strong>{title}</strong>{activeWorkorder ? <span className="operational-unit-workorder">{workorder}</span> : null}</span>{metadata ? <span className="operational-unit-result-meta">{metadata}</span> : null}</button>;
+            return <button key={vehicle.id} id={`${resultIdPrefix}-vehicle-result-${index}`} type="button" role="option" tabIndex={-1} aria-selected={index === activeResultIndex} className={activeWorkorder ? "is-unavailable" : ""} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActiveResultIndex(index)} onClick={() => activateVehicleResult(vehicle)}><span className="operational-unit-result-main"><strong>{title}</strong>{activeWorkorder ? <span className="operational-unit-workorder">{workorder}</span> : null}</span>{metadata ? <span className="operational-unit-result-meta">{metadata}</span> : null}</button>;
           })}</div> : null}
         </div>
-        {selectedVehicle ? <UnitSummary editing={unitDetailsOpen} unit={{ unitNo: form.unitNo, unitType: form.unitType, vehicle: form.model, vin: form.vinNo, license: form.licenseNo, mileage: form.mileage }} onEdit={() => setUnitDetailsOpen((open) => !open)} onFieldChange={onChange} editLabel={unitDetailsOpen ? t("create.unit.doneEditing") : t("create.unit.editDetails")} locale={locale} /> : null}
-        {!selectedVehicle ? <OptionalSection title={t("create.unit.details")} open>
+        {selectedVehicle && !onePage ? <UnitSummary editing={unitDetailsOpen} unit={{ unitNo: form.unitNo, unitType: form.unitType, vehicle: form.model, vin: form.vinNo, license: form.licenseNo, mileage: form.mileage }} onEdit={() => setUnitDetailsOpen((open) => !open)} onFieldChange={onChange} editLabel={unitDetailsOpen ? t("create.unit.doneEditing") : t("create.unit.editDetails")} locale={locale} /> : null}
+        {!selectedVehicle || onePage ? <UnitDetails
+          title={t("create.unit.details")}
+          open={onePage ? unitDetailsOpen : true}
+          onToggle={onePage ? setUnitDetailsOpen : undefined}
+        >
           <div className="operational-form-grid two">
             <FormField id="workorder-unit-type" label={t("create.unit.type")}><Dropdown value={form.unitType} onChange={(event) => onChange("unitType", event.target.value)}><option value="">{t("create.unit.selectType")}</option><option value="Truck">{t("create.unit.truck")}</option><option value="Trailer">{t("create.unit.trailer")}</option><option value="Other">{t("create.unit.other")}</option></Dropdown></FormField>
             <FormField id="workorder-license" label={t("create.unit.license")}><input {...textEntryProps("identifier")} enterKeyHint="next" value={form.licenseNo} onChange={(event) => onChange("licenseNo", event.target.value)} /></FormField>
@@ -129,11 +166,11 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
             <FormField id="workorder-model" label={t("create.unit.model")}><input {...textEntryProps("identifier")} enterKeyHint="next" value={form.model} onChange={(event) => onChange("model", event.target.value)} /></FormField>
           </div>
           <FormField id="workorder-vin" label={t("create.unit.vin")}><input {...textEntryProps("identifier")} enterKeyHint="done" value={form.vinNo} onChange={(event) => onChange("vinNo", event.target.value)} /></FormField>
-        </OptionalSection> : null}
-      </FormSection>
-      <FormSection title={t("create.unit.customer")}>
-        <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t("create.unit.customerCompany")} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required requiredLabel={t("create.required")} />
-      </FormSection>
+          {onePage ? locationContent : null}
+        </UnitDetails> : null}
+        {onePage ? customerField : null}
+      </UnitSection>
+      {!onePage ? <FormSection title={t("create.unit.customer")}>{customerField}</FormSection> : null}
     </ProgressiveWorkorderSection>
   );
 }

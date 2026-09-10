@@ -51,6 +51,7 @@ import { handleInventoryReuseApi } from "./src/server/routes/inventory-reuse.rou
 import { handleInspectionsApi } from "./src/server/routes/inspections.routes.js";
 import { handleProductModulesApi } from "./src/server/routes/product-modules.routes.js";
 import { handleInspectionTemplatesApi } from "./src/server/routes/inspection-templates.routes.js";
+import { handleLaborProductsApi } from "./src/server/routes/labor-products.routes.js";
 import { catalogUomConflictError } from "./src/server/modules/inventory/inventory.errors.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
@@ -823,6 +824,7 @@ async function handleApi(req, res) {
   if (await handleInvoiceExtractionApi(req, res, url, helpers)) return;
   if (await handleSurveillanceApi(req, res, url, helpers)) return;
   if (await handleWorkorderModulesApi(req, res, url, helpers)) return;
+  if (await handleLaborProductsApi(req, res, url, helpers)) return;
   if (await handlePartsHelperApi(req, res, url, helpers)) return;
   if (await handleProofreadingApi(req, res, url, helpers)) return;
   if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;

@@ -178,6 +178,28 @@ test("module route ignores unrelated workorder paths", async () => {
   );
 });
 
+test("generic Diagnosis patch accepts a typed labor snapshot while Unit rejects smuggling it", async () => {
+  const productId = "44444444-4444-4444-8444-444444444444";
+  const laborProduct = { productId, externalId: "", code: "LAB", name: "Labor", uomCode: "hr" };
+  let patched;
+  const diagnosis = await runRoute({
+    method: "PATCH",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/diagnosisRepair`,
+    body: { diagnosis: "", workPerformed: "", expectedVersion: 1, formData: { laborProduct } },
+    dependencies: { patchModule: async (...args) => { patched = args; return {}; } },
+  });
+  assert.equal(diagnosis.responses[0].status, 200);
+  assert.equal(patched[2], "diagnosisRepair");
+  assert.deepEqual(patched[3].formData.laborProduct, laborProduct);
+
+  await assert.rejects(runRoute({
+    method: "PATCH",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/unit`,
+    body: { formData: { unitNo: "17", laborProduct } },
+    dependencies: { patchModule: async () => assert.fail("invalid cross-module input must not reach persistence") },
+  }), /unrecognized key/i);
+});
+
 test("canonical generic module routes expose protected reads and allowlisted mutations", async () => {
   const calls = [];
   const dependencies = {

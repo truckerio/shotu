@@ -41,6 +41,7 @@ export function CreateWorkorderShell({
   children,
   controlRef,
   previewOpen,
+  presentation = "panel",
   supportingPane,
 }) {
   const t = (key) => interfaceText(locale, key);
@@ -109,20 +110,23 @@ export function CreateWorkorderShell({
               <span>{officeCreateState.busy ? t("create.creating") : t("create.title")}</span>
             </button>
           </div>
-          <div className="create-workorder-mobile-nav">
-            <WorkorderSectionNav
-              className="create-workorder-section-nav"
-              sections={sections}
-              activeSection={activeSection}
-              onSelect={onSelectSection}
-              locale={locale}
-              preferenceKey={sectionPreferenceKey}
-            />
-          </div>
+          {presentation === "panel" ? (
+            <div className="create-workorder-mobile-nav">
+              <WorkorderSectionNav
+                className="create-workorder-section-nav"
+                sections={sections}
+                activeSection={activeSection}
+                onSelect={onSelectSection}
+                locale={locale}
+                preferenceKey={sectionPreferenceKey}
+              />
+            </div>
+          ) : null}
         </KeyboardAwareDock>
       ) : null}
       locale={locale}
       previewOpen={previewOpen}
+      presentation={presentation}
       sectionClassName="create-workorder-section-nav"
       sections={{ items: sections, activeId: activeSection, onSelect: onSelectSection, preferenceKey: sectionPreferenceKey }}
       summary={{

@@ -64,9 +64,11 @@ test("real PostgreSQL batches an unbounded count apply, preserves evidence, and 
   const partE = randomUUID();
   const partF = randomUUID();
   const partG = randomUUID();
+  const unreviewedPart = randomUUID();
   const importA = randomUUID();
   const importBatched = randomUUID();
   const importOdoo = randomUUID();
+  const importUnreviewed = randomUUID();
   const numberA = `COUNT-A-${suffix}`;
   const numberB = `COUNT-B-${suffix}`;
   const numberC = `COUNT-C-${suffix}`;
@@ -89,8 +91,8 @@ test("real PostgreSQL batches an unbounded count apply, preserves evidence, and 
     await query("insert into companies (id, slug, name) values ($1, $2, $3)", [companyId, `count-${suffix}`, "Count integration"]);
     await query("insert into locations (id, company_id, name) values ($1, $2, 'Count shop')", [locationId, companyId]);
     await query(
-      `insert into parts_catalog (id, company_id, normalized_part_number, part_number, description, uom_code)
-       select input.id, $1, input.normalized_part_number, input.part_number, input.description, 'ea'
+      `insert into parts_catalog (id, company_id, normalized_part_number, part_number, description, uom_code, tracking_mode)
+       select input.id, $1, input.normalized_part_number, input.part_number, input.description, 'ea', 'serialized'
        from jsonb_to_recordset($2::jsonb) as input(
          id uuid, normalized_part_number text, part_number text, description text
        )`,
@@ -101,6 +103,37 @@ test("real PostgreSQL batches an unbounded count apply, preserves evidence, and 
         description,
       })))],
     );
+    const unreviewedNumber = `COUNT-UNREVIEWED-${suffix}`;
+    const unreviewedNormalized = `COUNTUNREVIEWED${suffix}`;
+    await query(
+      `insert into parts_catalog (id, company_id, normalized_part_number, part_number, description, uom_code, tracking_mode)
+       values ($1, $2, $3, $4, 'Unreviewed count part', 'ea', null)`,
+      [unreviewedPart, companyId, unreviewedNormalized, unreviewedNumber],
+    );
+    const unreviewed = await createInventoryCountImport({
+      importId: importUnreviewed,
+      companyIds: [companyId],
+      locationIds: [locationId],
+      actorId,
+      locationId,
+      ...sourceEvidence(`unreviewed-${suffix}`, companyId, importUnreviewed),
+      rows: [countRow(4, unreviewedNumber, unreviewedNormalized, 2, "U1")],
+    });
+    assert.equal(unreviewed.import.lines[0].matchStatus, "unmatched");
+    assert.equal(unreviewed.import.lines[0].catalogPartId, null);
+    const refusedMatch = await resolveInventoryCountImportLine({
+      importId: importUnreviewed,
+      lineId: unreviewed.import.lines[0].id,
+      actorId,
+      companyIds: [companyId],
+      locationIds: [locationId],
+      expectedVersion: unreviewed.import.version,
+      action: "match",
+      catalogPartId: unreviewedPart,
+      quantity: 2,
+      binLocation: "U1",
+    });
+    assert.equal(refusedMatch.kind, "tracking_required");
 
     const created = await createInventoryCountImport({
       importId: importA,

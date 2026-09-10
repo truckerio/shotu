@@ -5,6 +5,7 @@ import test from "node:test";
 const component = readFileSync(new URL("./QuantityUnitInput.jsx", import.meta.url), "utf8");
 const picker = readFileSync(new URL("./UnitOfMeasurePicker.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./quantity-unit-input.css", import.meta.url), "utf8");
+const placement = readFileSync(new URL("./quantity-unit-placement-model.js", import.meta.url), "utf8");
 
 test("quantity control exposes a searchable grouped unit listbox", () => {
   assert.match(component, /<UnitOfMeasurePicker/);
@@ -34,12 +35,14 @@ test("quantity control keeps a bounded mobile menu and stable grid", () => {
   assert.match(css, /left:\s*16px/);
   assert.match(css, /right:\s*16px/);
   assert.match(picker, /trigger\.getBoundingClientRect\(\)/);
-  assert.match(picker, /minimumUsefulHeight = isMobile \? 180 : 240/);
-  assert.match(picker, /availableBelow >= Math\.min\(menuHeight, minimumUsefulHeight\)/);
-  assert.match(picker, /setMenuPlacement\(openBelow \? "below" : "above"\)/);
+  assert.match(picker, /quantityUnitMenuPlacement/);
+  assert.match(placement, /usefulHeight = isMobile \? 180 : 240/);
+  assert.match(placement, /below >= Math\.min\(desiredHeight, usefulHeight\)/);
+  assert.match(picker, /setMenuPlacement\(placement\.placement\)/);
   assert.match(picker, /setMenuStyle\(nextStyle\)/);
   assert.match(picker, /data-placement=\{menuPlacement\}/);
   assert.match(picker, /--quantity-menu-top/);
+  assert.match(picker, /visualViewport\?\.addEventListener\("scroll", positionMenu\)/);
   assert.match(css, /grid-template-rows:\s*auto minmax\(0,\s*1fr\)/);
   assert.match(css, /max-height:\s*var\(--quantity-menu-max-height,\s*min\(360px,\s*60vh\)\)/);
   assert.match(css, /\.quantity-unit-options\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s);

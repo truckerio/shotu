@@ -18,6 +18,7 @@ export function WorkorderDiagnosisRepairModule({
   mechanicProgress,
   onChange,
   onSelect,
+  presentation = "panel",
   workPerformed,
 }) {
   if (!access) return null;
@@ -27,22 +28,23 @@ export function WorkorderDiagnosisRepairModule({
     <ProgressiveWorkorderSection
       id="diagnosisRepair"
       title={localeText("detail.diagnosisRepair")}
-      headerAction={<SectionHelpDisclosure label={localeText("detail.inspectionAndRepair")}><p>{localeText("detail.diagnosisHint")}</p><p>{localeText("detail.repairHint")}</p></SectionHelpDisclosure>}
+      headerAction={presentation === "one-page" ? null : <SectionHelpDisclosure label={localeText("detail.inspectionAndRepair")}><p>{localeText("detail.diagnosisHint")}</p><p>{localeText("detail.repairHint")}</p></SectionHelpDisclosure>}
       activeSection={activeSection}
       onSelect={onSelect}
       className="mechanic-work-section"
       displayMode="panel"
+      showTitle={presentation !== "one-page"}
     >
       {canWrite ? (
-        <div className="operational-form detail-workflow-fields">
+        <div className={`operational-form detail-workflow-fields${presentation === "one-page" ? " workorder-one-page-diagnosis-fields" : ""}`}>
           <FormField id="mechanic-diagnosis" label={localeText("detail.diagnosis")}>
-            <NarrativeField locale={locale} rows="3" value={diagnosis || ""} onChange={(event) => onChange?.("diagnosis", event.target.value)} />
+            <NarrativeField locale={locale} rows={presentation === "one-page" ? 2 : 3} value={diagnosis || ""} onChange={(event) => onChange?.("diagnosis", event.target.value)} />
           </FormField>
           <FormField
             id="mechanic-work-performed"
             label={localeText("detail.repairCompleted")}
           >
-            <NarrativeField locale={locale} id="mechanic-work-performed" rows="4" value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
+            <NarrativeField locale={locale} id="mechanic-work-performed" rows={presentation === "one-page" ? 2 : 4} value={workPerformed || ""} onChange={(event) => onChange?.("workPerformed", event.target.value)} />
           </FormField>
           {mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} localeText={localeText} /> : null}
         </div>

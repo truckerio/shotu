@@ -153,6 +153,172 @@ test("compatibility batch patch authorizes every touched module and persists onc
   assert.equal(result[1].officeUserId, "actor-1");
 });
 
+test("compatibility patch canonicalizes a changed labor product using server-owned workorder scope", async () => {
+  const oldProductId = "11111111-1111-4111-8111-111111111111";
+  const newProductId = "22222222-2222-4222-8222-222222222222";
+  const current = {
+    id: "wo-1",
+    companyId: "company-server",
+    locationId: "location-server",
+    formData: { laborProduct: { productId: oldProductId, externalId: "", code: "OLD", name: "Old labor", uomCode: "hr" } },
+  };
+  const authorizations = [];
+  let resolvedScope;
+  const result = await patchWorkorderModules(context, "wo-1", ["unit", "diagnosisRepair"], {
+    formData: {
+      unitNo: "17",
+      laborProduct: { productId: newProductId, externalId: "forged", code: "BAD", name: "Forged", uomCode: "hr" },
+    },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async (_context, _workorderId, requests) => {
+      authorizations.push(...requests);
+      return { workorder: current };
+    },
+    resolveLaborProduct: async (scope) => {
+      resolvedScope = scope;
+      return { productId: newProductId, externalId: "", code: "DIAG", name: "Diagnostics", uomCode: "hr" };
+    },
+    updateOffice: async (...args) => args,
+  });
+
+  assert.deepEqual(authorizations.map(({ moduleKey }) => moduleKey), ["unit", "diagnosisRepair"]);
+  assert.deepEqual(resolvedScope, {
+    productId: newProductId,
+    companyId: "company-server",
+    locationId: "location-server",
+  });
+  assert.deepEqual(result[1].formData.laborProduct, {
+    productId: newProductId, externalId: "", code: "DIAG", name: "Diagnostics", uomCode: "hr",
+  });
+});
+
+test("compatibility autosave preserves an unchanged legacy labor snapshot without requiring Diagnosis access", async () => {
+  const legacyLabor = { externalId: "91", code: "LAB", name: "Legacy labor", uomCode: "hr" };
+  const current = {
+    id: "wo-1",
+    companyId: "company-server",
+    locationId: "location-server",
+    formData: { laborProduct: legacyLabor },
+  };
+  const authorizations = [];
+  const result = await patchWorkorderModules(context, "wo-1", ["unit", "diagnosisRepair"], {
+    formData: { unitNo: "17", laborProduct: { ...legacyLabor } },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async (_context, _workorderId, requests) => {
+      authorizations.push(...requests);
+      return { workorder: current };
+    },
+    resolveLaborProduct: async () => assert.fail("unchanged legacy snapshots must not be re-resolved"),
+    updateOffice: async (...args) => args,
+  });
+
+  assert.deepEqual(authorizations.map(({ moduleKey }) => moduleKey), ["unit"]);
+  assert.deepEqual(result[1].formData.laborProduct, legacyLabor);
+});
+
+test("labor-only compatibility autosave is a no-op when the saved snapshot is unchanged", async () => {
+  const laborProduct = { externalId: "91", code: "LAB", name: "Legacy labor", uomCode: "hr" };
+  const current = { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: { laborProduct } };
+  const result = await patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+    formData: { laborProduct: { ...laborProduct } },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async () => assert.fail("an unchanged snapshot must not require write authorization"),
+    updateOffice: async () => assert.fail("an unchanged labor-only snapshot must not be persisted"),
+  });
+  assert.equal(result, current);
+});
+
+test("explicit null remains a no-op when a legacy workorder has no saved labor product", async () => {
+  const current = { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} };
+  const result = await patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+    formData: { laborProduct: null },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async () => assert.fail("absent-to-null must not require write authorization"),
+    updateOffice: async () => assert.fail("absent-to-null must not persist"),
+  });
+  assert.equal(result, current);
+});
+
+test("compatibility patch allows an authorized office user to clear the saved labor product", async () => {
+  const current = {
+    id: "wo-1", companyId: "company-1", locationId: "location-1",
+    formData: { laborProduct: { externalId: "91", code: "LAB", name: "Legacy labor", uomCode: "hr" } },
+  };
+  const result = await patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+    formData: { laborProduct: null },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async () => ({ workorder: current }),
+    resolveLaborProduct: async () => assert.fail("clearing labor must not resolve a product"),
+    updateOffice: async (...args) => args,
+  });
+  assert.equal(result[1].formData.laborProduct, null);
+});
+
+test("generic Diagnosis patch rejects mechanic labor-product mutation after module authorization", async () => {
+  const current = { companyId: "company-1", locationId: "location-1", formData: {} };
+  await assert.rejects(patchWorkorderModule(
+    { actor: { id: "mechanic-1", role: "mechanic" } },
+    "wo-1",
+    "diagnosisRepair",
+    {
+      diagnosis: "",
+      workPerformed: "",
+      expectedVersion: 1,
+      formData: {
+        laborProduct: {
+          productId: "33333333-3333-4333-8333-333333333333",
+          externalId: "",
+          code: "LAB",
+          name: "Labor",
+          uomCode: "hr",
+        },
+      },
+    },
+    {
+      authorize: async () => ({ workorder: current }),
+      resolveLaborProduct: async () => assert.fail("mechanics cannot select office-owned labor products"),
+      updateMechanic: async () => assert.fail("denied mutations must not persist"),
+    },
+  ), (error) => error.statusCode === 403);
+});
+
+test("changed labor selection propagates trusted resolver rejection and never persists", async () => {
+  const productId = "44444444-4444-4444-8444-444444444444";
+  const current = { companyId: "company-server", locationId: "location-server", formData: {} };
+  let scope;
+  await assert.rejects(patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+    formData: { laborProduct: { productId, externalId: "", code: "BAD", name: "Cross tenant", uomCode: "hr" } },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async () => ({ workorder: current }),
+    resolveLaborProduct: async (value) => {
+      scope = value;
+      const error = new Error("Labor product not found");
+      error.statusCode = 404;
+      throw error;
+    },
+    updateOffice: async () => assert.fail("rejected selections must not persist"),
+  }), (error) => error.statusCode === 404);
+  assert.deepEqual(scope, { productId, companyId: "company-server", locationId: "location-server" });
+});
+
+test("changed non-local labor snapshots are rejected instead of trusting client fields", async () => {
+  const current = { companyId: "company-server", locationId: "location-server", formData: {} };
+  await assert.rejects(patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+    formData: { laborProduct: { externalId: "91", code: "FORGED", name: "Forged", uomCode: "hr" } },
+  }, {
+    loadWorkorder: async () => current,
+    authorizeMany: async () => ({ workorder: current }),
+    resolveLaborProduct: async () => assert.fail("invalid snapshots must fail before lookup"),
+    updateOffice: async () => assert.fail("invalid snapshots must not persist"),
+  }), (error) => error.statusCode === 400);
+});
+
 test("generic action routes assignment through authenticated actor after module guard", async () => {
   const calls = [];
   const result = await runWorkorderModuleAction(context, "wo-1", "assignment", "assign", {
@@ -397,6 +563,36 @@ test("active-unit creation conflicts are returned as actionable HTTP errors", as
       && error.code === "ASSET_ACTIVE_WORKORDER_EXISTS"
       && /already has an active workorder/i.test(error.message),
   );
+});
+
+test("create persists only the trusted local labor snapshot", async () => {
+  const localId = "44444444-4444-4444-8444-444444444444";
+  let resolved;
+  const result = await createWorkorderRuntime({
+    actor: { id: "actor-1", role: "office" },
+    companyIds: new Set(["company-1"]),
+    locationIds: new Set(["location-1"]),
+  }, {
+    companyId: "company-1",
+    locationId: "location-1",
+    concern: "Inspect",
+    mechanicUserIds: [],
+    formData: { laborProduct: { productId: localId, externalId: "", name: "Untrusted", code: "BAD", uomCode: "hr" } },
+  }, {
+    companyId: "company-1", locationId: "location-1", concern: "Inspect", formData: { laborProduct: { productId: localId } },
+  }, {
+    authorizeCreate: async () => {},
+    loadLaborProduct: async () => assert.fail("local selection must not use the configured fallback"),
+    resolveLaborProduct: async (scope) => {
+      resolved = scope;
+      return { productId: localId, externalId: "", name: "Diagnostics", code: "DIAG", uomCode: "hr" };
+    },
+    create: async (input) => input,
+  });
+  assert.deepEqual(resolved, { productId: localId, companyId: "company-1", locationId: "location-1" });
+  assert.deepEqual(result.formData.laborProduct, {
+    productId: localId, externalId: "", name: "Diagnostics", code: "DIAG", uomCode: "hr",
+  });
 });
 
 test("create context exposes the company-selected labor product to every location", async () => {

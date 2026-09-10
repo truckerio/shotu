@@ -64,7 +64,6 @@ export function validatePartIdentityDraft(draft) {
   if (!description) errors.description = "Enter a part name.";
   if (!partNumber) errors.partNumber = "Enter a primary part number.";
   if (!["quantity", "serialized", "measured_bulk"].includes(draft.trackingMode)) errors.trackingMode = "Choose how this part is tracked.";
-
   references.forEach((reference, index) => {
     const value = text(reference.value);
     if (!value) return;

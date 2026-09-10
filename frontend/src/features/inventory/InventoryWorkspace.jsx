@@ -18,7 +18,7 @@ import {
 import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
 import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
-import { PartStockRules } from "./PartStockRules.jsx";
+import { PartLocationSettings } from "./PartLocationSettings.jsx";
 import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
 import { InventoryAuthorityExceptionsPanel } from "./InventoryAuthorityExceptionsPanel.jsx";
@@ -350,7 +350,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
             ariaLabel={`Open details for ${item.partNumber}, ${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
             onAction={() => setSelectedStockKey(stockItemKey(item))}
           >
-            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span>{item.lowStock ? <span className="inventory-stock-state is-low">Minimum reached</span> : null}</span><small>{item.description || "No part name"}</small>{item.providerManaged ? <small>In Odoo: {item.odooName || "Name not provided"}</small> : null}</OperationalCollectionCell>
+            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span>{item.lowStock ? <span className="inventory-stock-state is-low">Minimum reached</span> : null}</span><small>{item.description || "No part name"}</small></OperationalCollectionCell>
             <OperationalCollectionCell label="Our on hand">{quantity(item.quantityOnHand)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell label="Reserved">{quantity(item.quantityReserved)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell className="inventory-available-cell" label="Our available"><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</small></OperationalCollectionCell>
@@ -393,15 +393,14 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
 
           <SecondaryDetailSection title="Locations">
             <div className="inventory-detail-locations">
-              {selectedItem.locations.map((location) => <button type="button" key={location.locationId} onClick={() => setSelectedLocationId(location.locationId)} disabled={partIdentityEditOpen}>
-                <div><strong>{location.locationName}</strong><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</small></div>
-                <ChevronRight aria-hidden="true" />
-              </button>)}
+              {selectedItem.locations.map((location) => <div className="inventory-detail-location-row" key={location.locationId}>
+                <button type="button" onClick={() => setSelectedLocationId(location.locationId)} disabled={partIdentityEditOpen}>
+                  <div><strong>{location.locationName}</strong><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</small></div>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+                <PartLocationSettings part={selectedItem} location={location} disabled={partIdentityEditOpen} onSaved={() => setRefreshKey((value) => value + 1)} />
+              </div>)}
             </div>
-          </SecondaryDetailSection>
-
-          <SecondaryDetailSection title="Tracking and stock rules" description="Office controls how this part is tracked and when each location needs replenishment.">
-            <PartStockRules part={selectedItem} onSaved={() => setRefreshKey((value) => value + 1)} />
           </SecondaryDetailSection>
 
           <SecondaryDetailSection
@@ -424,7 +423,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
               <div><dt>Catalog barcode</dt><dd>{selectedItem.barcode || "Not set"}</dd></div>
               <div><dt>Reference numbers</dt><dd>{selectedItem.referenceNumbers?.length ? selectedItem.referenceNumbers.join(", ") : "None"}</dd></div>
               <div><dt>Unit</dt><dd>{selectedItem.uomCode}</dd></div>
-              <div><dt>Tracking</dt><dd>{selectedItem.trackingMode === "serialized" ? "Serialized" : selectedItem.trackingMode === "measured_bulk" ? "Measured or bulk" : selectedItem.trackingMode === "quantity" ? "Quantity" : "Not reviewed"}</dd></div>
               {selectedItem.providerManaged ? <div><dt>Mapping</dt><dd>Odoo name and identifiers are read-only</dd></div> : null}
             </dl>}
           </SecondaryDetailSection>

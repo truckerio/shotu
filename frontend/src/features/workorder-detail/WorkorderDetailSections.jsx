@@ -12,6 +12,7 @@ export function WorkorderDetailSections({
   detailMechanicNames,
   detailSection,
   detailSections = [],
+  supportingOnly = false,
   detailStatus,
   filledPartCount,
   form,
@@ -178,6 +179,7 @@ export function WorkorderDetailSections({
       onRegisterSerializedRepairFlush,
       onPartsChange: updateActiveUsedParts,
       onLaborHoursChange: updateActiveLaborHours,
+      onLaborProductChange: (value) => updateField("laborProduct", value), locationId: activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || "",
       onLaborRepairOrderChange: (value) => updateField("workPerformed", value),
       onSaveParts: saveActiveUsedParts,
       onSelect: setDetailSection,
@@ -213,5 +215,5 @@ export function WorkorderDetailSections({
       vehicleModelText,
     },
   };
-  return <WorkorderDetailModuleHost sections={detailSections} moduleProps={moduleProps} />;
+  return <WorkorderDetailModuleHost sections={detailSections} moduleProps={moduleProps} supportingOnly={supportingOnly} />;
 }
