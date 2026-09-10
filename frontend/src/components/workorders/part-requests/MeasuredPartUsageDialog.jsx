@@ -4,6 +4,7 @@ import { api } from "../../../lib/api.js";
 import { interfaceText } from "../../../i18n/index.js";
 import { formatQuantityUnit } from "../../forms/quantity-unit-model.js";
 import { Button } from "../../ui/Button.jsx";
+import { PartRepairOrderField } from "./PartRepairOrderField.jsx";
 import "./measured-part-usage.css";
 
 const transientKeys = new Map();
@@ -49,7 +50,17 @@ function statusText(status, t) {
   return translated === key ? status : translated;
 }
 
-export function MeasuredPartUsageDialog({ open, actorId, workorderId, catalogPart, locale = "en", onClose, onReserved }) {
+export function MeasuredPartUsageDialog({
+  open,
+  actorId,
+  workorderId,
+  catalogPart,
+  assetId,
+  suggestionsEnabled = true,
+  locale = "en",
+  onClose,
+  onReserved,
+}) {
   const t = (key) => interfaceText(locale, key);
   const [quantity, setQuantity] = useState("1");
   const [repairOrder, setRepairOrder] = useState("");
@@ -99,7 +110,17 @@ export function MeasuredPartUsageDialog({ open, actorId, workorderId, catalogPar
           {message ? <p className="measured-part-message" role="alert">{message}</p> : null}
           <label>{t("parts.quantity")}<input ref={quantityRef} type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
           <p>{uomCode}</p>
-          <label>{t("parts.repairOrder")}<textarea value={repairOrder} onChange={(event) => setRepairOrder(event.target.value)} maxLength="2000" disabled={busy} /></label>
+          <div className="measured-part-field"><label htmlFor={`${titleId}-repair-order`}>{t("parts.repairOrder")}</label><PartRepairOrderField
+            historyEnabled={suggestionsEnabled}
+            workorderId={workorderId}
+            catalogPartId={catalogPart?.id}
+            partNumber={catalogPart?.partNumber}
+            assetId={assetId}
+            currentRepairOrder={repairOrder}
+            onApply={setRepairOrder}
+            disabled={busy}
+            locale={locale}
+          ><textarea id={`${titleId}-repair-order`} value={repairOrder} onChange={(event) => setRepairOrder(event.target.value)} maxLength="2000" disabled={busy} /></PartRepairOrderField></div>
           <footer><Button type="button" onClick={onClose} disabled={busy}>{completed ? t("parts.close") : t("parts.cancel")}</Button><Button type="submit" variant="primary" disabled={busy || completed}>{busy ? t("parts.reserving") : t("parts.reserveMeasured")}</Button></footer>
         </form>
       </Dialog>

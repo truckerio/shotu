@@ -15,7 +15,7 @@ import "./used-parts-editor.css";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
 import { WorkorderSerializedPartDialog } from "./part-requests/WorkorderSerializedPartDialog.jsx";
 import { AggregatePartUsageRows, MeasuredPartUsageDialog } from "./part-requests/MeasuredPartUsageDialog.jsx";
-import { RepairHistorySuggestions } from "./part-requests/RepairHistorySuggestions.jsx";
+import { PartRepairOrderField } from "./part-requests/PartRepairOrderField.jsx";
 import { laborProductLabel } from "../../../../shared/labor-product.js";
 import { DEFAULT_PART_ENTRY_ROWS } from "../../../../shared/workorder-template.js";
 import { LaborProductSelector } from "./LaborProductSelector.jsx";
@@ -195,7 +195,17 @@ export function UsedPartsEditor({
           <div className="used-part-field used-part-repair">
             <span className="used-part-cell-label">{t("parts.repairOrder")}</span>
             {installed ? (
-              <>
+              <PartRepairOrderField
+                historyEnabled={suggestionsEnabled && Boolean(part.usageId)}
+                workorderId={detail.workorder.id}
+                catalogPartId={part.catalogPartId}
+                partNumber={part.partNo}
+                assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+                currentRepairOrder={serializedRepairOrder(part)}
+                onApply={(text) => updateSerializedRepairOrder(part, text)}
+                disabled={disabled || !part.usageId || savingSerializedUsageId === part.usageId}
+                locale={locale}
+              >
                 <NarrativeField
                   locale={locale}
                   singleLine
@@ -206,17 +216,7 @@ export function UsedPartsEditor({
                   placeholder={t("parts.describeRepair")}
                   disabled={disabled || !part.usageId}
                 />
-                {suggestionsEnabled && part.catalogPartId && part.usageId ? <RepairHistorySuggestions
-                  workorderId={detail.workorder.id}
-                  catalogPartId={part.catalogPartId}
-                  partNumber={part.partNo}
-                  assetId={detail.workorder.asset?.id || detail.workorder.assetId}
-                  currentRepairOrder={serializedRepairOrder(part)}
-                  onApply={(text) => updateSerializedRepairOrder(part, text)}
-                  disabled={disabled || !part.usageId || savingSerializedUsageId === part.usageId}
-                  locale={locale}
-                /> : null}
-              </>
+              </PartRepairOrderField>
             ) : <span className="used-part-pending-repair">{t("parts.repairAfterInstalled")}</span>}
           </div>
           <div className="used-part-serialized-actions">
@@ -387,6 +387,7 @@ export function UsedPartsEditor({
     catalogPart={serializedDialogPart}
     initialUnitId={serializedDialogPart.initialUnitId}
     initialSerialNumber={serializedDialogPart.initialSerialNumber}
+    anchorToPartField={onePage}
     locale={locale}
     onClose={closeSerializedDialog}
     onReserved={async (usage) => {
@@ -402,7 +403,10 @@ export function UsedPartsEditor({
     }}
   /> : null;
   const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
-    open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart} locale={locale}
+    open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart}
+    assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+    suggestionsEnabled={suggestionsEnabled}
+    locale={locale}
     onClose={closeMeasuredDialog} onReserved={async () => {
       clearActiveOnePageIntake();
       setCatalogQuery("");
@@ -480,13 +484,13 @@ export function UsedPartsEditor({
                 allowManualEntry={false}
                 locale={locale}
               />
+              {activeOnePageIntakeIndex === intakeIndex ? serializedDialog : null}
             </div>
             <QuantityUnitInput id={`workorder-part-intake-quantity-${intakeIndex}`} quantity="" uomCode="pc" quantityLabel={t("parts.quantity")} unitLabel={t("parts.unit")} disabled unitReadOnly compact />
             <input {...textEntryProps("identifier")} aria-label={`${t("parts.repairOrder")} ${intakeIndex + 1}`} placeholder={t("parts.repairOrder")} readOnly />
             <span aria-hidden="true"></span>
           </WorkorderPartsRow>) : null}
         </WorkorderPartsTable>
-        {serializedDialog}
         {serializedFeedback}
         {(partsEditable || serializedToolbar) ? <WorkorderPartsActions className="used-parts-actions">
           {partsEditable ? <Button id="workorder-add-approved-part" type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={addOnePageIntakeRow} aria-controls="workorder-part-intake-row-0">

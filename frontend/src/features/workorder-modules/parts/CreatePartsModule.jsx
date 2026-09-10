@@ -4,7 +4,7 @@ import { QuantityUnitInput } from "../../../components/forms/index.js";
 import { formatQuantityUnit } from "../../../components/forms/quantity-unit-model.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
-import { RepairHistorySuggestions } from "../../../components/workorders/part-requests/RepairHistorySuggestions.jsx";
+import { PartRepairOrderField } from "../../../components/workorders/part-requests/PartRepairOrderField.jsx";
 import { LaborProductSelector } from "../../../components/workorders/LaborProductSelector.jsx";
 import {
   defaultUsedPartQuantity,
@@ -191,10 +191,17 @@ function LegacyCreatePartsEditor({
               part={part}
             /></div>
             <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
-            <div className="create-part-repair-with-history">
+            <PartRepairOrderField
+              historyEnabled={historyEnabled}
+              locationId={locationId}
+              catalogPartId={part.catalogPartId}
+              partNumber={part.partNo}
+              currentRepairOrder={part.repairOrder}
+              onApply={(text) => onChange(index, "repairOrder", text)}
+              locale={locale}
+            >
               <input {...textEntryProps("narrative")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
-              {historyEnabled && part.catalogPartId ? <RepairHistorySuggestions locationId={locationId} catalogPartId={part.catalogPartId} partNumber={part.partNo} currentRepairOrder={part.repairOrder} onApply={(text) => onChange(index, "repairOrder", text)} locale={locale} initiallyCollapsed dropdown /> : null}
-            </div>
+            </PartRepairOrderField>
             <button className="create-part-remove-icon" type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1} aria-label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")}><Trash01 aria-hidden="true" /></button>
           </WorkorderPartsRow>
         ))}
@@ -439,7 +446,15 @@ export function CreatePartsModule({
           />
           <div className="create-part-repair-field">
             <span>{t("create.parts.repairOrder")}</span>
-            <div className="create-part-repair-with-history">
+            <PartRepairOrderField
+              historyEnabled={historyEnabled}
+              locationId={locationId}
+              catalogPartId={part.catalogPartId}
+              partNumber={part.partNo}
+              currentRepairOrder={part.repairOrder}
+              onApply={(text) => onChange(index, "repairOrder", text)}
+              locale={locale}
+            >
             <input
               {...textEntryProps("identifier")}
               value={part.repairOrder}
@@ -447,8 +462,7 @@ export function CreatePartsModule({
               aria-label={`${t("create.parts.repairOrder")} ${ordinal}`}
               placeholder={t("create.parts.repairOrder")}
             />
-              {historyEnabled && part.catalogPartId ? <RepairHistorySuggestions locationId={locationId} catalogPartId={part.catalogPartId} partNumber={part.partNo} currentRepairOrder={part.repairOrder} onApply={(text) => onChange(index, "repairOrder", text)} locale={locale} initiallyCollapsed dropdown /> : null}
-            </div>
+            </PartRepairOrderField>
           </div>
         </div>
         <footer className="create-part-editor-actions">

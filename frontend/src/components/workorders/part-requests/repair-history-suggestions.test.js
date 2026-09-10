@@ -7,6 +7,9 @@ const office = readFileSync(new URL("./OfficePartComposer.jsx", import.meta.url)
 const officeRequest = readFileSync(new URL("./OfficeRequestCard.jsx", import.meta.url), "utf8");
 const officeReview = readFileSync(new URL("./useOfficeRequestReview.js", import.meta.url), "utf8");
 const used = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
+const field = readFileSync(new URL("./PartRepairOrderField.jsx", import.meta.url), "utf8");
+const measured = readFileSync(new URL("./MeasuredPartUsageDialog.jsx", import.meta.url), "utf8");
+const create = readFileSync(new URL("../../../features/workorder-modules/parts/CreatePartsModule.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./repair-history-suggestions.css", import.meta.url), "utf8");
 
 test("field history uses an accessible anchored dropdown without a second row", () => {
@@ -15,6 +18,21 @@ test("field history uses an accessible anchored dropdown without a second row", 
   assert.match(component, /<Popover[^>]*placement="bottom end"/);
   assert.match(component, /aria-label=\{t\("parts.showPreviousWork"\)\}/);
   assert.match(css, /\.repair-history-field-dropdown\s*\{[^}]*position: absolute/);
+});
+
+test("Create and Detail share one repair-order field shell with collapsed history", () => {
+  assert.match(field, /export function PartRepairOrderField/);
+  assert.match(field, /<RepairHistorySuggestions/);
+  assert.match(field, /initiallyCollapsed/);
+  assert.match(field, /dropdown/);
+  assert.match(create, /import \{ PartRepairOrderField \}/);
+  assert.match(create, /<PartRepairOrderField/);
+  assert.match(used, /import \{ PartRepairOrderField \}/);
+  assert.match(used, /<PartRepairOrderField/);
+  assert.match(measured, /<PartRepairOrderField/);
+  assert.match(measured, /<label htmlFor=\{`\$\{titleId\}-repair-order`\}/);
+  assert.match(measured, /<textarea id=\{`\$\{titleId\}-repair-order`\}/);
+  assert.doesNotMatch(measured, /<label[^>]*>[^<]*<PartRepairOrderField/);
 });
 
 test("history lookup is bounded, cancellable, stale-safe, and explicit apply only", () => {
@@ -58,7 +76,7 @@ test("catalog selection does not silently apply repair-history or AI repair sugg
   assert.doesNotMatch(used, /onSelect=\{\(catalogPart\) => \{[\s\S]{0,500}partNo: catalogPart\.partNumber/);
   assert.match(office, /<RepairHistorySuggestions/);
   assert.match(officeRequest, /<RepairHistorySuggestions/);
-  assert.match(used, /<RepairHistorySuggestions/);
+  assert.match(used, /<PartRepairOrderField/);
   assert.match(used, /locale=\{locale\}/);
 });
 

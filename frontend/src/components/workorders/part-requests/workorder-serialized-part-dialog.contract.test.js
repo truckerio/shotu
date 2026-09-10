@@ -22,7 +22,10 @@ test("inventory finder routes countable catalog selections to one nested seriali
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.doesNotMatch(editor, /addUsedPart|usedPartsAutosave|recoveredUnsavedEntries/);
   assert.match(editor, /<WorkorderSerializedPartDialog/);
+  assert.match(editor, /anchorToPartField=\{onePage\}/);
+  assert.match(editor, /activeOnePageIntakeIndex === intakeIndex \? serializedDialog : null/);
   assert.match(dialog, /<SerializedUnitNestedDropdown/);
+  assert.match(dialog, /anchorToPartField=\{anchorToPartField\}/);
   assert.doesNotMatch(dialog, /<ModalOverlay|<Modal|<Dialog/);
   assert.match(editorCss, /used-parts-manual-picker > \.serialized-unit-nested-dropdown[\s\S]*left:\s*calc\(100% \+ 8px\)/);
 });

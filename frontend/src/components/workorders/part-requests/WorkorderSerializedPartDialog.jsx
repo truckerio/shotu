@@ -70,6 +70,7 @@ export function WorkorderSerializedPartDialog({
   catalogPart,
   initialUnitId = "",
   initialSerialNumber = "",
+  anchorToPartField = false,
   onClose,
   onReserved,
   locale = "en",
@@ -265,6 +266,7 @@ export function WorkorderSerializedPartDialog({
   if (view !== "create") {
     return (
       <SerializedUnitNestedDropdown
+        anchorToPartField={anchorToPartField}
         busy={busy}
         confirmLabel={busy ? text.adding : text.selected}
         description={showDescription ? partDescription : ""}

@@ -7,6 +7,7 @@
 .measured-part-dialog header button { min-height: 44px; min-width: 44px; }
 .measured-part-dialog form { display: grid; gap: 12px; }
 .measured-part-dialog label { color: #344054; display: grid; font-weight: 700; gap: 6px; }
+.measured-part-field { display: grid; gap: 6px; }
 .measured-part-dialog input, .measured-part-dialog textarea { border: 1px solid #98a2b3; border-radius: 8px; box-sizing: border-box; font: inherit; min-height: 44px; padding: 10px 12px; width: 100%; }
 .measured-part-dialog textarea { min-height: 84px; resize: vertical; }
 .measured-part-dialog footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

@@ -307,17 +307,6 @@
   height: 16px;
 }
 
-.create-part-repair-with-history {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.create-part-repair-with-history > input {
-  width: 100%;
-  min-width: 0;
-}
-
 @media (max-width: 700px) {
   .control-panel[data-workorder-presentation="one-page"] .create-workorder-form-message {
     padding-inline: 12px;

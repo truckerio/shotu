@@ -54,6 +54,8 @@ test("starter intake slots stay local until the existing inventory lifecycle com
   assert.match(editor, /const \[activeOnePageIntakeIndex, setActiveOnePageIntakeIndex\] = useState\(null\)/);
   assert.match(editor, /function clearActiveOnePageIntake\(\)[\s\S]*?updateOnePageIntakeQuery\(activeOnePageIntakeIndex, ""\)/);
   assert.match(onePage, /setActiveOnePageIntakeIndex\(intakeIndex\)/);
+  assert.match(onePage, /activeOnePageIntakeIndex === intakeIndex \? serializedDialog : null/);
+  assert.doesNotMatch(onePage, /<\/WorkorderPartsTable>\s*\{serializedDialog\}/);
   assert.doesNotMatch(onePage, /onSave\(/);
   assert.doesNotMatch(onePage, /onChange=\{onPartsChange\}/);
 });

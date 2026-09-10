@@ -139,8 +139,19 @@
   margin: 0;
 }
 
-.create-part-repair-with-history { position: relative; }
-.create-part-repair-with-history:has(.repair-history-field-dropdown) > input { padding-right: 44px; }
+.workorder-part-repair-with-history {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  position: relative;
+}
+.workorder-part-repair-with-history > input,
+.workorder-part-repair-with-history > .narrative-field {
+  min-width: 0;
+  width: 100%;
+}
+.workorder-part-repair-with-history:has(.repair-history-field-dropdown) input,
+.workorder-part-repair-with-history:has(.repair-history-field-dropdown) textarea { padding-right: 44px; }
 .repair-history-field-dropdown { position: absolute; inset: 0 0 0 auto; width: 44px; }
 .repair-history-field-trigger {
   align-items: center;
