@@ -237,20 +237,20 @@
 }
 
 .prototype.workorder-detail-page:has(.control-panel[data-workorder-presentation="one-page"]) {
-  background: #f7f8fa;
+  background: #fff;
   padding: 0;
 }
 
 .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] {
-  background: #f7f8fa;
+  background: #fff;
 }
 
 .workorder-one-page-notices:empty { display: none; }
 .workorder-one-page-notices:not(:empty) { padding: 0 32px; }
 @media (min-width: 1280px) {
-  .split-layout.workorder-detail-layout:has(> .workorder-tools-panel-overlay[data-open]) {
+  .split-layout.workorder-detail-layout.has-tools-layout {
     display: grid;
-    grid-template-columns: minmax(620px, 1fr) var(--detail-resizer-width) minmax(360px, var(--preview-pane-width));
+    grid-template-columns: minmax(620px, 1fr) var(--detail-resizer-width) minmax(0, var(--preview-pane-width));
     align-items: start;
   }
 }
@@ -318,7 +318,7 @@
 }
 
 .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack {
-  background: #f7f8fa;
+  background: #fff;
   container-type: inline-size;
   gap: 20px;
   padding: 20px 32px 48px;
@@ -660,8 +660,10 @@
 .create-assignment-one-page-dropdown > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 8px; cursor: pointer; list-style: none; background: #fff; }
 .create-assignment-one-page-dropdown > summary::-webkit-details-marker { display: none; }
 .create-assignment-one-page-dropdown > summary::after { content: "⌄"; flex-shrink: 0; }
-.create-assignment-one-page-dropdown > .operational-mechanic-select { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 12; max-height: 300px; overflow: auto; padding: 12px; background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; box-shadow: 0 8px 24px #10182820; }
-.create-assignment-one-page-dropdown .operational-mechanic-select > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.create-assignment-one-page-dropdown > :is(.operational-mechanic-select, .office-mechanic-team) { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 12; max-height: 300px; overflow: auto; padding: 12px; background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; box-shadow: 0 8px 24px #10182820; }
+.create-assignment-one-page-dropdown > :is(.operational-mechanic-select, .office-mechanic-team) > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.create-assignment-one-page-dropdown > .office-mechanic-team { display: grid; }
+.create-assignment-one-page-dropdown > .office-mechanic-team > label { min-height: 44px; }
 .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-assignment { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .55fr); gap: 24px; align-items: start; }
 .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-concern-assignment > * { order: 0; min-width: 0; }
 .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack > .create-parts-card { margin-top: 24px; background: transparent; border: 0; border-top: 1px solid #dce1e7; border-radius: 0; padding: 20px 0 0; box-shadow: none; }

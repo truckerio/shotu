@@ -16,8 +16,10 @@ function CreateLaborProductDialog({ locationId, onClose, onCreated }) {
   const titleId = useId();
   const nameId = useId();
   const codeId = useId();
+  const descriptionId = useId();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -26,7 +28,7 @@ function CreateLaborProductDialog({ locationId, onClose, onCreated }) {
     event.preventDefault();
     event.stopPropagation();
     if (busyRef.current) return;
-    const body = createLaborProductPayload({ locationId, name, code });
+    const body = createLaborProductPayload({ locationId, name, code, description });
     if (!body) {
       setError("Enter a labor product name.");
       return;
@@ -57,6 +59,7 @@ function CreateLaborProductDialog({ locationId, onClose, onCreated }) {
           {error ? <p role="alert" className="labor-product-error">{error}</p> : null}
           <label htmlFor={nameId}>Name<input id={nameId} autoFocus autoComplete="off" maxLength={300} value={name} disabled={busy} onChange={(event) => { setName(event.target.value); setError(""); }} /></label>
           <label htmlFor={codeId}>Code <span>(optional)</span><input id={codeId} autoComplete="off" maxLength={100} value={code} disabled={busy} onChange={(event) => { setCode(event.target.value); setError(""); }} /></label>
+          <label htmlFor={descriptionId}>Description <span>(optional)</span><textarea id={descriptionId} maxLength={2000} rows={3} value={description} disabled={busy} onChange={(event) => setDescription(event.target.value)} /></label>
           <footer><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" disabled={busy}>{busy ? "Creating…" : "Create product"}</button></footer>
         </form>
       </Dialog>

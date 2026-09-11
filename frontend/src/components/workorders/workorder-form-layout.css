@@ -130,20 +130,57 @@
   white-space: nowrap;
 }
 
-/* Use tall desktop space for section and row rhythm, not oversized controls.
-   Keep the compact layout for tablets and shorter split-view windows. */
+/* Keep wide office forms within a comfortable scan and pointer range while
+   leaving the work surface flat. Detail Tools keeps this width boundary while
+   its sibling pane opens; Create preview uses its full split-pane width. */
+@media (min-width: 1440px) {
+  .split-layout:is(:not(.has-preview), .workorder-detail-layout.has-tools-layout) > .control-panel[data-workorder-presentation="one-page"] {
+    --workorder-wide-form-width: 1280px;
+  }
+
+  .split-layout:is(:not(.has-preview), .workorder-detail-layout.has-tools-layout) > .control-panel[data-workorder-presentation="one-page"] > .workorder-one-page-notices:not(:empty) {
+    box-sizing: border-box;
+    margin-inline: auto;
+    max-width: var(--workorder-wide-form-width);
+    padding-inline: 24px;
+    width: calc(100% - 48px);
+  }
+
+  .split-layout:is(:not(.has-preview), .workorder-detail-layout.has-tools-layout) .control-panel[data-workorder-presentation="one-page"] .create-workorder-form-message {
+    box-sizing: border-box;
+    margin-inline: auto;
+    max-width: var(--workorder-wide-form-width);
+    padding-inline: 24px;
+    width: calc(100% - 48px);
+  }
+
+  .split-layout:is(:not(.has-preview), .workorder-detail-layout.has-tools-layout) .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-sizing: border-box;
+    margin: 16px auto 48px;
+    max-width: var(--workorder-wide-form-width);
+    overflow: visible;
+    padding: 24px;
+    width: calc(100% - 48px);
+  }
+}
+
+/* Give tall tools workspaces a little extra breathing room without pushing
+   the Parts task far below the information that precedes it. */
 @media (min-width: 1280px) and (min-height: 1000px) {
   .workorder-detail-layout.has-tools-layout .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout {
-    padding-top: clamp(28px, 3vh, 48px);
+    padding-top: clamp(24px, 2vh, 32px);
   }
 
   .workorder-detail-layout.has-tools-layout .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-primary {
-    gap: clamp(16px, 2vh, 28px);
+    gap: clamp(16px, 1.5vh, 20px);
   }
 
   .workorder-detail-layout.has-tools-layout .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-parts {
-    margin-top: clamp(32px, 6vh, 96px);
-    padding-top: clamp(32px, 3vh, 48px);
+    margin-top: clamp(24px, 3vh, 40px);
+    padding-top: clamp(24px, 2.5vh, 32px);
   }
 
   .workorder-detail-layout.has-tools-layout .used-parts-editor .used-parts-items-table > .operational-part-row,

@@ -8,6 +8,13 @@ function text(value) {
   return String(value || "").trim();
 }
 
+export function catalogPartRequiresSerializedUnits(part = {}) {
+  if (part.trackingMode === "quantity" || part.trackingMode === "measured_bulk") return false;
+  const unit = getUnitDefinition(part.uomCode);
+  return ["count", "packaging"].includes(unit?.category)
+    && (part.trackingMode === "serialized" || part.inventory?.serializationRequired === true);
+}
+
 export function createPartHasContent(part = {}) {
   return Boolean(text(part.partNo) || text(part.qty) || text(part.repairOrder));
 }

@@ -45,7 +45,6 @@ export function CustomerCompanyField({
     onChange?.(option.name);
     setOpen(false);
     setActiveIndex(-1);
-    inputRef.current?.focus();
   }
 
   function handleKeyDown(event) {

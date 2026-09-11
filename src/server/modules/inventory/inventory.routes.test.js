@@ -335,6 +335,24 @@ test("part-location routes read company-wide details and create auditable serial
   }]);
 });
 
+test("aggregate stock-intake route posts scoped physical inventory and audits the replay result", async () => {
+  const response = {}; const events = []; let command;
+  await handleInventoryApi(
+    { method: "POST", requestId: "aggregate-intake-route-1" }, response,
+    new URL(`http://localhost/api/office/inventory/parts/${RUN_ID}/locations/${LOCATION_ID}/stock-intake`),
+    { ...helpers({ quantity: 4, uomCode: "ea", trackingMode: "quantity",
+      confirmation: "physically_present_at_location", idempotencyKey: "aggregate-route-four" }),
+    emitAdministrativeAuditEvent: async (event) => { events.push(event); } },
+    { postIntake: async (input) => { command = input; return { kind: "posted", receiptId: BATCH_ID, quantity: 4 }; } },
+  );
+  assert.equal(response.status, 201);
+  assert.equal(response.payload.replayed, false);
+  assert.deepEqual(command.locationIds, [LOCATION_ID]);
+  assert.deepEqual(events, [{ type: "inventory_aggregate_stock_received", requestId: "aggregate-intake-route-1",
+    actorId: ACTOR_ID, catalogPartId: RUN_ID, locationId: LOCATION_ID, quantity: 4,
+    trackingMode: "quantity", replayed: false }]);
+});
+
 test("inventory master route accepts only master-match purpose and preserves authorized scope", async () => {
   const response = {};
   let locationScope;

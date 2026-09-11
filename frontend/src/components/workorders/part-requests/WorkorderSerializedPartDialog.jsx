@@ -67,6 +67,9 @@ export function WorkorderSerializedPartDialog({
   open,
   actorId,
   workorderId,
+  locationId,
+  createOnly = false,
+  onCreated,
   catalogPart,
   initialUnitId = "",
   initialSerialNumber = "",
@@ -75,7 +78,7 @@ export function WorkorderSerializedPartDialog({
   onReserved,
   locale = "en",
 }) {
-  const [view, setView] = useState("units");
+  const [view, setView] = useState(createOnly ? "create" : "units");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -97,7 +100,9 @@ export function WorkorderSerializedPartDialog({
   const partId = catalogPart?.id || catalogPart?.catalogPartId;
   const endpoint = partId && workorderId
     ? `/api/workorders/${encodeURIComponent(workorderId)}/inventory-parts/${encodeURIComponent(partId)}/units`
-    : "";
+    : partId && locationId && createOnly
+      ? `/api/office/inventory/parts/${encodeURIComponent(partId)}/locations/${encodeURIComponent(locationId)}/units`
+      : "";
   const part = data?.part || catalogPart || {};
   const partNumber = part.partNumber || part.normalizedPartNumber || "";
   const partDescription = part.description?.trim();
@@ -131,7 +136,7 @@ export function WorkorderSerializedPartDialog({
 
   useEffect(() => {
     if (!open || !endpoint) return;
-    setView("units");
+    setView(createOnly ? "create" : "units");
     setData(null);
     setMessage("");
     setQuantity("1");
@@ -143,7 +148,7 @@ export function WorkorderSerializedPartDialog({
     unitRequestKeysRef.current = new Map();
     createKeyRef.current = { identity: "", key: "" };
     load({ query: initialSerialNumber });
-  }, [open, endpoint, initialUnitId, initialSerialNumber]);
+  }, [open, endpoint, initialUnitId, initialSerialNumber, createOnly]);
 
   useEffect(() => {
     if (view === "create") window.requestAnimationFrame(() => quantityRef.current?.focus());
@@ -176,6 +181,8 @@ export function WorkorderSerializedPartDialog({
 
   async function createUnits(event) {
     event.preventDefault();
+    event.stopPropagation();
+    if (busy) return;
     const amount = Number(quantity);
     if (!Number.isInteger(amount) || amount < 1 || amount > 25) {
       setMessage("Enter a whole quantity from 1 to 25.");
@@ -192,7 +199,7 @@ export function WorkorderSerializedPartDialog({
     }
     const confirmation = "physically_present_at_location";
     const identity = JSON.stringify({ partId, amount, confirmation, conditionCode, conditionEvidence: evidence });
-    const storageKey = pendingCreateStorageKey({ actorId, workorderId, partId, quantity: amount, confirmation, conditionCode, conditionEvidence: evidence });
+    const storageKey = pendingCreateStorageKey({ actorId, workorderId: workorderId || locationId, partId, quantity: amount, confirmation, conditionCode, conditionEvidence: evidence });
     if (createKeyRef.current.identity !== identity) {
       createKeyRef.current = {
         identity,
@@ -217,6 +224,10 @@ export function WorkorderSerializedPartDialog({
       setSelectedUnitIds(new Set());
       clearPendingCreateKey(storageKey);
       createKeyRef.current = { identity: "", key: "" };
+      if (createOnly) {
+        onCreated?.(result);
+        return;
+      }
       setView("created");
     } catch (error) {
       setMessage(errorText(error, text));
@@ -262,6 +273,7 @@ export function WorkorderSerializedPartDialog({
   }
 
   const batch = data?.batch || data?.labelBatch;
+  const IntakeContainer = createOnly ? "div" : "form";
   if (!open) return null;
   if (view !== "create") {
     return (
@@ -296,11 +308,11 @@ export function WorkorderSerializedPartDialog({
         <section
           ref={createPanelRef}
           className="workorder-serialized-dialog workorder-serialized-create-panel"
-          style={createPanelShift.x || createPanelShift.y ? { transform: `translate(${-createPanelShift.x}px, ${-createPanelShift.y}px)` } : undefined}
+          style={{ ...(createOnly ? { left: 0, top: "calc(100% + 6px)" } : {}), ...(createPanelShift.x || createPanelShift.y ? { transform: `translate(${-createPanelShift.x}px, ${-createPanelShift.y}px)` } : {}) }}
           role="dialog"
           aria-modal="false"
           aria-labelledby={`${dialogId}-title`}
-          onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}
+          onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); event.stopPropagation(); close(); } }}
         >
           <header>
             <div className="workorder-serialized-heading">
@@ -320,7 +332,7 @@ export function WorkorderSerializedPartDialog({
           </header>
           <div className="workorder-serialized-dialog-content">
             {message ? <p className="workorder-serialized-message" role="alert">{message}</p> : null}
-            <form onSubmit={createUnits} className="workorder-serialized-create">
+            <IntakeContainer onSubmit={createOnly ? undefined : createUnits} className="workorder-serialized-create" onKeyDown={(event) => { if (createOnly && event.key === "Enter" && event.target.tagName !== "TEXTAREA") event.preventDefault(); }}>
               <div className="workorder-serialized-field">
                 <label>{text.quantity}<input ref={quantityRef} type="number" min="1" max="25" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
                 <p>{text.creates}</p>
@@ -331,8 +343,8 @@ export function WorkorderSerializedPartDialog({
                 <label>{text.conditionEvidence}<textarea rows="2" maxLength="2000" value={conditionEvidence} onChange={(event) => setConditionEvidence(event.target.value)} placeholder={text.conditionEvidencePlaceholder} disabled={busy} /></label>
               </div>
               <label className="workorder-serialized-check"><Checkbox checked={physicallyPresent} onChange={(event) => setPhysicallyPresent(event.target.checked)} disabled={busy} /><span>{text.confirm} <strong>{locationName}</strong>.</span></label>
-              <footer><Button type="button" onClick={() => { setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type="submit" variant="primary" disabled={busy || !physicallyPresent || !conditionEvidence.trim()}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
-            </form>
+              <footer><Button type="button" onClick={() => { if (createOnly) { close(); return; } setView("units"); window.requestAnimationFrame(() => addUnitsRef.current?.focus()); }} disabled={busy}>{text.back}</Button><Button type={createOnly ? "button" : "submit"} onClick={createOnly ? createUnits : undefined} variant="primary" disabled={busy || !physicallyPresent || !conditionEvidence.trim()}>{busy ? "Creating serialized units…" : `Create ${quantity || 1} serialized unit${Number(quantity) === 1 ? "" : "s"}`}</Button></footer>
+            </IntakeContainer>
           </div>
         </section>
   );

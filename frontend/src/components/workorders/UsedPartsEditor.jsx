@@ -21,6 +21,7 @@ import { DEFAULT_PART_ENTRY_ROWS } from "../../../../shared/workorder-template.j
 import { LaborProductSelector } from "./LaborProductSelector.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
+import { partStockTracking } from "../inventory/stock-intake-model.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
 import {
   DETAIL_WORKORDER_PARTS_COLUMNS,
@@ -30,8 +31,6 @@ import {
   WorkorderPartsRow,
   WorkorderPartsTable,
 } from "./WorkorderPartsTable.jsx";
-
-const MEASURED_UOM_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 
 export function UsedPartsEditor({
   actorId,
@@ -403,7 +402,7 @@ export function UsedPartsEditor({
     }}
   /> : null;
   const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
-    open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart}
+    open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart} locationId={locationId || detail.workorder.locationId}
     assetId={detail.workorder.asset?.id || detail.workorder.assetId}
     suggestionsEnabled={suggestionsEnabled}
     locale={locale}
@@ -473,9 +472,10 @@ export function UsedPartsEditor({
                   setActiveOnePageIntakeIndex(intakeIndex);
                   updateOnePageIntakeQuery(intakeIndex, catalogPart.partNumber);
                   setMessage("");
-                  if (MEASURED_UOM_CATEGORIES.has(category)) setMeasuredDialogPart(catalogPart);
+                  if (["quantity", "measured_bulk"].includes(partStockTracking(catalogPart))) setMeasuredDialogPart(catalogPart);
                   else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
-                  else setSerializedDialogPart(catalogPart);
+                  else if (partStockTracking(catalogPart) === "serialized") setSerializedDialogPart(catalogPart);
+                  else setMessage("Review this part’s tracking settings in Inventory before adding stock.");
                 }}
                 label=""
                 inputAriaLabel={`${t("parts.numberOrDescription")} ${intakeIndex + 1}`}
@@ -603,9 +603,10 @@ export function UsedPartsEditor({
                   serializedReservationCompletedRef.current = false;
                   setCatalogQuery(catalogPart.partNumber);
                   setMessage("");
-                  if (MEASURED_UOM_CATEGORIES.has(category)) setMeasuredDialogPart(catalogPart);
+                  if (["quantity", "measured_bulk"].includes(partStockTracking(catalogPart))) setMeasuredDialogPart(catalogPart);
                   else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
-                  else setSerializedDialogPart(catalogPart);
+                  else if (partStockTracking(catalogPart) === "serialized") setSerializedDialogPart(catalogPart);
+                  else setMessage("Review this part’s tracking settings in Inventory before adding stock.");
                 }}
                 label=""
                 inputAriaLabel={t("parts.numberOrDescription")}

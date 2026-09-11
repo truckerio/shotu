@@ -36,6 +36,10 @@ test("reserve validates precision strictly and forwards tenant, location, and wo
   assert.equal(command.workorderId, WORKORDER_ID);
   assert.deepEqual(command.companyIds, [COMPANY_ID]);
   assert.deepEqual(command.locationIds, [LOCATION_ID]);
+  await reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
+    catalogPartId: PART_ID, quantity: "1.005", uomCode: "gal", repairOrder: "Tolerance check",
+    idempotencyKey: "aggregate-reserve-1005",
+  }, context(), { reserveAggregateUsage: async () => ({ kind: "reserved", usage: { id: USAGE_ID } }) });
   await assert.rejects(
     reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
       catalogPartId: PART_ID, quantity: "1.0009", uomCode: "gal", unexpected: true,
@@ -96,4 +100,21 @@ test("repository contract locks workorder identity and keeps event/movement delt
   assert.match(source, /Math\.max\(1, Math\.min\(Number\(limit\) \|\| 200, 200\)\)/);
   const listProjection = source.slice(source.indexOf("export async function listAggregateWorkorderUsages"), source.indexOf("function publicUsage"));
   assert.doesNotMatch(listProjection, /provider|external_id|receipt_id|invoice/i);
+  assert.match(source, /catalog\.tracking_mode/);
+  assert.match(source, /QUANTITY_CATEGORIES/);
+  assert.match(source, /Number\.isInteger\(input\.quantity\)/);
+  assert.match(source, /supportsLegacyMeasured/);
+});
+
+test("quantity aggregate persistence stores policy and enforces whole-number adjustments", async () => {
+  const sql = await readFile(new URL("../../db/migrations/130_inventory_manual_stock_intake.sql", import.meta.url), "utf8");
+  assert.match(sql, /workorder_aggregate_usage_quantity_scale_check/i);
+  assert.match(sql, /quantity=trunc\(quantity\)/i);
+  await assert.rejects(
+    releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
+      usageId: USAGE_ID, action: "adjust", targetQuantity: 1.5, reason: "Count correction",
+      idempotencyKey: "aggregate-count-adjust",
+    }, context("office"), { releaseAggregateUsage: async () => ({ kind: "unsupported_uom" }) }),
+    (error) => error.code === "AGGREGATE_USAGE_UOM_UNSUPPORTED",
+  );
 });

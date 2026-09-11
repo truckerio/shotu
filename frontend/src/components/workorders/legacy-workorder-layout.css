@@ -85,6 +85,12 @@
   transition: none;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .split-layout.workorder-detail-layout.has-tools-layout {
+    transition: none;
+  }
+}
+
 .detail-pane-resizer {
   align-self: stretch;
   cursor: col-resize;

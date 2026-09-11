@@ -25,6 +25,7 @@ export const laborProductSchema = z.object({
   externalId: z.string().trim().max(200).optional(),
   code: z.string().trim().max(100).default(""),
   name: z.string().trim().min(1).max(300),
+  description: z.string().trim().max(2000).optional(),
   uomCode: z.literal("hr").default("hr"),
   pinned: z.boolean().optional(),
 }).strict().transform(({ pinned: _pinned, ...product }) => product);

@@ -46,3 +46,19 @@ test("local labor snapshot keeps its local identity separate from Odoo", () => {
     uomCode: "hr",
   });
 });
+
+test("local labor snapshot preserves its repair-order description", () => {
+  assert.deepEqual(localLaborProductSnapshot({
+    id: "11111111-1111-4111-8111-111111111111",
+    code: "DIAG",
+    name: "Diagnostics",
+    description: " Diagnose the no-start condition and verify the repair. ",
+  }), {
+    productId: "11111111-1111-4111-8111-111111111111",
+    externalId: "",
+    code: "DIAG",
+    name: "Diagnostics",
+    uomCode: "hr",
+    description: "Diagnose the no-start condition and verify the repair.",
+  });
+});

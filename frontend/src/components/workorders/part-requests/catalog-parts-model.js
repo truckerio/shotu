@@ -65,9 +65,9 @@ export function catalogPartDetails(part, localeText = null, purpose = "issue") {
       : purpose === "master_match" ? "Master catalog part" : "Our inventory part");
 }
 
-export function repairOrderAfterCatalogSelection(currentRepairOrder, catalogPart = {}) {
+export function repairOrderAfterCatalogSelection(currentRepairOrder, catalogPart = {}, previousPartId = null) {
   const current = String(currentRepairOrder || "");
-  if (current.trim()) return current;
+  if (current.trim() || (previousPartId && String(previousPartId) === String(catalogPart.id || catalogPart.productId))) return current;
   return String(catalogPart.description || "").trim().slice(0, MAX_PART_REPAIR_ORDER_LENGTH);
 }
 

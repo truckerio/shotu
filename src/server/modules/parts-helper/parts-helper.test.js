@@ -91,7 +91,7 @@ test("catalog search input requires one authorized scope and a bounded query", (
   assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "issue", q: "filter" }).purpose, "issue");
   assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "master_match", q: "filter" }).purpose, "master_match");
   assert.equal(catalogSearchInputSchema.parse({ workorderId, purpose: "workorder_assignment", q: "filter" }).purpose, "workorder_assignment");
-  assert.equal(catalogSearchInputSchema.safeParse({ locationId, purpose: "workorder_assignment", q: "filter" }).success, false);
+  assert.equal(catalogSearchInputSchema.safeParse({ locationId, purpose: "workorder_assignment", q: "filter" }).success, true);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, purpose: "all", q: "filter" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "x" }).success, false);
   assert.equal(catalogSearchInputSchema.safeParse({ workorderId, q: "filter", limit: 13 }).success, false);
@@ -266,6 +266,24 @@ test("workorder assignment includes zero-stock and catalog-only parents", async 
     searchCatalogParts: async () => ({ catalogAvailable: true, items: candidates }),
   });
   assert.deepEqual(result.items, candidates);
+});
+
+test("Create assignment searches the authorized company catalog without requiring local stock", async () => {
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  const companyId = "33333333-3333-4333-8333-333333333333";
+  const candidates = [{ id: "catalog-only", source: "company", inventory: null }, { id: "zero", source: "local", inventory: { locationId, available: 0 } }];
+  const context = { actor: { id: "office-1", role: "office" }, companyIds: new Set([companyId]), locationIds: new Set([locationId]) };
+  const dependencies = {
+    getLocationById: async () => ({ id: locationId, company_id: companyId }),
+    searchCatalogParts: async (scope, options) => {
+      assert.equal(scope, companyId);
+      assert.equal(options.locationId, locationId);
+      assert.equal(options.purpose, "workorder_assignment");
+      return { catalogAvailable: true, items: candidates };
+    },
+  };
+  assert.deepEqual((await searchPartCatalog({ locationId, purpose: "workorder_assignment", q: "filter" }, context, dependencies)).items, candidates);
+  await assert.rejects(searchPartCatalog({ locationId, purpose: "workorder_assignment", q: "filter" }, { ...context, locationIds: new Set() }, dependencies), (error) => error.statusCode === 403);
 });
 
 test("master-match catalog search requires inventory count apply permission", async () => {

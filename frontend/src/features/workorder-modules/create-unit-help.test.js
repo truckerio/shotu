@@ -12,7 +12,7 @@ const workorderObjectPage = readSource("../../components/workorders/WorkorderObj
 const workorderDetailStyles = readSource("../../styles/workorder-detail.css");
 
 test("unit instructions stay behind accessible help disclosure", () => {
-  assert.match(createUnit, /<FormSection[\s\S]*title=\{t\("create\.unit\.unit"\)\}[\s\S]*action=\{\(/);
+  assert.match(createUnit, /<UnitSection[\s\S]*\.\.\.\(onePage \? \{ className: "workorder-compact-unit-fields" \} : \{ title: t\("create\.unit\.unit"\), action: \(/);
   assert.match(createUnit, /<SectionHelpDisclosure label=\{t\("create\.unit\.summary"\)\}>/);
   assert.match(createUnit, /<p>\{t\("create\.unit\.summary"\)\}<\/p>/);
   assert.match(createUnit, /<p>\{t\("create\.unit\.searchHelp"\)\}<\/p>/);
@@ -26,11 +26,13 @@ test("unit instructions stay behind accessible help disclosure", () => {
 });
 
 test("Create panels keep one useful heading layer", () => {
-  assert.match(createUnit, /showTitle=\{false\}[\s\S]*<FormSection[\s\S]*title=\{t\("create\.unit\.unit"\)\}/);
-  assert.match(createUnit, /<FormSection title=\{t\("create\.unit\.customer"\)\}>/);
+  assert.match(createUnit, /const UnitSection = onePage \? "div" : FormSection/);
+  assert.match(createUnit, /showTitle=\{false\}[\s\S]*<UnitSection[\s\S]*title: t\("create\.unit\.unit"\)/);
+  assert.match(createUnit, /!onePage \? <FormSection title=\{t\("create\.unit\.customer"\)\}>/);
   assert.match(createConcern, /showTitle=\{false\}[\s\S]*<FormSection[\s\S]*title=\{t\("create\.concern\.problem"\)\}/);
   assert.match(createLocation, /showTitle=\{false\}[\s\S]*<FormSection title=\{t\("create\.location\.repairLocation"\)\}>/);
-  assert.match(createSchedule, /showTitle=\{false\}[\s\S]*<FormSection title=\{t\("create\.schedule\.workDates"\)\}>/);
+  assert.match(createSchedule, /const dates = onePage \?[\s\S]*: <FormSection title=\{t\("create\.schedule\.workDates"\)\}>/);
+  assert.match(createSchedule, /showTitle=\{false\}/);
   assert.match(createParts, /showTitle=\{!compactLayout\}/);
   assert.match(createParts, /compactLayout \? \([\s\S]*create-parts-labor-title/);
   assert.match(createParts, /function LegacyCreatePartsEditor/);

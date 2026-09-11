@@ -21,13 +21,6 @@ export const catalogSearchInputSchema = z.object({
       message: "Provide exactly one catalog scope: workorderId or locationId.",
     });
   }
-  if (value.purpose === "workorder_assignment" && !value.workorderId) {
-    context.addIssue({
-      code: "custom",
-      path: ["workorderId"],
-      message: "Workorder assignment search requires workorder scope.",
-    });
-  }
 });
 
 export const repairSuggestionsInputSchema = z.object({

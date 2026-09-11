@@ -77,6 +77,24 @@ test("create rejects normalized duplicate input", async () => {
   }), (error) => error.statusCode === 409 && error.code === "LABOR_PRODUCT_DUPLICATE");
 });
 
+test("create trims and persists the optional repair-order description", async () => {
+  const result = await addLaborProduct({
+    locationId: LOCATION_ID,
+    name: "Diagnostics",
+    description: " Diagnose the no-start condition. ",
+  }, context(), {
+    findLocation: async () => location,
+    createProduct: async (input) => {
+      assert.equal(input.description, "Diagnose the no-start condition.");
+      return {
+        kind: "created",
+        product: { id: PRODUCT_ID, name: "Diagnostics", code: "", description: input.description, uomCode: "hr", pinned: false },
+      };
+    },
+  });
+  assert.equal(result.description, "Diagnose the no-start condition.");
+});
+
 test("pin is admin-only and validates the path id", async () => {
   await assert.rejects(changeLaborProductPin(PRODUCT_ID, {
     locationId: LOCATION_ID,
@@ -95,7 +113,7 @@ test("trusted selection reloads the active record and emits a server snapshot", 
     locationId: LOCATION_ID,
   }, context(), {
     findLocation: async () => location,
-    findProduct: async () => ({ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", uomCode: "hr", pinned: true }),
+    findProduct: async () => ({ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", description: "Diagnose the no-start condition.", uomCode: "hr", pinned: true }),
   });
   assert.deepEqual(result, {
     productId: PRODUCT_ID,
@@ -103,5 +121,6 @@ test("trusted selection reloads the active record and emits a server snapshot", 
     name: "Diagnostics",
     code: "DIAG",
     uomCode: "hr",
+    description: "Diagnose the no-start condition.",
   });
 });

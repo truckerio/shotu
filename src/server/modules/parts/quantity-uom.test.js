@@ -25,6 +25,8 @@ test("measured units accept three decimal places", () => {
     quantity: 2.375,
     uomCode: "gal",
   });
+  assert.equal(inputSchema.safeParse({ quantity: 1.005, uomCode: "gal" }).success, true);
+  assert.equal(inputSchema.safeParse({ quantity: 1e-10, uomCode: "gal" }).success, false);
   assert.equal(inputSchema.safeParse({ quantity: 12.7504, uomCode: "lb" }).success, false);
 });
 

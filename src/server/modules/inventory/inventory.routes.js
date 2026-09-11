@@ -33,6 +33,7 @@ import {
 } from "./inventory-count-imports.service.js";
 import { createInventoryPart, updateInventoryPart } from "./inventory-part-details.service.js";
 import { updateInventoryStockRule } from "./inventory-stocking-policy.service.js";
+import { createAggregateStockIntake } from "./inventory-stock-intake.service.js";
 import {
   readInventoryAuthorityException,
   readInventoryAuthorityExceptions,
@@ -261,6 +262,28 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
         helpers.requestContext,
         dependencies,
       ));
+      return true;
+    }
+    const stockIntakeMatch = /^\/api\/office\/inventory\/parts\/([^/]+)\/locations\/([^/]+)\/stock-intake$/.exec(url.pathname);
+    if (stockIntakeMatch && req.method === "POST") {
+      const result = await createAggregateStockIntake(
+        decodeURIComponent(stockIntakeMatch[1]),
+        decodeURIComponent(stockIntakeMatch[2]),
+        await helpers.readBody(req),
+        helpers.requestContext,
+        dependencies,
+      );
+      await emitInventoryAudit(helpers, {
+        type: "inventory_aggregate_stock_received",
+        requestId: req.requestId || null,
+        actorId: helpers.requestContext.actor.id,
+        catalogPartId: decodeURIComponent(stockIntakeMatch[1]),
+        locationId: decodeURIComponent(stockIntakeMatch[2]),
+        quantity: result.quantity,
+        trackingMode: result.trackingMode,
+        replayed: result.replayed,
+      });
+      helpers.sendJson(res, 201, result);
       return true;
     }
     if (partLocationMatch && req.method === "POST") {

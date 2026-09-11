@@ -14,6 +14,7 @@ import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import { api } from "../../lib/api.js";
 import { serializedUnitSourceView } from "./part-serialization-source-model.js";
+import { StockIntakeControl } from "../../components/inventory/StockIntakeControl.jsx";
 
 function quantity(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(
@@ -215,7 +216,8 @@ export function PartSerializationPanel({
   }, [load]);
 
   useEffect(() => {
-    if (!companyId || !location?.locationId || !item?.catalogPartId)
+    if (!data || ["quantity", "measured_bulk"].includes(data.part?.trackingMode)
+      || !companyId || !location?.locationId || !item?.catalogPartId)
       return undefined;
     let active = true;
     setCustodyUnits((current) => ({ ...current, loading: true, error: "" }));
@@ -262,6 +264,8 @@ export function PartSerializationPanel({
     custodyRefreshVersion,
     item?.catalogPartId,
     location?.locationId,
+    data?.part?.trackingMode,
+    Boolean(data),
   ]);
 
   useEffect(() => {
@@ -498,6 +502,21 @@ export function PartSerializationPanel({
     }
   }
 
+  if (!loading && data && ["quantity", "measured_bulk"].includes(data.part.trackingMode)) {
+    const uom = data.part.canonicalUomCode || data.part.uomCode;
+    return <div className="inventory-quantity-stock">
+      <button className="inventory-detail-back" type="button" onClick={onBack}><ArrowLeft />All locations</button>
+      <header><h3>{location.locationName}</h3><p>{data.part.trackingMode === "quantity" ? "Quantity tracked" : "Measured or bulk"}</p></header>
+      {error ? <p role="alert">{error}</p> : null}
+      <dl>
+        <div><dt>On hand</dt><dd>{quantity(data.location.localQuantityOnHand)} {uom}</dd></div>
+        <div><dt>Reserved</dt><dd>{quantity(data.location.localQuantityReserved)} {uom}</dd></div>
+        <div><dt>Available</dt><dd>{quantity(Math.max(0, data.location.localQuantityOnHand - data.location.localQuantityReserved))} {uom}</dd></div>
+      </dl>
+      <StockIntakeControl catalogPartId={item.catalogPartId} locationId={location.locationId} initialData={data} onReceived={async () => { await load(); onInventoryChanged?.(); }} />
+    </div>;
+  }
+
   return (
     <div className="inventory-serial-drilldown" ref={rootRef}>
       <button
@@ -513,7 +532,7 @@ export function PartSerializationPanel({
       {loading ? (
         <div className="inventory-serial-loading">
           <RefreshCw01 className="loading-icon" />
-          Loading serialized units
+          Loading stock
         </div>
       ) : null}
       {error ? (

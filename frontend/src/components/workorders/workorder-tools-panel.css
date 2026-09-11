@@ -15,10 +15,12 @@
 .workorder-tools-panel-header {
   align-items: center;
   border-bottom: 1px solid #e4e7ec;
+  box-sizing: border-box;
   display: flex;
+  height: 62px;
   justify-content: space-between;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 10px 16px;
 }
 
 .workorder-tools-panel-header h2 { font-size: 17px; margin: 0; }
@@ -86,7 +88,6 @@
   .workorder-tools-panel-overlay[data-open] { display: contents; }
 
   .workorder-tools-panel[open] {
-    border-left: 1px solid #e4e7ec;
     display: grid;
     height: 100dvh;
     position: sticky;
@@ -99,6 +100,7 @@
 .workorder-tools-panel-view:has(> .chat-content) {
   display: flex;
   flex-direction: column;
+  padding-bottom: 24px;
 }
 
 .workorder-tools-panel-view[hidden] { display: none; }

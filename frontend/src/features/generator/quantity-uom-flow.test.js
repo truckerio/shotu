@@ -55,8 +55,8 @@ test("detail catalog parent selection waits for an exact serialized child", () =
   assert.doesNotMatch(usedPartsEditor, /partNo:\s*catalogPart\.partNumber,[\s\S]*qty:\s*defaultUsedPartQuantity\(part\.qty\)/);
 });
 
-test("detail catalog selection routes measured and countable inventory by UOM", () => {
-  assert.match(usedPartsEditor, /MEASURED_UOM_CATEGORIES\.has\(category\)/);
+test("detail catalog selection routes inventory by saved tracking policy", () => {
+  assert.match(usedPartsEditor, /\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)/);
   assert.match(usedPartsEditor, /setMeasuredDialogPart\(catalogPart\)/);
   assert.match(usedPartsEditor, /setSerializedDialogPart\(catalogPart\)/);
   assert.doesNotMatch(usedPartsEditor, /partNo:\s*value,[\s\S]*qty:/);
@@ -68,8 +68,9 @@ test("create workorder uses the location-scoped catalog selector and retains sel
   assert.match(createPartsModule, /locationId=\{locationId\}/);
   assert.match(createPartsModule, /catalogPartId:\s*catalogPart\.id/);
   assert.match(createPartsModule, /qty:\s*serializationRequired \? "" : defaultUsedPartQuantity\(part\.qty\)/);
-  assert.match(createPartsModule, /repairOrder:\s*repairOrderAfterNestedSelection\(part\.repairOrder, catalogPart\)/);
-  assert.match(createPartsModule, /setSerialPickerIndex\(catalogPart\.inventory\?\.serializationRequired === true \? index : -1\)/);
+  assert.match(createPartsModule, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart, part\.catalogPartId\)/);
+  assert.match(createPartsModule, /setSerialPickerIndex\(index\)/);
+  assert.match(createPartsModule, /<CreateStockDropdown/);
   assert.match(createPartsModule, /quantityReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
   assert.match(formController, /typeof field === "object"[\s\S]*\.\.\.patch/);
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  catalogPartRequiresSerializedUnits,
   createPartHasContent,
   createPartRequiresSerializedUnits,
   createPartRenderIndexes,
@@ -14,6 +15,14 @@ import {
 } from "./create-parts-model.js";
 
 const blank = () => ({ partNo: "", qty: "", uomCode: "pc", repairOrder: "" });
+
+test("catalog serial policy works before the location has stock", () => {
+  assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "serialized", uomCode: "pc", inventory: null }), true);
+  assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "", uomCode: "pc", inventory: null }), false);
+  assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "", uomCode: "pc", inventory: { serializationRequired: true } }), true);
+  assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "quantity", uomCode: "pc", inventory: null }), false);
+  assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "measured_bulk", uomCode: "gal", inventory: null }), false);
+});
 
 test("create Parts presentation hides untouched placeholder rows", () => {
   const parts = [blank(), blank(), blank()];

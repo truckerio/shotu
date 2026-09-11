@@ -51,3 +51,7 @@ test("the persistent native dialog supplies modal focus behavior and desktop rec
   assert.match(css, /\.workorder-tools-panel::backdrop/);
   assert.match(css, /\.workorder-tools-panel-view\s*\{[\s\S]*overflow-y: auto;/);
 });
+
+test("the chat composer keeps a comfortable inset from the viewport edge", () => {
+  assert.match(css, /\.workorder-tools-panel-view:has\(> \.chat-content\)\s*\{[^}]*padding-bottom:\s*24px;/s);
+});

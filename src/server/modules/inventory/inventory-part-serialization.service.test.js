@@ -32,6 +32,19 @@ test("Office can read every location in its company but can create only at an as
   assert.deepEqual(readInput.companyIds, [COMPANY_ID]);
   assert.equal("locationIds" in readInput, false);
   assert.equal(result.canCreateAtLocation, false);
+  assert.equal(result.canReceiveStock, false);
+});
+
+test("aggregate intake metadata exposes canonical UOM only at an assigned writable location", async () => {
+  const result = await readPartLocationSerialization(PART_ID, ASSIGNED_LOCATION_ID, context(), {
+    read: async () => ({ part: { catalogPartId: PART_ID, uomCode: "case", canonicalUomCode: "ea", trackingMode: "quantity" }, location: {}, units: [] }),
+  });
+  assert.equal(result.part.canonicalUomCode, "ea");
+  assert.equal(result.canReceiveStock, true);
+  const mechanicResult = await readPartLocationSerialization(PART_ID, ASSIGNED_LOCATION_ID, context("mechanic"), {
+    read: async () => ({ part: { catalogPartId: PART_ID, uomCode: "ea", trackingMode: "quantity" }, location: {}, units: [] }),
+  });
+  assert.equal(mechanicResult.canReceiveStock, false);
 });
 
 test("serialized intake forwards physical confirmation and assigned-location scope", async () => {

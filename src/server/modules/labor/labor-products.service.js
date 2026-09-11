@@ -57,6 +57,7 @@ export async function addLaborProduct(input, context, dependencies = {}) {
     companyId: location.company_id,
     name: parsed.name,
     code: parsed.code,
+    description: parsed.description,
     actorId: context.actor.id,
   });
   if (result.kind === "duplicate") {

@@ -19,13 +19,14 @@ test("catalog list is company scoped, location pinned, searchable, and pinned fi
   }, async (sql, params) => {
     statement = sql;
     values = params;
-    return { rows: [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", pinned: true }] };
+    return { rows: [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", description: "Diagnose no-start", pinned: true }] };
   });
   assert.match(statement, /product\.company_id = \$1 and product\.active = true/);
   assert.match(statement, /pin\.location_id = \$2/);
   assert.match(statement, /order by coalesce\(pin\.pinned, false\) desc/i);
   assert.deepEqual(values, [COMPANY_ID, LOCATION_ID, "diag", 50]);
-  assert.deepEqual(items, [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", uomCode: "hr", pinned: true }]);
+  assert.match(statement, /product\.description/);
+  assert.deepEqual(items, [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", description: "Diagnose no-start", uomCode: "hr", pinned: true }]);
 });
 
 test("trusted lookup requires active company product and active location", async () => {
@@ -34,10 +35,11 @@ test("trusted lookup requires active company product and active location", async
     companyId: COMPANY_ID, locationId: LOCATION_ID, productId: PRODUCT_ID,
   }, async (sql) => {
     statement = sql;
-    return { rows: [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", pinned: false }] };
+    return { rows: [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", description: "Diagnose no-start", pinned: false }] };
   });
   assert.match(statement, /location\.active = true/);
   assert.match(statement, /product\.company_id = \$1 and product\.id = \$3 and product\.active = true/);
+  assert.equal(product.description, "Diagnose no-start");
   assert.equal(product.id, PRODUCT_ID);
 });
 
@@ -51,9 +53,11 @@ test("pin mutation derives the tenant from selected active rows", async () => {
     actorId: "actor-1",
   }, async (sql) => {
     statement = sql;
-    return { rows: [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", pinned: true }] };
+    return { rows: [{ id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", description: "Diagnose no-start", pinned: true }] };
   });
   assert.match(statement, /where product\.company_id = \$1 and product\.id = \$3 and product\.active = true/);
   assert.match(statement, /select company_id, \$2, id, \$4, \$5, now\(\) from selected/);
+  assert.match(statement, /selected\.description/);
   assert.equal(product.pinned, true);
+  assert.equal(product.description, "Diagnose no-start");
 });

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { NarrativeField } from "../../../components/forms/index.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
@@ -26,10 +27,23 @@ export function WorkorderAssignmentModule({
   onSelect,
   presentation = "panel",
 }) {
+  const dropdownRef = useRef(null);
+  const onePage = presentation === "one-page";
+  useEffect(() => {
+    if (!onePage) return undefined;
+    const closeOnOutsidePointer = (event) => {
+      if (dropdownRef.current?.open && !dropdownRef.current.contains(event.target)) {
+        const restoreFocus = dropdownRef.current.contains(document.activeElement);
+        dropdownRef.current.open = false;
+        if (restoreFocus) dropdownRef.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [onePage]);
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
   const canWrite = writable(access) && Boolean(allowedActions.assignMechanics);
-  const onePage = presentation === "one-page";
   const selectedNames = assignableMechanics.filter((mechanic) => assignedIds.map(String).includes(String(mechanic.id))).map((mechanic) => mechanic.name);
   return (
     <ProgressiveWorkorderSection
@@ -44,7 +58,18 @@ export function WorkorderAssignmentModule({
       {canWrite && onePage ? (
         <div className="office-assignment-control create-assignment-one-page-field">
           <span className="create-assignment-one-page-label">Mechanic</span>
-          <details className="create-assignment-one-page-dropdown">
+          <details className="create-assignment-one-page-dropdown" ref={dropdownRef}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && event.currentTarget.open) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus();
+              }
+            }}>
             <summary>{selectedNames.length ? selectedNames.join(", ") : t("assignment.unassigned")}</summary>
             <fieldset className="office-mechanic-team">
               <legend>{t("assignment.assignedMechanics")}</legend>

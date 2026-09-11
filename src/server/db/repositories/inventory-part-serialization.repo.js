@@ -98,6 +98,7 @@ export async function getPartLocationSerialization({ catalogPartId, locationId, 
       partNumber: part.part_number,
       description: part.description || "",
       uomCode: part.inventory_display_uom_code || part.uom_code,
+      canonicalUomCode: part.uom_code,
       trackingMode: part.tracking_mode || null,
     },
     location: {

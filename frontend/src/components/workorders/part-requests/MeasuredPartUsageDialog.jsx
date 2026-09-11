@@ -5,6 +5,9 @@ import { interfaceText } from "../../../i18n/index.js";
 import { formatQuantityUnit } from "../../forms/quantity-unit-model.js";
 import { Button } from "../../ui/Button.jsx";
 import { PartRepairOrderField } from "./PartRepairOrderField.jsx";
+import { StockIntakeControl } from "../../inventory/StockIntakeControl.jsx";
+import { stockIntakeQuantity } from "../../inventory/stock-intake-model.js";
+import { repairOrderAfterCatalogSelection } from "./catalog-parts-model.js";
 import "./measured-part-usage.css";
 
 const transientKeys = new Map();
@@ -55,6 +58,7 @@ export function MeasuredPartUsageDialog({
   actorId,
   workorderId,
   catalogPart,
+  locationId,
   assetId,
   suggestionsEnabled = true,
   locale = "en",
@@ -69,18 +73,19 @@ export function MeasuredPartUsageDialog({
   const [completed, setCompleted] = useState(false);
   const quantityRef = useRef(null);
   const titleId = useId();
-  const uomCode = catalogPart?.uomCode || "";
+  const uomCode = catalogPart?.canonicalUomCode || catalogPart?.uomCode || "";
+  const amount = stockIntakeQuantity(quantity, catalogPart);
 
   useEffect(() => {
     if (!open) return;
-    setQuantity("1"); setRepairOrder(""); setMessage(""); setCompleted(false);
+    setQuantity("1"); setRepairOrder(repairOrderAfterCatalogSelection("", catalogPart)); setMessage(""); setCompleted(false);
     window.requestAnimationFrame(() => quantityRef.current?.focus());
   }, [open, catalogPart?.id]);
 
   async function reserve(event) {
     event.preventDefault();
     const amount = Number(quantity);
-    if (!Number.isFinite(amount) || amount <= 0) { setMessage(t("parts.measuredQuantityRequired")); return; }
+    if (busy || completed || !stockIntakeQuantity(quantity, catalogPart).valid) { setMessage(t("parts.measuredQuantityRequired")); return; }
     const identity = [actorId || "session", workorderId, catalogPart?.id, amount, uomCode, repairOrder.trim()].join(":");
     setBusy(true); setMessage("");
     try {
@@ -105,10 +110,11 @@ export function MeasuredPartUsageDialog({
   return <ModalOverlay className="measured-part-dialog-overlay" isOpen isDismissable={false}>
     <Modal className="measured-part-dialog-modal">
       <Dialog className="measured-part-dialog" aria-labelledby={titleId} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); onClose?.(); } }}>
-        <header><div><p>{t("parts.measuredMaterial")}</p><h2 id={titleId}>{catalogPart?.partNumber}</h2><span>{catalogPart?.description}</span></div><button type="button" onClick={onClose} disabled={busy} aria-label={t("parts.closeMeasuredDialog")}>×</button></header>
+        <header><div><p>{catalogPart?.trackingMode === "quantity" ? t("parts.quantity") : t("parts.measuredMaterial")}</p><h2 id={titleId}>{catalogPart?.partNumber}</h2><span>{catalogPart?.description}</span></div><button type="button" onClick={onClose} disabled={busy} aria-label={t("parts.closeMeasuredDialog")}>×</button></header>
+        <StockIntakeControl catalogPartId={catalogPart?.id} locationId={locationId} onReceived={() => setMessage("Stock added. Enter the quantity to reserve for this workorder.")} />
         <form onSubmit={reserve}>
           {message ? <p className="measured-part-message" role="alert">{message}</p> : null}
-          <label>{t("parts.quantity")}<input ref={quantityRef} type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
+          <label>{t("parts.quantity")}<input ref={quantityRef} type="number" min={amount.step} step={amount.step} max={amount.max} value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
           <p>{uomCode}</p>
           <div className="measured-part-field"><label htmlFor={`${titleId}-repair-order`}>{t("parts.repairOrder")}</label><PartRepairOrderField
             historyEnabled={suggestionsEnabled}
@@ -121,7 +127,7 @@ export function MeasuredPartUsageDialog({
             disabled={busy}
             locale={locale}
           ><textarea id={`${titleId}-repair-order`} value={repairOrder} onChange={(event) => setRepairOrder(event.target.value)} maxLength="2000" disabled={busy} /></PartRepairOrderField></div>
-          <footer><Button type="button" onClick={onClose} disabled={busy}>{completed ? t("parts.close") : t("parts.cancel")}</Button><Button type="submit" variant="primary" disabled={busy || completed}>{busy ? t("parts.reserving") : t("parts.reserveMeasured")}</Button></footer>
+          <footer><Button type="button" onClick={onClose} disabled={busy}>{completed ? t("parts.close") : t("parts.cancel")}</Button><Button type="submit" variant="primary" disabled={busy || completed || !amount.valid}>{busy ? t("parts.reserving") : t("parts.reserveMeasured")}</Button></footer>
         </form>
       </Dialog>
     </Modal>

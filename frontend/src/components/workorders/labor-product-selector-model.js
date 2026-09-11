@@ -1,9 +1,12 @@
+import { repairOrderAfterCatalogSelection } from "./part-requests/catalog-parts-model.js";
+
 export function normalizeLaborProductItem(item = {}) {
   const id = String(item.id || item.productId || "").trim();
   const name = String(item.name || "").trim();
   return {
     id,
     name,
+    ...(String(item.description || "").trim() ? { description: String(item.description).trim() } : {}),
     code: String(item.code || "").trim(),
     uomCode: "hr",
     pinned: Boolean(item.pinned),
@@ -41,6 +44,7 @@ export function localLaborProductValue(item = {}) {
     externalId: "",
     code: normalized.code,
     name: normalized.name,
+    ...(normalized.description ? { description: normalized.description } : {}),
     uomCode: "hr",
   } : null;
 }
@@ -49,7 +53,7 @@ export function productMatchesValue(item, value) {
   return Boolean(item?.id) && String(value?.productId || "").trim() === item.id;
 }
 
-export function createLaborProductPayload({ locationId, name, code } = {}) {
+export function createLaborProductPayload({ locationId, name, code, description } = {}) {
   const cleanedName = String(name || "").trim();
   const cleanedCode = String(code || "").trim();
   if (!String(locationId || "").trim() || !cleanedName) return null;
@@ -57,5 +61,14 @@ export function createLaborProductPayload({ locationId, name, code } = {}) {
     locationId: String(locationId).trim(),
     name: cleanedName,
     ...(cleanedCode ? { code: cleanedCode } : {}),
+    ...(String(description || "").trim() ? { description: String(description).trim() } : {}),
+  };
+}
+
+export function laborProductSelectionPatch(form, product) {
+  const repairOrder = repairOrderAfterCatalogSelection(form.workPerformed, product || {}, form.laborProduct?.productId);
+  return {
+    laborProduct: product,
+    ...(repairOrder !== form.workPerformed ? { workPerformed: repairOrder } : {}),
   };
 }

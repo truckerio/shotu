@@ -1,3 +1,4 @@
+import { laborProductSelectionPatch } from "../../components/workorders/labor-product-selector-model.js";
 import { FormErrorSummary, OperationalForm } from "../../components/forms/index.js";
 import { WorkorderCreateModuleHost } from "../workorder-modules/WorkorderCreateModuleHost.jsx";
 import { createWorkorderSummaryErrors } from "./create-workorder-validation.js";
@@ -82,7 +83,7 @@ export function CreateWorkorderForm({
       onAdd: onAddPart,
       onChange: onPartChange,
       onLaborHoursChange: (value) => onFieldChange("laborHours", value),
-      onLaborProductChange: presentation === "one-page" ? (value) => onFieldChange("laborProduct", value) : undefined,
+      onLaborProductChange: presentation === "one-page" ? (value) => Object.entries(laborProductSelectionPatch(form, value)).forEach(([field, next]) => onFieldChange(field, next)) : undefined,
       onLaborRepairOrderChange: (value) => onFieldChange("workPerformed", value),
       onRemove: onRemovePart,
       onReplaceSerializedUnits: onReplacePartSerializedUnits,

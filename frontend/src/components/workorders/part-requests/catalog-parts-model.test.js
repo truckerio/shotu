@@ -71,3 +71,10 @@ test("master matching uses a neutral catalog fallback instead of operational sto
   assert.equal(catalogPartDetails({}, text), "Our inventory part");
   assert.equal(catalogPartDetails({}, text, "master_match"), "Master catalog part");
 });
+
+
+test("reselecting the same catalog part preserves an explicitly cleared repair order", () => {
+  const catalogPart = { id: "part-1", description: "Oil filter" };
+  assert.equal(repairOrderAfterCatalogSelection("", catalogPart, "part-1"), "");
+  assert.equal(repairOrderAfterCatalogSelection("", catalogPart, "part-2"), "Oil filter");
+});

@@ -94,25 +94,19 @@
 
 .preview-pane-toggle svg {
   height: 16px;
+  transition: transform 300ms var(--motion-ease-standard);
+  transform: rotate(0deg);
   width: 16px;
 }
 
 .preview-pane-toggle.is-open svg {
-  animation: preview-toggle-open 300ms var(--motion-ease-standard) forwards;
+  transform: rotate(180deg);
 }
 
-.preview-pane-toggle.is-closed svg {
-  animation: preview-toggle-close 300ms var(--motion-ease-standard) forwards;
-}
-
-@keyframes preview-toggle-open {
-  from { transform: rotate(0deg) scale(0.88); }
-  to { transform: rotate(180deg) scale(1); }
-}
-
-@keyframes preview-toggle-close {
-  from { transform: rotate(180deg) scale(0.88); }
-  to { transform: rotate(0deg) scale(1); }
+@media (prefers-reduced-motion: reduce) {
+  .preview-pane-toggle svg {
+    transition: none;
+  }
 }
 
 .icon-tooltip {

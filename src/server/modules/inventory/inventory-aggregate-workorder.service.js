@@ -5,21 +5,21 @@ import {
 } from "../../db/repositories/inventory-aggregate-workorder-usage.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { z } from "zod";
+import { hasQuantityPrecision, validateQuantityUnit } from "../parts/quantity-uom.js";
 
 const reserveSchema = z.object({
   catalogPartId: z.string().uuid(),
-  quantity: z.coerce.number().positive().max(999999.999)
-    .refine((value) => Number.isInteger(value * 1000), "Quantity supports at most three decimals."),
+  quantity: z.coerce.number().positive().max(999999.999),
   uomCode: z.string().trim().min(1).max(32),
   repairOrder: z.string().trim().max(2000).default(""),
   idempotencyKey: z.string().trim().min(8).max(160),
-}).strict();
+}).strict().superRefine((value, context) => validateQuantityUnit(value, context));
 
 const lifecycleSchema = z.object({
   usageId: z.string().uuid(),
   action: z.enum(["release", "reverse", "adjust"]),
   targetQuantity: z.coerce.number().positive().max(999999.999)
-    .refine((value) => Number.isInteger(value * 1000), "Quantity supports at most three decimals.").optional(),
+    .refine((value) => hasQuantityPrecision(value, 3), "Quantity supports at most three decimals.").optional(),
   reason: z.string().trim().min(2).max(500),
   idempotencyKey: z.string().trim().min(8).max(160),
 }).strict();
@@ -59,7 +59,7 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
   });
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "inactive_workorder") fail("AGGREGATE_USAGE_WORKORDER_INACTIVE", "Measured inventory can be reserved only for active accepted work.");
-  if (result.kind === "unsupported_uom") fail("AGGREGATE_USAGE_UOM_UNSUPPORTED", "Only liquid volume, mass, gas volume, or length inventory can use aggregate workorder usage.");
+  if (result.kind === "unsupported_uom") fail("AGGREGATE_USAGE_UOM_UNSUPPORTED", "The quantity and unit must match this part's saved tracking method and canonical unit.");
   if (result.kind === "insufficient_stock") fail("AGGREGATE_USAGE_INSUFFICIENT_STOCK", "Not enough unreserved measured inventory is available at this workorder location.");
   if (result.kind === "idempotency_conflict") fail("AGGREGATE_USAGE_REPLAY_CONFLICT", "That measured-usage request key was already used with different details.");
   return { usage: result.usage, replayed: result.kind === "replay" };
@@ -90,6 +90,7 @@ export async function releaseOrReverseMeasuredUsageForWorkorder(workorderId, inp
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "idempotency_conflict") fail("AGGREGATE_USAGE_REPLAY_CONFLICT", "That measured-usage request key was already used with different details.");
   if (result.kind === "insufficient_stock") fail("AGGREGATE_USAGE_INSUFFICIENT_STOCK", "The adjustment would make measured inventory negative.");
+  if (result.kind === "unsupported_uom") fail("AGGREGATE_USAGE_UOM_UNSUPPORTED", "Quantity-tracked inventory must be adjusted in whole units.");
   if (result.kind === "terminal") fail("AGGREGATE_USAGE_TERMINAL", "This measured-usage evidence is already released or reversed.");
   return { status: result.kind, replayed: result.kind === "replay" };
 }

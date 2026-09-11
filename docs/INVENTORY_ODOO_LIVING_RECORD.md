@@ -80,6 +80,12 @@ Boundary rule: Workorder Generator may store workflow state and projections. It 
 
 ## Current Verified State
 
+### Tracking-aware manual intake — local implementation, 2026-09-10
+
+Saved catalog tracking now chooses physical intake: serialized parts retain exact-unit creation and labels; `quantity` uses whole counts/packages; `measured_bulk` uses the canonical measurement and precision. Inventory, Create, and saved Workorder aggregate intake reuse `StockIntakeControl`. Catalog selection does not receive or issue stock. Unreviewed count parts are not silently treated as serialized.
+
+The new `/api/office/inventory/parts/:id/locations/:id/stock-intake` endpoint records an idempotent manual intake batch, confirmed receipt, aggregate receipt line, movement, and local balance in one transaction. Migration `130_inventory_manual_stock_intake.sql` is required. It was tested on disposable PostgreSQL, not applied to the configured database. Authenticated in-app verification and deployment remain unverified.
+
 ### Executive verdict
 
 The repository has a self-contained local inventory vertical. Office and Admin
@@ -563,6 +569,19 @@ Each implementation slice records applicable evidence:
 | Product history | `src/server/modules/workorders/unit-service-history.service.js` | Join installed inventory identities without replacing service-history ownership. |
 
 ## Change Log
+
+### INV-20260910-01 — Tracking-aware manual stock intake
+
+- Status: IMPLEMENTED locally; in-app validation pending.
+- Decision/requirement: Add stock according to the part's saved tracking rather than forcing serial identities on all parts.
+- Before: Inventory's location drilldown only offered serialized creation; saved Workorder counted catalog parts always opened the serial picker.
+- After: Quantity and measured-bulk parts have a shared quantity intake control in Inventory/Create/Detail; saved Workorder usage honors explicit quantity policy and whole-number constraints. Serialized paths remain separate and unchanged.
+- Canonical owners: `inventory-stock-intake.repo.js`, `inventory-stock-intake.service.js`, `inventory-aggregate-workorder-usage.repo.js`, `StockIntakeControl.jsx`, `stock-intake-model.js`.
+- Data/API changes: Migration 130 adds manual intake lineage and preserves aggregate usage tracking snapshots. New POST `/stock-intake`; existing location metadata exposes canonical UOM and intake capability.
+- Authorization/security changes: Office/Admin, company and current location scope; request-hash replay; canonical tracking/UOM checks under a catalog lock; legacy authority conflicts fail without adding stock.
+- Verification: Focused frontend tests and build passed; backend route/schema and disposable PostgreSQL migration/transaction tests passed. Final review recorded in external task state.
+- Release evidence: None. No configured database migration, stock receipt, commit, push, or deployment performed.
+- Remaining gaps: In-app browser controls unavailable in this session; authenticated end-to-end receiving and final bulk rendered check not verified.
 
 ### INV-20260824-01 — Baseline audit and target decision record
 

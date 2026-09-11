@@ -378,3 +378,20 @@
     width: 100%;
   }
 }
+.create-stock-dropdown {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 45;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 8px 20px rgb(16 24 40 / 10%);
+  display: grid;
+  gap: 10px;
+}
+.create-stock-dropdown p { margin: 0; color: #475467; }
+.create-stock-dropdown > button { justify-self: end; min-height: 44px; }

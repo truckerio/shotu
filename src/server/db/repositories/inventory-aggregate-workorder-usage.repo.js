@@ -1,6 +1,8 @@
 import { getPool, query } from "../pool.js";
+import { hasQuantityPrecision } from "../../modules/parts/quantity-uom.js";
 
 const MEASURED_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
+const QUANTITY_CATEGORIES = new Set(["count", "packaging"]);
 
 export async function listAggregateWorkorderUsages({
   workorderId,
@@ -72,7 +74,7 @@ export async function reserveAggregateWorkorderUsage(input) {
     }
     const selected = await client.query(
       `select workorder.id, workorder.company_id, workorder.location_id, workorder.status,
-              catalog.uom_code, uom.category
+              catalog.uom_code, catalog.tracking_mode, uom.category, uom.decimal_scale
        from operational_workorders workorder
        join parts_catalog catalog on catalog.company_id=workorder.company_id and catalog.id=$2
        join units_of_measure uom on uom.code=catalog.uom_code
@@ -86,7 +88,12 @@ export async function reserveAggregateWorkorderUsage(input) {
     if (!["accepted", "in_progress"].includes(workorder.status)) {
       await client.query("rollback"); return { kind: "inactive_workorder" };
     }
-    if (!MEASURED_CATEGORIES.has(workorder.category) || workorder.uom_code !== input.uomCode) {
+    const scaleValid = hasQuantityPrecision(input.quantity, Number(workorder.decimal_scale));
+    const supportsMeasured = workorder.tracking_mode === "measured_bulk" && MEASURED_CATEGORIES.has(workorder.category) && scaleValid;
+    const supportsQuantity = workorder.tracking_mode === "quantity" && QUANTITY_CATEGORIES.has(workorder.category)
+      && Number(workorder.decimal_scale) === 0 && Number.isInteger(input.quantity);
+    const supportsLegacyMeasured = workorder.tracking_mode === null && MEASURED_CATEGORIES.has(workorder.category) && scaleValid;
+    if ((!supportsMeasured && !supportsQuantity && !supportsLegacyMeasured) || workorder.uom_code !== input.uomCode) {
       await client.query("rollback"); return { kind: "unsupported_uom" };
     }
     const balance = await client.query(
@@ -108,12 +115,12 @@ export async function reserveAggregateWorkorderUsage(input) {
     );
     const inserted = await client.query(
       `insert into workorder_aggregate_part_usages (
-         company_id, workorder_id, location_id, catalog_part_id, quantity, uom_code,
+         company_id, workorder_id, location_id, catalog_part_id, quantity, uom_code, tracking_mode,
          repair_order, created_by_user_id, idempotency_key, request_hash
-       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
+       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
       [workorder.company_id, input.workorderId, workorder.location_id, input.catalogPartId,
-        input.quantity, input.uomCode, input.repairOrder, input.actorId,
-        input.idempotencyKey, input.requestHash],
+        input.quantity, input.uomCode, supportsQuantity ? "quantity" : "measured_bulk", input.repairOrder,
+        input.actorId, input.idempotencyKey, input.requestHash],
     );
     const usage = inserted.rows[0];
     await client.query(
@@ -158,6 +165,9 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
     );
     const usage = selected.rows[0];
     if (!usage) { await client.query("rollback"); return { kind: "not_found" }; }
+    if (input.action === "adjust" && usage.tracking_mode === "quantity" && !Number.isInteger(input.targetQuantity)) {
+      await client.query("rollback"); return { kind: "unsupported_uom" };
+    }
     const balance = await client.query(
       `select id from inventory_items where company_id=$1 and location_id=$2
        and catalog_part_id=$3 and uom_code=$4 and source_provider='local' limit 1 for update`,
@@ -312,4 +322,4 @@ export async function consumeAggregateUsagesForApproval(client, { workorderId, c
   }
 }
 
-export const aggregateUsageInternals = { MEASURED_CATEGORIES };
+export const aggregateUsageInternals = { MEASURED_CATEGORIES, QUANTITY_CATEGORIES };

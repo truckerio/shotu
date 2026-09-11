@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { uomCodeSchema } from "../parts/quantity-uom.js";
+import { uomCodeSchema, validateQuantityUnit } from "../parts/quantity-uom.js";
 
 export const inventoryTrackingModeSchema = z.enum(["quantity", "serialized", "measured_bulk"]);
 
@@ -87,6 +87,14 @@ export const createPartSerializedUnitsSchema = z.object({
 }).strict().superRefine((value, context) => {
   if (value.conditionCode !== "unknown" && !value.conditionEvidence) context.addIssue({ code: "custom", path: ["conditionEvidence"], message: "Condition evidence is required when asserting a condition." });
 });
+
+export const createAggregateStockIntakeSchema = z.object({
+  quantity: z.number().positive().max(999999.999),
+  uomCode: uomCodeSchema.removeDefault(),
+  trackingMode: z.enum(["quantity", "measured_bulk"]),
+  confirmation: z.literal("physically_present_at_location"),
+  idempotencyKey: z.string().trim().min(8).max(120),
+}).strict().superRefine((value, context) => validateQuantityUnit(value, context));
 
 export const resolveInventoryCodeSchema = z.object({
   code: z.string().trim().min(8).max(2000),

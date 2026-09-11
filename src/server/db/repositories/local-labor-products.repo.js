@@ -9,6 +9,7 @@ function publicProduct(row) {
     name: product.name,
     code: product.code,
     uomCode: product.uomCode,
+    ...(product.description ? { description: product.description } : {}),
     pinned: row.pinned === true,
   };
 }
@@ -16,7 +17,7 @@ function publicProduct(row) {
 export async function listLocalLaborProducts({ companyId, locationId, q = "", limit = 50 }, execute = query) {
   const normalizedQuery = String(q || "").trim().toLowerCase();
   const result = await execute(
-    `select product.id, product.name, product.code, product.uom_code,
+    `select product.id, product.name, product.code, product.description, product.uom_code,
             coalesce(pin.pinned, false) as pinned
        from local_labor_products product
        left join local_labor_product_location_pins pin
@@ -35,7 +36,7 @@ export async function listLocalLaborProducts({ companyId, locationId, q = "", li
 
 export async function findActiveLocalLaborProduct({ companyId, locationId, productId }, execute = query) {
   const result = await execute(
-    `select product.id, product.name, product.code, product.uom_code,
+    `select product.id, product.name, product.code, product.description, product.uom_code,
             coalesce(pin.pinned, false) as pinned
        from local_labor_products product
        join locations location
@@ -51,13 +52,14 @@ export async function findActiveLocalLaborProduct({ companyId, locationId, produ
   return publicProduct(result.rows[0]);
 }
 
-export async function createLocalLaborProduct({ companyId, name, code = "", actorId }) {
+export async function createLocalLaborProduct({ companyId, name, code = "", description = "", actorId }) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [`local-labor-products:${companyId}`]);
     const normalizedName = name.trim().toLowerCase().replace(/\s+/g, " ");
     const normalizedCode = code.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const normalizedDescription = description.trim();
     const conflict = await client.query(
       `select 1 from local_labor_products
         where company_id = $1 and active = true
@@ -71,10 +73,10 @@ export async function createLocalLaborProduct({ companyId, name, code = "", acto
     }
     const inserted = await client.query(
       `insert into local_labor_products (
-         company_id, name, normalized_name, code, normalized_code, created_by_user_id
-       ) values ($1, $2, $3, $4, $5, $6)
-       returning id, name, code, uom_code, false as pinned`,
-      [companyId, name, normalizedName, code, normalizedCode, actorId],
+         company_id, name, normalized_name, code, normalized_code, description, created_by_user_id
+       ) values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, name, code, description, uom_code, false as pinned`,
+      [companyId, name, normalizedName, code, normalizedCode, normalizedDescription, actorId],
     );
     await client.query("commit");
     return { kind: "created", product: publicProduct(inserted.rows[0]) };
@@ -90,7 +92,7 @@ export async function createLocalLaborProduct({ companyId, name, code = "", acto
 export async function setLocalLaborProductPinned({ companyId, locationId, productId, pinned, actorId }, execute = query) {
   const result = await execute(
     `with selected as (
-       select product.company_id, product.id, product.name, product.code, product.uom_code
+       select product.company_id, product.id, product.name, product.code, product.description, product.uom_code
        from local_labor_products product
        join locations location
          on location.company_id = product.company_id and location.id = $2 and location.active = true
@@ -103,7 +105,7 @@ export async function setLocalLaborProductPinned({ companyId, locationId, produc
        set pinned = excluded.pinned, updated_by_user_id = excluded.updated_by_user_id, updated_at = now()
        returning labor_product_id, pinned
      )
-     select selected.id, selected.name, selected.code, selected.uom_code, changed.pinned
+     select selected.id, selected.name, selected.code, selected.description, selected.uom_code, changed.pinned
      from selected join changed on changed.labor_product_id = selected.id`,
     [companyId, locationId, productId, pinned, actorId],
   );

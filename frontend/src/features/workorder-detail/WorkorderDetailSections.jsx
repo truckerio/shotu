@@ -1,8 +1,8 @@
+import { laborProductSelectionPatch } from "../../components/workorders/labor-product-selector-model.js";
 import { getVehicleLocation } from "../../components/workorders/AssetLocationCard.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { WorkorderDetailModuleHost } from "../workorder-modules/WorkorderDetailModuleHost.jsx";
 import { workorderNeedsChatAttention } from "./workorder-detail-sections.js";
-
 export function WorkorderDetailSections({
   activeWorkorder,
   actorId,
@@ -179,7 +179,7 @@ export function WorkorderDetailSections({
       onRegisterSerializedRepairFlush,
       onPartsChange: updateActiveUsedParts,
       onLaborHoursChange: updateActiveLaborHours,
-      onLaborProductChange: (value) => updateField("laborProduct", value), locationId: activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || "",
+      onLaborProductChange: (value) => Object.entries(laborProductSelectionPatch(form, value)).forEach(([field, next]) => updateField(field, next)), locationId: activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || "",
       onLaborRepairOrderChange: (value) => updateField("workPerformed", value),
       onSaveParts: saveActiveUsedParts,
       onSelect: setDetailSection,

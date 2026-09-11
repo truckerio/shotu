@@ -38,9 +38,14 @@ export async function readPartLocationSerialization(catalogPartId, locationId, r
     ...companyReadScope(requestContext),
   });
   if (!result) throw inventoryNotFound();
+  const canWriteLocation = requestContext.actor.role === "admin" || requestContext.locationIds?.has(shopId) === true;
+  const canManageInventory = ["admin", "office"].includes(requestContext.actor.role);
   return {
     ...result,
-    canCreateAtLocation: requestContext.actor.role === "admin" || requestContext.locationIds?.has(shopId) === true,
+    part: { ...result.part, canonicalUomCode: result.part.canonicalUomCode || result.part.uomCode },
+    canCreateAtLocation: canWriteLocation,
+    canReceiveStock: canManageInventory && canWriteLocation
+      && ["quantity", "measured_bulk"].includes(result.part.trackingMode),
   };
 }
 

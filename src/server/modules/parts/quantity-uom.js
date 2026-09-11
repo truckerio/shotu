@@ -13,6 +13,11 @@ const UOM_CODES = UNITS_OF_MEASURE.map((unit) => unit.code);
 export const uomCodeSchema = z.enum(UOM_CODES).default(DEFAULT_UOM_CODE);
 export const quantitySchema = z.coerce.number().positive().max(MAX_QUANTITY);
 
+export function hasQuantityPrecision(quantity, decimalScale = 3) {
+  if (!Number.isFinite(quantity) || !Number.isInteger(decimalScale) || decimalScale < 0 || decimalScale > 3) return false;
+  return quantity === Number(quantity.toFixed(decimalScale));
+}
+
 export function validateQuantityUnit(value, context, quantityPath = ["quantity"]) {
   const definition = getUnitDefinition(value.uomCode);
   const quantity = value[quantityPath.at(-1)];
@@ -24,7 +29,7 @@ export function validateQuantityUnit(value, context, quantityPath = ["quantity"]
     });
     return;
   }
-  if (definition.decimalScale === 0 && !Number.isInteger(quantity)) {
+  if (definition.decimalScale === 0 && !hasQuantityPrecision(quantity, 0)) {
     context.addIssue({
       code: "custom",
       path: quantityPath,
@@ -32,8 +37,7 @@ export function validateQuantityUnit(value, context, quantityPath = ["quantity"]
     });
     return;
   }
-  const scaled = quantity * 1000;
-  if (Math.abs(scaled - Math.round(scaled)) > Number.EPSILON * Math.abs(scaled || 1) * 4) {
+  if (!hasQuantityPrecision(quantity, Math.min(definition.decimalScale, 3))) {
     context.addIssue({
       code: "custom",
       path: quantityPath,

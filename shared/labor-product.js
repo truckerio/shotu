@@ -36,6 +36,7 @@ export function localLaborProductSnapshot(product) {
   if (!product || typeof product !== "object" || Array.isArray(product)) return null;
   const productId = String(product.productId || product.product_id || product.id || "").trim();
   const name = String(product.name || product.displayName || product.display_name || "").trim();
+  const description = String(product.description || "").trim();
   if (!productId || !name) return null;
   return {
     productId,
@@ -43,5 +44,6 @@ export function localLaborProductSnapshot(product) {
     code: String(product.code || product.defaultCode || product.default_code || "").trim(),
     name,
     uomCode: "hr",
+    ...(description ? { description } : {}),
   };
 }

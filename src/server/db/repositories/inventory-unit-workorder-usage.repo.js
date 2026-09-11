@@ -268,7 +268,7 @@ export async function listAvailableSerializedUnitsForCreate({
        select part.id, part.part_number, part.description, part.uom_code,
               location.id as location_id, location.name as location_name,
               uom.category as uom_category, uom.decimal_scale,
-              exists (
+              (part.tracking_mode = 'serialized' or exists (
                 select 1
                   from inventory_receipt_lines tracking_line
                   join inventory_receipts tracking_receipt
@@ -280,7 +280,7 @@ export async function listAvailableSerializedUnitsForCreate({
                    and tracking_line.tracking_mode = 'serial'
                    and tracking_receipt.location_id = location.id
                    and tracking_receipt.provider in ('local', 'local_count', 'local_serialization', 'legacy_tracking')
-              ) as serialization_required
+              )) as serialization_required
        from parts_catalog part
        join locations location on location.company_id = part.company_id
        join units_of_measure uom on uom.code = part.uom_code

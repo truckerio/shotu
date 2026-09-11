@@ -23,9 +23,11 @@
 .labor-product-create-dialog p { color: #667085; margin: 0; }
 .labor-product-create-dialog label { color: #344054; display: grid; font-size: 14px; font-weight: 600; gap: 5px; }
 .labor-product-create-dialog label span { color: #667085; font-weight: 400; }
-.labor-product-create-dialog input { border: 1px solid #d0d5dd; border-radius: 6px; font: inherit; min-height: 40px; padding: 0 10px; }
+.labor-product-create-dialog :is(input, textarea) { border: 1px solid #d0d5dd; border-radius: 6px; font: inherit; min-height: 40px; padding: 0 10px; }
 .labor-product-create-dialog footer { display: flex; gap: 8px; justify-content: flex-end; }
 .labor-product-create-dialog footer button { border: 1px solid #d0d5dd; border-radius: 6px; cursor: pointer; min-height: 44px; padding: 0 12px; }
 .labor-product-create-dialog footer button[type="submit"] { background: #1570ef; border-color: #1570ef; color: #fff; }
 .labor-product-error { color: #b42318 !important; }
 @media (max-width: 640px) { .labor-product-control { min-height: 44px; } .labor-product-popup li { min-height: 48px; } }
+
+.labor-product-create-dialog textarea { padding: 10px; resize: vertical; }

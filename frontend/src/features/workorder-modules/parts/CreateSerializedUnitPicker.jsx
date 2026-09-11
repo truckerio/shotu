@@ -3,6 +3,8 @@ import { SerializedUnitNestedDropdown } from "../../../components/workorders/par
 import { normalizeLocale } from "../../../i18n/index.js";
 import { api } from "../../../lib/api.js";
 import { serializedSelectionPatch } from "./create-parts-model.js";
+import { Button } from "../../../components/ui/Button.jsx";
+import { WorkorderSerializedPartDialog } from "../../../components/workorders/part-requests/WorkorderSerializedPartDialog.jsx";
 
 const TEXT = {
   en: { empty: "No serialized units are available at this location.", error: "Serialized units could not be loaded." },
@@ -25,6 +27,11 @@ export function CreateSerializedUnitPicker({
   const [selectedIds, setSelectedIds] = useState(() => new Set(Array.isArray(part.serializedUnitIds) ? part.serializedUnitIds : []));
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [intakeAllowed, setIntakeAllowed] = useState(false);
+  const [locationName, setLocationName] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [batch, setBatch] = useState(null);
   const selectedIdsRef = useRef(new Set(Array.isArray(part.serializedUnitIds) ? part.serializedUnitIds : []));
   const endpoint = locationId && part.catalogPartId
     ? `/api/workorders/create-inventory/locations/${encodeURIComponent(locationId)}/parts/${encodeURIComponent(part.catalogPartId)}/units?limit=100`
@@ -63,7 +70,22 @@ export function CreateSerializedUnitPicker({
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [endpoint, excludedUnitKey, open, selectedUnitKey]);
+  }, [endpoint, excludedUnitKey, open, selectedUnitKey, revision]);
+
+  useEffect(() => {
+    setIntakeOpen(false);
+    setIntakeAllowed(false);
+    setBatch(null);
+    if (!open || !locationId || !part.catalogPartId) return undefined;
+    let active = true;
+    api(`/api/office/inventory/parts/${encodeURIComponent(part.catalogPartId)}/locations/${encodeURIComponent(locationId)}/units`)
+      .then((result) => {
+        if (!active) return;
+        setIntakeAllowed(result.canCreateAtLocation === true && result.canCreateSerializedUnits === true);
+        setLocationName(result.location?.name || result.location?.locationName || "");
+      }).catch(() => { if (active) setIntakeAllowed(false); });
+    return () => { active = false; };
+  }, [open, locationId, part.catalogPartId]);
 
   function updateSelection(nextIds) {
     selectedIdsRef.current = new Set(nextIds);
@@ -76,6 +98,20 @@ export function CreateSerializedUnitPicker({
   }
 
   if (!open) return null;
+  if (intakeOpen) return <WorkorderSerializedPartDialog
+    open
+    createOnly
+    locationId={locationId}
+    catalogPart={{ id: part.catalogPartId, partNumber: part.partNo, uomCode: part.uomCode, locationName }}
+    locale={locale}
+    onClose={() => setIntakeOpen(false)}
+    onCreated={(result) => {
+      setBatch(result.batch || result.labelBatch || null);
+      setIntakeOpen(false);
+      setRevision((value) => value + 1);
+    }}
+  />;
+  const addUnits = intakeAllowed ? <Button type="button" onClick={() => setIntakeOpen(true)}>{normalizeLocale(locale) === "es" ? "Agregar unidades" : normalizeLocale(locale) === "pa" ? "ਯੂਨਿਟ ਜੋੜੋ" : "Add units"}</Button> : null;
   return (
     <SerializedUnitNestedDropdown
       anchorToPartField
@@ -85,6 +121,9 @@ export function CreateSerializedUnitPicker({
       locale={locale}
       maxSelected={maxSelected}
       emptyMessage={text.empty}
+      emptyAction={addUnits}
+      footerAction={units.length ? addUnits : null}
+      topContent={batch?.printUrl ? <a href={batch.printUrl} target="_blank" rel="noreferrer">Print QR labels</a> : null}
       onClose={onClose}
       onConfirm={commitSelection}
       onSelectionChange={updateSelection}

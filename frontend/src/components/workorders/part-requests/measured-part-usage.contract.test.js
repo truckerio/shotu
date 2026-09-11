@@ -7,7 +7,7 @@ const editor = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), 
 
 test("measured catalog parents use the aggregate endpoint and retain an in-memory retry key", () => {
   assert.match(editor, /getUnitDefinition\(catalogPart\.uomCode\)\?\.category/);
-  assert.match(editor, /MEASURED_UOM_CATEGORIES\.has\(category\)/);
+  assert.match(editor, /\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)/);
   assert.match(source, /const transientKeys = new Map\(\)/);
   assert.match(source, /transientKeys\.has\(storage\)/);
   assert.match(source, /operation: "aggregateUsageReserve"/);
@@ -18,11 +18,16 @@ test("measured selection bypasses manual rows and retains the aggregate-owned re
   assert.match(source, /setCompleted\(true\)/);
   assert.match(source, /await onReserved\?\.\(result\.usage, result\)/);
   assert.match(source, /aggregateReservedRefresh/);
-  assert.match(source, /disabled=\{busy \|\| completed\}/);
-  assert.match(editor, /if \(MEASURED_UOM_CATEGORIES\.has\(category\)\) setMeasuredDialogPart\(catalogPart\)/);
+  assert.match(source, /disabled=\{busy \|\| completed \|\| !amount\.valid\}/);
+  assert.match(editor, /if \(\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)\) setMeasuredDialogPart\(catalogPart\)/);
   assert.match(editor, /function closeMeasuredDialog\(\)/);
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
+});
+
+test("a newly selected measured part starts its repair order from the catalog description", () => {
+  assert.match(source, /import \{ repairOrderAfterCatalogSelection \} from "\.\/catalog-parts-model\.js"/);
+  assert.match(source, /setRepairOrder\(repairOrderAfterCatalogSelection\("", catalogPart\)\)/);
 });
 
 test("aggregate evidence stays in the canonical Parts row hierarchy", () => {

@@ -63,8 +63,8 @@ test("desktop retains the existing create Parts grid", () => {
 });
 
 test("serialized parent selection opens one shared nested dropdown and derives quantity from selected units", () => {
-  assert.match(source, /onOpenSerialPicker\(catalogPart\.inventory\?\.serializationRequired === true \? index : -1\)/);
-  assert.match(source, /onSelectedValueOpen=\{createPartRequiresSerializedUnits\(part\) \? \(\) => onOpenSerialPicker\(index\) : undefined\}/);
+  assert.match(source, /onOpenSerialPicker\(index\)/);
+  assert.match(source, /onSelectedValueOpen=\{part\.catalogPartId \? \(\) => onOpenSerialPicker\(index\) : undefined\}/);
   assert.match(source, /onSelectedValueClose=\{\(\) => onOpenSerialPicker\(-1\)\}/);
   assert.match(source, /selectedValueOpen=\{serialPickerIndex === index\}/);
   assert.doesNotMatch(source, /Choose serial numbers|Select at least one exact serial number/);
@@ -97,11 +97,10 @@ test("serialized parent selection opens one shared nested dropdown and derives q
   assert.match(nestedCss, /max-height:\s*min\(34rem, calc\(100dvh - 32px\)\)/);
 });
 
-test("catalog selection never writes the description into Repair order", () => {
-  assert.match(source, /function repairOrderAfterNestedSelection/);
-  assert.match(source, /repairOrder:\s*repairOrderAfterNestedSelection\(part\.repairOrder, catalogPart\)/);
-  assert.match(source, /current\.localeCompare\(description/);
-  assert.doesNotMatch(source, /repairOrderAfterCatalogSelection/);
+test("catalog and scanned selections carry descriptions into each Repair order", () => {
+  assert.match(source, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart, part\.catalogPartId\)/);
+  assert.equal((source.match(/repairOrder: repairOrderAfterCatalogSelection\("", unit\)/g) || []).length, 2);
+  assert.doesNotMatch(source, /repairOrderAfterNestedSelection/);
 });
 
 test("help aligns with the visible Parts heading in both layouts", () => {
