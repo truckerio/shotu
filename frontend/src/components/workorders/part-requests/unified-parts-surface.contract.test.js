@@ -95,6 +95,7 @@ test("office allocation choices are exclusively server-provided transitions", ()
   assert.match(officeCard, /nextStatuses\.map\(\(status\) => <option value=\{status\} key=\{status\}>/);
   assert.match(officeCard, /: <span className="allocation-source-status">\{statusLabel\}<\/span>/);
   assert.doesNotMatch(officeCard, /Object\.entries\(ALLOCATION_STATUS_LABELS\)\.map/);
+  assert.doesNotMatch(officeCard, /GetPartsFlow|parts\.getParts|part-fulfillments/);
 });
 
 test("new compact controls retain touch-safe mobile geometry", () => {

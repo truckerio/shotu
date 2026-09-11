@@ -25,6 +25,7 @@ let cancellationWorkorderId;
 let acceptedWorkorderId;
 let mechanicCreatedWorkorderId;
 let inventoryId;
+let cancellationCatalogPartId;
 
 try {
   companyId = (await query(
@@ -232,6 +233,27 @@ try {
      ) values ($1, $2, $3, $3, $4, 2, 'pc', 'approved') returning id`,
     [cancellationTarget.id, mechanicId, `CANCEL-${suffix}`, `cancel-${suffix}`],
   )).rows[0].id;
+  cancellationCatalogPartId = (await query(
+    `insert into parts_catalog (
+       company_id, part_number, normalized_part_number, description, uom_code
+     ) values ($1, $2, $3, $4, 'pc') returning id`,
+    [companyId, `CANCEL-FULFILLMENT-${suffix}`, `cancelfulfillment${suffix}`.replace(/[^a-z0-9]/g, ""), "Cancellation fulfillment fixture"],
+  )).rows[0].id;
+  const fulfillmentRequestId = (await query(
+    `insert into part_fulfillment_requests (
+       company_id, workorder_id, catalog_part_id, destination_location_id,
+       quantity, uom_code, idempotency_key, request_hash, created_by_user_id,
+       state
+     ) values ($1, $2, $3, $4, 1, 'pc', $5, $6, $7, 'approved') returning id`,
+    [companyId, cancellationTarget.id, cancellationCatalogPartId, locationId, `cancel-fulfillment-${suffix}`, "a".repeat(64), officeId],
+  )).rows[0].id;
+  await query(
+    `insert into part_fulfillment_legs (
+       company_id, fulfillment_request_id, route_type, source_location_id,
+       destination_location_id, quantity, uom_code, state
+     ) values ($1, $2, 'internal_transfer', null, $3, 1, 'pc', 'backordered')`,
+    [companyId, fulfillmentRequestId, locationId],
+  );
   await query(
     `insert into part_allocations (
        part_request_id, source_type, status, quantity, uom_code,
@@ -247,6 +269,8 @@ try {
   assert.equal((await query("select quantity_reserved from inventory_items where id = $1", [inventoryId])).rows[0].quantity_reserved, "0.000");
   assert.equal((await query("select status from part_allocations where part_request_id = $1", [partRequestId])).rows[0].status, "cancelled");
   assert.equal((await query("select approval_status from workorder_part_requests where id = $1", [partRequestId])).rows[0].approval_status, "cancelled");
+  assert.equal((await query("select state from part_fulfillment_requests where id = $1", [fulfillmentRequestId])).rows[0].state, "cancelled");
+  assert.equal((await query("select state from part_fulfillment_legs where fulfillment_request_id = $1", [fulfillmentRequestId])).rows[0].state, "cancelled");
   assert.equal((await query(
     "select count(*)::int as count from workorder_mechanic_assignments where workorder_id = $1 and active = true",
     [cancellationTarget.id],
@@ -263,8 +287,12 @@ try {
     approvalActor: true,
     protectedMechanicEvidence: true,
     transactionalCancellationCleanup: true,
+    unsourcedBackorderCancellation: true,
   }));
 } finally {
+  if (cancellationWorkorderId) {
+    await query("delete from part_fulfillment_requests where workorder_id = $1", [cancellationWorkorderId]).catch(() => {});
+  }
   if (primaryWorkorderId || cancellationWorkorderId || acceptedWorkorderId || mechanicCreatedWorkorderId) {
     await query("delete from operational_workorders where id = any($1::uuid[])", [[
       primaryWorkorderId,
@@ -274,6 +302,7 @@ try {
     ].filter(Boolean)]).catch(() => {});
   }
   if (inventoryId) await query("delete from inventory_items where id = $1", [inventoryId]).catch(() => {});
+  if (cancellationCatalogPartId) await query("delete from parts_catalog where id = $1", [cancellationCatalogPartId]).catch(() => {});
   if (companyId) await query("delete from workorder_serial_counters where company_id = $1", [companyId]).catch(() => {});
   const userIds = [mechanicId, joiningMechanicId, officeId].filter(Boolean);
   if (userIds.length) await query("delete from user_profiles where id = any($1::uuid[])", [userIds]).catch(() => {});

@@ -17,7 +17,6 @@ import {
 import { RequestSummary } from "./RequestSummary.jsx";
 import { RepairHistorySuggestions } from "./RepairHistorySuggestions.jsx";
 import { useOfficeRequestReview } from "./useOfficeRequestReview.js";
-import { GetPartsFlow } from "../../../features/inventory/GetPartsFlow.jsx";
 import { interfaceText } from "../../../i18n/index.js";
 import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
 
@@ -139,20 +138,6 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
         </>
       ) : (
         <>
-          {request.approvalStatus === "approved" && request.catalogPartId ? (
-            <details className="part-get-parts-flow">
-              <summary>{t("parts.getParts")}</summary>
-              <GetPartsFlow
-                workorderId={detail.workorder.id}
-                catalogPartId={request.catalogPartId}
-                partLabel={request.partNumber || request.description || t("parts.selectedPart")}
-                destinationLocationId={detail.workorder.locationId}
-                defaultQuantity={request.quantity}
-                defaultUomCode={request.uomCode}
-                onComplete={onChanged}
-              />
-            </details>
-          ) : null}
           {request.repairOrder ? <p className="part-repair-order">{request.repairOrder}</p> : null}
           {request.allocations.length ? (
             <div className="part-allocation-list office-allocation-list">

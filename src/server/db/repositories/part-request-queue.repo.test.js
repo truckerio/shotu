@@ -13,7 +13,7 @@ test("unresolved request queue keeps its tenant, location, lifecycle, supply, an
   assert.match(source, /pr\.approval_status = 'approved'/);
   assert.match(source, /allocation\.status in \('issued', 'installed'\)/);
   assert.doesNotMatch(source, /usage_status not in \('issued', 'installed'\)/);
-  assert.doesNotMatch(source, /item\.source_provider = 'local'/);
+  assert.match(source, /item\.source_provider = 'local'/);
   assert.match(source, /item\.company_id = wo\.company_id/);
   assert.match(source, /allocation\.part_request_id = pr\.id/);
   assert.doesNotMatch(source, /part_fulfillment_requests/);
