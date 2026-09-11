@@ -710,7 +710,10 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
       );
     }
     if (![PART_APPROVAL_STATUS.SUBMITTED, PART_APPROVAL_STATUS.NEEDS_INFO].includes(request.approval_status)) {
-      throw new Error("This part request was already reviewed.");
+      throw new PartWorkflowConflictError(
+        "PART_REQUEST_ALREADY_REVIEWED",
+        "This part request was already reviewed.",
+      );
     }
     const inputAllocations = Array.isArray(input.allocations) ? input.allocations : [];
     const values = {

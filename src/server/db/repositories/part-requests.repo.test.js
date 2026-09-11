@@ -72,6 +72,14 @@ test("decision and usage mutations reject terminal workorders before request, ac
   assert.doesNotMatch(usage, /addSystemMessage/);
 });
 
+test("a stale duplicate decision returns a lifecycle conflict instead of an internal error", async () => {
+  const source = await readFile(repositoryUrl, "utf8");
+  const decision = source.slice(source.indexOf("export async function decidePartRequest"), source.indexOf("async function applyInventoryAllocationTransition"));
+
+  assert.match(decision, /PART_REQUEST_ALREADY_REVIEWED/);
+  assert.match(decision, /throw new PartWorkflowConflictError/);
+});
+
 test("legacy mechanic usage entry point fails closed before any database mutation", async () => {
   const source = await readFile(repositoryUrl, "utf8");
   const usage = source.slice(source.indexOf("export async function updatePartUsage"));
