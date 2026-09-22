@@ -6,11 +6,6 @@
 .shared-upload-heading h2,.shared-upload-heading p { margin:0; }
 .shared-upload-heading h2 { color:#101828; font-size:20px; }
 .shared-upload-heading p { color:#667085; font-size:13px; }
-.shared-upload-heading>button { align-items:center; background:transparent; border:0; border-radius:8px; color:#475467; cursor:pointer; display:inline-flex; flex:0 0 auto; height:40px; justify-content:center; padding:10px; width:40px; }
-.shared-upload-heading>button:hover { background:#f2f4f7; }
-.shared-upload-heading>button:focus-visible { outline:3px solid #84caff; outline-offset:2px; }
-.shared-upload-heading>button:disabled { color:#98a2b3; cursor:not-allowed; }
-.shared-upload-heading svg { height:18px; width:18px; }
 .shared-upload-body { display:grid; gap:16px; }
 .shared-upload-body form { display:grid; gap:16px; }
 .shared-upload-field { color:#175cd3; display:grid; font-size:13px; font-weight:700; gap:8px; min-width:0; }

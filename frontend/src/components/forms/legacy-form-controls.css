@@ -74,6 +74,11 @@ textarea:focus {
 }
 
 .button {
+  box-sizing: border-box;
+  vertical-align: middle;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   align-items: center;
   background: #fff;
   border: 1px solid #d5d7da;
@@ -88,7 +93,7 @@ textarea:focus {
   min-height: 42px;
   padding: 9px 14px;
   text-decoration: none;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .download-link {
@@ -117,14 +122,14 @@ textarea:focus {
   background: #1570ef;
   border-color: #1570ef;
   color: #fff;
-  min-height: 46px;
+  min-height: 42px;
 }
 
 .button.success {
   background: #067647;
   border-color: #067647;
   color: #fff;
-  min-height: 46px;
+  min-height: 42px;
 }
 
 .button:hover {
@@ -148,3 +153,6 @@ textarea:focus {
 .button.success:focus-visible {
   box-shadow: 0 0 0 3px #d1fadf;
 }
+
+.shared-action-row {display:flex;align-items:center;flex-wrap:wrap;gap:10px;min-width:0;}
+.shared-action-row > .button {margin:0;}

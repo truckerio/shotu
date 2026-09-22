@@ -45,6 +45,26 @@ export function OperationalCollectionTabs({ items, activeId, onChange, ariaLabel
   );
 }
 
+export function OperationalCollectionSectionHeader({ items, activeId, onChange, ariaLabel, actions = null, className = "", headingLevel = 1 }) {
+  const activeItem = items.find((item) => item.id === activeId) || items[0];
+  const Heading = headingLevel === 2 ? "h2" : "h1";
+
+  return (
+    <header className={joinClasses("operational-collection-section-header", className)}>
+      <Heading>{activeItem?.label}</Heading>
+      <nav className="operational-collection-section-nav" aria-label={ariaLabel}>
+        {items.filter((item) => item.id !== activeItem?.id).map((item) => (
+          <button key={item.id} type="button" onClick={() => onChange(item.id)}>
+            <span>{item.label}</span>
+            {item.count !== undefined ? <strong aria-label={item.countLabel}>{item.count}</strong> : null}
+          </button>
+        ))}
+      </nav>
+      {actions ? <div className="operational-collection-section-actions page-header-actions">{actions}</div> : null}
+    </header>
+  );
+}
+
 export function OperationalCollectionToolbar({ children, className = "" }) {
   return <div className={joinClasses("operational-collection-toolbar", className)}>{children}</div>;
 }

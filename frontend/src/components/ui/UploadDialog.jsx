@@ -1,6 +1,8 @@
 import { useId } from "react";
 import { UploadCloud02, XClose } from "@untitledui/icons";
-import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
+import { Heading } from "react-aria-components";
+import { IconButton } from "./IconButton.jsx";
+import { ModalFrame } from "./ModalFrame.jsx";
 import "./upload-dialog.css";
 
 export function UploadDialog({
@@ -20,31 +22,28 @@ export function UploadDialog({
   const titleId = useId();
 
   return (
-    <ModalOverlay
-      className="shared-upload-overlay"
+    <ModalFrame
+      overlayClassName="shared-upload-overlay"
+      modalClassName="shared-upload-modal"
+      dialogClassName="shared-upload-dialog"
+      ariaLabelledBy={titleId}
       isOpen={isOpen}
       isDismissable={isDismissable}
       onOpenChange={onOpenChange}
     >
-      <Modal className="shared-upload-modal">
-        <Dialog className="shared-upload-dialog" aria-labelledby={titleId}>
           <div className="shared-upload-heading">
             <div>
               <Heading slot="title" id={titleId}>{title}</Heading>
               {description ? <p>{description}</p> : null}
             </div>
-            <button type="button" aria-label={closeLabel} onClick={() => onOpenChange?.(false)} disabled={closeDisabled}>
-              <XClose aria-hidden="true" />
-            </button>
+            <IconButton icon={XClose} label={closeLabel} onClick={() => onOpenChange?.(false)} disabled={closeDisabled} />
           </div>
           <div className="shared-upload-body">{children}</div>
           {actions ? <div className="shared-upload-actions">{actions}</div> : null}
           {error ? <p className="ops-error shared-upload-feedback" role="alert" aria-live="assertive">{error}</p> : null}
           {status ? <p className="shared-upload-status" role="status">{status}</p> : null}
           {footer ? <div className="shared-upload-footer">{footer}</div> : null}
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+    </ModalFrame>
   );
 }
 

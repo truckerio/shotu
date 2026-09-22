@@ -1,0 +1,16 @@
+import { z } from 'zod';
+const id=z.string().uuid();
+const base={locationId:id,idempotencyKey:id,reason:z.string().trim().min(1).max(500)};
+const quantity=z.number().min(0).max(999999.999);
+export const stockTaskQuery=z.object({locationId:id,kind:z.enum(['damage','transfer','count']).optional(),page:z.coerce.number().int().positive().max(100000).default(1)}).strict();
+export const stockTaskDetailQuery=z.object({taskId:id,locationId:id,kind:z.enum(['damage','transfer'])}).strict();
+export const stockTaskCommand=z.discriminatedUnion('action',[
+ z.object({...base,action:z.enum(['damage','transfer','count']),catalogPartId:id,quantity,expectedBalanceRevision:z.string().min(1).max(30),destinationId:id.optional(),sourceAllocations:z.array(z.object({positionId:id,quantity:quantity.positive()}).strict()).max(1000).optional(),blindReceiving:z.boolean().default(false),serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().min(1).max(240)}).strict(),
+ z.object({...base,action:z.literal('receive_transfer'),taskId:id,expectedVersion:z.number().int().positive(),quantity:quantity,serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().min(1).max(240),targetPositionId:id,disposition:z.enum(['good','damaged']).default('good')}).strict(),
+ z.object({...base,action:z.literal('receive_transfer_return'),taskId:id,expectedVersion:z.number().int().positive(),quantity,serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().min(1).max(240),targetPositionId:id}).strict(),
+ z.object({...base,action:z.literal('request_transfer_return'),taskId:id,expectedVersion:z.number().int().positive(),serialNumbers:z.array(z.string()).max(0).default([]),holder:z.string().trim().min(1).max(240)}).strict(),
+ z.object({...base,action:z.literal('report_transfer_discrepancy'),taskId:id,expectedVersion:z.number().int().positive(),discrepancyType:z.enum(['short','extra']),quantity:quantity.positive(),serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().min(1).max(240),targetPositionId:id.optional()}).strict(),
+ z.object({...base,action:z.literal('resolve_transfer_discrepancy'),taskId:id,expectedVersion:z.number().int().positive(),discrepancyId:id,resolutionType:z.enum(['received_or_returned','lost_in_transit','extra_returned']),quantity:quantity.positive().optional(),resolutionReference:z.string().trim().min(1).max(500),serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().min(1).max(240)}).strict(),
+ z.object({...base,action:z.literal('release'),taskId:id,expectedVersion:z.number().int().positive(),serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().min(1).max(240),targetPositionId:id}).strict(),
+ z.object({...base,action:z.enum(['repair','scrap','approve_count','recount','cancel_count']),taskId:id,expectedVersion:z.number().int().positive(),quantity:quantity.optional(),serialNumbers:z.array(z.string().trim().min(1).max(4000)).max(1000).default([]),holder:z.string().trim().max(240).default('')}).strict(),
+]);

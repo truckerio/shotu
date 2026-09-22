@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button.jsx";
+import { DatePicker } from "../../components/forms/DatePicker.jsx";
 import { api } from "../../lib/api.js";
 import "./get-parts-flow.css";
 
@@ -32,7 +33,7 @@ export function GetPartsFlow({ workorderId, catalogPartId = "", partLabel = "Sel
       <div className="get-parts-selected-part"><span>Part</span><strong>{partLabel}</strong></div>
       <label><span>Quantity</span><input type="number" min="0.001" step="0.001" value={form.quantity} onChange={update("quantity")} required /></label>
       <label><span>Unit</span><input value={form.uomCode} onChange={update("uomCode")} required /></label>
-      <label><span>Needed by <small>Optional</small></span><input type="date" value={form.neededBy} onChange={update("neededBy")} /></label>
+      <label><span>Needed by <small>Optional</small></span><DatePicker value={form.neededBy} onChange={update("neededBy")} aria-label="Needed by" /></label>
       <Button type="submit" variant="primary" disabled={busy}>{busy ? "Finding route…" : "Find parts"}</Button>
     </form> : <div className="get-parts-result" aria-live="polite">
       <strong>{fulfillment.state === "approved" ? "Recommendation approved" : routeLabel(fulfillment.legs[0])}</strong>

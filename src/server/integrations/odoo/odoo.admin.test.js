@@ -13,7 +13,7 @@ import {
   odooOutboundWarehouseMappingSchema,
 } from "./odoo.admin.schemas.js";
 import { buildOdooInventoryBalances, repairTextFromOdooLine } from "./odoo.admin.repo.js";
-import { readOdooCatalogProducts, readOdooServiceHistory } from "./odoo.admin.service.js";
+import { readOdooCatalogProducts, readOdooPurchaseHistory, readOdooServiceHistory } from "./odoo.admin.service.js";
 
 test("Odoo configuration requires a complete connection without accepting extra secrets", () => {
   assert.equal(odooConfigurationSchema.parse({
@@ -128,6 +128,31 @@ test("Odoo client marks a response timeout as an unknown transport outcome", asy
     () => client.authenticate(),
     (error) => error.code === "ODOO_CONNECTION_TIMEOUT",
   );
+});
+
+test("Odoo purchase history reads confirmed orders and their price lines", async () => {
+  const calls = [];
+  const fields = {
+    id: {}, name: {}, state: {}, date_order: {}, date_approve: {}, partner_id: {}, currency_id: {},
+    amount_total: {}, write_date: {}, company_id: {}, order_id: {}, sequence: {}, display_type: {},
+    product_id: {}, product_qty: {}, qty_received: {}, qty_invoiced: {}, product_uom: {}, price_unit: {},
+    price_subtotal: {}, price_total: {}, date_planned: {},
+  };
+  const client = { async authenticate() { return 17; }, async execute(model, method, args, kwargs) {
+    calls.push({ model, method, args, kwargs });
+    if (method === "fields_get") return fields;
+    if (model === "res.users") return [{ id: 17, company_id: [3, "Pro Tec"] }];
+    if (model === "purchase.order") return [{ id: 20, name: "P00020", state: "purchase" }];
+    if (model === "purchase.order.line") return [{ id: 201, order_id: [20, "P00020"], product_id: [7, "Filter"], price_unit: 12.5 }];
+    return [];
+  } };
+  const result = await readOdooPurchaseHistory(client);
+  assert.deepEqual(result.activeOrderIds, ["20"]);
+  assert.equal(result.lines[0].price_unit, 12.5);
+  const orderRead = calls.find((call) => call.model === "purchase.order" && call.method === "search_read");
+  assert.deepEqual(orderRead.args[0][0], ["company_id", "=", 3]);
+  assert.deepEqual(orderRead.args[0][1], ["state", "in", ["purchase", "done"]]);
+  assert.ok(calls.some((call) => call.model === "purchase.order.line" && call.method === "search_read" && call.args[0].some((term) => term[0] === "order_id")));
 });
 
 test("Odoo migration preserves explicit unmatched mapping state and immutable external identity", async () => {
@@ -406,6 +431,7 @@ test("catalog sync durably queues service history without waiting for its provid
   const catalogSync = source.slice(source.indexOf("export async function syncOdooPartsAndInventory"));
   assert.match(catalogSync, /const inventoryResult = await importOdooInventory[\s\S]*enqueueIntegrationJob/);
   assert.match(catalogSync, /jobType: "service_history_sync"/);
+  assert.match(catalogSync, /jobType: "purchase_history_sync"/);
   assert.match(catalogSync, /idempotencyKey: `odoo:service-history:/);
   assert.doesNotMatch(catalogSync, /readOdooServiceHistory/);
   assert.match(source, /export async function syncOdooServiceHistory[\s\S]*markServiceHistorySyncSucceeded[\s\S]*providerWatermark: syncStartedAt/);
@@ -425,6 +451,8 @@ test("Odoo history jobs are registered with the shared retry worker", async () =
   assert.match(adapter, /provider: "odoo"/);
   assert.match(adapter, /async service_history_sync\(job\)/);
   assert.match(adapter, /syncOdooServiceHistory\(job\.company_id\)/);
+  assert.match(adapter, /async purchase_history_sync\(job\)/);
+  assert.match(adapter, /syncOdooPurchaseHistory\(job\.company_id\)/);
   assert.match(worker, /odoo\/odoo\.adapter\.js/);
   assert.match(routes, /syncOdooPartsAndInventory\(companyId, \{ requestId: req\.requestId \}\)/);
 });

@@ -163,6 +163,7 @@ export function OfficeRequestCard({ request, detail, onChanged }) {
               <SearchMd /> {review.busy === "prices" ? t("parts.searchingCurrentPrices") : t("parts.findCurrentPrices")}
             </button>
           ) : null}
+          {request.purchaseSupply?.readyAtShop?<p className="part-request-note"><strong>Part ready at shop.</strong> Hand it to the Workorder through the existing inventory supply flow.</p>:request.purchaseSupply?.incomingQuantity>0?<p className="part-request-note">Ordered · {formatQuantityUnit(request.purchaseSupply.incomingQuantity,request.uomCode)} incoming.</p>:null}
           {review.pricing?.listings?.length ? (
             <div className="part-price-results">
               {review.pricing.listings.slice(0, 3).map((listing) => (

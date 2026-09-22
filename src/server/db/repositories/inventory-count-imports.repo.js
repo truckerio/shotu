@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch } from "./inventory-labels.repo.js";
+import { placeAggregateInventoryReceipt, placeSerializedInventoryReceipt } from "./inventory-positions.repo.js";
 import {
   inspectInventoryAuthority,
   recordInventoryAuthorityCutover,
@@ -8,6 +9,16 @@ import {
 } from "./inventory-authority.repo.js";
 
 const INVENTORY_COUNT_BATCH_UNIT_LIMIT = 500;
+function hasPrecision(value, scale) {
+  const factor = 10 ** Number(scale);
+  return Number.isFinite(Number(value)) && Math.abs(Math.round(Number(value) * factor) - Number(value) * factor) < 1e-8;
+}
+function validCatalogQuantity({ trackingMode, decimalScale = 0, quantity }) {
+  const value = Number(quantity);
+  if (!Number.isFinite(value) || value <= 0 || value > 500) return false;
+  if (trackingMode === "quantity" || trackingMode === "serialized") return Number.isInteger(value);
+  return trackingMode === "measured_bulk" && hasPrecision(value, Number(decimalScale));
+}
 
 function publicLine(row) {
   return {
@@ -18,6 +29,8 @@ function publicLine(row) {
     sourceDescription: row.source_description,
     sourceBinLocation: row.source_bin_location,
     binLocation: row.reviewed_bin_location,
+    targetPositionId: row.target_position_id || null,
+    targetPositionPath: row.target_position_path || "",
     sourceQuantity: row.source_quantity_text,
     quantity: row.quantity === null ? null : Number(row.quantity),
     averageCost: row.average_cost === null ? null : Number(row.average_cost),
@@ -27,6 +40,7 @@ function publicLine(row) {
     manufacturer: row.manufacturer || "",
     uomCode: row.uom_code || "ea",
     trackingMode: row.tracking_mode || null,
+    decimalScale: row.decimal_scale === null || row.decimal_scale === undefined ? null : Number(row.decimal_scale),
     matchStatus: row.match_status,
     resolutionSource: row.resolution_source,
     appliedReceiptId: row.applied_receipt_id || null,
@@ -90,10 +104,22 @@ async function loadImport(client, { importId, companyIds, locationIds = [], isAd
   if (!source) return null;
   const lines = await client.query(
     `select line.*, catalog.part_number, catalog.description as catalog_description,
-            catalog.manufacturer, catalog.uom_code, catalog.tracking_mode
+            catalog.manufacturer, catalog.uom_code, catalog.tracking_mode, uom.decimal_scale,
+            position_path.path as target_position_path
      from inventory_count_import_lines line
      left join parts_catalog catalog
        on catalog.company_id = line.company_id and catalog.id = line.catalog_part_id
+     left join units_of_measure uom on uom.code = catalog.uom_code and uom.active
+     left join lateral (
+       with recursive ancestors as (
+         select position.id,position.parent_id,position.name,0 depth
+         from inventory_positions position where position.company_id=line.company_id and position.id=line.target_position_id
+         union all
+         select parent.id,parent.parent_id,parent.name,ancestors.depth+1
+         from inventory_positions parent join ancestors on ancestors.parent_id=parent.id
+         where parent.company_id=line.company_id
+       ) select string_agg(name,' / ' order by depth desc) path from ancestors
+     ) position_path on true
      where line.company_id = $1 and line.import_id = $2
      order by line.source_row, line.id`,
     [source.company_id, source.id],
@@ -129,7 +155,7 @@ async function refreshCounts(client, companyId, importId) {
          updated_at = now()
      from (
        select count(*) filter (where match_status = 'ready')::integer as ready_count,
-              count(*) filter (where match_status in ('unmatched', 'duplicate', 'invalid_quantity'))::integer as exception_count,
+              count(*) filter (where match_status in ('unmatched', 'duplicate', 'invalid_quantity', 'position_required'))::integer as exception_count,
               count(*) filter (where match_status = 'applied')::integer as applied_count,
               count(*) filter (where match_status not in ('applied', 'ignored'))::integer as remaining_count
        from inventory_count_import_lines
@@ -202,9 +228,10 @@ export async function createInventoryCountImport({
     }
     const normalized = [...new Set(rows.map((row) => row.normalizedPartNumber))];
     const catalog = await client.query(
-      `select id, normalized_part_number, tracking_mode
-       from parts_catalog
-       where company_id = $1 and normalized_part_number = any($2::text[])`,
+      `select catalog.id, catalog.normalized_part_number, catalog.tracking_mode, uom.decimal_scale
+       from parts_catalog catalog
+       join units_of_measure uom on uom.code = catalog.uom_code and uom.active
+       where catalog.company_id = $1 and catalog.normalized_part_number = any($2::text[])`,
       [target.company_id, normalized],
     );
     const catalogByNumber = new Map(catalog.rows.map((part) => [part.normalized_part_number, part]));
@@ -215,13 +242,14 @@ export async function createInventoryCountImport({
     const prepared = rows.map((row) => {
       const matchedPart = catalogByNumber.get(row.normalizedPartNumber) || null;
       const catalogPartId = matchedPart?.id || null;
-      let matchStatus = "ready";
+      let matchStatus = "position_required";
       if (!row.quantity) matchStatus = "invalid_quantity";
       else if ((occurrenceCount.get(row.normalizedPartNumber) || 0) > 1) matchStatus = "duplicate";
       else if (!catalogPartId || !matchedPart.tracking_mode) matchStatus = "unmatched";
+      else if (!validCatalogQuantity({ trackingMode: matchedPart.tracking_mode, decimalScale: matchedPart.decimal_scale, quantity: row.quantity })) matchStatus = "invalid_quantity";
       return {
         ...row,
-        catalogPartId: matchStatus === "ready" ? catalogPartId : null,
+        catalogPartId: ["position_required", "ready"].includes(matchStatus) ? catalogPartId : null,
         matchStatus,
         resolutionSource: matchStatus === "ready" ? "exact" : "none",
       };
@@ -255,7 +283,7 @@ export async function createInventoryCountImport({
        from jsonb_to_recordset($3::jsonb) as input(
          id uuid, source_row integer, source_part_number text, source_part_name text,
          source_description text, source_bin_location text, source_quantity_text text,
-         quantity integer, average_cost numeric, catalog_part_id uuid,
+         quantity numeric, average_cost numeric, catalog_part_id uuid,
          match_status text, resolution_source text
        )`,
       [target.company_id, importId, JSON.stringify(prepared.map((row) => ({
@@ -332,6 +360,7 @@ export async function resolveInventoryCountImportLine({
   catalogPartId,
   quantity,
   binLocation,
+  targetPositionId,
 }) {
   const client = await getPool().connect();
   try {
@@ -354,7 +383,7 @@ export async function resolveInventoryCountImportLine({
       return { kind: "stale" };
     }
     const line = await client.query(
-      `select id, catalog_part_id, quantity, reviewed_bin_location, match_status
+      `select id, catalog_part_id, quantity, reviewed_bin_location, target_position_id, match_status
        from inventory_count_import_lines
        where company_id = $1 and import_id = $2 and id = $3
        limit 1 for update`,
@@ -368,15 +397,17 @@ export async function resolveInventoryCountImportLine({
     if (action === "ignore") {
       updatedLine = await client.query(
         `update inventory_count_import_lines
-         set match_status = 'ignored', catalog_part_id = null, quantity = null,
+         set match_status = 'ignored', catalog_part_id = null, quantity = null, target_position_id = null,
              resolution_source = 'manual', updated_at = now()
          where company_id = $1 and import_id = $2 and id = $3
-         returning catalog_part_id, quantity, reviewed_bin_location, match_status`,
+         returning catalog_part_id, quantity, reviewed_bin_location, target_position_id, match_status`,
         [stocktake.company_id, stocktake.id, lineId],
       );
     } else {
       const catalog = await client.query(
-        `select id, tracking_mode from parts_catalog where company_id = $1 and id = $2 limit 1`,
+        `select catalog.id, catalog.tracking_mode, catalog.uom_code, uom.decimal_scale
+         from parts_catalog catalog join units_of_measure uom on uom.code=catalog.uom_code and uom.active
+         where catalog.company_id = $1 and catalog.id = $2 limit 1 for share`,
         [stocktake.company_id, catalogPartId],
       );
       if (!catalog.rows[0]) {
@@ -386,6 +417,21 @@ export async function resolveInventoryCountImportLine({
       if (!catalog.rows[0].tracking_mode) {
         await client.query("rollback");
         return { kind: "tracking_required" };
+      }
+      if (!validCatalogQuantity({ trackingMode: catalog.rows[0].tracking_mode, decimalScale: catalog.rows[0].decimal_scale, quantity })) {
+        await client.query("rollback");
+        return { kind: "quantity_invalid" };
+      }
+      const position = await client.query(
+        `select id from inventory_positions
+         where company_id = $1 and location_id = $2 and id = $3
+           and is_active and can_store and is_pickable and usage = 'storage' and system_key is null
+         limit 1 for update`,
+        [stocktake.company_id, stocktake.location_id, targetPositionId],
+      );
+      if (!position.rows[0]) {
+        await client.query("rollback");
+        return { kind: "position_invalid" };
       }
       const duplicate = await client.query(
         `select 1 from inventory_count_import_lines
@@ -401,16 +447,17 @@ export async function resolveInventoryCountImportLine({
       updatedLine = await client.query(
         `update inventory_count_import_lines
          set match_status = 'ready', catalog_part_id = $4, quantity = $5,
-             reviewed_bin_location = $6, resolution_source = 'manual', updated_at = now()
+             reviewed_bin_location = $6, target_position_id = $7, resolution_source = 'manual', updated_at = now()
          where company_id = $1 and import_id = $2 and id = $3
-         returning catalog_part_id, quantity, reviewed_bin_location, match_status`,
-        [stocktake.company_id, stocktake.id, lineId, catalogPartId, quantity, binLocation],
+         returning catalog_part_id, quantity, reviewed_bin_location, target_position_id, match_status`,
+        [stocktake.company_id, stocktake.id, lineId, catalogPartId, quantity, binLocation, targetPositionId],
       );
     }
     const reviewState = (row) => ({
       catalogPartId: row.catalog_part_id || null,
       quantity: row.quantity === null ? null : Number(row.quantity),
       reviewedBinLocation: row.reviewed_bin_location,
+      targetPositionId: row.target_position_id || null,
       matchStatus: row.match_status,
     });
     await client.query(
@@ -492,10 +539,11 @@ export async function applyInventoryCountImport({
     ]);
     const ready = await client.query(
       `select line.*, catalog.part_number, catalog.normalized_part_number,
-              catalog.description as catalog_description, catalog.uom_code, catalog.tracking_mode
+              catalog.description as catalog_description, catalog.uom_code, catalog.tracking_mode, uom.decimal_scale
        from inventory_count_import_lines line
        join parts_catalog catalog
          on catalog.company_id = line.company_id and catalog.id = line.catalog_part_id
+       join units_of_measure uom on uom.code=catalog.uom_code and uom.active
        where line.company_id = $1 and line.import_id = $2 and line.match_status = 'ready'
        order by line.source_row, line.id
        for update of line`,
@@ -515,6 +563,23 @@ export async function applyInventoryCountImport({
     if (unreviewed) {
       await client.query("rollback");
       return { kind: "tracking_required", sourceRow: Number(unreviewed.source_row) };
+    }
+    for (const line of ready.rows) {
+      if (!validCatalogQuantity({ trackingMode: line.tracking_mode, decimalScale: line.decimal_scale, quantity: line.quantity })) {
+        await client.query("rollback");
+        return { kind: "quantity_invalid", sourceRow: Number(line.source_row) };
+      }
+      const target = await client.query(
+        `select id from inventory_positions
+         where company_id = $1 and location_id = $2 and id = $3
+           and is_active and can_store and is_pickable and usage = 'storage' and system_key is null
+         limit 1 for update`,
+        [stocktake.company_id, stocktake.location_id, line.target_position_id],
+      );
+      if (!target.rows[0]) {
+        await client.query("rollback");
+        return { kind: "position_invalid", sourceRow: Number(line.source_row) };
+      }
     }
     const authorityClaims = new Map();
     for (const line of ready.rows) {
@@ -647,6 +712,15 @@ export async function applyInventoryCountImport({
             `local-count:${stocktake.id}:${line.catalog_part_id}`],
         );
         if (!balance.rows[0]) throw new Error("Inventory count ownership changed during apply.");
+        const placement = {
+          companyId: stocktake.company_id, locationId: stocktake.location_id, catalogPartId: line.catalog_part_id,
+          uomCode: line.uom_code, actorId, idempotencyKey: `position:opening-count:${stocktake.id}:${line.source_row}`,
+          receiptId, targetPositionId: line.target_position_id, reason: `Opening count row ${line.source_row}`,
+        };
+        if (serialized) await placeSerializedInventoryReceipt(client, { ...placement, unitIds });
+        else await placeAggregateInventoryReceipt(client, {
+          ...placement, inventoryItemId: balance.rows[0].id, quantity: line.quantity,
+        });
         unitIds.forEach((unitId, index) => labelItems.push({
           id: randomUUID(),
           unitId,
@@ -694,6 +768,7 @@ export async function applyInventoryCountImport({
 export const inventoryCountImportInternals = {
   batchUnitLimit: INVENTORY_COUNT_BATCH_UNIT_LIMIT,
   chunksByUnitLimit,
+  validCatalogQuantity,
 };
 
 export async function listInventoryCountImports({ companyIds, locationIds = [], isAdmin = false, limit = 20, offset = 0 }) {

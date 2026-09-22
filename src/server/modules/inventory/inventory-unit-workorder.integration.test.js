@@ -13,7 +13,8 @@ import {
   createOperationalWorkorder,
   getWorkorderTimeline,
 } from "../../db/repositories/operational-workorders.repo.js";
-import { closePool, query } from "../../db/pool.js";
+import { closePool, getPool, query } from "../../db/pool.js";
+import { placeSerializedInventoryReceipt } from "../../db/repositories/inventory-positions.repo.js";
 
 const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -23,6 +24,21 @@ after(async () => {
 
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+async function placeReceiptUnits({ companyId, locationId, catalogPartId, unitIds, actorId, receiptId, key }) {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await placeSerializedInventoryReceipt(client, {
+      companyId, locationId, catalogPartId, uomCode:"ea", unitIds, actorId,
+      idempotencyKey:key, receiptId,
+    });
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally { client.release(); }
 }
 
 test("real PostgreSQL creates a workorder and reserves its exact serialized units atomically", { skip: !runPostgres }, async () => {
@@ -83,6 +99,7 @@ test("real PostgreSQL creates a workorder and reserves its exact serialized unit
        ) values ($1,$2,$3,$4,$5,'Atomic tires',2,0,'ea','local',$6)`,
       [companyId, locationId, catalogPartId, `ATOMIC${suffix}`, `ATOMIC-${suffix}`, `local:${suffix}`],
     );
+    await placeReceiptUnits({ companyId,locationId,catalogPartId,unitIds,actorId:officeId,receiptId,key:`atomic-position-${suffix}` });
     const createInput = {
       companyId,
       locationId,
@@ -121,12 +138,15 @@ test("real PostgreSQL creates a workorder and reserves its exact serialized unit
     });
   } finally {
     await query("delete from inventory_unit_events where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_position_movements where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_position_operations where company_id=$1", [companyId]).catch(() => {});
     await query("delete from workorder_serialized_part_usages where company_id=$1", [companyId]).catch(() => {});
     await query("delete from workorder_assignment_events where workorder_id in (select id from operational_workorders where company_id=$1)", [companyId]).catch(() => {});
     await query("delete from workorder_mechanic_assignments where workorder_id in (select id from operational_workorders where company_id=$1)", [companyId]).catch(() => {});
     await query("delete from operational_workorders where company_id=$1", [companyId]).catch(() => {});
     await query("delete from workorder_serial_counters where company_id=$1", [companyId]).catch(() => {});
     await query("delete from inventory_serialized_units where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from inventory_positions where company_id=$1", [companyId]).catch(() => {});
     await query("delete from inventory_receipt_lines where company_id=$1", [companyId]).catch(() => {});
     await query("delete from inventory_receipts where company_id=$1", [companyId]).catch(() => {});
     await query("delete from inventory_items where company_id=$1", [companyId]).catch(() => {});
@@ -230,6 +250,7 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
        ) values ($1,$2,$3,$4,$5,'Serialized integration filter',2,0,'ea','local',$6)`,
       [companyId, locationId, catalogPartId, `SERIAL${suffix}`, `SERIAL-${suffix}`, `local:${suffix}`],
     );
+    await placeReceiptUnits({ companyId,locationId,catalogPartId,unitIds:[unitA,unitB],actorId,receiptId,key:`serialized-position-${suffix}` });
 
     assert.equal((await issueSerializedUnitToWorkorder({
       ...scope,
@@ -397,8 +418,11 @@ test("real PostgreSQL reserves until approval, returns unused parts, and rejects
   } finally {
     await query("delete from inventory_unit_events where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_stock_movements where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from inventory_position_movements where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from inventory_position_operations where company_id = $1", [companyId]).catch(() => {});
     await query("delete from workorder_serialized_part_usages where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_serialized_units where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from inventory_positions where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_receipt_lines where company_id = $1", [companyId]).catch(() => {});
     await query("delete from local_inventory_receipt_lines where company_id = $1", [companyId]).catch(() => {});
     await query("delete from inventory_receipts where company_id = $1", [companyId]).catch(() => {});

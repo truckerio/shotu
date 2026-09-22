@@ -149,6 +149,23 @@ test("create keeps manual count parts and measured catalog parts compatible", ()
   }));
 });
 
+test("create requires a matching position selection for aggregate inventory", () => {
+  const catalogPartId = "33333333-3333-4333-8333-333333333333";
+  const positionId = "44444444-4444-4444-8444-444444444444";
+  const input = {
+    companyId: COMPANY_ID,
+    locationId: LOCATION_ID,
+    concern: "Replace filter.",
+    formData: { parts: [{ catalogPartId, partNo: "Filter", qty: "1", uomCode: "ea", trackingMode: "quantity" }] },
+  };
+  assert.throws(() => createWorkorderSchema.parse(input), /pick/i);
+  const parsed = createWorkorderSchema.parse({
+    ...input,
+    inventoryPositionSelections: [{ partIndex: 0, catalogPartId, positionId }],
+  });
+  assert.equal(parsed.inventoryPositionSelections[0].positionId, positionId);
+});
+
 test("public workorder projection exposes asset owner and a canonical form snapshot", () => {
   const workorder = publicWorkorderRow({
     id: "33333333-3333-4333-8333-333333333333",

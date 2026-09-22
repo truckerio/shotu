@@ -10,7 +10,6 @@ const capabilities = { remove: "remove", legacy_track: "remove", receive: "recei
 
 async function authorization(input, context, dependencies, write = false) {
   requireActor(context); requireCompanyAccess(context, input.companyId); requireLocationAccess(context, input.locationId);
-  if (input.action === "remove") return;
   await (dependencies.authorizeProduct || authorizeProductModule)(context, { companyId: input.companyId, locationId: input.locationId, moduleKey: "workorders" }, write ? "write" : "read");
 }
 function repositoryInput(input, context) { return { ...input, actorId: context.actor.id }; }
@@ -33,6 +32,7 @@ export async function getInventoryReuse(view, rawInput, entityId, context, depen
       : reuseScopeSchema;
   const input = { ...schema.parse(rawInput), view };
   if (view === "asset") input.assetId = reuseId.parse(entityId);
+  if (view === "case") input.caseId = reuseId.parse(entityId);
   if (view === "operation") input.idempotencyKey = entityId;
   if (view === "unit") input.unitId = reuseId.parse(entityId);
   if (view === "scan") input.code = String(entityId || input.code || "");

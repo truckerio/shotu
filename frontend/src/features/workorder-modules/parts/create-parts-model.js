@@ -15,6 +15,11 @@ export function catalogPartRequiresSerializedUnits(part = {}) {
     && (part.trackingMode === "serialized" || part.inventory?.serializationRequired === true);
 }
 
+export function catalogPartRequiresSourcePosition(part = {}) {
+  return Boolean(text(part.catalogPartId))
+    && ["quantity", "measured_bulk"].includes(text(part.trackingMode));
+}
+
 export function createPartHasContent(part = {}) {
   return Boolean(text(part.partNo) || text(part.qty) || text(part.repairOrder));
 }
@@ -36,6 +41,7 @@ export function invalidCreatePartIndex(parts = []) {
     const code = text(part.uomCode || DEFAULT_UOM_CODE).toLowerCase();
     const definition = getUnitDefinition(code);
     if (!definition || !normalizeQuantity(part.qty, code)) return true;
+    if (catalogPartRequiresSourcePosition(part) && !text(part.sourcePositionId)) return true;
     if (!createPartRequiresSerializedUnits(part)) return false;
     return serializedUnitIds(part).length !== Number(normalizeQuantity(part.qty, code));
   });

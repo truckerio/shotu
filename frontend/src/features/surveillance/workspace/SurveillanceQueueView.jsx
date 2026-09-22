@@ -1,4 +1,5 @@
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
+import { DatePicker } from "../../../components/forms/DatePicker.jsx";
 import { RefreshCw01, SearchMd } from "@untitledui/icons";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
@@ -90,8 +91,8 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, inspectio
                 </Dropdown>
               </label>
             ) : null}
-            <label><span>From</span><input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" /></label>
-            <label><span>To</span><input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" /></label>
+            <label><span>From</span><DatePicker value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" /></label>
+            <label><span>To</span><DatePicker value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" /></label>
           </MobileQueueToolbar>
           <div className="surveillance-filter-row">
             <label className="mechanic-search"><SearchMd /><input {...textEntryProps("search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search unit, workorder, or location" aria-label="Search workorders" /></label>
@@ -103,11 +104,11 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, inspectio
             ) : null}
             <label className="surveillance-date-filter surveillance-desktop-date">
               <span>From</span>
-              <input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" />
+              <DatePicker value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Activity date start filter" />
             </label>
             <label className="surveillance-date-filter surveillance-desktop-date">
               <span>To</span>
-              <input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" />
+              <DatePicker value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Activity date end filter" />
             </label>
             <div className="surveillance-compact-date-controls">
               <div className="surveillance-date-presets" aria-label="Activity date range">
@@ -117,8 +118,8 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, inspectio
               </div>
               {customDateOpen || activeDatePreset === "custom" ? (
                 <div className="surveillance-custom-date-range">
-                  <label><span>From</span><input type="date" value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Custom activity date start" /></label>
-                  <label><span>To</span><input type="date" value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Custom activity date end" /></label>
+                  <label><span>From</span><DatePicker value={dateStartFilter} onChange={(event) => setDateStartFilter(event.target.value)} aria-label="Custom activity date start" /></label>
+                  <label><span>To</span><DatePicker value={dateEndFilter} onChange={(event) => setDateEndFilter(event.target.value)} aria-label="Custom activity date end" /></label>
                   {(dateStartFilter || dateEndFilter) ? <button type="button" onClick={clearDates}>Clear</button> : <span className="surveillance-any-date">All dates</span>}
                 </div>
               ) : null}

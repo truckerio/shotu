@@ -1,8 +1,8 @@
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
+import { CurrencySelector } from "../../components/forms/CurrencySelector.jsx";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CheckCircle, File02, RefreshCw01, Trash01, UploadCloud02, XClose } from "@untitledui/icons";
 import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
-import { OptionalSection } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
@@ -14,9 +14,15 @@ import { PartCatalogCombobox } from "../../components/workorders/part-requests/P
 import { CreateInventoryPartDialog } from "../inventory/CreateInventoryPartDialog.jsx";
 import {
   confidenceState,
+  firstInvoiceLineId,
+  invoiceDeliveryFullyReceived,
   invoiceFieldNeedsReview,
+  invoiceLineNeedsReview,
   invoiceReviewErrorMessage,
+  nextInvoiceLineIdAfterRemoval,
   nextReviewableBatchIndex,
+  orderInvoiceLinesForReview,
+  orderInvoiceReviewSections,
   addBlankInvoiceLine,
   INVOICE_HEADER_FIELDS,
   parseReviewNumber,
@@ -33,6 +39,9 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_BATCH_FILES = 10;
 const MAX_ENQUEUE_CONCURRENCY = 3;
 const STATUS_DISMISS_MS = 1_500;
+const COMPACT_REVIEW_QUERY = "(max-width: 900px)";
+const INVOICE_DETAIL_FIELDS = new Set(["documentType", "vendorName", "vendorAccount", "invoiceNumber", "invoiceDate"]);
+const TOTAL_FIELDS = new Set(["currency", "subtotal", "tax", "shipping", "total"]);
 
 function readFileDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -51,6 +60,22 @@ function queuedBatchMessage(fileName, batchSize) {
   return batchSize > 1
     ? `${fileName} is ready to review. Other invoices will continue extracting.`
     : `${fileName} is ready to review.`;
+}
+
+function reviewValue(field, fallback) {
+  const value = String(field?.value ?? "").trim();
+  return value || fallback;
+}
+
+function reviewAmount(field, currency = "") {
+  if (field?.value === null || field?.value === undefined || field?.value === "") return "Total not extracted";
+  const value = Number(field?.value);
+  if (!Number.isFinite(value)) return "Total not extracted";
+  return `${currency ? `${currency} ` : ""}${value.toFixed(2)}`;
+}
+
+function orderReviewFields(fields, draft) {
+  return [...fields].sort((left, right) => Number(invoiceFieldNeedsReview(draft?.[right[0]], right[3])) - Number(invoiceFieldNeedsReview(draft?.[left[0]], left[3])));
 }
 
 function Confidence({ field, optional = false }) {
@@ -86,6 +111,8 @@ function Field({ fieldName, label, type, draft, onChange, options = {}, disabled
         <Dropdown id={inputId} value={field.value} onChange={(event) => onChange(fieldName, event.target.value)} disabled={disabled}>
           <option value="invoice">Invoice</option><option value="credit_memo">Credit memo</option><option value="unknown">Unknown</option>
         </Dropdown>
+      ) : type === "currency" ? (
+        <CurrencySelector id={inputId} value={field.value} onChange={(event) => onChange(fieldName, event.target.value)} disabled={disabled} />
       ) : (
         <input
           id={inputId}
@@ -100,7 +127,25 @@ function Field({ fieldName, label, type, draft, onChange, options = {}, disabled
   );
 }
 
-export function InvoiceExtractionWorkspace({ embedded = false, availableLocations, uploadOpen: controlledUploadOpen, onUploadOpenChange, onContextChange }) {
+function ReviewSection({ sectionId, title, summary, issueCount = 0, status = "", readOnly = false, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const contentId = `${sectionId}-content`;
+  useEffect(() => {
+    if (status === "Pending" || issueCount > 0) setOpen(true);
+  }, [issueCount, status]);
+  return (
+    <section className={`invoice-review-section${issueCount ? " has-issues" : ""}`} aria-labelledby={`${sectionId}-title`}>
+      <button type="button" className="invoice-review-section-toggle" aria-expanded={open} aria-controls={contentId} onClick={() => setOpen((current) => !current)}>
+        <span className="invoice-review-section-heading"><strong id={`${sectionId}-title`}>{title}</strong><small>{summary}</small></span>
+        <span className={`invoice-review-section-status${issueCount ? " has-issues" : ""}`}>{status || (issueCount ? `${issueCount} issue${issueCount === 1 ? "" : "s"}` : "Ready")}</span>
+        <span className="invoice-review-section-action">{open ? "Close" : readOnly ? "View" : "Edit"}</span>
+      </button>
+      <div id={contentId} className="invoice-review-section-content" hidden={!open}>{children}</div>
+    </section>
+  );
+}
+
+export function InvoiceExtractionWorkspace({ embedded = false, availableLocations, initialLocationId = "", uploadOpen: controlledUploadOpen, onUploadOpenChange, onContextChange }) {
   const [locations, setLocations] = useState(() => Array.isArray(availableLocations) ? availableLocations : []);
   const [locationId, setLocationId] = useState("");
   const [uploads, setUploads] = useState([]);
@@ -114,6 +159,15 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const [approveLearning, setApproveLearning] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [receipt, setReceipt] = useState(null);
+  const [receiptEpisode, setReceiptEpisode] = useState(0);
+  const [purchaseOrderSuggestion, setPurchaseOrderSuggestion] = useState(null);
+  const [purchaseOrderSuggestionLoading, setPurchaseOrderSuggestionLoading] = useState(false);
+  const [purchaseOrderSuggestionError, setPurchaseOrderSuggestionError] = useState("");
+  const [purchaseOrderSuggestionReload, setPurchaseOrderSuggestionReload] = useState(0);
+  const [receiptPositions, setReceiptPositions] = useState([]);
+  const [receiptPositionsLoading, setReceiptPositionsLoading] = useState(false);
+  const [receiptPositionsError, setReceiptPositionsError] = useState("");
+  const [receiptPositionsReload, setReceiptPositionsReload] = useState(0);
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyStatus, setHistoryStatus] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
@@ -124,6 +178,9 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const [reextractOpen, setReextractOpen] = useState(false);
   const [catalogQueries, setCatalogQueries] = useState({});
   const [createPartLineId, setCreatePartLineId] = useState("");
+  const [activeLineId, setActiveLineId] = useState("");
+  const [reviewPane, setReviewPane] = useState("review");
+  const [compactReview, setCompactReview] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.(COMPACT_REVIEW_QUERY).matches));
   const fileInputRef = useRef(null);
   const reviewTitleRef = useRef(null);
   const reviewKeyRef = useRef("");
@@ -131,7 +188,10 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const batchRunsRef = useRef([]);
   const batchTokenRef = useRef("");
   const savedRunRequestRef = useRef({ id: "", controller: null });
+  const purchaseOrderSuggestionRequestRef = useRef(null);
   const uploadOpen = controlledUploadOpen ?? internalUploadOpen;
+  const receiptLocationId = run?.locationId || locationId;
+  const receiptPositionIdentity = run?.id && receiptLocationId ? `${run.id}:${run.version}:${receiptLocationId}` : "";
 
   function setUploadOpen(open) {
     if (controlledUploadOpen === undefined) setInternalUploadOpen(open);
@@ -156,7 +216,11 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   useEffect(() => {
     if (Array.isArray(availableLocations)) {
       setLocations(availableLocations);
-      setLocationId((current) => current || availableLocations[0]?.id || "");
+      setLocationId((current) => (
+        availableLocations.some((location) => location.id === initialLocationId)
+          ? initialLocationId
+          : current || availableLocations[0]?.id || ""
+      ));
       return undefined;
     }
     api("/api/office/template")
@@ -166,7 +230,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
         setLocationId((current) => current || available[0]?.id || "");
       })
       .catch((nextError) => setError(nextError.message));
-  }, [availableLocations]);
+  }, [availableLocations, initialLocationId]);
 
   useEffect(() => {
     const savedRunId = new URLSearchParams(window.location.search).get("invoiceRun");
@@ -179,11 +243,79 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     reviewTitleRef.current.focus({ preventScroll: true });
   }, [draft]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const media = window.matchMedia(COMPACT_REVIEW_QUERY);
+    const updateCompactReview = (event) => setCompactReview(event.matches);
+    setCompactReview(media.matches);
+    media.addEventListener?.("change", updateCompactReview);
+    return () => media.removeEventListener?.("change", updateCompactReview);
+  }, []);
+
+  const draftLineKey = draft?.lines?.map((line) => line.id).join("|") || "";
+  useEffect(() => {
+    setActiveLineId((current) => draft?.lines?.some((line) => line.id === current) ? current : firstInvoiceLineId(draft?.lines));
+  }, [draftLineKey, run?.id]);
+
   useEffect(() => () => {
     batchTokenRef.current = "";
     savedRunRequestRef.current.controller?.abort();
     savedRunRequestRef.current = { id: "", controller: null };
+    purchaseOrderSuggestionRequestRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    purchaseOrderSuggestionRequestRef.current?.abort();
+    setPurchaseOrderSuggestion(null);
+    setPurchaseOrderSuggestionError("");
+    if (!run?.id || run.status !== "reviewed") {
+      setPurchaseOrderSuggestionLoading(false);
+      return undefined;
+    }
+    const controller = new AbortController();
+    purchaseOrderSuggestionRequestRef.current = controller;
+    setPurchaseOrderSuggestionLoading(true);
+    api(`/api/office/invoice-extractions/${encodeURIComponent(run.id)}/purchase-order-suggestions`, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result || !["suggestions", "none", "ambiguous", "review_required"].includes(result.kind)) throw new Error("Purchase order review returned an unsupported result.");
+        if (result.version !== undefined && Number(result.version) !== Number(run.version)) throw new Error("The invoice changed while purchase orders were checked. Retry with the current review.");
+        setPurchaseOrderSuggestion(result);
+      })
+      .catch((nextError) => {
+        if (!controller.signal.aborted) setPurchaseOrderSuggestionError(nextError.message || "Purchase order suggestions could not be loaded.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPurchaseOrderSuggestionLoading(false);
+      });
+    return () => controller.abort();
+  }, [run?.id, run?.version, run?.status, receipt?.status, purchaseOrderSuggestionReload]);
+
+  useEffect(() => {
+    setReceiptPositions([]);
+    setReceiptPositionsError("");
+  }, [receiptPositionIdentity]);
+
+  useEffect(() => {
+    if (!receiptPositionIdentity || run?.status !== "reviewed") {
+      setReceiptPositionsLoading(false);
+      return undefined;
+    }
+    let active = true;
+    setReceiptPositionsLoading(true);
+    setReceiptPositionsError("");
+    api(`/api/office/inventory/locations/${encodeURIComponent(receiptLocationId)}/positions`)
+      .then((result) => {
+        if (active) setReceiptPositions(result.positions || result.items || []);
+      })
+      .catch((nextError) => {
+        if (active) setReceiptPositionsError(nextError.message || "Storage destinations could not be loaded.");
+      })
+      .finally(() => {
+        if (active) setReceiptPositionsLoading(false);
+      });
+    return () => { active = false; };
+  }, [receiptPositionIdentity, receiptPositionsReload, run?.status]);
 
   useEffect(() => {
     const activeUploadId = batchRuns[batchIndex]?.uploadId;
@@ -212,6 +344,14 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
       ? invoiceFieldNeedsReview(candidate.field, candidate.options)
       : Number(candidate?.confidence) < 90).length;
   }, [draft]);
+  const invoiceDetailFields = useMemo(() => INVOICE_HEADER_FIELDS.filter(([name]) => INVOICE_DETAIL_FIELDS.has(name)), []);
+  const totalFields = useMemo(() => INVOICE_HEADER_FIELDS.filter(([name]) => TOTAL_FIELDS.has(name)), []);
+  const deliveryFields = useMemo(() => INVOICE_HEADER_FIELDS.filter(([name]) => name === "purchaseOrderNumber"), []);
+  const orderedLines = useMemo(() => orderInvoiceLinesForReview(draft?.lines), [draft?.lines]);
+  const invoiceDetailIssues = useMemo(() => invoiceDetailFields.filter(([name, , , options]) => invoiceFieldNeedsReview(draft?.[name], options)).length, [draft, invoiceDetailFields]);
+  const totalsIssues = useMemo(() => totalFields.filter(([name, , , options]) => invoiceFieldNeedsReview(draft?.[name], options)).length, [draft, totalFields]);
+  const deliveryIssues = useMemo(() => deliveryFields.filter(([name, , , options]) => invoiceFieldNeedsReview(draft?.[name], options)).length, [draft, deliveryFields]);
+  const lineIssues = useMemo(() => (draft?.lines || []).filter((line) => invoiceLineNeedsReview(line)).length, [draft?.lines]);
   const batchProgress = useMemo(() => ({
     ready: batchRuns.filter((entry) => entry.run.draft && !entry.error).length,
     processing: batchRuns.filter((entry) => entry.run.status === "processing" && !entry.error).length,
@@ -242,6 +382,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
       setDraft(savedRun.draft);
       setReviewDirty(false);
       setReceipt(savedRun.inventoryReceipt || null);
+      setReceiptEpisode(0);
       setMessage(savedRun.sourceAvailable
         ? "Saved invoice draft and secure source restored."
         : "Saved invoice draft restored. Its source is no longer available.");
@@ -307,6 +448,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     setMessage("");
     setError("");
     setReceipt(null);
+    setReceiptEpisode(0);
     setReviewDirty(false);
     setLeaveReviewOpen(false);
     setReextractOpen(false);
@@ -353,6 +495,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     setRun(entry.run);
     setDraft(entry.run.draft);
     setReceipt(entry.run.inventoryReceipt || null);
+    setReceiptEpisode(0);
     setApproveLearning(false);
     setReviewDirty(false);
     reviewKeyRef.current = "";
@@ -429,6 +572,8 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     activeRunRef.current = null;
     setDraft(null);
     setReviewDirty(false);
+    setReceipt(null);
+    setReceiptEpisode(0);
     const token = crypto.randomUUID();
     batchTokenRef.current = token;
     setMessage(`Queueing ${uploads.length} invoice${uploads.length === 1 ? "" : "s"}…`);
@@ -532,28 +677,43 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     }
   }
 
-  async function confirmPhysicalReceipt() {
+  async function confirmPhysicalReceipt(posting = {}) {
     setBusy("receive");
     setError("");
     setMessage("Adding reviewed parts to local inventory…");
+    const commandStorageKey = `invoice-receipt-command:${run.id}`;
+    let idempotencyKey = localStorage.getItem(commandStorageKey);
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+      localStorage.setItem(commandStorageKey, idempotencyKey);
+    }
     try {
       const result = await api(`/api/office/invoice-extractions/${encodeURIComponent(run.id)}/confirm-receipt`, {
         method: "POST",
         body: JSON.stringify({
-          idempotencyKey: `local-inventory-${run.id}`,
+          idempotencyKey,
           expectedVersion: run.version,
-          confirmation: "all_received_undamaged",
+          postingRoute: posting.postingRoute,
+          allocationPlan: posting.allocationPlan || [],
+          noPurchaseOrderReason: posting.noPurchaseOrderReason || "",
+          receiptLines: posting.receiptLines || [],
         }),
       });
+      localStorage.removeItem(commandStorageKey);
       setReceipt(result.receipt);
+      setReceiptEpisode((current) => current + 1);
+      setPurchaseOrderSuggestionReload((value) => value + 1);
       setMessage(`${result.receipt.lineCount} part line${result.receipt.lineCount === 1 ? "" : "s"} added to ${result.receipt.locationName}.`);
     } catch (nextError) {
+      if (nextError?.code === "INVENTORY_RECEIPT_POSITION_INVALID") setReceiptPositionsReload((value) => value + 1);
       setError(nextError.message);
       setMessage("");
     } finally {
       setBusy("");
     }
   }
+
+  const invoiceFullyReceived = invoiceDeliveryFullyReceived({ receipt, suggestion: purchaseOrderSuggestion });
 
   function updateHeader(name, value) {
     reviewKeyRef.current = "";
@@ -582,6 +742,32 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
       return { ...next, lines: next.lines.map((line) => line.id === lineId ? { ...line, catalogPartId: part.id } : line) };
     });
     setMessage(`${part.partNumber} matched to this invoice line. Inventory is unchanged.`);
+  }
+
+  function addInvoiceLine() {
+    const lineId = `manual-${crypto.randomUUID()}`;
+    reviewKeyRef.current = "";
+    setReviewDirty(true);
+    setDraft((current) => addBlankInvoiceLine(current, lineId));
+    setActiveLineId(lineId);
+  }
+
+  function removeInvoiceReviewLine(lineId) {
+    reviewKeyRef.current = "";
+    setReviewDirty(true);
+    setActiveLineId(nextInvoiceLineIdAfterRemoval(draft.lines, lineId));
+    setDraft((current) => removeInvoiceLine(current, lineId));
+  }
+
+  function activateReviewPane(nextPane, event) {
+    setReviewPane(nextPane);
+    if (event?.type === "keydown") window.requestAnimationFrame(() => document.getElementById(`invoice-${nextPane}-tab`)?.focus());
+  }
+
+  function handleReviewPaneKeyDown(event) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    activateReviewPane(event.key === "ArrowLeft" || event.key === "Home" ? "document" : "review", event);
   }
 
   const uploadDialog = (
@@ -641,6 +827,16 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   );
 
   if (draft) {
+    const deliveryComplete = invoiceFullyReceived;
+    const deliveryReversed = receipt?.status === "reversed";
+    const deliveryPending = run.status === "reviewed" && !deliveryComplete && !deliveryReversed;
+    const partialReceiptPosted = receipt?.status === "posted" && deliveryPending;
+    const reviewSections = orderInvoiceReviewSections([
+      { id: "details", unresolved: invoiceDetailIssues > 0 },
+      { id: "items", unresolved: lineIssues > 0 },
+      { id: "totals", unresolved: totalsIssues > 0 },
+      { id: "delivery", unresolved: deliveryPending || deliveryIssues > 0 },
+    ]);
     return (
       <>{uploadDialog}{leaveReviewDialog}{reextractDialog}<section className="invoice-extraction-workspace" aria-labelledby="invoice-review-title">
         <header className="invoice-review-header">
@@ -652,74 +848,62 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
           </div>
           {run.sourceAvailable ? <Button type="button" icon={busy === "reextract" ? LoadingRefreshIcon : RefreshCw01} onClick={() => setReextractOpen(true)} disabled={Boolean(busy) || receipt?.status === "posted"} title={receipt?.status === "posted" ? "Reverse the posted receipt before re-extracting" : "Create a new extraction from the original file"}>{busy === "reextract" ? "Re-extracting…" : "Re-extract"}</Button> : null}
         </header>
-        {error ? <p className="ops-error" role="alert">{error}</p> : null}
-        {message ? <p className="invoice-status" role="status">{message}</p> : null}
-        {receipt?.status === "posted" ? (
-          <section className="inventory-label-result" aria-labelledby="inventory-label-title">
-            <div className="inventory-label-heading">
-              <div><span>Local receipt</span><h3 id="inventory-label-title">Inventory added at {receipt.locationName}</h3></div>
-              {receipt.labelBatch?.printUrl ? <Button type="button" onClick={() => window.open(receipt.labelBatch.printUrl, "_blank", "noopener,noreferrer")}>Open {receipt.labelBatch.itemCount} printable label{receipt.labelBatch.itemCount === 1 ? "" : "s"}</Button> : null}
-            </div>
-            <p>{receipt.lineCount} part line{receipt.lineCount === 1 ? "" : "s"} posted. Quantities remain in each line’s unit. This invoice cannot be posted twice.</p>
-            {receipt.units?.length ? <div className="inventory-label-grid">
-              {receipt.units.slice(0, 12).map((unit) => <article className="inventory-unit-label" key={unit.id}>
-                <img src={unit.qrSvgUrl} alt={`QR code for serial ${unit.serialNumber}`} />
-                <div><strong>{unit.partNumber}</strong><span>{unit.description || "Inventory part"}</span><code>{unit.serialNumber}</code></div>
-              </article>)}
-            </div> : null}
-            {receipt.units?.length > 12 ? <p>Showing 12 of {receipt.units.length} labels. Open the printable batch for the complete set.</p> : null}
-            {receipt.labelsUnavailable ? <p className="ops-error" role="alert">{receipt.labelsUnavailable}</p> : null}
-            {Array.isArray(receipt.units) && !receipt.units.length && !receipt.labelsUnavailable ? <p>No individual labels were created. Measured quantities stay as aggregate inventory.</p> : null}
-          </section>
-        ) : receipt?.status === "reversed" ? <p className="invoice-reversed-status" role="status">This receipt was reversed. Its QR batch remains historical and inventory is no longer marked as added.</p> : null}
-        {draft.warnings.length ? (
-          <details className="invoice-review-notes">
-            <summary>{draft.warnings.length} extraction note{draft.warnings.length === 1 ? "" : "s"}</summary>
-            <ul>{draft.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-          </details>
-        ) : null}
+        <div className="invoice-review-switch" role="tablist" aria-label="Invoice review view" onKeyDown={handleReviewPaneKeyDown}>
+          <button id="invoice-document-tab" type="button" role="tab" aria-selected={reviewPane === "document"} aria-controls="invoice-document-panel" tabIndex={reviewPane === "document" ? 0 : -1} onClick={() => activateReviewPane("document")}>Document</button>
+          <button id="invoice-review-tab" type="button" role="tab" aria-selected={reviewPane === "review"} aria-controls="invoice-review-panel" tabIndex={reviewPane === "review" ? 0 : -1} onClick={() => activateReviewPane("review")}>Review{reviewCount ? ` · ${reviewCount}` : ""}</button>
+        </div>
         <div className="invoice-review-layout">
-          <InvoiceDocumentViewer sourceUrl={displayedPreviewUrl} mimeType={activeFile?.type || run.mimeType} fileName={run.fileName} />
-          <div className="invoice-review-form">
-            <div className="invoice-fields-grid">
-              {INVOICE_HEADER_FIELDS.filter(([, , , options]) => !options?.secondary).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}
-            </div>
-            <OptionalSection className="invoice-optional-review" title="Additional details" description="PO number only if your company gave one to the seller.">
-              <div className="invoice-fields-grid invoice-secondary-fields">
-                {INVOICE_HEADER_FIELDS.filter(([, , , options]) => options?.secondary).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}
-              </div>
-            </OptionalSection>
-            <div className="invoice-lines-heading"><div><h3>Invoice lines</h3><span>{draft.lines.length} extracted</span></div>{run.status !== "reviewed" ? <Button type="button" onClick={() => { reviewKeyRef.current = ""; setReviewDirty(true); setDraft((current) => addBlankInvoiceLine(current, `manual-${crypto.randomUUID()}`)); }}>Add missing line</Button> : null}</div>
-            <div className="invoice-lines">
-              {draft.lines.map((line, index) => (
-                <fieldset className="invoice-line-card" key={line.id}>
-                  <legend>Line {index + 1}</legend>
-                  {run.status !== "reviewed" ? <div className="invoice-line-catalog-tools">
-                    <PartCatalogCombobox
-                      locationId={run.locationId || locationId}
-                      purpose="master_match"
-                      value={catalogQueries[line.id] ?? String(line.partNumber.value || "")}
-                      onChange={(value) => setCatalogQueries((current) => ({ ...current, [line.id]: value }))}
-                      onSelect={(part) => useCatalogPart(line.id, part)}
-                      label="Inventory part"
-                      inputAriaLabel={`Find inventory part for invoice line ${index + 1}`}
-                      placeholder="Find existing inventory part"
-                      catalogEndpoint="/api/office/inventory/catalog"
-                      resultLimit={12}
-                      popupAriaLabel={`Inventory parts for invoice line ${index + 1}`}
-                    />
-                    <Button type="button" onClick={() => setCreatePartLineId(line.id)}>Create new part</Button>
-                    <small>Choose an existing part or create one. Review save and inventory receipt remain separate.</small>
-                  </div> : null}
-                  {["partNumber", "description", "quantity", "unitOfMeasure", "unitPrice", "lineTotal"].map((name) => {
-                    const label = { partNumber: "Part number", description: "Description", quantity: "Quantity", unitOfMeasure: "Unit", unitPrice: "Unit price", lineTotal: "Line total" }[name];
-                    const type = ["quantity", "unitPrice", "lineTotal"].includes(name) ? "number" : "text";
-                    return <label key={name} className={line[name].confidence < 90 ? "needs-review" : ""}><span>{label}</span><input type={type} step={type === "number" ? "0.001" : undefined} value={line[name].value ?? ""} readOnly={run.status === "reviewed"} onChange={(event) => updateLine(line.id, name, event.target.value, type)} /><Confidence field={line[name]} /></label>;
-                  })}
-                  {run.status !== "reviewed" ? <Button type="button" icon={Trash01} className="invoice-remove-line" onClick={() => { reviewKeyRef.current = ""; setReviewDirty(true); setDraft((current) => removeInvoiceLine(current, line.id)); }}>Remove line</Button> : null}
-                </fieldset>
-              ))}
-            </div>
+          <div id="invoice-document-panel" className="invoice-review-panel invoice-source-panel" role="tabpanel" aria-labelledby="invoice-document-tab" hidden={compactReview && reviewPane !== "document"}>
+            <InvoiceDocumentViewer sourceUrl={displayedPreviewUrl} mimeType={activeFile?.type || run.mimeType} fileName={run.fileName} />
+          </div>
+          <div id="invoice-review-panel" className="invoice-review-panel invoice-review-form invoice-review-rail" role="tabpanel" aria-labelledby="invoice-review-tab" hidden={compactReview && reviewPane !== "review"}>
+            {error ? <p className="ops-error" role="alert">{error}</p> : null}
+            {message ? <p className="invoice-status" role="status">{message}</p> : null}
+            {receipt?.status === "posted" ? (
+              <section className="inventory-label-result" aria-labelledby="inventory-label-title">
+                <div className="inventory-label-heading">
+                  <div><span>Local receipt</span><h3 id="inventory-label-title">Inventory added at {receipt.locationName}</h3></div>
+                  {receipt.labelBatch?.printUrl && receipt.units?.length ? <Button type="button" onClick={() => window.open(receipt.labelBatch.printUrl, "_blank", "noopener,noreferrer")}>Print {receipt.labelBatch.itemCount} serialized label{receipt.labelBatch.itemCount === 1 ? "" : "s"}</Button> : null}
+                </div>
+                <p>{receipt.lineCount} part line{receipt.lineCount === 1 ? "" : "s"} posted. Quantities remain in each line’s unit. {deliveryComplete ? "All invoice quantities are received." : "Remaining quantities can be received in another episode."}</p>
+                {receipt.units?.length ? <div className="inventory-label-grid">
+                  {receipt.units.slice(0, 12).map((unit) => <article className="inventory-unit-label" key={unit.id}>
+                    <img src={unit.qrSvgUrl} alt={`QR code for serial ${unit.serialNumber}`} />
+                    <div><strong>{unit.partNumber}</strong><span>{unit.description || "Inventory part"}</span><code>{unit.serialNumber}</code></div>
+                  </article>)}
+                </div> : null}
+                {receipt.units?.length > 12 ? <p>Showing 12 of {receipt.units.length} labels. Open the printable batch for the complete set.</p> : null}
+                {receipt.labelsUnavailable ? <p className="ops-error" role="alert">{receipt.labelsUnavailable}</p> : null}
+              </section>
+            ) : receipt?.status === "reversed" ? <p className="invoice-reversed-status" role="status">This receipt was reversed. Its QR batch remains historical and inventory is no longer marked as added.</p> : null}
+            {draft.warnings.length ? (
+              <details className="invoice-review-notes">
+                <summary>{draft.warnings.length} extraction note{draft.warnings.length === 1 ? "" : "s"}</summary>
+                <ul>{draft.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+              </details>
+            ) : null}
+            {reviewSections.map((section) => {
+              if (section.id === "details") return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-details" title="Invoice details" summary={`${reviewValue(draft.vendorName, "Vendor not extracted")} · ${reviewValue(draft.invoiceNumber, "No invoice number")}`} issueCount={invoiceDetailIssues} readOnly={run.status === "reviewed"} defaultOpen={invoiceDetailIssues > 0}>
+                <div className="invoice-fields-grid">{orderReviewFields(invoiceDetailFields, draft).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}</div>
+              </ReviewSection>;
+              if (section.id === "items") return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-items" title="Items" summary={`${draft.lines.length} line${draft.lines.length === 1 ? "" : "s"}${lineIssues ? ` · ${lineIssues} need attention` : " · Ready"}`} issueCount={lineIssues} readOnly={run.status === "reviewed"} defaultOpen={lineIssues > 0}>
+                <div className="invoice-lines-heading"><span>Unresolved lines appear first</span>{run.status !== "reviewed" ? <Button type="button" onClick={addInvoiceLine}>Add missing line</Button> : null}</div>
+                <div className="invoice-lines">{orderedLines.map((line) => {
+                  const lineNumber = draft.lines.findIndex((candidate) => candidate.id === line.id) + 1;
+                  const active = activeLineId === line.id;
+                  const needsReview = invoiceLineNeedsReview(line);
+                  return <article className={`invoice-line-row${active ? " is-active" : ""}${needsReview ? " has-issues" : ""}`} key={line.id}>
+                    <button type="button" className="invoice-line-summary" aria-expanded={active} aria-controls={`invoice-line-editor-${line.id}`} onClick={() => setActiveLineId(active ? "" : line.id)}><span><strong>Line {lineNumber} · {reviewValue(line.partNumber, "No part number")}</strong><small>{reviewValue(line.description, "No description")}</small></span><span className="invoice-line-quantity">{line.quantity.value ?? "—"} {reviewValue(line.unitOfMeasure, "")}</span><span className="invoice-line-total">{reviewAmount(line.lineTotal, reviewValue(draft.currency, ""))}</span><span className={`invoice-line-state${needsReview ? " has-issues" : ""}`}>{needsReview ? "Review" : "Ready"}</span><span className="invoice-line-edit">{active ? "Close" : run.status === "reviewed" ? "View" : "Edit"}</span></button>
+                    {active ? <fieldset id={`invoice-line-editor-${line.id}`} className="invoice-line-card"><legend>Line {lineNumber} editor</legend>{run.status !== "reviewed" ? <div className="invoice-line-catalog-tools"><PartCatalogCombobox locationId={run.locationId || locationId} purpose="master_match" value={catalogQueries[line.id] ?? String(line.partNumber.value || "")} onChange={(value) => setCatalogQueries((current) => ({ ...current, [line.id]: value }))} onSelect={(part) => useCatalogPart(line.id, part)} label="Inventory part" inputAriaLabel={`Find inventory part for invoice line ${lineNumber}`} placeholder="Find existing inventory part" catalogEndpoint="/api/office/inventory/catalog" resultLimit={12} popupAriaLabel={`Inventory parts for invoice line ${lineNumber}`} /><Button type="button" onClick={() => setCreatePartLineId(line.id)}>Create new part</Button><small>Choose an existing part or create one. Review save and inventory receipt remain separate.</small></div> : null}{["partNumber", "description", "quantity", "unitOfMeasure", "unitPrice", "lineTotal"].map((name) => { const label = { partNumber: "Part number", description: "Description", quantity: "Quantity", unitOfMeasure: "Unit", unitPrice: "Unit price", lineTotal: "Line total" }[name]; const type = ["quantity", "unitPrice", "lineTotal"].includes(name) ? "number" : "text"; return <label key={name} className={line[name].confidence < 90 ? "needs-review" : ""}><span>{label}</span><input type={type} step={type === "number" ? "0.001" : undefined} value={line[name].value ?? ""} readOnly={run.status === "reviewed"} onChange={(event) => updateLine(line.id, name, event.target.value, type)} /><Confidence field={line[name]} /></label>; })}{run.status !== "reviewed" ? <Button type="button" icon={Trash01} className="invoice-remove-line" onClick={() => removeInvoiceReviewLine(line.id)}>Remove line</Button> : null}</fieldset> : null}
+                  </article>;
+                })}</div>
+              </ReviewSection>;
+              if (section.id === "totals") return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-totals" title="Totals" summary={reviewAmount(draft.total, reviewValue(draft.currency, ""))} issueCount={totalsIssues} readOnly={run.status === "reviewed"} defaultOpen={totalsIssues > 0}><div className="invoice-fields-grid">{orderReviewFields(totalFields, draft).map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}</div></ReviewSection>;
+              return <ReviewSection key={`${run.id}-${section.id}`} sectionId="invoice-delivery" title="Delivery" summary={partialReceiptPosted ? "Partial receipt posted · receive remaining quantities" : deliveryPending ? "Confirm received quantities and purchase order route" : deliveryComplete ? "Inventory receipt completed" : deliveryReversed ? "Receipt reversed · inventory not added" : reviewValue(draft.purchaseOrderNumber, "No purchase order")} issueCount={deliveryIssues} status={deliveryPending ? "Pending" : deliveryComplete ? "Complete" : deliveryReversed ? "Reversed" : ""} readOnly={run.status === "reviewed"} defaultOpen={deliveryPending || deliveryIssues > 0}>
+                <div className="invoice-fields-grid">{deliveryFields.map(([name, label, type, options]) => <Field key={name} fieldName={name} label={label} type={type} options={options} draft={draft} onChange={updateHeader} disabled={run.status === "reviewed"} />)}</div>
+                {deliveryPending ? <PhysicalReceiptConfirmation receiptEpisode={receiptEpisode} busy={busy === "receive"} disabled={Boolean(busy) && busy !== "receive"} runId={run.id} runVersion={run.version} draft={draft} suggestion={purchaseOrderSuggestion} suggestionLoading={purchaseOrderSuggestionLoading} suggestionError={purchaseOrderSuggestionError} onRetrySuggestions={() => setPurchaseOrderSuggestionReload((value) => value + 1)} positions={receiptPositions} positionLoading={receiptPositionsLoading} positionError={receiptPositionsError} onRetryPositions={() => setReceiptPositionsReload((value) => value + 1)} onConfirm={confirmPhysicalReceipt} /> : deliveryComplete ? <p className="invoice-review-complete">All invoice quantities received</p> : deliveryReversed ? <p className="invoice-review-reversed">Receipt reversed · Inventory not added</p> : null}
+              </ReviewSection>;
+            })}
             {createPartLineId ? (() => {
               const sourceLine = draft.lines.find((line) => line.id === createPartLineId);
               return sourceLine ? <CreateInventoryPartDialog
@@ -729,28 +913,20 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
                 onCreated={(part) => useCatalogPart(sourceLine.id, part)}
               /> : null;
             })() : null}
+            {run.status !== "reviewed" ? <footer className="invoice-review-actions">
+              <>
+                  <details className="invoice-learning-option">
+                    <summary>Learning preference</summary>
+                    <label className="invoice-learning-choice"><Checkbox checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setReviewDirty(true); setApproveLearning(event.target.checked); }} /><span>Use my corrections to improve future invoice extraction</span></label>
+                  </details>
+                  <div className="invoice-review-primary">
+                    <span>Saves review only · Inventory stays unchanged</span>
+                    <Button type="button" variant="primary" icon={busy === "review" ? LoadingRefreshIcon : CheckCircle} onClick={approve} disabled={Boolean(busy)}>Approve review</Button>
+                  </div>
+              </>
+            </footer> : null}
           </div>
         </div>
-        <footer className={`invoice-review-actions${run.status === "reviewed" ? " is-receiving" : ""}`}>
-          {run.status === "reviewed" ? (
-            receipt?.status === "posted"
-              ? <p className="invoice-review-complete">Delivery confirmed · Inventory added</p>
-              : receipt?.status === "reversed"
-                ? <p className="invoice-review-reversed">Receipt reversed · Inventory not added</p>
-              : <PhysicalReceiptConfirmation busy={busy === "receive"} disabled={Boolean(busy) && busy !== "receive"} onConfirm={confirmPhysicalReceipt} />
-          ) : (
-            <>
-              <details className="invoice-learning-option">
-                <summary>Learning preference</summary>
-                <label className="invoice-learning-choice"><Checkbox checked={approveLearning} onChange={(event) => { reviewKeyRef.current = ""; setReviewDirty(true); setApproveLearning(event.target.checked); }} /><span>Use my corrections to improve future invoice extraction</span></label>
-              </details>
-              <div className="invoice-review-primary">
-                <span>Saves review only · Inventory stays unchanged</span>
-                <Button type="button" variant="primary" icon={busy === "review" ? LoadingRefreshIcon : CheckCircle} onClick={approve} disabled={Boolean(busy)}>Approve review</Button>
-              </div>
-            </>
-          )}
-        </footer>
       </section></>
     );
   }

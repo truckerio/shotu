@@ -24,6 +24,9 @@
     "db:seed-chino-volume": "node --env-file=.env src/server/db/seeds/chino-volume.js",
     "kiosk:pins:reset": "node scripts/kiosk/reset-mechanic-pins.js",
     "test:parts-helper": "node --test src/server/modules/parts-helper/parts-helper.test.js",
+    "test:inventory:receiving": "node --test src/server/modules/inventory/direct-inventory-receipt.service.test.js frontend/src/features/inventory/direct-receipt-model.test.js",
+    "test:inventory:receiving:db": "node --env-file=.env scripts/qa/run-direct-receipt-integration.js",
+    "test:inventory:positions:db": "node --env-file=.env scripts/qa/run-inventory-position-integration.js",
     "test:proofreading": "node --test frontend/src/components/forms/NarrativeField.test.js frontend/src/components/forms/narrative-correction-model.test.js frontend/src/components/forms/narrative-spellcheck-engine.test.js src/server/db/repositories/proofreading-dictionaries.contract.test.js src/server/modules/proofreading/*.test.js src/server/routes/proofreading.routes.test.js scripts/proofreading/*.test.js",
     "test:proofreading:benchmark": "node --env-file=.env --env-file-if-exists=.env.proofreading scripts/proofreading/benchmark.js",
     "test:parts-helper:hf": "node src/server/modules/parts-helper/parts-helper.samples.js",
@@ -47,10 +50,14 @@
     "test:unit": "node --test frontend/src/app/routes/*.test.js frontend/src/components/forms/*.test.js frontend/src/components/operations/*.test.js frontend/src/components/ui/*.test.js frontend/src/components/workorders/*.test.js frontend/src/components/workorders/chat/*.test.js frontend/src/components/workorders/part-requests/*.test.js frontend/src/features/admin/integrations/*.test.js frontend/src/features/admin/modules/*.test.js frontend/src/features/admin/workspace/*.test.js frontend/src/features/create-workorder/*.test.js frontend/src/features/generator/*.test.js frontend/src/features/inspections/*.test.js frontend/src/features/inventory/*.test.js frontend/src/features/mechanic/*.test.js frontend/src/features/office/*.test.js frontend/src/features/surveillance/workspace/*.test.js frontend/src/features/workorder-detail/*.test.js frontend/src/features/workorder-modules/*.test.js frontend/src/hooks/*.test.js frontend/src/lib/*.test.js frontend/src/lib/maps/*.test.js shared/*.test.js scripts/proofreading/*.test.js scripts/qa/*.test.js scripts/qa/e2e/*.test.js src/server/auth/*.test.js src/server/db/repositories/proofreading-dictionaries.contract.test.js src/server/db/repositories/local-labor-products.repo.test.js src/server/integrations/*.test.js src/server/integrations/core/*.test.js src/server/integrations/odoo/*.test.js src/server/integrations/samsara/*.test.js src/server/modules/admin/*.test.js src/server/modules/chat/*.test.js src/server/modules/inventory/*.test.js src/server/modules/invoice-extraction/*.test.js src/server/modules/kiosk/*.test.js src/server/modules/labor/*.test.js src/server/modules/mechanic/*.test.js src/server/modules/office/*.test.js src/server/modules/parts/*.test.js src/server/modules/parts-helper/parts-helper.test.js src/server/modules/proofreading/*.test.js src/server/modules/surveillance/*.test.js src/server/modules/workorders/*.test.js src/server/operations/*.test.js src/server/print/*.test.js src/server/routes/*.test.js src/server/security/*.test.js",
     "check:structure": "node scripts/check-structure.js",
     "check": "node --check server.js && find src/server scripts -name '*.js' -print | xargs -I{} node --check {} && npm run build",
-    "verify": "npm run check:structure && npm run test:backup-restore && npm run test:performance-tooling && npm run test:unit && npm run test:units && npm run check"
+    "verify": "npm run check:structure && npm run test:backup-restore && npm run test:performance-tooling && npm run test:unit && npm run test:units && npm run check",
+    "test:inventory:workflows:db": "node --env-file=.env scripts/qa/run-direct-receipt-integration.js",
+    "test:inventory:workflows:browser": "node scripts/qa/inventory-workspace-browser.js",
+    "inventory:import-chino-manager": "node --env-file=.env scripts/inventory/import-chino-manager-inventory.js"
   },
   "dependencies": {
     "@better-auth/passkey": "^1.6.25",
+    "@internationalized/date": "^3.12.2",
     "@untitledui/icons": "^0.0.19",
     "@vitejs/plugin-react": "^4.3.4",
     "better-auth": "^1.6.25",

@@ -89,6 +89,89 @@ export async function createLocalLaborProduct({ companyId, name, code = "", desc
   }
 }
 
+function normalizeLaborName(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeLaborCode(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function hourlyOdooLaborSql() {
+  return `product.product_type = 'service'
+          and product.active = true
+          and product.uom_name ~* '^hours?$'
+          and product.uom_category_name ~* 'time'`;
+}
+
+/**
+ * Copies explicitly chosen cached Odoo labor snapshots into the application-owned
+ * catalog. This has no source linkage or automatic update behavior: an unchanged
+ * name/code replay skips its existing local row. Existing local products always
+ * win, so this routine never updates or deactivates them.
+ */
+export async function importOdooLaborProducts({ companyId, externalIds, actorId = null }, connect = () => getPool().connect()) {
+  const requestedIds = [...new Set((externalIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  if (!companyId) throw new Error("Company is required.");
+  if (!requestedIds.length) throw new Error("Choose at least one Odoo labor product.");
+  const client = await connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`local-labor-products:${companyId}`]);
+    const source = await client.query(
+      `select product.external_id, product.display_name, product.default_code
+         from odoo_service_products product
+        where product.company_id = $1
+          and product.external_id = any($2::text[])
+          and ${hourlyOdooLaborSql()}
+        order by product.external_id`,
+      [companyId, requestedIds],
+    );
+    if (source.rows.length !== requestedIds.length) {
+      throw new Error("One or more selected Odoo labor products are not active hourly services for this company.");
+    }
+    const products = [];
+    for (const sourceProduct of source.rows) {
+      const name = String(sourceProduct.display_name || "").trim();
+      const code = String(sourceProduct.default_code || "").trim();
+      if (!name) throw new Error("An Odoo labor product is missing a name.");
+      const normalizedName = normalizeLaborName(name);
+      const normalizedCode = normalizeLaborCode(code);
+      const inserted = await client.query(
+        `insert into local_labor_products (
+           company_id, name, normalized_name, code, normalized_code, created_by_user_id
+         ) values ($1, $2, $3, $4, $5, $6)
+         on conflict do nothing
+         returning id, name, code`,
+        [companyId, name, normalizedName, code, normalizedCode, actorId],
+      );
+      const existing = inserted.rows[0] || (await client.query(
+        `select id, name, code, active from local_labor_products
+          where company_id = $1
+            and (normalized_name = $2 or ($3 <> '' and normalized_code = $3))
+          order by id
+          limit 1`,
+        [companyId, normalizedName, normalizedCode],
+      )).rows[0];
+      if (!existing?.active && !inserted.rows[0]) {
+        throw new Error(`Odoo labor product ${sourceProduct.external_id} conflicts with an inactive local labor product.`);
+      }
+      products.push({
+        externalId: sourceProduct.external_id,
+        productId: existing.id,
+        created: Boolean(inserted.rows[0]),
+      });
+    }
+    await client.query("commit");
+    return { products };
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function setLocalLaborProductPinned({ companyId, locationId, productId, pinned, actorId }, execute = query) {
   const result = await execute(
     `with selected as (

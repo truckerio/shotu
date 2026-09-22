@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { officeQueueText } from "./part-request-model.js";
 import { OfficeRequestCard } from "./OfficeRequestCard.jsx";
 import { OfficePartComposer } from "./OfficePartComposer.jsx";
 import { UsedPartsSection } from "./UsedPartsSection.jsx";
 import { interfaceText } from "../../../i18n/index.js";
 import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
+import { MechanicPartRequestForm } from "../MechanicPartRequestForm.jsx";
 
 export function OfficePartsSurface({
   actorId,
@@ -35,6 +36,7 @@ export function OfficePartsSurface({
     ? ""
     : new URLSearchParams(window.location.search).get("partRequest") || "";
   const focusedRequestRef = useRef(null);
+  const [requestFormOpen,setRequestFormOpen]=useState(false);
 
   useEffect(() => {
     if (!focusedRequestId || !requests.some((request) => request.id === focusedRequestId)) return;
@@ -72,6 +74,13 @@ export function OfficePartsSurface({
         suggestionsEnabled
         presentation={presentation}
       />
+      <details className="compact-parts-labor" open={presentation!=="one-page"||Boolean(focusedRequestId)}><summary>Requests &amp; supply</summary>
+      {detail.allowedActions?.requestParts?<div className="mechanic-part-request-action">
+        <button type="button" aria-expanded={requestFormOpen} aria-controls={`office-request-part-${detail.workorder.id}`} onClick={()=>setRequestFormOpen(open=>!open)}>Request part</button>
+        <div id={`office-request-part-${detail.workorder.id}`} hidden={!requestFormOpen}>
+          <MechanicPartRequestForm workorderId={detail.workorder.id} onChanged={onChanged} requestUrl={`/api/workorders/${encodeURIComponent(detail.workorder.id)}/modules/parts/actions/request`}/>
+        </div>
+      </div>:null}
       {detail.allowedActions?.planParts ? (
         <section className={`office-part-planning${presentation === "one-page" ? " is-one-page" : ""}`} aria-labelledby="requests-supply-heading">
           <div className="office-part-planning-heading">
@@ -99,6 +108,7 @@ export function OfficePartsSurface({
           </div>
         )) : null}
       </div>
+      </details>
     </>
   );
 }

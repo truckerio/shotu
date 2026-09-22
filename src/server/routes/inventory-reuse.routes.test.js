@@ -21,18 +21,26 @@ test("custody routes ignore unrelated paths and reject unsupported methods",asyn
 test("remove, atomic return, legacy receive and review cross real schemas into guarded mutation service",async()=>{
   const calls=[];const deps={mutate:async(input)=>{calls.push(input);return {case:{id:caseId,status:"hold"},replayed:false};}};
   assert.equal((await request("/api/inventory-reuse/remove","POST",{...scope,usageId:randomUUID(),reason:"Test",expectedVersion:1,idempotencyKey:"remove-test-1"},deps)).status,200);
-  assert.equal((await request(`/api/inventory-reuse/${caseId}/return`,"POST",{...scope,exactUnitId:randomUUID(),outcome:"hold",expectedVersion:1,idempotencyKey:"return-test-1"},deps)).status,200);
+  assert.equal((await request(`/api/inventory-reuse/${caseId}/return`,"POST",{...scope,exactUnitId:randomUUID(),outcome:"hold",evidence:"Exact unit received",expectedVersion:1,idempotencyKey:"return-test-1"},deps)).status,200);
   assert.equal((await request(`/api/inventory-reuse/${caseId}/receive`,"POST",{...scope,evidence:"Actual handoff observed",exactUnitId:randomUUID(),expectedVersion:1,idempotencyKey:"receive-test-1"},deps)).status,200);
   assert.equal((await request(`/api/inventory-reuse/${caseId}/review`,"POST",{...scope,decision:"hold",inspectionEvidence:"Damage seen",reason:"Repair needed",expectedVersion:1,idempotencyKey:"hold-test-1"},deps)).status,200);
   assert.deepEqual(calls.map((c)=>c.action),["remove","return","receive","release"]);
 });
-test("asset, operation, config and explicit configuration actions map exact endpoint contracts",async()=>{
+test("asset, custody case, operation, config and explicit configuration actions map exact endpoint contracts",async()=>{
   const views=[]; const deps={read:async(input)=>{views.push(input.view);return {};},configure:async(input)=>({saved:true,kind:input.kind})};
   const search=`?companyId=${companyId}&locationId=${locationId}`;
-  for(const endpoint of ["",`/asset/${randomUUID()}`,"/operations/original-key","/config"]) assert.equal((await request(`/api/inventory-reuse${endpoint}${search}`,"GET",null,deps)).status,200);
-  assert.deepEqual(views,["queue","asset","operation","config"]);
+  for(const endpoint of ["",`/asset/${randomUUID()}`,`/cases/${caseId}`,"/operations/original-key","/config"]) assert.equal((await request(`/api/inventory-reuse${endpoint}${search}`,"GET",null,deps)).status,200);
+  assert.deepEqual(views,["queue","asset","case","operation","config"]);
   assert.equal((await request("/api/inventory-reuse/config/grant","POST",{...scope,userId:actorId,capabilities:[],reason:"Revoke"},deps)).data.saved,true);
   assert.equal((await request("/api/inventory-reuse/config/policy","POST",{...scope,catalogPartId:randomUUID(),reuseAllowed:false,evidence:"Single use only"},deps)).data.saved,true);
+});
+
+test("exact custody case route rejects malformed ids and preserves scoped not-found errors",async()=>{
+  const search=`?companyId=${companyId}&locationId=${locationId}`;
+  assert.equal((await request(`/api/inventory-reuse/cases/not-a-case${search}`,"GET")).status,400);
+  const missing=await request(`/api/inventory-reuse/cases/${caseId}${search}`,"GET",null,{read:async()=>{throw new InventoryError("Custody case not found.",{code:"INVENTORY_REUSE_NOT_FOUND",statusCode:404});}});
+  assert.equal(missing.status,404);
+  assert.equal(missing.data.code,"INVENTORY_REUSE_NOT_FOUND");
 });
 test("exact-unit state filters cross the route contract and reject unknown future states",async()=>{
   let readInput;

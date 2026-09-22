@@ -22,42 +22,31 @@ test("office one-page Parts reaches the used-parts editor without changing mecha
   assert.match(section, /presentation=\{presentation\}/);
 });
 
-test("office Detail uses the shared selectable labor control through the form callback", () => {
+test("office Detail passes the shared labor control through the shared parts table", () => {
   assert.match(panel, /onLaborProductChange,/);
   assert.match(office, /onLaborProductChange=\{onLaborProductChange\}/);
   assert.match(section, /onLaborProductChange=\{onLaborProductChange\}/);
-  assert.match(editor, /<LaborProductSelector[\s\S]*?onChange=\{onLaborProductChange\}/);
-  assert.match(editor, /disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table">[\s\S]*?<LaborProductSelector[\s\S]*?<QuantityUnitInput/);
+  assert.match(editor, /onChange=\{onLaborProductChange \|\| \(\(\) => \{\}\)\}/);
+  assert.match(editor, /<LaborProductSelector[\s\S]*?disabled=\{!laborEditable\}/);
+  assert.match(editor, /<QuantityUnitInput[\s\S]*?id="workorder-labor-hours"[\s\S]*?disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
 });
 
-test("one-page Detail Parts starts with labor plus three local inventory intake rows", () => {
+test("one-page Detail Parts stays on the shared table lifecycle surface", () => {
   assert.match(editor, /const onePage = presentation === "one-page"/);
-  assert.match(editor, /if \(onePage\) \{[\s\S]*?<WorkorderPartsTable columns=\{DETAIL_WORKORDER_PARTS_COLUMNS\} className="detail-operational-parts-editor used-parts-items-table used-parts-one-page-table">/);
-  assert.match(editor, /\{renderPartsColumnHead\(\)\}[\s\S]*?<WorkorderPartsRow className="used-part-labor-row"/);
-  assert.match(editor, /activeSerializedParts\.map\([\s\S]*recordedManualParts\.map\(/);
-  assert.match(editor, /const \[onePageIntakeCount, setOnePageIntakeCount\] = useState\(DEFAULT_PART_ENTRY_ROWS\)/);
-  assert.match(editor, /const localIntakeRowCount = Math\.max\(0, onePageIntakeCount - activeSerializedParts\.length - recordedManualParts\.length\)/);
-  assert.match(editor, /Array\.from\(\{ length: localIntakeRowCount \}/);
-  assert.match(editor, /id=\{`workorder-part-intake-row-\$\{intakeIndex\}`\}/);
-  assert.match(editor, /const \[onePageIntakeQueries, setOnePageIntakeQueries\][\s\S]*?Array\.from\(\{ length: DEFAULT_PART_ENTRY_ROWS \}/);
-  assert.doesNotMatch(editor.match(/if \(onePage\) \{[\s\S]*?\n  \}\n\n  if \(!partsEditable/)[0], /used-parts-empty/);
-  assert.match(editorCss, /\.used-parts-one-page-table \{[\s\S]*?--workorder-parts-quantity-track: 158px/s);
-  assert.match(editorCss, /\.used-parts-one-page-table \.quantity-unit-input \{[\s\S]*?grid-template-columns: 90px 60px/s);
-  assert.match(editorCss, /\.used-parts-one-page-table \{[\s\S]*?minmax\(140px, 0\.55fr\)/s);
-  assert.match(editorCss, /\.used-parts-one-page-table \.used-parts-manual-picker \.part-catalog-field > input \{[\s\S]*?border-bottom: 1px solid #d0d5dd/s);
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">/);
+  assert.match(editor, /activeSerializedParts\.map\(\(part, index\) => renderSerializedPartRow/);
+  assert.match(editor, /recordedManualParts\.map\(\(part, index\) => renderRecordedPartRow/);
+  assert.doesNotMatch(editor, /CompactWorkorderParts|if \(onePage\)/);
+  assert.doesNotMatch(editorCss, /\.compact-workorder-parts/);
 });
 
-test("starter intake slots stay local until the existing inventory lifecycle completes", () => {
-  const onePage = editor.match(/if \(onePage\) \{[\s\S]*?\n  \}\n\n  if \(!partsEditable/)[0];
-  assert.match(editor, /Detail's starter rows are intentionally local/);
-  assert.match(onePage, /purpose="workorder_assignment"/);
-  assert.match(editor, /const \[activeOnePageIntakeIndex, setActiveOnePageIntakeIndex\] = useState\(null\)/);
-  assert.match(editor, /function clearActiveOnePageIntake\(\)[\s\S]*?updateOnePageIntakeQuery\(activeOnePageIntakeIndex, ""\)/);
-  assert.match(onePage, /setActiveOnePageIntakeIndex\(intakeIndex\)/);
-  assert.match(onePage, /activeOnePageIntakeIndex === intakeIndex \? serializedDialog : null/);
-  assert.doesNotMatch(onePage, /<\/WorkorderPartsTable>\s*\{serializedDialog\}/);
-  assert.doesNotMatch(onePage, /onSave\(/);
-  assert.doesNotMatch(onePage, /onChange=\{onPartsChange\}/);
+test("one-page catalog selection stays in the existing inventory lifecycle", () => {
+  assert.match(editor, /const \[serializedDialogPart, setSerializedDialogPart\]/);
+  assert.match(editor, /<PartCatalogCombobox[\s\S]*onSelect=\{\(catalogPart\) => \{[\s\S]*setCatalogQuery\(catalogPart\.partNumber\)[\s\S]*setSerializedDialogPart\(catalogPart\)/);
+  assert.match(editor, /\{serializedDialog\}/);
+  assert.match(editor, /onReserved=\{async \(usage\) => \{[\s\S]*serializedParts\?\.recordUsage\?\.\(usage\)/);
+  assert.match(editor, /anchorToPartField=\{onePage\}/);
 });
 
 test("office request actions remain rendered after the one-page table", () => {

@@ -57,14 +57,23 @@ function reviewedInvoice(overrides = {}) {
   };
 }
 
+function noPoCommand(overrides = {}) {
+  return {
+    postingRoute: "no_purchase_order",
+    noPurchaseOrderReason: "Supplier invoice arrived without a purchase order.",
+    ...overrides,
+  };
+}
+
 test("posts a reviewed invoice to local inventory without provider dependencies", async () => {
   let posted;
   const result = await postReviewedInvoiceToLocalInventory(
     RUN_ID,
-    { idempotencyKey: "local-receipt-1", expectedVersion: 3, confirmation: "all_received_undamaged" },
+    noPoCommand({ idempotencyKey: "local-receipt-1", expectedVersion: 3, confirmation: "all_received_undamaged" }),
     context(),
     {
       loadInvoice: async () => reviewedInvoice(),
+      loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "serialized" }],
       postReceipt: async (input) => {
         posted = input;
         return {
@@ -106,7 +115,7 @@ test("a reviewed Quantity policy prevents per-piece serial creation on receipt",
   let posted;
   await postReviewedInvoiceToLocalInventory(
     RUN_ID,
-    { idempotencyKey: "quantity-policy-receipt", expectedVersion: 3, confirmation: "all_received_undamaged" },
+    noPoCommand({ idempotencyKey: "quantity-policy-receipt", expectedVersion: 3, confirmation: "all_received_undamaged" }),
     context(),
     {
       loadInvoice: async () => reviewedInvoice(),
@@ -121,10 +130,11 @@ test("a reviewed Quantity policy prevents per-piece serial creation on receipt",
 test("returns the existing receipt for an exact idempotent replay", async () => {
   const result = await postReviewedInvoiceToLocalInventory(
     RUN_ID,
-    { idempotencyKey: "local-receipt-replay", expectedVersion: 3, confirmation: "all_received_undamaged" },
+    noPoCommand({ idempotencyKey: "local-receipt-replay", expectedVersion: 3, confirmation: "all_received_undamaged" }),
     context(),
     {
       loadInvoice: async () => reviewedInvoice(),
+      loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "quantity" }],
       postReceipt: async () => ({ kind: "replay", receipt: { id: "receipt-1", status: "posted", units: [] } }),
     },
   );
@@ -136,10 +146,11 @@ test("rejects a changed request behind an already-used receipt identity", async 
   await assert.rejects(
     postReviewedInvoiceToLocalInventory(
       RUN_ID,
-      { idempotencyKey: "local-receipt-conflict", expectedVersion: 3, confirmation: "all_received_undamaged" },
+      noPoCommand({ idempotencyKey: "local-receipt-conflict", expectedVersion: 3, confirmation: "all_received_undamaged" }),
       context(),
       {
         loadInvoice: async () => reviewedInvoice(),
+        loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "quantity" }],
         postReceipt: async () => ({ kind: "conflict" }),
         qrOptions: { signingKey: SIGNING_KEY },
       },
@@ -155,10 +166,11 @@ test("measured quantities stay aggregate and do not receive invented serial iden
   let posted;
   await postReviewedInvoiceToLocalInventory(
     RUN_ID,
-    { idempotencyKey: "local-measured-quantity", expectedVersion: 3, confirmation: "all_received_undamaged" },
+    noPoCommand({ idempotencyKey: "local-measured-quantity", expectedVersion: 3, confirmation: "all_received_undamaged" }),
     context(),
     {
       loadInvoice: async () => invoice,
+      loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "measured_bulk" }],
       postReceipt: async (input) => {
         posted = input;
         return { kind: "posted", receipt: { id: input.receiptId, status: "posted", units: [] } };
@@ -187,7 +199,7 @@ test("rejects unsupported units before any inventory write", async () => {
   await assert.rejects(
     postReviewedInvoiceToLocalInventory(
       RUN_ID,
-      { idempotencyKey: "local-receipt-uom", expectedVersion: 3, confirmation: "all_received_undamaged" },
+      noPoCommand({ idempotencyKey: "local-receipt-uom", expectedVersion: 3, confirmation: "all_received_undamaged" }),
       context(),
       { loadInvoice: async () => invoice, postReceipt: async () => { wrote = true; } },
     ),
@@ -228,9 +240,9 @@ test("surfaces reserved legacy balance authority conflicts", async () => {
   await assert.rejects(
     postReviewedInvoiceToLocalInventory(
       RUN_ID,
-      { idempotencyKey: "local-authority-conflict", expectedVersion: 3, confirmation: "all_received_undamaged" },
+      noPoCommand({ idempotencyKey: "local-authority-conflict", expectedVersion: 3, confirmation: "all_received_undamaged" }),
       context(),
-      { loadInvoice: async () => reviewedInvoice(), postReceipt: async () => ({ kind: "authority_conflict" }), qrOptions: { signingKey: SIGNING_KEY } },
+      { loadInvoice: async () => reviewedInvoice(), loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "quantity" }], postReceipt: async () => ({ kind: "authority_conflict" }), qrOptions: { signingKey: SIGNING_KEY } },
     ),
     (error) => error.code === "INVENTORY_AUTHORITY_CONFLICT"
       && error.statusCode === 409
@@ -242,9 +254,9 @@ test("requires a fresh match when a selected catalog part changed", async () => 
   await assert.rejects(
     postReviewedInvoiceToLocalInventory(
       RUN_ID,
-      { idempotencyKey: "local-catalog-changed", expectedVersion: 3, confirmation: "all_received_undamaged" },
+      noPoCommand({ idempotencyKey: "local-catalog-changed", expectedVersion: 3, confirmation: "all_received_undamaged" }),
       context(),
-      { loadInvoice: async () => reviewedInvoice(), postReceipt: async () => ({ kind: "catalog_changed" }), qrOptions: { signingKey: SIGNING_KEY } },
+      { loadInvoice: async () => reviewedInvoice(), loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "quantity" }], postReceipt: async () => ({ kind: "catalog_changed" }), qrOptions: { signingKey: SIGNING_KEY } },
     ),
     (error) => error.code === "INVENTORY_CATALOG_PART_CHANGED"
       && error.statusCode === 409
@@ -257,10 +269,11 @@ test("does not write countable inventory when QR signing is unavailable", async 
   await assert.rejects(
     postReviewedInvoiceToLocalInventory(
       RUN_ID,
-      { idempotencyKey: "local-missing-qr", expectedVersion: 3, confirmation: "all_received_undamaged" },
+      noPoCommand({ idempotencyKey: "local-missing-qr", expectedVersion: 3, confirmation: "all_received_undamaged" }),
       context(),
       {
         loadInvoice: async () => reviewedInvoice(),
+        loadTrackingModes: async () => [{ catalogPartId: CATALOG_PART_ID, trackingMode: "serialized" }],
         postReceipt: async () => { wrote = true; },
         qrOptions: { signingKey: "invalid" },
       },
@@ -293,6 +306,17 @@ test("Office stock reads forward the requested server-side sort before paginatio
   assert.equal(inputs[0].sort, "reserved_desc");
   assert.equal(inputs[0].limit, 20);
   assert.equal(inputs[0].offset, 40);
+});
+
+test("Office stock reads forward low-stock priority before pagination", async () => {
+  const inputs = [];
+  await readLocalInventoryStock(
+    new URLSearchParams({ sort: "low_stock_first", page: "2", limit: "20" }),
+    context(),
+    { listStock: async (nextInput) => { inputs.push(nextInput); return []; } },
+  );
+  assert.equal(inputs[0].sort, "low_stock_first");
+  assert.equal(inputs[0].offset, 20);
 });
 
 test("invoice history keeps Office location scope and forwards bounded server pagination", async () => {

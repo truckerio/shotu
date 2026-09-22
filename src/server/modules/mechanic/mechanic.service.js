@@ -225,7 +225,14 @@ export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts, 
       "Mechanics cannot record used parts at this location. Send a part request to the office instead.",
     );
   }
-  return updateMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours);
+  try {
+    return await updateMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours);
+  } catch (error) {
+    if (error instanceof WorkorderLifecycleConflictError) {
+      throw new AuthError(error.statusCode, error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 export async function markMechanicDone(workorderId, mechanicUserId, input) {

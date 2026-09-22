@@ -2,9 +2,9 @@ export const ADMIN_MOBILE_DESTINATIONS = [
   { key: "units", label: "Units", view: "units" },
   { key: "inventory", label: "Inventory", view: "inventory" },
   { key: "locations", label: "Locations", view: "locations" },
+  { key: "operations", label: "Ops", view: "operations" },
   { key: "modules", label: "Modules", view: "modules" },
   { key: "settings", label: "Settings", view: "settings" },
-  { key: "operations", label: "Ops", view: "operations", secondary: true },
 ];
 
 export function canonicalAdminSearch(search = "") {

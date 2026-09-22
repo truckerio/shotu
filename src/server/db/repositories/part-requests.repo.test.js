@@ -125,3 +125,14 @@ test("public allocations derive next statuses from database-shaped rows", () => 
     inventory_item_id: null,
   }).nextStatuses, ["ordered", "cancelled"]);
 });
+
+test("inventory allocations open a position reconciliation gate in the same transaction", async () => {
+  const source = await readFile(repositoryUrl, "utf8");
+  const create = source.slice(source.indexOf("async function createAllocation"), source.indexOf("async function appendOfficeAddedPart"));
+  const transition = source.slice(source.indexOf("async function markLegacyAllocationReconciliation"), source.indexOf("export async function updatePartAllocation"));
+  assert.match(create, /markLegacyAllocationReconciliation\(client, inventoryItemId, insertedAllocation\.rows\[0\]\.id\)/);
+  assert.ok(create.indexOf("markLegacyAllocationReconciliation") < create.indexOf("set quantity_reserved = quantity_reserved +"));
+  assert.match(transition, /active_legacy_allocation/);
+  assert.match(transition, /on conflict\(company_id,inventory_item_id,exception_code\) do update/);
+  assert.ok(transition.indexOf("markLegacyAllocationReconciliation") < transition.indexOf("set quantity_reserved = quantity_reserved +"));
+});

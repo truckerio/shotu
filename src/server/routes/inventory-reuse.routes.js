@@ -8,9 +8,9 @@ export async function handleInventoryReuseApi(req, res, url, helpers, dependenci
   const scope = Object.fromEntries(["companyId", "locationId", "limit", "cursor", "q", "status", "unitState", "route", "condition", "catalogPartId", "code"].map((key) => [key, url.searchParams.get(key)]).filter(([, value]) => value !== null));
   try {
     if (req.method === "GET") {
-      const asset = /^\/asset\/([^/]+)$/.exec(suffix), operation = /^\/operations\/([^/]+)$/.exec(suffix), unit = /^\/units\/([^/]+)$/.exec(suffix), children = /^\/stock\/([^/]+)\/units$/.exec(suffix);
-      let view = suffix === "/stock" ? "stock" : suffix === "/queue" || suffix === "" ? "queue" : suffix === "/scan" ? "scan" : children ? "units" : unit ? "unit" : asset ? "asset" : operation ? "operation" : suffix === "/config" ? "config" : null;
-      if (view) { helpers.sendJson(res, 200, await getInventoryReuse(view, { ...scope, ...(children ? { catalogPartId: decodeURIComponent(children[1]) } : {}) }, decodeURIComponent(unit?.[1] || asset?.[1] || operation?.[1] || ""), helpers.requestContext, dependencies)); return true; }
+      const asset = /^\/asset\/([^/]+)$/.exec(suffix), reuseCase = /^\/cases\/([^/]+)$/.exec(suffix), operation = /^\/operations\/([^/]+)$/.exec(suffix), unit = /^\/units\/([^/]+)$/.exec(suffix), children = /^\/stock\/([^/]+)\/units$/.exec(suffix);
+      let view = suffix === "/stock" ? "stock" : suffix === "/queue" || suffix === "" ? "queue" : suffix === "/scan" ? "scan" : children ? "units" : unit ? "unit" : reuseCase ? "case" : asset ? "asset" : operation ? "operation" : suffix === "/config" ? "config" : null;
+      if (view) { helpers.sendJson(res, 200, await getInventoryReuse(view, { ...scope, ...(children ? { catalogPartId: decodeURIComponent(children[1]) } : {}) }, decodeURIComponent(unit?.[1] || reuseCase?.[1] || asset?.[1] || operation?.[1] || ""), helpers.requestContext, dependencies)); return true; }
     }
     if (req.method === "POST") {
       if (suffix === "/config/grant" || suffix === "/config/policy") { helpers.sendJson(res, 200, await saveInventoryReuseConfiguration(suffix.endsWith("/grant") ? "grant" : "policy", await helpers.readBody(req), helpers.requestContext, dependencies)); return true; }

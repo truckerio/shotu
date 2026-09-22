@@ -28,6 +28,7 @@ export function normalizeCatalogPart(raw = {}) {
       || raw.inventory[0]
       || {}
     : raw.inventory || {};
+  const inventory = normalizeInventory(inventorySource);
 
   return {
     id: raw.id || raw.catalogPartId || "",
@@ -36,8 +37,14 @@ export function normalizeCatalogPart(raw = {}) {
     description: String(raw.description || raw.name || ""),
     category: String(raw.category || ""),
     barcode: String(raw.barcode || ""),
-    uomCode: normalizeUomCode(raw.uomCode || raw.unit || raw.unitCode),
+    uomCode: normalizeUomCode(
+      raw.uomCode || raw.unit || raw.unitCode
+      || inventorySource.uomCode || inventorySource.unit || inventorySource.unitCode,
+    ),
     trackingMode: ["quantity", "serialized", "measured_bulk"].includes(raw.trackingMode) ? raw.trackingMode : "",
+    decimalScale: Number.isInteger(Number(raw.decimalScale ?? raw.decimal_scale))
+      ? Number(raw.decimalScale ?? raw.decimal_scale)
+      : 0,
     version: Number(raw.version || 1),
     providerManaged: raw.providerManaged === true,
     referenceNumbers: Array.isArray(raw.referenceNumbers) ? raw.referenceNumbers.map(String) : [],
@@ -45,7 +52,7 @@ export function normalizeCatalogPart(raw = {}) {
     repairOrder: String(raw.repairOrder || raw.repairOrderTemplate || ""),
     source: String(raw.source || "company_catalog"),
     matchType: String(raw.matchType || ""),
-    inventory: normalizeInventory(inventorySource),
+    inventory,
   };
 }
 

@@ -54,7 +54,7 @@ test("local posting serializes invoice creation while Odoo sync remains catalog-
   assert.match(repository, /local_inventory_receipts_company_id_created_by_idempotency__key/);
   assert.match(repository, /inventory_receipts_company_id_invoice_run_id_key/);
   assert.match(genericTracking, /tracking_mode in \('serial', 'aggregate'\)/i);
-  assert.match(repository, /line\.serializedUnits\?\.length \? "serial" : "aggregate"/);
+  assert.match(repository, /line\.trackingMode === "serialized" \? "serial" : "aggregate"/);
   const canonicalLineInsert = repository.indexOf("insert into inventory_receipt_lines");
   const movementInsert = repository.indexOf("insert into inventory_stock_movements");
   assert.ok(canonicalLineInsert > -1 && canonicalLineInsert < movementInsert,
@@ -71,7 +71,7 @@ test("invoice detail projects durable local receipt truth after refresh", async 
     readFile(new URL("../../db/repositories/invoice-extractions.repo.js", import.meta.url), "utf8"),
     readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8"),
   ]);
-  assert.match(repository, /left join local_inventory_receipts local_receipt/);
+  assert.match(repository, /left join lateral \([\s\S]*local_inventory_receipts receipt[\s\S]*order by receipt\.posted_at desc, receipt\.id desc[\s\S]*\) local_receipt on true/);
   assert.match(repository, /inventoryReceipt: row\.local_receipt_id/);
   assert.match(repository, /local_receipt\.posted_at as local_receipt_posted_at/);
   assert.match(repository, /left join inventory_label_batches label_batch/);
@@ -124,6 +124,8 @@ test("inventory stock applies a whitelisted requested order before pagination", 
   assert.match(orderBy, /case when \$10 = 'available_desc' then quantity_available end desc/i);
   assert.match(orderBy, /case when \$10 = 'reserved_desc' then quantity_reserved end desc/i);
   assert.match(orderBy, /case when \$10 = 'locations_desc' then location_count end desc/i);
+  assert.match(orderBy, /case when \$10 = 'low_stock_first' then low_stock end desc/i);
+  assert.match(orderBy, /case when \$10 = 'low_stock_first' and low_stock then quantity_available end asc/i);
   assert.match(repository, /count\(\*\) filter \([\s\S]*balance\.quantity_on_hand > 0[\s\S]*balance\.odoo_quantity_on_hand > 0[\s\S]*\)::integer as location_count/i);
   assert.match(orderBy, /lower\(part_number\), catalog_part_id/i);
   assert.ok(orderBy.length > 0);

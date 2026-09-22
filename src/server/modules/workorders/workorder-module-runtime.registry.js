@@ -96,6 +96,7 @@ const ACTIONS = Object.freeze({
       z.object({
         operation: z.literal("aggregateUsageReserve"),
         catalogPartId: id,
+        sourcePositionId: id,
         quantity: z.coerce.number().positive().max(999999.999).multipleOf(0.001),
         uomCode: z.string().trim().min(1).max(32),
         repairOrder: z.string().trim().max(2000).default(""),

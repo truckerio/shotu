@@ -136,6 +136,7 @@ function publicInventory(row) {
 }
 
 function publicRequest(row) {
+  const purchaseSupply=row.purchase_supply||{};
   return {
     id: row.id,
     workorderId: row.workorder_id,
@@ -164,6 +165,13 @@ function publicRequest(row) {
     updatedAt: row.updated_at,
     allocations: (row.allocations || []).map(publicAllocation),
     inventory: (row.inventory || []).map(publicInventory),
+    purchaseSupply: {
+      plannedQuantity:publicQuantity(purchaseSupply.plannedQuantity),
+      incomingQuantity:publicQuantity(purchaseSupply.incomingQuantity),
+      receivedQuantity:publicQuantity(purchaseSupply.receivedQuantity),
+      cancelledQuantity:publicQuantity(purchaseSupply.cancelledQuantity),
+      readyAtShop:publicQuantity(purchaseSupply.receivedQuantity)>0,
+    },
   };
 }
 
@@ -195,7 +203,17 @@ export async function listWorkorderPartRequests(workorderId) {
               and ii.uom_code = pr.uom_code
               and pr.normalized_part_number <> ''
           ) inventory_row
-        ), '[]'::jsonb) as inventory
+        ), '[]'::jsonb) as inventory,
+        coalesce((
+          select jsonb_build_object(
+            'plannedQuantity',coalesce(sum(source.planned_quantity),0),
+            'incomingQuantity',coalesce(sum(source.planned_quantity-source.received_quantity-source.cancelled_quantity),0),
+            'receivedQuantity',coalesce(sum(source.received_quantity),0),
+            'cancelledQuantity',coalesce(sum(source.cancelled_quantity),0)
+          )
+          from inventory_purchase_line_sources source
+          where source.company_id=wo.company_id and source.source_type='workorder_request' and source.source_id=pr.id
+        ),'{}'::jsonb) as purchase_supply
       from workorder_part_requests pr
       join operational_workorders wo on wo.id = pr.workorder_id
       left join user_profiles requester on requester.id = pr.requested_by_user_id
@@ -236,16 +254,25 @@ async function requireSelectedCatalogPart(client, companyId, catalogPartId, part
   const selected = result.rows[0];
   if (!selected) {
     if (!strict) return null;
-    throw new Error("Selected catalog part was not found for this company.");
+    throw new PartWorkflowConflictError(
+      "PART_CATALOG_SELECTION_NOT_FOUND",
+      "The selected inventory catalog part is no longer available. Search and select it again.",
+    );
   }
   const normalized = normalizePartNumber(partNumber);
   if (!normalized || normalized !== selected.normalized_part_number) {
     if (!strict) return null;
-    throw new Error("Selected catalog part does not match the entered part number.");
+    throw new PartWorkflowConflictError(
+      "PART_CATALOG_NUMBER_MISMATCH",
+      "The part number was changed after selecting an inventory catalog match. Select the catalog part again.",
+    );
   }
   if ((uomCode || DEFAULT_UOM_CODE) !== (selected.uom_code || DEFAULT_UOM_CODE)) {
     if (!strict) return null;
-    throw new Error("Selected catalog part does not match the entered unit.");
+    throw new PartWorkflowConflictError(
+      "PART_CATALOG_UOM_MISMATCH",
+      "The unit does not match the selected inventory catalog part. Select the catalog part again.",
+    );
   }
   return selected;
 }
@@ -268,12 +295,19 @@ export async function createPartRequest(workorderId, input) {
     const current = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
-    const assignment = await client.query(
-      `select 1 from workorder_mechanic_assignments
-       where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
-      [workorderId, input.mechanicUserId],
-    );
-    if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can request parts.");
+    if (input.actorRole === "mechanic" || !input.actorRole) {
+      const assignment = await client.query(
+        `select 1 from workorder_mechanic_assignments
+         where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
+        [workorderId, input.mechanicUserId],
+      );
+      if (!assignment.rows[0]) {
+        const error = new Error("You must be assigned to this workorder before requesting a part.");
+        error.statusCode = 409;
+        error.code = "WORKORDER_MECHANIC_ASSIGNMENT_REQUIRED";
+        throw error;
+      }
+    }
     if (TERMINAL_WORKORDER_STATUSES.includes(workorder.status)) throw new Error("Parts cannot be requested on a completed workorder.");
 
     if (input.sourceChatMessageId) {
@@ -604,22 +638,13 @@ async function createAllocation(client, {
     inventoryItemId = match.rows[0].id;
     allocationLocationId = match.rows[0].location_id;
   }
-  if (inventoryItemId && allocation.sourceType === "inventory" && allocation.status === "reserved") {
-    const reserved = await client.query(
-      `update inventory_items
-       set quantity_reserved = quantity_reserved + $2, updated_at = now()
-       where id = $1 and quantity_on_hand - quantity_reserved >= $2
-       returning id`,
-      [inventoryItemId, allocation.quantity]
-    );
-    if (!reserved.rows[0]) throw new Error("Not enough inventory is available to reserve this quantity.");
-  }
-  await client.query(
+  const insertedAllocation = await client.query(
     `
       insert into part_allocations (
         part_request_id, source_type, status, quantity, location_id, inventory_item_id,
         vendor, source_reference, unit_price, quote_url, created_by_user_id, uom_code
       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      returning id
     `,
     [
       requestId,
@@ -636,6 +661,17 @@ async function createAllocation(client, {
       allocation.uomCode || DEFAULT_UOM_CODE,
     ]
   );
+  if (inventoryItemId && allocation.sourceType === "inventory" && allocation.status === "reserved") {
+    await markLegacyAllocationReconciliation(client, inventoryItemId, insertedAllocation.rows[0].id);
+    const reserved = await client.query(
+      `update inventory_items
+       set quantity_reserved = quantity_reserved + $2, updated_at = now()
+       where id = $1 and quantity_on_hand - quantity_reserved >= $2
+       returning id`,
+      [inventoryItemId, allocation.quantity]
+    );
+    if (!reserved.rows[0]) throw new Error("Not enough inventory is available to reserve this quantity.");
+  }
 }
 
 async function appendOfficeAddedPart(client, workorderId, values) {
@@ -834,6 +870,20 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
   }
 }
 
+async function markLegacyAllocationReconciliation(client, inventoryItemId, allocationId) {
+  await client.query(
+    `insert into inventory_position_reconciliation_exceptions
+       (company_id,location_id,inventory_item_id,catalog_part_id,exception_code,details)
+     select company_id,location_id,id,catalog_part_id,'active_legacy_allocation',
+       jsonb_build_object('allocationId',$2::text)
+     from inventory_items where id=$1
+     on conflict(company_id,inventory_item_id,exception_code) do update set
+       details=inventory_position_reconciliation_exceptions.details || excluded.details,
+       status='open',resolved_at=null`,
+    [inventoryItemId, allocationId],
+  );
+}
+
 async function applyInventoryAllocationTransition(client, allocation, nextStatus) {
   const inventory = await client.query(
     "select id from inventory_items where id = $1 for update",
@@ -845,6 +895,7 @@ async function applyInventoryAllocationTransition(client, allocation, nextStatus
   const quantity = allocation.quantity;
   let updated;
   if (allocation.status === "proposed" && nextStatus === "reserved") {
+    await markLegacyAllocationReconciliation(client, allocation.inventory_item_id, allocation.id);
     updated = await client.query(
       `update inventory_items
        set quantity_reserved = quantity_reserved + $2, updated_at = now()

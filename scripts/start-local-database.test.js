@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   databaseErrorCodes,
   isLoopbackDatabaseHost,
@@ -13,6 +15,18 @@ test("parses the configured PostgreSQL target without exposing credentials", () 
     parseDatabaseTarget("postgresql+asyncpg://user:secret@localhost:5433/workorder_generator"),
     { host: "localhost", port: 5433, database: "workorder_generator" },
   );
+});
+
+test("direct execution runs the database preflight", () => {
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL("./start-local-database.js", import.meta.url)),
+  ], {
+    env: { ...process.env, DATABASE_URL: "" },
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /DATABASE_URL is required/);
 });
 
 test("limits automatic startup to loopback hosts", () => {

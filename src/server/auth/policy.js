@@ -17,6 +17,30 @@ export function permissionForRequest(method, pathname) {
   if (method === "POST" && /^\/api\/office\/inventory\/count-imports\/[^/]+\/apply$/.test(pathname)) {
     return PERMISSION.INVENTORY_COUNT_APPLY;
   }
+  if (method === "POST" && /^\/api\/office\/inventory\/position-counts\/[^/]+\/apply$/.test(pathname)) {
+    return PERMISSION.INVENTORY_COUNT_APPLY;
+  }
+  if (
+    (method === "POST" && /^\/api\/office\/inventory\/locations\/[^/]+\/(positions|position-counts)$/.test(pathname))
+    || (method === "PATCH" && /^\/api\/office\/inventory\/positions\/[^/]+$/.test(pathname))
+    || (method === "POST" && /^\/api\/office\/inventory\/parts\/[^/]+\/locations\/[^/]+\/moves$/.test(pathname))
+    || (method === "PUT" && /^\/api\/office\/inventory\/position-counts\/[^/]+\/lines\/[^/]+$/.test(pathname))
+  ) return PERMISSION.INVENTORY_LOCATION_MANAGE;
+  if (method === "GET" && /^\/api\/office\/inventory\/parts\/[^/]+\/commercial$/.test(pathname)) {
+    return PERMISSION.INVENTORY_COST_READ;
+  }
+  if ((method === "GET" && pathname === "/api/office/inventory/tax-profiles")
+    || (method === "POST" && /^\/api\/office\/inventory\/parts\/[^/]+\/pricing-preview$/.test(pathname))) {
+    return PERMISSION.INVENTORY_COST_READ;
+  }
+  if ((method === "POST" && pathname === "/api/office/inventory/tax-profiles")
+    || (method === "PUT" && /^\/api\/office\/inventory\/tax-profiles\/[^/]+$/.test(pathname))
+    || (method === "PATCH" && /^\/api\/office\/inventory\/tax-profiles\/[^/]+\/archive$/.test(pathname))) {
+    return PERMISSION.INVENTORY_PRICE_WRITE;
+  }
+  if (["PUT", "PATCH"].includes(method) && /^\/api\/office\/inventory\/parts\/[^/]+\/prices\/(internal|selling)$/.test(pathname)) {
+    return PERMISSION.INVENTORY_PRICE_WRITE;
+  }
   if (pathname.startsWith("/api/office/")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/workorder-drafts")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/surveillance/")) return PERMISSION.WORKORDER_SURVEILLANCE;

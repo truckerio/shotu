@@ -29,6 +29,7 @@ export function MechanicRequestCard({ request, locale = "en" }) {
       {request.approvalStatus === "approved" && request.usageStatus ? (
         <p className="part-request-note">{localizedUsage === usageKey ? statusText(request.usageStatus) : localizedUsage}</p>
       ) : null}
+      {request.purchaseSupply?.readyAtShop?<p className="part-request-note"><strong>Part ready at shop.</strong> Inventory handoff still required.</p>:request.purchaseSupply?.incomingQuantity>0?<p className="part-request-note">Ordered · {formatQuantityUnit(request.purchaseSupply.incomingQuantity,request.uomCode)} incoming.</p>:null}
     </article>
   );
 }

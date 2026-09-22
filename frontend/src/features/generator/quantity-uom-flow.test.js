@@ -109,7 +109,9 @@ test("detail parts use the same configured labor product label as create and pri
   assert.match(usedPartsEditor, /onLaborRepairOrderChange\(event\.target\.value\)/);
   assert.match(usedPartsEditor, /<WorkorderSerializedPartDialog/);
   assert.match(detailPartsModule, /laborRepairOrderDisabled=\{!activeWorkorder\.allowedActions\?\.saveNotes\}/);
-  // Four labor inputs plus the shared product selector obey the same permission gate.
-  assert.equal(usedPartsEditor.match(/disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/g)?.length, 5);
+  // The compact surface keeps product selection separately editable while
+  // hours and work performed remain blocked when notes are locked.
+  assert.equal(usedPartsEditor.match(/disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/g)?.length, 2);
+  assert.match(usedPartsEditor, /<LaborProductSelector[\s\S]*?disabled=\{!laborEditable\}/);
   assert.doesNotMatch(usedPartsEditor, /\[PTR001\] LABOR HOURS/);
 });

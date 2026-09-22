@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { basename, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -63,7 +63,7 @@ const migrationFiles = (await filesUnder(join(root, "src", "server", "db", "migr
   .filter((file) => extname(file) === ".sql");
 
 for (const file of migrationFiles) {
-  const name = file.split("/").at(-1);
+  const name = basename(file);
   if (!/^\d{3}_[a-z0-9_]+\.sql$/.test(name)) {
     fail(file, "migration names must use NNN_snake_case.sql");
   }

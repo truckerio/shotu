@@ -1,5 +1,7 @@
+import './inventory-tables.css';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
+import { DatePicker } from "../../components/forms/DatePicker.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import {
@@ -17,6 +19,7 @@ import {
 import { api } from "../../lib/api.js";
 import { InventoryCodeScanner } from "./InventoryCodeScanner.jsx";
 import { ReuseSetup } from "./ReuseSetup.jsx";
+import { StoragePositionPicker } from "./StoragePositionPicker.jsx";
 import {
   clearCustodyRecovery,
   custodyCommandBody,
@@ -42,20 +45,6 @@ const ROUTES = [
   ["scrap", "Scrap"],
   ["not_sure", "Not sure"],
 ];
-const RETURN_OUTCOMES = [
-  ["reuse", "Ready to reuse"],
-  ["repair", "Needs repair"],
-  ["core_return", "Return as core"],
-  ["scrap", "Scrap"],
-  ["hold", "Keep on hold"],
-];
-const RETURN_BUTTONS = {
-  reuse: "Return to inventory",
-  repair: "Send to repair",
-  core_return: "Prepare core return",
-  scrap: "Mark for scrap",
-  hold: "Keep on hold",
-};
 const CONDITIONS = {
   new: "New",
   serviceable_used: "Reusable",
@@ -119,13 +108,16 @@ function apiPath(path, values) {
 
 function commandLabel(caseItem, capabilities = {}) {
   const status = caseItem?.workflowStatus || caseItem?.status;
+  if (status === "awaiting_handoff" && capabilities.receive)
+    return "Receive part";
   if (
-    status === "awaiting_handoff" &&
-    RETURN_OUTCOMES.some(([outcome]) =>
-      returnOutcomeAllowed(outcome, caseItem, capabilities),
-    )
+    ["received_pending_review", "needs_inspection", "hold", "repair_complete_pending_review"].includes(status) &&
+    capabilities.release &&
+    caseItem?.reviewReason
   )
-    return "Return part";
+    return caseItem?.reuseAllowed === true
+      ? "Release to stock"
+      : "Reuse setup required";
   if (
     ["received_pending_review", "needs_inspection"].includes(status) &&
     capabilities.route
@@ -151,13 +143,13 @@ function commandLabel(caseItem, capabilities = {}) {
 
 function statusForAction(caseItem, capabilities) {
   const status = caseItem?.workflowStatus || caseItem?.status;
+  if (status === "awaiting_handoff" && capabilities.receive) return "receive";
   if (
-    status === "awaiting_handoff" &&
-    RETURN_OUTCOMES.some(([outcome]) =>
-      returnOutcomeAllowed(outcome, caseItem, capabilities),
-    )
+    ["received_pending_review", "needs_inspection", "hold", "repair_complete_pending_review"].includes(status) &&
+    capabilities.release &&
+    caseItem?.reviewReason
   )
-    return "return";
+    return "release";
   if (
     ["received_pending_review", "needs_inspection"].includes(status) &&
     capabilities.route
@@ -179,59 +171,15 @@ function statusForAction(caseItem, capabilities) {
   return "";
 }
 
-function returnOutcomeAllowed(outcome, caseItem, capabilities) {
-  if (!capabilities.receive) return false;
-  if (outcome === "reuse")
-    return Boolean(
-      capabilities.release &&
-        caseItem?.reuseAllowed &&
-        caseItem?.ownership === "company" &&
-        caseItem?.ownershipEvidence,
-    );
-  if (outcome === "hold") return Boolean(capabilities.release);
-  const policy = {
-    repair: "repairAllowed",
-    core_return: "coreReturnAllowed",
-    scrap: "scrapAllowed",
-  }[outcome];
-  return Boolean(capabilities.route && policy && caseItem?.[policy]);
-}
-
-function returnOutcomeReason(outcome, caseItem, capabilities) {
-  if (!capabilities.receive) return "You do not have permission to receive returns.";
-  if (outcome === "reuse" && caseItem?.ownership !== "company")
-    return "Only company-owned parts can return to stock.";
-  if (outcome === "reuse" && !caseItem?.reuseAllowed)
-    return "Reuse is not approved for this part type.";
-  if (outcome === "repair" && !caseItem?.repairAllowed)
-    return "Repair is not approved for this part type.";
-  if (outcome === "core_return" && !caseItem?.coreReturnAllowed)
-    return "Core return is not approved for this part type.";
-  if (outcome === "scrap" && !caseItem?.scrapAllowed)
-    return "Scrap is not approved for this part type.";
-  return "You do not have permission for this outcome.";
-}
-
-function defaultReturnOutcome(caseItem, capabilities) {
-  const preferred = {
-    inspect_for_reuse: "reuse",
-    repair: "repair",
-    core_return: "core_return",
-    scrap: "scrap",
-    not_sure: "hold",
-  }[caseItem?.intendedRoute];
-  return [preferred, "hold", "reuse", "repair", "core_return", "scrap"].find(
-    (outcome) => outcome && returnOutcomeAllowed(outcome, caseItem, capabilities),
-  ) || "hold";
-}
-
 export function InventoryCustodyWorkspace({
   locations = [],
   actorId = "",
   initialTab = "stock",
+  initialLocationId = "",
+  initialCaseId = "",
   hidePrimaryTabs = false,
 }) {
-  const [scopeId, setScopeId] = useState("");
+  const [scopeId, setScopeId] = useState(initialLocationId);
   const [tab, setTab] = useState(initialTab);
   const [stock, setStock] = useState({
     items: [],
@@ -262,11 +210,15 @@ export function InventoryCustodyWorkspace({
   });
   const [unitCursor, setUnitCursor] = useState([""]);
   const [selectedCase, setSelectedCase] = useState(null);
+  const [initialCasePending, setInitialCasePending] = useState(Boolean(initialCaseId));
+  const [initialCaseError, setInitialCaseError] = useState("");
+  const [initialCaseRetry, setInitialCaseRetry] = useState(0);
   const [detail, setDetail] = useState(null);
   const [action, setAction] = useState("");
   const [draft, setDraft] = useState({
     evidence: "",
     binLocation: "",
+    targetPositionId: "",
     route: "inspect_for_reuse",
     handlerType: "internal",
     handlerReference: "",
@@ -284,6 +236,10 @@ export function InventoryCustodyWorkspace({
   const [pendingRequest, setPendingRequest] = useState(null);
   const [retryAllowed, setRetryAllowed] = useState(false);
   const [requestedPolicyPart, setRequestedPolicyPart] = useState(null);
+  const [positions, setPositions] = useState([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsError, setPositionsError] = useState("");
+  const [positionsRefresh, setPositionsRefresh] = useState(0);
   const refreshRef = useRef(0);
   const scope = useMemo(
     () => locations.find((location) => location.id === scopeId) || null,
@@ -299,6 +255,8 @@ export function InventoryCustodyWorkspace({
   useEffect(() => {
     if (!scopeId && locations.length === 1) setScopeId(locations[0].id);
   }, [locations, scopeId]);
+  useEffect(() => { if (initialLocationId) setScopeId(initialLocationId); }, [initialLocationId]);
+  useEffect(() => { setInitialCasePending(Boolean(initialCaseId)); setInitialCaseError(""); }, [initialCaseId]);
   useEffect(() => {
     setStockCursor([""]);
     setQueueCursor([""]);
@@ -360,6 +318,28 @@ export function InventoryCustodyWorkspace({
     currentStockCursor,
     refreshRef.current,
   ]);
+
+  useEffect(() => {
+    setPositions([]);
+    setPositionsError("");
+    if (!scopeReady || action !== "release") return undefined;
+    let active = true;
+    setPositionsLoading(true);
+    api(`/api/office/inventory/locations/${encodeURIComponent(locationId)}/positions`)
+      .then((result) => {
+        if (active) setPositions(result.positions || result.items || []);
+      })
+      .catch((error) => {
+        if (active)
+          setPositionsError(error.message || "Storage destinations could not be loaded.");
+      })
+      .finally(() => {
+        if (active) setPositionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [action, locationId, positionsRefresh, scopeReady]);
 
   useEffect(() => {
     if (!scopeReady || tab !== "returns") return undefined;
@@ -499,18 +479,10 @@ export function InventoryCustodyWorkspace({
       );
       setDetail(loaded);
       const loadedCase = loaded.case || caseItem;
-      if (
-        !saved &&
-        (loadedCase.workflowStatus || loadedCase.status) === "awaiting_handoff" &&
-        RETURN_OUTCOMES.some(([outcome]) =>
-          returnOutcomeAllowed(outcome, loadedCase, loaded.capabilities || {}),
-        )
-      ) {
-        setAction("return");
+      if (!saved && (loadedCase.workflowStatus || loadedCase.status) === "awaiting_handoff" && (loaded.capabilities || {}).receive) {
+        setAction("receive");
         setDraft((current) => ({
           ...current,
-          outcome: defaultReturnOutcome(loadedCase, loaded.capabilities || {}),
-          note: "",
           serial: "",
         }));
       }
@@ -520,6 +492,23 @@ export function InventoryCustodyWorkspace({
       );
     }
   }
+  useEffect(() => {
+    if (!initialCasePending || !initialCaseId || !scopeReady) return undefined;
+    let active = true;
+    setInitialCaseError("");
+    api(apiPath(`/api/inventory-reuse/cases/${encodeURIComponent(initialCaseId)}`, { companyId, locationId }))
+      .then((result) => {
+        if (!active) return;
+        setInitialCasePending(false);
+        openCase(result.case);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setInitialCasePending(false);
+        setInitialCaseError(error.message || "This custody case could not be opened.");
+      });
+    return () => { active = false; };
+  }, [companyId, initialCaseId, initialCasePending, initialCaseRetry, locationId, scopeReady]);
   async function execute() {
     const caseItem = selectedCase?.case || selectedCase;
     const caseId = caseItem?.id;
@@ -530,14 +519,14 @@ export function InventoryCustodyWorkspace({
       pendingRequest
     )
       return;
-    if (["return", "receive", "repair/complete"].includes(action) && !exactIdentityId) {
+    if (["receive", "repair/complete"].includes(action) && !exactIdentityId) {
       setActionError(
         "Scan or validate the exact QR or serial before receiving this part.",
       );
       return;
     }
-    if (action === "return" && !returnOutcomeAllowed(draft.outcome, activeCase, caps)) {
-      setActionError(returnOutcomeReason(draft.outcome, activeCase, caps));
+    if (action === "release" && !draft.targetPositionId) {
+      setActionError("Choose the exact shelf or bin before returning this part to available stock.");
       return;
     }
     const body = custodyCommandBody({
@@ -554,12 +543,8 @@ export function InventoryCustodyWorkspace({
         actualHolderType: "inventory_location",
         actualLocationId: locationId,
         exactUnitId: exactIdentityId,
-        ...(draft.binLocation.trim()
-          ? { binLocation: draft.binLocation.trim() }
-          : {}),
-        correctedRoute: draft.route,
       });
-    if (action === "repair/complete") Object.assign(body, { exactUnitId: exactIdentityId, receiptEvidence: draft.receiptEvidence.trim(), binLocation: draft.binLocation.trim() });
+    if (action === "repair/complete") Object.assign(body, { exactUnitId: exactIdentityId, receiptEvidence: draft.receiptEvidence.trim() });
     if (action === "route") Object.assign(body, { route: draft.route });
     if (action === "repair/start")
       Object.assign(body, {
@@ -862,6 +847,11 @@ export function InventoryCustodyWorkspace({
               {state.error}
             </p>
           ) : null}
+          {initialCaseError ? (
+            <p className="ops-error" role="alert">
+              {initialCaseError} <Button type="button" onClick={() => { setInitialCasePending(true); setInitialCaseRetry((value) => value + 1); }}>Try again</Button>
+            </p>
+          ) : null}
           <OperationalCollectionResultHeader>
             <span role="status">
               {state.loading
@@ -872,7 +862,7 @@ export function InventoryCustodyWorkspace({
             </span>
           </OperationalCollectionResultHeader>
           {tab === "stock" ? (
-            <OperationalCollectionTable
+            <OperationalCollectionTable className="inventory-data-table inventory-data-table-five"
               ariaLabel="Stock by catalog part"
               busy={stock.loading}
               columns={[
@@ -912,7 +902,7 @@ export function InventoryCustodyWorkspace({
               ))}
             </OperationalCollectionTable>
           ) : (
-            <OperationalCollectionTable
+            <OperationalCollectionTable className="inventory-data-table inventory-data-table-five"
               ariaLabel="Returns and repairs"
               busy={queue.loading}
               columns={[
@@ -1165,7 +1155,7 @@ export function InventoryCustodyWorkspace({
                     }
                   />
                 </label>
-                <div>
+                <div className="shared-action-row">
                   <Button
                     type="button"
                     variant="primary"
@@ -1210,7 +1200,7 @@ export function InventoryCustodyWorkspace({
         ) : null}
         {!pendingRequest && nextAction ? (
           <SecondaryDetailSection
-            title={action === "return" ? "Return part" : action ? "Complete action" : "Next action"}
+            title={action ? "Complete action" : "Next action"}
           >
             {!action ? (
               <div className="inventory-custody-actions">
@@ -1223,14 +1213,13 @@ export function InventoryCustodyWorkspace({
                       setDraft({
                         evidence: "",
                         binLocation: "",
+                        targetPositionId: "",
                         route: "inspect_for_reuse",
                         handlerType: "internal",
                         handlerReference: "",
                         externalReference: "",
                         dispositionDate: "",
                         reason: "",
-                        outcome: defaultReturnOutcome(activeCase, caps),
-                        note: "",
                         serial: "",
                       });
                     }}
@@ -1238,17 +1227,11 @@ export function InventoryCustodyWorkspace({
                     {commandLabel(activeCase, caps)}
                   </Button>
                 )}
-                {["route", "repair/complete"].includes(nextAction) &&
-                caps.release && !releaseBlocker ? (
-                  <Button type="button" onClick={() => setAction("release")}>
-                    Release to stock
-                  </Button>
-                ) : null}
                 {nextAction !== "release" ? releaseGuidance : null}
               </div>
             ) : (
               <div className="inventory-custody-form">
-                {["return", "receive", "repair/complete"].includes(action) ? (
+                {["receive", "repair/complete"].includes(action) ? (
                   <>
                     <p>
                       Scan the exact QR first. Manual entry remains available
@@ -1287,53 +1270,10 @@ export function InventoryCustodyWorkspace({
                         Matched serial {detail?.unit?.serialNumber || "confirmed"}.
                       </p>
                     ) : null}
-                    {action === "repair/complete" ? <><label>Physical return evidence<textarea rows="2" value={draft.receiptEvidence || ""} onChange={(event) => setDraft((current) => ({ ...current, receiptEvidence: event.target.value }))} disabled={saving} /></label><label>Bin or shelf<input value={draft.binLocation} onChange={(event) => setDraft((current) => ({ ...current, binLocation: event.target.value }))} disabled={saving} /></label></> : null}
+                    {action === "repair/complete" ? <label>Physical return evidence<textarea rows="2" value={draft.receiptEvidence || ""} onChange={(event) => setDraft((current) => ({ ...current, receiptEvidence: event.target.value }))} disabled={saving} /></label> : null}
                   </>
                 ) : null}
-                {action === "return" ? (
-                  <>
-                    <label>
-                      Condition
-                      <Dropdown
-                        aria-label="Returned part condition"
-                        value={draft.outcome}
-                        onChange={(event) => {
-                          setActionError("");
-                          setDraft((current) => ({ ...current, outcome: event.target.value }));
-                        }}
-                        disabled={saving}
-                      >
-                        {RETURN_OUTCOMES.map(([value, label]) => (
-                          <option
-                            key={value}
-                            value={value}
-                            disabled={!returnOutcomeAllowed(value, activeCase, caps)}
-                          >
-                            {label}
-                          </option>
-                        ))}
-                      </Dropdown>
-                    </label>
-                    {!returnOutcomeAllowed(draft.outcome, activeCase, caps) ? (
-                      <p className="inventory-custody-guidance" role="status">
-                        {returnOutcomeReason(draft.outcome, activeCase, caps)}
-                      </p>
-                    ) : null}
-                    <details className="inventory-custody-optional">
-                      <summary>Add note</summary>
-                      <label>
-                        Note
-                        <textarea
-                          rows="2"
-                          value={draft.note}
-                          onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
-                          disabled={saving}
-                        />
-                      </label>
-                    </details>
-                  </>
-                ) : (
-                  <label>
+                <label>
                     Evidence
                     <textarea
                       rows="3"
@@ -1346,9 +1286,8 @@ export function InventoryCustodyWorkspace({
                       }
                       disabled={saving}
                     />
-                  </label>
-                )}
-                {["receive", "route", "quarantine/resolve"].includes(action) ? (
+                </label>
+                {["route", "quarantine/resolve"].includes(action) ? (
                   <label>
                     Route
                     <Dropdown
@@ -1374,20 +1313,18 @@ export function InventoryCustodyWorkspace({
                     </Dropdown>
                   </label>
                 ) : null}
-                {["receive", "release"].includes(action) ? (
-                  <label>
-                    Bin or shelf <span>(optional)</span>
-                    <input
-                      value={draft.binLocation}
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          binLocation: event.target.value,
-                        }))
-                      }
-                      disabled={saving}
+                {action === "release" ? (
+                  <>
+                    <StoragePositionPicker
+                      positions={positions}
+                      value={draft.targetPositionId}
+                      onChange={(targetPositionId) => setDraft((current) => ({ ...current, targetPositionId }))}
+                      disabled={saving || positionsLoading}
+                      required
+                      purpose="damage_release"
                     />
-                  </label>
+                    {positionsError ? <Button type="button" onClick={() => setPositionsRefresh((value) => value + 1)} disabled={saving || positionsLoading}>Try storage locations again</Button> : null}
+                  </>
                 ) : null}
                 {action === "repair/start" ? (
                   <>
@@ -1461,8 +1398,7 @@ export function InventoryCustodyWorkspace({
                         ? "Core return date"
                         : "Scrap date"}{" "}
                       <span>(required)</span>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={draft.dispositionDate}
                         onChange={(event) =>
                           setDraft((current) => ({
@@ -1471,25 +1407,23 @@ export function InventoryCustodyWorkspace({
                           }))
                         }
                         disabled={saving}
+                        aria-label={action === "core-return" ? "Core return date" : "Scrap date"}
                       />
                     </label>
                   </>
                 ) : null}
                 {actionError ? <p role="alert">{actionError}</p> : null}
-                <div>
+                <div className="shared-action-row">
                   <Button
                     type="button"
                     variant="primary"
                     disabled={
                       saving ||
-                      (action !== "return" && !draft.evidence.trim()) ||
-                      (action === "return" &&
-                        (!exactIdentityId ||
-                          !returnOutcomeAllowed(draft.outcome, activeCase, caps))) ||
+                      !draft.evidence.trim() ||
                       (action === "receive" && !exactIdentityId) ||
                       (action === "repair/complete" && (!exactIdentityId || !draft.receiptEvidence?.trim())) ||
                       (action === "repair/start" && !draft.handlerReference.trim()) ||
-                      (action === "release" && !draft.reason.trim()) ||
+                      (action === "release" && (!draft.reason.trim() || !draft.targetPositionId || positionsLoading)) ||
                       (["core-return", "scrap"].includes(action) &&
                         (!draft.externalReference.trim() ||
                           !draft.dispositionDate))
@@ -1498,9 +1432,7 @@ export function InventoryCustodyWorkspace({
                   >
                     {saving
                       ? "Saving…"
-                      : action === "return"
-                        ? RETURN_BUTTONS[draft.outcome] || "Return part"
-                        : "Confirm"}
+                      : "Confirm"}
                   </Button>
                   <Button
                     type="button"

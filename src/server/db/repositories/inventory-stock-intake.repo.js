@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { getPool } from "../pool.js";
 import { inspectInventoryAuthority, recordInventoryAuthorityCutover, recordInventoryAuthorityException } from "./inventory-authority.repo.js";
 import { hasQuantityPrecision } from "../../modules/parts/quantity-uom.js";
+import { placeAggregateInventoryReceipt } from "./inventory-positions.repo.js";
 
 const MEASURED_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 const QUANTITY_CATEGORIES = new Set(["count", "packaging"]);
@@ -87,6 +88,12 @@ export async function postAggregateStockIntake(input) {
       (company_id,location_id,catalog_part_id,receipt_id,receipt_line_id,movement_type,quantity_delta,uom_code,actor_id,reason,idempotency_key)
       values ($1,$2,$3,$4,$5,'manual_receipt',$6,$7,$8,'Physical stock intake',$9)`,
     [part.company_id, input.locationId, part.id, receiptId, lineId, input.quantity, part.uom_code, input.actorId, `manual-intake:${batchId}`]);
+    await placeAggregateInventoryReceipt(client, {
+      companyId: part.company_id, locationId: input.locationId, inventoryItemId: balance.rows[0].id,
+      catalogPartId: part.id, uomCode: part.uom_code, quantity: input.quantity, actorId: input.actorId,
+      idempotencyKey: `position:manual-intake:${batchId}`, requestHash, receiptId,
+      reason: "Manual physical intake",
+    });
     await client.query("commit");
     return { kind: "posted", receiptId, quantity: input.quantity };
   } catch (error) {

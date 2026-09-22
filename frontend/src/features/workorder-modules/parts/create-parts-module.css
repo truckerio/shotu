@@ -381,7 +381,7 @@
 .create-stock-dropdown {
   position: absolute;
   left: 0;
-  width: 100%;
+  width: min(29rem, calc(100vw - 32px));
   box-sizing: border-box;
   z-index: 45;
   overflow-y: auto;
@@ -395,3 +395,12 @@
 }
 .create-stock-dropdown p { margin: 0; color: #475467; }
 .create-stock-dropdown > button { justify-self: end; min-height: 44px; }
+.create-stock-positions { border: 0; display: grid; gap: 6px; margin: 0; padding: 0; }
+.create-stock-positions legend { color: #344054; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.create-stock-positions label { align-items: center; border: 1px solid #d0d5dd; border-radius: 8px; cursor: pointer; display: flex; gap: 10px; min-height: 48px; padding: 8px 10px; }
+.create-stock-positions label:has(input:checked) { background: #eff8ff; border-color: #2e90fa; }
+.create-stock-positions label.is-disabled { cursor: not-allowed; opacity: .52; }
+.create-stock-positions input[type="radio"] { flex: 0 0 auto; height: 18px; margin: 0; width: 18px; }
+.create-stock-positions label > span { display: flex; flex: 1; gap: 12px; justify-content: space-between; min-width: 0; }
+.create-stock-positions label strong { font-size: 13px; overflow-wrap: anywhere; }
+.create-stock-positions label small { color: #667085; flex: 0 0 auto; font-size: 12px; }

@@ -4,11 +4,13 @@ import { api } from "../../../lib/api.js";
 import { interfaceText } from "../../../i18n/index.js";
 import { formatQuantityUnit } from "../../forms/quantity-unit-model.js";
 import { Button } from "../../ui/Button.jsx";
+import { WorkorderPartsRow } from "../WorkorderPartsTable.jsx";
 import { PartRepairOrderField } from "./PartRepairOrderField.jsx";
 import { StockIntakeControl } from "../../inventory/StockIntakeControl.jsx";
 import { stockIntakeQuantity } from "../../inventory/stock-intake-model.js";
 import { repairOrderAfterCatalogSelection } from "./catalog-parts-model.js";
 import "./measured-part-usage.css";
+import { workorderPartErrorMessage } from "../mechanic-part-request-model.js";
 
 const transientKeys = new Map();
 
@@ -71,6 +73,8 @@ export function MeasuredPartUsageDialog({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [positions, setPositions] = useState([]);
+  const [sourcePositionId, setSourcePositionId] = useState("");
   const quantityRef = useRef(null);
   const titleId = useId();
   const uomCode = catalogPart?.canonicalUomCode || catalogPart?.uomCode || "";
@@ -78,20 +82,23 @@ export function MeasuredPartUsageDialog({
 
   useEffect(() => {
     if (!open) return;
-    setQuantity("1"); setRepairOrder(repairOrderAfterCatalogSelection("", catalogPart)); setMessage(""); setCompleted(false);
+    setQuantity("1"); setRepairOrder(repairOrderAfterCatalogSelection("", catalogPart)); setMessage(""); setCompleted(false); setPositions([]); setSourcePositionId("");
+    api(`/api/office/inventory/parts/${encodeURIComponent(catalogPart.id)}/locations/${encodeURIComponent(locationId)}/positions`)
+      .then((result) => setPositions((result.positions || []).filter((position) => position.isActive && position.canStore && position.isPickable && Number(position.available) > 0)))
+      .catch((error) => setMessage(error?.message || t("parts.aggregateSaveFailed")));
     window.requestAnimationFrame(() => quantityRef.current?.focus());
-  }, [open, catalogPart?.id]);
+  }, [open, catalogPart?.id, locationId]);
 
   async function reserve(event) {
     event.preventDefault();
     const amount = Number(quantity);
-    if (busy || completed || !stockIntakeQuantity(quantity, catalogPart).valid) { setMessage(t("parts.measuredQuantityRequired")); return; }
-    const identity = [actorId || "session", workorderId, catalogPart?.id, amount, uomCode, repairOrder.trim()].join(":");
+    if (busy || completed || !stockIntakeQuantity(quantity, catalogPart).valid || !sourcePositionId) { setMessage(t("parts.measuredQuantityRequired")); return; }
+    const identity = [actorId || "session", workorderId, catalogPart?.id, sourcePositionId, amount, uomCode, repairOrder.trim()].join(":");
     setBusy(true); setMessage("");
     try {
       const result = await api(`/api/workorders/${encodeURIComponent(workorderId)}/modules/parts/actions/record`, {
         method: "POST",
-        body: JSON.stringify({ operation: "aggregateUsageReserve", catalogPartId: catalogPart.id, quantity: amount, uomCode, repairOrder: repairOrder.trim(), idempotencyKey: persistedKey("aggregate-reserve", identity) }),
+        body: JSON.stringify({ operation: "aggregateUsageReserve", catalogPartId: catalogPart.id, sourcePositionId, quantity: amount, uomCode, repairOrder: repairOrder.trim(), idempotencyKey: persistedKey("aggregate-reserve", identity) }),
       });
       clearPersistedKey("aggregate-reserve", identity);
       setCompleted(true);
@@ -102,7 +109,7 @@ export function MeasuredPartUsageDialog({
         setMessage(t("parts.aggregateReservedRefresh"));
       }
     } catch (error) {
-      setMessage(locale === "en" && error?.message ? error.message : t("parts.aggregateSaveFailed"));
+      setMessage(workorderPartErrorMessage(error, t) || t("parts.aggregateSaveFailed"));
     } finally { setBusy(false); }
   }
 
@@ -114,8 +121,12 @@ export function MeasuredPartUsageDialog({
         <StockIntakeControl catalogPartId={catalogPart?.id} locationId={locationId} onReceived={() => setMessage("Stock added. Enter the quantity to reserve for this workorder.")} />
         <form onSubmit={reserve}>
           {message ? <p className="measured-part-message" role="alert">{message}</p> : null}
-          <label>{t("parts.quantity")}<input ref={quantityRef} type="number" min={amount.step} step={amount.step} max={amount.max} value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={busy} /></label>
+          <label>{t("parts.quantity")}<input ref={quantityRef} type="number" min={amount.step} step={amount.step} max={amount.max} value={quantity} onChange={(event) => { setQuantity(event.target.value); setSourcePositionId(""); }} disabled={busy} /></label>
           <p>{uomCode}</p>
+          <fieldset className="measured-part-positions"><legend>Pick from</legend>{positions.map((position) => {
+            const disabled = Number(position.available) < Number(quantity || 0);
+            return <label className={disabled ? "is-disabled" : ""} key={position.id}><input type="radio" name={`${titleId}-source-position`} checked={sourcePositionId === position.id} disabled={busy || disabled} onChange={() => setSourcePositionId(position.id)} /><span><strong>{position.path}</strong><small>{position.available} {uomCode}</small></span></label>;
+          })}</fieldset>
           <div className="measured-part-field"><label htmlFor={`${titleId}-repair-order`}>{t("parts.repairOrder")}</label><PartRepairOrderField
             historyEnabled={suggestionsEnabled}
             workorderId={workorderId}
@@ -127,14 +138,14 @@ export function MeasuredPartUsageDialog({
             disabled={busy}
             locale={locale}
           ><textarea id={`${titleId}-repair-order`} value={repairOrder} onChange={(event) => setRepairOrder(event.target.value)} maxLength="2000" disabled={busy} /></PartRepairOrderField></div>
-          <footer><Button type="button" onClick={onClose} disabled={busy}>{completed ? t("parts.close") : t("parts.cancel")}</Button><Button type="submit" variant="primary" disabled={busy || completed || !amount.valid}>{busy ? t("parts.reserving") : t("parts.reserveMeasured")}</Button></footer>
+          <footer><Button type="button" onClick={onClose} disabled={busy}>{completed ? t("parts.close") : t("parts.cancel")}</Button><Button type="submit" variant="primary" disabled={busy || completed || !amount.valid || !sourcePositionId}>{busy ? t("parts.reserving") : t("parts.reserveMeasured")}</Button></footer>
         </form>
       </Dialog>
     </Modal>
   </ModalOverlay>;
 }
 
-export function AggregatePartUsageRows({ actorId, workorderId, usages, role, editable, locale = "en", onChanged }) {
+export function AggregatePartUsageRows({ actorId, workorderId, usages, role, editable, locale = "en", onChanged, startOrdinal = 1 }) {
   const t = (key) => interfaceText(locale, key);
   const [editing, setEditing] = useState(null);
   const [reason, setReason] = useState("");
@@ -166,19 +177,25 @@ export function AggregatePartUsageRows({ actorId, workorderId, usages, role, edi
     finally { setBusy(false); }
   }
 
-  return <div className="aggregate-part-usages" aria-label={t("parts.measuredUsageEvidence")}>
+  return <>
     {message && !editing ? <p className="measured-part-message" role="status">{message}</p> : null}
-    {usages.map((usage) => {
+    {usages.map((usage, index) => {
       const releasable = editable && ["reserved", "installed_pending_approval"].includes(usage.status);
       const correctable = canOfficeCorrect && usage.status === "consumed";
-      return <article key={usage.id} className="part-row used-part-aggregate-row">
-        <div><strong>{usage.partNumber}</strong><span>{formatQuantityUnit(usage.effectiveQuantity, usage.uomCode)}</span><small>{statusText(usage.status, t)} · {t("parts.evidenceRecorded")} · {usage.evidenceId}</small>{usage.repairOrder ? <span>{usage.repairOrder}</span> : null}</div>
-        <div className="aggregate-part-actions">
+      const status = statusText(usage.status, t);
+      const pickupPath = usage.sourcePositionPath || (usage.status === "reserved" ? "Pickup not assigned" : "");
+      return <WorkorderPartsRow key={usage.id} className="used-part-aggregate-row" aria-label={`${usage.partNumber}, ${formatQuantityUnit(usage.effectiveQuantity, usage.uomCode)}, ${status}`}>
+        <strong>{startOrdinal + index}</strong>
+        <div className="used-part-field used-part-aggregate-identity"><span className="used-part-cell-label">{t("parts.part")}</span><strong>{usage.partNumber}</strong><small>{t("parts.evidenceRecorded")} · {usage.evidenceId}</small></div>
+        <div className="used-part-field used-part-aggregate-value"><span className="used-part-cell-label">{t("parts.quantityUnit")}</span><strong>{formatQuantityUnit(usage.effectiveQuantity, usage.uomCode)}</strong></div>
+        <div className="used-part-field used-part-aggregate-repair"><span className="used-part-cell-label">{t("parts.repairOrder")}</span>{usage.repairOrder || <span aria-hidden="true">—</span>}</div>
+        {pickupPath ? <div className="used-part-field used-part-aggregate-pickup"><span className="used-part-cell-label">Pickup</span><strong>{pickupPath}</strong></div> : <span className="used-part-pickup-empty" aria-hidden="true"></span>}
+        <div className="aggregate-part-actions"><span className="used-part-cell-label used-part-status-label">{t("parts.statusAction")}</span><span className="used-part-aggregate-status">{status}</span>
           {releasable ? <Button type="button" onClick={() => openLifecycle(usage, "release")}>{t("parts.releaseMeasured")}</Button> : null}
           {correctable ? <><Button type="button" onClick={() => openLifecycle(usage, "reverse")}>{t("parts.reverseMeasured")}</Button><Button type="button" onClick={() => openLifecycle(usage, "adjust")}>{t("parts.adjustMeasured")}</Button></> : null}
         </div>
-      </article>;
+      </WorkorderPartsRow>;
     })}
     {editing ? <ModalOverlay className="measured-part-dialog-overlay" isOpen isDismissable={false}><Modal className="measured-part-dialog-modal"><Dialog className="measured-part-dialog" aria-label={t("parts.correctMeasuredUsage")}><form onSubmit={submitLifecycle}><h2>{editing.action === "adjust" ? t("parts.adjustMeasured") : editing.action === "reverse" ? t("parts.reverseMeasured") : t("parts.releaseMeasured")}</h2>{message ? <p className="measured-part-message" role="alert">{message}</p> : null}{editing.action === "adjust" ? <label>{t("parts.quantity")}<input type="number" min="0.001" step="0.001" value={targetQuantity} onChange={(event) => setTargetQuantity(event.target.value)} disabled={busy} /></label> : null}<label>{t("parts.reasonRequired")}<textarea value={reason} onChange={(event) => setReason(event.target.value)} minLength="2" maxLength="500" required disabled={busy} /></label><footer><Button type="button" onClick={() => setEditing(null)} disabled={busy}>{t("parts.cancel")}</Button><Button type="submit" variant="primary" disabled={busy || !reason.trim() || (editing.action === "adjust" && !(Number(targetQuantity) > 0))}>{t("parts.save")}</Button></footer></form></Dialog></Modal></ModalOverlay> : null}
-    </div>;
+    </>;
 }

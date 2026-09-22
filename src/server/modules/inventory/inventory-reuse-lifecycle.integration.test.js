@@ -27,7 +27,7 @@ test("PostgreSQL removal runs directly from Unit detail without creating or link
   } finally { await f.cleanup(); }
 });
 
-test("PostgreSQL atomic return scans once and applies one policy-guarded outcome", { skip: !run }, async () => {
+test("PostgreSQL legacy return records receipt only and cannot release or route stock", { skip: !run }, async () => {
   const f = await createInventoryReuseFixture();
   const base = { companyId: f.companyId, locationId: f.locationId };
   const command = (action, actorId, extra = {}) => ({
@@ -40,28 +40,21 @@ test("PostgreSQL atomic return scans once and applies one policy-guarded outcome
       usageId:f.usageId, reason:"worn", intendedRoute:"inspect_for_reuse",
     }))).case;
     await assert.rejects(mutateInventoryReuse(command("return", f.receiverId, {
-      caseId:removed.id, exactUnitId:f.unitId, outcome:"hold", expectedVersion:removed.caseVersion,
-    })), { code:"INVENTORY_REUSE_FORBIDDEN" });
-    await configureInventoryReuse({ ...base, actorId:f.adminId, kind:"grant", userId:f.receiverId, capabilities:["receive","release"], reason:"atomic return QA" });
-    await configureInventoryReuse({ ...base, actorId:f.adminId, kind:"policy", catalogPartId:f.catalogPartId, reuseAllowed:false, repairAllowed:false, coreReturnAllowed:false, scrapAllowed:false, evidence:"not yet approved" });
-    await assert.rejects(mutateInventoryReuse(command("return", f.receiverId, {
-      caseId:removed.id, exactUnitId:f.unitId, outcome:"reuse", expectedVersion:removed.caseVersion,
-    })), { code:"INVENTORY_REUSE_POLICY_REQUIRED" });
-    await assert.rejects(mutateInventoryReuse(command("return", f.receiverId, {
-      caseId:removed.id, exactUnitId:f.pendingUnitId, outcome:"hold", expectedVersion:removed.caseVersion,
+      caseId:removed.id, exactUnitId:f.pendingUnitId, outcome:"hold", evidence:"Wrong unit", expectedVersion:removed.caseVersion,
     })), { code:"INVENTORY_REUSE_EXACT_UNIT_MISMATCH" });
-    await configureInventoryReuse({ ...base, actorId:f.adminId, kind:"policy", catalogPartId:f.catalogPartId, reuseAllowed:true, repairAllowed:false, coreReturnAllowed:false, scrapAllowed:false, evidence:"approved shop policy" });
+    await configureInventoryReuse({ ...base, actorId:f.adminId, kind:"policy", catalogPartId:f.catalogPartId, reuseAllowed:false, repairAllowed:false, coreReturnAllowed:false, scrapAllowed:false, evidence:"not yet approved" });
     const input = command("return", f.receiverId, {
-      caseId:removed.id, exactUnitId:f.unitId, outcome:"reuse", note:"Ready for service", expectedVersion:removed.caseVersion,
+      caseId:removed.id, exactUnitId:f.unitId, outcome:"reuse", evidence:"Exact unit scanned into review", expectedVersion:removed.caseVersion,
     });
     const returned = await mutateInventoryReuse(input);
-    assert.equal(returned.case.status, "released");
-    assert.equal(returned.ledgerEffect, 1);
+    assert.equal(returned.case.status, "received_pending_review");
+    assert.ok(returned.case.receivedAt);
+    assert.equal(returned.ledgerEffect, 0);
     assert.equal((await mutateInventoryReuse(input)).replayed, true);
-    const unit = (await query("select status,condition_code,custody_holder_type,custody_location_id from inventory_serialized_units where company_id=$1 and id=$2", [f.companyId,f.unitId])).rows[0];
-    assert.deepEqual(unit, { status:"in_stock", condition_code:"serviceable_used", custody_holder_type:"inventory_location", custody_location_id:f.locationId });
-    assert.equal((await query("select count(*)::int n from inventory_stock_movements where company_id=$1 and unit_id=$2 and movement_type='return'", [f.companyId,f.unitId])).rows[0].n, 1);
-    assert.equal((await query("select count(*)::int n from inventory_unit_events where company_id=$1 and unit_id=$2 and event_type in ('reuse_received','reuse_released')", [f.companyId,f.unitId])).rows[0].n, 2);
+    const unit = (await query("select status,condition_code,custody_holder_type,custody_location_id,current_position_id from inventory_serialized_units where company_id=$1 and id=$2", [f.companyId,f.unitId])).rows[0];
+    assert.deepEqual(unit, { status:"removed", condition_code:"unknown", custody_holder_type:"inventory_location", custody_location_id:f.locationId, current_position_id:null });
+    assert.equal((await query("select count(*)::int n from inventory_stock_movements where company_id=$1 and unit_id=$2 and movement_type='return'", [f.companyId,f.unitId])).rows[0].n, 0);
+    assert.equal((await query("select count(*)::int n from inventory_unit_events where company_id=$1 and unit_id=$2 and event_type='reuse_received'", [f.companyId,f.unitId])).rows[0].n, 1);
   } finally { await f.cleanup(); }
 });
 
@@ -73,7 +66,7 @@ test("PostgreSQL repair route retains identity and releases refurbished stock on
     await configureInventoryReuse({...base,actorId:f.adminId,kind:"grant",userId:f.releaseId,capabilities:["release"],reason:"repair QA"});
     await configureInventoryReuse({...base,actorId:f.adminId,kind:"policy",catalogPartId:f.catalogPartId,reuseAllowed:true,repairAllowed:true,coreReturnAllowed:true,scrapAllowed:true,evidence:"repair QA"});
     const removed=(await mutateInventoryReuse(command("remove",f.removerId,{usageId:f.usageId,removalWorkorderId:f.removalWorkorderId,reason:"failed",ownership:"company",ownershipEvidence:"purchase"}))).case;
-    const received=(await mutateInventoryReuse(command("receive",f.receiverId,{caseId:removed.id,evidence:"matched",actualHolderType:"inventory_location"}))).case;
+    const received=(await mutateInventoryReuse(command("receive",f.receiverId,{caseId:removed.id,evidence:"matched",exactUnitId:f.unitId,actualHolderType:"inventory_location"}))).case;
     const routed=(await mutateInventoryReuse(command("route",f.receiverId,{caseId:removed.id,route:"repair",evidence:"bench failed",expectedVersion:received.caseVersion}))).case;
     assert.equal(routed.status,"repair");
     await mutateInventoryReuse(command("repair_start",f.receiverId,{caseId:removed.id,handlerType:"external",handlerReference:"Rebuilder",evidence:"sent",expectedVersion:routed.caseVersion}));
@@ -85,8 +78,11 @@ test("PostgreSQL repair route retains identity and releases refurbished stock on
     await assert.rejects(mutateInventoryReuse(command("repair_start",f.receiverId,{caseId:removed.id,handlerType:"internal",handlerReference:"shop",evidence:"duplicate",expectedVersion:rerouted.caseVersion+1})),{code:"INVENTORY_REUSE_CHANGED"});
     const secondComplete=(await mutateInventoryReuse(command("repair_complete",f.receiverId,{caseId:removed.id,evidence:"rebuilt twice",receiptEvidence:"returned again",exactUnitId:f.unitId,release:false,inspectionEvidence:"",binLocation:"A-1",expectedVersion:rerouted.caseVersion+1}))).case;
     assert.equal((await query("select count(*)::int n from inventory_reuse_repairs where company_id=$1 and case_id=$2",[f.companyId,removed.id])).rows[0].n,2);
-    const released=(await mutateInventoryReuse(command("release",f.releaseId,{caseId:removed.id,decision:"release",inspectionEvidence:"bench pass",reason:"approved",binLocation:"A-1",expectedVersion:secondComplete.caseVersion}))).case;
+    const released=(await mutateInventoryReuse(command("release",f.releaseId,{caseId:removed.id,decision:"release",inspectionEvidence:"bench pass",reason:"approved",targetPositionId:f.storagePositionId,expectedVersion:secondComplete.caseVersion}))).case;
     assert.equal(released.status,"released");
+    assert.equal(released.releasePositionId,f.storagePositionId);
+    assert.equal(released.releasePositionPath,"Reuse QA bin");
+    assert.ok(released.inspectedAt);
     const unit=(await query("select status,condition_code,custody_holder_type from inventory_serialized_units where id=$1",[f.unitId])).rows[0];
     assert.deepEqual(unit,{status:"in_stock",condition_code:"refurbished",custody_holder_type:"inventory_location"});
     const reissued=await issueSerializedUnitToWorkorder({...base,workorderId:f.secondWorkorderId,unitId:f.unitId,actorId:f.removerId,actorRole:"office",idempotencyKey:randomUUID(),requestHash:digest("reissue")});
@@ -94,11 +90,63 @@ test("PostgreSQL repair route retains identity and releases refurbished stock on
   } finally { await f.cleanup(); }
 });
 
+test("PostgreSQL release rejects system and cross-scope positions without partial stock writes", { skip: !run }, async () => {
+  const f=await createInventoryReuseFixture();
+  const other=await createInventoryReuseFixture({installed:false});
+  const base={companyId:f.companyId,locationId:f.locationId};
+  const command=(action,actorId,extra={})=>({...base,action,capability:action,actorId,idempotencyKey:randomUUID(),requestHash:digest(randomUUID()),...extra});
+  try {
+    const removed=(await mutateInventoryReuse(command("remove",f.removerId,{usageId:f.usageId,reason:"Position validation"}))).case;
+    const received=(await mutateInventoryReuse(command("receive",f.receiverId,{caseId:removed.id,exactUnitId:f.unitId,evidence:"Exact unit received",expectedVersion:removed.caseVersion}))).case;
+    const systemPosition=(await query("select id from inventory_positions where company_id=$1 and location_id=$2 and system_key='receiving'",[f.companyId,f.locationId])).rows[0].id;
+    const before=(await query(`select
+      (select quantity_on_hand from inventory_items where company_id=$1 and catalog_part_id=$2) quantity,
+      (select count(*)::int from inventory_stock_movements where company_id=$1 and unit_id=$3 and movement_type='return') stock_moves,
+      (select count(*)::int from inventory_position_operations where company_id=$1 and command_type='reuse_release') position_ops`,[f.companyId,f.catalogPartId,f.unitId])).rows[0];
+    for(const targetPositionId of [systemPosition,other.storagePositionId]) {
+      await assert.rejects(mutateInventoryReuse(command("release",f.releaseId,{
+        caseId:removed.id,decision:"release",inspectionEvidence:"Pass",reason:"Attempt invalid target",
+        targetPositionId,expectedVersion:received.caseVersion,
+      })),{code:"INVENTORY_REUSE_POSITION_INVALID"});
+      const after=(await query(`select
+        (select quantity_on_hand from inventory_items where company_id=$1 and catalog_part_id=$2) quantity,
+        (select count(*)::int from inventory_stock_movements where company_id=$1 and unit_id=$3 and movement_type='return') stock_moves,
+        (select count(*)::int from inventory_position_operations where company_id=$1 and command_type='reuse_release') position_ops`,[f.companyId,f.catalogPartId,f.unitId])).rows[0];
+      assert.deepEqual(after,before);
+      assert.equal((await query("select status,case_version,release_position_id from inventory_reuse_cases where company_id=$1 and id=$2",[f.companyId,removed.id])).rows[0].status,"received_pending_review");
+    }
+  } finally { await other.cleanup(); await f.cleanup(); }
+});
+
+test("PostgreSQL core and scrap dispositions remain unavailable stock with terminal evidence", { skip: !run }, async () => {
+  for(const route of ["core_return","scrap"]) {
+    const f=await createInventoryReuseFixture();
+    const base={companyId:f.companyId,locationId:f.locationId};
+    const command=(action,actorId,extra={})=>({...base,action,capability:({core_return:"disposition",scrap:"disposition"})[action] || action,actorId,idempotencyKey:randomUUID(),requestHash:digest(randomUUID()),...extra});
+    try {
+      await configureInventoryReuse({...base,actorId:f.adminId,kind:"grant",userId:f.receiverId,capabilities:["receive","route","disposition"],reason:"Terminal route QA"});
+      await configureInventoryReuse({...base,actorId:f.adminId,kind:"policy",catalogPartId:f.catalogPartId,reuseAllowed:true,repairAllowed:true,coreReturnAllowed:true,scrapAllowed:true,evidence:"Terminal route QA"});
+      const removed=(await mutateInventoryReuse(command("remove",f.removerId,{usageId:f.usageId,reason:`${route} candidate`}))).case;
+      const received=(await mutateInventoryReuse(command("receive",f.receiverId,{caseId:removed.id,exactUnitId:f.unitId,evidence:"Exact unit received",expectedVersion:removed.caseVersion}))).case;
+      const routed=(await mutateInventoryReuse(command("route",f.receiverId,{caseId:removed.id,route,evidence:"Inspection selected terminal route",expectedVersion:received.caseVersion}))).case;
+      const disposition=(await mutateInventoryReuse(command(route,f.receiverId,{
+        caseId:removed.id,evidence:"Physical disposition confirmed",externalReference:route === "core_return" ? "Vendor core receipt CR-100" : "Scrap manifest SM-100",
+        dispositionDate:"2026-09-19",expectedVersion:routed.caseVersion,
+      }))).case;
+      assert.equal(disposition.status,route === "core_return" ? "core_returned" : "scrapped");
+      const state=(await query("select status,current_position_id from inventory_serialized_units where company_id=$1 and id=$2",[f.companyId,f.unitId])).rows[0];
+      assert.equal(state.status,route === "scrap" ? "scrapped" : "removed");
+      assert.equal(state.current_position_id,null);
+      assert.equal((await query("select count(*)::int n from inventory_stock_movements where company_id=$1 and unit_id=$2 and movement_type='return'",[f.companyId,f.unitId])).rows[0].n,0);
+    } finally { await f.cleanup(); }
+  }
+});
+
 test("PostgreSQL correction is versioned, replay-safe, scoped, and mechanic stock reads are denied", { skip: !run }, async () => {
   const f=await createInventoryReuseFixture({installed:false}); const base={companyId:f.companyId,locationId:f.locationId};
   try {
     await configureInventoryReuse({...base,actorId:f.adminId,kind:"grant",userId:f.adminId,capabilities:["route"],reason:"correction QA"});
-    const input={...base,action:"correct_location",capability:"route",actorId:f.adminId,unitId:f.unitId,custodyVersion:1,holderType:"inventory_location",binLocation:"A-2",externalReference:"",evidence:"counted",idempotencyKey:"correct-qa-key",requestHash:digest("correct")};
+    const input={...base,action:"correct_location",capability:"route",actorId:f.adminId,unitId:f.unitId,custodyVersion:f.initialCustodyVersion,holderType:"inventory_location",binLocation:"A-2",externalReference:"",evidence:"counted",idempotencyKey:"correct-qa-key",requestHash:digest("correct")};
     const first=await mutateInventoryReuse(input); assert.equal(first.unitProjection.custodyBinLocation,"A-2");
     assert.equal((await mutateInventoryReuse(input)).replayed,true);
     await assert.rejects(mutateInventoryReuse({...input,idempotencyKey:"stale-qa-key",requestHash:digest("stale")}),{code:"INVENTORY_REUSE_CHANGED"});

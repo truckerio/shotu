@@ -12,11 +12,11 @@ test("phone admin navigation keeps location-owned setup inside Locations", () =>
     "units",
     "inventory",
     "locations",
+    "operations",
     "modules",
     "settings",
-    "operations",
   ]);
-  assert.equal(ADMIN_MOBILE_DESTINATIONS.at(-1).secondary, true);
+  assert.equal(ADMIN_MOBILE_DESTINATIONS[3].key, "operations");
 });
 
 test("admin phone shell reserves a shared profile destination outside route state", async () => {
@@ -27,12 +27,20 @@ test("admin phone shell reserves a shared profile destination outside route stat
   assert.match(source, /<ProfileMenu actor=\{actor\} mobileNav \/>/);
 });
 
-test("admin phone destinations divide the full bottom navigation evenly", async () => {
+test("admin phone navigation keeps Ops visible and only setup destinations in the kebab menu", async () => {
   const styles = await import("node:fs/promises").then(({ readFile }) => readFile(
     new URL("./admin.css", import.meta.url),
     "utf8",
   ));
-  assert.match(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(7, minmax\(0, 1fr\)\)/s);
+  const shell = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./workspace/AdminWorkspaceShell.jsx", import.meta.url),
+    "utf8",
+  ));
+  assert.match(styles, /\.admin-mobile-nav\s*\{[^}]*grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/s);
+  assert.match(styles, /@media \(max-width: 380px\)[\s\S]*admin-mobile-nav button span/);
+  assert.match(shell, /ADMIN_MOBILE_DESTINATIONS\.slice\(0, 4\)/);
+  assert.match(shell, /DotsVertical aria-hidden="true"/);
+  assert.match(shell, /phoneOverflowDestinations\.map/);
 });
 
 test("Locations stays active throughout location-owned users and template pages", () => {

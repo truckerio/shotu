@@ -223,6 +223,40 @@ test("canonical generic module routes expose protected reads and allowlisted mut
   assert.equal(calls[3][4], "close");
 });
 
+test("canonical Parts actions keep domain request identity separate from the HTTP trace", async () => {
+  const calls = [];
+  const dependencies = {
+    runAction: async (...args) => { calls.push(args); return { saved: true }; },
+  };
+  const aggregateInput = {
+    operation: "aggregateUsageReserve",
+    catalogPartId: "22222222-2222-4222-8222-222222222222",
+    sourcePositionId: "33333333-3333-4333-8333-333333333333",
+    quantity: 2,
+    uomCode: "ea",
+    repairOrder: "Replace hubcap gasket",
+    idempotencyKey: "aggregate-reserve-route-1",
+  };
+  await runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body: aggregateInput,
+    dependencies,
+  });
+  assert.deepEqual(calls[0][4], aggregateInput);
+  assert.equal(Object.hasOwn(calls[0][4], "requestId"), false);
+
+  const partRequestId = "44444444-4444-4444-8444-444444444444";
+  await runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body: { operation: "usage", requestId: partRequestId, usageStatus: "issued", note: "Picked up" },
+    dependencies,
+  });
+  assert.equal(calls[1][4].requestId, partRequestId);
+  assert.notEqual(calls[1][4].requestId, "request-one");
+});
+
 test("canonical Parts action validates and forwards serialized repair wording", async () => {
   const calls = [];
   const dependencies = {
@@ -349,6 +383,28 @@ test("canonical create accepts independent serialized rows and rejects grouped u
       inventoryUnitSelections: [{ partIndex: 0, catalogPartId, unitIds }],
     },
   }), (error) => error.statusCode === 400 && /own part row/i.test(error.message));
+});
+
+test("canonical create requires and forwards aggregate pickup position", async () => {
+  const catalogPartId = "33333333-3333-4333-8333-333333333333";
+  const positionId = "44444444-4444-4444-8444-444444444444";
+  const body = {
+    companyId: WORKORDER_ID,
+    locationId: "22222222-2222-4222-8222-222222222222",
+    concern: "Replace filter",
+    formData: { parts: [{ catalogPartId, partNo: "FILTER", qty: "1", uomCode: "ea", trackingMode: "quantity" }] },
+  };
+  await assert.rejects(runRoute({ method: "POST", pathname: "/api/workorders", body }),
+    (error) => error.statusCode === 400 && /pick/i.test(error.message));
+  let createInput;
+  const target = await runRoute({
+    method: "POST",
+    pathname: "/api/workorders",
+    body: { ...body, inventoryPositionSelections: [{ partIndex: 0, catalogPartId, positionId }] },
+    dependencies: { createWorkorder: async (_context, input) => { createInput = input; return { id: "wo-position" }; } },
+  });
+  assert.equal(target.responses[0].status, 201);
+  assert.deepEqual(createInput.inventoryPositionSelections, [{ partIndex: 0, catalogPartId, positionId }]);
 });
 
 test("mechanic creation uses the same canonical role-neutral create route", async () => {

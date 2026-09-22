@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { partStockTracking } from "../../inventory/stock-intake-model.js";
 
 const dialog = readFileSync(new URL("./WorkorderSerializedPartDialog.jsx", import.meta.url), "utf8");
 const editor = readFileSync(new URL("../UsedPartsEditor.jsx", import.meta.url), "utf8");
@@ -23,11 +24,22 @@ test("inventory finder routes countable catalog selections to one nested seriali
   assert.doesNotMatch(editor, /addUsedPart|usedPartsAutosave|recoveredUnsavedEntries/);
   assert.match(editor, /<WorkorderSerializedPartDialog/);
   assert.match(editor, /anchorToPartField=\{onePage\}/);
-  assert.match(editor, /activeOnePageIntakeIndex === intakeIndex \? serializedDialog : null/);
+  assert.match(editor, /<PartCatalogCombobox[\s\S]*?onSelect=\{\(catalogPart\) => \{[\s\S]*\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)[\s\S]*setMeasuredDialogPart\(catalogPart\)[\s\S]*partStockTracking\(catalogPart\) === "serialized"[\s\S]*setSerializedDialogPart\(catalogPart\)/);
+  assert.doesNotMatch(editor, /CompactWorkorderParts/);
+  assert.match(editor, /category === "time"\) setMessage\(t\("parts\.timeInventoryUnsupported"\)\)/);
+  assert.match(editor, /else setMessage\("Review this part’s tracking settings in Inventory before adding stock\."\)/);
   assert.match(dialog, /<SerializedUnitNestedDropdown/);
   assert.match(dialog, /anchorToPartField=\{anchorToPartField\}/);
   assert.doesNotMatch(dialog, /<ModalOverlay|<Modal|<Dialog/);
   assert.match(editorCss, /used-parts-manual-picker > \.serialized-unit-nested-dropdown[\s\S]*left:\s*calc\(100% \+ 8px\)/);
+});
+
+test("shared table intake preserves quantity and unreviewed tracking policy", () => {
+  assert.equal(partStockTracking({ trackingMode: "quantity", uomCode: "ea" }), "quantity");
+  assert.equal(partStockTracking({ trackingMode: "quantity", uomCode: "pc" }), "quantity");
+  assert.equal(partStockTracking({ uomCode: "pc" }), "unreviewed");
+  assert.match(editor, /\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)/);
+  assert.match(editor, /else setMessage\("Review this part’s tracking settings in Inventory before adding stock\."\)/);
 });
 
 test("dialog keeps on-demand intake explicit and bounded", () => {

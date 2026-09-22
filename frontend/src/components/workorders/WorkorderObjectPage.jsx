@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  DotsVertical,
   Settings01,
   Tool02,
   XClose,
@@ -292,6 +293,7 @@ export function WorkorderSectionNav({ sections, activeSection, onSelect, classNa
               aria-current={phoneActiveOverflowSection ? "page" : undefined}
               aria-label={phoneActiveOverflowSection ? `${t("detail.moreSections")}, ${phoneActiveOverflowSection.label} ${t("detail.selected")}` : t("detail.moreWorkorderSections")}
             >
+              <DotsVertical aria-hidden="true" />
               <span>{t("detail.more")}</span>
               {phoneActiveOverflowSection?.count !== undefined ? <small>{phoneActiveOverflowSection.count}</small> : null}
             </Button>

@@ -1,4 +1,5 @@
-import { MarkerPin01, Package, Settings01, Shield03, Tool02 } from "@untitledui/icons";
+import { DotsVertical, MarkerPin01, Package, Settings01, Shield03, Tool02 } from "@untitledui/icons";
+import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { ProfileMenu } from "../../../components/account/ProfileMenu.jsx";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.jsx";
 import { workorderTemplateStyles } from "../../../../../shared/workorder-template.js";
@@ -39,6 +40,12 @@ export function AdminWorkspaceShell({
   onOpenLocation,
   modulePageProps,
 }) {
+  const phonePrimaryDestinations = ADMIN_MOBILE_DESTINATIONS.slice(0, 4);
+  const phoneOverflowDestinations = ADMIN_MOBILE_DESTINATIONS.slice(4);
+  const phoneOverflowActive = phoneOverflowDestinations.some((destination) => (
+    adminMobileDestinationState({ view, tab: locationDetailProps.tab, selectedId }, destination)
+  ));
+
   return (
     <main className="admin-shell">
       <style>{workorderTemplateStyles}</style>
@@ -62,7 +69,7 @@ export function AdminWorkspaceShell({
       {view === "locations" && selectedId && detail ? <LocationDetailPage {...locationDetailProps} /> : null}
       {view === "locations" && !(selectedId && detail) ? <LocationsPage locations={locations} loading={state.loading} onCreate={onCreateLocation} onOpen={onOpenLocation} /> : null}
       <nav className="admin-mobile-nav" aria-label="Admin workspace">
-        {ADMIN_MOBILE_DESTINATIONS.map((destination) => {
+        {phonePrimaryDestinations.map((destination) => {
           const Icon = mobileDestinationIcon(destination.key);
           const active = adminMobileDestinationState({ view, tab: locationDetailProps.tab, selectedId }, destination);
           return (
@@ -77,6 +84,38 @@ export function AdminWorkspaceShell({
             </button>
           );
         })}
+        <MenuTrigger>
+          <Button
+            className={`admin-mobile-more-trigger${phoneOverflowActive ? " active" : ""}`}
+            aria-label="More admin destinations"
+          >
+            <DotsVertical aria-hidden="true" />
+            <span>More</span>
+          </Button>
+          <Popover className="admin-mobile-more-popover" placement="top end">
+            <Menu className="admin-mobile-more-menu" aria-label="More admin destinations">
+              {phoneOverflowDestinations.map((destination) => {
+                const Icon = mobileDestinationIcon(destination.key);
+                const active = adminMobileDestinationState(
+                  { view, tab: locationDetailProps.tab, selectedId },
+                  destination,
+                );
+                return (
+                  <MenuItem
+                    className={active ? "active" : ""}
+                    id={destination.key}
+                    key={destination.key}
+                    textValue={destination.label}
+                    onAction={() => changeView(destination.view)}
+                  >
+                    <Icon aria-hidden="true" />
+                    <span>{destination.label}</span>
+                  </MenuItem>
+                );
+              })}
+            </Menu>
+          </Popover>
+        </MenuTrigger>
         <ProfileMenu actor={actor} mobileNav />
       </nav>
     </main>

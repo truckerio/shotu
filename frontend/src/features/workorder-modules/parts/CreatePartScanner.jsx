@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Scan, XClose } from "@untitledui/icons";
-import { Dialog, Modal, ModalOverlay } from "react-aria-components";
 import { isApplicationOwnedInventoryProvider } from "../../../../../shared/inventory-provider.js";
 import { Button } from "../../../components/ui/Button.jsx";
+import { IconButton } from "../../../components/ui/IconButton.jsx";
+import { ModalFrame } from "../../../components/ui/ModalFrame.jsx";
 import { InventoryCodeScanner } from "../../inventory/InventoryCodeScanner.jsx";
 import { interfaceText } from "../../../i18n/index.js";
 import { api } from "../../../lib/api.js";
@@ -51,18 +52,17 @@ export function CreatePartScanner({ disabled = false, locationId, locale = "en",
         {t("create.parts.scan")}
       </Button>
       {open ? (
-        <ModalOverlay
-          className="mechanic-scanner-overlay"
+        <ModalFrame
+          overlayClassName="mechanic-scanner-overlay"
+          modalClassName="mechanic-scanner-modal"
+          dialogClassName="mechanic-scanner-panel"
+          ariaLabel={t("create.parts.scan")}
           isOpen={open}
           isDismissable
           onOpenChange={(nextOpen) => { if (!nextOpen) closeScanner(); }}
         >
-          <Modal className="mechanic-scanner-modal">
-            <Dialog className="mechanic-scanner-panel" aria-label={t("create.parts.scan") }>
               <header className="mechanic-scanner-header">
-                <button className="mechanic-scanner-close" type="button" onClick={closeScanner} aria-label={t("parts.closeScanner") }>
-                  <XClose aria-hidden="true" focusable="false" />
-                </button>
+                <IconButton className="mechanic-scanner-close" icon={XClose} label={t("parts.closeScanner")} onClick={closeScanner} />
               </header>
               <InventoryCodeScanner
                 autoStart
@@ -73,9 +73,7 @@ export function CreatePartScanner({ disabled = false, locationId, locale = "en",
                   cameraLabel: t("parts.scannerCamera"),
                 }}
               />
-            </Dialog>
-          </Modal>
-        </ModalOverlay>
+        </ModalFrame>
       ) : null}
       {message ? <p className="create-parts-action-message" role="status">{message}</p> : null}
     </>

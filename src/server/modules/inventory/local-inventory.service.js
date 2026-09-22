@@ -17,6 +17,7 @@ import {
   inventoryStockQuerySchema,
   invoiceHistoryQuerySchema,
 } from "./inventory.schemas.js";
+import { validateCompleteInvoiceAllocationPlan, validateInvoicePostingRoute } from "./inventory-purchase-invoice-allocation.service.js";
 
 function publicError(code, message, statusCode = 422, retryable = false) {
   return new InventoryError(message, { code, statusCode, retryable });
@@ -87,8 +88,124 @@ function prepareLocalLines(draft) {
       uomCode,
       unitCost,
       lineTotal,
+      currency: String(draft.currency?.value || "").trim().toUpperCase() || null,
     };
   });
+}
+
+function requireTrackingPolicies(lines, policies) {
+  const trackingByPart = new Map(policies.map((policy) => [policy.catalogPartId, policy.trackingMode]));
+  return lines.map((line) => {
+    const trackingMode = line.catalogPartId ? trackingByPart.get(line.catalogPartId) || null : null;
+    if (!trackingMode) {
+      throw publicError(
+        "INVENTORY_TRACKING_REQUIRED",
+        `Review tracking for ${line.partNumber} before receiving it.`,
+        409,
+      );
+    }
+    return { ...line, trackingMode };
+  });
+}
+
+function assertReceiptQuantity(quantity, line, field) {
+  const unit = getUnitDefinition(line.uomCode);
+  const factor = 10 ** unit.decimalScale;
+  if (!Number.isFinite(quantity) || quantity < 0 || Math.round(quantity * factor) / factor !== quantity) {
+    throw publicError("INVENTORY_QUANTITY_INVALID", `${field} for ${line.partNumber} does not match ${line.uomCode} precision.`);
+  }
+}
+
+function prepareReceiptEpisode(lines, parsed, receiptId) {
+  const requested = parsed.receiptLines || lines.map((line) => ({
+    invoiceLineIndex: line.lineIndex,
+    purchaseLineId: parsed.allocationPlan?.find((allocation) => allocation.invoiceLineIndex === line.lineIndex)?.purchaseLineId || null,
+    acceptedQuantity: line.quantity,
+    heldQuantity: 0,
+    rejectedQuantity: 0,
+    notReceivedQuantity: 0,
+    outcome: "accepted",
+    notes: "",
+    serialNumbers: [],
+  }));
+  const byIndex = new Map(lines.map((line) => [line.lineIndex, line]));
+  const outcomes = [];
+  const postingLines = [];
+  for (const receiptLine of requested) {
+    const source = byIndex.get(receiptLine.invoiceLineIndex);
+    if (!source) throw publicError("INVENTORY_RECEIPT_LINE_INVALID", `Invoice line ${receiptLine.invoiceLineIndex + 1} is unavailable.`, 409);
+    const acceptedQuantity = Number(receiptLine.acceptedQuantity || 0);
+    const heldQuantity = Number(receiptLine.heldQuantity || 0);
+    const rejectedQuantity = Number(receiptLine.rejectedQuantity || 0);
+    const notReceivedQuantity = Number(receiptLine.notReceivedQuantity || 0);
+    for (const [field, quantity] of Object.entries({ acceptedQuantity, heldQuantity, rejectedQuantity, notReceivedQuantity })) {
+      assertReceiptQuantity(quantity, source, field);
+    }
+    const actualQuantity = acceptedQuantity + heldQuantity + rejectedQuantity;
+    if (receiptLine.outcome !== "over" && actualQuantity + notReceivedQuantity > source.quantity) {
+      throw publicError("INVENTORY_INVOICE_QUANTITY_EXCEEDED", `Receipt quantities exceed invoice line ${receiptLine.invoiceLineIndex + 1}.`, 409);
+    }
+    if (acceptedQuantity > source.quantity) {
+      throw publicError("INVENTORY_INVOICE_QUANTITY_EXCEEDED", `Accepted quantity exceeds invoice line ${receiptLine.invoiceLineIndex + 1}.`, 409);
+    }
+    if (source.trackingMode === "serialized") {
+      if (![acceptedQuantity, heldQuantity, rejectedQuantity, notReceivedQuantity].every(Number.isInteger)) {
+        throw publicError("INVENTORY_SERIAL_QUANTITY_INVALID", `${source.partNumber} requires whole-unit quantities.`);
+      }
+      if (receiptLine.serialNumbers.length && receiptLine.serialNumbers.length !== acceptedQuantity + heldQuantity) {
+        throw publicError("INVENTORY_SERIAL_QUANTITY_INVALID", `Capture one identity for every accepted or held ${source.partNumber} unit.`);
+      }
+      if (new Set(receiptLine.serialNumbers.map((value) => value.toLocaleUpperCase("en-US"))).size !== receiptLine.serialNumbers.length) {
+        throw publicError("INVENTORY_SERIAL_IDENTITY_DUPLICATE", `Each ${source.partNumber} identity must be different.`);
+      }
+    } else if (receiptLine.serialNumbers.length) {
+      throw publicError("INVENTORY_SERIAL_IDENTITY_NOT_ALLOWED", `${source.partNumber} does not use individual identities.`);
+    }
+    const physicalLineId = actualQuantity > 0 ? randomUUID() : null;
+    const unitCost = source.unitCost;
+    const proportionalTotal = source.lineTotal === null ? null : Number((source.lineTotal * (actualQuantity / source.quantity)).toFixed(2));
+    if (physicalLineId) {
+      postingLines.push({
+        ...source,
+        id: physicalLineId,
+        quantity: actualQuantity,
+        acceptedQuantity,
+        heldQuantity,
+        rejectedQuantity,
+        targetPositionId: receiptLine.targetPositionId || null,
+        lineTotal: proportionalTotal,
+        costSource: unitCost === null && proportionalTotal === null ? "unknown" : "invoice_line",
+        serializedUnits: source.trackingMode === "serialized"
+          ? Array.from({ length: acceptedQuantity + heldQuantity }, (_, index) => ({
+            id: randomUUID(),
+            ordinal: index + 1,
+            serialNumber: receiptLine.serialNumbers[index]
+              || `WG-L-${receiptId.replaceAll("-", "").slice(0, 16).toUpperCase()}-${source.lineIndex + 1}-${index + 1}`,
+            conditionCode: "unknown",
+            status: index < acceptedQuantity ? "in_stock" : "held",
+          }))
+          : [],
+      });
+    }
+    outcomes.push({
+      invoiceLineIndex: source.lineIndex,
+      purchaseLineId: receiptLine.purchaseLineId || null,
+      receiptLineId: physicalLineId,
+      catalogPartId: source.catalogPartId,
+      partNumber: source.partNumber,
+      uomCode: source.uomCode,
+      expectedQuantity: actualQuantity + notReceivedQuantity,
+      actualQuantity,
+      usableQuantity: acceptedQuantity,
+      heldQuantity,
+      rejectedQuantity,
+      notReceivedQuantity,
+      outcome: receiptLine.outcome,
+      notes: receiptLine.notes,
+      holdLocation: receiptLine.holdLocation,
+    });
+  }
+  return { postingLines, outcomes };
 }
 
 function requestHash(value) {
@@ -111,6 +228,13 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
     throw publicError("INVOICE_REVIEW_STALE", "This reviewed invoice changed. Refresh it before confirming delivery.", 409, true);
   }
   const draft = invoiceDraftSchema.parse(source.reviewed_draft);
+  const postingRoute = validateInvoicePostingRoute({
+    draft,
+    postingRoute: parsed.postingRoute,
+    allocationPlan: parsed.allocationPlan,
+    receiptLines: parsed.receiptLines,
+    noPurchaseOrderReason: parsed.noPurchaseOrderReason,
+  });
   const preparedLines = prepareLocalLines(draft);
   const loadTrackingModes = dependencies.loadTrackingModes
     || (dependencies.postReceipt ? async () => [] : getCatalogTrackingModes);
@@ -118,13 +242,15 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
     companyIds: scope.companyIds,
     catalogPartIds: [...new Set(preparedLines.map((line) => line.catalogPartId).filter(Boolean))],
   });
-  const trackingByPart = new Map(policies.map((policy) => [policy.catalogPartId, policy.trackingMode]));
-  const lines = preparedLines.map((line) => ({ ...line, trackingMode: line.catalogPartId ? trackingByPart.get(line.catalogPartId) || null : null }));
-  const serializedQuantity = lines.reduce((total, line) => {
-    const category = getUnitDefinition(line.uomCode)?.category;
-    const serialized = line.trackingMode === "serialized" || (line.trackingMode === null && (category === "count" || category === "packaging"));
-    return serialized ? total + line.quantity : total;
-  }, 0);
+  const lines = requireTrackingPolicies(preparedLines, policies);
+  const receiptId = randomUUID();
+  const episode = prepareReceiptEpisode(lines, parsed, receiptId);
+  if (postingRoute === "purchase_order") validateCompleteInvoiceAllocationPlan({
+    lines,
+    receiptLines: episode.outcomes,
+    allocationPlan: parsed.allocationPlan,
+  });
+  const serializedQuantity = episode.postingLines.reduce((total, line) => total + line.serializedUnits.length, 0);
   if (serializedQuantity > 500) {
     throw publicError(
       "INVENTORY_RECEIPT_UNIT_LIMIT",
@@ -136,26 +262,15 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
     runId,
     reviewedRunVersion: parsed.expectedVersion,
     locationId: source.location_id,
-    confirmation: parsed.confirmation,
-    lines: lines.map(({ id: _id, ...line }) => line),
+    confirmation: parsed.confirmation || "physically_received",
+    postingRoute,
+    noPurchaseOrderReason: parsed.noPurchaseOrderReason,
+    allocationPlan: parsed.allocationPlan,
+    receiptLines: parsed.receiptLines || null,
+    lines: episode.postingLines.map(({ id: _id, serializedUnits: _units, ...line }) => line),
+    outcomes: episode.outcomes.map(({ receiptLineId: _receiptLineId, ...outcome }) => outcome),
   };
-  const receiptId = randomUUID();
   const labelBatchId = serializedQuantity ? randomUUID() : null;
-  const postingLines = lines.map((line) => {
-    const category = getUnitDefinition(line.uomCode)?.category;
-    const serializable = line.trackingMode === "serialized" || (line.trackingMode === null && (category === "count" || category === "packaging"));
-    return {
-      ...line,
-      serializedUnits: serializable
-        ? Array.from({ length: line.quantity }, (_, index) => ({
-          id: randomUUID(),
-          ordinal: index + 1,
-          serialNumber: `WG-L-${receiptId.replaceAll("-", "").slice(0, 16).toUpperCase()}-${line.lineIndex + 1}-${index + 1}`,
-          conditionCode: "unknown",
-        }))
-        : [],
-    };
-  });
   const result = await (dependencies.postReceipt || postLocalInventoryReceipt)({
     receiptId,
     runId,
@@ -164,15 +279,19 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
     idempotencyKey: parsed.idempotencyKey,
     requestHash: requestHash(hashShape),
     reviewedRunVersion: parsed.expectedVersion,
-    physicalConfirmation: parsed.confirmation,
+    physicalConfirmation: parsed.confirmation || "physically_received",
     confirmationHash: requestHash({
       runId,
       reviewedRunVersion: parsed.expectedVersion,
-      confirmation: parsed.confirmation,
+      confirmation: parsed.confirmation || "physically_received",
       actorId: requestContext.actor.id,
     }),
+    postingRoute,
+    noPurchaseOrderReason: parsed.noPurchaseOrderReason,
+    allocationPlan: parsed.allocationPlan,
     labelBatchId,
-    lines: postingLines,
+    lines: episode.postingLines,
+    receiptOutcomes: episode.outcomes,
   });
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "review_required") {
@@ -183,6 +302,18 @@ export async function confirmReviewedInvoiceFullDelivery(runId, input, requestCo
   }
   if (result.kind === "conflict") {
     throw publicError("INVENTORY_RECEIPT_REPLAY_CONFLICT", "This invoice was already posted with different inventory details.", 409);
+  }
+  if (result.kind === "purchase_conflict") {
+    throw publicError("INVENTORY_PURCHASE_RECEIPT_CONFLICT", "The purchase order changed or no longer has enough outstanding quantity for this invoice allocation.", 409, true);
+  }
+  if (result.kind === "target_position_invalid") {
+    throw publicError("INVENTORY_RECEIPT_POSITION_INVALID", "Receipt target position is not eligible.");
+  }
+  if (result.kind === "invoice_quantity_conflict") {
+    throw publicError("INVENTORY_INVOICE_QUANTITY_CONFLICT", "This invoice line no longer has enough unreceived quantity. Refresh it before receiving.", 409, true);
+  }
+  if (result.kind === "serial_conflict") {
+    throw publicError("INVENTORY_SERIAL_IDENTITY_DUPLICATE", "One of these serialized identities is already recorded in inventory.", 409);
   }
   if (result.kind === "authority_conflict") {
     throw publicError(

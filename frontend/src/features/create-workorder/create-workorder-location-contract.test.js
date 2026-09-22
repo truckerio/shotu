@@ -30,6 +30,12 @@ test("create location loading failures are explicit instead of silently swallowe
   assert.doesNotMatch(locationController, /request\(endpoint\)[\s\S]{0,900}\.catch\(\(\) => \{\}\)/);
 });
 
+test("automatic template hydration resets only a pristine draft baseline", () => {
+  assert.match(locationController, /canAdoptInitialTemplateBaseline/);
+  assert.match(locationController, /reason: "template-reconciled"[\s\S]*resetDraftBaseline,/);
+  assert.match(locationController, /templateBaselineAdoptedRef\.current = true/);
+});
+
 test("create conflicts are announced as alerts instead of generic status copy", () => {
   assert.match(commands, /message: error\.message, error: true/);
   assert.match(createForm, /role=\{error \? "alert" : "status"\}/);

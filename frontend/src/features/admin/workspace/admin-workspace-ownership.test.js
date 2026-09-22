@@ -46,6 +46,16 @@ test("admin pages are owned outside the controller", () => {
   assert.match(locations, /<KioskSettingsPanel/);
 });
 
+test("Settings makes storage layout an Inventory configuration destination", () => {
+  assert.match(settings, /tab === "templates" \|\| tab === "storage-layout"/);
+  assert.match(settings, /title="Storage layout"/);
+  assert.match(settings, /onManage=\{\(\) => changeTab\("storage-layout"\)\}/);
+  assert.match(settings, /current="Storage layout"/);
+  assert.match(settings, /<InventoryLocationsWorkspace/);
+  assert.match(settings, /locations=\{locations\}/);
+  assert.match(settings, /canApplyInventoryCount=\{actor\?\.role === "admin"\}/);
+});
+
 test("Operations and Inventory share the operational collection page composition", () => {
   assert.match(operationsPage, /<OperationalCollectionPage/);
   assert.match(operationsPage, /title=\{<OperationsTitle product=\{product\} canSwitch=\{canSwitch\} onChange=\{changeProduct\} \/>\}/);

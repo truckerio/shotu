@@ -67,9 +67,17 @@ function DraftActions({ draft, role, actorId, canOpen, busy, onOpen, onDiscard, 
         </Button>
       ) : null}
       {canOpen ? (
-        <Button type="button" variant="primary" icon={ArrowRight} disabled={busy} onClick={() => onOpen(draft)}>
-          {busy ? "Opening" : "Resume"}
-        </Button>
+        <button
+          type="button"
+          className="workorder-draft-icon-action is-resume"
+          disabled={busy}
+          title={busy ? "Opening draft" : "Resume draft"}
+          aria-label={`${busy ? "Opening" : "Resume"} ${draftUnit(draft)} draft`}
+          aria-busy={busy}
+          onClick={() => onOpen(draft)}
+        >
+          <ArrowRight aria-hidden="true" />
+        </button>
       ) : null}
       {canDiscard ? (
         <button

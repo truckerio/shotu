@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Settings01, XClose } from "@untitledui/icons";
-import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
+import { AlertCircle, DotsVertical, Rows03, Settings01, SwitchHorizontal01, XClose } from "@untitledui/icons";
+import { Button as AriaButton, Heading, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { Button } from "../../components/ui/Button.jsx";
 import { Checkbox } from "../../components/ui/Checkbox.jsx";
+import { IconButton } from "../../components/ui/IconButton.jsx";
+import { ModalFrame } from "../../components/ui/ModalFrame.jsx";
 import { api } from "../../lib/api.js";
 
 function stockRuleDraft(location) {
@@ -13,7 +15,7 @@ function stockRuleDraft(location) {
   };
 }
 
-export function PartLocationSettings({ part, location, disabled = false, onSaved }) {
+export function PartLocationSettings({ part, location, disabled = false, onDamage, onOpenShelves, onSaved, onTransfer }) {
   const [open, setOpen] = useState(false);
   const [rule, setRule] = useState(() => stockRuleDraft(location));
   const [ruleBusy, setRuleBusy] = useState(false);
@@ -56,11 +58,33 @@ export function PartLocationSettings({ part, location, disabled = false, onSaved
 
   const busy = ruleBusy;
   return <>
-    <Button type="button" icon={Settings01} aria-label={`Stock settings for ${location.locationName}`} onClick={showSettings} disabled={disabled} />
-    {open ? <ModalOverlay className="inventory-location-settings-overlay" isOpen isDismissable={!busy} onOpenChange={(nextOpen) => { if (!nextOpen && !busy) setOpen(false); }}>
-      <Modal className="inventory-location-settings-modal">
-        <Dialog className="inventory-location-settings-dialog" aria-label={`${location.locationName} inventory settings`}>
-          <header><div><Heading slot="title">{location.locationName} settings</Heading><p>{part.partNumber} · {part.description || "No part name"}</p></div><button type="button" aria-label="Close location settings" onClick={() => setOpen(false)} disabled={busy}><XClose aria-hidden="true" /></button></header>
+    <MenuTrigger>
+      <AriaButton className="shared-icon-button is-neutral inventory-location-actions-trigger" aria-label={`Actions for ${location.locationName}`} title={`Actions for ${location.locationName}`} isDisabled={disabled}>
+        <DotsVertical aria-hidden="true" />
+      </AriaButton>
+      <Popover className="inventory-location-actions-popover" placement="bottom end">
+        <Menu className="inventory-location-actions-menu" aria-label={`Actions for ${location.locationName}`}>
+          {onOpenShelves ? <MenuItem className="inventory-location-actions-item" onAction={onOpenShelves} textValue="Shelves and bins">
+            <Rows03 aria-hidden="true" />
+            <span>Shelves and bins</span>
+          </MenuItem> : null}
+          <MenuItem className="inventory-location-actions-item" onAction={() => onTransfer?.(location.locationId)} textValue="Transfer stock">
+            <SwitchHorizontal01 aria-hidden="true" />
+            <span>Transfer stock</span>
+          </MenuItem>
+          <MenuItem className="inventory-location-actions-item is-danger" onAction={() => onDamage?.(location.locationId)} textValue="Mark stock damaged">
+            <AlertCircle aria-hidden="true" />
+            <span>Mark stock damaged</span>
+          </MenuItem>
+          <MenuItem className="inventory-location-actions-item" onAction={showSettings} textValue="Stock settings">
+            <Settings01 aria-hidden="true" />
+            <span>Stock settings</span>
+          </MenuItem>
+        </Menu>
+      </Popover>
+    </MenuTrigger>
+    {open ? <ModalFrame overlayClassName="inventory-location-settings-overlay" modalClassName="inventory-location-settings-modal" dialogClassName="inventory-location-settings-dialog" ariaLabel={`${location.locationName} inventory settings`} isDismissable={!busy} onOpenChange={(nextOpen) => { if (!nextOpen && !busy) setOpen(false); }}>
+          <header><div><Heading slot="title">{location.locationName} settings</Heading><p>{part.partNumber} · {part.description || "No part name"}</p></div><IconButton icon={XClose} label="Close location settings" onClick={() => setOpen(false)} disabled={busy} /></header>
 
           <section aria-labelledby={`stock-rule-${location.locationId}`}>
             <div><h3 id={`stock-rule-${location.locationId}`}>Stock rule</h3><p>These thresholds apply only to {location.locationName}.</p></div>
@@ -74,8 +98,6 @@ export function PartLocationSettings({ part, location, disabled = false, onSaved
           </section>
 
           <footer><Button type="button" onClick={() => setOpen(false)} disabled={busy}>Close</Button></footer>
-        </Dialog>
-      </Modal>
-    </ModalOverlay> : null}
+    </ModalFrame> : null}
   </>;
 }

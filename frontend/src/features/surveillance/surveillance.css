@@ -277,7 +277,8 @@
 .surveillance-desktop-queues { min-width: 0; }
 .surveillance-filter-row { align-items: center; display: flex; gap: 8px; padding: 0 14px 12px; }
 .surveillance-filter-row .mechanic-search { flex: 1; margin: 0; }
-.surveillance-filter-row select, .surveillance-filter-row input[type="date"] { background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; min-height: 38px; padding: 0 10px; }
+.surveillance-filter-row select { background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; min-height: 38px; padding: 0 10px; }
+.surveillance-filter-row .date-picker-control { min-height: 38px; }
 .surveillance-date-filter {
   align-items: center;
   display: flex;
@@ -314,7 +315,7 @@
   }
 
   .surveillance-filter-row select,
-  .surveillance-filter-row input[type="date"] {
+  .surveillance-filter-row .date-picker-control {
     min-height: 44px;
     min-width: 0;
   }
@@ -461,7 +462,7 @@
     width: auto;
   }
   .surveillance-filter-row select,
-  .surveillance-filter-row input[type="date"] {
+  .surveillance-filter-row .date-picker-control {
     min-height: 44px;
     min-width: 0;
     width: 100%;

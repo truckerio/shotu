@@ -1,8 +1,8 @@
 .physical-receipt-confirmation {
-  align-items: center;
+  align-items: stretch;
   display: grid;
   gap: 0.75rem 1.5rem;
-  grid-template-columns: minmax(12rem, 1fr) minmax(24rem, auto);
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
 }
 
@@ -27,6 +27,92 @@
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   justify-content: flex-end;
+}
+
+.invoice-po-review {
+  display: grid;
+  gap: 0.625rem;
+  grid-column: 1 / -1;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--color-border-secondary, #eaecf0);
+  border-bottom: 1px solid var(--color-border-secondary, #eaecf0);
+}
+
+.invoice-po-review h4,
+.invoice-po-review p {
+  margin: 0;
+}
+
+.invoice-po-review-heading,
+.invoice-po-suggestion > div,
+.invoice-po-suggestion li,
+.invoice-no-po-route {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.invoice-po-review-heading > div,
+.invoice-po-suggestion,
+.invoice-po-suggestion > div,
+.invoice-no-po-route label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.invoice-po-review-heading p,
+.invoice-po-suggestion span,
+.invoice-no-po-route label span {
+  color: var(--color-text-secondary, #667085);
+  font-size: 0.8125rem;
+}
+
+.invoice-po-suggestion {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-secondary, #d0d5dd);
+  border-radius: 0.625rem;
+}
+
+.invoice-po-suggestion ul {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.invoice-po-suggestion li {
+  min-width: 0;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--color-border-secondary, #eaecf0);
+}
+
+.invoice-po-suggestion li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.invoice-no-po-route {
+  align-items: end;
+  justify-content: flex-start;
+}
+
+.invoice-no-po-route label {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.invoice-no-po-route input {
+  box-sizing: border-box;
+  min-height: 44px;
+  width: 100%;
+}
+
+.invoice-po-route-choice.is-selected {
+  background: var(--color-background-primary-alt, #eff8ff);
+  border-color: var(--color-border-brand, #84adff);
+  color: var(--color-text-brand-secondary, #175cd3);
 }
 
 .physical-receipt-confirmation label {
@@ -58,6 +144,29 @@
   text-align: right;
 }
 
+.physical-receipt-destination-status {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.physical-receipt-destination-status:empty {
+  display: none;
+}
+
+.physical-receipt-destination-status > p {
+  align-items: center;
+  color: var(--color-text-secondary, #667085);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.physical-receipt-destination-status > p[role="alert"] {
+  color: var(--color-text-danger, #b42318);
+}
+
 @media (max-width: 760px) {
   .physical-receipt-confirmation {
     align-items: stretch;
@@ -65,7 +174,11 @@
   }
 
   .physical-receipt-controls,
-  .physical-receipt-actions {
+  .physical-receipt-actions,
+  .invoice-po-review-heading,
+  .invoice-po-suggestion > div,
+  .invoice-po-suggestion li,
+  .invoice-no-po-route {
     align-items: stretch;
     flex-direction: column;
   }
@@ -78,7 +191,28 @@
     width: 100%;
   }
 
+  .invoice-no-po-route label {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .invoice-po-suggestion .button,
+  .invoice-no-po-route .button {
+    min-height: 44px;
+    width: 100%;
+  }
+
   .physical-receipt-note {
     text-align: left;
+  }
+
+  .physical-receipt-destination-status > p {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .physical-receipt-destination-status .button {
+    min-height: 44px;
+    width: 100%;
   }
 }

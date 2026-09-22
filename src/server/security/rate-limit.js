@@ -96,7 +96,7 @@ export function sensitiveRateLimitPolicy(method, pathname) {
       ? "integration"
       : null;
   }
-  if (normalizedMethod === "POST" && path === "/api/office/invoice-extractions") {
+  if (normalizedMethod === "POST" && (path === "/api/office/invoice-extractions" || /^\/api\/office\/inventory\/purchasing\/[^/]+\/bills$/.test(path))) {
     return "invoice";
   }
   if (normalizedMethod === "POST" && path === "/api/office/inventory/count-imports") {

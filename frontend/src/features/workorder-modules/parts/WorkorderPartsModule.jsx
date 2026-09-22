@@ -63,6 +63,7 @@ export function WorkorderPartsModule({
   return (
     <ProgressiveWorkorderSection
       id="parts"
+      showTitle={presentation!=="one-page"}
       title={isMechanicDetail ? t("parts.usedTitle") : "Parts"}
       summary={partsVisible
         ? (pendingPartCount

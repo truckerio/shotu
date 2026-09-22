@@ -12,6 +12,7 @@ import {
   createTemplateEndpoint,
   normalizeCreateLocationResponse,
 } from "./create-location-controller-model.js";
+import { canAdoptInitialTemplateBaseline } from "./useCreateLocationController.js";
 
 const locations = [
   {
@@ -26,6 +27,35 @@ const locations = [
 
 test("controller keeps the established template and mechanics API contracts", () => {
   assert.equal(createTemplateEndpoint(), "/api/workorders/create-context");
+});
+
+test("automatic template hydration adopts a baseline only for an untouched Create form", () => {
+  const initialForm = {
+    locationId: "loc-chino",
+    locationName: "",
+    laborProduct: null,
+    headerTitle: "CHINO YARD WORKORDER",
+    unitNo: "",
+    parts: [{ partNo: "", qty: "" }],
+  };
+
+  assert.equal(canAdoptInitialTemplateBaseline({
+    initialForm,
+    currentForm: { ...initialForm, locationName: "Chino Yard", laborProduct: { productId: "labor-1" } },
+  }), true);
+  assert.equal(canAdoptInitialTemplateBaseline({
+    initialForm,
+    currentForm: { ...initialForm, unitNo: "TRUCK-9" },
+  }), false);
+  assert.equal(canAdoptInitialTemplateBaseline({
+    initialForm,
+    currentForm: { ...initialForm, locationId: "loc-arizona" },
+  }), false);
+  assert.equal(canAdoptInitialTemplateBaseline({
+    initialForm,
+    currentForm: initialForm,
+    templateAlreadyApplied: true,
+  }), false);
 });
 
 test("location response prefers the explicit role default and normalizes missing arrays", () => {

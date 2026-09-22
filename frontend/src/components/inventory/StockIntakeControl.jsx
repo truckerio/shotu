@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Dialog, Modal, ModalOverlay } from "react-aria-components";
 import { api } from "../../lib/api.js";
 import { Button } from "../ui/Button.jsx";
 import { Checkbox } from "../ui/Checkbox.jsx";
+import { ModalFrame } from "../ui/ModalFrame.jsx";
 import { clearStockIntakeRequestKey, stockIntakeQuantity, stockIntakeRequestKey } from "./stock-intake-model.js";
 import "./stock-intake.css";
 
@@ -58,8 +58,7 @@ export function StockIntakeControl({ catalogPartId, locationId, initialData, onR
   if (!data?.canReceiveStock && !open) return null;
   return <>
     <Button type="button" onClick={() => { setQuantity("1"); setConfirmed(false); setCompleted(false); setMessage(""); setOpen(true); }}>Add stock</Button>
-    {open ? <ModalOverlay className="stock-intake-overlay" isOpen isDismissable={!busy} onOpenChange={(next) => { if (!next) close(); }}>
-      <Modal className="stock-intake-modal"><Dialog className="stock-intake-dialog" aria-labelledby={titleId} onKeyDown={(event) => {
+    {open ? <ModalFrame overlayClassName="stock-intake-overlay" modalClassName="stock-intake-modal" dialogClassName="stock-intake-dialog" ariaLabelledBy={titleId} isDismissable={!busy} onOpenChange={(next) => { if (!next) close(); }} onKeyDown={(event) => {
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
       }}>
         <header><div><h2 id={titleId}>Add stock · {data?.part.partNumber}</h2><p>{data?.location.locationName}</p></div></header>
@@ -73,7 +72,6 @@ export function StockIntakeControl({ catalogPartId, locationId, initialData, onR
           {message ? <p role={completed ? "status" : "alert"}>{message}</p> : null}
           <footer><Button type="button" onClick={close} disabled={busy}>{completed ? "Done" : "Cancel"}</Button>{!completed ? <Button type="button" variant="primary" onClick={receive} disabled={busy || !confirmed || !amount.valid || !data?.canReceiveStock}>{busy ? "Adding stock…" : "Add stock"}</Button> : null}</footer>
         </div>
-      </Dialog></Modal>
-    </ModalOverlay> : null}
+    </ModalFrame> : null}
   </>;
 }

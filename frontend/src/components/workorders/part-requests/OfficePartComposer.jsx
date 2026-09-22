@@ -19,6 +19,7 @@ import { RepairHistorySuggestions } from "./RepairHistorySuggestions.jsx";
 import { catalogInventoryText } from "./catalog-parts-model.js";
 import { formatLocaleNumber } from "../../../i18n/index.js";
 import { interfaceText } from "../../../i18n/index.js";
+import { workorderPartErrorMessage } from "../mechanic-part-request-model.js";
 
 export function OfficePartComposer({ detail, onChanged }) {
   const locale = "en";
@@ -103,7 +104,7 @@ export function OfficePartComposer({ detail, onChanged }) {
       setOpen(false);
       await onChanged();
     } catch (error) {
-      setMessage(locale === "en" && error?.message ? error.message : t("parts.savePlanFailed"));
+      setMessage(workorderPartErrorMessage(error, t) || t("parts.savePlanFailed"));
     } finally {
       setBusy("");
     }

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { randomUUID } from "node:crypto";
+import test, { after } from "node:test";
 
+import { closePool, query } from "../pool.js";
 import {
   findActiveLocalLaborProduct,
+  importOdooLaborProducts,
   listLocalLaborProducts,
   setLocalLaborProductPinned,
 } from "./local-labor-products.repo.js";
@@ -10,6 +13,8 @@ import {
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 const LOCATION_ID = "22222222-2222-4222-8222-222222222222";
 const PRODUCT_ID = "33333333-3333-4333-8333-333333333333";
+const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
+after(async () => { if (runPostgres) await closePool(); });
 
 test("catalog list is company scoped, location pinned, searchable, and pinned first", async () => {
   let statement;
@@ -60,4 +65,57 @@ test("pin mutation derives the tenant from selected active rows", async () => {
   assert.match(statement, /selected\.description/);
   assert.equal(product.pinned, true);
   assert.equal(product.description, "Diagnose no-start");
+});
+
+test("Odoo labor snapshot copy is tenant-scoped, hourly-only, replay-safe, and rolls back invalid batches", { skip: !runPostgres }, async () => {
+  const companyId = randomUUID();
+  const otherCompanyId = randomUUID();
+  const suffix = randomUUID().replaceAll("-", "");
+  const validId = `labor-${suffix}`;
+  const freshId = `fresh-${suffix}`;
+  const disabledId = `disabled-${suffix}`;
+  const eachId = `each-${suffix}`;
+  const foreignId = `foreign-${suffix}`;
+  const existingId = `existing-${suffix}`;
+  const blankId = `zzblank-${suffix}`;
+  try {
+    await query("insert into companies (id, slug, name) values ($1, $2, $3), ($4, $5, $6)", [
+      companyId, `labor-copy-${suffix}`, "Labor copy", otherCompanyId, `labor-copy-other-${suffix}`, "Labor copy other",
+    ]);
+    const sourceRows = [
+      [companyId, validId, "LAB", "Shop labor", true, "Hours", "Working Time"],
+      [companyId, freshId, "FRESH", "Fresh labor", true, "Hours", "Working Time"],
+      [companyId, disabledId, "DIS", "Disabled labor", false, "Hours", "Working Time"],
+      [companyId, eachId, "EACH", "Each service", true, "Each", "Unit"],
+      [companyId, existingId, "EXIST", "Existing labor", true, "Hours", "Working Time"],
+      [companyId, blankId, "BLANK", "", true, "Hours", "Working Time"],
+      [otherCompanyId, foreignId, "FOREIGN", "Foreign labor", true, "Hours", "Working Time"],
+    ];
+    for (const [tenantId, externalId, code, name, active, uomName, category] of sourceRows) {
+      await query(`insert into odoo_service_products (
+        company_id, external_id, default_code, display_name, uom_external_id, uom_name,
+        uom_category_external_id, uom_category_name, active
+      ) values ($1, $2, $3, $4, '1', $6, 'time', $7, $5)`, [tenantId, externalId, code, name, active, uomName, category]);
+    }
+    await query(`insert into local_labor_products (company_id, name, normalized_name, code, normalized_code)
+      values ($1, 'Existing labor', 'existing labor', 'EXIST', 'exist')`, [companyId]);
+
+    const first = await importOdooLaborProducts({ companyId, externalIds: [validId, existingId] });
+    assert.deepEqual(first.products.map((product) => [product.externalId, product.created]).sort(), [[existingId, false], [validId, true]]);
+    const replay = await Promise.all([
+      importOdooLaborProducts({ companyId, externalIds: [validId, existingId] }),
+      importOdooLaborProducts({ companyId, externalIds: [validId, existingId] }),
+    ]);
+    assert.deepEqual(replay.flatMap((result) => result.products).map((product) => product.created), [false, false, false, false]);
+    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 2);
+
+    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [disabledId] }), /not active hourly services/i);
+    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [eachId] }), /not active hourly services/i);
+    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [foreignId] }), /not active hourly services/i);
+    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [freshId, blankId] }), /missing a name/i);
+    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 2);
+    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1 and normalized_name='fresh labor'", [companyId])).rows[0].count, 0);
+  } finally {
+    await query("delete from companies where id = any($1::uuid[])", [[companyId, otherCompanyId]]).catch(() => {});
+  }
 });

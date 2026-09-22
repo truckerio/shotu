@@ -1,7 +1,17 @@
+import { InventoryLocationStockWorkspace } from "./InventoryLocationStockWorkspace.jsx";
+import { PartPositionsPanel } from "./PartPositionsPanel.jsx";
+import { PartCommercialDetails } from "./PartCommercialDetails.jsx";
+import './inventory-tables.css';
+import { InventoryPurchases } from './InventoryPurchases.jsx';
+import { InventoryInboundWorkspace } from './InventoryInboundWorkspace.jsx';
+import { InventoryStockTasks } from './InventoryStockTasks.jsx';
+import { InventoryReports } from './InventoryReports.jsx';
+import { InventoryTaskQueue } from './InventoryTaskQueue.jsx';
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, FileCheck02, Package, Plus, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
+import { ArrowLeft, ChevronRight, Package, Plus, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
+import { IconButton } from "../../components/ui/IconButton.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
 import { Pagination } from "../../components/ui/Pagination.jsx";
@@ -11,6 +21,7 @@ import {
   OperationalCollectionPage,
   OperationalCollectionResultHeader,
   OperationalCollectionRow,
+  OperationalCollectionSectionHeader,
   OperationalCollectionTable,
   OperationalCollectionTabs,
   OperationalCollectionToolbar,
@@ -20,6 +31,8 @@ import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace
 import { PartIdentityEditor } from "./PartIdentityEditor.jsx";
 import { PartLocationSettings } from "./PartLocationSettings.jsx";
 import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
+import { AddInventoryStockDialog } from "./AddInventoryStockDialog.jsx";
+import { StockMovementHistory } from "./StockMovementHistory.jsx";
 import { PartSerializationPanel } from "./PartSerializationPanel.jsx";
 import { InventoryAuthorityExceptionsPanel } from "./InventoryAuthorityExceptionsPanel.jsx";
 import { InventoryCustodyWorkspace } from "./InventoryCustodyWorkspace.jsx";
@@ -30,6 +43,7 @@ import {
   stockStateLabel,
 } from "./inventory-workspace-model.js";
 import { hasRefreshedPartIdentityVersion } from "./part-identity-editor-model.js";
+import { configuredPriceView, effectiveSellingPrice } from "./part-commercial-model.js";
 import "./inventory-workspace.css";
 
 let inventoryCountPanelPromise;
@@ -42,6 +56,11 @@ const InventoryCountImportPanel = lazy(loadInventoryCountPanel);
 
 function quantity(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(Number(value || 0));
+}
+
+function locationHasStock(location) {
+  return [location.quantityOnHand, location.quantityReserved, location.quantityAvailable, location.odooQuantityOnHand]
+    .some((value) => Number(value || 0) !== 0);
 }
 
 function inventoryUrl({ invoiceRun = "", upload = false, countImport = "", count = false } = {}) {
@@ -81,6 +100,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [locationId, setLocationId] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
   const [stockSort, setStockSort] = useState(DEFAULT_STOCK_SORT);
+  const [stockMode, setStockMode] = useState(() => initialParams.get("stockMode") === "location" ? "location" : "part");
   const [locations, setLocations] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,14 +108,35 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedStockKey, setSelectedStockKey] = useState("");
+  const [selectedLocationPart, setSelectedLocationPart] = useState(null);
+  const [selectedPositionContext, setSelectedPositionContext] = useState(null);
   const [selectedLocationId, setSelectedLocationId] = useState("");
-  const [partIdentityEditOpen, setPartIdentityEditOpen] = useState(false);
+  const [partDetailPage, setPartDetailPage] = useState("stock");
+  const [shelvingOpen, setShelvingOpen] = useState(false);
   const [partIdentityBusy, setPartIdentityBusy] = useState(false);
+  const [partIdentityDirty, setPartIdentityDirty] = useState(false);
   const [partIdentityOverride, setPartIdentityOverride] = useState(null);
   const [partIdentityRefreshPending, setPartIdentityRefreshPending] = useState(null);
+  const [partHeaderPrice, setPartHeaderPrice] = useState({ scopeKey: "", label: "" });
   const [createPartOpen, setCreatePartOpen] = useState(false);
+  const [receivingPart, setReceivingPart] = useState(null);
   const [stockPage, setStockPage] = useState(1);
-  const [inventorySection, setInventorySection] = useState("stock");
+  const [inventorySection, setInventorySection] = useState(() => ["inbound", "purchases", "tasks", "reports"].includes(initialParams.get("inventorySection")) ? initialParams.get("inventorySection") : "stock");
+  const [inboundReceiptOrderId, setInboundReceiptOrderId] = useState("");
+  const [reportPurchaseOrderId] = useState(() => initialParams.get("purchaseOrderId") || "");
+  const [reportPurchaseOrderNumber] = useState(() => initialParams.get("purchaseOrderNumber") || "");
+  const [inboundSource, setInboundSource] = useState(() => ({ receiptId: initialParams.get("receiptId") || "", deliveryId: initialParams.get("deliveryId") || "" }));
+  const [stockLocationInitialShop, setStockLocationInitialShop] = useState(() => initialParams.get("taskLocation") || "");
+  const [stockLocationInitialPosition, setStockLocationInitialPosition] = useState(() => initialParams.get("positionId") || "");
+  const [taskSection,setTaskSection]=useState(() => ["transfer", "count"].includes(initialParams.get("taskOwner")) ? initialParams.get("taskOwner") : "damage");
+  const [taskPart,setTaskPart]=useState(null);
+  const [taskLocationId,setTaskLocationId]=useState(() => initialParams.get("taskLocation") || "");
+  const [taskWorkflow,setTaskWorkflow]=useState(() => {
+    const owner = initialParams.get("taskOwner");
+    if (["damage", "transfer", "count"].includes(owner) && initialParams.get("taskId")) return { kind: "stock", task: { sourceId: initialParams.get("taskId") } };
+    if (owner === "custody" && initialParams.get("reuseCaseId")) return { kind: "custody", task: { sourceId: initialParams.get("reuseCaseId") } };
+    return null;
+  });
   const [stockMeta, setStockMeta] = useState({ pageCount: 1, total: 0, counts: { all: 0, available: 0, reserved: 0, out: 0 } });
 
   useEffect(() => {
@@ -144,56 +185,129 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const initialLoading = loading && !stockLoaded;
   const refreshing = loading && stockLoaded;
   const selectedItem = useMemo(() => {
-    const item = items.find((entry) => stockItemKey(entry) === selectedStockKey) || null;
+    const item = selectedLocationPart && stockItemKey(selectedLocationPart) === selectedStockKey
+      ? selectedLocationPart
+      : items.find((entry) => stockItemKey(entry) === selectedStockKey) || null;
     return item && partIdentityOverride?.catalogPartId === item.catalogPartId ? { ...item, ...partIdentityOverride } : item;
-  }, [items, partIdentityOverride, selectedStockKey]);
+  }, [items, partIdentityOverride, selectedLocationPart, selectedStockKey]);
   const selectedLocation = selectedItem?.locations.find((location) => location.locationId === selectedLocationId) || null;
+  const stockedLocations = selectedItem?.locations.filter(locationHasStock) || [];
+  const otherLocations = selectedItem?.locations.filter((location) => !locationHasStock(location)) || [];
+  const partHeaderPriceScopeKey = selectedItem?.catalogPartId ? `${selectedItem.catalogPartId}:${selectedLocation?.locationId || "company"}` : "";
 
   useEffect(() => {
-    setSelectedLocationId("");
-    setPartIdentityEditOpen(false);
+    if (!selectedItem?.catalogPartId) {
+      setPartHeaderPrice({ scopeKey: "", label: "" });
+      return undefined;
+    }
+    let active = true;
+    const scopeKey = partHeaderPriceScopeKey;
+    setPartHeaderPrice({ scopeKey, label: "…" });
+    const params = new URLSearchParams({ limit: "1" });
+    if (selectedLocation?.locationId) params.set("locationId", selectedLocation.locationId);
+    api(`/api/office/inventory/parts/${encodeURIComponent(selectedItem.catalogPartId)}/commercial?${params}`)
+      .then((commercial) => {
+        if (!active) return;
+        const price = effectiveSellingPrice(commercial, Boolean(selectedLocation?.locationId));
+        const view = configuredPriceView(price);
+        setPartHeaderPrice({ scopeKey, label: view.label === "Unknown" ? "—" : view.label });
+      })
+      .catch(() => {
+        if (active) setPartHeaderPrice({ scopeKey, label: "—" });
+      });
+    return () => { active = false; };
+  }, [partHeaderPriceScopeKey, refreshKey, selectedItem?.catalogPartId, selectedLocation?.locationId]);
+
+  function closeSelectedPart() {
+    setSelectedStockKey("");
+    setSelectedLocationPart(null);
+    setSelectedPositionContext(null);
+  }
+
+  function openListedPart(item) {
+    setSelectedLocationPart(null);
+    setSelectedPositionContext(null);
+    setSelectedStockKey(stockItemKey(item));
+  }
+
+  async function openLocationPart({ item, shopId, positionId, positionPath, canStore }) {
+    const params = new URLSearchParams({ q: item.partNumber || "", locationId: shopId, limit: "100", page: "1" });
+    const result = await api(`/api/office/inventory/stock?${params}`);
+    const fullItem = (result.items || []).find((entry) => entry.catalogPartId === (item.catalogPartId || item.partId || item.id));
+    if (!fullItem) throw new Error("This part is no longer available at the selected location. Refresh and try again.");
+    setSelectedLocationPart(fullItem);
+    setSelectedPositionContext({ shopId, positionId: canStore ? positionId : "", positionPath });
+    setSelectedStockKey(stockItemKey(fullItem));
+  }
+
+  function openStockTransfer(part, sourceLocationId) {
+    setTaskPart(part);
+    setTaskLocationId(sourceLocationId);
+    setTaskSection('transfer');
+    setTaskWorkflow({ kind: 'stock' });
+    setInventorySection('tasks');
+    closeSelectedPart();
+  }
+
+  function openStockDamage(part, sourceLocationId, serialNumber = "") {
+    setTaskPart(serialNumber ? { ...part, damageSerialNumber: serialNumber } : part);
+    setTaskLocationId(sourceLocationId);
+    setTaskSection("damage");
+    setTaskWorkflow({ kind: "stock" });
+    setInventorySection("tasks");
+    closeSelectedPart();
+  }
+
+  function partLocationRow(location) {
+    return <div className="inventory-detail-location-row" key={location.locationId}>
+      <button type="button" onClick={() => setSelectedLocationId(location.locationId)}>
+        <div><strong>{location.locationName}</strong><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available{Number(location.odooQuantityOnHand || 0) > 0 ? <> · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</> : null}</small></div>
+        <ChevronRight aria-hidden="true" />
+      </button>
+      <PartLocationSettings part={selectedItem} location={location} onOpenShelves={() => { setSelectedLocationId(location.locationId); setShelvingOpen(true); }} onDamage={(sourceLocationId) => openStockDamage(selectedItem, sourceLocationId)} onTransfer={(sourceLocationId) => openStockTransfer(selectedItem, sourceLocationId)} onSaved={() => setRefreshKey((value) => value + 1)} />
+    </div>;
+  }
+
+  useEffect(() => {
+    setSelectedLocationId(selectedPositionContext?.shopId || "");
+    setPartDetailPage("stock");
+    setShelvingOpen(false);
     setPartIdentityBusy(false);
+    setPartIdentityDirty(false);
     setPartIdentityOverride(null);
     setPartIdentityRefreshPending(null);
-  }, [selectedStockKey]);
+  }, [selectedPositionContext, selectedStockKey]);
 
   useEffect(() => {
     if (!partIdentityRefreshPending) return;
     const refreshedItem = items.find((item) => item.catalogPartId === partIdentityRefreshPending.catalogPartId);
     if (!hasRefreshedPartIdentityVersion(refreshedItem, partIdentityRefreshPending)) return;
     setPartIdentityRefreshPending(null);
-    window.requestAnimationFrame(() => document.getElementById("inventory-edit-part")?.focus({ preventScroll: true }));
+    window.requestAnimationFrame(() => document.getElementById("inventory-part-name")?.focus({ preventScroll: true }));
   }, [items, partIdentityRefreshPending]);
 
   const onPartIdentityEditStateChange = useCallback((state) => {
     setPartIdentityBusy(Boolean(state?.busy));
+    setPartIdentityDirty(Boolean(state?.dirty));
   }, []);
-
-  function closePartIdentityEditor() {
-    setPartIdentityEditOpen(false);
-    window.requestAnimationFrame(() => document.getElementById("inventory-edit-part")?.focus({ preventScroll: true }));
-  }
 
   function handlePartIdentitySaved(part) {
     setPartIdentityOverride((current) => ({ ...(selectedItem || current || {}), ...(part || {}) }));
-    setPartIdentityEditOpen(false);
     setRefreshKey((value) => value + 1);
-    window.requestAnimationFrame(() => document.getElementById("inventory-edit-part")?.focus({ preventScroll: true }));
+    window.requestAnimationFrame(() => document.getElementById("inventory-part-name")?.focus({ preventScroll: true }));
   }
 
   function reloadPartIdentity() {
     if (!selectedItem) return;
     setPartIdentityOverride(null);
-    setPartIdentityEditOpen(false);
     setPartIdentityRefreshPending({ catalogPartId: selectedItem.catalogPartId, version: selectedItem.version });
     setRefreshKey((value) => value + 1);
   }
 
-  function openPartIdentityEditor() {
-    if (!partIdentityRefreshPending) setPartIdentityEditOpen(true);
-  }
-
-  function openInvoiceWorkflow(invoiceRun = "") {
+  function openInvoiceWorkflow(invoiceRun = "", requestedLocationId = "") {
+    if (requestedLocationId && locations.some((location) => location.id === requestedLocationId)) {
+      setLocationId(requestedLocationId);
+    }
     window.history.replaceState({}, "", inventoryUrl({ invoiceRun, upload: !invoiceRun }));
     setInvoiceWorkflowOpen(true);
     setInvoiceUploadOpen(!invoiceRun);
@@ -208,7 +322,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   }
 
   function closeInvoiceWorkflow() {
-    const returnFocusId = invoiceWorkflowOpen ? "inventory-invoice-action" : countWorkflowOpen ? "inventory-count-action" : "";
+    const returnFocusId = invoiceWorkflowOpen ? "inventory-invoice-action" : countWorkflowOpen ? "inventory-import-count-action" : "";
     window.history.replaceState({}, "", inventoryUrl());
     setInvoiceWorkflowOpen(false);
     setCountWorkflowOpen(false);
@@ -244,12 +358,12 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     setStockSort(DEFAULT_STOCK_SORT);
   }
 
-  const inventoryTitle = invoiceWorkflowOpen ? "Invoice intake" : countWorkflowOpen ? "Inventory files" : "Parts inventory";
+  const inventoryTitle = invoiceWorkflowOpen ? "Invoice intake" : countWorkflowOpen ? "Count sheets" : "";
   const inventorySubtitle = invoiceWorkflowOpen
     ? "Upload, review, and add parts without leaving inventory."
     : countWorkflowOpen
-      ? "Review uploaded inventory files and their import status."
-      : "Owned by this system and organized by shop.";
+      ? "Review uploaded count sheets and their import status."
+      : "";
   const inventoryLeading = invoiceWorkflowOpen || countWorkflowOpen ? <ContextBreadcrumbs
     items={[
       {
@@ -258,7 +372,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         onClick: followInventoryBreadcrumb,
       },
       ...(workflowDetail ? [{
-        label: invoiceWorkflowOpen ? "Invoice intake" : "Inventory files",
+        label: invoiceWorkflowOpen ? "Invoice intake" : "Count sheets",
         href: inventoryUrl(invoiceWorkflowOpen ? { upload: true } : { count: true }).toString(),
         onClick: followWorkflowBreadcrumb,
       }] : []),
@@ -266,19 +380,67 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     current={workflowDetail?.label || inventoryTitle}
   /> : null;
   const inventoryActions = countWorkflowOpen ? (
-    <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Add inventory</Button>
+    <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Import count sheet</Button>
   ) : invoiceWorkflowOpen ? (
-    !workflowDetail ? <Button className="inventory-invoice-upload-button" type="button" icon={UploadCloud02} aria-label="Upload invoices" title="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} /> : null
-  ) : <>
-    <Button className="inventory-refresh-button" type="button" icon={RefreshCw01} aria-label="Refresh inventory" title="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
+    !workflowDetail ? <IconButton className="inventory-invoice-upload-button" icon={UploadCloud02} label="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} /> : null
+  ) : null;
+
+  const stockActions = <>
+    <Button type="button" variant="primary" onClick={() => setReceivingPart({})} disabled={!locations.length}>Add stock</Button>
+    <Button type="button" onClick={() => openCountWorkflow()}>Starting inventory</Button>
+    <IconButton className="inventory-refresh-button" icon={RefreshCw01} label="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
     <Button type="button" icon={Plus} onClick={() => setCreatePartOpen(true)} disabled={!locations.length}>New part</Button>
-    <Button id="inventory-count-action" type="button" icon={FileCheck02} onClick={openCountWorkflow}>Count</Button>
-    <Button id="inventory-invoice-action" type="button" variant="primary" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Invoice</Button>
   </>;
+  const inboundActions = <>
+    <Button type="button" variant="primary" onClick={() => setReceivingPart({})} disabled={!locations.length}>Record arrival</Button>
+    <Button type="button" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Upload invoice</Button>
+  </>;
+  const inventorySections = [{ id: "stock", label: "Stock" }, { id: "inbound", label: "Inbound" }, { id: "purchases", label: "Purchasing" }, { id: "tasks", label: "Tasks" }, { id: "reports", label: "Reports" }];
+  const sectionActions = inventorySection === "stock" ? stockActions : inventorySection === "inbound" ? inboundActions : null;
+
+  function changeInventorySection(nextSection) {
+    setInventorySection(nextSection);
+    setTaskWorkflow(null);
+    setInboundSource({ receiptId: "", deliveryId: "" });
+    const url = new URL(window.location.href);
+    url.searchParams.set("inventorySection", nextSection);
+    for (const key of ["taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "stockMode", "queueTaskType", "queueTaskId", "queueTaskLocation"]) url.searchParams.delete(key);
+    window.history.replaceState({}, "", url);
+  }
+
+  function openExactTaskUrl(values) {
+    const url = new URL(window.location.href);
+    for (const key of ["taskOwner", "taskId", "taskLocation", "reuseCaseId", "positionId", "receiptId", "deliveryId", "stockMode", "queueTaskType", "queueTaskId", "queueTaskLocation"]) url.searchParams.delete(key);
+    for (const [key, value] of Object.entries(values)) if (value) url.searchParams.set(key, value);
+    window.history.replaceState({}, "", url);
+  }
+
+  function closeTaskOwner() {
+    setTaskWorkflow(null);
+    openExactTaskUrl({ inventorySection: "tasks" });
+  }
+
+  function openTaskOwner(task) {
+    const location = task.location?.id || task.actionTarget?.locationId || "";
+    if (task.sourceType === "damage_inspection") { setTaskSection("damage"); setTaskLocationId(location); setTaskWorkflow({ kind: "stock", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "damage", taskId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "transfer_receipt") { setTaskSection("transfer"); setTaskLocationId(location); setTaskWorkflow({ kind: "stock", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "transfer", taskId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "removed_part_custody") { setTaskLocationId(location); setTaskWorkflow({ kind: "custody", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "custody", reuseCaseId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "position_recount") { const positionId = task.actionTarget?.positionId || new URL(task.deepLink, window.location.href).searchParams.get("positionId") || ""; setStockLocationInitialShop(location); setStockLocationInitialPosition(positionId); setStockMode("location"); setInventorySection("stock"); openExactTaskUrl({ inventorySection: "stock", stockMode: "location", positionId, taskLocation: location }); return; }
+    if (task.sourceType === "invoice_po_decision") { openInvoiceWorkflow(task.sourceId, location); return; }
+    if (task.sourceType === "missing_invoice") { setInboundSource({ receiptId: task.sourceId, deliveryId: "" }); setInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", receiptId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "receipt_exception") { setInboundSource({ receiptId: "", deliveryId: task.sourceId }); setInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", deliveryId: task.sourceId, taskLocation: location }); return; }
+    window.location.assign(task.deepLink);
+  }
+
+  function openStockByLocation(shopId = "") {
+    setStockLocationInitialShop(shopId);
+    setStockMode("location");
+    setInventorySection("stock");
+  }
 
   return (
     <OperationalCollectionPage
-      className={`${presentation === "page" ? "admin-content " : ""}inventory-workspace${invoiceWorkflowOpen || countWorkflowOpen ? " is-invoice-workflow" : ""}`}
+      className={`${presentation === "page" ? "admin-content " : ""}inventory-workspace${invoiceWorkflowOpen || countWorkflowOpen ? " is-invoice-workflow" : " is-section-root"}`}
       presentation={presentation}
       title={inventoryTitle}
       subtitle={inventorySubtitle}
@@ -292,12 +454,32 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         onCreated={(part) => { setQuery(part.partNumber); setRefreshKey((value) => value + 1); }}
       /> : null}
 
-      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading inventory files</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
+      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} initialLocationId={locations.some((location) => location.id === locationId) ? locationId : ""} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading count sheets</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 
-      <OperationalCollectionTabs ariaLabel="Inventory sections" activeId={inventorySection} onChange={setInventorySection} items={[{ id: "stock", label: "Stock" }, { id: "returns", label: "Returns & repairs" }]} />
-      {inventorySection === "returns" ? <InventoryCustodyWorkspace locations={locations} actorId={actorId} initialTab="returns" hidePrimaryTabs /> : null}
+      <OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={inventorySections} actions={sectionActions} headingLevel={presentation === "embedded" ? 2 : 1} />
+      {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId) => { setInboundReceiptOrderId(poId); setInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}
+      {inventorySection==='purchases'?<InventoryPurchases key={inventorySection} locations={locations} actorId={actorId} view={inventorySection} initialReceiptOrderId={inboundReceiptOrderId} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} onInvoice={(requestedLocationId)=>openInvoiceWorkflow("", requestedLocationId)} onStock={()=>setInventorySection('stock')}/>:null}
+      {inventorySection==='reports'?<InventoryReports locations={locations}/>:null}
+      {inventorySection==='tasks'?taskWorkflow?<section className="inventory-task-owner"><IconButton icon={ArrowLeft} label="Back to My work" onClick={closeTaskOwner} />{taskWorkflow.kind==='custody'?<InventoryCustodyWorkspace locations={locations} actorId={actorId} initialTab="returns" initialLocationId={taskLocationId} initialCaseId={taskWorkflow.task.sourceId} hidePrimaryTabs/>:<InventoryStockTasks
+          key={taskSection}
+          locations={locations}
+          actorId={actorId}
+          kind={taskSection}
+          initialPart={taskPart}
+          initialLocationId={taskLocationId}
+          initialTaskId={taskWorkflow.task?.sourceId || ""}
+          onOpenLocations={openStockByLocation}
+          onImportCount={openCountWorkflow}
+        />}</section>:<InventoryTaskQueue locations={locations} onOpenTask={openTaskOwner}/>:null}
 
       {inventorySection === "stock" ? <><OperationalCollectionTabs
+        className="inventory-stock-mode-tabs"
+        ariaLabel="Inventory stock view"
+        activeId={stockMode}
+        onChange={setStockMode}
+        items={[{ id: "part", label: "By part" }, { id: "location", label: "By location" }]}
+      />
+      {stockMode === "part" ? <><OperationalCollectionTabs
         className="inventory-stock-tabs"
         ariaLabel="Filter stock by availability"
         activeId={stockFilter}
@@ -315,6 +497,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         <label className="inventory-toolbar-field inventory-scope-field"><span>Inventory view</span><Dropdown value={locationId} onChange={(event) => setLocationId(event.target.value)} aria-label="Inventory view"><option value="all">All locations</option><option value="master">Odoo master catalog</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>
         <label className="inventory-toolbar-field inventory-stock-sort"><span>Sort</span><Dropdown value={stockSort} onChange={(event) => setStockSort(event.target.value)} aria-label="Sort inventory stock">
           <option value="available_desc">Most available</option>
+          <option value="low_stock_first">Low stock first</option>
           <option value="part_asc">Part number</option>
           <option value="reserved_desc">Most reserved</option>
           <option value="locations_desc">Most locations</option>
@@ -330,7 +513,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           {(query || locationId !== "all" || stockFilter !== "all" || stockSort !== DEFAULT_STOCK_SORT) ? <Button type="button" onClick={clearStockView}>Reset view</Button> : null}
         </OperationalCollectionResultHeader>
         {items.length ? <OperationalCollectionTable
-          className={`inventory-stock-table${refreshing ? " is-refreshing" : ""}`}
+          className={`inventory-stock-table inventory-data-table${refreshing ? " is-refreshing" : ""}`}
           ariaLabel="Inventory parts"
           busy={refreshing}
           columns={[
@@ -348,88 +531,114 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
             key={stockItemKey(item)}
             aria-haspopup="dialog"
             ariaLabel={`Open details for ${item.partNumber}, ${stateText}, ${quantity(item.quantityAvailable)} ${item.uomCode} available`}
-            onAction={() => setSelectedStockKey(stockItemKey(item))}
+            onAction={() => openListedPart(item)}
           >
-            <OperationalCollectionCell className="inventory-part-cell" label="Part"><span><strong>{item.partNumber}</strong><span className={`inventory-stock-state is-${state}`}>{stateText}</span>{item.lowStock ? <span className="inventory-stock-state is-low">Minimum reached</span> : null}</span><small>{item.description || "No part name"}</small></OperationalCollectionCell>
-            <OperationalCollectionCell label="Our on hand">{quantity(item.quantityOnHand)} {item.uomCode}</OperationalCollectionCell>
+            <OperationalCollectionCell className="inventory-part-cell" label="Part"><strong>{item.partNumber}</strong><small>{item.description || "No part name"}</small></OperationalCollectionCell>
+            <OperationalCollectionCell label="Usable on hand">{quantity(item.quantityOnHand)} {item.uomCode}</OperationalCollectionCell>
             <OperationalCollectionCell label="Reserved">{quantity(item.quantityReserved)} {item.uomCode}</OperationalCollectionCell>
-            <OperationalCollectionCell className="inventory-available-cell" label="Our available"><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</small></OperationalCollectionCell>
+            <OperationalCollectionCell className={`inventory-available-cell is-${state}`} label="Our available">
+              {state === "out" ? <><strong>Out of stock</strong><small>{quantity(item.quantityOnHand)} {item.uomCode} on hand</small></>
+                : state === "reserved" ? <><strong>{quantity(item.quantityAvailable)} {item.uomCode} available</strong><small>{quantity(item.quantityReserved)} {item.uomCode} reserved</small></>
+                  : <><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small className="inventory-availability-meta"><span>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</span>{item.lowStock ? <span className="inventory-availability-low">Low stock</span> : null}</small></>}
+            </OperationalCollectionCell>
           </OperationalCollectionRow>})}
         </OperationalCollectionTable> : query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
         <Pagination currentPage={stockPage} pageCount={stockMeta.pageCount} setPage={setStockPage} total={stockMeta.total} label="parts" loading={refreshing} />
       </> : null}
       {canReconcileAuthority ? <InventoryAuthorityExceptionsPanel actorId={actorId} /> : null}
-
+      </> : <InventoryLocationStockWorkspace locations={locations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onOpenPart={openLocationPart} onAddStock={({ part, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} onOpenStartingInventory={(shopId) => { if (shopId) setLocationId(shopId); openCountWorkflow(); }} />}
       <SecondaryDetailPanel
         open={Boolean(selectedItem)}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen && !partIdentityEditOpen && !partIdentityBusy) setSelectedStockKey("");
+          if (!nextOpen && !partIdentityBusy && !partIdentityDirty) closeSelectedPart();
         }}
         eyebrow="Part details"
         title={selectedItem?.partNumber || "Part"}
         description={selectedItem?.description || "No description"}
-        status={selectedItem ? <span className={`inventory-detail-status ${selectedItem.quantityAvailable > 0 ? "is-available" : "is-unavailable"}`}>{selectedItem.quantityAvailable > 0 ? "Our inventory available" : "Our inventory 0"}</span> : null}
-        footer={!partIdentityEditOpen ? <Button type="button" onClick={() => setSelectedStockKey("")}>Close</Button> : null}
-        dismissable={!partIdentityEditOpen}
-        onClose={partIdentityEditOpen ? closePartIdentityEditor : null}
-        closeDisabled={partIdentityBusy}
-        closeLabel={partIdentityBusy ? "Saving part details" : partIdentityEditOpen ? "Discard part identity edits" : "Close part details"}
+        status={selectedItem ? <span className="inventory-part-header-price">Selling · {partHeaderPrice.scopeKey === partHeaderPriceScopeKey ? partHeaderPrice.label || "—" : "…"} / {selectedItem.uomCode || "unit"}</span> : null}
+        footer={<Button type="button" onClick={closeSelectedPart} disabled={partIdentityBusy || partIdentityDirty}>Close</Button>}
+        dismissable={!partIdentityBusy && !partIdentityDirty}
+        closeDisabled={partIdentityBusy || partIdentityDirty}
+        closeLabel={partIdentityBusy ? "Saving part details" : partIdentityDirty ? "Reset changes before closing" : "Close part details"}
       >
-        {selectedItem ? selectedLocation ? <PartSerializationPanel
-          item={selectedItem}
-          location={selectedLocation}
-          companyId={selectedItem.companyId}
-          actorId={actorId}
-          onBack={() => setSelectedLocationId("")}
-          onInventoryChanged={() => setRefreshKey((value) => value + 1)}
-        /> : <>
-          <SecondaryDetailSection title="Inventory">
-            <div className="inventory-detail-metrics">
-              <div><span>Our stock</span><strong>{quantity(selectedItem.quantityOnHand)} {selectedItem.uomCode}</strong></div>
-              <div><span>Our reserved</span><strong>{quantity(selectedItem.quantityReserved)} {selectedItem.uomCode}</strong></div>
-              <div><span>Odoo · read-only</span><strong>{quantity(selectedItem.odooQuantityOnHand)} {selectedItem.uomCode}</strong></div>
-            </div>
-          </SecondaryDetailSection>
+        {selectedItem ? <>
+          <div className="inventory-part-detail-navigation">
+            <nav className="inventory-part-detail-pages" aria-label="Part detail pages">
+              {[{ id: "stock", label: "Stock" }, { id: "prices", label: "Prices" }, { id: "activity", label: "Audit log" }, { id: "details", label: "Details" }].map((page) => <button key={page.id} type="button" aria-current={partDetailPage === page.id ? "page" : undefined} disabled={partIdentityDirty && page.id !== "details"} onClick={() => { setPartDetailPage(page.id); setShelvingOpen(false); }}>{page.label}</button>)}
+            </nav>
+            {partDetailPage === "stock" ? <Button className="inventory-part-detail-primary-action" type="button" variant="primary" onClick={() => setReceivingPart(selectedLocation ? { ...selectedItem, receiptLocationId: selectedLocation.locationId, receiptPositionId: selectedPositionContext?.positionId || "", receiptPositionPath: selectedPositionContext?.positionPath || selectedLocation.locationName, lockReceiptLocation: true } : selectedItem)} disabled={!selectedItem.trackingMode}>Add stock</Button> : null}
+          </div>
 
-          <SecondaryDetailSection title="Locations">
-            <div className="inventory-detail-locations">
-              {selectedItem.locations.map((location) => <div className="inventory-detail-location-row" key={location.locationId}>
-                <button type="button" onClick={() => setSelectedLocationId(location.locationId)} disabled={partIdentityEditOpen}>
-                  <div><strong>{location.locationName}</strong><small><b>{quantity(location.quantityAvailable)} {selectedItem.uomCode}</b> available · {quantity(location.odooQuantityOnHand)} {selectedItem.uomCode} in Odoo</small></div>
-                  <ChevronRight aria-hidden="true" />
-                </button>
-                <PartLocationSettings part={selectedItem} location={location} disabled={partIdentityEditOpen} onSaved={() => setRefreshKey((value) => value + 1)} />
-              </div>)}
+          {partDetailPage === "stock" ? selectedLocation && shelvingOpen ? <>
+            <div className="inventory-part-detail-toolbar"><IconButton icon={ArrowLeft} label="Back to location" onClick={() => setShelvingOpen(false)} /></div>
+            <PartPositionsPanel item={selectedItem} location={selectedLocation} initialSourcePositionId={selectedPositionContext?.positionId || ""} onChanged={() => setRefreshKey((value) => value + 1)} />
+          </> : selectedLocation ? <>
+            <div className="inventory-part-detail-toolbar">
+              <IconButton icon={ArrowLeft} label="Back to all locations" onClick={() => setSelectedLocationId("")} />
+              <PartLocationSettings part={selectedItem} location={selectedLocation} onOpenShelves={() => setShelvingOpen(true)} onDamage={(sourceLocationId) => openStockDamage(selectedItem, sourceLocationId)} onTransfer={(sourceLocationId) => openStockTransfer(selectedItem, sourceLocationId)} onSaved={() => setRefreshKey((value) => value + 1)} />
             </div>
-          </SecondaryDetailSection>
+            {selectedItem.trackingMode === "quantity" || selectedItem.trackingMode === "measured_bulk" ? <div className="inventory-part-location-summary">
+              <SecondaryDetailSection title={selectedLocation.locationName} description={selectedPositionContext?.positionPath || ""}>
+                <div className="inventory-detail-metrics">
+                  <div><span>On hand</span><strong>{quantity(selectedLocation.quantityOnHand)} {selectedItem.uomCode}</strong></div>
+                  <div><span>Reserved</span><strong>{quantity(selectedLocation.quantityReserved)} {selectedItem.uomCode}</strong></div>
+                  <div><span>Available</span><strong>{quantity(selectedLocation.quantityAvailable)} {selectedItem.uomCode}</strong></div>
+                </div>
+              </SecondaryDetailSection>
+              <section className="inventory-shop-usage" aria-labelledby="inventory-shop-usage-heading">
+                <header><div><h3 id="inventory-shop-usage-heading">Used on Workorders</h3><p>{selectedLocation.locationName}</p></div><Button type="button" onClick={() => setPartDetailPage("activity")}>View full audit log</Button></header>
+                <StockMovementHistory partId={selectedItem.catalogPartId} locationId={selectedLocation.locationId} view="workorder" emptyMessage="No Workorder usage at this shop." refreshKey={refreshKey} />
+              </section>
+            </div> : <>
+              <PartSerializationPanel
+                item={selectedItem}
+                location={selectedLocation}
+                companyId={selectedItem.companyId}
+                actorId={actorId}
+                onInventoryChanged={() => setRefreshKey((value) => value + 1)}
+                onMarkDamaged={(unit) => openStockDamage(selectedItem, selectedLocation.locationId, unit.serialNumber)}
+                showAddAction={false}
+              />
+              <div className="inventory-part-location-audit-action"><Button type="button" onClick={() => setPartDetailPage("activity")}>View full audit log</Button></div>
+            </>}
+          </> : <>
+            <section className="inventory-part-stock-overview" aria-label="Inventory summary">
+              {!selectedItem.trackingMode ? <p>Review tracking in Details before adding stock.</p> : null}
+              <div className="inventory-detail-metrics">
+                <div><span>On hand</span><strong>{quantity(selectedItem.quantityOnHand)} {selectedItem.uomCode}</strong></div>
+                <div><span>Our reserved</span><strong>{quantity(selectedItem.quantityReserved)} {selectedItem.uomCode}</strong></div>
+                <div><span>Available</span><strong>{quantity(selectedItem.quantityAvailable)} {selectedItem.uomCode}</strong></div>
+              </div>
+              {Number(selectedItem.odooQuantityOnHand || 0) > 0 ? <p className="inventory-detail-provider-stock">Odoo · read-only · {quantity(selectedItem.odooQuantityOnHand)} {selectedItem.uomCode}</p> : null}
+            </section>
+            <SecondaryDetailSection title="Locations">
+              {stockedLocations.length ? <div className="inventory-detail-locations">{stockedLocations.map(partLocationRow)}</div> : <p className="inventory-detail-empty">No stock at any location.</p>}
+              {otherLocations.length ? <details className="inventory-detail-other-locations"><summary>Other locations <span>{otherLocations.length}</span></summary><div className="inventory-detail-locations">{otherLocations.map(partLocationRow)}</div></details> : null}
+            </SecondaryDetailSection>
+          </> : null}
 
-          <SecondaryDetailSection
-            title="Part identity"
-            description={partIdentityRefreshPending ? "Reloading current details before editing can resume." : ""}
-            action={!partIdentityEditOpen ? <Button id="inventory-edit-part" type="button" onClick={openPartIdentityEditor} disabled={Boolean(partIdentityRefreshPending)}>{partIdentityRefreshPending ? "Refreshing details" : "Edit part"}</Button> : null}
-          >
-            {partIdentityEditOpen ? <PartIdentityEditor
+          {partDetailPage === "prices" ? <PartCommercialDetails key={`${selectedItem.catalogPartId}:${selectedLocation?.locationId || "company-defaults"}`} part={selectedItem} location={selectedLocation || undefined} onChanged={() => setRefreshKey((value) => value + 1)} /> : null}
+
+          {partDetailPage === "activity" ? <section className="inventory-stock-activity-page" aria-labelledby="inventory-audit-log-heading">
+            <header className="inventory-audit-log-heading"><div><h3 id="inventory-audit-log-heading">Audit log</h3><p>{selectedLocation ? `${selectedLocation.locationName} · Filtered to this shop` : "All locations · Company-wide history"}</p></div>{selectedLocation ? <Button type="button" onClick={() => setSelectedLocationId("")}>Show all locations</Button> : null}</header>
+            <StockMovementHistory partId={selectedItem.catalogPartId} locationId={selectedLocation?.locationId} refreshKey={refreshKey} />
+          </section> : null}
+
+          {partDetailPage === "details" ? <section className="inventory-part-identity" aria-label="Part details">
+            {partIdentityRefreshPending ? <p role="status">Refreshing…</p> : null}
+            <PartIdentityEditor
+              key={`${selectedItem.catalogPartId}:${selectedItem.version}`}
               part={selectedItem}
-              onCancel={closePartIdentityEditor}
               onEditStateChange={onPartIdentityEditStateChange}
               onReload={reloadPartIdentity}
               onSaved={handlePartIdentitySaved}
-            /> : <dl className="inventory-detail-facts">
-              <div><dt>Part name</dt><dd>{selectedItem.description || "Not set"}</dd></div>
-              {selectedItem.providerManaged ? <div><dt>In Odoo</dt><dd>{selectedItem.odooName || "Name not provided"}</dd></div> : null}
-              <div><dt>Primary part number</dt><dd>{selectedItem.partNumber || "Not set"}</dd></div>
-              <div><dt>Manufacturer</dt><dd>{selectedItem.manufacturer || "Not set"}</dd></div>
-              <div><dt>Category</dt><dd>{selectedItem.category || "Not set"}</dd></div>
-              <div><dt>Catalog barcode</dt><dd>{selectedItem.barcode || "Not set"}</dd></div>
-              <div><dt>Reference numbers</dt><dd>{selectedItem.referenceNumbers?.length ? selectedItem.referenceNumbers.join(", ") : "None"}</dd></div>
-              <div><dt>Unit</dt><dd>{selectedItem.uomCode}</dd></div>
-              {selectedItem.providerManaged ? <div><dt>Mapping</dt><dd>Odoo name and identifiers are read-only</dd></div> : null}
-            </dl>}
-          </SecondaryDetailSection>
-
+            />
+          </section> : null}
         </> : null}
-      </SecondaryDetailPanel></> : null}
+      </SecondaryDetailPanel>
+      </> : null}
       </>}
+      {receivingPart ? <AddInventoryStockDialog part={receivingPart} actorId={actorId} locations={locations.filter((location) => !receivingPart.companyId || !location.companyId || location.companyId === receivingPart.companyId)} initialLocationId={receivingPart.receiptLocationId || (locationId !== "all" && locationId !== "master" ? locationId : "")} initialPositionId={receivingPart.receiptPositionId || ""} lockLocation={Boolean(receivingPart.lockReceiptLocation)} locationContextLabel={receivingPart.receiptPositionPath || ""} onClose={() => setReceivingPart(null)} onReceived={() => setRefreshKey((value) => value + 1)} /> : null}
     </OperationalCollectionPage>
   );
 }

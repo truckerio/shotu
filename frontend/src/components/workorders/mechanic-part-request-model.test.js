@@ -4,6 +4,8 @@ import {
   createMechanicPartRequestDraft,
   mechanicPartsActionState,
   mechanicPartRequestErrorFields,
+  mechanicPartRequestErrorMessage,
+  workorderPartErrorMessage,
   validateMechanicPartRequest,
 } from "./mechanic-part-request-model.js";
 
@@ -15,6 +17,19 @@ test("mechanic part request starts with one piece", () => {
     quantity: "1",
     uomCode: "pc",
   });
+});
+
+test("maps direct workorder part conflicts to actionable messages", () => {
+  assert.equal(workorderPartErrorMessage({ code: "WORKORDER_MECHANIC_ASSIGNMENT_REQUIRED" }),
+    "You are not assigned to this workorder. Accept or join it before adding or requesting parts.");
+  assert.equal(workorderPartErrorMessage({ code: "PART_CATALOG_UOM_MISMATCH" }),
+    "The unit does not match the selected inventory part. Select the catalog part again.");
+});
+
+test("explains that a mechanic assignment is required before requesting a part", () => {
+  assert.equal(mechanicPartRequestErrorMessage({
+    code: "WORKORDER_MECHANIC_ASSIGNMENT_REQUIRED",
+  }), "You are not assigned to this workorder. Accept or join it before adding or requesting parts.");
 });
 
 test("preserves explicitly selected company catalog identity", () => {

@@ -64,6 +64,7 @@ import {
   applyManualPartEvidence,
   listWorkorderManualPartEvidence,
 } from "../../db/repositories/workorder-manual-part-evidence.repo.js";
+import { createPartRequest as createCanonicalPartRequest } from "../../db/repositories/part-requests.repo.js";
 import { listWorkorderInstalledSerializedPartSummaries } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 
 function resourceOptions(context) {
@@ -259,11 +260,10 @@ export async function runWorkorderModuleAction(
   dependencies = {},
 ) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
-  const isMechanicPartRequest = moduleKey === "parts" && action === "request";
-  if (isMechanicPartRequest && context.actor.role !== "mechanic") throw permissionDenied();
+  const isPartRequest = moduleKey === "parts" && action === "request";
   const authorization = await authorize(context, workorderId, {
     moduleKey,
-    capability: isMechanicPartRequest ? "read" : "write",
+    capability: isPartRequest && context.actor.role === "mechanic" ? "read" : "write",
     action,
     resourceAccess: action === "accept" ? resourceOptions(context) : {},
   });
@@ -290,7 +290,12 @@ export async function runWorkorderModuleAction(
   }
 
   if (moduleKey === "parts") {
-    if (action === "request") return (dependencies.requestPart || requestMechanicPart)(workorderId, { ...input, mechanicUserId: actorId });
+    if (action === "request") {
+      if (dependencies.requestPart) return dependencies.requestPart(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role});
+      return context.actor.role === "mechanic"
+        ? requestMechanicPart(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role})
+        : createCanonicalPartRequest(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role});
+    }
     if (action === "record" && input.operation === "usedParts") {
       return context.actor.role === "mechanic"
         ? (dependencies.saveMechanicParts || saveMechanicUsedParts)(workorderId, actorId, input.parts, input.laborHours)

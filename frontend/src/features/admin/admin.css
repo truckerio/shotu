@@ -97,6 +97,11 @@
   padding: 4px;
   z-index: 130;
 }
+
+@media (max-width: 380px) {
+  .admin-mobile-nav button span,
+  .admin-mobile-nav .profile-menu-mobile-nav-trigger span { display: none; }
+}
 .admin-user-menu { outline: none; }
 .admin-user-menu-item {
   align-items: center;
@@ -252,7 +257,7 @@
     border-top: 1px solid #d0d5dd;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     height: calc(58px + env(safe-area-inset-bottom));
     left: 0;
     padding: 4px 8px env(safe-area-inset-bottom);
@@ -281,6 +286,30 @@
   .admin-mobile-nav button.secondary.active { color: #175cd3; }
   .admin-mobile-nav button:focus-visible { outline: 2px solid #84adff; outline-offset: -2px; }
   .admin-mobile-nav svg { height: 20px; width: 20px; }
+  .admin-mobile-more-popover {
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgb(16 24 40 / 18%);
+    min-width: 190px;
+    padding: 5px;
+    z-index: 100;
+  }
+  .admin-mobile-more-menu { display: grid; gap: 2px; outline: 0; }
+  .admin-mobile-more-menu [role="menuitem"] {
+    align-items: center;
+    border-radius: 7px;
+    color: #344054;
+    cursor: pointer;
+    display: flex;
+    gap: 9px;
+    min-height: 44px;
+    outline: 0;
+    padding: 9px 11px;
+  }
+  .admin-mobile-more-menu [role="menuitem"].active { background: #eff8ff; color: #175cd3; }
+  .admin-mobile-more-menu [role="menuitem"][data-focused] { background: #f2f4f7; }
+  .admin-mobile-more-menu svg { height: 19px; width: 19px; }
   .admin-content > .page-header + .admin-location-table { margin-top: 18px; }
   .admin-content .page-header { min-width: 0; }
   .admin-content .page-header .button { min-height: 44px; }
@@ -393,3 +422,26 @@
   .admin-error,
   .admin-success { margin-inline: 14px; max-width: none; }
 }
+
+.admin-po-approval { display:grid; gap:16px; }
+.admin-po-approval > h2,.admin-po-approval > p { margin:0; }
+.admin-po-approval > p { color:#667085; font-size:var(--text-secondary); }
+.admin-po-approval > label,.admin-po-approval-form { max-width:680px; width:100%; box-sizing:border-box; }
+.admin-po-approval label { display:grid; gap:6px; }
+.admin-po-approval-form { margin-top:0; padding:20px; }
+.admin-po-approval-form fieldset { border:0; padding:0; margin:0; min-width:0; display:grid; gap:14px; }
+.admin-po-approval-form legend { padding:0 0 12px; font-weight:var(--weight-semibold); }
+.admin-po-approval-form p { margin:0; color:#667085; font-size:var(--text-secondary); }
+.admin-po-approval-form .admin-po-approver { display:flex; align-items:center; gap:10px; min-height:32px; }
+.admin-po-approval-form .button { justify-self:start; }
+
+.admin-po-approval > .integration-card { width: 100%; max-width: none; box-sizing: border-box; }
+.po-approval-location { display: grid; gap: 6px; font-size: 13px; }
+.po-approval-configuration.odoo-configuration { display: block; }
+.po-approval-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.po-approval-fields > :is(p, fieldset, .integration-card-actions) { grid-column: 1 / -1; }
+.po-approval-fields > p { margin: 0; color: #667085; font-size: 13px; }
+.po-approval-approvers { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.po-approval-approvers legend { padding: 0 0 10px; font-size: 14px; font-weight: 600; }
+.po-approval-configuration label.po-approval-approver { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+@media (max-width: 600px) { .po-approval-fields { grid-template-columns: minmax(0, 1fr); } }

@@ -85,10 +85,10 @@ export function useRoleRouterLifecycleEffects({
   useWorkorderDetailRealtime({
     enabled: Boolean(activeWorkorder?.workorder?.id && ["office", "mechanic"].includes(detailSource)),
     workorderId: activeWorkorder?.workorder?.id,
-    paused: usedPartsDirty || (
-      isMechanicDetail
-      && (mechanicProgress.hasUnsyncedChanges || mechanicProgress.status === "saving")
-    ),
-    onRefresh: () => reloadActiveWorkorder({ preserveForm: shouldPreserveActiveWorkorderForm() }),
+    paused: isMechanicDetail
+      && (mechanicProgress.hasUnsyncedChanges || mechanicProgress.status === "saving"),
+    onRefresh: () => reloadActiveWorkorder({
+      preserveForm: usedPartsDirty || shouldPreserveActiveWorkorderForm(),
+    }),
   });
 }

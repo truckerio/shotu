@@ -112,13 +112,6 @@
   outline: none;
 }
 
-.used-parts-labor-table .used-part-labor-row {
-  background: var(--surface-subtle, #f9fafb);
-  border: 1px solid var(--border-subtle, #e4e7ec);
-  border-radius: 8px;
-  padding: 8px;
-}
-
 .used-parts-items-table {
   gap: 0;
 }
@@ -284,6 +277,10 @@
   min-height: 1px;
 }
 
+.used-parts-editor .used-part-pickup-empty {
+  min-width: 0;
+}
+
 .used-parts-editor .used-part-serialized-status {
   align-items: center;
   display: flex;
@@ -345,6 +342,10 @@
 
   .used-parts-editor .used-part-serialized-actions {
     grid-column: 2 / -1;
+  }
+
+  .used-parts-editor .used-part-pickup-empty {
+    display: none;
   }
 
   .used-parts-editor .used-part-recorded-status {

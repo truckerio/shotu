@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   catalogPartRequiresSerializedUnits,
+  catalogPartRequiresSourcePosition,
   createPartHasContent,
   createPartRequiresSerializedUnits,
   createPartRenderIndexes,
@@ -22,6 +23,14 @@ test("catalog serial policy works before the location has stock", () => {
   assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "", uomCode: "pc", inventory: { serializationRequired: true } }), true);
   assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "quantity", uomCode: "pc", inventory: null }), false);
   assert.equal(catalogPartRequiresSerializedUnits({ trackingMode: "measured_bulk", uomCode: "gal", inventory: null }), false);
+});
+
+test("quantity and measured catalog parts require a physical pickup position", () => {
+  const part = { catalogPartId: "part-1", partNo: "Filter", qty: "1", uomCode: "ea", trackingMode: "quantity" };
+  assert.equal(catalogPartRequiresSourcePosition(part), true);
+  assert.equal(invalidCreatePartIndex([part]), 0);
+  assert.equal(invalidCreatePartIndex([{ ...part, sourcePositionId: "position-1" }]), -1);
+  assert.equal(catalogPartRequiresSourcePosition({ ...part, trackingMode: "serialized" }), false);
 });
 
 test("create Parts presentation hides untouched placeholder rows", () => {

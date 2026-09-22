@@ -92,3 +92,23 @@ export function mechanicPartRequestErrorFields(error) {
     return fields;
   }, {});
 }
+
+export function mechanicPartRequestErrorMessage(error, t = (key) => interfaceText("en", key)) {
+  if (error?.code === "WORKORDER_MECHANIC_ASSIGNMENT_REQUIRED"
+    || /only an assigned mechanic can request parts/i.test(String(error?.message || ""))) {
+    return t("parts.assignmentRequired");
+  }
+  return "";
+}
+
+export function workorderPartErrorMessage(error, t = (key) => interfaceText("en", key)) {
+  const code = String(error?.code || "");
+  if (code === "WORKORDER_MECHANIC_ASSIGNMENT_REQUIRED"
+    || /only an assigned mechanic can (request|add|save)/i.test(String(error?.message || ""))) {
+    return t("parts.assignmentRequired");
+  }
+  if (code === "PART_CATALOG_SELECTION_NOT_FOUND") return t("parts.catalogSelectionMissing");
+  if (code === "PART_CATALOG_NUMBER_MISMATCH") return t("parts.catalogNumberMismatch");
+  if (code === "PART_CATALOG_UOM_MISMATCH") return t("parts.catalogUnitMismatch");
+  return String(error?.message || "");
+}

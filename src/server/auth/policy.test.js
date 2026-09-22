@@ -18,6 +18,14 @@ test("route families map to domain permissions", () => {
   assert.equal(permissionForRequest("POST", "/api/office/invoice-extractions/run-1/receive"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("POST", "/api/office/invoice-extractions/run-1/post-inventory"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("GET", "/api/office/inventory/stock"), PERMISSION.WORKORDER_OFFICE);
+  assert.equal(permissionForRequest("GET", "/api/office/inventory/parts/part-1/commercial"), PERMISSION.INVENTORY_COST_READ);
+  assert.equal(permissionForRequest("PUT", "/api/office/inventory/parts/part-1/prices/internal"), PERMISSION.INVENTORY_PRICE_WRITE);
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/locations/location-1/positions"), PERMISSION.INVENTORY_LOCATION_MANAGE);
+  assert.equal(permissionForRequest("PATCH", "/api/office/inventory/positions/position-1"), PERMISSION.INVENTORY_LOCATION_MANAGE);
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/parts/part-1/locations/location-1/moves"), PERMISSION.INVENTORY_LOCATION_MANAGE);
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/locations/location-1/position-counts"), PERMISSION.INVENTORY_LOCATION_MANAGE);
+  assert.equal(permissionForRequest("PUT", "/api/office/inventory/position-counts/count-1/lines/line-1"), PERMISSION.INVENTORY_LOCATION_MANAGE);
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/position-counts/count-1/apply"), PERMISSION.INVENTORY_COUNT_APPLY);
   assert.equal(permissionForRequest("GET", "/api/office/inventory/receipts/receipt-1/labels"), PERMISSION.WORKORDER_OFFICE);
   assert.equal(permissionForRequest("POST", "/api/office/inventory/count-imports/import-1/apply"), PERMISSION.INVENTORY_COUNT_APPLY);
   assert.equal(permissionForRequest("POST", "/api/inventory/resolve"), PERMISSION.AUTHENTICATED);
@@ -48,4 +56,12 @@ test("route families map to domain permissions", () => {
   );
   assert.equal(permissionForRequest("GET", "/api/admin/locations"), PERMISSION.ADMIN_MANAGE);
   assert.equal(permissionForRequest("POST", "/api/kiosk/event"), PERMISSION.AUTHENTICATED);
+});
+
+test("pricing previews and reusable tax profiles use financial permissions", () => {
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/parts/part-1/pricing-preview"), PERMISSION.INVENTORY_COST_READ);
+  assert.equal(permissionForRequest("GET", "/api/office/inventory/tax-profiles"), PERMISSION.INVENTORY_COST_READ);
+  assert.equal(permissionForRequest("POST", "/api/office/inventory/tax-profiles"), PERMISSION.INVENTORY_PRICE_WRITE);
+  assert.equal(permissionForRequest("PUT", "/api/office/inventory/tax-profiles/profile-1"), PERMISSION.INVENTORY_PRICE_WRITE);
+  assert.equal(permissionForRequest("PATCH", "/api/office/inventory/tax-profiles/profile-1/archive"), PERMISSION.INVENTORY_PRICE_WRITE);
 });

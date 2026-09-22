@@ -1,0 +1,46 @@
+.inventory-task-queue { display: grid; min-width: 0; gap: 14px; }
+.inventory-task-toolbar { grid-template-columns: minmax(170px,.8fr) minmax(210px,1fr) minmax(260px,1.4fr) auto; align-items: end; }
+.inventory-task-toolbar label { display: grid; min-width: 0; gap: 6px; color: #344054; font-size: 12px; font-weight: 650; }
+.inventory-task-toolbar input { width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 11px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; font: inherit; }
+.inventory-task-toolbar .dropdown-select-trigger { min-height: 44px; }
+.inventory-task-toolbar > .button { min-height: 44px; }
+.inventory-task-open { display: grid; width: 100%; min-width: 0; min-height: 44px; align-content: center; gap: 3px; padding: 4px 0; border: 0; color: #344054; background: transparent; text-align: left; cursor: pointer; }
+.inventory-task-open strong, .inventory-task-open span, .inventory-task-open small { min-width: 0; overflow-wrap: anywhere; }
+.inventory-task-open strong { color: #101828; font-size: 13px; }
+.inventory-task-open span, .inventory-task-open small { color: #667085; font-size: 12px; }
+.inventory-task-open small { color: #b54708; }
+.inventory-task-open:hover strong { color: #175cd3; }
+.inventory-task-open:focus-visible { outline: 3px solid #84caff; outline-offset: 2px; border-radius: 5px; }
+.inventory-task-table .is-blocked { background: #fffcf5; }
+.inventory-task-state { display: grid; justify-items: center; gap: 5px; padding: 48px 20px; border: 1px dashed #d0d5dd; border-radius: 10px; color: #667085; text-align: center; }
+.inventory-task-state strong { color: #344054; }
+.inventory-task-error { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #fecdca; border-radius: 9px; color: #b42318; background: #fef3f2; }
+.inventory-task-pages { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: #667085; font-size: 13px; }
+.inventory-task-pages .button { min-height: 44px; }
+.inventory-task-detail { display: grid; gap: 16px; }
+.inventory-task-next { display: grid; gap: 8px; }
+.inventory-task-next p { margin: 0; padding: 10px; border: 1px solid #fedf89; border-radius: 8px; color: #93370d; background: #fffaeb; }
+.inventory-task-status { width: fit-content; padding: 4px 8px; border-radius: 999px; color: #175cd3; background: #eff8ff; font-size: 12px; font-weight: 700; }
+.inventory-task-facts { display: grid; margin: 0; border: 1px solid #e4e7ec; border-radius: 9px; overflow: hidden; }
+.inventory-task-facts > div { display: grid; grid-template-columns: minmax(100px,.45fr) minmax(0,1fr); gap: 12px; padding: 10px 12px; border-top: 1px solid #e4e7ec; }
+.inventory-task-facts > div:first-child { border-top: 0; }
+.inventory-task-facts dt { color: #667085; font-size: 12px; }
+.inventory-task-facts dd { min-width: 0; margin: 0; color: #344054; overflow-wrap: anywhere; }
+.inventory-task-assignment-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.inventory-task-assignment-actions .button, .inventory-task-primary { min-height: 44px; }
+.inventory-task-primary { display: inline-flex; width: fit-content; align-items: center; justify-content: center; box-sizing: border-box; padding: 0 16px; border-radius: 8px; text-decoration: none; }
+.inventory-task-notice { margin: 0; padding: 10px 12px; border: 1px solid #abefc6; border-radius: 8px; color: #067647; background: #ecfdf3; }
+
+@media (max-width: 760px) {
+  .inventory-task-toolbar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .inventory-task-search { grid-column: 1 / -1; }
+  .inventory-task-toolbar > .button { width: 100%; }
+  .inventory-task-pages { justify-content: space-between; }
+}
+@media (max-width: 480px) {
+  .inventory-task-toolbar { grid-template-columns: minmax(0,1fr); }
+  .inventory-task-search { grid-column: auto; }
+  .inventory-task-assignment-actions { display: grid; }
+  .inventory-task-assignment-actions .button, .inventory-task-primary { width: 100%; }
+  .inventory-task-facts > div { grid-template-columns: 1fr; gap: 3px; }
+}

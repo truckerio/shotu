@@ -20,6 +20,7 @@ visual regression pass proves otherwise.
 - `../features/workorder-detail/workorder-detail-toolbar.css`: shared detail toolbar and Preview toggle presentation.
 - `../features/create-workorder/create-workorder-editor.css`: create editor, assignment, and section presentation.
 - `../components/forms/legacy-form-controls.css`: shared form controls retained from the old bundle.
+- `../components/forms/search-controls.css`: shared search appearance and focus styling, based on the Operations toolbar. Covers existing search wrappers and semantic search inputs; feature styles own placement and responsive widths. Add new search surfaces here rather than introducing feature-specific visual variants.
 - `../components/workorders/legacy-used-parts-editor.css`: shared used-parts editor presentation.
 - `../lib/maps/legacy-asset-map*.css`: shared asset location and map presentation.
 - `../components/preview/legacy-preview-layout.css` and `legacy-printable-document.css`: Preview shell, fullscreen, and printable document presentation.

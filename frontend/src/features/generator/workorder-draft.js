@@ -15,6 +15,12 @@ function filledParts(parts) {
     .map((part) => ({
       ...(part?.catalogPartId ? { catalogPartId: part.catalogPartId } : {}),
       ...(part?.serializationRequired === true ? { serializationRequired: true } : {}),
+      ...(part?.trackingMode ? { trackingMode: part.trackingMode } : {}),
+      ...(part?.purchaseRequested === true ? { purchaseRequested: true } : {}),
+      ...(part?.sourcePositionId ? {
+        sourcePositionId: part.sourcePositionId,
+        sourcePositionPath: text(part.sourcePositionPath),
+      } : {}),
       ...(Array.isArray(part?.serializedUnitIds) && part.serializedUnitIds.length ? {
         serializedUnitIds: [...new Set(part.serializedUnitIds.filter(Boolean))],
         serializedSerialNumbers: [...new Set((part.serializedSerialNumbers || []).filter(Boolean))],
@@ -55,6 +61,11 @@ export function buildWorkorderDraftPayload({
     inventoryUnitSelections: parts.flatMap((part, partIndex) => (
       part.catalogPartId && part.serializedUnitIds?.length
         ? [{ partIndex, catalogPartId: part.catalogPartId, unitIds: part.serializedUnitIds }]
+        : []
+    )),
+    inventoryPositionSelections: parts.flatMap((part, partIndex) => (
+      part.catalogPartId && part.sourcePositionId
+        ? [{ partIndex, catalogPartId: part.catalogPartId, positionId: part.sourcePositionId }]
         : []
     )),
     formData: {

@@ -99,8 +99,7 @@
     flex-direction: column;
   }
 
-  .create-workorder-page .operational-form select,
-  .create-workorder-page .operational-form input[type="date"] {
+  .create-workorder-page .operational-form select {
     block-size: 44px;
     box-sizing: border-box;
     inline-size: 100%;
@@ -109,12 +108,6 @@
     min-block-size: 44px;
     min-inline-size: 0;
     padding-block: 0;
-  }
-
-  .create-workorder-page .operational-form input[type="date"] {
-    -webkit-appearance: none;
-    appearance: none;
-    display: block;
   }
 
   .create-workorder-page {

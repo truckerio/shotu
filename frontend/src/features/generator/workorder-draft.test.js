@@ -137,6 +137,33 @@ test("create draft carries exact unit selections outside printable form rows", (
   assert.equal(formValuesFromWorkorderDraft(payload, { parts: [] }).parts.length, 2);
 });
 
+test("create draft preserves aggregate pickup position and command selection", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      parts: [{
+        catalogPartId: "11111111-1111-4111-8111-111111111111",
+        partNo: "Filter",
+        qty: "2",
+        uomCode: "ea",
+        repairOrder: "Replace filter",
+        trackingMode: "quantity",
+        sourcePositionId: "22222222-2222-4222-8222-222222222222",
+        sourcePositionPath: "Aisle 1 / Shelf 2 / Bin 3",
+      }],
+    },
+  });
+
+  assert.deepEqual(payload.inventoryPositionSelections, [{
+    partIndex: 0,
+    catalogPartId: "11111111-1111-4111-8111-111111111111",
+    positionId: "22222222-2222-4222-8222-222222222222",
+  }]);
+  assert.equal(payload.formData.parts[0].sourcePositionPath, "Aisle 1 / Shelf 2 / Bin 3");
+  assert.equal(formValuesFromWorkorderDraft(payload, { parts: [] }).parts[0].sourcePositionId, "22222222-2222-4222-8222-222222222222");
+});
+
 test("location and template changes make create drafts meaningful after baseline", () => {
   const actor = { companyIds: ["company-1"], locationIds: ["location-1"] };
   const form = {

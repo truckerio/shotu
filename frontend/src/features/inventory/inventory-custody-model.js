@@ -61,8 +61,8 @@ export function custodyCommandBody({
       decision: "release",
       inspectionEvidence: draft.evidence.trim(),
       reason: draft.reason.trim(),
-      ...(draft.binLocation.trim()
-        ? { binLocation: draft.binLocation.trim() }
+      ...(draft.targetPositionId
+        ? { targetPositionId: draft.targetPositionId }
         : {}),
     });
   }

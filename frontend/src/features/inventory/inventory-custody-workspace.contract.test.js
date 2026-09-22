@@ -30,11 +30,11 @@ test("custody actions include concurrency and idempotency guards and leave error
   assert.match(source, /Not classified/);
 });
 
-test("receipt cannot be submitted until the exact scanned identity matches the returned unit", async () => {
+test("physical receipt cannot be submitted until the exact scanned identity matches the removed unit", async () => {
   const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
   assert.match(source, /const \[exactIdentityId, setExactIdentityId\]/);
   assert.match(source, /expectedId && scanned\.id !== expectedId/);
-  assert.match(source, /\["return", "receive", "repair\/complete"\]\.includes\(action\) && !exactIdentityId/);
+  assert.match(source, /\["receive", "repair\/complete"\]\.includes\(action\) && !exactIdentityId/);
   assert.match(source, /exactUnitId: exactIdentityId/);
   assert.match(source, /Scan or validate the exact QR or serial before receiving this part/);
   assert.match(source, /setExactIdentityId\(\"\"\)/);
@@ -44,15 +44,28 @@ test("receipt cannot be submitted until the exact scanned identity matches the r
   assert.match(source, /receiptEvidence/);
 });
 
-test("awaiting handoff is one minimal policy-aware return action", async () => {
+test("awaiting handoff receives physical evidence before inspection or release", async () => {
   const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
-  assert.match(source, /return "Return part"/);
-  assert.match(source, /setAction\("return"\)/);
-  assert.match(source, /Ready to reuse/);
-  assert.match(source, /<summary>Add note<\/summary>/);
-  assert.match(source, /action !== "return" && !draft\.evidence\.trim\(\)/);
-  assert.match(source, /returnOutcomeAllowed/);
+  assert.match(source, /return "Receive part"/);
+  assert.match(source, /setAction\("receive"\)/);
+  assert.match(source, /Scan or validate the exact QR or serial before receiving this part/);
+  assert.match(source, /actualHolderType: "inventory_location"/);
+  assert.doesNotMatch(source, /setAction\("return"\)/);
+  assert.doesNotMatch(source, /Returned part condition/);
   assert.match(source, /import \{ ReuseSetup \}/);
+});
+
+test("stock release requires an inspection record and an exact storage position", async () => {
+  const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
+  const model = await readFile(new URL("./inventory-custody-model.js", import.meta.url), "utf8");
+  assert.match(source, /import \{ StoragePositionPicker \}/);
+  assert.match(source, /\/api\/office\/inventory\/locations\/\$\{encodeURIComponent\(locationId\)\}\/positions/);
+  assert.match(source, /<StoragePositionPicker/);
+  assert.match(source, /targetPositionId/);
+  assert.match(source, /capabilities\.release &&\s+caseItem\?\.reviewReason/);
+  assert.match(source, /Choose the exact shelf or bin before returning this part to available stock/);
+  assert.match(source, /action === "release" && \(!draft\.reason\.trim\(\) \|\| !draft\.targetPositionId/);
+  assert.match(model, /targetPositionId: draft\.targetPositionId/);
 });
 
 test("queue and repair actions use the lifecycle statuses returned by the server", async () => {

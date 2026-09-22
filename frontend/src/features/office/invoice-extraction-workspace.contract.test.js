@@ -88,13 +88,20 @@ test("header upload control opens one compact dialog and leaves vendor identific
   assert.match(source, /Invoice \{batchIndex \+ 1\} of \{batchRuns\.length\} · \{batchProgress\.ready\} ready/);
   assert.match(source, /isDismissable=\{busy !== "extract"\}/);
   assert.match(source, /Encrypted · Training use requires your approval/);
-  assert.match(sharedDialog, /className="shared-upload-dialog"/);
+  assert.match(sharedDialog, /<ModalFrame[\s\S]*dialogClassName="shared-upload-dialog"/);
   assert.match(sharedDialog, /<UploadCloud02 aria-hidden="true"/);
   assert.match(sharedStyles, /border:1\.5px dashed #b2ccff/);
   assert.match(sharedStyles, /border-radius:24px/);
   assert.doesNotMatch(source, /More options/);
   assert.doesNotMatch(source, /vendorHint|Vendor name \(optional\)/);
   assert.doesNotMatch(source, /Extract a parts invoice/);
+});
+
+test("embedded invoice intake starts in the shop selected by Purchases", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /initialLocationId = ""/);
+  assert.match(source, /availableLocations\.some\(\(location\) => location\.id === initialLocationId\)/);
+  assert.match(source, /\? initialLocationId/);
 });
 
 test("batch extraction opens the first completed draft while independent pollers continue", async () => {
@@ -109,14 +116,16 @@ test("batch extraction opens the first completed draft while independent pollers
   assert.doesNotMatch(source, /Stopped at \$\{failed\.fileName\}/);
 });
 
-test("invoice review stays compact while confidence and evidence remain available", async () => {
+test("invoice review groups compact evidence fields into meaningful disclosure sections", async () => {
   const source = await readFile(workspaceUrl, "utf8");
   const styles = await readFile(new URL("./invoice-extraction.css", import.meta.url), "utf8");
   assert.match(source, /className="invoice-field-heading"/);
   assert.match(source, /<Confidence field=\{field\} optional=\{options\.optional\} \/>/);
   assert.match(source, /<details className="invoice-field-evidence">/);
-  assert.match(source, /title="Additional details"/);
-  assert.match(source, /PO number only if your company gave one to the seller\./);
+  for (const title of ["Invoice details", "Items", "Totals", "Delivery"]) assert.match(source, new RegExp(`title="${title}"`));
+  assert.match(source, /className="invoice-review-section-action">\{open \? "Close" : readOnly \? "View" : "Edit"\}/);
+  assert.match(source, /import \{ CurrencySelector \}/);
+  assert.match(source, /type === "currency"/);
   assert.match(source, /invoiceFieldNeedsReview\(candidate\.field, candidate\.options\)/);
   assert.match(source, /confidence >= 90 \? "high" : confidence >= 70 \? "medium" : "low"/);
   assert.match(source, /\{state\} · <span className=\{`invoice-confidence-value is-\$\{level\}`\}>\{field\.confidence\}%<\/span>/);
@@ -136,11 +145,80 @@ test("completed invoice status banners dismiss after 1.5 seconds without hiding 
   assert.match(source, /<details className="invoice-review-notes">/);
 });
 
-test("invoice review always composes the reusable document viewer before the form", async () => {
+test("invoice review composes a mounted source canvas before the independently scrolling rail", async () => {
   const source = await readFile(workspaceUrl, "utf8");
+  const styles = await readFile(new URL("./invoice-extraction.css", import.meta.url), "utf8");
   assert.match(source, /import \{ InvoiceDocumentViewer \}/);
-  assert.match(source, /<div className="invoice-review-layout">[\s\S]*<InvoiceDocumentViewer[\s\S]*<div className="invoice-review-form">/);
+  assert.match(source, /<div className="invoice-review-layout">[\s\S]*className="invoice-review-panel invoice-source-panel"[\s\S]*<InvoiceDocumentViewer[\s\S]*className="invoice-review-panel invoice-review-form invoice-review-rail"/);
+  assert.match(source, /hidden=\{compactReview && reviewPane !== "document"\}/);
+  assert.match(source, /hidden=\{compactReview && reviewPane !== "review"\}/);
+  assert.match(styles, /\.invoice-review-layout\s*\{[^}]*block-size:max\(560px,calc\(100dvh - 230px\)\)[^}]*overflow:hidden;/);
+  assert.match(styles, /\.invoice-review-rail\s*\{[^}]*overflow-y:auto;/);
+  assert.match(styles, /@media \(max-width:900px\)[\s\S]*\.invoice-review-rail\s*\{[^}]*overflow:visible;/);
   assert.doesNotMatch(source, /displayedPreviewUrl \? \(/);
+});
+
+test("tablet and phone keep both review panels mounted behind an accessible switch", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  const styles = await readFile(new URL("./invoice-extraction.css", import.meta.url), "utf8");
+  assert.match(source, /className="invoice-review-switch" role="tablist" aria-label="Invoice review view"/);
+  assert.match(source, /role="tab" aria-selected=\{reviewPane === "document"\} aria-controls="invoice-document-panel"/);
+  assert.match(source, /role="tab" aria-selected=\{reviewPane === "review"\} aria-controls="invoice-review-panel"/);
+  assert.match(source, /COMPACT_REVIEW_QUERY = "\(max-width: 900px\)"/);
+  assert.match(source, /media\.addEventListener\?\.\("change", updateCompactReview\)/);
+  assert.match(styles, /\.invoice-review-switch button\s*\{[^}]*min-height:44px;/);
+});
+
+test("invoice items put unresolved rows first and render only the selected line editor", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /const orderedLines = useMemo\(\(\) => orderInvoiceLinesForReview\(draft\?\.lines\)/);
+  assert.match(source, /const \[activeLineId, setActiveLineId\] = useState\(""\)/);
+  assert.match(source, /aria-expanded=\{active\} aria-controls=\{`invoice-line-editor-\$\{line\.id\}`\}/);
+  assert.match(source, /\{active \? <fieldset id=\{`invoice-line-editor-\$\{line\.id\}`\}/);
+  assert.match(source, /nextInvoiceLineIdAfterRemoval\(draft\.lines, lineId\)/);
+  assert.match(source, /Unresolved lines appear first/);
+  assert.match(source, /defaultOpen=\{lineIssues > 0\}/);
+});
+
+test("unresolved disclosures lead DOM and keyboard order while completed sections start collapsed", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /const reviewSections = orderInvoiceReviewSections\(\[/);
+  assert.match(source, /\{ id: "details", unresolved: invoiceDetailIssues > 0 \}/);
+  assert.match(source, /\{ id: "delivery", unresolved: deliveryPending \|\| deliveryIssues > 0 \}/);
+  assert.match(source, /\{reviewSections\.map\(\(section\) => \{/);
+  assert.match(source, /defaultOpen=\{invoiceDetailIssues > 0\}/);
+  assert.match(source, /defaultOpen=\{totalsIssues > 0\}/);
+});
+
+test("resolving the final issue preserves the open editor until the operator closes it", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /if \(status === "Pending" \|\| issueCount > 0\) setOpen\(true\)/);
+  assert.doesNotMatch(source, /!issueCount\) setOpen\(false\)/);
+  assert.match(source, /key=\{`\$\{run\.id\}-\$\{section\.id\}`\}/);
+});
+
+test("Delivery owns pending physical receipt and resets it only after successful receipt episodes", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  const deliveryStart = source.indexOf('sectionId="invoice-delivery"');
+  const footerStart = source.indexOf('{run.status !== "reviewed" ? <footer', deliveryStart);
+  const deliverySource = source.slice(deliveryStart, footerStart);
+  assert.match(source, /const \[receiptEpisode, setReceiptEpisode\] = useState\(0\)/);
+  assert.match(source, /setReceipt\(result\.receipt\);[\s\S]*setReceiptEpisode\(\(current\) => current \+ 1\)/);
+  assert.match(deliverySource, /status=\{deliveryPending \? "Pending" : deliveryComplete \? "Complete" : deliveryReversed \? "Reversed" : ""\}/);
+  assert.match(deliverySource, /defaultOpen=\{deliveryPending \|\| deliveryIssues > 0\}/);
+  assert.match(deliverySource, /<PhysicalReceiptConfirmation receiptEpisode=\{receiptEpisode\}/);
+  assert.doesNotMatch(source.slice(footerStart), /<PhysicalReceiptConfirmation/);
+  assert.match(source, /setReceiptEpisode\(0\)/);
+});
+
+test("a posted partial receipt keeps Delivery pending for the next receiving episode", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /const invoiceFullyReceived = invoiceDeliveryFullyReceived\(\{ receipt, suggestion: purchaseOrderSuggestion \}\)/);
+  assert.match(source, /const deliveryComplete = invoiceFullyReceived;/);
+  assert.doesNotMatch(source, /deliveryComplete = receipt\?\.status === "posted"/);
+  assert.match(source, /const partialReceiptPosted = receipt\?\.status === "posted" && deliveryPending;/);
+  assert.match(source, /Partial receipt posted · receive remaining quantities/);
+  assert.match(source, /Remaining quantities can be received in another episode\./);
 });
 
 test("document viewer toolkit keeps bounded controls and truthful unavailable state", async () => {
@@ -156,12 +234,79 @@ test("physical receipt confirmation requires explicit attestation and keeps exce
   const confirmation = await readFile(confirmationUrl, "utf8");
   assert.match(workspace, /<PhysicalReceiptConfirmation/);
   assert.match(workspace, /\/confirm-receipt/);
-  assert.match(confirmation, /All reviewed items received and undamaged/);
-  assert.match(confirmation, /Missing or damaged/);
+  assert.match(confirmation, /ReceiptLinesEditor/);
+  assert.match(confirmation, /Post received items/);
   assert.match(confirmation, /Inventory unchanged/);
-  assert.match(confirmation, /correct the invoice if its values are wrong/);
-  assert.match(confirmation, /disabled=\{busy \|\| disabled \|\| !attested\}/);
+  assert.match(confirmation, /Leave all lines at zero/);
+  assert.match(confirmation, /quantities and delivery exceptions below match what physically arrived/);
+  assert.match(confirmation, /quantities and delivery exceptions entered below accurately describe this delivery/);
+  assert.doesNotMatch(confirmation, /these entered quantities are physically present/);
+  assert.match(confirmation, /disabled=\{busy \|\| disabled \|\| !attested \|\| !ready/);
   assert.doesNotMatch(confirmation, /api\(/);
+});
+
+test("invoice receipt retries stale exact positions without replacing its receipt command", async () => {
+  const workspace = await readFile(workspaceUrl, "utf8");
+  assert.match(workspace, /const commandStorageKey = `invoice-receipt-command:\$\{run\.id\}`/);
+  assert.match(workspace, /let idempotencyKey = localStorage\.getItem\(commandStorageKey\)/);
+  assert.match(workspace, /if \(nextError\?\.code === "INVENTORY_RECEIPT_POSITION_INVALID"\) setReceiptPositionsReload\(\(value\) => value \+ 1\)/);
+  assert.match(workspace, /setError\(nextError\.message\)/);
+  assert.match(workspace, /localStorage\.removeItem\(commandStorageKey\);\n      setReceipt\(result\.receipt\)/);
+});
+
+test("no-PO receipt posting strips purchase line identity from receipt lines", async () => {
+  const confirmation = await readFile(confirmationUrl, "utf8");
+  assert.match(confirmation, /posting\.postingRoute === "no_purchase_order"/);
+  assert.match(confirmation, /purchaseLineId: _purchaseLineId/);
+  assert.match(confirmation, /receiptLines: receiptLinesForPosting/);
+});
+
+test("invoice receiving loads shop destinations and sends the selected target on the existing receipt command", async () => {
+  const [workspace, confirmation] = await Promise.all([
+    readFile(workspaceUrl, "utf8"),
+    readFile(confirmationUrl, "utf8"),
+  ]);
+  assert.match(workspace, /const receiptLocationId = run\?\.locationId \|\| locationId/);
+  assert.match(workspace, /const receiptPositionIdentity = run\?\.id && receiptLocationId \? `\$\{run\.id\}:\$\{run\.version\}:\$\{receiptLocationId\}` : ""/);
+  assert.match(workspace, /setReceiptPositions\(\[\]\);[\s\S]*setReceiptPositionsError\(""\);[\s\S]*\[receiptPositionIdentity\]/);
+  assert.match(workspace, /\/api\/office\/inventory\/locations\/\$\{encodeURIComponent\(receiptLocationId\)\}\/positions/);
+  assert.match(workspace, /onRetryPositions=\{\(\) => setReceiptPositionsReload\(\(value\) => value \+ 1\)\}/);
+  assert.match(workspace, /positions=\{receiptPositions\} positionLoading=\{receiptPositionsLoading\} positionError=\{receiptPositionsError\}/);
+  assert.match(workspace, /receiptLines: posting\.receiptLines \|\| \[\]/);
+  assert.match(confirmation, /positions=\{positions\} positionLoading=\{positionLoading\} positionError=\{positionError\}/);
+  assert.match(confirmation, /onClick=\{onRetryPositions\}/);
+});
+
+test("reviewed invoices require an explicit exact PO or truthful no-PO posting route", async () => {
+  const [workspace, confirmation] = await Promise.all([
+    readFile(workspaceUrl, "utf8"),
+    readFile(confirmationUrl, "utf8"),
+  ]);
+  assert.match(workspace, /\/purchase-order-suggestions/);
+  assert.match(workspace, /\["suggestions", "none", "ambiguous", "review_required"\]/);
+  assert.match(workspace, /run\?\.id, run\?\.version, run\?\.status/);
+  assert.match(workspace, /postingRoute: posting\.postingRoute/);
+  assert.match(workspace, /allocationPlan: posting\.allocationPlan \|\| \[\]/);
+  assert.match(workspace, /noPurchaseOrderReason: posting\.noPurchaseOrderReason \|\| ""/);
+  assert.match(workspace, /invoice-receipt-command:\$\{run\.id\}/);
+  assert.match(workspace, /localStorage\.removeItem\(commandStorageKey\)/);
+  assert.match(confirmation, />Use this PO<\/Button>/);
+  assert.match(confirmation, />No purchase order<\/Button>/);
+  assert.match(confirmation, /selection\.postingRoute === "no_purchase_order" \? <label/);
+  assert.match(confirmation, /purchaseOrderNumber \? `Reason for receiving without \$\{purchaseOrderNumber\}` : "Reason for receiving without a purchase order"/);
+  assert.match(confirmation, /id=\{`\$\{checkboxId\}-no-po-reason`\} required maxLength=\{500\}/);
+  assert.match(confirmation, /initialInvoicePostingSelection\(suggestion, draft\)/);
+  assert.match(confirmation, /\[runId, runVersion, suggestion\]/);
+});
+
+test("PO suggestion loading, ambiguity and errors stay explicit and retryable", async () => {
+  const confirmation = await readFile(confirmationUrl, "utf8");
+  assert.match(confirmation, /Checking exact purchase order matches/);
+  assert.match(confirmation, /More than one exact PO line/);
+  assert.match(confirmation, /No exact purchase order matches/);
+  assert.match(confirmation, /has no exact eligible line allocation/);
+  assert.match(confirmation, /onClick=\{onRetrySuggestions\}/);
+  assert.match(confirmation, /role="alert">\{suggestionError\}/);
 });
 
 test("review notes and footer use compact progressive disclosure", async () => {
@@ -197,7 +342,7 @@ test("invoice lines can match or create local catalog identity before review", a
   assert.match(source, /updateInvoiceLineField\(next, lineId, "unitOfMeasure", part\.uomCode \|\| "ea"\)/);
   assert.match(source, /catalogPartId: part\.id/);
   assert.match(source, /\["partNumber", "unitOfMeasure"\][\s\S]*catalogPartId: _removed/);
-  assert.match(dialog, /aria-labelledby=\{titleId\} aria-describedby=\{descriptionId\}/);
+  assert.match(dialog, /<ModalFrame[\s\S]*ariaLabelledBy=\{titleId\}[\s\S]*ariaDescribedBy=\{descriptionId\}/);
   assert.match(dialog, /No quantity or Odoo record will be created/);
   assert.match(dialog, /Odoo or supplier number/);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*min-height: 44px/);

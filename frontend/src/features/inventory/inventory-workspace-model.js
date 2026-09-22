@@ -37,6 +37,16 @@ export function stockFilterCounts(items = []) {
 export function filterAndSortStock(items = [], { filter = "all", sort = DEFAULT_STOCK_SORT } = {}) {
   const filtered = filter === "all" ? [...items] : items.filter((item) => stockState(item) === filter);
   return filtered.sort((left, right) => {
+    if (sort === "low_stock_first") {
+      const alertDifference = Number(Boolean(right.lowStock)) - Number(Boolean(left.lowStock));
+      if (alertDifference) return alertDifference;
+      if (left.lowStock && right.lowStock) {
+        const urgencyDifference = numeric(left.quantityAvailable) - numeric(right.quantityAvailable);
+        if (urgencyDifference) return urgencyDifference;
+      }
+      return numeric(right.quantityAvailable) - numeric(left.quantityAvailable)
+        || String(left.partNumber || "").localeCompare(String(right.partNumber || ""), undefined, { numeric: true, sensitivity: "base" });
+    }
     if (sort === "part_asc") {
       return String(left.partNumber || "").localeCompare(String(right.partNumber || ""), undefined, { numeric: true, sensitivity: "base" });
     }

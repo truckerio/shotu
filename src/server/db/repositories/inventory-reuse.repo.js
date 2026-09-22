@@ -6,6 +6,7 @@ import { getNormalizedModulePolicy } from "./module-access-rules.repo.js";
 import { modeAllows, resolveProductModuleMode } from "../../../../shared/product-modules.js";
 import { resolveEffectiveWorkorderModuleAccess } from "../../../../shared/workorder-modules.js";
 import { inventoryTokenFromCode, readInventoryQrToken } from "../../modules/inventory/inventory-qr.js";
+import { returnExactUnitFromReuseToPosition } from "./inventory-exact-position-lifecycle.repo.js";
 
 const fail = (code, message, statusCode = 409) => { throw new InventoryError(message, { code, statusCode }); };
 const changed = () => fail("INVENTORY_REUSE_CHANGED", "This part changed — review its current status.");
@@ -19,6 +20,15 @@ const CASE_SELECT = `select c.*, u.serial_number,u.status as unit_status,u.condi
   policy.reuse_allowed,policy.repair_allowed,policy.core_return_allowed,policy.scrap_allowed,
   (select repair.started_at from inventory_reuse_repairs repair where repair.company_id=c.company_id and repair.case_id=c.id order by repair.started_at desc limit 1) as repair_started_at,
   (select repair.completed_at from inventory_reuse_repairs repair where repair.company_id=c.company_id and repair.case_id=c.id order by repair.started_at desc limit 1) as repair_completed_at,
+  (select position.code from inventory_positions position where position.company_id=c.company_id and position.location_id=c.location_id and position.id=c.release_position_id) as release_position_code,
+  (select position.name from inventory_positions position where position.company_id=c.company_id and position.location_id=c.location_id and position.id=c.release_position_id) as release_position_name,
+  (with recursive ancestors as (
+    select position.id,position.parent_id,position.name,0 depth from inventory_positions position
+      where position.company_id=c.company_id and position.location_id=c.location_id and position.id=c.release_position_id
+    union all
+    select parent.id,parent.parent_id,parent.name,ancestors.depth+1 from inventory_positions parent join ancestors on ancestors.parent_id=parent.id
+      where parent.company_id=c.company_id and parent.location_id=c.location_id
+  ) select string_agg(name,' / ' order by depth desc) from ancestors) as release_position_path,
   case when u.custody_holder_type='asset' then concat('Unit ',coalesce((select a.unit_no from assets a where a.company_id=u.company_id and a.id=u.custody_asset_id), 'unknown'))
        when u.custody_holder_type='inventory_location' then concat(coalesce((select location.name from locations location where location.company_id=u.company_id and location.id=u.custody_location_id),'Inventory'),case when coalesce(u.custody_bin_location,'')='' then '' else concat(' · ',u.custody_bin_location) end)
        else coalesce(nullif(u.custody_external_reference,''),replace(u.custody_holder_type,'_',' ')) end as custody_holder_label, l.part_number, l.description, w.serial as original_workorder_serial
@@ -32,7 +42,8 @@ async function loadCase(client, input, id) {
   return publicReuseCase(result.rows[0]);
 }
 
-async function returnUnitToStock(client, input, current, caseId, condition, binLocation = "") {
+async function returnUnitToStock(client, input, current, caseId, condition, targetPositionId) {
+  if (current.tracking_mode !== "serialized") fail("INVENTORY_REUSE_TRACKING_REQUIRED", "Only an exact serialized unit can be released through this workflow.");
   const item = await client.query(`select id from inventory_items where company_id=$1 and location_id=$2
     and catalog_part_id=$3 and uom_code=$4 and source_provider='local' order by updated_at desc,id limit 1 for update`,
   [input.companyId,input.locationId,current.catalog_part_id,current.uom_code]);
@@ -53,8 +64,19 @@ async function returnUnitToStock(client, input, current, caseId, condition, binL
     actor_id,reason,idempotency_key,unit_id,usage_id,workorder_id,asset_id)
     values($1,$2,$3,'return',1,$4,$5,$6,$7,$8,$9,$10,$11)`,
   [input.companyId,input.locationId,current.catalog_part_id,current.uom_code,input.actorId,input.note || input.reason || "Returned exact part to stock",`reuse-release:${caseId}`,current.unit_id,current.usage_id,current.removal_workorder_id || current.original_workorder_id,current.asset_id]);
-  await client.query(`update inventory_serialized_units set status='in_stock',condition_code=$3,custody_holder_type='inventory_location',custody_location_id=$4,custody_asset_id=null,custody_bin_location=$5,custody_external_reference=null,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,
-  [input.companyId,current.unit_id,condition,input.locationId,binLocation || current.received_bin_location || ""]);
+  await client.query(`update inventory_serialized_units set status='in_stock',condition_code=$3,custody_holder_type='inventory_location',custody_location_id=$4,custody_asset_id=null,custody_bin_location='',custody_external_reference=null,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,
+  [input.companyId,current.unit_id,condition,input.locationId]);
+  return returnExactUnitFromReuseToPosition(client, {
+    companyId: input.companyId,
+    locationId: input.locationId,
+    catalogPartId: current.catalog_part_id,
+    uomCode: current.uom_code,
+    unitId: current.unit_id,
+    actorId: input.actorId,
+    caseId,
+    workorderId: current.removal_workorder_id || current.original_workorder_id,
+    targetPositionId,
+  });
 }
 
 // All custody/config commands share a scope lock, then lock membership/grants,
@@ -78,20 +100,28 @@ async function scopeAccess(client, input, capability, admin = false) {
   const capabilities = Object.fromEntries(["remove","receive","release","route","repair","disposition","quarantine"].map((key) => [key,grants.rows.some((r) => r.capability===key)]));
   if (capability && !capabilities[capability]) denied();
   capabilities.configure = role === "admin";
-  if (input.action !== "remove") await moduleAccess(client,input,role,Boolean(capability || admin && input.kind));
+  await moduleAccess(client,input,role,Boolean(capability || admin && input.kind));
   return { role, capabilities };
 }
 
-async function moduleAccess(client,input,role,write) {
+export async function canAccessInventoryReuseModule(client,input,role,write) {
   // SHARE also protects absent rules against an insertion revoking a compatibility
   // default during this short transaction. No second pool connection is used.
-  await client.query("lock table product_module_access_rules, workorder_module_policy_scopes, workorder_module_access_rules in share mode");
+  // Keep this order aligned with the company-delete cascade: policy scopes,
+  // then product rules. A reuse command must wait before taking the product
+  // rule lock when a company cleanup is already removing policy scopes.
+  await client.query("lock table workorder_module_policy_scopes, product_module_access_rules, workorder_module_access_rules in share mode");
   const dependencies = {query:client.query.bind(client)};
   const rules = await listProductModuleAccessRules({companyIds:[input.companyId],locationIds:[input.locationId]},dependencies);
   const product = resolveProductModuleMode({moduleKey:"workorders",role,userId:input.actorId,
     companyRules:rules.filter((r)=>!r.locationId),locationRules:rules.filter((r)=>r.locationId===input.locationId)});
-  if (!modeAllows(product.mode,write ? "write" : "read")) denied();
+  return modeAllows(product.mode,write ? "write" : "read");
+}
+
+async function moduleAccess(client,input,role,write) {
+  if (!(await canAccessInventoryReuseModule(client,input,role,write))) denied();
   if (input.action === "remove" || input.view === "asset") {
+    const dependencies = {query:client.query.bind(client)};
     const companyPolicy = await getNormalizedModulePolicy({companyId:input.companyId},dependencies);
     const locationPolicy = await getNormalizedModulePolicy({companyId:input.companyId,locationId:input.locationId},dependencies);
     const decision = resolveEffectiveWorkorderModuleAccess({role,userId:input.actorId,surface:"detail",moduleKey:"partsScanning",companyPolicy,locationPolicy});
@@ -131,6 +161,7 @@ export async function mutateInventoryReuse(input) {
       return { case: prior.rows[0].result, replayed: true, operationId: input.idempotencyKey, ledgerEffect: 0, unitProjection: prior.rows[0].result };
     }
     let caseId = input.caseId;
+    let positionOperationId = null;
     if (input.action === "legacy_track") {
       if (!["office","admin"].includes(role)) denied();
       const asset = await client.query(`select id from assets where company_id=$1 and location_id=$2 and id=$3 for share`,[input.companyId,input.locationId,input.assetId]);
@@ -211,63 +242,52 @@ export async function mutateInventoryReuse(input) {
       await client.query(`insert into inventory_reuse_operations(company_id,location_id,actor_id,idempotency_key,action,request_hash,case_id,result) values($1,$2,$3,$4,$5,$6,null,$7::jsonb)`,[input.companyId,input.locationId,input.actorId,input.idempotencyKey,input.action,input.requestHash,JSON.stringify(result)]);
       return {case:null,replayed:false,operationId:input.idempotencyKey,ledgerEffect:0,unitProjection:result};
     } else {
-      const result = await client.query(`select c.*,u.serial_number,u.status as unit_status,u.custody_holder_type,u.custody_location_id,s.status as usage_status,s.catalog_part_id,s.uom_code
+      const result = await client.query(`select c.*,u.serial_number,u.status as unit_status,u.custody_holder_type,u.custody_location_id,s.status as usage_status,s.catalog_part_id,s.uom_code,p.tracking_mode
         from inventory_reuse_cases c
         join workorder_serialized_part_usages s on s.company_id=c.company_id and s.id=c.usage_id
         join inventory_serialized_units u on u.company_id=c.company_id and u.id=c.unit_id and u.location_id=c.location_id
+        join parts_catalog p on p.company_id=s.company_id and p.id=s.catalog_part_id
         where c.company_id=$1 and c.location_id=$2 and c.id=$3 for update of c,s,u`,[input.companyId,input.locationId,caseId]);
       const current = result.rows[0];
       if (!current) fail("INVENTORY_REUSE_NOT_FOUND", "Removed-part case not found.",404);
+      if (current.tracking_mode !== "serialized") fail("INVENTORY_REUSE_TRACKING_REQUIRED", "Only exact serialized units can use removed-part custody.");
       if (current.unit_status !== "removed" || current.usage_status !== "removed") changed();
       if (input.expectedVersion && current.case_version !== input.expectedVersion) changed();
       if (input.action === "return") {
         if (current.status !== "awaiting_handoff") changed();
         if (input.exactUnitId !== current.unit_id) fail("INVENTORY_REUSE_EXACT_UNIT_MISMATCH", "The scanned unit does not match this returned-part case.");
-        const requiredCapability = ["repair","core_return","scrap"].includes(input.outcome) ? "route" : "release";
-        if (!capabilities[requiredCapability]) denied();
-        const policy = await client.query(`select reuse_allowed,repair_allowed,core_return_allowed,scrap_allowed from inventory_reuse_catalog_policies
-          where company_id=$1 and location_id=$2 and catalog_part_id=$3 for share`,[input.companyId,input.locationId,current.catalog_part_id]);
-        if (input.outcome === "reuse" && !policy.rows[0]?.reuse_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED", "This part type is not approved for reuse. Keep it on hold or ask an admin to update Reuse settings.");
-        if (input.outcome === "repair" && !policy.rows[0]?.repair_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED", "This part type is not approved for repair. Keep it on hold or ask an admin to update Reuse settings.");
-        if (input.outcome === "core_return" && !policy.rows[0]?.core_return_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED", "This part type is not approved for core return. Keep it on hold or ask an admin to update Reuse settings.");
-        if (input.outcome === "scrap" && !policy.rows[0]?.scrap_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED", "This part type is not approved for scrap. Keep it on hold or ask an admin to update Reuse settings.");
-        if (input.outcome === "reuse" && (current.ownership !== "company" || !current.ownership_evidence.trim())) fail("INVENTORY_REUSE_OWNERSHIP_REQUIRED", "Only documented company-owned parts can return to stock.");
-        const receiptEvidence = `Exact serialized unit ${current.serial_number} scanned and received.`;
-        const decisionEvidence = input.note || `Returned part marked ${input.outcome.replaceAll("_", " ")}.`;
-        const nextStatus = { reuse:"released", repair:"repair", core_return:"core_pending_return", scrap:"scrap_pending_approval", hold:"hold" }[input.outcome];
-        const finalRoute = input.outcome === "reuse" ? "inspect_for_reuse" : input.outcome === "hold" ? "not_sure" : input.outcome;
-        await client.query(`update inventory_reuse_cases set status=$4,received_by_user_id=$5::uuid,released_by_user_id=case when $4='released' then $5::uuid else null end,
-          receipt_evidence=$6,inspection_evidence=case when $4='released' then $7 else inspection_evidence end,review_reason=$7,final_route=$8,
-          received_bin_location=$9,case_version=case_version+1,completed_at=case when $4='released' then now() else null end,updated_at=now()
-          where company_id=$1 and location_id=$2 and id=$3`,
-        [input.companyId,input.locationId,caseId,nextStatus,input.actorId,receiptEvidence,decisionEvidence,finalRoute,input.binLocation]);
-        if (input.outcome === "reuse") await returnUnitToStock(client,input,current,caseId,"serviceable_used",input.binLocation);
-        else await client.query(`update inventory_serialized_units set condition_code=$3,custody_holder_type='inventory_location',custody_location_id=$4,custody_asset_id=null,custody_bin_location=$5,custody_external_reference=null,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,
-          [input.companyId,current.unit_id,input.outcome === "repair" ? "needs_repair" : ["core_return","scrap"].includes(input.outcome) ? "unserviceable" : "unknown",input.locationId,input.binLocation]);
-        for (const eventType of ["reuse_received", input.outcome === "reuse" ? "reuse_released" : input.outcome === "hold" ? "reuse_hold" : "reuse_routed"]) {
-          await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details)
-            values($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,[input.companyId,current.unit_id,eventType,input.actorId,current.usage_id,current.removal_workorder_id || current.original_workorder_id,current.asset_id,JSON.stringify({caseId,outcome:input.outcome,evidence:eventType === "reuse_received" ? receiptEvidence : decisionEvidence})]);
-        }
+        const receiptEvidence = input.evidence || input.note;
+        if (!String(receiptEvidence || "").trim()) fail("INVENTORY_REUSE_RECEIPT_EVIDENCE_REQUIRED", "Receipt evidence is required before this part can enter review.");
+        await client.query(`update inventory_reuse_cases set status='received_pending_review',received_by_user_id=$4,
+          receipt_evidence=$5,received_bin_location=$6,received_at=now(),case_version=case_version+1,updated_at=now()
+          where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId,input.actorId,receiptEvidence,input.binLocation]);
+        await client.query(`update inventory_serialized_units set condition_code='unknown',custody_holder_type='inventory_location',custody_location_id=$3,
+          custody_asset_id=null,custody_bin_location=$4,custody_external_reference=null,custody_version=custody_version+1,updated_at=now()
+          where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.locationId,input.binLocation]);
+        await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details)
+          values($1,$2,'reuse_received',$3,$4,$5,$6,$7::jsonb)`,[input.companyId,current.unit_id,input.actorId,current.usage_id,current.removal_workorder_id || current.original_workorder_id,current.asset_id,JSON.stringify({caseId,evidence:receiptEvidence,source:"reuse_return_compatibility"})]);
       } else if (input.action === "receive") {
         if (current.status !== "awaiting_handoff") changed();
-        if (input.exactUnitId && input.exactUnitId !== current.unit_id) fail("INVENTORY_REUSE_EXACT_UNIT_MISMATCH", "The scanned unit does not match this removed-part case.");
+        if (input.exactUnitId !== current.unit_id) fail("INVENTORY_REUSE_EXACT_UNIT_MISMATCH", "The scanned unit does not match this removed-part case.");
         if (input.actualLocationId && input.actualLocationId !== input.locationId) fail("INVENTORY_REUSE_CROSS_LOCATION_FORBIDDEN", "A returned part cannot be received into a different owning inventory location.");
         await client.query(`update inventory_reuse_cases set status='received_pending_review',received_by_user_id=$4,
-          receipt_evidence=$5,received_bin_location=$6,final_route=coalesce($7,final_route),case_version=case_version+1,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId,input.actorId,input.evidence,input.binLocation || "",input.correctedRoute || null]);
+          receipt_evidence=$5,received_bin_location=$6,received_at=now(),case_version=case_version+1,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId,input.actorId,input.evidence,input.binLocation || ""]);
         await client.query(`update inventory_serialized_units set custody_holder_type=$3,custody_location_id=coalesce($4,custody_location_id),custody_bin_location=$5,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.actualHolderType || "inventory_location",input.actualLocationId || input.locationId,input.binLocation || ""]);
       } else if (input.action === "release") {
         if (!["received_pending_review","hold","repair_complete_pending_review"].includes(current.status) || !current.received_by_user_id) changed();
         if (current.custody_holder_type !== "inventory_location" || current.custody_location_id !== input.locationId) fail("INVENTORY_REUSE_PHYSICAL_RETURN_REQUIRED","Confirm physical return to this shop before releasing stock.");
         if (input.decision === "release") {
+          if (!input.targetPositionId) fail("INVENTORY_REUSE_POSITION_REQUIRED", "Choose a storage position before releasing this part.");
           const policy = await client.query(`select reuse_allowed,evidence from inventory_reuse_catalog_policies
             where company_id=$1 and location_id=$2 and catalog_part_id=$3 for share`,[input.companyId,input.locationId,current.catalog_part_id]);
           if (!policy.rows[0]?.reuse_allowed) fail("INVENTORY_REUSE_POLICY_REQUIRED", "Catalog reuse approval is missing or reuse is prohibited. Keep this part on hold.");
           if (current.ownership !== "company" || !current.ownership_evidence.trim()) fail("INVENTORY_REUSE_OWNERSHIP_REQUIRED", "Documented company ownership is required. Keep customer or unknown property on hold.");
-          await returnUnitToStock(client,input,current,caseId,current.status === "repair_complete_pending_review" ? "refurbished" : "serviceable_used",input.binLocation);
+          positionOperationId = await returnUnitToStock(client,input,current,caseId,current.status === "repair_complete_pending_review" ? "refurbished" : "serviceable_used",input.targetPositionId);
         }
         await client.query(`update inventory_reuse_cases set status=$4,inspection_evidence=$5,review_reason=$6,
-          released_by_user_id=$7,case_version=case_version+1,completed_at=case when $4='released' then now() else null end,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,
-        [input.companyId,input.locationId,caseId,input.decision === "release" ? "released" : "hold",input.inspectionEvidence,input.reason,input.decision === "release" ? input.actorId : null]);
+          released_by_user_id=$7,inspected_at=now(),release_position_id=$8,case_version=case_version+1,
+          completed_at=case when $4='released' then now() else null end,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,
+        [input.companyId,input.locationId,caseId,input.decision === "release" ? "released" : "hold",input.inspectionEvidence,input.reason,input.decision === "release" ? input.actorId : null,input.decision === "release" ? input.targetPositionId : null]);
       } else if (input.action === "route" || input.action === "quarantine_resolve") {
         if (!["received_pending_review","hold","quarantine","repair_complete_pending_review"].includes(current.status)) changed();
         const route = input.action === "route" ? input.route : input.resolution;
@@ -292,7 +312,7 @@ export async function mutateInventoryReuse(input) {
         if (input.exactUnitId !== current.unit_id) fail("INVENTORY_REUSE_EXACT_UNIT_MISMATCH","The returned unit does not match this repair case.");
         const repair=await client.query(`update inventory_reuse_repairs set completed_at=now(),evidence=$3,version=version+1 where company_id=$1 and case_id=$2 and completed_at is null returning id`,[input.companyId,caseId,input.evidence]);
         if (!repair.rows[0]) changed();
-        await client.query(`update inventory_reuse_cases set status='repair_complete_pending_review',receipt_evidence=$4,received_bin_location=$5,review_reason=$6,case_version=case_version+1,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId,input.receiptEvidence,input.binLocation,input.evidence]);
+        await client.query(`update inventory_reuse_cases set status='repair_complete_pending_review',receipt_evidence=$4,received_bin_location=$5,review_reason=$6,received_at=now(),case_version=case_version+1,updated_at=now() where company_id=$1 and location_id=$2 and id=$3`,[input.companyId,input.locationId,caseId,input.receiptEvidence,input.binLocation,input.evidence]);
         await client.query(`update inventory_serialized_units set custody_holder_type='inventory_location',custody_location_id=$3,custody_asset_id=null,custody_bin_location=$4,custody_external_reference=null,custody_version=custody_version+1,updated_at=now() where company_id=$1 and id=$2`,[input.companyId,current.unit_id,input.locationId,input.binLocation]);
       } else if (input.action === "core_return" || input.action === "scrap") {
         const required = input.action === "core_return" ? "core_pending_return" : "scrap_pending_approval";
@@ -306,13 +326,12 @@ export async function mutateInventoryReuse(input) {
     const result = await loadCase(client,input,caseId);
     if (!['remove','legacy_track','return'].includes(input.action)) await client.query(`insert into inventory_unit_events(company_id,unit_id,event_type,actor_id,usage_id,workorder_id,asset_id,details)
       values($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,[input.companyId,result.unitId,({receive:"reuse_received",release:input.decision === "hold" ? "reuse_hold" : "reuse_released",route:"reuse_routed",repair_start:"reuse_repair_started",repair_complete:"reuse_repair_completed",core_return:"reuse_core_returned",scrap:"reuse_scrapped",quarantine_resolve:"reuse_quarantine_resolved"})[input.action],
-      input.actorId,result.usageId,result.removalWorkorderId || result.originalWorkorderId,result.assetId,JSON.stringify({caseId,status:result.status,evidence:input.evidence || input.inspectionEvidence,reason:input.reason || null,externalReference:input.externalReference || null,dispositionDate:input.dispositionDate || null})]);
+      input.actorId,result.usageId,result.removalWorkorderId || result.originalWorkorderId,result.assetId,JSON.stringify({caseId,status:result.status,evidence:input.evidence || input.inspectionEvidence,reason:input.reason || null,externalReference:input.externalReference || null,dispositionDate:input.dispositionDate || null,source:"reuse_lifecycle",positionOperationId})]);
     await audit(client,input,input.action === "release" ? input.decision : input.action,caseId,result);
     await client.query(`insert into inventory_reuse_operations(company_id,location_id,actor_id,idempotency_key,action,request_hash,case_id,result)
       values($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,[input.companyId,input.locationId,input.actorId,input.idempotencyKey,input.action,input.requestHash,caseId,JSON.stringify(result)]);
     const ledgerEffect =
-      (input.action === "release" && input.decision === "release") ||
-      (input.action === "return" && input.outcome === "reuse")
+      (input.action === "release" && input.decision === "release")
         ? 1
         : input.action === "remove" && result.installationStatus === "installed_pending_approval"
           ? -1
@@ -324,6 +343,14 @@ export async function mutateInventoryReuse(input) {
 export async function readInventoryReuse(input) {
   return transaction(input,async (client) => {
     const access = await scopeAccess(client,input,null,input.view === "config");
+    if (input.view === "case") {
+      // Queue/detail custody is an inventory-wide Office/Admin surface. Keep
+      // mechanics on the assigned-asset view, even when they know a case id.
+      if (access.role === "mechanic") denied();
+      const reuseCase = await loadCase(client,input,input.caseId);
+      if (!reuseCase) fail("INVENTORY_REUSE_NOT_FOUND", "Custody case not found.", 404);
+      return { case: reuseCase, capabilities: access.capabilities };
+    }
     if (input.view === "operation") {
       const result = await client.query(`select action,result from inventory_reuse_operations
         where company_id=$1 and location_id=$2 and actor_id=$3 and idempotency_key=$4`,[input.companyId,input.locationId,input.actorId,input.idempotencyKey]);

@@ -1,8 +1,8 @@
 # Odoo Inventory And Workorder Parts — Living Record
 
 **Status:** Canonical current-state record<br>
-**Last verified:** 2026-08-26<br>
-**Verified against:** local working tree at base commit `9172846dfb05de4a9901672b1db0001041f1f045`<br>
+**Last verified:** 2026-09-21<br>
+**Verified against:** local working tree at base commit `b174c7ad3cc52785e9afb607a864f6f9a31d6c1f`<br>
 **Scope:** Odoo product/inventory integration, workorder part requests, local inventory projection, future receiving/scanning/issuing/core workflows
 
 ## How To Use This File
@@ -80,6 +80,22 @@ Boundary rule: Workorder Generator may store workflow state and projections. It 
 
 ## Current Verified State
 
+### Developer source integration (2026-09-15, local)
+
+Currency entry uses the shared `CurrencySelector` dropdown in purchase orders, supplier bills, part prices, tax profiles and purchase approval settings. Existing currency values and API payloads are retained.
+
+Local stabilization: PO and purchase-request receiving retain the completed receipt and label-print action until explicitly dismissed. An unsubmitted receipt draft cannot override a different explicitly selected shop; previously submitted commands retain their original shop and idempotency key for recovery. New damage/transfer tasks reset their prior part, serial and destination state. Verification is recorded in the external inventory-stabilization task report.
+
+`IMPLEMENTED`: the developer ZIP's purchasing, approval, delivery, bill-document, stock-task and reporting workflow is integrated into the staging-derived local application. Existing position accounting and Workorder lifecycle are retained; incompatible imported count writes are routed to position counts. See [Developer source integration](specs/DEVELOPER_SOURCE_INTEGRATION.md) for source decisions, verification boundaries and unfinished batch/location pricing work. No hosted release is claimed.
+
+### Inventory catalog pricing — 2026-09-15 local implementation
+
+Part detail now presents compact stock totals, a single Prices summary, contextual editors and secondary history/tax controls. Empty identity fields and repeated header facts are omitted from the read view; edits retain the complete identity form. The UX change preserves existing financial services and stock actions. Local rendered and regression evidence is tracked in the part-detail-ux task.
+
+`IMPLEMENTED` locally: purchase-cost observations remain distinct from independently versioned internal and selling prices. Migration 135 adds company tax profiles and immutable versions; each price records explicit tax treatment and an exact profile version. Older price tax assumptions remain unknown. Inventory previews calculate quantity, discount, net, named taxes and total using exact decimal arithmetic. Office/Admin financial permissions and company scope apply. See [pricing design and research](specs/INVENTORY_PRICING_AND_TAX_IMPLEMENTATION.md). Local authenticated browser checks pass; full-suite and independent review evidence is tracked in the pricing task. This is not a hosted release. Workorder billing snapshots and Odoo commercial export mapping remain separate work.
+
+`IMPLEMENTED` locally on 2026-09-17: migration 152 adds location-scoped internal and selling price versions while preserving a company default. Reads identify whether the effective value came from a location override or the company default; an explicit Unknown override masks the default and a zero value remains known. Receipt-cost evidence is filtered to the requested location and distinguishes invoice-linked cost, missing invoice-line cost, and unpriced receipts. The current Part detail UI has not yet moved these controls inside each location; this slice establishes the safe data and API boundary first.
+
 ### Tracking-aware manual intake — local implementation, 2026-09-10
 
 Saved catalog tracking now chooses physical intake: serialized parts retain exact-unit creation and labels; `quantity` uses whole counts/packages; `measured_bulk` uses the canonical measurement and precision. Inventory, Create, and saved Workorder aggregate intake reuse `StockIntakeControl`. Catalog selection does not receive or issue stock. Unreviewed count parts are not silently treated as serialized.
@@ -106,7 +122,7 @@ bounded opening-count import now reuses Odoo-synchronized master identities,
 persists every source row as review evidence, and applies only physically
 confirmed exact matches as serialized local stock. It does not create or edit
 master parts. The local vertical still does not implement partial/damaged receipt posting,
-transfer execution, purchasing, general cycle counts, valuation, warranty/problem
+transfer execution, purchasing, valuation, warranty/problem
 reporting, cores, or a dedicated Parts role.
 
 ### Capability matrix
@@ -121,17 +137,19 @@ reporting, cores, or a dedicated Parts role.
 | Mechanic part request | IMPLEMENTED | mechanic parts route, `MechanicPartRequestForm.jsx` | Mechanic submits structured request inside a workorder. |
 | Office review and supply recommendation | PARTIAL, LOCAL VERIFIED | `part-fulfillment.service.js`; `OfficeRequestCard.jsx`; `GetPartsFlow.jsx` | Office can ask the backend for a location-scoped local-stock recommendation and approve that recommendation. Approval is audit evidence only; it does not reserve or move stock. Legacy aggregate allocation remains separate. |
 | Local issue/return quantity updates | IMPLEMENTED, TEMPORARY ARCHITECTURE | `part-requests.repo.js` | Reserved→issued decrements local balance; issued→returned increments it. No Odoo stock command is made. |
-| Serialized-part workorder disposition | PARTIAL, EXACT-UNIT LOCAL VERIFIED | `SerializedPartsScanner.jsx`; `inventory-unit-workorder.service.js`; migration `087` | Exact local units move through reserved → installed pending approval → installed. Reservation affects reserved/available only; Office approval consumes on-hand. A pre-approval removal explicitly returns the unit and releases the reservation; a post-approval removal records used-part history without restoring stock. Mechanics remain denied by default and require an explicit Part scanning grant plus active assignment. Damaged/quarantine/core workflows remain absent. |
+| Serialized-part workorder disposition | LOCAL VERIFIED | `SerializedPartsScanner.jsx`; `inventory-unit-workorder.service.js`; inventory reuse/custody services; migrations `087` and `169` | Exact local units move through reserved → installed pending approval → installed. A post-install removal creates exact custody with Workorder, Unit, receipt, and purchase lineage; physical receipt, inspection, repair, quarantine, core, scrap, and exact-position reuse remain separate guarded transitions. Mechanics remain denied by default and require an explicit Part scanning grant plus active assignment. |
 | Workorder completion guard | PARTIAL, EXACT-UNIT LOCAL VERIFIED | operational workorder repository lifecycle guards | Work done continues to block unresolved reserved units but accepts an explicitly installed-pending-approval unit. Office close consumes every pending installed unit in the same transaction and records approval evidence. Cancel, reassignment, and self-release fail closed while exact reservations remain active. Legacy aggregate requests retain their existing guards. |
 | Odoo service-order export | IMPLEMENTED, SEPARATE DOMAIN | `odoo.outbound.*`; migrations `048`, `056`, `059` | Creates a draft Odoo Sales service order after readiness checks. It intentionally does not confirm orders, create invoices, post payments, or mutate stock. |
 | Dedicated Parts role and permissions | PARTIAL | shared `partsScanning` module policy; Admin Modules | Roles remain mechanic, office, surveillance, and admin. Exact workorder scan/issue has a dedicated role/named-user module permission; a standalone Parts role and broader inventory permission family remain absent. |
-| Parts inventory workspace | PARTIAL, LOCAL VERIFIED | `InventoryWorkspace.jsx`; Admin and Office navigation | Inventory is stock-only. Invoice upload, review, receipt actions, and receipt-enriched history are progressively grouped in Invoice Intake. Dedicated Parts role, movements UI, receiving tasks, and warehouse exception queues remain absent. |
-| Invoice/receiving documents | LOCAL FULL-DELIVERY VERIFIED; ODOO COMPATIBILITY RETAINED | `PhysicalReceiptConfirmation.jsx`; local receipt service/repository; `POST /api/office/invoice-extractions/:runId/confirm-receipt` | Reviewed invoices require explicit complete-delivery confirmation before atomic local posting. Eligible discrete lines create exact identities and a durable label batch. Mismatch/damage is a no-write stop with truthful guidance; partial/damaged posting and PO matching remain absent. |
-| Scanner and secure QR resolution | PARTIAL, LOCAL VERIFIED | `inventory-qr.js`; canonical workorder inventory-unit routes; `InventoryScanWorkspace.jsx`; `SerializedPartsScanner.jsx` | Authenticated-encrypted QR tokens resolve one exact unit under authenticated company/location scope. Office Parts progressively exposes one compact scan action, exact-unit confirmation, atomic issue, and installed/returned dispositions. Mechanics are off by default and can be granted narrowly in Modules. Bin/pick, bulk, transfer, and dedicated Parts-role scanning remain absent. |
+| Parts inventory workspace | LOCAL VERIFIED | `InventoryWorkspace.jsx`; `InventoryInboundWorkspace.jsx`; `InventoryPurchases.jsx`; `InventoryTaskQueue.jsx`; `InventoryReports.jsx` | Inventory exposes Stock, Inbound, Purchasing, Tasks, and Reports. Inbound coordinates canonical PO, invoice, receipt, condition, and no-PO evidence; Purchasing derives demand and keeps compact/direct PO paths; Tasks routes canonical exceptions; Reports reconciles stock, positions, purchasing, transfers, receipt cost, no-PO, and custody evidence. Mutation workflows remain with their canonical owners. |
+| Stock by location placement | LOCAL VERIFIED | inventory position repository; `InventoryLocationStockWorkspace.jsx`; realistic Inventory demo seed | A selected parent can show direct stock or its complete subtree. Every part row retains its total and identifies each exact physical placement with a compact coordinate such as `A1 › S2 › B3`, a plain-language bin name, and the quantity stored there. |
+| Inventory stock entry and physical count | LOCAL VERIFIED | `InventoryWorkspace.jsx`; `InventoryLocationStockWorkspace.jsx`; `AddInventoryStockDialog.jsx`; `PositionCountPanel.jsx`; direct-receipt and inventory-position owners | Stock exposes separate Add stock, Starting inventory, and explicit Start/Resume physical-count actions. A selected storage location can start Add stock with its shop and eligible exact position preserved; system Receiving retains implicit destination handling. Found quantity or measured/bulk catalog parts enter the exact-position count as expected-zero evidence and apply only through the audited count-adjustment ledger. Serialized finds continue to require exact identity evidence through Add stock or Starting inventory. |
+| Invoice/receiving documents | LOCAL PARTIAL-DELIVERY VERIFIED; ODOO COMPATIBILITY RETAINED | `InvoiceExtractionWorkspace.jsx`; `PhysicalReceiptConfirmation.jsx`; `ReceiptLinesEditor.jsx`; local receipt and purchase-invoice allocation services/repositories | Invoice Intake keeps the source document visible beside a guided review rail on desktop and uses an accessible Document/Review switch on compact screens. Reviewed invoices require an explicit exact-PO or truthful no-PO route, physical quantities, condition evidence, and attestation before posting. Repeated partial episodes post only entered outcomes; serialized lines require exact identities; quantity and measured/bulk lines remain aggregate. Completed receipts collapse to truthful summaries, while partial receipts remain Pending. Approval and receipt posting remain separate mutations. |
+| Scanner and secure QR resolution | PARTIAL, LOCAL VERIFIED | `inventory-qr.js`; canonical workorder inventory-unit routes; `InventoryScanWorkspace.jsx`; `SerializedPartsScanner.jsx` | Authenticated-encrypted QR tokens resolve one exact serialized unit under authenticated company/location scope. Office Parts exposes compact scan, confirmation, atomic issue, installed/returned disposition, physical count, transfer, and custody handoffs where exact identities are required. Quantity and measured stock use quantity entry; a dedicated Parts role and general warehouse pick-wave scanning remain absent. |
 | Label jobs/printing | PARTIAL, DURABLE BATCH VERIFIED | `inventory_label_batches`; label repository/routes; `GET /api/office/inventory/receipts/:receiptId/labels`; QR SVG route | Full delivery creates a durable immutable batch and a bounded on-screen preview with a complete print-batch link. Printer delivery status, configurable templates, and putaway completion remain absent. |
-| Opening inventory import | IMPLEMENTED, LOCAL VERIFIED | migrations `071`–`073`; `inventory-count-imports.*`; `InventoryCountImportPanel.jsx` | A bounded XLSX upload creates a durable review draft, exact-matches company master parts, isolates duplicates/unmatched/invalid quantities, and requires physical-count attestation before replacing an unreserved provider projection or creating local serialized stock and printable label batches. General cycle-count correction remains absent. |
-| Core obligations and disposition | NOT IMPLEMENTED | No core tables, routes, service, or UI. | Removed core cannot be linked durably to replacement part and vendor credit. |
-| Provider command outbox/reconciliation | PARTIAL, RECEIPTS ONLY | `inventory_provider_commands`; `inventory-receiving.service.js` | Receipt commands persist pending/processing/succeeded/reconciliation-required state and reject key/hash conflicts. Transfers, issues, returns, and operator reconciliation UI remain absent. |
+| Opening inventory import | IMPLEMENTED, LOCAL VERIFIED | migrations `071`–`073`; `inventory-count-imports.*`; `InventoryCountImportPanel.jsx` | A bounded XLSX upload creates a durable review draft, exact-matches company master parts, isolates duplicates/unmatched/invalid quantities, and requires physical-count attestation before replacing an unreserved provider projection or creating local serialized stock and printable label batches. It remains separate from routine exact-position physical counts. |
+| Core obligations and disposition | LOCAL VERIFIED FOR SERIALIZED REMOVALS | inventory reuse/custody migrations, service, routes, Tasks and Reports | A removed exact unit can enter a core route with external destination/date and optional supplier, PO, bill, and credit references. Missing financial evidence remains Unknown. Aggregate core programs and accounting settlement remain future work. |
+| Provider command outbox/reconciliation | PARTIAL, RECEIPTS ONLY | `inventory_provider_commands`; `inventory-receiving.service.js` | Provider receipt commands persist pending/processing/succeeded/reconciliation-required state and reject key/hash conflicts. Local transfers, Workorder issues/returns, counts, and custody use their local canonical ledgers and reconciliation reports; equivalent outbound provider commands remain absent. |
 
 ## Current Architecture
 
@@ -570,6 +588,75 @@ Each implementation slice records applicable evidence:
 
 ## Change Log
 
+### INV-20260920-02 — Full-height invoice review and realistic Chino map
+
+- Status: LOCAL VERIFIED; not released.
+- Decision/requirement: Use the available desktop viewport for invoice work and make the local Chino fixture resemble a readable shop map rather than a technical test tree.
+- Before: Invoice review stopped at an 820px desktop height and left unused space on tall displays. Chino used one warehouse with mixed wrapper areas and only four aisle-like branches.
+- After: Desktop invoice review grows to the viewport while its document and review rail retain independent scrolling. Chino presents Warehouse 1, Warehouse 2, Warehouse 3, Core area, and the system Receiving area. Warehouse 1 contains naturally ordered A1 through A12; every aisle has a named shelf and storable bin with short unique codes.
+- Canonical owners: `invoice-extraction.css`; `inventory-location-model.js`; inventory position projection; realistic Inventory demo seed.
+- Data/API changes: Position reads now include the existing `systemKey` so system Receiving and Unassigned can be ordered clearly. No schema change. The local fixture reconciler adds or updates only its defined positions and leaves unrelated user-created locations intact.
+- Verification: Focused invoice/location contracts, repeatable local fixture replay, database hierarchy and stock reconciliation, production build, and authenticated browser geometry and hierarchy checks.
+- Release evidence: Local working tree and local test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260920-01 — Scannable location stock paths
+
+- Status: LOCAL VERIFIED; not released.
+- Decision/requirement: Make parent-location stock useful on the floor by showing where each quantity is physically stored, using short coordinate codes plus plain-language orientation names.
+- Before: Subtree rows showed one total but did not identify the contributing aisle, shelf, rack, or bin. The local realistic fixture used long shop-prefixed codes throughout the tree.
+- After: Each row keeps its total and lists the exact contributing placements and quantities. Coordinate paths suppress non-coordinate wrapper levels when aisle/shelf/rack/bin values are available, producing labels such as `A1 › S2 › B3`. The local fixture uses short shop-local codes such as `WH`, `A1`, `S1`, and `B1`, with descriptive names such as `Filters and brake parts` and `Brake pads`.
+- Canonical owners: inventory position stock repository; `InventoryLocationStockWorkspace.jsx`; `inventory-location-model.js`; realistic Inventory demo seed.
+- Data/API changes: The existing location-stock response adds a `placements` array with position identity, compact path inputs, and quantity/reserved totals. No schema migration and no stock quantity mutation.
+- Authorization/security changes: Existing company, authorized-shop, selected-location, and direct/subtree scope checks remain on both total and placement queries.
+- Verification: Focused model/contracts, PostgreSQL position integration, production build, and authenticated local browser checks. Local demo label reconciliation preserves existing fixture position IDs, hierarchy, parts, quantities, and Workorders.
+- Release evidence: Local working tree and local test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260917-01 — Location pricing foundation, Workorder pickup, and Purchases invoice entry
+
+- Status: VERIFIED locally for the completed slices; not released.
+- Decision/requirement: Build the first inventory-foundation slices on the developer-integrated base without changing Workorder stock accounting or allowing invoice and PO paths to post the same stock twice.
+- Before: Detail Workorder parts used a separate desktop presentation and did not show aggregate pickup paths; commercial prices had only a company scope; invoice upload was not reachable from Purchase Requests or Purchase Orders.
+- After: Detail uses the shared flat desktop row structure and shows the complete aggregate pickup path; location price overrides inherit from a company default with explicit Unknown and zero semantics; Purchases opens Invoice Intake with its selected shop preselected.
+- Canonical owners: `UsedPartsEditor.jsx`; `WorkorderPartsTable.jsx`; inventory-part-prices repository/service/routes; `InventoryPurchaseRequests.jsx`; `InventoryPurchases.jsx`; `InventoryWorkspace.jsx`; `InvoiceExtractionWorkspace.jsx`.
+- Data/API changes: Migration `152_inventory_location_price_overrides.sql`; location-scoped price write and pricing-preview routes; commercial reads can resolve effective location pricing and location-filtered invoice receipt cost evidence.
+- User-experience changes: Desktop Workorder rows match the established flat operational structure; phone rows remain compact. The pickup column names warehouse, aisle, rack, shelf and bin. Purchases provides one `Add supplier invoice` action and retains shop context through upload.
+- Authorization/security changes: Existing financial and Office/Admin permissions remain authoritative; company and location scope are validated server-side.
+- Failure/reconciliation behavior: Explicit Unknown location prices mask the company default; zero is preserved as a known value; missing receipt cost is never shown as zero. PO extraction does not auto-link or post inventory yet because PO receipt and invoice receipt lack one atomic allocation guard.
+- Verification: Focused frontend contracts passed 52/52; pricing service/route contracts passed; opt-in PostgreSQL pricing integration passed 27/27 after migration 152; production build passed. Authenticated desktop and 390px browser checks showed the full pickup path, flat Labor/Parts rows, Purchases-owned invoice dialog with `Basics Shop` selected, no horizontal overflow and no page or HTTP 5xx errors.
+- Release evidence: Local working tree and localhost only. No commit, push, deployment, production mutation, or Odoo write was authorized.
+- Remaining gaps: Move commercial controls into each location in Part detail; add read-only exact PO suggestions and then atomic invoice-to-PO line allocation before matched invoice receipt; complete mobile Inventory containment and blank Create draft cleanup.
+
+### INV-20260915-CURRENCY — Currency selectors
+
+- Status: IMPLEMENTED locally.
+- Replaced free-text currency fields with the shared dropdown; common codes appear first, followed by runtime-supported currencies. Existing saved codes remain selectable.
+- Owners: `CurrencySelector`, purchasing/bills, part commercial details, PO approval settings.
+- Data/API changes: none. Verification: production build and local browser selector checks; no deployment.
+
+### INV-20260915-STABILIZE — Existing receiving and task interactions
+
+- Status: IMPLEMENTED locally; verification evidence in the inventory-stabilization task report.
+- Before: purchase receiving dismissed completion immediately; receipt drafts could reopen against a previous shop; repeated damage/transfer actions could retain stale identities or destinations.
+- After: receipt confirmation and labels remain available until Done; explicit shop selection controls unsubmitted draft restoration; uncertain submitted commands remain recoverable. New task entry clears stale selections.
+- Owners: `InventoryPurchases`, `InventoryPurchaseRequests`, `AddInventoryStockDialog`, `direct-receipt-model`, `InventoryStockTasks`.
+- Data/API changes: none; existing stock, permission and idempotency APIs are retained.
+- Verification: focused draft/command tests and browser regression scripts for receiving and stock-task state. Final results recorded externally.
+- Release evidence: local only; no commit, push or deployment.
+- Remaining gaps: roadmap unchanged; this repairs existing workflows without adding batch prices, warranties or AI modules.
+
+### INV-20260915-DEVELOPER — Integrate developer inventory workflow
+
+- Status: IMPLEMENTED locally; see external task report for final verification evidence.
+- Decision: use the developer's submitted workflow as the basis for subsequent fixes and polish.
+- Before: local staging-derived implementation; ZIP was reference material only.
+- After: developer purchase requests, POs, approval, receiving, bills, tasks and reports are connected to the application. Existing storage positions and pricing/tax remain available.
+- Canonical owners: `InventoryWorkspace`, `InventoryPurchases`, inventory purchasing/bills/stock-task services and repositories; migrations 136–151.
+- Compatibility: historical migrations/checksums preserved. Populated disposable upgrade retained 265 existing rows across 41 inventory tables without changing their original values.
+- Failure/reconciliation: held deliveries stay outside usable positions; stock tasks reconcile positions; unsupported independent count writes are blocked in favor of Storage locations counts. Target-company roles govern imported service access.
+- Verification: migration compatibility tests, fresh database workflow tests, unit/build checks and authenticated local browser QA are recorded in the external developer-integration task report.
+- Release evidence: none; local integration only.
+- Remaining gaps: batch costs/warranty, automatic invoice matching, full partial-delivery workflow, location price overrides and AI orchestration remain future work.
+
 ### INV-20260910-01 — Tracking-aware manual stock intake
 
 - Status: IMPLEMENTED locally; in-app validation pending.
@@ -759,3 +846,341 @@ Each implementation slice records applicable evidence:
 - Verification: Focused model, route, service, repository, lifecycle, timeline, and projection tests passed. A fresh disposable PostgreSQL database applies all migrations and exercises the exact reservation lifecycle; final full-suite and independent-review evidence is recorded in the task state.
 - Release evidence: Local verification is complete and Git delivery to `origin/staging` is authorized. No Railway deployment, database migration, production mutation, Odoo write, or staging data mutation is authorized.
 - Remaining gaps: Bind aggregate allocations to exact reserved identities; add damaged/quarantine/inspection disposition and restock approval for removed used parts; perform an authenticated rendered staging walkthrough after deployment is separately authorized.
+
+### INV-20260915-01 — Internal and selling prices with explicit tax history
+
+- Status: IMPLEMENTED (local working tree; authenticated browser and targeted database verification passed).
+- Decision/requirement: Research then implement internal price, selling price and tax as the next inventory foundation.
+- Before: Separate price history existed, but tax treatment, reusable rates and authoritative breakdowns were absent.
+- After: Explicit unknown/inclusive/exclusive/zero-rated/exempt/out-of-scope treatment, immutable company tax profile versions, and decimal quantity/discount previews preserve historic assumptions.
+- Canonical owners: inventory-part-prices repository/service, inventory-tax-profiles repository/service, inventory-pricing calculation/routes, PartCommercialDetails and its model.
+- Data/API changes: Additive migration 135; tax-profile create/revise/archive/list and part pricing-preview routes. Existing price writes retain compatible unconfigured legacy behavior with replay protection.
+- User-experience changes: Edit each price with currency, treatment and reason; choose or create a matching reusable profile; inspect optional breakdown and history. Missing price/tax remains Unknown.
+- Authorization/security changes: Financial read/write permissions and authenticated company scope; no mechanic/public financial exposure.
+- Failure/reconciliation behavior: Stale edits and conflicting retries fail; saved prices retain exact historic profile versions. No inferred statutory rate or jurisdiction.
+- Verification: Authenticated local browser passes profile creation/revision, preserved price drafts, both price save/reload flows, failed-save retry, inclusive/exclusive tax, discounts, historical rate retention, Unknown versus zero, and 1440/768/390 layouts with no page errors. Populated migration preserves existing price values and adds unknown historical tax; fresh full migration and no-op replay pass. Exact arithmetic, API error/role/company scope and PostgreSQL profile history checks pass. Full-suite and independent-review evidence is recorded in the external pricing task state.
+- Release evidence: None. No commit, push, deployment, production mutation or Odoo write authorized.
+- Remaining gaps: Workorder billing snapshots, customer/tier pricelists, invoice posting tax policies and Odoo export mapping are separate work.
+
+### INV-20260915-02 — Compact part detail
+
+- Status: IMPLEMENTED locally; validation recorded in the part-detail-ux task.
+- Decision/requirement: Simplify part detail and configured prices; remove explanatory prose from routine screens.
+- Canonical owners: InventoryWorkspace, PartCommercialDetails and their existing styles.
+- User-experience changes: Compact available/on-hand/reserved totals; one Prices section; visible current amounts and tax status; full-width contextual editors; optional history, calculation and tax setup; populated identity fields only.
+- Data/API and authorization changes: None. Existing permissions, price versions, tax profiles, retry handling and location actions are retained.
+- Verification: Authenticated responsive browser flows, existing commercial and workspace contracts, shared dropdown contracts, build and independent review are required in the task record.
+- Release evidence: Local development only; no commit, push or hosted deployment.
+
+### INV-20260917-02 — Location commercial context and safe invoice-to-PO receiving
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Make the stocked location the working context for price and receipt evidence, and let reviewed invoices use exact purchase-order evidence without allowing invoice and PO receiving to count the same stock twice.
+- Before: Part detail emphasized company prices outside its locations. Invoice review could post a direct inventory receipt but had no bounded PO suggestion or shared allocation guard with purchase receiving. Opening an untouched Create Workorder could persist a blank draft after automatic location/template hydration.
+- After: A part opens with Locations first. Choosing a location shows its effective internal and selling prices, company fallback, bounded receipt cost evidence and invoice lineage; Shelves & bins remains a secondary closed action. Company price defaults stay in a collapsed fallback section. Reviewed invoices show exact, scoped PO suggestions and require an explicit operator choice. The operator can instead choose No PO; an extracted PO requires a reason before that bypass. Purchase-linked posting validates a complete invoice-line allocation and writes the receipt, allocation evidence and PO received quantities in one transaction. Untouched Create hydration adopts the initial baseline and does not create a draft, while a user edit retains normal save and recovery.
+- Canonical owners: `inventory_part_price_versions`; `inventory_receipt_lines`; `inventory_purchase_invoice_allocations`; `inventory_purchase_receipt_allocations`; `frontend/src/features/inventory/PartCommercialDetails.jsx`; `frontend/src/features/office/InvoiceExtractionWorkspace.jsx`; `src/server/modules/inventory/inventory-purchase-invoice-allocation.service.js`.
+- Data/API changes: Migration `153_purchase_invoice_allocations.sql` adds explicit invoice receipt route/reason fields and immutable reviewed-invoice-line to purchase-line allocation evidence. `GET /api/office/invoice-extractions/:runId/purchase-order-suggestions` returns exact normalized PO/vendor candidates only. Physical confirmation accepts either `purchase_order` with a complete allocation plan or `no_purchase_order` with the applicable reason.
+- Authorization/security changes: Suggestions and posting re-derive company and location scope from the actor. Posting revalidates PO number, vendor, catalog part/part number, UOM, tracking policy and outstanding quantity while holding deterministic PO-line locks. Cross-tenant or cross-location candidates are unavailable.
+- Failure/reconciliation behavior: Missing and ambiguous matches remain non-writing review states. An invoice without extracted PO evidence can use No PO without inventing one. A bypass of extracted PO evidence requires an operator reason. Idempotent replay returns the existing receipt; changed replay, stale evidence, over-allocation and concurrent direct-versus-invoice receiving fail before duplicate stock can post.
+- Verification: Focused frontend tests passed 88/88. Backend allocation/service tests passed 22/22, route tests passed 24 with one legacy opt-in skip, and direct-receipt regressions passed 9/9. Real PostgreSQL passed exact suggestion, authorization, replay, cross-tenant and concurrent invoice/direct receiving checks. Production build and diff check passed. Authenticated localhost verified the location-first drawer at desktop and 390px, collapsed shelving, no inventory API errors, no untouched draft write, edited draft persistence and reload.
+- Release evidence: Local working tree and local test database only. No commit, push, deployment, production mutation, accounting post or Odoo write was authorized.
+- Remaining gaps: Fuzzy or AI PO matching, partial-delivery invoice allocation, supplier credits, bill/payment accounting and hosted-device proof remain later slices.
+
+### INV-20260917-03 — Tracking-aware partial receiving and receipt batches
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Receive invoice and purchase-order lines across multiple physical deliveries while deriving identity and labels only from the saved catalog tracking mode.
+- Before: The normal purchase flow used an order-level delivery confirmation before stock intake, reviewed invoices assumed one complete receipt, and whole-unit quantities could be treated as serialized without a saved serialized policy.
+- After: Invoice Intake and Purchases share one line editor for available, held, rejected, short, wrong and over-delivery evidence. Each receipt episode posts only entered rows, accepted quantity alone becomes usable, and remaining quantities keep the PO open. Quantity and measured/bulk stock remain aggregate and label-free. Serialized available and held units retain exact identities; held identities use unavailable `held` custody status. Exact retries return the original receipt, while changed or concurrent over-receipts fail.
+- Canonical owners: `inventory_receipt_lines`; `inventory_purchase_deliveries`; `inventory_purchase_delivery_lines`; local-inventory repository/service; inventory-purchasing service; `ReceiptLinesEditor`; `InvoiceExtractionWorkspace`; `InventoryPurchases`.
+- Data/API changes: Migrations `154_inventory_partial_receiving_batches.sql` through `157_inventory_allocation_cleanup_boundary.sql`; repeated local receipts per reviewed invoice; tracking/cost/currency snapshots on canonical receipt-line batches; `POST /api/office/inventory/purchasing/:orderId/receipts`; stronger delivery source/location guards.
+- User-experience changes: Operators enter only the current delivery, see invoice/PO remaining quantities, provide exception evidence in context, and post once. Retry identity is retained until the episode succeeds. A later episode remains available until every invoice quantity is received. Print actions appear only when the server returns serialized units and a label batch.
+- Authorization/security changes: Company, location and actor come from authenticated scope. Saved catalog tracking, current PO/invoice quantities and source relationships are revalidated under transaction locks. Database guards require delivery, PO, invoice and receipt evidence to share company and location.
+- Failure/reconciliation behavior: Rejected and held quantities never increase usable stock. Accepted overages remain blocked until the order/invoice is revised; an over-delivery can be recorded as held exception evidence. A fully missing shipment writes durable shortage evidence with no stock line or label. Cancelling the remainder of a partially received PO records `closed_with_discrepancy`; cancelling an untouched PO records `cancelled`.
+- Verification: Focused frontend/backend/schema suites pass; strict generated browser payloads parse through both backend receipt schemas. Real PostgreSQL passes partial receipt, exact replay, changed replay, invoice-versus-direct concurrency, aggregate label exclusion, serialized available/held identity, label batch, cost evidence and cleanup checks. Production build passes. Isolated rendered mixed receipts pass at 1440px and 390px without overflow.
+- Release evidence: Local working tree and local disposable test database only. No commit, push, deployment, hosted database mutation, accounting post or Odoo write was authorized.
+- Remaining gaps: Discrepancy resolution after closure, supplier credits, receipt reversal, hosted authenticated walkthrough and real-device scanner/printer proof remain separate work.
+
+### INV-20260917-04 — Guided Invoice Intake review and receiving workspace
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Keep one source document visible while operators resolve invoice evidence and physical receipt facts with minimal steps, without merging invoice approval and inventory posting.
+- Before: Invoice review exposed one long form; physical receiving competed for attention and compact screens lacked an explicit source/review mode.
+- After: Desktop uses a bounded source canvas and independently scrolling review rail. Tablet and phone use an accessible Document/Review switch. Unresolved sections and lines lead; completed sections collapse to truthful summaries. Delivery owns exact-PO/no-PO selection, tracking-aware quantities, serialized identities, attestation, and progressive exception evidence. Partial posted receipts remain Pending until invoice outstanding quantity reaches zero.
+- Canonical owners: `frontend/src/features/office/InvoiceExtractionWorkspace.jsx`; `PhysicalReceiptConfirmation.jsx`; `ReceiptLinesEditor.jsx`; adjacent models, styles and contracts; `src/server/db/repositories/inventory-purchase-invoice-allocation.repo.js`.
+- Data/API changes: No new route or schema. Purchase-order suggestion responses now retain authoritative receipt-line tracking facts for no-PO, unmatched, ambiguous, fully received and matched outcomes.
+- User-experience changes: One active line editor, receive-all shortcut that leaves serialized identity entry explicit, one state-relevant primary action, accessible disclosure semantics, and 44px compact controls.
+- Authorization/security changes: None. Existing Office/Admin route, company and location scope remain unchanged.
+- Failure/reconciliation behavior: Missing tracking facts fail closed. Nothing received is write-free. Stale receipt inputs reset only after a successful post; suggestion retries preserve current operator input. Reversal remains server-owned and truthful.
+- Verification: Focused frontend model/contract suite passed 50/50; real PostgreSQL purchase-invoice allocation integration passed, including serialized unmatched and ambiguous responses; structure check and production build passed. Authenticated localhost covered unresolved no-PO serialized entry, completed PO, desktop/tablet/phone, keyboard view switching, and 200%-equivalent reflow without horizontal overflow.
+- Release evidence: None; local working tree only.
+- Remaining gaps: Native browser zoom control was unavailable, so 200% was verified by equivalent CSS-pixel reflow. No persisted partial-receipt browser fixture existed; partial Pending behavior is covered by focused model/contract and PostgreSQL tests. No hosted or physical-device proof.
+
+### INV-20260918-01 — Unified Add inventory and exact receipt placement
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Give daily operators one clear inventory entry point while keeping receiving, physical counts, and starting balances as distinct stock actions.
+- Before: Manual intake started only from an already selected part and always posted usable stock to the system Receiving position. Finding a master part, choosing a shop, counting existing stock, and loading starting balances were separate or unclear workflows.
+- After: Stock exposes one `Add inventory` action. The operator selects a shop and master-catalog part, then chooses Receive stock, Physical count, or Starting inventory. Receive stock follows the saved quantity, measured/bulk, or serialized tracking policy and can place accepted stock into an eligible exact storage position. Leaving the position blank uses system Receiving. Physical count opens the canonical location count workflow; Starting inventory opens the existing count-sheet import without posting a direct receipt.
+- Canonical owners: `frontend/src/features/inventory/AddInventoryStockDialog.jsx`; `StoragePositionPicker.jsx`; `direct-receipt-model.js`; `InventoryWorkspace.jsx`; `src/server/modules/inventory/direct-inventory-receipt.service.js`; `src/server/db/repositories/local-inventory.repo.js`; `inventory-positions.repo.js`.
+- Data/API changes: Direct receipt commands accept an optional `targetPositionId`, which is bound into confirmation and idempotency hashes. No migration is required. The receipt transaction locks and revalidates an explicit destination as same-company, same-shop, active, storage-use, storable, pickable, and non-system before writing placement movements. Omitted destinations retain the existing system Receiving behavior.
+- User-experience changes: One-column, resumable modal with progressive disclosure and shared controls. Shop changes clear stale part and destination choices. The catalog search and exact-position picker show the facts needed for selection. Compact screens use a full-width sheet with 44px controls. Existing contextual Add stock remains available with the part prefilled.
+- Authorization/security changes: Existing Office/Admin company and location authorization remains authoritative. The server owns catalog tracking and destination eligibility; client filtering is convenience only. Invalid, cross-scope, system, receiving-use, inactive, non-storable, or non-pickable explicit targets fail with the generic `INVENTORY_RECEIPT_POSITION_INVALID` response.
+- Failure/reconciliation behavior: Invalid destinations roll back without creating a receipt or movement. Held stock cannot be placed into a sellable storage position. Exact replay returns the original receipt; changed payloads conflict. Count and starting-inventory handoffs never call the direct-receipt endpoint.
+- Verification: Focused frontend and backend suites passed, the production build passed, and a disposable PostgreSQL run passed concurrency, default Receiving, exact measured placement, rejected-target rollback, serialized identity, isolation, and reconciliation. Independent review passed after the explicit-target eligibility fix. Authenticated localhost verified the entry action, catalog selection, serialized receive state, physical-count handoff, and 390px full-width layout without horizontal overflow.
+- Release evidence: Local working tree only. No commit, push, deployment, hosted database mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Starting-inventory handoff does not yet preselect the chosen shop inside the import panel. No live-browser receipt was posted to the configured local database. Hosted and physical-device proof remain separate work.
+
+### INV-20260918-02 — Exact destination safety for transfer receipt and damage release
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: A transfer receipt or approved damage release cannot complete with only a free-text shelf claim. It must restore stock to an eligible exact physical position.
+- Before: Transfer receipt and damage release accepted a physical-location text field while the canonical placement helper defaulted aggregate balances and exact units into `SYS-UNASSIGNED`.
+- After: Both commands require `targetPositionId`. The server locks and validates a same-company, same-shop, active, non-system, `storage`-use, storable, pickable position and places aggregate balances or exact units there in the same transaction. Free text is retained only as the receiving handoff, inspection, repair, or disposal reference.
+- Canonical owners: `InventoryStockTasks`; shared `StoragePositionPicker`; stock-task schema/service/repository; canonical inventory-position receipt helpers.
+- Data/API changes: No migration. `receive_transfer` and `release` stock-task commands now require an exact target UUID, which is included in replay hashing and position-operation evidence.
+- Failure/reconciliation behavior: Missing, inactive, system, non-storage, non-storable, non-pickable, wrong-shop, wrong-company, or changed-replay targets fail before commit. Partial receipt stays in transit; exact identities and aggregate balances remain reconciled with their position movements.
+- Verification: Focused model/service/route/contract tests passed 46/46 and direct-receipt regressions passed 17/17. Three fresh migrated PostgreSQL lifecycle tests passed aggregate and serialized receipt/release placement, every invalid target class, rollback, idempotent replay, replay drift, and partial receipt. Authenticated Playwright passed at 1440×1000, 820×1180, and 390×844 with keyboard order, eligible-only options, stale shop reset, no overflow, and no browser/API errors. Temporary accounts and fixture rows were removed. Production build, diff check, and independent fingerprint-stable review passed.
+- Release evidence: Local working tree only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: The broader mixed Inventory PostgreSQL runner still includes legacy purchasing-request and approval tests that conflict with the retired standalone request flow; those are handled in the Purchasing slices.
+
+### INV-20260918-03 — Unified Inbound read surface
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Give operators one Inbound queue for expected deliveries, invoice-first work, goods-first work, condition exceptions, and completed receipt evidence without merging or duplicating the canonical financial and stock records.
+- Before: Expected deliveries lived under Purchasing while invoice intake, direct receipt, PO receipt, and condition work were opened from separate surfaces. The operator had to infer the next action and owner.
+- After: Inventory navigation is Stock, Inbound, Purchasing, Tasks, and Reports. Inbound derives My work, Expected, Needs attention, and Complete from existing purchase orders, invoice allocations, reviewed invoice evidence, local receipts, and delivery condition evidence. Each row shows PO or permanent `No PO used` truth, progress, next action, and owner. PO-backed invoices stay consolidated on their PO row.
+- Canonical owners: `InventoryInboundWorkspace.jsx`; `inventory-inbound-model.js`; `inventory-inbound.routes.js`; `inventory-inbound.service.js`; `inventory-inbound.repo.js`. Existing PO, invoice, receipt, count, and stock-task mutations remain canonical.
+- Data/API changes: No migration. Read-only company-scoped endpoints expose the bounded Inbound list and detail projection. Counts are derived before pagination and respect search. Detail reads fail closed outside company, shop, and role scope.
+- User-experience changes: Add inventory and Upload invoice are contextual Inbound actions. Purchasing contains Needs ordering and Purchase orders. Desktop uses the shared collection layout and compact screens preserve one-column navigation and handoffs. Mixed UOM lines display separate unit types rather than a mathematically invalid total.
+- Authorization/security changes: Existing Office/Admin company and authorized-shop scope is enforced server-side. Cross-company, unauthorized-shop, and missing-detail reads return no record. The read projection cannot write stock, PO, invoice, or receipt state.
+- Failure/reconciliation behavior: Open POs derive Receive goods; held, rejected, and short receipts derive Review exception; unmatched reviewed invoices derive Resolve no PO in Needs attention; direct goods-first arrivals derive Review invoice; completed records expose no mutation action. A missing PO is never synthesized.
+- Verification: Focused frontend/service/route tests passed 35/35. Expanded fresh PostgreSQL integration covered expected, partial, complete, condition exceptions, direct and posted no-PO paths, unmatched and allocated invoices, global counts, search, authorization, 404, and no stock mutation. Four fresh-database adjacent regressions and 62 focused adjacent tests passed. Authenticated Playwright passed at 1440×1000, 820×1180, and 390×844; production build and diff check passed. One HIGH unmatched-invoice classification finding was fixed and final fingerprint-stable independent review passed.
+- Release evidence: Local working tree only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: This slice intentionally did not replace the existing PO, invoice, receipt, or exception mutation editors. Compact PO creation and unified Inbound entry are the next slices. Hosted and physical-device proof remain separate work.
+
+### INV-20260919-01 — Compact demand-backed Purchase Orders
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Turn automatic purchasing demand into a small PO workflow without weakening source lineage, approval controls, or the separate physical receipt boundary.
+- Before: Needs ordering used Add to PO wording even though the server only created a new linked draft. The editor exposed supplier, currency, expected date, price, manual line entry, notes, new supplier, Save draft, and Save/Place together. Price and date blocked placement.
+- After: Needs ordering uses Create order and always starts a new supplier-scoped PO. Selected demand lines are locked summaries. Routine users choose Supplier and Place order; optional price, configured currency, expected date, notes, and new supplier are under More details. Direct exceptional PO creation keeps the complete manual editor. Demand drafts survive tabs, asynchronous location loading, and reload, then are consumed after successful placement.
+- Canonical owners: `InventoryNeedsOrdering.jsx`; `InventoryPurchases.jsx`; `purchasing-demand-model.js`; `inventory-purchasing.repo.js`; purchase approval policy and immutable `inventory_purchase_line_sources`.
+- Data/API changes: No migration. Purchasing reads now include configured purchase defaults. PO placement permits an absent expected date and nullable line cost; any unpriced line is treated as an unbounded commitment and routes to `awaiting_approval`. Fully priced totals continue to use the configured threshold and currency.
+- Authorization/security changes: Existing company/shop scope, current demand advisory locks, catalog re-read, version checks, actor-scoped idempotency, and approver membership remain server-enforced. A PO creation or approval never posts stock.
+- Failure/reconciliation behavior: Changed demand returns `INVENTORY_PURCHASE_DEMAND_STALE`; replay returns the existing result; changed replay payload conflicts; currency mismatch fails against approval policy. Partial receipts and cancellation continue reconciling source received/cancelled quantities. Successful placement clears the recoverable client handoff so old demand cannot be ordered again from the editor.
+- Verification: Focused frontend/backend contracts passed 39/39. The fresh migrated Inventory workflow suite passed 10/10. Chrome QA passed compact demand and direct exceptional flows at 1440×1000, 768×1024, and 390×844, including async locations, tab/reload recovery, keyboard placement, no overflow, and no page errors. Production build and diff check passed. Independent review findings for post-success mode, tab persistence, and async reload recovery were fixed; final stable-fingerprint re-review passed.
+- Release evidence: Local working tree only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Hosted and physical-device proof remain separate work. Unified invoice/goods entry and permanent no-PO mutation evidence are Slice 3.
+
+### INV-20260919-02 — Unified Inbound entry and truthful no-PO evidence
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Let operators start from invoice, purchase order, or exceptional physical arrival while preserving one canonical receipt path and never manufacturing a PO from an invoice.
+- After: Reviewed invoices with no allocation remain `PO decision needed`. Direct receipts linked to a PO line advance that PO and retain delivery/allocation evidence. Standalone arrivals require the operator's no-PO reason and configured purchase approval authority. Exact replay is recovered before later approval-policy or catalog changes can invalidate the immutable result.
+- Canonical owners: `InventoryInboundWorkspace`; `AddInventoryStockDialog`; direct-receipt model/service; `inventory-inbound.repo.js`; `local-inventory.repo.js`; existing invoice extraction, purchase order, delivery, allocation, receipt, movement, and position records.
+- Failure/reconciliation behavior: Invoice upload/review and PO suggestions do not write inventory or create purchase orders. Invalid role, scope, catalog version, PO state, over-receipt, exact destination, held placement, duplicate identity, approval, or changed replay fails before partial mutation.
+- Verification: Focused UI/service/route tests passed; the fresh Inventory PostgreSQL gate passed 11/11; 40 invoice intake contracts, production build, and diff check passed. Authenticated Inbound and direct-arrival recovery passed at 1440×1000, 820×1180, and 390×844. A local-only real invoice file upload passed through authenticated UI/API, encrypted source persistence, background queue, loopback OCR, reload/source recovery, and zero inventory mutation at all three widths. Anonymous upload/source returned 401; QA runs, jobs, and accounts were removed. Final independent review passed at fingerprint `3c1472b4…`.
+- Release evidence: Local working tree and local disposable/test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Hosted and physical-device proof remain separate work. Stock and physical-count completion continues in Slice 5.
+
+### INV-20260919-03 — Shared physical receipt, exact put-away, and batch evidence
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Use one receipt-line editor and one server transaction boundary for PO, reviewed-invoice, and direct-arrival receiving while keeping their financial and source records distinct.
+- After: Accepted quantity, measured/bulk, and serialized stock may remain in system Receiving or use one eligible exact storage position per line. Held, rejected, and short outcomes remain outside pickable exact stock. PO and reviewed-invoice wrappers reload destinations after a stale target, remove the invalid choice, preserve the draft and idempotency key, and allow a safe retry. Direct arrival uses the same line editor with only the outcomes that apply to that route.
+- Canonical owners: `ReceiptLinesEditor`; `PhysicalReceiptConfirmation`; `InvoiceExtractionWorkspace`; `AddInventoryStockDialog`; inventory purchasing and local-inventory services/repositories; purchase delivery, receipt line, position movement, serialized unit, and invoice allocation records.
+- Data/API changes: No new migration in this slice. Existing receipt-line targets are validated inside the posting transaction for company, shop, active storage use, storable/pickable status, and non-system identity. No-PO routes remove purchase-line lineage at both service and repository boundaries. Duplicate serialized identities return one stable 409 domain error.
+- Failure/reconciliation behavior: An invalid destination, duplicate serial, stale order, changed replay, over-receipt, or concurrent conflict rolls back receipt, delivery, allocation, stock, serialized unit, and position writes. Shortage-only receipt episodes remain valid evidence without falsely claiming missing goods were present.
+- Verification: 121 focused checks completed with no failures and one intentional skip; the fresh Inventory PostgreSQL workflow gate passed 11/11; production build and diff check passed. PO, invoice, and direct-arrival browser flows passed at 1440×1000, 820×1180, and 390×844. Evidence covers keyboard-wedge and manual serial entry, stale-target recovery, exact command replay, PO and permanent no-PO lineage, responsive overflow, and fixture/account cleanup. Independent review passed against the 29-file manifest fingerprint `0a26d6b…`.
+- Release evidence: Local working tree and local test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Slice 5 owns exact serialized physical count, measured/import precision, exact opening-count placement, actor/reason projection, and full responsive count/import proof. Hosted and physical-device proof remain separate work.
+
+### INV-20260919-04 — Exact-position stock count and safe opening inventory
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Keep By part and By location as peer stock views, count one exact storage position at a time, and treat starting inventory as a reviewed import of existing master parts rather than an alternate catalog or receipt shortcut.
+- After: Nested location stock supports direct and subtree totals. Position counts record expected, counted, difference, observer, timestamps, applier, and reason. Quantity, measured/bulk, serialized identities, and unchanged empty positions follow their own precision and identity rules. Post-start movements or custody changes commit Needs recount and allow a clean restart. Opening imports require an existing catalog match plus an eligible exact destination; source bin text remains evidence only. Inline part creation was removed.
+- Canonical owners: `InventoryLocationStockWorkspace`; `PositionCountPanel`; inventory position count repository/service; `InventoryCountImportPanel`; inventory count-import repository/service; migrations 163 through 165; existing stock, position, serialized-unit, receipt, label, and movement records.
+- Data/API changes: Migration 163 adds exact serialized count snapshots/observations. Applied migration 164 remains byte-for-byte immutable and adds import precision/destination storage. Additive migration 165 reopens pending legacy ready rows for destination review while preserving applied history on system Unassigned. Catalog search now projects canonical UOM decimal scale to shared selection UI.
+- Failure/reconciliation behavior: Unknown, wrong-position, cross-tenant, duplicate, stale-custody, movement-after-watermark, invalid precision, inactive/cross-shop/system destinations, changed replay, and concurrent writers fail closed. Count/import reads do not mutate stock. Injected label failure rolls back receipt, movement, item, unit, position, label, and import changes; retry remains possible.
+- Verification: Frozen 29-path manifest `938283b4…`; focused tests, fresh PostgreSQL migration/integration, production build, diff check, and authenticated count/import browser workflows passed at 1440×1000, 820×1180, and 390×844. Browser proof covers nested keyboard navigation, scanner/manual identities, direct/subtree totals, Needs recount/reload, legacy migration repair, unmatched measured catalog selection with scale 2, exact placement, stale destination recovery, no overflow, and zero QA residue. Independent review passed after three bounded fix classes.
+- Release evidence: Local working tree and local disposable/test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Slice 6 owns durable no-PO approval and actor-aware unified task ownership. Hosted and physical-device proof remain separate work.
+
+### INV-20260919-05 — Durable no-PO approval and unified Inventory task ownership
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Give each inventory exception one truthful owner and next action while keeping every mutation in its existing receipt, transfer, count, invoice, or custody owner.
+- After: Direct arrivals that require approval create an immutable request and leave stock unchanged. Authorized approval posts the original physical receipt once; reject/cancel retains evidence. The unified task queue derives all supported task types, applies current actor/company/shop/module/capability rules, and stores only versioned assignment evidence.
+- Canonical owners: `DirectReceiptApprovalDetail`; `InventoryTaskQueue`; `inventory-task-queue.service.js`; `inventory-task-queue.repo.js`; `inventory-stock-tasks.repo.js`; migrations 166 and 167; existing canonical receipt, damage, transfer, count, invoice, and reuse owners.
+- Failure/reconciliation behavior: Anonymous, cross-company, unauthorized-shop, invalid membership, stale source/assignment, changed replay, concurrent claim/decision, catalog/position/serial drift, and unsupported custody action fail closed. Approval requests change no stock until approval. Held or damaged approved arrivals remain outside usable stock.
+- Verification: Final 50-path manifest `4caf86fd…`; full unit gate 2,276 passed, 75 intentionally skipped, 0 failed; fresh disposable PostgreSQL receiving workflows 12/12; structure, production build, and diff checks passed. Authenticated 1440/820/390 task, no-PO approval, held/damaged truth, exact deep-link/reload, responsive, and cleanup journeys passed. Final independent review passed after replacing the remaining native stock-scope select with the shared Dropdown.
+- Release evidence: Local working tree and local disposable/test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Slice 7 owns blind transfer receiving, explicit source-bin allocation, discrepancy, return-to-source, and custody-drift reconciliation. Hosted and physical-device proof remain separate work.
+
+### INV-20260919-06 — Transfer full cycle and canonical Inbound invoice history
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Complete physical transfer custody without shortcutting source positions, destination put-away, discrepancies, or return evidence; make invoice intake part of the canonical Inbound queue rather than a parallel client-side list.
+- After: Transfer dispatch requires exact source allocations for aggregate/measured stock or exact serialized identities, freezes tracking/UOM, and records in-transit holder/provenance. Destination receiving supports partial good put-away, damaged hold, shortage, unexpected goods, blind exact-unit scans, incremental recovery/loss, and physical return to an exact source position. Invoice processing, review, unmatched PO decision, added, and reversed history are projected and paginated server-side with one canonical row and truthful counts/status/actions. Invoice review fills the available Inventory workspace.
+- Canonical owners: `inventory_stock_tasks` plus transfer discrepancy/event evidence; `InventoryStockTasks`; Inventory Tasks and Reports projections; `inventory-inbound.repo.js`; `InventoryInboundWorkspace`; existing invoice extraction, allocation, receipt, movement, exact-position, and serialized-custody records.
+- Data/API changes: Migration 168 adds transfer state, frozen tracking, source allocations/provenance, blind-receiving, damage/loss/return totals, and discrepancy evidence. Inbound remains read-only and now includes extraction lifecycle rows directly; no invoice creates a purchase order.
+- Failure/reconciliation behavior: Source-allocation mismatch, unsupported precision, reservation/custody drift, wrong-shop/system/ineligible positions, over-receipt, stale version, changed replay, concurrent commands, unauthorized scope, and invalid discrepancy transitions fail before partial stock/custody mutation. Shortage recovery distinguishes goods already present at the report from goods recovered later. Reversed receipts suppress duplicate unresolved-invoice rows.
+- Verification: Frozen 23-file manifest `8d5ed63e…`; full unit gate 2,282 passed, 78 intentionally skipped, 0 failed; fresh disposable PostgreSQL receiving workflows 15/15; focused Inbound PostgreSQL and 64 affected contracts passed; structure, production build, and diff checks passed. Authenticated Inbound and transfer journeys passed at 1440×1000, 820×1180, and 390×844 with no overflow and zero fixture/account residue. Final independent review passed after four bounded correction classes.
+- Release evidence: Local working tree and local disposable/test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Slice 8 must separate removed-part physical receipt from inspection/release, require an exact reusable put-away position, define aggregate removal policy, and extend reuse/core reporting. Hosted and physical-device proof remain separate work.
+
+### INV-20260919-07 — Exact installed-part removal and reuse custody
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Keep Unit detail as the removal entry and the serialized reuse case as the custody owner; never make a removed part available before physical receipt, inspection, and exact put-away.
+- After: Exact serialized removal retains unit, Workorder, installation, actor, reason, and invoice/batch lineage. Handoff, receipt, inspection, repair, hold, quarantine, core, scrap, and release are separate transitions. Release requires inspection evidence and an eligible exact position; core and scrap remain unavailable.
+- Canonical owners: Unit inventory usage; inventory reuse case and events; exact-position balances/movements; Inventory Tasks and Reports projections.
+- Failure/reconciliation behavior: Product module, company, shop, capability, version, identity, position, replay, and concurrent state are revalidated. Receipt cannot release stock, repair completion cannot bypass review, and exact release updates position, item, custody, movement, and audit evidence atomically.
+- Verification: Focused contracts 47/47; serialized PostgreSQL lifecycle 17/17; authorization regression 7/7; build/diff pass; authenticated 1440/768/390 removal through exact release pass. An independent authorization finding was fixed and re-reviewed. Frozen fingerprint `465984a9…`.
+- Release evidence: Local working tree and local test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Hosted release and physical-device proof remain separate work.
+
+### INV-20260919-08 — Reconciled Inventory reports and no-PO compliance evidence
+
+- Status: LOCAL VERIFIED.
+- Decision/requirement: Give Office/Admin one read-only report that reconciles operational inventory without creating a second accounting or stock owner.
+- After: Reports compare shop stock with exact-position balances per part/UOM and expose bounded open PO, receipt/cost, task/exception, transfer, custody, bill, and cost-completeness evidence. Direct no-PO receipts plus unattached approval requests show shop, date, receiver, reason, decision/approver, vendor/amount when known, and a 12-month trend. Missing data remains Unknown.
+- Canonical owners: Existing inventory items, position balances, purchase orders/deliveries, receipt lines, task assignments, transfer discrepancies, direct receipt approvals, reuse cases, supplier bills, and invoice extraction records. Reports are repeatable-read and read-only.
+- Failure/reconciliation behavior: Company/shop and Office/Admin scope fail closed. Queries are bounded; UOM values are never combined; exports cover every loaded section and neutralize formula prefixes. Report links return to canonical Purchasing, Inbound, Tasks, custody, invoice, receipt, and Workorder owners.
+- Verification: Focused report and adjacent contracts 34/34; real local PostgreSQL projection passed; full unit 2,295 pass/80 skip/0 fail; receiving PostgreSQL 15/15; reuse PostgreSQL 17/17; build/diff pass. Authenticated restarted-server browser checks passed at 1440×1000, 768×1024, and 390×844 with API success, refresh, keyboard, export, error, overflow, and cleanup coverage. Independent review findings were fixed and re-reviewed at frozen 11-file fingerprint `511cd72f…`.
+- Release evidence: Local working tree and local test database only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Hosted release, authenticated staging/production proof, and physical-device proof remain separate work.
+
+### INV-20260919-09 — Unified Inventory local completion boundary
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Close the planned local Inventory slices only after full regression, PostgreSQL lifecycle, responsive browser, documentation, architecture, and data-integrity gates pass.
+- After: Stock, Inbound, Purchasing, Tasks, Reports, physical counts, transfers, and exact serialized removal/custody/reuse share canonical records and tracking-appropriate lifecycle owners. Quantity and Measured/bulk use aggregate return/count correction owners; exact installed-part custody/removal/reuse remains Serialized-only.
+- Verification: Full unit 2,295 pass/80 intentional skip/0 fail; disposable receiving PostgreSQL 15/15; final Reports browser 1440/768/390; build and diff checks; final independent architecture/data-integrity PASS with no remaining substantive findings.
+- Release evidence: Localhost and local PostgreSQL only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-01 — Realistic tracking-mode demo data
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Keep routine demo stock on quantity tracking, use exact identities only for serialized parts, and include a measured/bulk part with decimal stock.
+- After: The existing-parts fixture contains 15 quantity placements, one `12.5 qt` measured/bulk placement, and one serialized fuel-pump placement with one physical identity. Fixture validation rejects missing tracking modes, serials on aggregate stock, missing serial identities, and catalog policy drift.
+- Verification: 40 focused intake/tracking tests passed; idempotent PostgreSQL seed replay reconciled 17 stock placements, one serialized unit, five Workorders, five requests, and two usages; production build passed. Authenticated localhost UI showed `000628509` as `12.5 qt` and the Add inventory flow as `measured_bulk · qt`.
+- Release evidence: Localhost and local PostgreSQL only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-02 — Simplified daily price surface
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Keep current inventory pricing focused on purchase cost, internal price, and selling price; defer tax configuration until customer invoicing or jurisdiction-aware tax calculation is needed.
+- After: Location pricing shows Latest purchase cost, Selling price, Internal price, Purchase history, and Price history. Price editing asks only for amount, currency, and reason. Tax status, calculators, tax-profile management, and the extra tax-profile API request are removed from the daily part panel. Existing tax tables and APIs remain dormant for future use.
+- Verification: 14 focused pricing contracts passed; production build passed. A fresh authenticated localhost tab confirmed the Chino pricing panel contains the three routine price values, hides tax/calculation controls, and keeps only Amount, Currency, and Reason in the editor.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-03 — Compact part detail pages and location actions
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Keep the part drawer short enough for daily work and place stock-changing actions in the location that owns the stock.
+- After: Part details are split into Stock, Prices, Activity, and Details pages, with only the selected page rendered. Stock keeps location drill-down and shelves/bins. Transfer, damage, and stock settings live in each location's three-dot menu; Add stock remains visible. Damage opens the existing task flow with the selected location already set.
+- Verification: 31 focused frontend contracts passed; production build and diff checks passed. A fresh authenticated localhost tab confirmed all four pages, the compact selected-location view, and Chino Yard damage routing with Chino Yard preselected.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-04 — Daily-use part page hierarchy
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Make each part page answer one daily question without repeating provider data or forcing users through collapsed primary content.
+- After: Stock leads with local on-hand, reserved, and available quantities, shows stocked locations first, and keeps empty locations under Other locations. Prices opens company or selected-location values immediately while purchase and price histories remain disclosures. Activity is a compact movement list with signed quantity, location, timestamp, retry, and collapsed receipt reference. Details shows tracking and unit while removing the redundant mapping explanation.
+- Verification: Focused part-page contracts and production build passed. An authenticated localhost walkthrough confirmed all-location and Chino Yard Stock, Prices, Activity, and Details pages plus the Chino Yard location actions menu.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-05 — Inline selling and internal price editing
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Put the prices operators set most often before purchase evidence and remove the extra Change step.
+- After: Selling price and Internal price are always-visible Amount and Currency forms at the top of company and location Prices pages. Save activates only after a valid change, posts through the existing versioned/idempotent endpoint, and creates a truthful routine audit reason without asking for an extra field. Latest purchase cost, Purchase history, and Price history remain below them.
+- Verification: Focused price, model, and Inventory contracts passed; production build and diff checks passed. An authenticated localhost walkthrough confirmed company and Chino Yard inline fields, disabled unchanged state, changed-field enablement, selector behavior, and visual ordering without posting test data.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-06 — Direct-edit part details
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Make Details one compact editable form rather than a read-only summary followed by a separate edit mode.
+- After: Part name, manufacturer, unit, and tracking are immediately editable. Local-only identity fields continue to appear when allowed. Optional reference numbers stay collapsed. The duplicate summary, Edit part step, provider explanation, tracking tutorial, unit hint, and reference instructions are removed. Reset and Save activate only after a change; dirty or saving forms cannot be dismissed or switched away accidentally.
+- Verification: Focused identity, Inventory workspace, shared-control, route, and service checks passed; production build and diff checks passed. Authenticated localhost confirmed direct fields, unchanged disabled actions, dirty-state navigation/close protection, and Reset restoration without saving test data.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-07 — Compact part-header price
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Use the part header for the commercial value operators need and remove the redundant availability badge.
+- After: The header shows the effective selling price and unit. All-locations view uses the company selling price; a selected location uses its override or company fallback. Unknown, loading, and failed reads stay compact. Stock availability remains in the Stock page metrics and location rows.
+- Verification: Focused Inventory and commercial-model contracts, production build, diff checks, and authenticated localhost rendering passed. No pricing or stock data was changed during verification.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-08 — Chip-free stock availability
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Remove repetitive availability chips from part identity and let the availability column own stock state.
+- After: Part rows keep only the part number and description in the identity cell. Available parts show quantity and stocked-location count. Fully reserved parts show zero available and the reserved quantity. Out-of-stock parts use explicit text with zero on hand. Low stock appears as restrained inline exception text. Filters, sorting, and accessible row labels retain the existing stock-state model.
+- Verification: Focused Inventory workspace/model and compact-layout contracts, production build, diff checks, and authenticated localhost desktop rendering passed. Live data verified both available and out-of-stock rows; the current fixture has no fully reserved row.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-09 — Low-stock-first sorting
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Let operators bring replenishment exceptions to the top without changing the current availability filters.
+- After: Stock Sort includes Low stock first. The server orders unresolved replenishment alerts before pagination, with the least available alert first; remaining parts retain most-available ordering and stable part-number tie breaking. Existing sorts, filters, scope, counts, and pagination remain unchanged.
+- Verification: Focused UI, model, schema, service, route, and repository contracts, production build, diff checks, and authenticated localhost selection passed.
+- Release evidence: Localhost only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-10 — Chino shop-manager opening inventory
+
+- Status: LOCAL VERIFIED WITH ODOO READ BLOCKED; NOT RELEASED.
+- Decision/requirement: Replace the realistic test fixture with the Chino manager's cp1252 CSV while preserving non-demo local stock, matching exact catalog identities, and retaining position and movement evidence.
+- After: Chino has a Shop → Aisle → Bin → Shelf hierarchy derived from 1,162 source rows. The import reused 465 Odoo-mapped catalog parts, created 651 local identities, stocked 1,115 positive-quantity parts across 1,148 placements, and reconciled 6,434 units. Seven source rows without part numbers received reported local identifiers. Three prior non-demo local items remain. The realistic fixture's 17 items, four receipts, five Workorders, two usages, and old positions were removed.
+- Odoo evidence: Cached local projections contain 11,148 Odoo service orders and 13,059 part-history occurrences; 200 imported stocked parts have 2,560 linked occurrences. Direct current-price and purchase-history reads are blocked because the configured Odoo TLS chain is not trusted. No TLS bypass was used, no price was invented, and Odoo was not mutated.
+- Verification: Import/parser tests 4/4 and combined focused tests 28/28 passed; structure and production build passed. The database reconciled item and position quantities at 6,434, rejected identical-file replay, and reported zero remaining fixture items/Workorders. Authenticated localhost showed 1,118 available parts including the three preserved local items and the imported Shop hierarchy.
+- Recovery evidence: Pre-import PostgreSQL dump `/Users/karanpreetsingh/.codex/backups/workorder-generator/20260921-chino-manager-import-before.dump`, SHA-256 `65dc49d6dce823d5cea64c47388f93967c7e46afa524b1e706b9355488618cbc`.
+- Release evidence: Localhost and local PostgreSQL only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-11 — Odoo purchase-order price history and compact location browsing
+
+- Status: LOCAL VERIFIED WITH LIVE ODOO READ BLOCKED; NOT RELEASED.
+- Decision/requirement: Use confirmed Odoo purchase orders as read-only commercial evidence for mapped parts while local Inventory remains the stock and quantity authority.
+- After: Catalog synchronization queues a company-scoped purchase-history snapshot. Confirmed Odoo purchase orders and their lines are retained idempotently, including unmapped product lines for later reconciliation. Mapped part Prices pages show order date, PO/vendor, ordered and received quantities, unit price, and currency; the latest Odoo PO price is a fallback only when no confirmed local receipt cost exists. By-location browsing uses natural numeric hierarchy order, compact cumulative placement codes, and independent viewport-height tree and stock-list scrolling.
+- Authority and failure behavior: The integration filters by the authenticated Odoo user's active company, reads only `purchase` and `done` orders, never writes Odoo, and never changes local inventory balances. Missing product mappings remain visible in the snapshot without fabricating a local part. Provider connection failure leaves the last local snapshot unchanged and records the failed sync.
+- Verification: Focused UI, Odoo service/adapter, repository contract, and real PostgreSQL reconciliation tests passed; structure, production build, diff checks, and authenticated localhost location browsing passed. A live read was attempted and the configured Odoo endpoint refused the connection, so no current Odoo PO rows were imported and no TLS bypass was used.
+- Release evidence: Localhost and local PostgreSQL only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260921-12 — Location-first stock entry and explicit physical counts
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Keep new arrivals, starting balances, and physical corrections visibly separate while allowing operators to act from the location they are already reviewing.
+- Before: Stock exposed one Add inventory dialog that also offered physical-count and starting-inventory handoffs. The physical-count editor was always expanded below location stock, and a part physically found after count start could not be added without leaving the count.
+- After: Stock exposes separate Add stock and Starting inventory actions. Each stock-holding location exposes Add stock here; that contextual flow fixes the selected shop and exact storage destination, removes the redundant shop selector, and shows the destination read-only. System Receiving keeps the server-owned implicit destination. The global Add stock action remains flexible. Physical count is a collapsed Start/Resume workspace with Back to stock. An existing quantity or measured/bulk catalog part missing from the count snapshot can be recorded as an expected-zero found line. Serialized finds route to exact-identity Add stock or Starting inventory instead of fabricating identities.
+- Canonical owners: `InventoryWorkspace`; `InventoryLocationStockWorkspace`; `AddInventoryStockDialog`; `PositionCountPanel`; inventory-position schema/service/repository; migration 171.
+- Data/API changes: `POST /api/office/inventory/position-counts/:id/found-parts` adds one versioned, idempotent found line under current company/shop/count scope. Migration 171 distinguishes snapshot and found lines and extends count command evidence with `add_found`.
+- Authorization/security changes: Existing Office/Admin count-entry scope remains; only Admin can apply corrections. Catalog version, tracking mode, UOM precision, duplicate line, count version, position movement watermark, tenant, and shop scope are revalidated server-side.
+- Failure/reconciliation behavior: Found stock applies as an `adjustment` movement plus item and exact-position balance update. It never creates a purchase order, invoice, or receipt. Stale or concurrent stock produces retry/recount behavior. Direct arrivals retain the canonical direct-receipt/no-PO approval path; opening inventory retains the reviewed count-sheet path.
+- Verification: Focused UI, route, service, migration, and repository contracts passed 46/46; the full unit suite passed 2,314 tests with 82 skipped and zero failures; fresh migrated PostgreSQL position tests passed 10/10, including zero purchase/receipt rows for a found-part correction. Structure, syntax, production build, diff, and live/ready health checks passed. Authenticated localhost physical-count journeys passed at 1440×1000, 820×1180, and 390×844 with keyboard navigation, found-part controls, recount/reload, no overflow, and complete fixture/account cleanup. A live Admin walkthrough confirmed Stock actions, contextual Add stock here, the collapsed count launcher, and found-part entry.
+- Release evidence: Localhost and local disposable/test PostgreSQL only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+- Remaining gaps: Hosted and physical-device proof remain separate work. Exact serialized finds still require receipt or reviewed starting-inventory identity evidence by design.
+
+### INV-20260922-01 — Quantity-part Workorder lineage in stock activity
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: A quantity or measured/bulk reservation changes availability immediately, but it must not decrement on-hand or create a stock issue until Office approval. Once consumed, part Activity must show the Workorder and unit where the stock was used.
+- After: The existing append-only issue movement remains the history owner and now projects its linked Workorder number, unit, and repair order into part Activity. The Workorder/unit label links back to the canonical Workorder. Receipt and non-Workorder movement rows remain unchanged.
+- Canonical owners: `workorder_aggregate_part_usages` owns reserve-to-consume state; `inventory_items` and exact-position balances own on-hand/reserved quantities; `inventory_stock_movements` owns finalized stock history; part Activity is a read projection only.
+- Verification: Live local data for part `180.10641.1` on G2021 proved one 2 ea reservation, one pending transition, one consumption, one -2 issue movement, and stock changing from 287 to 285 with zero remaining reserved. Focused PostgreSQL lifecycle tests proved reservation keeps on-hand stable while reducing availability and approval consumes exactly once. Authenticated localhost showed `-2 ea`, `G2021 · WO-000204`, Chino Yard, timestamp, and repair order in part Activity; the link reopened the correct Workorder.
+- Release evidence: Localhost and local PostgreSQL only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260922-02 — Tracking-aware shop history and scoped audit log
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Quantity and measured/bulk parts use a compact shop summary plus Workorder usage; serialized parts retain exact-unit inspection. The full movement history is named Audit log and must state its current shop/company scope.
+- After: Opening a quantity or measured/bulk shop shows on-hand, reserved, available, storage/actions, and a server-filtered Used on Workorders list with quantity/UOM, unit/Workorder, repair order, and date. Serialized shops retain individual-unit controls and share the audit handoff. View full audit log preserves the selected shop; Show all locations restores company-wide scope.
+- Canonical owners: `inventory_stock_movements` remains the single append-only history owner. The `workorder` query is a read projection filtered by `workorder_id`; it creates no new consumption or duplicate history.
+- Tracking behavior: Quantity and measured/bulk share aggregate presentation, including decimal canonical UOM for bulk. Serialized remains identity-first. The default movement API remains the full audit projection for compatibility.
+- Verification: Focused route/service/UI contracts passed 76/76 with one intentional legacy skip; real PostgreSQL aggregate lifecycle and Workorder-only movement projection passed 3/3; the full local unit suite passed 2,318 tests with 82 skipped and zero failures. Structure, syntax, production build, diff, live/ready health, and authenticated localhost checks passed. Rendered checks proved quantity usage for `180.10641.1` at Chino Yard (`-2 ea`, G2021, WO-000204, repair order and date), the shop-filtered and company-wide audit scopes, measured/bulk shop structure for `000628509` in `qt`, and serialized exact-unit structure plus audit handoff for `FUEL PUMP`.
+- Release evidence: Local changes only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.

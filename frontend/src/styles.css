@@ -11,6 +11,7 @@
 @import "./styles/workorder-detail.css";
 @import "./styles/onscreen-keyboard.css";
 @import "./styles/print.css";
+@import "./components/forms/search-controls.css";
 
 /*
  * Compatibility contracts below intentionally mirror imported declarations.

@@ -89,34 +89,8 @@
   max-width: 62ch;
 }
 
-.secondary-detail-header > button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  color: #475467;
-  cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 44px;
-  justify-content: center;
+.secondary-detail-header > .shared-icon-button {
   margin: -8px -8px 0 0;
-  width: 44px;
-}
-
-.secondary-detail-header > button:hover {
-  background: #f2f4f7;
-  color: #101828;
-}
-
-.secondary-detail-header > button:focus-visible {
-  box-shadow: 0 0 0 3px #d1e9ff;
-  outline: 0;
-}
-
-.secondary-detail-header > button svg {
-  height: 20px;
-  width: 20px;
 }
 
 .secondary-detail-content {

@@ -1,5 +1,7 @@
 # Inventory End-to-End Walkthrough Plan
 
+**Architecture update — 2026-09-15:** [Full inventory operating model and shared intelligence foundation](specs/INVENTORY_OPERATING_SYSTEM_AND_SHARED_BRAIN_PLAN.md) now owns cross-module architecture, delivery order, job/counter integration and shared AI contracts. This walkthrough retains detailed scenarios and safeguards; its historical status notes are not current deployment proof.
+
 **Status:** Draft for refinement
 **Created:** 2026-08-26
 **Scope:** Invoice intake, receiving, configurable part tracking, QR labels, replenishment alerts, mechanic use, transfers, warranty, and audit history

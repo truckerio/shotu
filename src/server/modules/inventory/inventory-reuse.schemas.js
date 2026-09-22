@@ -17,21 +17,31 @@ export const reuseRemoveSchema = z.object({
   intendedRoute: route.default("not_sure"), note: z.string().trim().max(2000).default(""),
 }).strict().refine((v) => v.ownership !== "company" || v.ownershipEvidence.length > 0, { message: "Company ownership requires documented evidence.", path: ["ownershipEvidence"] });
 export const reuseReceiveSchema = z.object({ ...command, evidence,
-  exactUnitId: reuseId.optional(),
-  actualHolderType: z.enum(["inventory_location", "handoff", "internal_repair", "external_repair", "core_vendor", "scrap_area", "unknown"]).default("inventory_location"),
-  actualLocationId: reuseId.optional(), binLocation: z.string().trim().max(200).default(""), correctedRoute: route.optional(),
+  exactUnitId: reuseId,
+  actualHolderType: z.literal("inventory_location").default("inventory_location"),
+  actualLocationId: reuseId.optional(), binLocation: z.string().trim().max(200).default(""),
 }).strict();
 export const reuseReturnSchema = z.object({
   ...command,
   exactUnitId: reuseId,
-  outcome: z.enum(["reuse", "repair", "core_return", "scrap", "hold"]),
+  outcome: z.enum(["reuse", "repair", "core_return", "scrap", "hold"]).optional(),
+  evidence: z.string().trim().max(2000).default(""),
   note: z.string().trim().max(2000).default(""),
   binLocation: z.string().trim().max(200).default(""),
-}).strict();
-export const reuseReviewSchema = z.object({ ...command, decision: z.enum(["release", "hold"]), inspectionEvidence: evidence, reason: evidence, binLocation: z.string().trim().max(200).default("") }).strict();
+}).strict().refine((value) => Boolean(value.evidence || value.note), { message: "Receipt evidence is required.", path: ["evidence"] });
+export const reuseReviewSchema = z.object({
+  ...command,
+  decision: z.enum(["release", "hold"]),
+  inspectionEvidence: evidence,
+  reason: evidence,
+  targetPositionId: reuseId.optional(),
+}).strict().refine((value) => value.decision !== "release" || Boolean(value.targetPositionId), {
+  message: "A storage position is required to release this part.",
+  path: ["targetPositionId"],
+});
 export const reuseRouteSchema = z.object({ ...command, route, evidence }).strict();
 export const reuseRepairStartSchema = z.object({ ...command, handlerType: z.enum(["internal", "external"]), handlerReference: evidence, evidence }).strict();
-export const reuseRepairCompleteSchema = z.object({ ...command, evidence, exactUnitId: reuseId, receiptEvidence: evidence, binLocation: z.string().trim().max(200).default(""), release: z.boolean().default(false), inspectionEvidence: z.string().trim().max(2000).default("") }).strict();
+export const reuseRepairCompleteSchema = z.object({ ...command, evidence, exactUnitId: reuseId, receiptEvidence: evidence, binLocation: z.string().trim().max(200).default(""), release: z.literal(false).default(false), inspectionEvidence: z.string().trim().max(2000).default("") }).strict();
 export const reuseDispositionSchema = z.object({ ...command, evidence, externalReference: z.string().trim().min(1).max(500), dispositionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => { const parsed = new Date(`${value}T00:00:00Z`); return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value; }, "Invalid disposition date") }).strict();
 export const reuseQuarantineSchema = z.object({ ...command, resolution: z.enum(["inspect_for_reuse", "repair", "core_return", "scrap"]), evidence }).strict();
 export const reuseCorrectionSchema = z.object({ ...command, unitId: reuseId, custodyVersion: z.number().int().positive(), holderType: z.enum(["inventory_location","handoff","internal_repair","external_repair","core_vendor","scrap_area","unknown"]), binLocation: z.string().trim().max(200).default(""), externalReference: z.string().trim().max(500).default(""), evidence }).strict();

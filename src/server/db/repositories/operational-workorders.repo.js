@@ -16,6 +16,7 @@ import {
   consumeAggregateUsagesForApproval,
   markAggregateUsagesPending,
   releaseAggregateUsagesForCancelledWorkorder,
+  reserveAggregateWorkorderUsage,
   resetAggregateUsagesForRevision,
 } from "./inventory-aggregate-workorder-usage.repo.js";
 import {
@@ -557,8 +558,11 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     : { rows: [] };
   const sourceFormData = input.formData || {};
   const sourceParts = Array.isArray(sourceFormData.parts) ? sourceFormData.parts : [];
+  const pendingPurchaseRequests = sourceParts.filter((part) => part?.purchaseRequested === true);
   const selections = input.inventoryUnitSelections || [];
   const selectionsByPartIndex = new Map(selections.map((selection) => [selection.partIndex, selection]));
+  const positionSelections = input.inventoryPositionSelections || [];
+  const positionSelectionsByPartIndex = new Map(positionSelections.map((selection) => [selection.partIndex, selection]));
   const catalogPartIds = [...new Set(sourceParts.map((part) => part?.catalogPartId).filter(Boolean))];
   const serializedCatalogResult = catalogPartIds.length && input.locationId
     ? await client.query(
@@ -573,9 +577,20 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     )
     : { rows: [] };
   const serializedCatalogPartIds = new Set(serializedCatalogResult.rows.map((row) => row.catalog_part_id));
+  const aggregateCatalogResult = catalogPartIds.length
+    ? await client.query(
+      `select id,tracking_mode from parts_catalog
+       where company_id=$1 and id=any($2::uuid[]) and tracking_mode in ('quantity','measured_bulk')`,
+      [companyId, catalogPartIds],
+    )
+    : { rows: [] };
+  const aggregateTrackingByPartId = new Map(aggregateCatalogResult.rows.map((row) => [row.id, row.tracking_mode]));
   for (const [partIndex, part] of sourceParts.entries()) {
+    if (part?.purchaseRequested === true) continue;
     const selection = selectionsByPartIndex.get(partIndex);
+    const positionSelection = positionSelectionsByPartIndex.get(partIndex);
     const serialized = serializedCatalogPartIds.has(part?.catalogPartId);
+    const aggregate = aggregateTrackingByPartId.has(part?.catalogPartId);
     if (serialized && !selection) {
       throw new WorkorderLifecycleConflictError(
         "WORKORDER_SERIALIZED_SELECTION_REQUIRED",
@@ -588,8 +603,30 @@ export async function createOperationalWorkorderInTransaction(input, client) {
         "Serialized units can only be selected for inventory tracked by individual units.",
       );
     }
+    if (aggregate && !positionSelection) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SOURCE_POSITION_REQUIRED",
+        "Choose where each quantity-tracked inventory part will be picked up.",
+      );
+    }
+    if (!aggregate && positionSelection) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SOURCE_POSITION_INVALID",
+        "Pickup locations can only be selected for quantity-tracked inventory parts.",
+      );
+    }
+    if (positionSelection && positionSelection.catalogPartId !== part?.catalogPartId) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SOURCE_POSITION_INVALID",
+        "The selected pickup location does not match its inventory part.",
+      );
+    }
   }
-  const selectedPartIndexes = new Set(selections.map(({ partIndex }) => partIndex));
+  const selectedPartIndexes = new Set([
+    ...selections.map(({ partIndex }) => partIndex),
+    ...positionSelections.map(({ partIndex }) => partIndex),
+    ...sourceParts.flatMap((part,index)=>part?.purchaseRequested === true?[index]:[]),
+  ]);
   const formData = normalizeWorkorderFormData({
     ...sourceFormData,
     parts: Array.isArray(sourceFormData.parts)
@@ -624,6 +661,24 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       formData.workPerformed || "",
     ]
   );
+  for (const part of pendingPurchaseRequests) {
+    const partNumber=String(part.partNo||'').trim();
+    const description=String(part.description||part.partNo||'').trim();
+    const insertedRequest=await client.query(`insert into workorder_part_requests(
+      workorder_id,requested_by_user_id,catalog_part_id,raw_query,part_number,normalized_part_number,
+      description,quantity,uom_code,repair_order,fitment_status,raw_context
+    ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'unknown',$11::jsonb) returning id`,[
+      result.rows[0].id,input.createdByUserId,part.catalogPartId||null,partNumber||description,partNumber,
+      partNumber.toUpperCase().replace(/[^A-Z0-9]/g,''),description,Number(part.qty),part.uomCode||DEFAULT_UOM_CODE,
+      String(part.repairOrder||'').trim(),JSON.stringify({source:'create_workorder'}),
+    ]);
+    await client.query(`insert into part_request_events(workorder_id,part_request_id,event_type,actor_user_id,note,metadata)
+      values($1,$2,'submitted',$3,$4,$5::jsonb)`,[
+      result.rows[0].id,insertedRequest.rows[0].id,input.createdByUserId,
+      `Requested ${Number(part.qty)} ${part.uomCode||DEFAULT_UOM_CODE} ${partNumber||description}.`,
+      JSON.stringify({source:'create_workorder'}),
+    ]);
+  }
   await addStatusEvent(client, {
     workorderId: result.rows[0].id,
     toStatus: result.rows[0].status,
@@ -684,6 +739,38 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       throw new WorkorderLifecycleConflictError(
         "WORKORDER_SERIALIZED_SELECTION_CONFLICT",
         messages[selectionResult.kind] || "The selected serialized parts could not be reserved.",
+      );
+    }
+  }
+  for (const selection of positionSelections) {
+    const part = sourceParts[selection.partIndex];
+    const command = {
+      workorderId: result.rows[0].id,
+      catalogPartId: selection.catalogPartId,
+      sourcePositionId: selection.positionId,
+      quantity: Number(part.qty),
+      uomCode: part.uomCode,
+      repairOrder: String(part.repairOrder || "").trim(),
+      idempotencyKey: `create-position:${result.rows[0].id}:${selection.partIndex}`,
+      companyIds: [companyId],
+      locationIds: [input.locationId],
+      isAdmin: input.createdByRole === "admin",
+      actorId: input.createdByUserId,
+    };
+    const aggregateResult = await reserveAggregateWorkorderUsage({
+      ...command,
+      requestHash: createHash("sha256").update(JSON.stringify(command)).digest("hex"),
+    }, client);
+    if (!["reserved", "replay"].includes(aggregateResult.kind)) {
+      const messages = {
+        inactive_workorder: "Quantity-tracked parts can only be reserved for an open or active workorder.",
+        unsupported_uom: "The selected quantity and unit do not match this inventory part.",
+        insufficient_stock: "This shop no longer has enough available stock.",
+        source_position_unavailable: "The selected pickup location no longer has enough available stock.",
+      };
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_SOURCE_POSITION_CONFLICT",
+        messages[aggregateResult.kind] || "The selected pickup location could not be reserved.",
       );
     }
   }
@@ -1607,7 +1694,12 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
          where workorder_id = $1 and mechanic_user_id = $2 and active = true`,
         [workorderId, changedByUserId],
       );
-      if (!assignment.rows[0]) throw new Error("Only an assigned mechanic can save used parts.");
+      if (!assignment.rows[0]) {
+        throw lifecycleConflict(
+          "WORKORDER_MECHANIC_ASSIGNMENT_REQUIRED",
+          "Only an assigned mechanic can add parts to this workorder. Accept or join the workorder first.",
+        );
+      }
       const terminalStatuses = [
         WORKORDER_STATUS.MECHANIC_DONE,
         WORKORDER_STATUS.CLOSED,
@@ -2191,11 +2283,8 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
     if (![WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS].includes(workorder.status)) {
       throw lifecycleConflict("WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Mechanic assignments can only change on active workorders.");
     }
-    await assertNoUnresolvedSerializedParts(
-      client,
-      workorderId,
-      "Install or return every issued serialized part before changing the mechanic assignment.",
-    );
+    // Parts belong to the workorder/asset, not its mechanic roster. Changing
+    // the team must preserve existing reservations, installations, and history.
     const active = await client.query(
       `select mechanic_user_id, assignment_role
        from workorder_mechanic_assignments

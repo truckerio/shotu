@@ -131,7 +131,7 @@ export async function handleWorkorderModulesApi(req, res, url, helpers, dependen
         genericRoute.workorderId,
         genericRoute.moduleKey,
         genericRoute.action,
-        { ...input, requestId: req.requestId },
+        input,
       ) });
       return true;
     }

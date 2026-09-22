@@ -51,7 +51,7 @@ export function IntegrationClientsCard({
           <strong>Copy this token now</strong>
           <p>It cannot be shown again. Store it in the external system&apos;s secret manager.</p>
           <code>{createdToken}</code>
-          <div>
+          <div className="shared-action-row">
             <Button type="button" variant="primary" onClick={copyToken}>{copied ? "Copied" : "Copy token"}</Button>
             <Button type="button" onClick={onDismissToken}>Done</Button>
           </div>

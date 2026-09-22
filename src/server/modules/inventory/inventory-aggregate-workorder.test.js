@@ -12,6 +12,7 @@ const ACTOR_ID = "00000000-0000-4000-8000-000000000003";
 const WORKORDER_ID = "00000000-0000-4000-8000-000000000004";
 const USAGE_ID = "00000000-0000-4000-8000-000000000005";
 const PART_ID = "00000000-0000-4000-8000-000000000006";
+const POSITION_ID = "00000000-0000-4000-8000-000000000007";
 
 function context(role = "mechanic") {
   return { actor: { id: ACTOR_ID, role }, companyIds: new Set([COMPANY_ID]), locationIds: new Set([LOCATION_ID]) };
@@ -29,20 +30,21 @@ test("reserve validates precision strictly and forwards tenant, location, and wo
   let command;
   const result = await reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
     operation: "aggregateUsageReserve",
-    catalogPartId: PART_ID, quantity: "1.125", uomCode: "gal", repairOrder: "Top off coolant",
+    catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1.125", uomCode: "gal", repairOrder: "Top off coolant",
     idempotencyKey: "aggregate-reserve-1",
   }, context(), { reserveAggregateUsage: async (input) => { command = input; return { kind: "reserved", usage: { id: USAGE_ID } }; } });
   assert.equal(result.replayed, false);
   assert.equal(command.workorderId, WORKORDER_ID);
+  assert.equal(command.sourcePositionId, POSITION_ID);
   assert.deepEqual(command.companyIds, [COMPANY_ID]);
   assert.deepEqual(command.locationIds, [LOCATION_ID]);
   await reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
-    catalogPartId: PART_ID, quantity: "1.005", uomCode: "gal", repairOrder: "Tolerance check",
+    catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1.005", uomCode: "gal", repairOrder: "Tolerance check",
     idempotencyKey: "aggregate-reserve-1005",
   }, context(), { reserveAggregateUsage: async () => ({ kind: "reserved", usage: { id: USAGE_ID } }) });
   await assert.rejects(
     reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
-      catalogPartId: PART_ID, quantity: "1.0009", uomCode: "gal", unexpected: true,
+      catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1.0009", uomCode: "gal", unexpected: true,
       idempotencyKey: "aggregate-reserve-2",
     }, context(), { reserveAggregateUsage: async () => assert.fail("invalid input reached repository") }),
   );

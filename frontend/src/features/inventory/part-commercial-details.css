@@ -1,0 +1,76 @@
+.inventory-commercial-details, .inventory-commercial-price, .inventory-commercial-purchase, .inventory-commercial-price-form, .inventory-commercial-profile-form, .inventory-commercial-preview, .inventory-commercial-preview-result, .inventory-commercial-configured-history section, .inventory-commercial-configured-history ul, .inventory-commercial-configured-history li, .inventory-commercial-profiles, .inventory-commercial-profiles li { display: grid; gap: 10px; }
+.inventory-commercial-status { display: grid; justify-items: start; gap: 8px; }
+.inventory-commercial-status p { margin: 0; }
+.inventory-commercial-refresh { width: auto; }
+.inventory-commercial-details { gap: 12px; }.inventory-commercial-details h3, .inventory-commercial-details p { margin: 0; }.inventory-commercial-details small, .inventory-commercial-price-summary small { color: var(--text-secondary, #59636e); }
+.inventory-commercial-purchase, .inventory-commercial-price { border: 1px solid var(--border-secondary, #d5d9de); border-radius: var(--radius-md, 8px); padding: 12px; }
+.inventory-commercial-purchase > div, .inventory-commercial-price-summary, .inventory-commercial-rate, .inventory-commercial-preview-inputs, .inventory-commercial-configured-history li, .inventory-commercial-profiles li, .inventory-commercial-actions { display: flex; gap: 12px; }.inventory-commercial-purchase > div, .inventory-commercial-price-summary { align-items: center; }.inventory-commercial-purchase > div { justify-content: space-between; }.inventory-commercial-purchase strong, .inventory-commercial-price-summary strong { display: block; }.inventory-commercial-price-summary > div { flex: 1; min-width: 0; }.inventory-commercial-price-summary .button { flex: 0 0 auto; min-height: 44px; }.inventory-commercial-price-summary small { white-space: nowrap; }
+.inventory-commercial-price-form, .inventory-commercial-profile-form { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }.inventory-commercial-price-form label, .inventory-commercial-profile-form label, .inventory-commercial-preview-inputs label { display: grid; gap: 4px; }.inventory-commercial-price-form input, .inventory-commercial-profile-form input, .inventory-commercial-preview-inputs input { min-height: 44px; width: 100%; }.inventory-commercial-price-form .dropdown-select-trigger { min-height: 44px; }.inventory-commercial-reason, .inventory-commercial-price-form > p, .inventory-commercial-price-form > .inventory-commercial-actions, .inventory-commercial-price-form > .inventory-commercial-preview, .inventory-commercial-profile-form fieldset, .inventory-commercial-profile-form > p, .inventory-commercial-profile-form > .inventory-commercial-actions { grid-column: 1 / -1; }.inventory-commercial-actions { justify-content: flex-end; }.inventory-commercial-actions .button { min-height: 44px; }
+.inventory-commercial-preview { border-top: 1px solid var(--border-secondary, #d5d9de); padding-top: 10px; }.inventory-commercial-preview summary, .inventory-commercial-history summary, .inventory-commercial-configured-history summary, .inventory-commercial-profiles summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }.inventory-commercial-preview-inputs { align-items: end; }.inventory-commercial-preview-inputs label { min-width: 110px; }.inventory-commercial-preview-result dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 0; }.inventory-commercial-preview-result dl div { display: flex; justify-content: space-between; gap: 8px; }.inventory-commercial-preview-result dt, .inventory-commercial-preview-result dd { margin: 0; }
+.inventory-commercial-configured-history ul, .inventory-commercial-profiles ul { list-style: none; margin: 0; padding: 0; }.inventory-commercial-configured-history li, .inventory-commercial-profiles li { border-bottom: 1px solid var(--border-secondary, #d5d9de); padding: 8px 0; justify-content: space-between; }.inventory-commercial-profiles li > div { display: grid; gap: 3px; }.inventory-commercial-profiles li > div:last-child { display: flex; align-items: flex-start; gap: 8px; }.inventory-commercial-rate { align-items: end; margin: 8px 0; }.inventory-commercial-rate label { flex: 1; }.inventory-commercial-rate .inventory-commercial-compound { align-items: center; display: flex; min-height: 44px; }.inventory-commercial-rate .inventory-commercial-compound span { margin-left: 6px; }
+@media (max-width: 768px) { .inventory-commercial-price-form, .inventory-commercial-profile-form { grid-template-columns: 1fr; }.inventory-commercial-reason, .inventory-commercial-price-form > p, .inventory-commercial-price-form > .inventory-commercial-actions, .inventory-commercial-price-form > .inventory-commercial-preview, .inventory-commercial-profile-form fieldset, .inventory-commercial-profile-form > p, .inventory-commercial-profile-form > .inventory-commercial-actions { grid-column: auto; } }
+@media (max-width: 640px) { .inventory-commercial-price-summary, .inventory-commercial-rate, .inventory-commercial-preview-inputs, .inventory-commercial-configured-history li, .inventory-commercial-profiles li { align-items: stretch; flex-direction: column; }.inventory-commercial-price-summary small { white-space: normal; }.inventory-commercial-price-summary .button { align-self: flex-start; }.inventory-commercial-actions { justify-content: stretch; }.inventory-commercial-actions .button { flex: 1; }.inventory-commercial-preview-result dl { grid-template-columns: 1fr; } }
+
+/* Keep routine values compact; editors and secondary details expand below them. */
+.inventory-commercial-details { gap: 0; min-width: 0; }
+.inventory-commercial-details h3 { margin-bottom: 8px; }
+.inventory-commercial-purchase, .inventory-commercial-price {
+  border: 0;
+  border-bottom: 1px solid var(--border-secondary, #d5d9de);
+  border-radius: 0;
+  padding: 8px 0;
+  gap: 0;
+  min-width: 0;
+}
+.inventory-commercial-purchase { gap: 4px; }
+.inventory-commercial-price-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 2px 12px;
+  align-items: center;
+}
+.inventory-commercial-price-summary > div { grid-column: 1 / 3; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.inventory-commercial-price-summary > small { grid-column: 1; grid-row: 2; white-space: normal; }
+.inventory-commercial-price-summary > small + small { grid-column: 2; }
+.inventory-commercial-price-summary > .button { grid-column: 3; grid-row: 1 / 3; align-self: center; }
+.inventory-commercial-price-summary strong, .inventory-commercial-purchase strong { overflow-wrap: anywhere; }
+.inventory-commercial-preview { border: 0; padding-top: 0; gap: 8px; }
+.inventory-commercial-price-form { margin-top: 12px; }
+.inventory-commercial-details summary { gap: 8px; }
+.inventory-commercial-details summary::before { content: "›"; font-size: 18px; transition: transform 120ms; }
+.inventory-commercial-details details[open] > summary::before { transform: rotate(90deg); }
+.inventory-commercial-details summary::-webkit-details-marker { display: none; }
+.inventory-commercial-details summary:focus-visible { outline: 2px solid var(--color-primary, #2563eb); outline-offset: 2px; }
+.inventory-commercial-preview-inputs label { min-width: 0; flex: 1; }
+.inventory-commercial-preview-result dl div { flex-wrap: wrap; }
+.inventory-commercial-details fieldset { min-width: 0; }
+.inventory-commercial-details input { box-sizing: border-box; min-width: 0; }
+.inventory-commercial-details .button { min-height: 44px; }
+.inventory-commercial-details details:not([open]) { display: block; }
+.inventory-commercial-scope, .inventory-commercial-empty, .inventory-commercial-fallback { color: var(--text-secondary, #59636e); font-size: 13px; }
+.inventory-commercial-source { width: fit-content; padding: 2px 7px; border-radius: 999px; color: #344054; background: #f2f4f7; font-weight: 650; }
+.inventory-commercial-history-table span, .inventory-commercial-history-table small { display: block; min-width: 0; overflow-wrap: anywhere; }
+.inventory-commercial-history-group { display: grid; gap: 6px; }
+.inventory-commercial-history-group h6 { margin: 0; color: #475467; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.inventory-commercial-history-group > p { color: #667085; font-size: 13px; }
+.inventory-commercial-secondary { border-top: 1px solid var(--border-secondary, #d5d9de); }
+.inventory-commercial-secondary > summary { min-height: 44px; cursor: pointer; color: #344054; font-weight: 700; }
+.inventory-commercial-secondary > .inventory-commercial-details { padding-top: 8px; }
+.inventory-commercial-secondary > .inventory-commercial-details > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.inventory-commercial-editors { display: grid; }
+.inventory-commercial-price-heading { display: flex; align-items: center; gap: 8px; }
+.inventory-commercial-price-fields { display: grid; grid-template-columns: minmax(120px, 1fr) 140px auto auto; align-items: end; gap: 10px; }
+.inventory-commercial-price-fields label { display: grid; gap: 4px; min-width: 0; color: #344054; font-size: 12px; font-weight: 700; }
+.inventory-commercial-price-fields input { width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #98a2b3; border-radius: 8px; color: #101828; background: #fff; font: inherit; }
+.inventory-commercial-price-fields input:focus-visible { outline: 3px solid #84caff; outline-offset: 1px; }
+.inventory-commercial-price-fields .dropdown-select-trigger { min-height: 44px; }
+.inventory-commercial-price-fields > small { display: flex; align-items: center; min-height: 44px; white-space: nowrap; }
+.inventory-commercial-price-fields > .button { min-width: 76px; }
+@media (max-width: 640px) {
+  .inventory-commercial-price-fields { grid-template-columns: minmax(0, 1fr) minmax(120px, .7fr); }
+  .inventory-commercial-price-fields > small { grid-column: 1; min-height: auto; }
+  .inventory-commercial-price-fields > .button { grid-column: 2; grid-row: 2; }
+  .inventory-commercial-history-table { min-width: 0; }
+  .inventory-commercial-history-table [role="row"] { min-width: 0; }
+  .inventory-commercial-history-table [role="cell"], .inventory-commercial-history-table [role="rowheader"] { overflow-wrap: anywhere; }
+}

@@ -348,13 +348,14 @@ test("mechanic part requests use Parts read access without granting actual-part 
   assert.equal(authorizations[0].capability, "read");
   assert.equal(authorizations[0].action, "request");
 
-  await assert.rejects(
-    runWorkorderModuleAction(context, "wo-1", "parts", "request", {}, {
-      authorize: async () => assert.fail("non-mechanics must be denied before authorization"),
-      requestPart: async () => assert.fail("non-mechanics must not create mechanic requests"),
-    }),
-    (error) => error.statusCode === 403,
-  );
+  const officeAuthorizations=[];
+  const officeResult=await runWorkorderModuleAction(context,"wo-1","parts","request",{description:"Oil filter",quantity:1,uomCode:"ea"},{
+    authorize:async (_context,_workorderId,request)=>officeAuthorizations.push(request),
+    requestPart:async (...args)=>args,
+  });
+  assert.equal(officeAuthorizations[0].capability,"write");
+  assert.equal(officeResult[1].actorRole,"office");
+  assert.equal(officeResult[1].mechanicUserId,"actor-1");
 });
 
 test("parts action persists labor hours with goods through the authenticated role", async () => {

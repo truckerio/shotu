@@ -1,0 +1,122 @@
+/* Shared collection presentation for Inventory; detail editors retain their layout. */
+.inventory-data-frame .operational-data-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  background: #fff;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.inventory-data-frame .operational-data-table :is(th, td) {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid #eaecf0;
+  text-align: left;
+  vertical-align: middle;
+}
+.inventory-data-frame .operational-data-table thead th {
+  background: #f9fafb;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.inventory-data-frame .operational-data-table tbody tr:hover { background: #f9fafb; }
+.inventory-data-table small {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: normal;
+}
+.inventory-data-table strong { font-size: inherit; font-weight: 600; }
+.inventory-data-table button,
+.inventory-data-table .inventory-table-link {
+  width: auto;
+  min-height: 44px;
+  font-size: 13px;
+}
+.inventory-data-table .inventory-table-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0066ff;
+  cursor: pointer;
+  font-weight: 500;
+  text-align: left;
+}
+.inventory-data-table :is(.purchase-status, .inventory-request-status, .inventory-stock-state, .inventory-state, .inventory-table-status) {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.inventory-table-status { background: #f2f4f7; color: #344054; text-transform: capitalize; }
+.inventory-table-status:is(.is-inspection, .is-repair, .is-awaiting_approval, .is-recount) { background: #fffaeb; color: #b54708; }
+.inventory-table-status.is-in_transit { background: #eff8ff; color: #175cd3; }
+@media (min-width: 761px) {
+.inventory-data-table.operational-collection-table {
+  display: block;
+  overflow-x: auto;
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.inventory-data-table.operational-collection-table :is(.operational-collection-table-head, .operational-collection-row) {
+  display: grid;
+  grid-template-columns: var(--operational-collection-columns);
+  min-width: 640px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-bottom: 1px solid #eaecf0;
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.inventory-data-table.operational-collection-table .operational-collection-table-head {
+  font-size: 12px;
+  font-weight: 600;
+  background: #f9fafb;
+  color: #667085;
+}
+.inventory-data-table.operational-collection-table :is(.operational-collection-table-head > span, .operational-collection-cell) {
+  border: 0;
+  padding: 8px 12px;
+  align-content: center;
+}
+.inventory-data-table .operational-collection-cell::before { display: none; }
+.inventory-data-table .operational-collection-row:focus-visible { outline: 2px solid #1570ef; outline-offset: -2px; }
+.inventory-data-table.inventory-data-table-five { --operational-collection-columns: minmax(220px, 2fr) repeat(4, minmax(110px, 1fr)); }
+.inventory-data-table.operational-collection-table .operational-collection-cell { display: grid; gap: 2px; }
+.inventory-data-table.inventory-data-table-five :is(.operational-collection-table-head, .operational-collection-row) { min-width: 720px; }
+}
+.inventory-data-frame.inventory-count-review-table { overflow-x: auto; }
+.inventory-data-frame .operational-data-table { display: table; }
+.inventory-data-frame .operational-data-table [role="rowgroup"]:first-child {
+  display: table-header-group;
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+}
+.inventory-data-frame .operational-data-table tbody { display: table-row-group; }
+.inventory-data-frame .operational-data-table [role="row"] { display: table-row; }
+.inventory-data-frame .operational-data-table :is([role="gridcell"], [role="rowheader"], [role="columnheader"]) {
+  display: table-cell;
+  padding: 8px 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.inventory-data-frame .operational-data-table :is([role="gridcell"], [role="rowheader"])::before { display: none; }

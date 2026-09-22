@@ -1,0 +1,6 @@
+.form-validation-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: #10182866; }
+.form-validation-modal { width: min(100%, 460px); max-height: calc(100dvh - 32px); overflow: auto; background: #fff; border-radius: 12px; box-shadow: 0 20px 48px #10182830; }
+.form-validation-dialog { padding: 24px; outline: none; color: #344054; font-size: 14px; }
+.form-validation-dialog h2 { margin: 0 0 16px; font-size: 18px; color: #101828; }
+.form-validation-dialog ul { padding-left: 20px; margin: 0; display: grid; gap: 10px; }
+.form-validation-dialog footer { margin-top: 24px; display: flex; justify-content: flex-end; }

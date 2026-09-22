@@ -255,6 +255,8 @@ export function CreateWorkorderPage({
               </div>
             ) : null}
             <CreateWorkorderForm
+              actorId={actor.id}
+              actorRole={actor.role}
               assignment={assignment}
               busy={officeCreateState.busy}
               locale={isMechanicCreate ? locale : "en"}

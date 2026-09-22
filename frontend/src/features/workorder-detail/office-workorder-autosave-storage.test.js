@@ -61,8 +61,9 @@ test("detail location and template changes enter the shared autosave queue", () 
   assert.match(roleRouter, /onSelectionPatch: stageOfficeWorkorderAutosave/);
 });
 
-test("real-time refresh cannot overwrite debounced part edits", () => {
+test("real-time refresh preserves debounced part edits without hiding remote updates", () => {
   assert.match(formController, /function updateActiveUsedParts\(parts, options = \{\}\) \{[\s\S]*setUsedPartsDirty\(!saved\)/);
-  assert.match(lifecycleEffects, /paused: usedPartsDirty \|\| \(/);
+  assert.doesNotMatch(lifecycleEffects, /paused: usedPartsDirty/);
+  assert.match(lifecycleEffects, /preserveForm: usedPartsDirty \|\| shouldPreserveActiveWorkorderForm\(\)/);
   assert.match(formController, /options\.saved === true/);
 });

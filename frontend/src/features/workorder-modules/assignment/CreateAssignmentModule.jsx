@@ -1,5 +1,5 @@
 import { MechanicMultiSelect } from "../../../components/forms/index.js";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
 
@@ -10,6 +10,9 @@ function selectedMechanicNames(mechanics, selectedIds) {
 
 export function CreateAssignmentModule({ access, activeSection, assignment, onChange, presentation = "panel" }) {
   const dropdownRef = useRef(null);
+  const triggerRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const optionsId = useId();
   const onePage = presentation === "one-page";
   const mechanics = assignment?.mechanics || [];
   const selectedIds = assignment?.mechanicUserIds || [];
@@ -18,15 +21,17 @@ export function CreateAssignmentModule({ access, activeSection, assignment, onCh
   useEffect(() => {
     if (!onePage) return undefined;
     const closeOnOutsidePointer = (event) => {
-      if (dropdownRef.current?.open && !dropdownRef.current.contains(event.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         const restoreFocus = dropdownRef.current.contains(document.activeElement);
-        dropdownRef.current.open = false;
-        if (restoreFocus) dropdownRef.current.querySelector("summary")?.focus();
+        setOpen(false);
+        if (restoreFocus) triggerRef.current?.focus();
       }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("focusin", closeOnOutsidePointer);
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("focusin", closeOnOutsidePointer);
     };
   }, [onePage]);
   if (!access) return null;
@@ -35,21 +40,21 @@ export function CreateAssignmentModule({ access, activeSection, assignment, onCh
       <div className="create-assignment-content">
         {onePage ? <div className="create-assignment-one-page-field">
           <span className="create-assignment-one-page-label">Mechanic</span>
-          <details className="create-assignment-one-page-dropdown" ref={dropdownRef}
+          <div className="create-assignment-one-page-dropdown" ref={dropdownRef}
             onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+              if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Escape" && event.currentTarget.open) {
+              if (event.key === "Escape" && open) {
                 event.preventDefault();
                 event.stopPropagation();
-                event.currentTarget.open = false;
-                event.currentTarget.querySelector("summary")?.focus();
+                setOpen(false);
+                triggerRef.current?.focus();
               }
             }}>
-            <summary aria-label={`Mechanic: ${selectedNames.length ? selectedNames.join(", ") : "Select mechanic"}`}>{selectedNames.length ? selectedNames.join(", ") : "Select mechanic"}</summary>
-            {mechanicSelect}
-          </details>
+            <button type="button" className="create-mechanic-trigger" ref={triggerRef} aria-expanded={open} aria-controls={optionsId} disabled={assignment?.loading} onClick={() => setOpen(value => !value)} aria-label={`Mechanic: ${selectedNames.length ? selectedNames.join(", ") : "Select mechanic"}`}>{selectedNames.length ? selectedNames.join(", ") : "Select mechanic"}</button>
+            {open ? <div id={optionsId} className="create-mechanic-options">{mechanicSelect}</div> : null}
+          </div>
         </div> : mechanicSelect}
         {!onePage && !selectedIds.length ? <p className="operational-availability-note">This workorder will appear in the available queue.</p> : null}
       </div>

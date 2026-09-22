@@ -8,6 +8,7 @@ const styles = readFileSync(new URL("./operational-collection-page.css", import.
 test("operational collection template owns page, tabs, toolbar, result, and table composition", () => {
   assert.match(component, /export function OperationalCollectionPage/);
   assert.match(component, /export function OperationalCollectionTabs/);
+  assert.match(component, /export function OperationalCollectionSectionHeader/);
   assert.match(component, /export function OperationalCollectionToolbar/);
   assert.match(component, /export function OperationalCollectionResultHeader/);
   assert.match(component, /export function OperationalCollectionTable/);
@@ -15,6 +16,17 @@ test("operational collection template owns page, tabs, toolbar, result, and tabl
   assert.match(component, /export function OperationalCollectionCell/);
   assert.match(styles, /\.operational-collection-page-body\s*\{[^}]*margin-top:\s*24px;/s);
   assert.match(styles, /\.operational-collection-table\s*\{[^}]*border-bottom:\s*1px solid #d0d5dd;/s);
+});
+
+test("operational section header promotes the active view and keeps peers as navigation", () => {
+  assert.match(component, /const activeItem = items\.find\(\(item\) => item\.id === activeId\) \|\| items\[0\]/);
+  assert.match(component, /const Heading = headingLevel === 2 \? "h2" : "h1"/);
+  assert.match(component, /<Heading>\{activeItem\?\.label\}<\/Heading>/);
+  assert.match(component, /items\.filter\(\(item\) => item\.id !== activeItem\?\.id\)\.map/);
+  assert.match(component, /className="operational-collection-section-nav" aria-label=\{ariaLabel\}/);
+  assert.match(component, /operational-collection-section-actions page-header-actions/);
+  assert.match(styles, /\.operational-collection-section-header\s*\{[^}]*grid-template-columns: auto minmax\(0, 1fr\) auto;/s);
+  assert.match(styles, /\.operational-collection-section-header :is\(h1, h2\)\s*\{[^}]*color: var\(--foreground-brand-primary, #175cd3\);/s);
 });
 
 test("operational collection template keeps page and embedded heading semantics separate", () => {

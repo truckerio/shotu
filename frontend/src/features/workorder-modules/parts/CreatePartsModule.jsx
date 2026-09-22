@@ -22,11 +22,13 @@ import {
   WorkorderPartsTable,
 } from "../../../components/workorders/WorkorderPartsTable.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { IconButton } from "../../../components/ui/IconButton.jsx";
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { laborProductLabel } from "../../../../../shared/labor-product.js";
 import { interfaceText } from "../../../i18n/index.js";
 import {
   catalogPartRequiresSerializedUnits,
+  catalogPartRequiresSourcePosition,
   createPartHasContent,
   createPartRequiresSerializedUnits,
   createPartRenderIndexes,
@@ -41,7 +43,7 @@ import { CreateSerializedUnitPicker } from "./CreateSerializedUnitPicker.jsx";
 import { CreateStockDropdown } from "./CreateStockDropdown.jsx";
 import "./create-parts-module.css";
 
-const COMPACT_PARTS_QUERY = "(max-width: 1024px)";
+const COMPACT_PARTS_QUERY = "(max-width: 700px)";
 
 const SERIAL_LABEL = { en: "Serial", es: "Serie", pa: "ਸੀਰੀਅਲ" };
 
@@ -61,14 +63,17 @@ function catalogPartSelection(part, catalogPart) {
     uomCode: catalogPart.uomCode || part.uomCode,
     repairOrder: repairOrderAfterCatalogSelection(part.repairOrder, catalogPart, part.catalogPartId),
     serializationRequired,
+    trackingMode: catalogPart.trackingMode || null,
+    sourcePositionId: null,
+    sourcePositionPath: "",
     serializedUnitIds: [],
     serializedSerialNumbers: [],
   };
 }
 
-function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationId, locale, maxSelected, onCommit, onClose, part }) {
+function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationId, locale, maxSelected, onCommit, onPartChange, onClose, part }) {
   if (!createPartRequiresSerializedUnits(part)) return active && part.catalogPartId
-    ? <CreateStockDropdown locationId={locationId} part={part} onClose={onClose} /> : null;
+    ? <CreateStockDropdown locationId={locationId} part={part} onChange={(patch) => onPartChange(index, patch)} onClose={onClose} /> : null;
   return (
     <>
       {serializedPartSummary(part, locale) ? <small className="create-part-serial-summary">{serializedPartSummary(part, locale)}</small> : null}
@@ -87,6 +92,7 @@ function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationI
 }
 
 function LegacyCreatePartsEditor({
+  requestPartButton,
   historyEnabled = false,
   canAddPart,
   errors,
@@ -162,6 +168,9 @@ function LegacyCreatePartsEditor({
                 serializationRequired: false,
                 serializedUnitIds: [],
                 serializedSerialNumbers: [],
+                trackingMode: null,
+                sourcePositionId: null,
+                sourcePositionPath: "",
               })}
               onSelect={(catalogPart) => {
                 onChange(index, catalogPartSelection(part, catalogPart));
@@ -183,10 +192,11 @@ function LegacyCreatePartsEditor({
               locale={locale}
               maxSelected={serializedUnitSlots(parts, index)}
               onCommit={onReplaceSerializedUnits}
+              onPartChange={onChange}
               onClose={() => onOpenSerialPicker(-1)}
               part={part}
             /></div>
-            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
+            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
             <PartRepairOrderField
               historyEnabled={historyEnabled}
               locationId={locationId}
@@ -198,11 +208,12 @@ function LegacyCreatePartsEditor({
             >
               <input {...textEntryProps("narrative")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
             </PartRepairOrderField>
-            <button className="create-part-remove-icon" type="button" onClick={() => onRemove(index)} disabled={parts.length <= 1} aria-label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")}><Trash01 aria-hidden="true" /></button>
+            <IconButton className="create-part-remove-icon" icon={Trash01} tone="danger" onClick={() => onRemove(index)} disabled={parts.length <= 1} label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")} />
           </WorkorderPartsRow>
         ))}
       </WorkorderPartsTable>
       <WorkorderPartsActions className="create-parts-actions">
+        {requestPartButton}
         <Button type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={() => onAdd()} disabled={parts.length >= 18}>
           {t("create.parts.add")}
         </Button>
@@ -227,6 +238,8 @@ function LegacyCreatePartsEditor({
 }
 
 export function CreatePartsModule({
+  actorId,
+  actorRole,
   historyEnabled = false,
   access,
   activeSection,
@@ -253,6 +266,13 @@ export function CreatePartsModule({
   const [editingPartIndex, setEditingPartIndex] = useState(-1);
   const [laborOpen, setLaborOpen] = useState(false);
   const [serialPickerIndex, setSerialPickerIndex] = useState(-1);
+  const [requestMessage,setRequestMessage]=useState('');
+  const requestPartButton=['office','admin'].includes(actorRole)?<Button type="button" className="create-parts-compact-action" icon={Plus} disabled={!locationId} title={!locationId?'Choose a work order location first':undefined} onClick={()=>{
+    const index=parts.findIndex(part=>String(part.partNo||'').trim()&&!part.catalogPartId);
+    if(index<0){setRequestMessage('Enter the missing part, quantity, and unit first.');startAddingPart();return;}
+    onChange(index,{purchaseRequested:true,sourcePositionId:null,sourcePositionPath:'',serializedUnitIds:[],serializedSerialNumbers:[]});
+    setRequestMessage(`${parts[index].partNo}: Part request will be created when this Workorder is saved.`);
+  }}>Request part</Button>:null;
 
   const t = (key) => interfaceText(locale, key);
   const configuredLaborLabel = laborProductLabel(laborProduct);
@@ -272,6 +292,7 @@ export function CreatePartsModule({
       if (part.serializedUnitIds?.length) {
         onChange(index, { qty: "", serializedUnitIds: [], serializedSerialNumbers: [] });
       }
+      if (part.sourcePositionId) onChange(index, { sourcePositionId: null, sourcePositionPath: "" });
     });
     setSerialPickerIndex(-1);
   }, [locationId, onChange, parts]);
@@ -316,6 +337,10 @@ export function CreatePartsModule({
   }
 
   function finishEditingPart(index) {
+    if (catalogPartRequiresSourcePosition(parts[index]) && !parts[index].sourcePositionId) {
+      setSerialPickerIndex(index);
+      return;
+    }
     pendingReturnFocusRef.current = createPartHasContent(parts[index]) ? index : "add";
     setEditingPartIndex(-1);
   }
@@ -330,6 +355,9 @@ export function CreatePartsModule({
         serializationRequired: false,
         serializedUnitIds: [],
         serializedSerialNumbers: [],
+        trackingMode: null,
+        sourcePositionId: null,
+        sourcePositionPath: "",
       });
     } else {
       onRemove(index);
@@ -360,6 +388,7 @@ export function CreatePartsModule({
         ? formatQuantityUnit(part.qty, part.uomCode)
         : t("create.parts.quantityMissing");
       const serialSummary = serializedPartSummary(part, locale);
+      const sourceSummary = catalogPartRequiresSourcePosition(part) ? String(part.sourcePositionPath || "").trim() : "";
       return (
         <button
           className="create-part-summary"
@@ -374,7 +403,7 @@ export function CreatePartsModule({
         >
           <span className="create-part-summary-main">
             <strong>{part.partNo || `${t("create.parts.part")} ${ordinal}`}</strong>
-            <small>{[quantity, serialSummary].filter(Boolean).join(" · ")}</small>
+            <small>{[quantity, serialSummary, sourceSummary].filter(Boolean).join(" · ")}</small>
           </span>
           <span className={`create-part-summary-repair ${part.repairOrder ? "" : "is-missing"}`.trim()}>
             {part.repairOrder || t("create.parts.repairOrderMissing")}
@@ -404,6 +433,9 @@ export function CreatePartsModule({
               serializationRequired: false,
               serializedUnitIds: [],
               serializedSerialNumbers: [],
+              trackingMode: null,
+              sourcePositionId: null,
+              sourcePositionPath: "",
             })}
             onSelect={(catalogPart) => {
               onChange(index, catalogPartSelection(part, catalogPart));
@@ -425,6 +457,7 @@ export function CreatePartsModule({
             locale={locale}
             maxSelected={serializedUnitSlots(parts, index)}
             onCommit={onReplaceSerializedUnits}
+            onPartChange={onChange}
             onClose={() => setSerialPickerIndex(-1)}
             part={part}
           /></div>
@@ -432,8 +465,8 @@ export function CreatePartsModule({
             id={`known-part-quantity-${index}`}
             quantity={part.qty}
             uomCode={part.uomCode}
-            onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [] })}
-            onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [] })}
+            onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })}
+            onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })}
             quantityLabel={t("create.parts.quantity")}
             unitLabel={t("create.parts.unit")}
             locale={locale}
@@ -464,7 +497,7 @@ export function CreatePartsModule({
         <footer className="create-part-editor-actions">
           <Button type="button" variant="primary" onClick={() => finishEditingPart(index)}>{t("common.done")}</Button>
           {createPartHasContent(part) ? (
-            <button className="create-part-remove create-part-remove-icon" type="button" onClick={() => removePart(index)} aria-label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")}><Trash01 aria-hidden="true" /></button>
+            <IconButton className="create-part-remove create-part-remove-icon" icon={Trash01} tone="danger" onClick={() => removePart(index)} label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")} />
           ) : null}
         </footer>
       </article>
@@ -566,6 +599,7 @@ export function CreatePartsModule({
             )}
 
             <WorkorderPartsActions className="create-parts-actions">
+              {requestPartButton}
               <Button type="button" className="create-parts-compact-action create-parts-add-button" variant="primary" icon={Plus} onClick={startAddingPart} disabled={!canAddPart}>
                 {filledIndexes.length ? t("create.parts.addAnother") : t("create.parts.add")}
               </Button>
@@ -575,6 +609,7 @@ export function CreatePartsModule({
         </div>
       ) : (
         <LegacyCreatePartsEditor
+          requestPartButton={requestPartButton}
           historyEnabled={historyEnabled}
           canAddPart={canAddPart}
           errors={errors}
@@ -597,6 +632,8 @@ export function CreatePartsModule({
           t={t}
         />
       )}
+      {requestMessage?<p role="status">{requestMessage}</p>:null}
+      {requestPartButton&&!locationId?<p>Choose a location to request a part.</p>:null}
     </ProgressiveWorkorderSection>
   );
 }

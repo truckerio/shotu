@@ -39,7 +39,11 @@ export function WorkorderAssignmentModule({
       }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("focusin", closeOnOutsidePointer);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("focusin", closeOnOutsidePointer);
+    };
   }, [onePage]);
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
@@ -60,7 +64,9 @@ export function WorkorderAssignmentModule({
           <span className="create-assignment-one-page-label">Mechanic</span>
           <details className="create-assignment-one-page-dropdown" ref={dropdownRef}
             onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+              // Safari can blur to no element when clicking a checkbox or label.
+              // Outside pointer/focus listeners handle dismissal in that case.
+              if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
             }}
             onKeyDown={(event) => {
               if (event.key === "Escape" && event.currentTarget.open) {

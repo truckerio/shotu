@@ -173,7 +173,7 @@ function requestBodyLimit(req) {
   const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
   if (pathname === "/api/upload") return 75_000_000;
   if (pathname.endsWith("/messages")) return 12_000_000;
-  if (pathname === "/api/office/invoice-extractions") return 14_200_000;
+  if (pathname === "/api/office/invoice-extractions" || /^\/api\/office\/inventory\/purchasing\/[^/]+\/bills$/.test(pathname)) return 14_200_000;
   if (pathname === "/api/office/inventory/count-imports") return 6_500_000;
   return 1_000_000;
 }

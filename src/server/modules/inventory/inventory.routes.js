@@ -1,4 +1,16 @@
+import { handleInventoryPositionsApi } from "./inventory-positions.routes.js";
+import { handleInventoryPricingApi } from "./inventory-pricing.routes.js";
+import { readInventoryPartCommercial, updateInventoryPartPrice } from "./inventory-part-prices.service.js";
+import { listPurchaseBills, uploadPurchaseBill, downloadPurchaseBill } from './purchase-order-bills.service.js';
+import { getBills,postBill } from './inventory-bills.service.js';
+import { getInventoryReports } from './inventory-reports.service.js';
+import { getInbound,getInboundDetail } from './inventory-inbound.service.js';
+import { getInventoryTask, getInventoryTaskQueue, postInventoryTaskAssignment } from './inventory-task-queue.service.js';
+import { getStockTask,getStockTasks,getStockTaskSnapshot,postStockTask } from './inventory-stock-tasks.service.js';
 import { ZodError } from "zod";
+import { getPurchasing,savePurchase,getPurchaseCommand,getPurchaseApprovalSettings,savePurchaseApprovalSettings,receivePurchaseOrder } from "./inventory-purchasing.service.js";
+import { getPurchaseRequests,postPurchaseRequest } from "./inventory-purchase-requests.service.js";
+import { decideDirectReceiptApproval, receiveDirectInventory, readDirectReceiptApproval, readDirectReceiptOutcome, readPartStockMovements } from "./direct-inventory-receipt.service.js";
 import { catalogUomConflictError, InventoryError } from "./inventory.errors.js";
 import {
   readInventoryReceiptLabels,
@@ -11,6 +23,7 @@ import {
   readLocalInventoryStock,
   readLocalInvoiceHistory,
 } from "./local-inventory.service.js";
+import { getPurchaseInvoiceSuggestions } from "./inventory-purchase-invoice-allocation.service.js";
 import {
   readInventoryLabelBatchItems,
   renderInventoryLabelBatchPrint,
@@ -86,9 +99,103 @@ function sendError(helpers, res, error) {
 export async function handleInventoryApi(req, res, url, helpers, dependencies = {}) {
   const relevant = url.pathname.startsWith("/api/inventory/")
     || url.pathname.startsWith("/api/office/inventory/")
-    || /\/(receive|confirm-receipt)$/.test(url.pathname) && url.pathname.startsWith("/api/office/invoice-extractions/");
+    || /\/(receive|confirm-receipt|purchase-order-suggestions)$/.test(url.pathname) && url.pathname.startsWith("/api/office/invoice-extractions/");
   if (!relevant) return false;
   try {
+    if (await handleInventoryPositionsApi(req, res, url, helpers, dependencies)) return true;
+    if (await handleInventoryPricingApi(req, res, url, helpers, dependencies)) return true;
+    const commercialPartId = pathId(url.pathname, /^\/api\/office\/inventory\/parts\/([^/]+)\/commercial$/);
+    if (req.method === "GET" && commercialPartId) {
+      helpers.sendJson(res, 200, await readInventoryPartCommercial(commercialPartId, url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    const priceMatch = /^\/api\/office\/inventory\/parts\/([^/]+)\/prices\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "PUT" && priceMatch) {
+      helpers.sendJson(res, 200, await updateInventoryPartPrice(decodeURIComponent(priceMatch[1]), decodeURIComponent(priceMatch[2]), await helpers.readBody(req), helpers.requestContext, dependencies));
+      return true;
+    }
+    if(url.pathname==='/api/office/inventory/purchase-requests'){
+      if(req.method==='GET'){helpers.sendJson(res,200,await getPurchaseRequests(url.searchParams,helpers.requestContext));return true;}
+      if(req.method==='POST'){helpers.sendJson(res,200,await postPurchaseRequest(await helpers.readBody(req),helpers.requestContext));return true;}
+    }
+    const purchaseBillPath=/^\/api\/office\/inventory\/purchasing\/([^/]+)\/bills(?:\/([^/]+))?$/.exec(url.pathname);
+    if(purchaseBillPath){
+      const orderId=purchaseBillPath[1],documentId=purchaseBillPath[2];
+      if(req.method==='GET'&&documentId){
+        const file=await downloadPurchaseBill(orderId,documentId,helpers.requestContext);
+        res.writeHead(200,{'content-type':file.mimeType,'content-length':file.bytes.length,'content-disposition':inventoryDownloadDisposition(file.fileName),'cache-control':'private, no-store','x-content-type-options':'nosniff'});res.end(file.bytes);return true;
+      }
+      if(req.method==='GET'){helpers.sendJson(res,200,await listPurchaseBills(orderId,helpers.requestContext));return true;}
+      if(req.method==='POST'&&!documentId){const body=await helpers.readBody(req);helpers.sendJson(res,200,await uploadPurchaseBill({...body,orderId},helpers.requestContext));return true;}
+    }
+    const purchaseReceiptPath=/^\/api\/office\/inventory\/purchasing\/([^/]+)\/receipts$/.exec(url.pathname);
+    if(req.method==='POST'&&purchaseReceiptPath){
+      helpers.sendJson(res,200,await receivePurchaseOrder(decodeURIComponent(purchaseReceiptPath[1]),await helpers.readBody(req),helpers.requestContext,dependencies));return true;
+    }
+    if(url.pathname==='/api/office/inventory/bills'){
+      if(req.method==='GET'){helpers.sendJson(res,200,await getBills(url.searchParams,helpers.requestContext));return true;}
+      if(req.method==='POST'){helpers.sendJson(res,200,await postBill(await helpers.readBody(req),helpers.requestContext));return true;}
+    }
+    if(req.method==='GET'&&url.pathname==='/api/office/inventory/reports'){helpers.sendJson(res,200,await getInventoryReports(url.searchParams,helpers.requestContext));return true;}
+    if(req.method==='GET'&&url.pathname==='/api/office/inventory/inbound'){helpers.sendJson(res,200,await (dependencies.getInbound||getInbound)(url.searchParams,helpers.requestContext,dependencies));return true;}
+    const inboundDetail=/^\/api\/office\/inventory\/inbound\/([^/]+)$/.exec(url.pathname);
+    if(req.method==='GET'&&inboundDetail){helpers.sendJson(res,200,await (dependencies.getInboundDetail||getInboundDetail)(decodeURIComponent(inboundDetail[1]),url.searchParams,helpers.requestContext,dependencies));return true;}
+    if(req.method==='GET'&&url.pathname==='/api/office/inventory/task-queue'){
+      helpers.sendJson(res,200,await (dependencies.getInventoryTaskQueue||getInventoryTaskQueue)(url.searchParams,helpers.requestContext,dependencies));return true;
+    }
+    if(req.method==='POST'&&url.pathname==='/api/office/inventory/task-queue/assignments'){
+      helpers.sendJson(res,200,await (dependencies.postInventoryTaskAssignment||postInventoryTaskAssignment)(await helpers.readBody(req),helpers.requestContext,dependencies));return true;
+    }
+    const taskQueueDetail=/^\/api\/office\/inventory\/task-queue\/([^/]+)\/([^/]+)$/.exec(url.pathname);
+    if(req.method==='GET'&&taskQueueDetail){
+      helpers.sendJson(res,200,await (dependencies.getInventoryTask||getInventoryTask)(decodeURIComponent(taskQueueDetail[1]),decodeURIComponent(taskQueueDetail[2]),url.searchParams,helpers.requestContext,dependencies));return true;
+    }
+    if(req.method==='GET'&&url.pathname==='/api/office/inventory/stock-tasks/snapshot'){
+      helpers.sendJson(res,200,await getStockTaskSnapshot(url.searchParams,helpers.requestContext));return true;
+    }
+    const stockTaskDetail=/^\/api\/office\/inventory\/stock-tasks\/([^/]+)$/.exec(url.pathname);
+    if(req.method==='GET'&&stockTaskDetail){
+      helpers.sendJson(res,200,await (dependencies.getStockTask||getStockTask)(decodeURIComponent(stockTaskDetail[1]),url.searchParams,helpers.requestContext));return true;
+    }
+    if(url.pathname==='/api/office/inventory/stock-tasks'){
+      if(req.method==='GET'){helpers.sendJson(res,200,await getStockTasks(url.searchParams,helpers.requestContext));return true;}
+      if(req.method==='POST'){helpers.sendJson(res,200,await postStockTask(await helpers.readBody(req),helpers.requestContext));return true;}
+    }
+    if (url.pathname === '/api/office/inventory/purchasing/approval-settings') {
+      if(req.method==='GET'){helpers.sendJson(res,200,await getPurchaseApprovalSettings(url.searchParams,helpers.requestContext));return true;}
+      if(req.method==='PUT'){helpers.sendJson(res,200,await savePurchaseApprovalSettings(await helpers.readBody(req),helpers.requestContext));return true;}
+    }
+    if (req.method==='GET' && url.pathname==='/api/office/inventory/purchasing/command') {
+      helpers.sendJson(res,200,await getPurchaseCommand(url.searchParams,helpers.requestContext));return true;
+    }
+    if (url.pathname === '/api/office/inventory/purchasing') {
+      if(req.method==='GET'){helpers.sendJson(res,200,await getPurchasing(url.searchParams,helpers.requestContext));return true;}
+      if(req.method==='POST'){helpers.sendJson(res,200,await savePurchase(await helpers.readBody(req),helpers.requestContext));return true;}
+    }
+    const movementPartId = pathId(url.pathname, /^\/api\/office\/inventory\/parts\/([^/]+)\/movements$/);
+    if (req.method === "GET" && movementPartId) {
+      helpers.sendJson(res, 200, await readPartStockMovements(movementPartId, url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    if (req.method === "POST" && url.pathname === "/api/office/inventory/direct-receipts") {
+      helpers.sendJson(res, 200, await receiveDirectInventory(await helpers.readBody(req), helpers.requestContext, dependencies));
+      return true;
+    }
+    const directReceiptKey = pathId(url.pathname, /^\/api\/office\/inventory\/direct-receipts\/([^/]+)$/);
+    if (req.method === "GET" && directReceiptKey) {
+      helpers.sendJson(res, 200, await readDirectReceiptOutcome(directReceiptKey, helpers.requestContext, dependencies));
+      return true;
+    }
+    const directReceiptApprovalDecisionId = pathId(url.pathname, /^\/api\/office\/inventory\/direct-receipt-approvals\/([^/]+)\/decision$/);
+    if (req.method === "POST" && directReceiptApprovalDecisionId) {
+      helpers.sendJson(res, 200, await decideDirectReceiptApproval(directReceiptApprovalDecisionId, await helpers.readBody(req), helpers.requestContext, dependencies));
+      return true;
+    }
+    const directReceiptApprovalId = pathId(url.pathname, /^\/api\/office\/inventory\/direct-receipt-approvals\/([^/]+)$/);
+    if (req.method === "GET" && directReceiptApprovalId) {
+      helpers.sendJson(res, 200, await readDirectReceiptApproval(directReceiptApprovalId, helpers.requestContext, dependencies));
+      return true;
+    }
     if (req.method === "GET" && url.pathname === "/api/office/inventory/catalog") {
       helpers.sendJson(res, 200, await searchInventoryMasterParts(url.searchParams, helpers.requestContext, dependencies));
       return true;
@@ -207,6 +314,11 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
       return true;
     }
     const localRunId = pathId(url.pathname, /^\/api\/office\/invoice-extractions\/([^/]+)\/confirm-receipt$/);
+    const purchaseSuggestionRunId = pathId(url.pathname, /^\/api\/office\/invoice-extractions\/([^/]+)\/purchase-order-suggestions$/);
+    if (req.method === "GET" && purchaseSuggestionRunId) {
+      helpers.sendJson(res, 200, await getPurchaseInvoiceSuggestions(new URLSearchParams({ runId: purchaseSuggestionRunId }), helpers.requestContext, dependencies));
+      return true;
+    }
     if (req.method === "POST" && localRunId) {
       helpers.sendJson(res, 200, await confirmReviewedInvoiceFullDelivery(
         localRunId,

@@ -1,0 +1,45 @@
+.shared-icon-button {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #475467;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 44px;
+  justify-content: center;
+  min-width: 44px;
+  padding: 0;
+}
+
+.shared-icon-button:hover {
+  background: #f2f4f7;
+  color: #101828;
+}
+
+.shared-icon-button:focus-visible {
+  outline: 3px solid rgb(46 144 250 / 28%);
+  outline-offset: 2px;
+}
+
+.shared-icon-button:disabled {
+  color: #98a2b3;
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.shared-icon-button.is-danger {
+  color: #b42318;
+}
+
+.shared-icon-button.is-danger:hover:not(:disabled) {
+  background: #fef3f2;
+  border-color: #fecdca;
+}
+
+.shared-icon-button > svg {
+  height: 20px;
+  width: 20px;
+}

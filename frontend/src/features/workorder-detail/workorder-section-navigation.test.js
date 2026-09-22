@@ -22,6 +22,7 @@ test("section navigation resolves icons from module-owned manifests", () => {
 
 test("More navigation keeps its stable visible label and exposes overflow selection", () => {
   assert.doesNotMatch(source, /DotsHorizontal/);
+  assert.match(source, /DotsVertical aria-hidden="true"/);
   assert.equal((source.match(/<span>\{t\("detail\.more"\)\}<\/span>/g) || []).length, 3);
   assert.match(source, /ChevronDown aria-hidden="true"/);
   assert.match(source, /aria-current=\{desktopActiveOverflowSection \? "page" : undefined\}/);

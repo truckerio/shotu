@@ -42,11 +42,10 @@ function inputError(code, message, statusCode = 422) {
 }
 
 function countQuantity(value) {
-  if (typeof value === "number") return Number.isInteger(value) && value >= 1 && value <= 500 ? value : null;
   const text = String(value ?? "").trim();
-  if (!/^\d+$/.test(text)) return null;
+  if (!/^(?:\d+)(?:\.\d{1,3})?$/.test(text)) return null;
   const parsed = Number(text);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 500 ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 500 ? parsed : null;
 }
 
 function optionalCost(value) {
@@ -195,7 +194,13 @@ export async function resolveInventoryCountLine(importId, lineId, input, request
     throw inputError("INVENTORY_COUNT_PART_DUPLICATE", "That master part is already used by another row in this count.", 409);
   }
   if (result.kind === "tracking_required") {
-    throw inputError("INVENTORY_COUNT_TRACKING_REQUIRED", "Choose whether this master part is Quantity, Serialized, or Measured or bulk before adding it.", 409);
+    throw inputError("INVENTORY_COUNT_TRACKING_REQUIRED", "Choose a master catalog part whose tracking is configured.", 409);
+  }
+  if (result.kind === "quantity_invalid") {
+    throw inputError("INVENTORY_COUNT_QUANTITY_INVALID", "Serialized parts require a positive whole-unit quantity. Quantity and measured parts allow up to three decimal places.");
+  }
+  if (result.kind === "position_invalid") {
+    throw inputError("INVENTORY_COUNT_POSITION_INVALID", "That storage destination is no longer eligible. Reload storage locations and choose an active shelf or bin.", 409);
   }
   return { import: result.import };
 }
@@ -220,6 +225,12 @@ export async function confirmInventoryCount(importId, input, requestContext, dep
       `Spreadsheet row ${result.sourceRow} already has local or reserved stock. Use a cycle-count adjustment instead.`,
       409,
     );
+  }
+  if (result.kind === "position_invalid") {
+    throw inputError("INVENTORY_COUNT_POSITION_INVALID", `Spreadsheet row ${result.sourceRow} has an inactive or ineligible destination. Review the row and choose an active shelf or bin.`, 409);
+  }
+  if (result.kind === "quantity_invalid") {
+    throw inputError("INVENTORY_COUNT_QUANTITY_INVALID", `Spreadsheet row ${result.sourceRow} has a quantity that does not match its tracking mode.`);
   }
   if (result.kind === "tracking_required") {
     throw inputError(

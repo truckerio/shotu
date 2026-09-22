@@ -27,6 +27,9 @@
 .workorder-draft-icon-action:hover { background: #f9fafb; color: #182230; }
 .workorder-draft-icon-action svg { height: 17px; width: 17px; }
 .workorder-draft-icon-action.is-danger:hover { background: #fef3f2; border-color: #fecdca; color: #b42318; }
+.workorder-draft-icon-action.is-resume { background: #1570ef; border-color: #1570ef; color: #fff; }
+.workorder-draft-icon-action.is-resume:hover:not(:disabled) { background: #175cd3; border-color: #175cd3; }
+.workorder-draft-icon-action:disabled { cursor: default; opacity: .5; }
 
 .workorder-drafts-toolbar {
   align-items: center;

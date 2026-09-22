@@ -1,6 +1,22 @@
+import { IntegrationHttpError } from "../core/integration-errors.js";
+
 const DEFAULT_TIMEOUT_MS = 20_000;
 const PAGE_SIZE = 500;
 const MAX_RECORDS = 25_000;
+
+function transportMessage(error, baseUrl) {
+  const code = error?.cause?.code || error?.code;
+  if (["ENOTFOUND", "ENOENT", "EAI_AGAIN"].includes(code)) {
+    return `Cannot resolve the Odoo server ${new URL(baseUrl).hostname}. Check the current Odoo.sh URL and that the staging build is running. Credentials could not be verified.`;
+  }
+  if (["CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY"].includes(code)) {
+    return "The Odoo server certificate could not be verified. Check the server certificate and this computer's trusted certificates.";
+  }
+  if (code === "ECONNREFUSED" || error?.cause?.errors?.some((entry) => entry.code === "ECONNREFUSED")) {
+    return "The Odoo server refused the connection. Check that the configured Odoo.sh build is running and reachable.";
+  }
+  return "The Odoo connection ended before a response was received.";
+}
 
 function normalizedBaseUrl(value) {
   const url = new URL(String(value || "").trim());
@@ -45,14 +61,12 @@ export class OdooClient {
       return payload.result;
     } catch (error) {
       if (error?.name === "AbortError") {
-        const timeoutError = new Error("Odoo did not respond before the connection timeout.");
-        timeoutError.code = "ODOO_CONNECTION_TIMEOUT";
-        throw timeoutError;
+        throw new IntegrationHttpError(504, "ODOO_CONNECTION_TIMEOUT", "Odoo did not respond before the connection timeout.");
       }
       if (error instanceof TypeError) {
-        const transportError = new Error("The Odoo connection ended before a response was received.");
-        transportError.code = "ODOO_TRANSPORT_ERROR";
-        throw transportError;
+        // Preserve the transport code: outbound writes must still reconcile an
+        // uncertain result rather than automatically repeat a create operation.
+        throw new IntegrationHttpError(503, "ODOO_TRANSPORT_ERROR", transportMessage(error, this.baseUrl));
       }
       throw error;
     } finally {

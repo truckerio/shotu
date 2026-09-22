@@ -26,6 +26,7 @@ export function useWorkorderDetailRealtime({
 
   useEffect(() => {
     if (!enabled || !workorderId) return undefined;
+    let refreshInFlight = false;
 
     const refresh = () => {
       if (!shouldRefreshWorkorderDetail({
@@ -33,8 +34,13 @@ export function useWorkorderDetailRealtime({
         workorderId,
         paused: pausedRef.current,
         documentHidden: document.hidden,
-      })) return;
-      Promise.resolve(refreshRef.current?.()).catch(() => {});
+      }) || refreshInFlight) return;
+      refreshInFlight = true;
+      Promise.resolve(refreshRef.current?.())
+        .catch(() => {})
+        .finally(() => {
+          refreshInFlight = false;
+        });
     };
 
     const timer = window.setInterval(refresh, intervalMs);
@@ -42,10 +48,12 @@ export function useWorkorderDetailRealtime({
       if (!document.hidden) refresh();
     };
     document.addEventListener("visibilitychange", refreshOnVisible);
+    window.addEventListener("focus", refresh);
 
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshOnVisible);
+      window.removeEventListener("focus", refresh);
     };
   }, [enabled, intervalMs, workorderId]);
 }

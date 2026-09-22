@@ -20,6 +20,10 @@ const operationalFormCss = readFileSync(
   new URL("../../components/forms/operational-form.css", import.meta.url),
   "utf8",
 );
+const datePickerCss = readFileSync(
+  new URL("../../components/forms/date-picker.css", import.meta.url),
+  "utf8",
+);
 const sharedNavigationCss = readFileSync(
   new URL("../../components/workorders/workorder-object-page.css", import.meta.url),
   "utf8",
@@ -38,11 +42,12 @@ test("tablet Create starts collapsed and its Preview toggle opens fullscreen", (
   assert.match(createPage, /previewActive=\{showEmbeddedPreview \|\| previewFullscreen\}/);
 });
 
-test("phone Create select and date fields share the 44px control height", () => {
+test("phone Create select and shared date fields have 44px controls", () => {
   assert.match(
     createCss,
-    /\.create-workorder-page\s+\.operational-form\s+select,\s*\.create-workorder-page\s+\.operational-form\s+input\[type="date"\]\s*\{[^}]*block-size:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*inline-size:\s*100%;[^}]*max-block-size:\s*44px;[^}]*max-inline-size:\s*100%;[^}]*min-block-size:\s*44px;[^}]*min-inline-size:\s*0;[^}]*padding-block:\s*0;/s,
+    /\.create-workorder-page\s+\.operational-form\s+select\s*\{[^}]*block-size:\s*44px;[^}]*box-sizing:\s*border-box;[^}]*inline-size:\s*100%;[^}]*max-block-size:\s*44px;[^}]*max-inline-size:\s*100%;[^}]*min-block-size:\s*44px;[^}]*min-inline-size:\s*0;[^}]*padding-block:\s*0;/s,
   );
+  assert.match(datePickerCss, /\.date-picker-control \{[^}]*min-height: 44px;/);
 });
 
 test("shared operational controls include padding inside their contained width", () => {
@@ -59,11 +64,9 @@ test("known parts editor can container-wrap rows inside narrow desktop cards", (
   );
 });
 
-test("phone Create opts date fields out of Safari intrinsic control sizing", () => {
-  assert.match(
-    createCss,
-    /\.create-workorder-page\s+\.operational-form\s+input\[type="date"\]\s*\{[^}]*-webkit-appearance:\s*none;[^}]*appearance:\s*none;[^}]*display:\s*block;/s,
-  );
+test("phone Create uses the shared date picker instead of a native date control", () => {
+  assert.doesNotMatch(createForm, /type="date"/);
+  assert.match(datePickerCss, /\.date-picker-control/);
 });
 
 test("phone Create uses shared keyboard foundation and one docked primary action", () => {

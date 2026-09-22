@@ -12,7 +12,7 @@ const sharedParts = readFileSync(new URL("../../../components/workorders/Workord
 const sharedPartsCss = readFileSync(new URL("../../../components/workorders/workorder-parts-table.css", import.meta.url), "utf8");
 
 test("compact Create Parts hides untouched placeholders behind one editor", () => {
-  assert.match(source, /COMPACT_PARTS_QUERY = "\(max-width: 1024px\)"/);
+  assert.match(source, /COMPACT_PARTS_QUERY = "\(max-width: 700px\)"/);
   assert.match(source, /createPartRenderIndexes\(parts, editingPartIndex\)/);
   assert.match(source, /!renderIndexes\.length \? \(/);
   assert.match(source, /renderIndexes\.map\(\(index, position\) => renderCompactPart/);
@@ -51,6 +51,8 @@ test("compact Parts keeps touch geometry and one-column phone editing", () => {
   assert.match(css, /\.create-labor-editor \.create-part-repair-field input,[\s\S]*?min-height:\s*44px/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-part-editor-fields\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
   assert.match(sharedPartsCss, /@media \(max-width: 700px\)[\s\S]*?\.workorder-parts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /\.create-stock-dropdown\s*\{[^}]*width:\s*min\(29rem, calc\(100vw - 32px\)\)/s);
+  assert.match(css, /\.create-stock-positions input\[type="radio"\]\s*\{[^}]*width:\s*18px/s);
 });
 
 test("desktop retains the existing create Parts grid", () => {

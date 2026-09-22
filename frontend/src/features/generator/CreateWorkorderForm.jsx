@@ -1,5 +1,6 @@
+import { FormValidationDialog } from '../../components/forms/FormValidationDialog.jsx';
 import { laborProductSelectionPatch } from "../../components/workorders/labor-product-selector-model.js";
-import { FormErrorSummary, OperationalForm } from "../../components/forms/index.js";
+import { OperationalForm } from "../../components/forms/index.js";
 import { WorkorderCreateModuleHost } from "../workorder-modules/WorkorderCreateModuleHost.jsx";
 import { createWorkorderSummaryErrors } from "./create-workorder-validation.js";
 import { interfaceText } from "../../i18n/index.js";
@@ -13,6 +14,8 @@ const SERIAL_SELECTION_ERROR = {
 };
 
 export function CreateWorkorderForm({
+  actorId,
+  actorRole,
   assignment,
   busy,
   errors,
@@ -71,6 +74,8 @@ export function CreateWorkorderForm({
       selectedVehicle,
     },
     parts: {
+      actorId,
+      actorRole,
       historyEnabled: presentation === "one-page",
       activeSection: mobileSection,
       errors: localizedErrors,
@@ -94,8 +99,8 @@ export function CreateWorkorderForm({
 
   return (
     <OperationalForm ref={mobileScrollRef} id={CREATE_WORKORDER_FORM_ID} className="create-workorder-form" data-mobile-section={mobileSection} busy={busy} onSubmit={onSubmit} noValidate>
-      <FormErrorSummary errors={summaryErrors} focusFirstField focusKey={errorFocusKey} focusOnMount focusReady={errorFocusReady} onFocusTarget={onErrorFocusTarget} title={t("create.checkDetails")} />
-      {message ? <p className="create-workorder-form-message" role={error ? "alert" : "status"}>{message}</p> : null}
+      <FormValidationDialog errors={summaryErrors} focusKey={errorFocusKey} focusReady={errorFocusReady} onFocusTarget={onErrorFocusTarget} title={t("create.checkDetails")} />
+      {message && !summaryErrors.length ? <p className="create-workorder-form-message" role={error ? "alert" : "status"}>{message}</p> : null}
       <WorkorderCreateModuleHost presentation={presentation} sections={sections} moduleProps={moduleProps} />
     </OperationalForm>
   );

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import pg from "pg";
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 1_500;
@@ -149,7 +150,7 @@ export async function ensureLocalDatabase({
   return { started: true, target };
 }
 
-if (import.meta.url === new URL(process.argv[1], "file:").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   ensureLocalDatabase().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;

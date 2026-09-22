@@ -37,6 +37,12 @@ test("inventory count parsing keeps nonnumeric package text as a visible excepti
   assert.equal(row.quantity, null);
 });
 
+test("inventory count parsing accepts measured precision and rejects excess precision", () => {
+  const base = { sourceRow: 4, partNumber: "BULK-1", partName: "Oil", description: "", binLocation: "", averageCost: null };
+  assert.equal(inventoryCountInternals.prepareRows([{ ...base, quantity: "1.125" }])[0].quantity, 1.125);
+  assert.equal(inventoryCountInternals.prepareRows([{ ...base, quantity: "1.1255" }])[0].quantity, null);
+});
+
 test("inventory count parsing rejects duplicate spreadsheet row identities", () => {
   const row = { sourceRow: 4, partNumber: "ABC-1", partName: "", description: "", binLocation: "", quantity: 2, averageCost: null };
   assert.throws(() => inventoryCountInternals.prepareRows([row, row]), /row 4 was uploaded more than once/i);
@@ -184,6 +190,7 @@ test("count review and apply expose an explicit unreviewed-tracking error", asyn
       catalogPartId: "50000000-0000-4000-8000-000000000005",
       quantity: 3,
       binLocation: "A1",
+      targetPositionId: "60000000-0000-4000-8000-000000000006",
     }, context(), { resolveLine: async () => ({ kind: "tracking_required" }) }),
     (error) => error.code === "INVENTORY_COUNT_TRACKING_REQUIRED" && error.statusCode === 409,
   );

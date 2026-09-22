@@ -1,3 +1,4 @@
+import './inventory-tables.css';
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, FileCheck02, Package, SearchMd } from "@untitledui/icons";
@@ -9,8 +10,7 @@ import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from ".
 import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { api } from "../../lib/api.js";
-import { CreateInventoryPartDialog } from "./CreateInventoryPartDialog.jsx";
-import { ReviewInventoryCountPartDialog } from "./ReviewInventoryCountPartDialog.jsx";
+import { StoragePositionPicker } from "./StoragePositionPicker.jsx";
 
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_ROWS = 500;
@@ -18,9 +18,16 @@ const EXCEPTION_COLUMNS = [
   { id: "issue", label: "Issue" },
   { id: "sourcePart", label: "Spreadsheet part", isRowHeader: true },
   { id: "quantity", label: "Qty" },
-  { id: "storage", label: "Bin / shelf" },
+  { id: "storage", label: "Destination" },
   { id: "masterPart", label: "Master part" },
   { id: "action", label: "Action" },
+];
+const FILE_COLUMNS = [
+  { id: "file", label: "File", isRowHeader: true },
+  { id: "location", label: "Location" },
+  { id: "uploaded", label: "Uploaded" },
+  { id: "status", label: "Status" },
+  { id: "actions", label: "Actions" },
 ];
 
 function cellValue(cell) {
@@ -86,6 +93,7 @@ function statusText(status) {
     unmatched: "Choose and review master part",
     duplicate: "Duplicate row",
     invalid_quantity: "Fix quantity",
+    position_required: "Choose destination",
     ready: "Ready",
     applied: "Added",
     ignored: "Ignored",
@@ -97,14 +105,33 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
   const automaticSearchQuery = String(line.sourcePartName || line.sourceDescription || line.sourcePartNumber || "").trim();
   const [query, setQuery] = useState(suggestedQuery);
   const [useSpreadsheetSuggestions, setUseSpreadsheetSuggestions] = useState(true);
+  const [selectedPart, setSelectedPart] = useState(() => line.catalogPartId ? {
+    id: line.catalogPartId,
+    partNumber: line.partNumber,
+    description: line.description,
+    trackingMode: line.trackingMode,
+    decimalScale: line.decimalScale,
+  } : null);
   const [quantity, setQuantity] = useState(line.quantity || "");
-  const [binLocation, setBinLocation] = useState(line.binLocation || "");
+  const [targetPositionId, setTargetPositionId] = useState(line.targetPositionId || "");
+  const [positions, setPositions] = useState([]);
+  const [positionLoading, setPositionLoading] = useState(true);
+  const [positionError, setPositionError] = useState("");
+  const [positionReload, setPositionReload] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [reviewPart, setReviewPart] = useState(null);
 
-  async function update(action, part = null) {
+  useEffect(() => {
+    let active = true;
+    setPositionLoading(true);
+    api(`/api/office/inventory/locations/${encodeURIComponent(stocktake.locationId)}/positions`)
+      .then((result) => { if (active) { setPositions(result.positions || result.items || []); setPositionError(""); } })
+      .catch((nextError) => { if (active) setPositionError(nextError.message || "Storage locations could not be loaded."); })
+      .finally(() => { if (active) setPositionLoading(false); });
+    return () => { active = false; };
+  }, [stocktake.locationId, positionReload]);
+
+  async function update(action) {
     setSaving(true);
     setError("");
     try {
@@ -113,9 +140,10 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
         : {
           action,
           expectedVersion: stocktake.version,
-          catalogPartId: part.id,
+          catalogPartId: selectedPart.id,
           quantity: Number(quantity),
-          binLocation,
+          binLocation: line.sourceBinLocation || "",
+          targetPositionId,
         };
       const result = await api(`/api/office/inventory/count-imports/${stocktake.id}/lines/${line.id}`, {
         method: "PATCH",
@@ -123,13 +151,23 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
       });
       onUpdated(result.import);
     } catch (nextError) {
+      if (nextError?.code === "INVENTORY_COUNT_POSITION_INVALID") {
+        setTargetPositionId("");
+        setPositionReload((value) => value + 1);
+      }
       setError(nextError.message);
     } finally {
       setSaving(false);
     }
   }
 
-  const validQuantity = Number.isInteger(Number(quantity)) && Number(quantity) >= 1 && Number(quantity) <= 500;
+  const parsedQuantity = Number(quantity);
+  const quantityScale = selectedPart?.trackingMode === "measured_bulk" ? Number(selectedPart.decimalScale || 0) : 0;
+  const quantityFactor = 10 ** quantityScale;
+  const validQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 && parsedQuantity <= 500
+    && Math.abs(Math.round(parsedQuantity * quantityFactor) - parsedQuantity * quantityFactor) < 1e-8;
+  const quantityStep = quantityScale ? String(1 / quantityFactor) : "1";
+  const canMatch = Boolean(selectedPart?.trackingMode && validQuantity && targetPositionId && !positionLoading && !positionError);
   const partLabel = line.sourcePartNumber || `row ${line.sourceRow}`;
 
   return <OperationalDataRow id={line.id} className="inventory-count-table-row">
@@ -140,53 +178,42 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
     <OperationalDataCell label="Spreadsheet part" className="inventory-count-source-cell">
       <strong>{line.sourcePartNumber}</strong>
       <small>{line.sourcePartName || line.sourceDescription || "No spreadsheet description"}</small>
+      {line.sourceBinLocation ? <small>Sheet bin: {line.sourceBinLocation}</small> : null}
     </OperationalDataCell>
     <OperationalDataCell label="Qty" className="inventory-count-quantity-cell">
       <label className="inventory-count-visually-hidden" htmlFor={`count-quantity-${line.id}`}>Quantity for {partLabel}</label>
-      <input id={`count-quantity-${line.id}`} aria-invalid={!validQuantity} type="number" min="1" max="500" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+      <input id={`count-quantity-${line.id}`} aria-invalid={!validQuantity} type="number" min="0.001" max="500" step={quantityStep} value={quantity} data-decimal-scale={quantityScale} onChange={(event) => setQuantity(event.target.value)} />
     </OperationalDataCell>
-    <OperationalDataCell label="Bin / shelf" className="inventory-count-storage-cell">
-      <label className="inventory-count-visually-hidden" htmlFor={`count-storage-${line.id}`}>Bin or shelf for {partLabel}</label>
-      <input id={`count-storage-${line.id}`} value={binLocation} maxLength={120} placeholder="Bin or shelf" onChange={(event) => setBinLocation(event.target.value)} />
+    <OperationalDataCell label="Destination" className="inventory-count-storage-cell">
+      <StoragePositionPicker positions={positions} value={targetPositionId} onChange={setTargetPositionId} disabled={saving || positionLoading} required purpose="receipt" />
+      {positionLoading ? <small role="status">Loading storage locations…</small> : null}
+      {positionError ? <><small role="alert">{positionError}</small><Button type="button" onClick={() => setPositionReload((value) => value + 1)}>Try again</Button></> : null}
     </OperationalDataCell>
     <OperationalDataCell label="Master part" className="inventory-count-master-cell">
       <PartCatalogCombobox
         locationId={stocktake.locationId}
         purpose="master_match"
         value={query}
-        onChange={(nextQuery) => { setQuery(nextQuery); setUseSpreadsheetSuggestions(false); }}
-        onSelect={(part) => part.trackingMode ? update("match", part) : setReviewPart(part)}
-        disabled={saving || !validQuantity}
+        onChange={(nextQuery) => { setQuery(nextQuery); setUseSpreadsheetSuggestions(false); setSelectedPart(null); }}
+        onSelect={(part) => { setSelectedPart(part); setQuery(part.partNumber || part.description || ""); }}
+        disabled={saving}
         label=""
         inputAriaLabel={`Choose master part for ${partLabel} from row ${line.sourceRow}`}
-        placeholder="Choose a matching part"
+        placeholder="Choose a catalog part"
         catalogEndpoint="/api/office/inventory/catalog"
         resultLimit={12}
         popupAriaLabel={`Matching master parts for ${partLabel}`}
         suggestionQuery={useSpreadsheetSuggestions ? automaticSearchQuery : ""}
       />
-      <small className="inventory-count-match-hint">Select to view suggested matches</small>
-      {line.matchStatus === "unmatched" ? <Button type="button" onClick={() => setCreateOpen(true)} disabled={saving || !validQuantity}>Create this part</Button> : null}
+      <small className="inventory-count-match-hint">Use an existing configured catalog part.</small>
       {error ? <p className="ops-error" role="alert" aria-live="assertive">{error}</p> : null}
-      {createOpen ? <CreateInventoryPartDialog
-        locationId={stocktake.locationId}
-        defaults={{ partNumber: line.sourcePartNumber, description: line.sourcePartName || line.sourceDescription, uomCode: "ea" }}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(part) => update("match", part)}
-      /> : null}
-      {reviewPart ? <ReviewInventoryCountPartDialog
-        part={reviewPart}
-        quantity={Number(quantity)}
-        onClose={() => setReviewPart(null)}
-        onSaved={async (part) => { setReviewPart(null); await update("match", part); }}
-      /> : null}
     </OperationalDataCell>
     <OperationalDataCell label="Action" className="inventory-count-action-cell">
+      <Button type="button" variant="primary" onClick={() => update("match")} disabled={saving || !canMatch}>{saving ? "Saving…" : "Ready"}</Button>
       <Button type="button" aria-label={`Ignore ${partLabel} from row ${line.sourceRow}`} onClick={() => update("ignore")} disabled={saving}>{saving ? "Saving…" : "Ignore"}</Button>
     </OperationalDataCell>
   </OperationalDataRow>;
 }
-
 export function InventoryCountImportPanel({ locations, initialImportId = "", uploadOpen = false, onUploadOpenChange, canApplyInventoryCount = false, onApplied, onContextChange }) {
   const fileInput = useRef(null);
   const [locationId, setLocationId] = useState(() => locations[0]?.id || "");
@@ -236,7 +263,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
 
   useEffect(() => {
     onContextChange?.(stocktake ? {
-      label: stocktake.sourceFileName || "Inventory file",
+      label: stocktake.sourceFileName || "Count sheet",
       onBack: showFileList,
     } : null);
   }, [onContextChange, stocktake?.id, stocktake?.sourceFileName]);
@@ -251,7 +278,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     returnFocusImportIdRef.current = "";
   }, [imports, listLoading, stocktake]);
 
-  const exceptions = useMemo(() => stocktake?.lines.filter((line) => ["unmatched", "duplicate", "invalid_quantity"].includes(line.matchStatus)) || [], [stocktake]);
+  const exceptions = useMemo(() => stocktake?.lines.filter((line) => ["unmatched", "duplicate", "invalid_quantity", "position_required"].includes(line.matchStatus)) || [], [stocktake]);
   const filteredExceptions = useMemo(() => exceptions.filter((line) => {
     const sourceQuantity = String(line.sourceQuantity ?? "").trim();
     const matchesFilter = exceptionFilter === "all" || exceptionFilter === line.matchStatus || (exceptionFilter === "zero_or_blank" && (sourceQuantity === "" || Number(sourceQuantity) === 0));
@@ -279,6 +306,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
         timeoutMs: 30_000,
       });
       setStocktake(result.import);
+      onUploadOpenChange?.(false);
       setImportPage(1);
       window.history.replaceState({}, "", (() => {
         const url = new URL(window.location.href);
@@ -328,10 +356,10 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     }
   }
 
-  const uploadDialog = <UploadDialog title="Add inventory" closeLabel="Close inventory upload" isOpen={uploadOpen} onOpenChange={(open) => !uploading && onUploadOpenChange?.(open)} isDismissable={!uploading} closeDisabled={uploading} error={error}><label className="shared-upload-field" htmlFor="inventory-count-location"><span>Location</span><Dropdown id="inventory-count-location" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown></label><UploadDropzone inputId="inventory-count-file" inputRef={fileInput} accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={!locationId || uploading} onChange={(event) => upload(event.target.files?.[0])} onDrop={(event) => upload(event.dataTransfer.files?.[0])} text={uploading ? "Uploading…" : "Drop file here or browse"} hint="XLSX · 2 MB maximum" /></UploadDialog>;
+  const uploadDialog = <UploadDialog title="Import count sheet" closeLabel="Close count-sheet upload" isOpen={uploadOpen} onOpenChange={(open) => !uploading && onUploadOpenChange?.(open)} isDismissable={!uploading} closeDisabled={uploading} error={error}><label className="shared-upload-field" htmlFor="inventory-count-location"><span>Location</span><Dropdown id="inventory-count-location" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown></label><UploadDropzone inputId="inventory-count-file" inputRef={fileInput} accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={!locationId || uploading} onChange={(event) => upload(event.target.files?.[0])} onDrop={(event) => upload(event.dataTransfer.files?.[0])} text={uploading ? "Uploading…" : "Drop count sheet here or browse"} hint="XLSX · 2 MB maximum" /></UploadDialog>;
 
   if (loading) return <div className="inventory-empty"><Package /><strong>Loading inventory count</strong></div>;
-  if (!stocktake) return <>{uploadDialog}{error && !uploadOpen ? <p className="ops-error" role="alert">{error}</p> : null}{listLoading ? <div className="inventory-empty"><Package /><strong>Loading uploaded files</strong></div> : imports.length ? <><div className="inventory-file-list"><table className="inventory-file-table" aria-label="Uploaded inventory files"><thead><tr><th scope="col">File</th><th scope="col">Location</th><th scope="col">Uploaded</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead><tbody>{imports.map((entry) => <tr key={entry.id}><th scope="row"><span className="inventory-file-name"><FileCheck02 /><span><strong>{entry.sourceFileName}</strong><small>{entry.rowCount} inventory rows</small></span></span></th><td>{entry.locationName}</td><td>{new Date(entry.createdAt).toLocaleString()}</td><td><span className={`inventory-state is-${entry.status}`}>{entry.status}</span></td><td><div className="inventory-file-actions">{entry.downloadUrl ? <a href={entry.downloadUrl}>Download</a> : null}<Button type="button" data-inventory-import={entry.id} onClick={() => openImport(entry.id)}>Review</Button></div></td></tr>)}</tbody></table></div><Pagination currentPage={importPage} pageCount={importMeta.pageCount} setPage={setImportPage} total={importMeta.total} label="files" loading={listLoading} /></> : <div className="inventory-empty"><FileCheck02 /><strong>No inventory files uploaded</strong><p>Choose Add inventory to upload the first XLSX file.</p></div>}</>;
+  if (!stocktake) return <>{uploadDialog}{error && !uploadOpen ? <p className="ops-error" role="alert">{error}</p> : null}{listLoading ? <div className="inventory-empty"><Package /><strong>Loading uploaded count sheets</strong></div> : imports.length ? <><OperationalDataTable ariaLabel="Uploaded count sheets" columns={FILE_COLUMNS} className="inventory-file-table inventory-data-table">{imports.map((entry) => <OperationalDataRow id={entry.id} key={entry.id}><OperationalDataCell label="Count sheet"><span className="inventory-file-name"><FileCheck02 /><span><strong>{entry.sourceFileName}</strong><small>{entry.rowCount} count rows</small></span></span></OperationalDataCell><OperationalDataCell label="Location">{entry.locationName}</OperationalDataCell><OperationalDataCell label="Uploaded">{new Date(entry.createdAt).toLocaleString()}</OperationalDataCell><OperationalDataCell label="Status"><span className={`inventory-state is-${entry.status}`}>{entry.status}</span></OperationalDataCell><OperationalDataCell label="Actions"><div className="inventory-file-actions">{entry.downloadUrl ? <a href={entry.downloadUrl}>Download</a> : null}<Button type="button" data-inventory-import={entry.id} onClick={() => openImport(entry.id)}>Review</Button></div></OperationalDataCell></OperationalDataRow>)}</OperationalDataTable><Pagination currentPage={importPage} pageCount={importMeta.pageCount} setPage={setImportPage} total={importMeta.total} label="count sheets" loading={listLoading} /></> : <div className="inventory-empty"><FileCheck02 /><strong>No count sheets uploaded</strong><p>Choose Import count sheet to upload the first XLSX file.</p></div>}</>;
 
   return <>{uploadDialog}<section className="inventory-count-review">
     <header><div><FileCheck02 /><div><h3>{stocktake.sourceFileName}</h3><p>{stocktake.locationName} · Uploaded {new Date(stocktake.createdAt).toLocaleString()}</p></div></div><span className={`inventory-state is-${stocktake.status}`}>{stocktake.status}</span></header>
@@ -343,7 +371,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     </dl>
 
     {stocktake.readyCount && canApplyInventoryCount ? <section className="inventory-count-apply">
-      <div className="inventory-count-ready-copy"><CheckCircle /><div><strong>{stocktake.readyCount} matched</strong><p>Adds counted stock at {stocktake.locationName}. Serialized parts also receive QR labels.</p></div></div>
+      <div className="inventory-count-ready-copy"><CheckCircle /><div><strong>{stocktake.readyCount} matched</strong><p>Adds each reviewed row to its exact storage destination. Serialized parts also receive QR labels.</p></div></div>
       <fieldset className="inventory-count-confirmation"><legend className="inventory-count-visually-hidden">Physical count confirmation</legend><label className="inventory-count-attestation"><Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>Counted at {stocktake.locationName}</span></label></fieldset>
       <Button type="button" variant="primary" onClick={applyReady} disabled={!confirmed || applying}>{applying ? "Adding…" : `Add ${stocktake.readyCount} rows`}</Button>
     </section> : stocktake.readyCount ? <section className="inventory-count-admin-next-action"><strong>{stocktake.readyCount} matched rows are ready.</strong><p>An administrator must confirm the physical count before adding inventory.</p></section> : null}
@@ -351,9 +379,9 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     {stocktake.labelBatches.length ? <section className="inventory-count-labels"><h3>QR labels</h3><p>Print each batch and attach one label to each physical unit.</p><div>{stocktake.labelBatches.map((batch, index) => <a key={batch.id} href={batch.printUrl} target="_blank" rel="noreferrer">Print batch {index + 1} · {batch.itemCount} labels</a>)}</div></section> : null}
 
     {exceptions.length ? <section className="inventory-count-exceptions">
-      <div className="inventory-count-section-heading"><div><AlertCircle /><div><h3>{exceptions.length} need review</h3><p>Match a master part, correct the row, or ignore it.</p></div></div></div>
-      <div className="inventory-count-review-toolbar"><label><SearchMd /><input aria-label="Search inventory review rows" value={exceptionQuery} onChange={(event) => setExceptionQuery(event.target.value)} placeholder="Search part, description, bin, or row" /></label><Dropdown aria-label="Filter inventory review rows" value={exceptionFilter} onChange={(event) => setExceptionFilter(event.target.value)}><option value="all">All issues ({exceptions.length})</option><option value="zero_or_blank">Zero or blank quantity</option><option value="invalid_quantity">Quantity issues</option><option value="unmatched">Unmatched parts</option><option value="duplicate">Duplicates</option></Dropdown></div>
-      {filteredExceptions.length ? <><div className="inventory-count-filter-result"><strong>{filteredExceptions.length}</strong> matching rows</div><OperationalDataTable ariaLabel="Inventory count rows needing review" columns={EXCEPTION_COLUMNS} className="inventory-count-review-table">{exceptionItems.map((line) => <InventoryCountExceptionRow key={line.id} line={line} stocktake={stocktake} onUpdated={setStocktake} />)}</OperationalDataTable><Pagination currentPage={exceptionPage} pageCount={exceptionPageCount} setPage={setExceptionPage} total={filteredExceptions.length} label="rows" /></> : <div className="inventory-empty is-compact"><SearchMd /><strong>No matching review rows</strong><p>Change the search or issue filter.</p></div>}
+      <div className="inventory-count-section-heading"><div><AlertCircle /><div><h3>{exceptions.length} need review</h3><p>Choose the catalog part and exact storage destination, correct the quantity, or ignore the row.</p></div></div></div>
+      <div className="inventory-count-review-toolbar"><label><SearchMd /><input aria-label="Search inventory review rows" value={exceptionQuery} onChange={(event) => setExceptionQuery(event.target.value)} placeholder="Search part, description, source bin, or row" /></label><Dropdown aria-label="Filter inventory review rows" value={exceptionFilter} onChange={(event) => setExceptionFilter(event.target.value)}><option value="all">All issues ({exceptions.length})</option><option value="zero_or_blank">Zero or blank quantity</option><option value="invalid_quantity">Quantity issues</option><option value="unmatched">Unmatched parts</option><option value="duplicate">Duplicates</option><option value="position_required">Destination needed</option></Dropdown></div>
+      {filteredExceptions.length ? <><div className="inventory-count-filter-result"><strong>{filteredExceptions.length}</strong> matching rows</div><OperationalDataTable ariaLabel="Inventory count rows needing review" columns={EXCEPTION_COLUMNS} className="inventory-count-review-table inventory-data-frame">{exceptionItems.map((line) => <InventoryCountExceptionRow key={line.id} line={line} stocktake={stocktake} onUpdated={setStocktake} />)}</OperationalDataTable><Pagination currentPage={exceptionPage} pageCount={exceptionPageCount} setPage={setExceptionPage} total={filteredExceptions.length} label="rows" /></> : <div className="inventory-empty is-compact"><SearchMd /><strong>No matching review rows</strong><p>Change the search or issue filter.</p></div>}
     </section> : null}
     {error ? <p className="ops-error" role="alert" aria-live="assertive">{error}</p> : null}
   </section></>;

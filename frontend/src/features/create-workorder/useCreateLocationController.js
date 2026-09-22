@@ -15,6 +15,21 @@ import {
 
 const EMPTY_CALLBACK = () => {};
 
+function stableFormSnapshot(form = {}) {
+  const { laborProduct, locationName, ...draftFields } = form;
+  return JSON.stringify(draftFields);
+}
+
+export function canAdoptInitialTemplateBaseline({
+  currentForm = {},
+  initialForm = null,
+  templateAlreadyApplied = false,
+} = {}) {
+  return Boolean(initialForm)
+    && !templateAlreadyApplied
+    && stableFormSnapshot(currentForm) === stableFormSnapshot(initialForm);
+}
+
 export function useCreateLocationController({
   activeWorkorder = null,
   actorRole = "",
@@ -27,8 +42,22 @@ export function useCreateLocationController({
 } = {}) {
   const callbacksRef = useRef({ onClearLocationError, onFormPatch, onSelectionPatch });
   const currentFormRef = useRef(currentForm);
+  const initialCreateFormRef = useRef(currentForm);
+  const templateBaselineAdoptedRef = useRef(false);
   callbacksRef.current = { onClearLocationError, onFormPatch, onSelectionPatch };
   currentFormRef.current = currentForm;
+
+  useEffect(() => {
+    if (!activeWorkorder && workspace === "generator") return;
+    initialCreateFormRef.current = null;
+    templateBaselineAdoptedRef.current = false;
+  }, [activeWorkorder, workspace]);
+
+  useEffect(() => {
+    if (activeWorkorder || workspace !== "generator" || initialCreateFormRef.current) return;
+    initialCreateFormRef.current = currentForm;
+    templateBaselineAdoptedRef.current = false;
+  }, [activeWorkorder, currentForm, workspace]);
 
   const [locations, setLocations] = useState([]);
   const [locationsState, setLocationsState] = useState({
@@ -82,9 +111,15 @@ export function useCreateLocationController({
     if (activeWorkorder || workspace !== "generator") return;
     const patch = createLocationTemplatePatch(currentForm, locations);
     if (Object.keys(patch).length) {
+      const resetDraftBaseline = canAdoptInitialTemplateBaseline({
+        currentForm,
+        initialForm: initialCreateFormRef.current,
+        templateAlreadyApplied: templateBaselineAdoptedRef.current,
+      });
+      templateBaselineAdoptedRef.current = true;
       callbacksRef.current.onFormPatch(patch, {
         reason: "template-reconciled",
-        resetDraftBaseline: false,
+        resetDraftBaseline,
       });
     }
   }, [activeWorkorder, currentForm, locations, workspace]);

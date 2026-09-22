@@ -39,6 +39,7 @@ function publicCatalogPart(row) {
     description: row.description,
     category: row.category,
     uomCode: row.uom_code || DEFAULT_UOM_CODE,
+    decimalScale: Number.isInteger(Number(row.decimal_scale)) ? Number(row.decimal_scale) : 0,
     trackingMode: row.tracking_mode || null,
     repairOrder: row.repair_template,
     aliases: Array.isArray(row.aliases) ? row.aliases : [],
@@ -91,6 +92,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
       ), candidates as (
         select
           pc.*,
+          uom.decimal_scale,
           case
             when $2 <> '' and pc.normalized_part_number = $2 then 0
             when exists (
@@ -146,6 +148,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
             else 'related'
           end as match_type
         from parts_catalog pc
+        join units_of_measure uom on uom.code = pc.uom_code and uom.active
         where pc.company_id = $1
           and (
             ($2 <> '' and pc.normalized_part_number like $7 escape '\\')
@@ -285,6 +288,7 @@ export async function findCompanyCatalogPart(companyId, input) {
     `
       select
         pc.*,
+        uom.decimal_scale,
         coalesce((select jsonb_agg(reference.reference_number order by lower(reference.reference_number), reference.id) from part_reference_numbers reference where reference.company_id=pc.company_id and reference.catalog_part_id=pc.id), '[]'::jsonb) as reference_numbers,
         exists (select 1 from odoo_product_mappings ownership where ownership.company_id=pc.company_id and ownership.catalog_part_id=pc.id) as provider_managed,
         case
@@ -299,6 +303,7 @@ export async function findCompanyCatalogPart(companyId, input) {
           else 'related'
         end as match_type
       from parts_catalog pc
+      join units_of_measure uom on uom.code = pc.uom_code and uom.active
       where pc.company_id = $1
         and (
           pc.normalized_part_number = $2
@@ -328,3 +333,5 @@ export async function findCompanyCatalogPart(companyId, input) {
   );
   return result.rows[0] ? publicCatalogPart(result.rows[0]) : null;
 }
+
+export const partsCatalogInternals = Object.freeze({ publicCatalogPart });

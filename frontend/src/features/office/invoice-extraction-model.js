@@ -5,7 +5,7 @@ export const INVOICE_HEADER_FIELDS = Object.freeze([
   ["invoiceNumber", "Invoice number", "text"],
   ["invoiceDate", "Invoice date", "text"],
   ["purchaseOrderNumber", "PO number", "text", { optional: true, secondary: true }],
-  ["currency", "Currency", "text"],
+  ["currency", "Currency", "currency"],
   ["subtotal", "Subtotal", "number"],
   ["tax", "Tax", "number"],
   ["shipping", "Shipping", "number"],
@@ -78,6 +78,39 @@ export function invoiceFieldNeedsReview(field, { optional = false } = {}, thresh
   return Number(field?.confidence) < threshold;
 }
 
+export const INVOICE_LINE_FIELDS = Object.freeze(["partNumber", "description", "quantity", "unitOfMeasure", "unitPrice", "lineTotal"]);
+
+export function invoiceLineNeedsReview(line, threshold = 90) {
+  return INVOICE_LINE_FIELDS.some((fieldName) => Number(line?.[fieldName]?.confidence) < threshold);
+}
+
+export function orderInvoiceLinesForReview(lines = []) {
+  return [...lines].sort((left, right) => Number(invoiceLineNeedsReview(right)) - Number(invoiceLineNeedsReview(left)));
+}
+
+export function firstInvoiceLineId(lines = []) {
+  return lines.find((line) => invoiceLineNeedsReview(line))?.id || "";
+}
+
+export function nextInvoiceLineIdAfterRemoval(lines = [], removedId = "") {
+  const index = lines.findIndex((line) => line.id === removedId);
+  if (index < 0) return firstInvoiceLineId(lines);
+  return lines[index + 1]?.id || lines[index - 1]?.id || "";
+}
+
+export function orderInvoiceReviewSections(sections = []) {
+  return sections
+    .map((section, index) => ({ section, index }))
+    .sort((left, right) => Number(Boolean(right.section.unresolved)) - Number(Boolean(left.section.unresolved)) || left.index - right.index)
+    .map(({ section }) => section);
+}
+
+export function invoiceDeliveryFullyReceived({ suggestion } = {}) {
+  return suggestion?.reason === "invoice_fully_received"
+    || (suggestion?.receiptLines?.length > 0
+      && suggestion.receiptLines.every((line) => Number(line.invoiceOutstandingQuantity) <= 0));
+}
+
 export function invoiceReviewErrorMessage(error) {
   const issues = Array.isArray(error?.details?.issues) ? error.details.issues : [];
   const messages = [...new Set(issues.map((issue) => String(issue?.message || "").trim()).filter(Boolean))];
@@ -104,4 +137,42 @@ export function parseReviewNumber(value) {
   if (value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+export function extractedPurchaseOrderNumber(draft) {
+  return String(draft?.purchaseOrderNumber?.value || "").trim();
+}
+
+export function suggestedAllocationPlan(suggestion) {
+  if (suggestion?.kind !== "suggestions") return [];
+  return (suggestion.candidates || []).map((entry) => ({
+    invoiceLineIndex: Number(entry.invoiceLineIndex),
+    purchaseLineId: entry.purchaseLineId,
+    quantity: Number(entry.quantity),
+  }));
+}
+
+export function initialInvoicePostingSelection(suggestion, draft) {
+  const hasExtractedPurchaseOrder = Boolean(extractedPurchaseOrderNumber(draft));
+  if (suggestion?.kind === "none" && suggestion.reason === "no_purchase_order" && !hasExtractedPurchaseOrder) {
+    return { postingRoute: "no_purchase_order", allocationPlan: [], noPurchaseOrderReason: "" };
+  }
+  return { postingRoute: "", allocationPlan: [], noPurchaseOrderReason: "" };
+}
+
+export function invoicePostingSelectionReady(selection, suggestion, draft) {
+  if (!suggestion || suggestion.kind === "review_required") return false;
+  if (selection?.postingRoute === "purchase_order") {
+    return suggestion.kind === "suggestions" && suggestedAllocationPlan(suggestion).length > 0 && selection.allocationPlan?.length === suggestedAllocationPlan(suggestion).length;
+  }
+  if (selection?.postingRoute !== "no_purchase_order") return false;
+  return Boolean(String(selection.noPurchaseOrderReason || "").trim());
+}
+
+export function invoicePostingPayload(selection) {
+  return {
+    postingRoute: selection.postingRoute,
+    allocationPlan: selection.postingRoute === "purchase_order" ? selection.allocationPlan : [],
+    noPurchaseOrderReason: selection.postingRoute === "no_purchase_order" ? String(selection.noPurchaseOrderReason || "").trim() : "",
+  };
 }

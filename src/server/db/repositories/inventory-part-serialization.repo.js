@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch } from "./inventory-labels.repo.js";
+import { placeSerializedInventoryReceipt } from "./inventory-positions.repo.js";
 import {
   inspectInventoryAuthority,
   recordInventoryAuthorityCutover,
@@ -338,6 +339,12 @@ export async function createPartSerializedUnits({
         "Physical serialized intake from part details",
         `part-serialization:${serializationBatchId}`],
     );
+    await placeSerializedInventoryReceipt(client, {
+      companyId: part.company_id, locationId: part.location_id, catalogPartId: part.catalog_part_id,
+      uomCode: part.uom_code, unitIds, actorId,
+      idempotencyKey: `position:part-serialization:${serializationBatchId}`,
+      requestHash: hash, receiptId, reason: "Physical serialized intake from part details",
+    });
     const batch = await createReceiptLabelBatch(client, {
       batchId: labelBatchId,
       companyId: part.company_id,

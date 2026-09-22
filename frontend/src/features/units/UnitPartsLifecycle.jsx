@@ -433,6 +433,7 @@ export function UnitPartsLifecycle({
                 <Button
                   type="button"
                   variant="primary"
+                  style={{ minHeight: 44 }}
                   disabled={
                     busy ||
                     Boolean(pendingRequest) ||
@@ -466,6 +467,7 @@ export function UnitPartsLifecycle({
                 <Button
                   type="button"
                   variant="primary"
+                  style={{ minHeight: 44 }}
                   disabled={
                     busy ||
                     Boolean(pendingRequest) ||
@@ -610,7 +612,7 @@ export function UnitPartsLifecycle({
                 />
               </label>
             ) : null}
-            <div>
+            <div className="shared-action-row">
               <Button
                 type="button"
                 onClick={trackLegacy}
@@ -751,7 +753,7 @@ export function UnitPartsLifecycle({
               />
             </label>
           </details>
-          <div>
+          <div className="shared-action-row">
             <Button
               type="button"
               variant="primary"

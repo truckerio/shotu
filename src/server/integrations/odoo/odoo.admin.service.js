@@ -25,6 +25,7 @@ import {
 } from "../../db/repositories/service-history.repo.js";
 import { IntegrationHttpError } from "../core/integration-errors.js";
 import { enqueueIntegrationJob } from "../core/integration-platform.repo.js";
+import { importOdooPurchaseHistory } from "./odoo.purchase-history.repo.js";
 
 const HISTORY_PAGE_SIZE = 500;
 const ORDER_ID_BATCH_SIZE = 200;
@@ -34,6 +35,7 @@ const MAX_HISTORY_ORDERS = 100_000;
 const MAX_HISTORY_LINES = 500_000;
 const MAX_HISTORY_PRODUCTS = 100_000;
 const ELIGIBLE_HISTORY_STATES = new Set(["sale", "done"]);
+const ELIGIBLE_PURCHASE_STATES = ["purchase", "done"];
 const ODOO_SERVICE_ORDER_FIELD = "is_service_order";
 const HISTORY_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 const HISTORY_JOB_DEDUPE_WINDOW_MS = 5 * 60 * 1_000;
@@ -199,6 +201,42 @@ export async function readOdooServiceHistory(client, { updatedSince = null, reco
   return { orders, lines, products, activeOrderIds, inactiveOrderIds };
 }
 
+export async function readOdooPurchaseHistory(client) {
+  const uid = await client.authenticate();
+  const users = await client.execute("res.users", "read", [[uid]], { fields: ["company_id"] });
+  const odooCompanyId = Number(Array.isArray(users?.[0]?.company_id) ? users[0].company_id[0] : users?.[0]?.company_id);
+  if (!Number.isSafeInteger(odooCompanyId) || odooCompanyId <= 0) {
+    throw new Error("Odoo purchase history could not resolve the integration user's active company.");
+  }
+  const orderFields = await supportedFields(client, "purchase.order", [
+    "id", "name", "state", "date_order", "date_approve", "partner_id",
+    "currency_id", "amount_total", "write_date", "company_id",
+  ]);
+  const lineFields = await supportedFields(client, "purchase.order.line", [
+    "id", "order_id", "sequence", "display_type", "product_id", "name",
+    "product_qty", "qty_received", "qty_invoiced", "product_uom", "price_unit",
+    "price_subtotal", "price_total", "date_planned", "write_date",
+  ]);
+  const orders = await pagedSearchRead(
+    client,
+    "purchase.order",
+    [["company_id", "=", odooCompanyId], ["state", "in", ELIGIBLE_PURCHASE_STATES]],
+    orderFields,
+    MAX_HISTORY_ORDERS,
+  );
+  const lines = [];
+  for (const orderIds of batches(orders.map((order) => order.id), ORDER_ID_BATCH_SIZE)) {
+    lines.push(...await pagedSearchRead(
+      client,
+      "purchase.order.line",
+      [["order_id", "in", orderIds]],
+      lineFields,
+      MAX_HISTORY_LINES - lines.length,
+    ));
+  }
+  return { orders, lines, activeOrderIds: orders.map((order) => String(order.id)) };
+}
+
 async function configuredClient(companyId) {
   const configuration = await readOdooConfiguration(companyId);
   if (!configuration) throw new Error("Configure the Odoo.sh connection first.");
@@ -348,6 +386,30 @@ export async function syncOdooServiceHistory(companyId) {
   }
 }
 
+export async function syncOdooPurchaseHistory(companyId) {
+  const client = await configuredClient(companyId);
+  const syncStartedAt = new Date();
+  try {
+    await markServiceHistorySyncAttempted(companyId, "odoo_purchase", syncStartedAt);
+    const history = await readOdooPurchaseHistory(client);
+    const result = await importOdooPurchaseHistory(companyId, history);
+    await markServiceHistorySyncSucceeded(companyId, "odoo_purchase", {
+      providerWatermark: syncStartedAt,
+      reconciled: true,
+    });
+    return result;
+  } catch (error) {
+    await markServiceHistorySyncFailed(companyId, "odoo_purchase", {
+      attemptedAt: syncStartedAt,
+      code: "ODOO_PURCHASE_HISTORY_UNAVAILABLE",
+      message: "Odoo purchase history could not be synchronized.",
+    });
+    const purchaseError = new Error("Odoo purchase history could not be synchronized.", { cause: error });
+    purchaseError.code = "ODOO_PURCHASE_HISTORY_UNAVAILABLE";
+    throw purchaseError;
+  }
+}
+
 export async function syncOdooPartsAndInventory(companyId, { requestId = null } = {}) {
   const client = await configuredClient(companyId);
   await discoverOdooLocations(companyId);
@@ -363,11 +425,23 @@ export async function syncOdooPartsAndInventory(companyId, { requestId = null } 
     requestId,
     maxAttempts: 3,
   });
+  const purchaseHistoryJob = await enqueueIntegrationJob({
+    companyId,
+    provider: "odoo",
+    jobType: "purchase_history_sync",
+    payload: {},
+    idempotencyKey: `odoo:purchase-history:${companyId}:${Math.floor(Date.now() / HISTORY_JOB_DEDUPE_WINDOW_MS)}`,
+    requestId,
+    maxAttempts: 3,
+  });
   return {
     ...inventoryResult,
     historyQueued: historyJob.status !== "completed",
     historySyncStatus: historyJob.status,
     historyJobId: historyJob.id,
+    purchaseHistoryQueued: purchaseHistoryJob.status !== "completed",
+    purchaseHistorySyncStatus: purchaseHistoryJob.status,
+    purchaseHistoryJobId: purchaseHistoryJob.id,
   };
 }
 

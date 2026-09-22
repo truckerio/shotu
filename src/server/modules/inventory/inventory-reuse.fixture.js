@@ -2,10 +2,11 @@
 import { randomUUID, createHash } from "node:crypto";
 import { query, getPool } from "../../db/pool.js";
 import { issueSerializedUnitToWorkorder, finalizeSerializedUnitUsage, consumePendingSerializedInstallationsForApproval } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
+import { placeSerializedInventoryReceipt } from "../../db/repositories/inventory-positions.repo.js";
 export const reuseDigest = (text) => createHash("sha256").update(text).digest("hex");
 export async function createInventoryReuseFixture({installed = true, configured = true} = {}) {
   const suffix = randomUUID().replaceAll("-","");
-  const f = Object.fromEntries(["companyId","locationId","assetId","secondAssetId","workorderId","removalWorkorderId","secondWorkorderId","catalogPartId","unitId","pendingUnitId","adminId","removerId","receiverId","releaseId","runId","receiptId","lineId"].map((key)=>[key,randomUUID()]));
+  const f = Object.fromEntries(["companyId","locationId","storagePositionId","assetId","secondAssetId","workorderId","removalWorkorderId","secondWorkorderId","catalogPartId","unitId","pendingUnitId","adminId","removerId","receiverId","releaseId","runId","receiptId","lineId"].map((key)=>[key,randomUUID()]));
   f.suffix = suffix;
   f.createRemovalWorkorder = async () => {
     await query(`insert into operational_workorders(id,company_id,serial,asset_id,location_id,created_by_user_id,concern,status)
@@ -14,9 +15,10 @@ export async function createInventoryReuseFixture({installed = true, configured 
   };
   f.cleanup = async () => {
     // Restrict every delete to this fresh random company, in FK order.
-    for (const table of ["inventory_reuse_operations","inventory_reuse_audit_events","inventory_reuse_repairs","inventory_reuse_cases","inventory_reuse_capability_grants","inventory_reuse_catalog_policies","inventory_unit_events","inventory_stock_movements","workorder_serialized_part_usage_commands","workorder_serialized_part_usages","inventory_serialized_units","inventory_receipt_lines","inventory_receipts","inventory_items","parts_catalog"]) {
+    for (const table of ["inventory_reuse_operations","inventory_reuse_audit_events","inventory_reuse_repairs","inventory_reuse_cases","inventory_reuse_capability_grants","inventory_reuse_catalog_policies","inventory_unit_events","inventory_stock_movements","inventory_position_movements","inventory_position_operations","workorder_serialized_part_usage_commands","workorder_serialized_part_usages","inventory_serialized_units","inventory_receipt_lines","inventory_receipts","inventory_items","parts_catalog"]) {
       await query(`delete from ${table} where company_id=$1`,[f.companyId]);
     }
+    await query("delete from inventory_positions where company_id=$1",[f.companyId]);
     await query("delete from workorder_mechanic_assignments where workorder_id=any($1::uuid[])",[[f.workorderId,f.removalWorkorderId,f.secondWorkorderId]]);
     await query("delete from workorder_drafts where company_id=$1",[f.companyId]);
     await query("delete from operational_workorders where company_id=$1",[f.companyId]);
@@ -41,7 +43,9 @@ export async function createInventoryReuseFixture({installed = true, configured 
     for (const [id,name] of [[f.assetId,"A"],[f.secondAssetId,"B"]]) await query("insert into assets(id,company_id,location_id,provider,name,unit_no) values($1,$2,$3,'manual',$4,$5)",[id,f.companyId,f.locationId,`Custody Truck ${name}`,`CQ-${name}-${suffix.slice(0,8)}`]);
     for (const [id,asset,name] of [[f.workorderId,f.assetId,"original"],[f.secondWorkorderId,f.secondAssetId,"reuse"]]) await query(`insert into operational_workorders(id,company_id,serial,asset_id,location_id,created_by_user_id,concern,status)
       values($1,$2,$3,$4,$5,$6,'Custody lifecycle QA','in_progress')`,[id,f.companyId,`WO-CQ-${name}-${suffix}`,asset,f.locationId,f.adminId]);
-    await query("insert into parts_catalog(id,company_id,normalized_part_number,part_number,description,uom_code) values($1,$2,$3,$4,'Reusable QA alternator','ea')",[f.catalogPartId,f.companyId,`CQ${suffix}`,`CQ-${suffix}`]);
+    await query("insert into parts_catalog(id,company_id,normalized_part_number,part_number,description,uom_code,tracking_mode) values($1,$2,$3,$4,'Reusable QA alternator','ea','serialized')",[f.catalogPartId,f.companyId,`CQ${suffix}`,`CQ-${suffix}`]);
+    await query(`insert into inventory_positions(id,company_id,location_id,code,name,kind,usage,can_store,is_pickable,created_by)
+      values($1,$2,$3,$4,'Reuse QA bin','bin','storage',true,true,$5)`,[f.storagePositionId,f.companyId,f.locationId,`REUSE-${suffix.slice(0,8)}`,f.adminId]);
     await query(`insert into invoice_extraction_runs(id,company_id,location_id,created_by,reviewed_by,document_hash,file_name,mime_type,byte_size,idempotency_key,status,provider,model,prompt_version,reviewed_draft,reviewed_at)
       values($1,$2,$3,$4,$4,$5,'custody.pdf','application/pdf',1,$6,'reviewed','local-test','local-test','local-v1',$7::jsonb,now())`,[f.runId,f.companyId,f.locationId,f.adminId,reuseDigest(suffix),`extract-${suffix}`,JSON.stringify({documentType:{value:"invoice"},lines:[]})]);
     await query(`insert into inventory_receipts(id,company_id,location_id,invoice_run_id,created_by,idempotency_key,provider,provider_marker,provider_picking_name,status,confirmed_at)
@@ -52,6 +56,22 @@ export async function createInventoryReuseFixture({installed = true, configured 
       values($1,$3,$4,$5,$6,1,$7,'in_stock','new','inventory_location',$4),($2,$3,$4,$5,$6,2,$8,'in_stock','new','inventory_location',$4)`,[f.unitId,f.pendingUnitId,f.companyId,f.locationId,f.receiptId,f.lineId,`CQ-SERIAL-${suffix}-1`,`CQ-SERIAL-${suffix}-2`]);
     await query(`insert into inventory_items(company_id,location_id,catalog_part_id,normalized_part_number,part_number,description,quantity_on_hand,quantity_reserved,uom_code,source_provider,external_id)
       values($1,$2,$3,$4,$5,'Reusable QA alternator',2,0,'ea','local',$6)`,[f.companyId,f.locationId,f.catalogPartId,`CQ${suffix}`,`CQ-${suffix}`,`local:${suffix}`]);
+    const placementClient = await getPool().connect();
+    try {
+      await placementClient.query("begin");
+      await placeSerializedInventoryReceipt(placementClient, {
+        companyId:f.companyId, locationId:f.locationId, catalogPartId:f.catalogPartId, uomCode:"ea",
+        unitIds:[f.unitId,f.pendingUnitId], actorId:f.adminId, idempotencyKey:`receipt-position-${suffix}`, receiptId:f.receiptId,
+      });
+      await placementClient.query("commit");
+    } catch (error) {
+      await placementClient.query("rollback");
+      throw error;
+    } finally { placementClient.release(); }
+    f.initialCustodyVersion = (await query(
+      "select custody_version from inventory_serialized_units where company_id=$1 and id=$2",
+      [f.companyId,f.unitId],
+    )).rows[0].custody_version;
     if (configured) await query("insert into inventory_reuse_catalog_policies(company_id,location_id,catalog_part_id,reuse_allowed,evidence,updated_by_user_id) values($1,$2,$3,true,'QA approved reusable catalog item',$4)",[f.companyId,f.locationId,f.catalogPartId,f.adminId]);
     f.originalWorkorderId = f.workorderId;
     f.invoiceRunId = f.runId;

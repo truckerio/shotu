@@ -10,10 +10,11 @@ import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import {
   createMechanicPartRequestDraft,
   mechanicPartRequestErrorFields,
+  mechanicPartRequestErrorMessage,
   validateMechanicPartRequest,
 } from "./mechanic-part-request-model.js";
 
-export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en" }) {
+export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en", requestUrl = `/api/mechanic/workorders/${workorderId}/parts` }) {
   const t = (key) => interfaceText(locale, key);
   const descriptionRef = useRef(null);
   const [draft, setDraft] = useState(createMechanicPartRequestDraft);
@@ -48,7 +49,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en" 
     setErrors({});
     setMessage("");
     try {
-      await api(`/api/mechanic/workorders/${workorderId}/parts`, {
+      await api(requestUrl, {
         method: "POST",
         body: JSON.stringify(validation.payload),
       });
@@ -59,11 +60,12 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en" 
       setMessage(t("parts.sent"));
     } catch (error) {
       const fieldErrors = mechanicPartRequestErrorFields(error);
+      const actionMessage = mechanicPartRequestErrorMessage(error, t);
       setErrors(fieldErrors);
       setMessageTone("error");
       setMessage(Object.keys(fieldErrors).length
         ? t("parts.checkFields")
-        : locale === "en" && error?.message ? error.message : t("parts.requestFailed"));
+        : actionMessage || (locale === "en" && error?.message ? error.message : t("parts.requestFailed")));
       if (fieldErrors.query) descriptionRef.current?.focus();
     } finally {
       setBusy(false);

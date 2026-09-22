@@ -19,6 +19,12 @@ const inventoryUnitSelectionSchema = z.object({
     .refine((ids) => new Set(ids).size === ids.length, "Choose each serialized unit once."),
 }).strict();
 
+const inventoryPositionSelectionSchema = z.object({
+  partIndex: z.number().int().min(0).max(17),
+  catalogPartId: z.string().uuid(),
+  positionId: z.string().uuid(),
+}).strict();
+
 const customerCompanyNameSchema = z.string().trim().max(300, "Customer company must be 300 characters or less.");
 export const laborProductSchema = z.object({
   productId: z.string().uuid().optional(),
@@ -86,25 +92,45 @@ export const createWorkorderSchema = z.object({
     .default([]),
   formData: workorderFormDataSchema.default({}),
   inventoryUnitSelections: z.array(inventoryUnitSelectionSchema).max(18).default([]),
+  inventoryPositionSelections: z.array(inventoryPositionSelectionSchema).max(18).default([]),
 }).superRefine((input, context) => {
   const parts = Array.isArray(input.formData?.parts) ? input.formData.parts : [];
   const selectionsByPartIndex = new Map(input.inventoryUnitSelections.map((selection) => [selection.partIndex, selection]));
   const allUnitIds = input.inventoryUnitSelections.flatMap((selection) => selection.unitIds);
+  const positionsByPartIndex = new Map(input.inventoryPositionSelections.map((selection) => [selection.partIndex, selection]));
   if (new Set(allUnitIds).size !== allUnitIds.length) {
     context.addIssue({ code: "custom", path: ["inventoryUnitSelections"], message: "Choose each serialized unit once." });
   }
   if (selectionsByPartIndex.size !== input.inventoryUnitSelections.length) {
     context.addIssue({ code: "custom", path: ["inventoryUnitSelections"], message: "Each part row can have one serialized-unit selection." });
   }
+  if (positionsByPartIndex.size !== input.inventoryPositionSelections.length) {
+    context.addIssue({ code: "custom", path: ["inventoryPositionSelections"], message: "Each part row can have one pickup location." });
+  }
   parts.forEach((part, partIndex) => {
     const definition = getUnitDefinition(String(part?.uomCode || DEFAULT_UOM_CODE).trim().toLowerCase());
     const selection = selectionsByPartIndex.get(partIndex);
+    const positionSelection = positionsByPartIndex.get(partIndex);
     const allowsSerializedUnits = Boolean(part?.catalogPartId)
       && ["count", "packaging"].includes(definition?.category)
       && Number(definition?.decimalScale) === 0;
+    const requiresPosition = Boolean(part?.catalogPartId)
+      && ["quantity", "measured_bulk"].includes(part?.trackingMode);
     if (!allowsSerializedUnits && selection) {
       context.addIssue({ code: "custom", path: ["inventoryUnitSelections", partIndex], message: "Serialized units are only valid for countable inventory parts." });
       return;
+    }
+    if (positionSelection && positionSelection.catalogPartId !== part.catalogPartId) {
+      context.addIssue({ code: "custom", path: ["inventoryPositionSelections", partIndex], message: "Pickup location must match this inventory part." });
+    }
+    if (requiresPosition && !positionSelection) {
+      context.addIssue({ code: "custom", path: ["inventoryPositionSelections", partIndex], message: "Choose where this part will be picked up." });
+    }
+    if (!requiresPosition && positionSelection) {
+      context.addIssue({ code: "custom", path: ["inventoryPositionSelections", partIndex], message: "Pickup locations are only valid for quantity-tracked inventory parts." });
+    }
+    if (selection && positionSelection) {
+      context.addIssue({ code: "custom", path: ["inventoryPositionSelections", partIndex], message: "Choose exact units or a pickup location, not both." });
     }
     if (!selection) return;
     if (selection.catalogPartId !== part.catalogPartId) {
@@ -118,6 +144,11 @@ export const createWorkorderSchema = z.object({
   for (const selection of input.inventoryUnitSelections) {
     if (!parts[selection.partIndex]) {
       context.addIssue({ code: "custom", path: ["inventoryUnitSelections", selection.partIndex], message: "Serialized-unit selection does not match a part row." });
+    }
+  }
+  for (const selection of input.inventoryPositionSelections) {
+    if (!parts[selection.partIndex]) {
+      context.addIssue({ code: "custom", path: ["inventoryPositionSelections", selection.partIndex], message: "Pickup location does not match a part row." });
     }
   }
 });

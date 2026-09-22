@@ -11,6 +11,7 @@ const BATCH_ID = "00000000-0000-4000-8000-000000000007";
 const COUNT_ID = "00000000-0000-4000-8000-000000000008";
 const COUNT_LINE_ID = "00000000-0000-4000-8000-000000000009";
 const AUTHORITY_EXCEPTION_ID = "00000000-0000-4000-8000-000000000010";
+const CATALOG_PART_ID = "00000000-0000-4000-8000-000000000014";
 
 function context() {
   return {
@@ -27,6 +28,116 @@ function helpers(body, requestContext = context()) {
     sendJson: (res, status, payload) => Object.assign(res, { status, payload }),
   };
 }
+
+test("part movement route validates and forwards a shop-scoped Workorder projection", async () => {
+  const response = {};
+  let received;
+  const dependencies = {
+    loadLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+    findPart: async () => ({ id: CATALOG_PART_ID }),
+    listMovements: async (input) => { received = input; return { page: input.page, hasMore: false, items: [] }; },
+  };
+  const handled = await handleInventoryApi(
+    { method: "GET" }, response,
+    new URL(`http://localhost/api/office/inventory/parts/${CATALOG_PART_ID}/movements?locationId=${LOCATION_ID}&view=workorder&page=2`),
+    helpers(), dependencies,
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 200);
+  assert.equal(received.view, "workorder");
+  assert.equal(received.locationId, LOCATION_ID);
+  assert.equal(received.page, 2);
+  const invalidResponse = {};
+  await handleInventoryApi(
+    { method: "GET" }, invalidResponse,
+    new URL(`http://localhost/api/office/inventory/parts/${CATALOG_PART_ID}/movements?view=usage`),
+    helpers(), { ...dependencies, loadPartScope: async () => ({ companyId: COMPANY_ID }) },
+  );
+  assert.equal(invalidResponse.status, 400);
+  assert.equal(invalidResponse.payload.code, "validation_error");
+});
+
+test("direct no-PO approval decision route keeps the durable request as the mutation owner", async () => {
+  const requestId = "00000000-0000-4000-8000-000000000011";
+  const response = {};
+  const handled = await handleInventoryApi(
+    { method: "POST" },
+    response,
+    new URL(`http://localhost/api/office/inventory/direct-receipt-approvals/${requestId}/decision`),
+    helpers({ action: "reject", expectedVersion: 1, reason: "Invoice evidence required" }),
+    {
+      loadApprovalRequest: async () => ({ id: requestId, locationId: LOCATION_ID, status: "pending", version: 1 }),
+      loadLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      closeApprovalRequest: async (command) => ({ kind: "closed", request: { id: command.requestId, status: "rejected", version: 2 } }),
+    },
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.payload, { status: "rejected", approvalRequest: { id: requestId, status: "rejected", version: 2 } });
+});
+
+test("direct no-PO approval detail route returns only the authorized durable projection", async () => {
+  const requestId = "00000000-0000-4000-8000-000000000011";
+  const response = {};
+  const detail = { approvalRequest: { id: requestId, status: "pending", version: 1 }, arrival: { quantity: 2, uomCode: "ea" } };
+  const handled = await handleInventoryApi(
+    { method: "GET" }, response,
+    new URL(`http://localhost/api/office/inventory/direct-receipt-approvals/${requestId}`),
+    helpers(),
+    {
+      loadApprovalRequest: async () => ({ id: requestId, locationId: LOCATION_ID }),
+      loadLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      readApprovalDetail: async () => ({ kind: "found", detail }),
+    },
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.payload, detail);
+});
+
+test("task queue routes preserve normalized read and assignment command owners", async () => {
+  const sourceId = "00000000-0000-4000-8000-000000000012";
+  const listResponse = {};
+  assert.equal(await handleInventoryApi(
+    { method: "GET" }, listResponse,
+    new URL(`http://localhost/api/office/inventory/task-queue?locationId=${LOCATION_ID}&view=my_work`),
+    helpers(), { getInventoryTaskQueue: async (params) => ({ items: [], page: Number(params.get("page") || 1), pageSize: 25, hasMore: false, capabilities: { canClaim: true } }) },
+  ), true);
+  assert.equal(listResponse.status, 200);
+  assert.equal(listResponse.payload.pageSize, 25);
+
+  const detailResponse = {};
+  await handleInventoryApi(
+    { method: "GET" }, detailResponse,
+    new URL(`http://localhost/api/office/inventory/task-queue/position_recount/${sourceId}?locationId=${LOCATION_ID}`),
+    helpers(), { getInventoryTask: async (sourceType, id) => ({ item: { id: `${sourceType}:${id}` } }) },
+  );
+  assert.equal(detailResponse.payload.item.id, `position_recount:${sourceId}`);
+
+  const commandResponse = {};
+  const command = { action: "claim", locationId: LOCATION_ID, sourceType: "position_recount", sourceId, sourceVersion: "1", expectedAssignmentVersion: 0, idempotencyKey: "route-claim-001", reason: "Count this position" };
+  await handleInventoryApi(
+    { method: "POST" }, commandResponse,
+    new URL("http://localhost/api/office/inventory/task-queue/assignments"),
+    helpers(command), { postInventoryTaskAssignment: async (body) => ({ task: { id: `${body.sourceType}:${body.sourceId}`, assignmentVersion: 1 } }) },
+  );
+  assert.equal(commandResponse.status, 200);
+  assert.equal(commandResponse.payload.task.assignmentVersion, 1);
+});
+
+test("exact stock-task route preserves id, shop and kind for off-page reads", async () => {
+  const taskId = "00000000-0000-4000-8000-000000000013";
+  const response = {};let received;
+  const handled = await handleInventoryApi(
+    { method: "GET" }, response,
+    new URL(`http://localhost/api/office/inventory/stock-tasks/${taskId}?locationId=${LOCATION_ID}&kind=transfer`),
+    helpers(),
+    { getStockTask: async (id, params) => (received={id,locationId:params.get("locationId"),kind:params.get("kind")},{task:{id,kind:"transfer"}}) },
+  );
+  assert.equal(handled,true);assert.equal(response.status,200);
+  assert.deepEqual(received,{id:taskId,locationId:LOCATION_ID,kind:"transfer"});
+  assert.deepEqual(response.payload,{task:{id:taskId,kind:"transfer"}});
+});
 
 test.skip("legacy: receive route crosses the real handler boundary and returns a confirmed receipt", async () => {
   const response = {};
@@ -55,6 +166,7 @@ test.skip("legacy: receive route crosses the real handler boundary and returns a
           total: { value: 10, confidence: 100, evidence: "test" },
           lines: [{
             id: "line-1",
+            catalogPartId: RUN_ID,
             partNumber: { value: "QA-1", confidence: 100, evidence: "test" },
             description: { value: "QA serialized unit", confidence: 100, evidence: "test" },
             quantity: { value: 1, confidence: 100, evidence: "test" },
@@ -191,7 +303,13 @@ test("physical confirmation route returns an application-owned receipt without a
     { method: "POST" },
     response,
     new URL(`http://localhost/api/office/invoice-extractions/${RUN_ID}/confirm-receipt`),
-    helpers({ idempotencyKey: "route-local-post-1", expectedVersion: 2, confirmation: "all_received_undamaged" }),
+    helpers({
+      idempotencyKey: "route-local-post-1",
+      expectedVersion: 2,
+      confirmation: "all_received_undamaged",
+      postingRoute: "no_purchase_order",
+      noPurchaseOrderReason: "Supplier invoice arrived without a purchase order.",
+    }),
     {
       loadInvoice: async () => ({
         id: RUN_ID,
@@ -213,6 +331,7 @@ test("physical confirmation route returns an application-owned receipt without a
           total: { value: 10, confidence: 100, evidence: "test" },
           lines: [{
             id: "line-1",
+            catalogPartId: RUN_ID,
             partNumber: { value: "LOCAL-1", confidence: 100, evidence: "test" },
             description: { value: "Local part", confidence: 100, evidence: "test" },
             quantity: { value: 1, confidence: 100, evidence: "test" },
@@ -223,6 +342,7 @@ test("physical confirmation route returns an application-owned receipt without a
           warnings: [],
         },
       }),
+      loadTrackingModes: async () => [{ catalogPartId: RUN_ID, trackingMode: "quantity" }],
       postReceipt: async (input) => {
         posted = true;
         return { kind: "posted", receipt: { id: input.receiptId, status: "posted", lineCount: 1, units: [], labelBatch: null } };
@@ -246,6 +366,31 @@ test("physical confirmation route rejects an absent delivery attestation", async
   );
   assert.equal(response.status, 400);
   assert.equal(response.payload.code, "validation_error");
+});
+
+test("purchase receipt route records line quantities through the canonical receipt writer", async () => {
+  const response = {};
+  const orderId = "00000000-0000-4000-8000-000000000011";
+  const purchaseLineId = "00000000-0000-4000-8000-000000000012";
+  let posted;
+  await handleInventoryApi(
+    { method: "POST" }, response,
+    new URL(`http://localhost/api/office/inventory/purchasing/${orderId}/receipts`),
+    helpers({ locationId: LOCATION_ID, expectedVersion: 2, idempotencyKey: "route-purchase-receipt", reference: "Packing slip",
+      lines: [{ purchaseLineId, acceptedQuantity: 2, heldQuantity: 0, rejectedQuantity: 0, notReceivedQuantity: 1, outcome: "short", notes: "One missing", holdLocation: "", serialNumbers: [] }] }),
+    {
+      loadLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
+      readPurchaseOrder: async () => ({ id: orderId, location_id: LOCATION_ID, status: "ordered", version: 2, currency: "USD", lines: [{
+        id: purchaseLineId, catalog_part_id: RUN_ID, part_number: "ROUTE-PART", description: "Route part", uom_code: "ea", current_uom_code: "ea",
+        tracking_mode: "quantity", part_version: 1, quantity: "3", received_quantity: "0", cancelled_quantity: "0", unit_price: "4.0000",
+      }] }),
+      postReceipt: async (input) => { posted = input; return { kind: "posted", receipt: { id: input.receiptId, status: "posted", units: [] } }; },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.payload.recorded, true);
+  assert.equal(posted.lines[0].acceptedQuantity, 2);
+  assert.equal(posted.receiptOutcomes[0].notReceivedQuantity, 1);
 });
 
 test("durable label manifest route returns a bounded immutable page", async () => {
@@ -272,7 +417,7 @@ test("bounded stock list route uses authenticated scope", async () => {
   await handleInventoryApi(
     { method: "GET" },
     response,
-    new URL("http://localhost/api/office/inventory/stock?q=filter&limit=25&sort=locations_desc"),
+    new URL("http://localhost/api/office/inventory/stock?q=filter&limit=25&sort=low_stock_first"),
     helpers(null),
     { listStock: async (nextInput) => { inputs.push(nextInput); return []; } },
   );
@@ -282,7 +427,7 @@ test("bounded stock list route uses authenticated scope", async () => {
   assert.deepEqual(inputs[0].locationIds, [LOCATION_ID]);
   assert.equal(inputs[0].queryText, "filter");
   assert.equal(inputs[0].limit, 25);
-  assert.equal(inputs[0].sort, "locations_desc");
+  assert.equal(inputs[0].sort, "low_stock_first");
 });
 
 test("part-location routes read company-wide details and create auditable serialized children", async () => {
@@ -558,6 +703,7 @@ test("opening-count line review refuses an unreviewed master part at the route b
         catalogPartId: RUN_ID,
         quantity: 4,
         binLocation: "A1",
+        targetPositionId: "70000000-0000-4000-8000-000000000007",
       }),
       emitAdministrativeAuditEvent: async (event) => { events.push(event); },
     },

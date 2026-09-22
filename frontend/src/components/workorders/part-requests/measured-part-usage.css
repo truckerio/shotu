@@ -13,10 +13,32 @@
 .measured-part-dialog footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .measured-part-dialog footer .button { min-height: 44px; }
 .measured-part-message { color: #b42318; margin: 0; }
-.aggregate-part-usages { display: grid; gap: 8px; }
-.used-parts-editor .used-part-aggregate-row { align-items: start; background: #f9fafb; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding: 10px 12px; }
-.used-part-aggregate-row > div:first-child { display: grid; gap: 2px; }
-.used-part-aggregate-row small { color: #667085; }
-.aggregate-part-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.aggregate-part-actions .button { min-height: 44px; }
-@media (max-width: 420px) { .measured-part-dialog { padding: 16px; } .measured-part-dialog footer .button { flex: 1 1 120px; } .aggregate-part-actions { width: 100%; } .aggregate-part-actions .button { flex: 1 1 130px; } }
+.measured-part-positions { border: 0; display: grid; gap: 6px; margin: 0; padding: 0; }
+.measured-part-positions legend { color: #344054; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.measured-part-positions label { align-items: center; border: 1px solid #d0d5dd; border-radius: 8px; cursor: pointer; display: flex; gap: 10px; min-height: 48px; padding: 8px 10px; }
+.measured-part-positions label:has(input:checked) { background: #eff8ff; border-color: #2e90fa; }
+.measured-part-positions label.is-disabled { cursor: not-allowed; opacity: .52; }
+.measured-part-positions label input { min-height: auto; padding: 0; width: auto; }
+.measured-part-positions label > span { display: flex; flex: 1; gap: 12px; justify-content: space-between; min-width: 0; }
+.measured-part-positions label small { color: #667085; flex: 0 0 auto; font-weight: 400; }
+.used-parts-editor .used-part-aggregate-row { align-items: start; }
+.used-parts-editor .used-part-aggregate-identity { display: grid; gap: 2px; min-width: 0; }
+.used-part-aggregate-identity small { color: #667085; overflow-wrap: anywhere; }
+.used-part-aggregate-value,
+.used-part-aggregate-repair,
+.used-part-aggregate-pickup { min-width: 0; }
+.used-part-aggregate-pickup { display: grid; gap: 2px; overflow-wrap: anywhere; }
+.aggregate-part-actions { align-items: stretch; display: grid; gap: 6px; min-width: 0; }
+.aggregate-part-actions .button { min-height: 34px; min-width: 0; padding: 6px 10px; width: 100%; }
+.used-part-aggregate-status { color: #475467; font-size: 12px; }
+@container (max-width: 760px) { .used-part-aggregate-pickup, .aggregate-part-actions { grid-column: 2 / -1; } }
+@container (max-width: 520px) {
+  .used-parts-editor .used-parts-items-table > .used-part-aggregate-row { grid-template-columns: 24px minmax(0, 1fr) minmax(76px, auto); row-gap: 6px; }
+  .used-part-aggregate-identity { grid-column: 2; }
+  .used-part-aggregate-value { grid-column: 3; justify-items: end; text-align: right; }
+  .used-part-aggregate-repair,
+  .used-part-aggregate-pickup,
+  .aggregate-part-actions { grid-column: 2 / -1; }
+  .aggregate-part-actions .button { min-height: 44px; }
+}
+@media (max-width: 420px) { .measured-part-dialog { padding: 16px; } .measured-part-dialog footer .button { flex: 1 1 120px; } }

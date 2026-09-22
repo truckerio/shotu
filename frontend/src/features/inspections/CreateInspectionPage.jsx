@@ -1,4 +1,4 @@
-import { ActionFooter, Dropdown, FormCard, FormField, FormSection, OperationalForm, OptionalSection, UnitSummary } from "../../components/forms/index.js";
+import { ActionFooter, DatePicker, Dropdown, FormCard, FormField, FormSection, OperationalForm, OptionalSection, UnitSummary } from "../../components/forms/index.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { inspectionUnitTypeLabel } from "./inspection-model.js";
 import { useCreateInspectionController } from "./useCreateInspectionController.js";
@@ -45,7 +45,7 @@ export function CreateInspectionPage({ actor, access = {}, locations = [], mecha
               {form.canAssign ? <FormField label="Mechanic" required><Dropdown value={form.mechanicIds[0] || ""} onChange={(event) => form.setMechanicIds(event.target.value ? [event.target.value] : [])} aria-label="Assign mechanic"><option value="">Select mechanic</option>{form.mechanics.map((mechanic) => <option key={mechanic.id} value={mechanic.id}>{mechanic.name}</option>)}</Dropdown></FormField> : null}
             </div></FormSection> : null}
             <OptionalSection className="inspection-more-details" title="More details">
-              <FormField label="Due date"><input type="date" value={form.dueDate} onChange={(event) => form.setDueDate(event.target.value)} /></FormField>
+              <FormField label="Due date"><DatePicker value={form.dueDate} onChange={(event) => form.setDueDate(event.target.value)} aria-label="Due date" /></FormField>
               <FormField label="Office instructions"><textarea rows="3" value={form.instructions} onChange={(event) => form.setInstructions(event.target.value)} /></FormField>
             </OptionalSection>
             {form.state.error ? <p className="inspection-create-error" role="alert">{form.state.error}</p> : null}

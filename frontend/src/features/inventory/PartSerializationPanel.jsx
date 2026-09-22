@@ -10,6 +10,7 @@ import {
 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { Checkbox } from "../../components/ui/Checkbox.jsx";
+import { IconButton } from "../../components/ui/IconButton.jsx";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Pagination } from "../../components/ui/Pagination.jsx";
 import { api } from "../../lib/api.js";
@@ -132,6 +133,9 @@ export function PartSerializationPanel({
   actorId = "",
   onBack,
   onInventoryChanged,
+  onAddStock,
+  onMarkDamaged,
+  showAddAction = true,
 }) {
   const rootRef = useRef(null);
   const backRef = useRef(null);
@@ -168,7 +172,23 @@ export function PartSerializationPanel({
   const [correctionError, setCorrectionError] = useState("");
   const [pendingCorrection, setPendingCorrection] = useState(null);
   const [correctionRetryAllowed, setCorrectionRetryAllowed] = useState(false);
+  const unitHistory = [...(selectedUnit?.events || []).map(event=>({...event,context:eventContext(event)}))];
+  for(const event of custodyDetail?.unit?.timeline || []) {
+    const type=event.eventType || 'updated';
+    if(unitHistory.some(existing=>eventLabel(existing.type).toLowerCase()===eventLabel(type).toLowerCase() && (eventLabel(type).toLowerCase()==='created'||existing.at===event.at)))continue;
+    unitHistory.push({...event,type,context:custodyEventContext(event)});
+  }
+  unitHistory.sort((a,b)=>new Date(a.at)-new Date(b.at));
+  const canMarkDamaged=unit=>unit?.status==='in_stock' && unit?.custodyHolderType==='inventory_location' && unit?.custodyLocationId===location.locationId;
   const selectedUnitSource = serializedUnitSourceView(selectedUnit?.source);
+  const currentUnit = custodyDetail?.unit || selectedUnit;
+  const unitBin = currentUnit?.custodyBinLocation?.trim();
+  const isAtSelectedLocation = currentUnit?.custodyHolderType === "inventory_location" &&
+    (!currentUnit.custodyLocationId || currentUnit.custodyLocationId === location.locationId);
+  const partStorageBin = isAtSelectedLocation ? location.binLocation?.trim() : "";
+  const currentWhereabouts = isAtSelectedLocation
+    ? [location.locationName || selectedUnit?.locationName || "Inventory", unitBin || partStorageBin].filter(Boolean).join(" · ")
+    : custodyHolder(currentUnit);
   const selectedUnitUsesInternalTrackingId =
     selectedUnit?.source?.type === "legacy_tracking" ||
     /^LEGACY-/.test(selectedUnit?.serialNumber || "");
@@ -505,7 +525,7 @@ export function PartSerializationPanel({
   if (!loading && data && ["quantity", "measured_bulk"].includes(data.part.trackingMode)) {
     const uom = data.part.canonicalUomCode || data.part.uomCode;
     return <div className="inventory-quantity-stock">
-      <button className="inventory-detail-back" type="button" onClick={onBack}><ArrowLeft />All locations</button>
+      {onBack ? <button className="inventory-detail-back" type="button" onClick={onBack}><ArrowLeft />All locations</button> : null}
       <header><h3>{location.locationName}</h3><p>{data.part.trackingMode === "quantity" ? "Quantity tracked" : "Measured or bulk"}</p></header>
       {error ? <p role="alert">{error}</p> : null}
       <dl>
@@ -519,7 +539,7 @@ export function PartSerializationPanel({
 
   return (
     <div className="inventory-serial-drilldown" ref={rootRef}>
-      <button
+      {selectedUnitId || onBack ? <button
         className="inventory-detail-back"
         ref={backRef}
         type="button"
@@ -527,7 +547,7 @@ export function PartSerializationPanel({
       >
         <ArrowLeft />
         {selectedUnitId ? "Serialized units" : "All locations"}
-      </button>
+      </button> : null}
 
       {loading ? (
         <div className="inventory-serial-loading">
@@ -572,6 +592,7 @@ export function PartSerializationPanel({
                 </span>
               </header>
               <div className="inventory-unit-actions">
+                {onMarkDamaged && canMarkDamaged(currentUnit)?<Button onClick={()=>onMarkDamaged(selectedUnit)}>Mark this part damaged</Button>:null}
                 <a
                   className="button primary"
                   href={selectedUnit.printUrl}
@@ -599,8 +620,12 @@ export function PartSerializationPanel({
                   <dd>{selectedUnit.locationName}</dd>
                 </div>
                 <div>
+                  <dt>Bin / shelf</dt>
+                  <dd>{unitBin || partStorageBin || "Not set"}{!unitBin && partStorageBin ? " (part storage)" : ""}</dd>
+                </div>
+                <div>
                   <dt>Where it is</dt>
-                  <dd>{custodyHolder(custodyDetail?.unit || selectedUnit)}</dd>
+                  <dd>{currentWhereabouts}</dd>
                 </div>
                 <div>
                   <dt>Condition</dt>
@@ -725,7 +750,7 @@ export function PartSerializationPanel({
                           ) : null}
                         </div>
                       ) : null}
-                      <div>
+                      <div className="shared-action-row">
                         <Button
                           type="button"
                           variant="primary"
@@ -755,9 +780,9 @@ export function PartSerializationPanel({
                 aria-labelledby="inventory-unit-timeline-title"
               >
                 <h4 id="inventory-unit-timeline-title">Timeline</h4>
-                {selectedUnit.events?.length ? (
+                {unitHistory.length ? (
                   <ol>
-                    {selectedUnit.events.map((event) => (
+                    {unitHistory.map((event) => (
                       <li key={event.id || `${event.type}-${event.at}`}>
                         <span aria-hidden="true" />
                         <div>
@@ -766,8 +791,8 @@ export function PartSerializationPanel({
                             {dateTime(event.at)}
                             {event.actor?.name ? ` · ${event.actor.name}` : ""}
                           </small>
-                          {eventContext(event) ? (
-                            <p>{eventContext(event)}</p>
+                          {event.context ? (
+                            <p>{event.context}</p>
                           ) : null}
                         </div>
                       </li>
@@ -777,38 +802,6 @@ export function PartSerializationPanel({
                   <p>No recorded activity yet.</p>
                 )}
               </section>
-              {custodyDetail?.unit?.timeline?.length ? (
-                <section
-                  className="inventory-unit-timeline"
-                  aria-labelledby="inventory-unit-custody-history-title"
-                >
-                  <h4 id="inventory-unit-custody-history-title">
-                    Custody history
-                  </h4>
-                  <ol>
-                    {custodyDetail.unit.timeline.map((event, index) => (
-                      <li
-                        key={
-                          event.id || `${event.eventType}-${event.at}-${index}`
-                        }
-                      >
-                        <span aria-hidden="true" />
-                        <div>
-                          <strong>
-                            {event.eventType
-                              ? eventLabel(event.eventType)
-                              : "Updated"}
-                          </strong>
-                          <small>{dateTime(event.at)}</small>
-                          {custodyEventContext(event) ? (
-                            <p>{custodyEventContext(event)}</p>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              ) : null}
             </>
           ) : null}
         </div>
@@ -869,16 +862,16 @@ export function PartSerializationPanel({
                   </span>
                 </a>
               ) : null}
-              {data.units.length > 0 &&
+              {showAddAction && data.units.length > 0 &&
               data.canCreateAtLocation &&
               data.canCreateSerializedUnits &&
               !createOpen ? (
                 <Button
                   type="button"
                   icon={Plus}
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => onAddStock ? onAddStock() : setCreateOpen(true)}
                 >
-                  Add units
+                  {onAddStock ? "Add stock" : "Add units"}
                 </Button>
               ) : null}
               {createdBatch ? (
@@ -902,7 +895,7 @@ export function PartSerializationPanel({
             >
               <div className="inventory-serial-toolbar">
                 <strong id="inventory-custody-exact-title">
-                  Condition and exact custody
+                  Filter units
                 </strong>
                 <div className="inventory-serial-filters">
                   <label>
@@ -947,21 +940,6 @@ export function PartSerializationPanel({
                   </label>
                 </div>
               </div>
-              <div className="inventory-detail-metrics" aria-live="polite">
-                {[["new", "New available"], ["reusable", "Reusable available"], ["refurbished", "Refurbished available"]].map(([value, label]) => (
-                  <div key={value}>
-                    <span>{label}</span>
-                    <strong>
-                      {custodyUnits.conditionCounts?.[value] ?? 0}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-              <p className="inventory-serial-note">
-                Condition totals are scoped to this part and location. Use the
-                filters to inspect exact units without changing inventory
-                quantities.
-              </p>
               {custodyUnits.error ? (
                 <p className="ops-error" role="alert">
                   {custodyUnits.error}
@@ -1014,6 +992,8 @@ export function PartSerializationPanel({
                       </span>
                       <ChevronRight aria-hidden="true" />
                     </button>
+                    <div className="inventory-unit-row-actions">
+                      {onMarkDamaged && canMarkDamaged(unit)?<Button aria-label={`Block damaged unit ${unit.serialNumber}`} onClick={()=>onMarkDamaged(unit)}>Block / damaged</Button>:null}
                     <a
                       href={
                         unit.printUrl ||
@@ -1024,8 +1004,9 @@ export function PartSerializationPanel({
                       aria-label={`Print QR label for ${unit.serialNumber}`}
                     >
                       <Printer />
-                      Print QR
+                      <span className="inventory-count-visually-hidden">Print QR</span>
                     </a>
+                    </div>
                   </article>
                 ))}
                 {!companyId && data.truncated ? (
@@ -1076,16 +1057,16 @@ export function PartSerializationPanel({
               <QrCode01 />
               <strong>No serialized children yet</strong>
               <p>Add the physical units currently at this location.</p>
-              {data.canCreateAtLocation &&
+              {showAddAction && data.canCreateAtLocation &&
               data.canCreateSerializedUnits &&
               !createOpen ? (
                 <Button
                   type="button"
                   variant="primary"
                   icon={Plus}
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => onAddStock ? onAddStock() : setCreateOpen(true)}
                 >
-                  Add units
+                  {onAddStock ? "Add stock" : "Add units"}
                 </Button>
               ) : null}
             </div>
@@ -1100,13 +1081,11 @@ export function PartSerializationPanel({
                   <strong>Add units</strong>
                   <p>One serial number and QR label per unit.</p>
                 </div>
-                <button
-                  type="button"
+                <IconButton
+                  icon={XClose}
                   onClick={() => setCreateOpen(false)}
-                  aria-label="Close add units"
-                >
-                  <XClose />
-                </button>
+                  label="Close add units"
+                />
               </div>
               <label>
                 <span>Quantity</span>

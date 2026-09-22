@@ -112,14 +112,23 @@ test("used-parts intake and labor stay compact without hiding accessible names",
   assert.match(editor, /<WorkorderPartsRow className="used-part-labor-row" aria-label=\{t\("parts\.laborHours"\)\}>\s*<strong>1<\/strong>/);
   assert.match(editor, /<div className="used-parts-section-heading">\s*<h3 id=\{partsSectionTitleId\}>\{t\("parts\.usedTitle"\)\}<\/h3>\s*\{serializedToolbar\}\s*<\/div>/);
   assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">[\s\S]*?t\("parts\.addPart"\)[\s\S]*?<\/WorkorderPartsActions> : null/);
-  // One toolbar in each exclusive one-page, populated-panel, and empty-panel branch.
-  assert.equal((editor.match(/\{serializedToolbar\}/g) || []).length, 3);
+  // One toolbar in each exclusive editable and read-only branch.
+  assert.equal((editor.match(/\{serializedToolbar\}/g) || []).length, 2);
+  assert.doesNotMatch(editor, /CompactWorkorderParts|if \(onePage\)/);
   assert.match(editor, /const \[intakeOpen, setIntakeOpen\] = useState\(false\)/);
   assert.match(editor, /function focusIntakeRow\(\)\s*\{\s*if \(!intakeOpen\) \{[\s\S]*?setIntakeOpen\(true\)/);
   assert.match(editor, /function closeIntakeRow\(\)[\s\S]*?setIntakeOpen\(false\)[\s\S]*?workorder-add-approved-part/);
   assert.match(editor, /onClick=\{closeIntakeRow\}>\{t\("parts\.cancel"\)\}/);
   assert.match(editor, /aria-expanded=\{intakeOpen\}/);
   assert.match(editor, /aria-controls="workorder-part-intake-row"/);
+});
+
+test("desktop Detail uses flat Labor rows and reserves a shared Pickup column", () => {
+  assert.doesNotMatch(css, /\.used-parts-labor-table \.used-part-labor-row\s*\{[^}]*(?:background|border|border-radius)\s*:/s);
+  assert.match(sharedParts, /PICKUP: "pickup"/);
+  assert.match(sharedParts, /WORKORDER_PARTS_COLUMNS\.PICKUP/);
+  assert.match(editor, /WORKORDER_PARTS_COLUMNS\.PICKUP]: "Pickup"/);
+  assert.match(editor, /used-part-pickup-empty/);
 });
 
 test("labor and inventory have separate labeled sections with responsive table headings", () => {

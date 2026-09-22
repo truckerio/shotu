@@ -3,9 +3,18 @@ import test from "node:test";
 import {
   catalogInventoryText,
   catalogPartDetails,
+  normalizeCatalogPart,
   normalizeCatalogResponse,
   repairOrderAfterCatalogSelection,
 } from "./catalog-parts-model.js";
+
+test("catalog matches inherit their inventory unit when the catalog row omits it", () => {
+  assert.equal(normalizeCatalogPart({
+    id: "part-1",
+    partNumber: "OIL-1",
+    inventory: { available: 4, uomCode: "qt" },
+  }).uomCode, "qt");
+});
 
 test("normalizes catalog and location inventory without leaking API shape", () => {
   const result = normalizeCatalogResponse({
@@ -16,6 +25,7 @@ test("normalizes catalog and location inventory without leaking API shape", () =
       name: "Oil filter",
       unit: "EA",
       trackingMode: "measured_bulk",
+      decimalScale: 2,
       version: 7,
       providerManaged: true,
       referenceNumbers: ["ALT-1"],
@@ -34,6 +44,7 @@ test("normalizes catalog and location inventory without leaking API shape", () =
   assert.equal(result.items[0].inventory.itemId, "stock-1");
   assert.equal(result.items[0].inventory.available, 6);
   assert.equal(result.items[0].trackingMode, "measured_bulk");
+  assert.equal(result.items[0].decimalScale, 2);
   assert.equal(result.items[0].version, 7);
   assert.equal(result.items[0].providerManaged, true);
   assert.deepEqual(result.items[0].referenceNumbers, ["ALT-1"]);

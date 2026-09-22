@@ -1,5 +1,7 @@
 import { XClose } from "@untitledui/icons";
-import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
+import { Heading } from "react-aria-components";
+import { IconButton } from "./IconButton.jsx";
+import { ModalFrame } from "./ModalFrame.jsx";
 import "./secondary-detail-panel.css";
 
 export function SecondaryDetailPanel({
@@ -18,14 +20,15 @@ export function SecondaryDetailPanel({
   closeLabel = "Close details",
 }) {
   return (
-    <ModalOverlay
-      className="secondary-detail-overlay"
+    <ModalFrame
+      overlayClassName="secondary-detail-overlay"
+      modalClassName={`secondary-detail-modal is-${size}`}
+      dialogClassName="secondary-detail-dialog"
+      ariaLabel={title}
       isOpen={open}
       isDismissable={dismissable}
       onOpenChange={onOpenChange}
     >
-      <Modal className={`secondary-detail-modal is-${size}`}>
-        <Dialog className="secondary-detail-dialog" aria-label={title}>
           {({ close }) => (
             <>
               <header className="secondary-detail-header">
@@ -37,17 +40,13 @@ export function SecondaryDetailPanel({
                   </div>
                   {description ? <p>{description}</p> : null}
                 </div>
-                <button type="button" onClick={() => onClose ? onClose() : close()} disabled={closeDisabled} aria-label={closeLabel} title={closeLabel}>
-                  <XClose aria-hidden="true" />
-                </button>
+                <IconButton icon={XClose} label={closeLabel} onClick={() => onClose ? onClose() : close()} disabled={closeDisabled} />
               </header>
               <div className="secondary-detail-content">{children}</div>
               {footer ? <footer className="secondary-detail-footer">{footer}</footer> : null}
             </>
           )}
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+    </ModalFrame>
   );
 }
 

@@ -73,11 +73,114 @@
   color: #175cd3;
 }
 
+.operational-collection-section-header {
+  align-items: center;
+  border-bottom: 1px solid #d0d5dd;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.operational-collection-section-header :is(h1, h2) {
+  color: var(--foreground-brand-primary, #175cd3);
+  font-size: var(--text-page-title);
+  letter-spacing: -.02em;
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.operational-collection-section-nav {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.operational-collection-section-nav button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #475467;
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  gap: 7px;
+  min-height: 58px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.operational-collection-section-nav button:hover {
+  color: #175cd3;
+}
+
+.operational-collection-section-nav button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #2e6ee6;
+  outline-offset: -2px;
+}
+
+.operational-collection-section-nav strong {
+  background: #f2f4f7;
+  border-radius: 10px;
+  color: #475467;
+  font-size: var(--text-caption);
+  min-width: 22px;
+  padding: 2px 6px;
+  text-align: center;
+}
+
+.operational-collection-section-actions {
+  min-width: max-content;
+}
+
 .operational-collection-toolbar {
   align-items: end;
   display: grid;
   gap: 10px;
   padding: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .operational-collection-section-header {
+    gap: 10px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-top: 10px;
+  }
+
+  .operational-collection-section-header :is(h1, h2) {
+    font-size: 22px;
+  }
+
+  .operational-collection-section-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .operational-collection-section-nav button {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 560px) {
+  .operational-collection-section-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operational-collection-section-actions {
+    grid-column: 1;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .operational-collection-section-nav {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 .operational-collection-result-header {

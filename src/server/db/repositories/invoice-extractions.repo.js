@@ -72,8 +72,12 @@ async function selectRunWithSource(client, whereSql, parameters) {
      from invoice_extraction_runs r
      left join invoice_source_documents s
        on s.company_id = r.company_id and s.run_id = r.id
-     left join local_inventory_receipts local_receipt
-       on local_receipt.company_id = r.company_id and local_receipt.invoice_run_id = r.id
+     left join lateral (
+       select receipt.* from local_inventory_receipts receipt
+       where receipt.company_id = r.company_id and receipt.invoice_run_id = r.id
+       order by receipt.posted_at desc, receipt.id desc
+       limit 1
+     ) local_receipt on true
      left join locations local_receipt_location
        on local_receipt_location.company_id = local_receipt.company_id
       and local_receipt_location.id = local_receipt.location_id

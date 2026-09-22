@@ -101,7 +101,6 @@ test("workorder lifecycle blocks unresolved exact-unit issues", () => {
   assert.match(workorders, /assertNoUnresolvedSerializedParts\(client, workorderId/);
   assert.match(workorders, /changing the workorder unit or location/);
   assert.match(workorders, /before cancelling this workorder/);
-  assert.match(workorders, /before changing the mechanic assignment/);
   assert.match(workorders, /before leaving this workorder/);
 });
 

@@ -34,6 +34,9 @@ async function assertRemoved(ready, usageId) {
     from inventory_serialized_units u join inventory_reuse_cases c on c.company_id=u.company_id and c.unit_id=u.id
     where u.company_id=$1 and u.id=$2 and c.usage_id=$3`, [ready.companyId, ready.unitId, usageId, ready.receiptId]);
   assert.deepEqual(result.rows[0], { unit_status: "removed", case_status: "awaiting_handoff", returns: 0, removed_events: 1, receipt_preserved: true, direct_removal: true }, "Installed removal must preserve identity/receipt and create a direct handoff without return stock.");
+  const caseResult = await getPool().query(`select id from inventory_reuse_cases where company_id=$1 and unit_id=$2 and usage_id=$3`, [ready.companyId, ready.unitId, usageId]);
+  assert.equal(caseResult.rowCount, 1, "Removed unit must have one custody case.");
+  return caseResult.rows[0].id;
 }
 
 async function assertReturned(ready, usageId) {
@@ -50,11 +53,12 @@ async function runViewport({ ready, config, width, logger }) {
   const { unitNo, serialNumber } = await fixtureUnitNo(ready);
   const browser = await chromium.launch({ headless: true });
   let page;
+  const pageErrors = [];
   try {
     const context = await browser.newContext({ storageState: await ready.clients.admin.storageState(), viewport: { width, height: 844 } });
     page = await context.newPage();
-    page.on("pageerror", (error) => logger.log(`[inventory-unit-removal-browser] ${error.stack || error.message}`));
-    page.on("console", (message) => { if (message.type() === "error") logger.log(`[inventory-unit-removal-browser] ${message.text()}`); });
+    page.on("pageerror", (error) => { pageErrors.push(error.message); logger.log(`[inventory-unit-removal-browser] ${error.stack || error.message}`); });
+    page.on("console", (message) => { if (message.type() === "error") { pageErrors.push(message.text()); logger.log(`[inventory-unit-removal-browser] ${message.text()}`); } });
     await page.goto(new URL("/?adminView=units&view=units", config.baseUrl).href, { waitUntil: "networkidle", timeout: config.timeout });
     await page.getByPlaceholder("Unit number, VIN, or plate").fill(unitNo);
     await page.getByRole("row", { name: new RegExp(`Open .*${unitNo}`, "i") }).click();
@@ -99,27 +103,45 @@ async function runViewport({ ready, config, width, logger }) {
     await page.getByRole("region", { name: "Remove tracked part" }).waitFor({ state: "hidden", timeout: config.timeout });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `Removal overflows at ${width}px.`);
     await context.close();
-    await assertRemoved(ready, prepared.usageId);
+    const caseId = await assertRemoved(ready, prepared.usageId);
     const returnContext = await browser.newContext({ storageState: await ready.clients.admin.storageState(), viewport: { width, height: 844 } });
     page = await returnContext.newPage();
-    await page.goto(new URL("/?adminView=inventory", config.baseUrl).href, { waitUntil: "networkidle", timeout: config.timeout });
-    await page.getByRole("button", { name: "Returns & repairs", exact: true }).click();
-    await page.getByRole("row").filter({ hasText: serialNumber }).click();
-    await page.getByRole("heading", { name: "Return part", exact: true }).waitFor({ state: "visible" });
-    assert.equal(await page.getByLabel("Evidence", { exact: true }).count(), 0, "Normal return must not ask for evidence.");
-    assert.equal(await page.getByLabel("Next action", { exact: true }).count(), 0, "Normal return must not ask for a second route decision.");
-    assert.equal(await page.getByLabel("Note", { exact: true }).isVisible(), false, "Return note must stay collapsed.");
+    const custodyUrl = new URL("/?adminView=inventory&view=inventory&inventorySection=tasks&taskOwner=custody", config.baseUrl);
+    custodyUrl.searchParams.set("reuseCaseId", caseId);
+    custodyUrl.searchParams.set("taskLocation", ready.locationId);
+    await page.goto(custodyUrl.href, { waitUntil: "networkidle", timeout: config.timeout });
+    await page.getByRole("heading", { name: "Complete action", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await page.getByLabel("Next action", { exact: true }).count(), 0, "Physical receipt must not route or release the part.");
     const serial = page.getByLabel(/Exact QR or serial/);
     await serial.fill(serialNumber);
     await serial.press("Tab");
     await page.getByText(new RegExp(`Matched serial ${serialNumber}`)).waitFor();
-    await page.getByRole("button", { name: "Returned part condition" }).click();
-    await page.getByRole("option", { name: "Ready to reuse" }).click();
-    const returnResponse = page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/api/inventory-reuse/") && r.url().endsWith("/return"));
-    await page.getByRole("button", { name: "Return to inventory", exact: true }).click();
-    const returned = await returnResponse;
-    assert.equal(returned.ok(), true, await returned.text());
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `Return flow overflows at ${width}px.`);
+    await page.getByLabel("Evidence", { exact: true }).fill("QA physical receipt at returns desk.");
+    const receiveResponse = page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/api/inventory-reuse/") && r.url().endsWith("/receive"));
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    const received = await receiveResponse;
+    assert.equal(received.ok(), true, await received.text());
+    await page.goto(custodyUrl.href, { waitUntil: "networkidle", timeout: config.timeout });
+    await page.getByRole("button", { name: "Inspect and route", exact: true }).click();
+    await page.getByLabel("Evidence", { exact: true }).fill("QA inspection: reusable after visual and fitment check.");
+    await page.locator('[aria-label="Next action"]').last().click();
+    await page.getByRole("option", { name: "Inspect for reuse" }).click();
+    const inspectResponse = page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/api/inventory-reuse/") && r.url().endsWith("/route"));
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    const inspected = await inspectResponse;
+    assert.equal(inspected.ok(), true, await inspected.text());
+    await page.goto(custodyUrl.href, { waitUntil: "networkidle", timeout: config.timeout });
+    await page.getByRole("button", { name: "Release to stock", exact: true }).click();
+    await page.locator('[aria-label="Storage destination"]').last().click();
+    await page.getByRole("option").nth(1).click();
+    await page.getByLabel("Evidence", { exact: true }).fill("QA final inspection evidence.");
+    await page.getByLabel("Inspection decision", { exact: true }).fill("Passed visual and fitment inspection.");
+    const releaseResponse = page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/api/inventory-reuse/") && r.url().endsWith("/release"));
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    const released = await releaseResponse;
+    assert.equal(released.ok(), true, await released.text());
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `Custody workflow overflows at ${width}px.`);
+    assert.deepEqual(pageErrors, [], `Custody workflow emitted browser errors at ${width}px.`);
     await returnContext.close();
     await assertReturned(ready, prepared.usageId);
     logger.log(`[inventory-unit-removal-browser] ${width}px passed`);

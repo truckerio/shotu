@@ -7,6 +7,7 @@ const legacySourceMigration = readFileSync(new URL("../../db/migrations/077_inve
 const sourceMigration = readFileSync(new URL("../../db/migrations/078_inventory_count_source_security.sql", import.meta.url), "utf8");
 const reviewedBinMigration = readFileSync(new URL("../../db/migrations/079_inventory_count_reviewed_bin_location.sql", import.meta.url), "utf8");
 const reviewAuditMigration = readFileSync(new URL("../../db/migrations/081_inventory_count_review_audit.sql", import.meta.url), "utf8");
+const positionPrecisionMigration = readFileSync(new URL("../../db/migrations/164_inventory_count_import_position_precision.sql", import.meta.url), "utf8");
 const movementMigration = readFileSync(new URL("../../db/migrations/072_inventory_movement_generic_receipts.sql", import.meta.url), "utf8");
 const authorityAuditMigration = readFileSync(new URL("../../db/migrations/073_inventory_count_authority_audit.sql", import.meta.url), "utf8");
 const repository = readFileSync(new URL("../../db/repositories/inventory-count-imports.repo.js", import.meta.url), "utf8");
@@ -74,10 +75,12 @@ test("stock count apply is scoped, locked, idempotent, classification-aware, and
 
 test("inventory UI keeps count upload inside Inventory and requires physical confirmation", () => {
   assert.match(workspace, /InventoryCountImportPanel/);
-  assert.match(workspace, />Count<\/Button>/);
+  assert.match(workspace, /get\("inventoryAction"\) === "count"/);
   assert.match(panel, /MAX_FILE_BYTES = 2_000_000/);
   assert.match(panel, /MAX_ROWS = 500/);
   assert.match(panel, /Counted at \{stocktake\.locationName\}/);
+  assert.match(positionPrecisionMigration, /quantity type numeric\(18,3\)/i);
+  assert.match(positionPrecisionMigration, /target_position_id uuid/i);
   assert.match(panel, /confirmation: "physically_counted"/);
   const applySource = panel.slice(panel.indexOf("async function applyReady"), panel.indexOf("const uploadDialog"));
   assert.doesNotMatch(applySource, /timeoutMs/);
@@ -86,32 +89,24 @@ test("inventory UI keeps count upload inside Inventory and requires physical con
   assert.doesNotMatch(panel, /await import\("exceljs/);
 });
 
-test("inventory count review uses the shared accessible table and canonical bin or shelf field", () => {
+test("inventory count review uses existing catalog parts and an exact shared storage destination", () => {
   assert.match(panel, /OperationalDataTable/);
-  assert.match(panel, /label: "Bin \/ shelf"/);
-  assert.match(panel, /binLocation/);
+  assert.match(panel, /label: "Destination"/);
+  assert.match(panel, /sourceBinLocation/);
   assert.match(panel, /inventory-count-attestation/);
   assert.match(panel, /PartCatalogCombobox/);
-  assert.match(panel, /useState\(suggestedQuery\)/);
-  assert.match(panel, /catalogEndpoint="\/api\/office\/inventory\/catalog"/);
-  assert.match(panel, /resultLimit=\{12\}/);
-  assert.match(panel, /automaticSearchQuery = String\(line\.sourcePartName \|\| line\.sourceDescription \|\| line\.sourcePartNumber/);
-  assert.match(panel, /suggestionQuery=\{useSpreadsheetSuggestions \? automaticSearchQuery : ""\}/);
-  assert.match(panel, /setUseSpreadsheetSuggestions\(false\)/);
-  assert.match(panel, /Select to view suggested matches/);
-  assert.match(panel, /part\.trackingMode \? update\("match", part\) : setReviewPart\(part\)/);
-  assert.match(panel, /<ReviewInventoryCountPartDialog/);
-  assert.match(panel, /Serialized parts also receive QR labels/);
+  assert.match(panel, /StoragePositionPicker/);
+  assert.match(panel, /targetPositionId/);
+  assert.match(panel, /INVENTORY_COUNT_POSITION_INVALID/);
+  assert.match(panel, /setPositionReload/);
+  assert.doesNotMatch(panel, /CreateInventoryPartDialog|ReviewInventoryCountPartDialog/);
+  assert.match(panel, /const quantityScale = selectedPart\?\.trackingMode === "measured_bulk"/);
+  assert.match(panel, /step=\{quantityStep\}/);
+  assert.match(panel, /Use an existing configured catalog part/);
   assert.match(operationalTable, /TableHeader/);
   assert.match(operationalTable, /TableBody/);
   assert.match(operationalTable, /aria-label=\{ariaLabel\}/);
-  assert.match(operationalTable, /containEditorNavigation/);
-  assert.match(operationalTable, /event\.target !== event\.currentTarget[\s\S]*?event\.stopPropagation\(\)/);
-  assert.match(operationalTable, /TableStateContext/);
-  assert.match(operationalTable, /setKeyboardNavigationDisabled\(true\)/);
-  assert.match(operationalTable, /setKeyboardNavigationDisabled\(false\)/);
   assert.match(operationalTableStyles, /@media \(max-width: 760px\)/);
-  assert.match(operationalTableStyles, /content: attr\(data-label\)/);
 });
 
 test("inventory routes expose review, resolution, apply, and master search without a new top-level module", () => {

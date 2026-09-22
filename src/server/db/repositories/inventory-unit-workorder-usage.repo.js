@@ -1,4 +1,8 @@
 import { getPool, query } from "../pool.js";
+import {
+  assertExactUnitHasReservablePosition,
+  pickExactUnitForWorkorderInstallation,
+} from "./inventory-exact-position-lifecycle.repo.js";
 import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventory-provider.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
@@ -392,6 +396,11 @@ export async function reserveSerializedUnitsForCreatedWorkorder(input, client) {
     if (!item || Number(item.quantity_on_hand) - Number(item.quantity_reserved) < units.length) return { kind: "stock_mismatch" };
 
     for (const unit of units) {
+      if (!await assertExactUnitHasReservablePosition(client, {
+        companyId: workorder.company_id,
+        locationId: workorder.location_id,
+        unitId: unit.id,
+      })) return { kind: "unit_state" };
       const inserted = await client.query(
         `insert into workorder_serialized_part_usages (
            company_id, workorder_id, asset_id, location_id, unit_id, catalog_part_id,
@@ -606,6 +615,14 @@ export async function issueSerializedUnitToWorkorder(input) {
       await client.query("rollback");
       return { kind: "unit_state" };
     }
+    if (!await assertExactUnitHasReservablePosition(client, {
+      companyId: workorder.company_id,
+      locationId: workorder.location_id,
+      unitId: unit.id,
+    })) {
+      await client.query("rollback");
+      return { kind: "unit_state" };
+    }
     const itemResult = await client.query(
       `select id, quantity_on_hand, quantity_reserved
        from inventory_items
@@ -780,6 +797,18 @@ export async function finalizeSerializedUnitUsage(input) {
       ? "removed_returned_to_stock"
       : nextStatus;
     const nextUnitStatus = nextStatus === "returned" ? "in_stock" : nextStatus;
+    const positionOperationId = nextStatus === "installed_pending_approval"
+      ? await pickExactUnitForWorkorderInstallation(client, {
+        companyId: workorder.company_id,
+        locationId: usage.location_id,
+        catalogPartId: usage.catalog_part_id,
+        uomCode: usage.uom_code,
+        unitId: usage.unit_id,
+        actorId: input.actorId,
+        usageId: usage.id,
+        workorderId: workorder.id,
+      })
+      : null;
     await client.query(
       `update inventory_serialized_units set status = $3::text,
          custody_holder_type=case when $3::text in ('installed','installed_pending_approval') then 'asset' else 'inventory_location' end,
@@ -810,7 +839,7 @@ export async function finalizeSerializedUnitUsage(input) {
          company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
        ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
       [workorder.company_id, usage.unit_id, eventType, input.actorId, usage.id,
-        workorder.id, usage.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole })],
+        workorder.id, usage.asset_id, JSON.stringify({ source: "workorder_parts_scan", actorRole: input.actorRole, positionOperationId })],
     );
     const finalized = await loadUsage(client, workorder.company_id, usage.id);
     await client.query("commit");

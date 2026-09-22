@@ -1,9 +1,10 @@
 import { MinusCircle, Plus } from "@untitledui/icons";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActionFooter, FormErrorSummary, FormField, OperationalForm, textEntryProps } from "../../components/forms/index.js";
 import { UnitOfMeasurePicker } from "../../components/forms/UnitOfMeasurePicker.jsx";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Button } from "../../components/ui/Button.jsx";
+import { IconButton } from "../../components/ui/IconButton.jsx";
 import { api } from "../../lib/api.js";
 import { getUnitDefinition, UNITS_OF_MEASURE } from "../../../../shared/units-of-measure.js";
 import { createPartIdentityDraft, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, validatePartIdentityDraft } from "./part-identity-editor-model.js";
@@ -12,14 +13,13 @@ function fieldIsEditable(part, field) {
   return (part.editableFields || []).includes(field);
 }
 
-export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload, onSaved }) {
+export function PartIdentityEditor({ part, onEditStateChange, onReload, onSaved }) {
   const [draft, setDraft] = useState(() => createPartIdentityDraft(part));
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(null);
   const [message, setMessage] = useState("");
   const [focusKey, setFocusKey] = useState(0);
-  const referenceHintId = useId();
   const providerManaged = Boolean(part.providerManaged);
   const uomEditable = fieldIsEditable(part, "uomCode");
   const canonicalUomCode = part.canonicalUomCode || part.uomCode;
@@ -35,14 +35,21 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
       && unit.decimalScale === canonical.decimalScale
     )).map((unit) => unit.code);
   }, [canonicalUomCode, restrictedToEquivalentUnit]);
-  const uomHint = restrictedToEquivalentUnit
-    ? "Choose an equivalent label; inventory quantities stay unchanged."
-    : "Used for future inventory quantities.";
+  const savedPayload = partIdentityPayload(createPartIdentityDraft(part), part.version);
+  const draftPayload = partIdentityPayload(draft, part.version);
+  const dirty = JSON.stringify(draftPayload) !== JSON.stringify(savedPayload);
 
   useEffect(() => {
-    onEditStateChange?.({ busy, dirty: true });
+    onEditStateChange?.({ busy, dirty });
     return () => onEditStateChange?.({ busy: false, dirty: false });
-  }, [busy, onEditStateChange]);
+  }, [busy, dirty, onEditStateChange]);
+
+  useEffect(() => {
+    setDraft(createPartIdentityDraft(part));
+    setErrors({});
+    setConflict(null);
+    setMessage("");
+  }, [part.catalogPartId, part.version]);
 
   const canAddReference = draft.referenceNumbers.length < MAX_REFERENCE_NUMBERS && fieldIsEditable(part, "referenceNumbers");
   const summaryErrors = useMemo(() => ({
@@ -75,6 +82,13 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
   function removeReference(id) {
     setDraft((current) => ({ ...current, referenceNumbers: current.referenceNumbers.filter((reference) => reference.id !== id) }));
     setErrors((current) => ({ ...current, [`reference-${id}`]: undefined }));
+  }
+
+  function reset() {
+    setDraft(createPartIdentityDraft(part));
+    setErrors({});
+    setConflict(null);
+    setMessage("");
   }
 
   function reloadDetails() {
@@ -120,13 +134,8 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         <span>{conflict.message}</span>
         {conflict.kind === "stale" ? <Button type="button" onClick={reloadDetails} disabled={busy}>Reload details</Button> : null}
       </div> : null}
-      {providerManaged ? <section className="inventory-part-editor-summary" aria-label="Odoo part identity">
-        <div><span>In Odoo</span><strong>{draft.partNumber}</strong></div>
-        <p>{part.odooName || "Name not provided by Odoo"}</p>
-        {draft.category ? <small>{draft.category}</small> : null}
-      </section> : null}
       <div className="inventory-part-editor-grid">
-        <FormField id="inventory-part-name" label="Part name" hint={providerManaged ? "Your name in this system. The Odoo name stays unchanged." : "Name used in this system."} error={errors.description} required>
+        <FormField id="inventory-part-name" label="Part name" error={errors.description} required>
           <input {...textEntryProps("name")} maxLength={1000} value={draft.description} onChange={(event) => update("description", event.target.value)} disabled={busy || !fieldIsEditable(part, "description")} />
         </FormField>
         {!providerManaged ? <FormField id="inventory-primary-part-number" label="Primary part number" error={errors.partNumber} required>
@@ -141,10 +150,10 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
         {!providerManaged ? <FormField id="inventory-catalog-barcode" label="Catalog barcode">
           <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.barcode} onChange={(event) => update("barcode", event.target.value)} disabled={busy || !fieldIsEditable(part, "barcode")} />
         </FormField> : null}
-        <FormField id="inventory-unit" label="Unit" hint={uomHint}>
+        <FormField id="inventory-unit" label="Unit">
           <UnitOfMeasurePicker uomCode={draft.uomCode} allowedUomCodes={allowedUomCodes} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={!uomEditable} />
         </FormField>
-        <FormField id="inventory-tracking-mode" label="How do you track this part?" hint="Quantity is best for interchangeable parts. Serialized keeps one identity per physical unit. Measured or bulk is for fluids and divisible material." error={errors.trackingMode} required>
+        <FormField id="inventory-tracking-mode" label="Tracking" error={errors.trackingMode} required>
           <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy || !fieldIsEditable(part, "trackingMode")}>
             <option value="">Choose tracking</option>
             <option value="quantity">Quantity</option>
@@ -153,23 +162,21 @@ export function PartIdentityEditor({ part, onCancel, onEditStateChange, onReload
           </Dropdown>
         </FormField>
       </div>
-      <details className="inventory-part-editor-references" defaultOpen={draft.referenceNumbers.length > 0}>
+      <details className="inventory-part-editor-references">
         <summary><span><strong id="inventory-reference-numbers-title">Reference numbers</strong><small>{draft.referenceNumbers.length ? `${draft.referenceNumbers.length} added` : "Optional"}</small></span></summary>
-        <div className="inventory-part-editor-reference-content" aria-labelledby="inventory-reference-numbers-title" aria-describedby={referenceHintId}>
-        <header><p id={referenceHintId}>Cross-reference, OEM, or supplier numbers. Up to {MAX_REFERENCE_NUMBERS}.</p>{canAddReference ? <Button type="button" icon={Plus} onClick={addReference} disabled={busy}>Add reference</Button> : null}</header>
+        <div className="inventory-part-editor-reference-content" aria-labelledby="inventory-reference-numbers-title">
+        <header>{canAddReference ? <Button type="button" icon={Plus} onClick={addReference} disabled={busy}>Add reference</Button> : null}</header>
         {draft.referenceNumbers.map((reference, index) => <div className="inventory-part-editor-reference-row" key={reference.id}>
           <FormField id={`inventory-reference-${reference.id}`} label={`Reference number ${index + 1}`} error={errors[`reference-${reference.id}`]}>
             <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={reference.value} onChange={(event) => updateReference(reference.id, event.target.value)} disabled={busy || !fieldIsEditable(part, "referenceNumbers")} />
           </FormField>
-          <button type="button" className="inventory-part-editor-remove" onClick={() => removeReference(reference.id)} disabled={busy || !fieldIsEditable(part, "referenceNumbers")} aria-label={`Remove reference number ${index + 1}`} title={`Remove reference number ${index + 1}`}><MinusCircle aria-hidden="true" /></button>
+          <IconButton className="inventory-part-editor-remove" icon={MinusCircle} tone="danger" onClick={() => removeReference(reference.id)} disabled={busy || !fieldIsEditable(part, "referenceNumbers")} label={`Remove reference number ${index + 1}`} />
         </div>)}
-        {!draft.referenceNumbers.length ? <p className="inventory-part-editor-empty">No reference numbers added.</p> : null}
         </div>
       </details>
-      {providerManaged ? <p className="inventory-part-editor-managed">Odoo name, number, category, and barcode stay read-only. Your Part name is saved only in this system.</p> : null}
       <ActionFooter stickyOnMobile message={busy ? "Saving part details…" : ""}>
-        <Button type="button" onClick={onCancel} disabled={busy}>Cancel</Button>
-        <Button type="submit" variant="primary" disabled={busy}>{busy ? "Saving" : "Save changes"}</Button>
+        <Button type="button" onClick={reset} disabled={busy || !dirty}>Reset</Button>
+        <Button type="submit" variant="primary" disabled={busy || !dirty}>{busy ? "Saving" : "Save"}</Button>
       </ActionFooter>
     </OperationalForm>
   );

@@ -42,7 +42,7 @@ function callbackResult() {
     : { message: "", error: message || "Samsara connection failed." };
 }
 
-export function IntegrationsSettings({ onOpenTemplates }) {
+export function IntegrationsSettings({ onOpenTemplates, additionalSettings = null }) {
   const [status, setStatus] = useState(null);
   const [odooStatus, setOdooStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -286,8 +286,8 @@ export function IntegrationsSettings({ onOpenTemplates }) {
         <section aria-labelledby="settings-templates-heading">
           <div className="integration-page-heading">
             <div>
-              <h2 id="settings-templates-heading">Templates</h2>
-              <p>Manage inspection templates for your company.</p>
+              <h2 id="settings-templates-heading">Company settings</h2>
+              <p>Manage templates and purchasing rules for your company.</p>
             </div>
           </div>
           <div className="integration-provider-grid">
@@ -298,9 +298,11 @@ export function IntegrationsSettings({ onOpenTemplates }) {
             onManage={onOpenTemplates}
             title="Inspection templates"
           />
+          {additionalSettings}
           </div>
         </section>
       ) : null}
+
 
       {confirmDisconnect ? (
         <div className="integration-confirm-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmDisconnect(false)}>

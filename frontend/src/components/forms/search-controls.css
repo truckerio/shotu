@@ -1,0 +1,121 @@
+/* Shared search appearance, based on the Operations workorder toolbar.
+   Feature styles continue to own placement and responsive widths. */
+:root body :is(.operations-input-with-icon,
+  .mechanic-search,
+  .inventory-search-control,
+  .inspection-search-control,
+  .invoice-history-search > span:last-child,
+  .workorder-drafts-search,
+  .quantity-unit-search,
+  .inventory-count-review-toolbar > label) {
+  position: relative;
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+:root body :is(.operations-input-with-icon,
+  .mechanic-search,
+  .inventory-search-control,
+  .inspection-search-control,
+  .invoice-history-search > span:last-child,
+  .workorder-drafts-search,
+  .quantity-unit-search,
+  .inventory-count-review-toolbar > label):focus-within { border: 0; box-shadow: none; outline: none; }
+:root body :is(.operations-input-with-icon input,
+  .mechanic-search input,
+  .inventory-search-control input,
+  .inspection-search-control input,
+  .invoice-history-search > span:last-child input,
+  .workorder-drafts-search input,
+  .quantity-unit-search input,
+  .inventory-count-review-toolbar > label input,
+  input[type="search"],
+  input[aria-label^="Search"],
+  input[placeholder^="Search"],
+  input[enterkeyhint="search"],
+  .serialized-unit-nested-search input,
+  .workorder-serialized-search input,
+  .odoo-outbound-search input) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  color: #182230;
+  font: inherit;
+  font-size: var(--text-secondary);
+  font-weight: var(--weight-regular, 400);
+  box-shadow: none;
+  outline: none;
+}
+:root body :is(.operations-input-with-icon input,
+  .mechanic-search input,
+  .inventory-search-control input,
+  .inspection-search-control input,
+  .invoice-history-search > span:last-child input,
+  .workorder-drafts-search input,
+  .quantity-unit-search input,
+  .inventory-count-review-toolbar > label input,
+  input[type="search"],
+  input[aria-label^="Search"],
+  input[placeholder^="Search"],
+  input[enterkeyhint="search"],
+  .serialized-unit-nested-search input,
+  .workorder-serialized-search input,
+  .odoo-outbound-search input):focus {
+  border-color: #84caff;
+  box-shadow: 0 0 0 3px #eff8ff;
+  outline: 2px solid #2e6ee6;
+  outline-offset: 2px;
+}
+:root body :is(.operations-input-with-icon,
+  .mechanic-search,
+  .inventory-search-control,
+  .inspection-search-control,
+  .invoice-history-search > span:last-child,
+  .workorder-drafts-search,
+  .quantity-unit-search,
+  .inventory-count-review-toolbar > label) input { padding-left: 34px; }
+:root body :is(.operations-input-with-icon,
+  .mechanic-search,
+  .inventory-search-control,
+  .inspection-search-control,
+  .invoice-history-search > span:last-child,
+  .workorder-drafts-search,
+  .quantity-unit-search,
+  .inventory-count-review-toolbar > label) > svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  color: #667085;
+  pointer-events: none;
+}
+@media (max-width: 760px) {
+:root body :is(.operations-input-with-icon input,
+  .mechanic-search input,
+  .inventory-search-control input,
+  .inspection-search-control input,
+  .invoice-history-search > span:last-child input,
+  .workorder-drafts-search input,
+  .quantity-unit-search input,
+  .inventory-count-review-toolbar > label input,
+  input[type="search"],
+  input[aria-label^="Search"],
+  input[placeholder^="Search"],
+  input[enterkeyhint="search"],
+  .serialized-unit-nested-search input,
+  .workorder-serialized-search input,
+  .odoo-outbound-search input) { height: 44px; min-height: 44px; }
+}

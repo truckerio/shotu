@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { partsCatalogInternals } from "./parts-catalog.repo.js";
 
 const repositoryUrl = new URL("./parts-catalog.repo.js", import.meta.url);
 const migrationUrl = new URL("../migrations/044_parts_catalog_search.sql", import.meta.url);
@@ -37,6 +38,22 @@ test("operational catalog search is purpose-gated by local availability", async 
   assert.match(source, /case when inventory\.id is not null then 'local'/);
   assert.match(source, /source: row\.inventory_item_id \? "local"/);
   assert.match(source, /trackingMode: row\.tracking_mode \|\| null/);
+  assert.match(source, /join units_of_measure uom on uom\.code = pc\.uom_code and uom\.active/);
+});
+
+test("public catalog parts expose canonical UOM precision", () => {
+  const part = partsCatalogInternals.publicCatalogPart({
+    id: "part-1",
+    part_number: "OIL-1",
+    normalized_part_number: "OIL1",
+    uom_code: "hr",
+    tracking_mode: "measured_bulk",
+    decimal_scale: 2,
+  });
+
+  assert.equal(part.uomCode, "hr");
+  assert.equal(part.trackingMode, "measured_bulk");
+  assert.equal(part.decimalScale, 2);
 });
 
 test("catalog search migration indexes partial text, barcode, and location inventory", async () => {
