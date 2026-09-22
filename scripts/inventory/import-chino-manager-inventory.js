@@ -10,7 +10,7 @@ import { placeAggregateInventoryReceipt } from "../../src/server/db/repositories
 import { DEMO_SHOPS, REALISTIC_INVENTORY_DEMO_KEY } from "../../src/server/db/seeds/realistic-inventory-demo.data.js";
 
 const COMPANY_ID = DEFAULT_COMPANY_ID;
-const LOCATION_NAME = "Chino Yard";
+const DEFAULT_LOCATION_NAME = "Chino Yard";
 const STAGING_PROJECT_NAME = "junior";
 const STAGING_SERVICE_NAME = "junior";
 const STAGING_PUBLIC_DOMAIN = "junior-staging.up.railway.app";
@@ -117,15 +117,15 @@ export function assertImportTarget({ target = "local", stagingConfirmation = nul
   return { target, databaseHost: url.hostname, publicDomain: env.RAILWAY_PUBLIC_DOMAIN };
 }
 
-async function resolveContext(client) {
-  const location = (await client.query("select id,name from locations where company_id=$1 and active=true and name=$2", [COMPANY_ID, LOCATION_NAME])).rows[0];
-  if (!location) throw new Error("Chino Yard is missing.");
+async function resolveContext(client, locationName) {
+  const location = (await client.query("select id,name from locations where company_id=$1 and active=true and lower(name)=lower($2)", [COMPANY_ID, locationName])).rows[0];
+  if (!location) throw new Error(`Inventory location '${locationName}' is missing.`);
   const actor = (await client.query(`select profile.id from user_profiles profile join user_company_memberships membership on membership.user_id=profile.id and membership.company_id=$1 and membership.active=true and membership.role in ('admin','office') where profile.active=true and profile.deleted_at is null order by case membership.role when 'admin' then 0 else 1 end,profile.created_at limit 1`, [COMPANY_ID])).rows[0];
   if (!actor) throw new Error("An active administrator or office user is required.");
-  return { locationId: location.id, actorId: actor.id };
+  return { locationId: location.id, locationName: location.name, actorId: actor.id };
 }
 
-async function removeInventoryDemoFixture(client) {
+async function removeInventoryDemoFixture(client, locationName) {
   const workorderIds = (await client.query(`select id from operational_workorders where company_id=$1 and form_data->'testFixture'->>'key'=$2`, [COMPANY_ID, REALISTIC_INVENTORY_DEMO_KEY])).rows.map((row) => row.id);
   const usageIds = workorderIds.length ? (await client.query("select id from workorder_aggregate_part_usages where company_id=$1 and workorder_id=any($2::uuid[])", [COMPANY_ID, workorderIds])).rows.map((row) => row.id) : [];
   const receiptIds = (await client.query("select id from inventory_receipts where company_id=$1 and provider_marker like $2", [COMPANY_ID, `${FIXTURE_MARKER_PREFIX}-%`])).rows.map((row) => row.id);
@@ -173,17 +173,17 @@ async function removeInventoryDemoFixture(client) {
     where session.company_id=$1 and session.position_id in(
       select position.id from inventory_positions position where position.company_id=$1
         and position.location_id=(select id from locations where company_id=$1 and name=$2 limit 1)
-        and position.code='455' and position.name='bin1')`, [COMPANY_ID, LOCATION_NAME]);
+        and position.code='455' and position.name='bin1')`, [COMPANY_ID, locationName]);
   await client.query(`delete from inventory_position_admin_commands command where command.company_id=$1 and command.position_id in(
     select position.id from inventory_positions position where position.company_id=$1
       and position.location_id=(select id from locations where company_id=$1 and name=$2 limit 1)
-      and position.code='455' and position.name='bin1')`, [COMPANY_ID, LOCATION_NAME]);
+      and position.code='455' and position.name='bin1')`, [COMPANY_ID, locationName]);
   await client.query(`delete from inventory_positions position where position.company_id=$1
     and position.location_id=(select id from locations where company_id=$1 and name=$2 limit 1)
     and position.code='455' and position.name='bin1' and position.system_key is null
     and not exists(select 1 from inventory_position_balances balance where balance.company_id=position.company_id and balance.position_id=position.id)
     and not exists(select 1 from inventory_serialized_units unit where unit.company_id=position.company_id and unit.current_position_id=position.id)
-    and not exists(select 1 from inventory_positions child where child.company_id=position.company_id and child.parent_id=position.id)`, [COMPANY_ID, LOCATION_NAME]);
+    and not exists(select 1 from inventory_positions child where child.company_id=position.company_id and child.parent_id=position.id)`, [COMPANY_ID, locationName]);
   return { workorders: workorderIds.length, usages: usageIds.length, receipts: receiptIds.length, items: itemIds.length };
 }
 
@@ -238,7 +238,7 @@ async function resolveCatalog(client, plan, sourceHash) {
 }
 
 async function applyPlan(client, plan, context, sourceHash) {
-  const demoRemoved = await removeInventoryDemoFixture(client);
+  const demoRemoved = await removeInventoryDemoFixture(client, context.locationName);
   const positions = await buildPositions(client, context, plan);
   const catalog = await resolveCatalog(client, plan, sourceHash);
   const positiveParts = new Map();
@@ -297,17 +297,17 @@ async function verifyApplied(client, plan, context, sourceHash) {
   return { ...summary, expectedQuantity, expectedItems, expectedPlacements: plan.placements.length };
 }
 
-export async function runImport({ file, apply = false, reportFile = null, target = "local", stagingConfirmation = null }) {
+export async function runImport({ file, apply = false, reportFile = null, target = "local", stagingConfirmation = null, locationName = DEFAULT_LOCATION_NAME }) {
   const targetEvidence = assertImportTarget({ target, stagingConfirmation });
   const buffer = await readFile(file), sourceHash = sha256(buffer), text = new TextDecoder("windows-1252").decode(buffer);
   const plan = buildImportPlan(text, path.basename(file));
   const client = await getPool().connect();
   try {
-    const context = await resolveContext(client);
+    const context = await resolveContext(client, locationName);
     const existing = await client.query("select id from inventory_receipts where company_id=$1 and provider_marker like $2", [COMPANY_ID, `SHOP-MANAGER-${sourceHash.slice(0, 24)}-%`]);
     if (existing.rowCount) throw new Error("This exact manager CSV has already been imported.");
     const catalogMatches = await client.query("select count(*)::int count from parts_catalog where company_id=$1 and normalized_part_number=any($2::text[])", [COMPANY_ID, plan.parts.map((part) => part.normalizedPartNumber)]);
-    const report = { mode: apply ? "apply" : "dry-run", target: targetEvidence, source: { file: path.resolve(file), sha256: sourceHash, encoding: "windows-1252" }, scope: { companyId: COMPANY_ID, locationId: context.locationId, locationName: LOCATION_NAME }, parsed: { sourceLines: plan.lineCount, uniqueParts: plan.parts.length, positivePlacements: plan.placements.length, totalQuantity: plan.placements.reduce((sum, line) => sum + line.quantity, 0), catalogMatches: catalogMatches.rows[0].count, catalogCreates: plan.parts.length - catalogMatches.rows[0].count, generatedPartNumbers: plan.generatedPartNumbers } };
+    const report = { mode: apply ? "apply" : "dry-run", target: targetEvidence, source: { file: path.resolve(file), sha256: sourceHash, encoding: "windows-1252" }, scope: { companyId: COMPANY_ID, locationId: context.locationId, locationName: context.locationName }, parsed: { sourceLines: plan.lineCount, uniqueParts: plan.parts.length, positivePlacements: plan.placements.length, totalQuantity: plan.placements.reduce((sum, line) => sum + line.quantity, 0), catalogMatches: catalogMatches.rows[0].count, catalogCreates: plan.parts.length - catalogMatches.rows[0].count, generatedPartNumbers: plan.generatedPartNumbers } };
     if (apply) {
       await client.query("begin");
       await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${SOURCE_PREFIX}:${COMPANY_ID}:${context.locationId}`]);
@@ -330,6 +330,7 @@ if (invokedDirectly) {
   const reportFile = process.argv.find((value) => value.startsWith("--report="))?.slice(9) || null;
   const target = process.argv.find((value) => value.startsWith("--target="))?.slice(9) || "local";
   const stagingConfirmation = process.argv.find((value) => value.startsWith("--confirm-staging="))?.slice(18) || null;
-  if (!file) { console.error("Usage: node --env-file=.env scripts/inventory/import-chino-manager-inventory.js --file=/path/to.csv [--apply] [--report=/path/report.json] [--target=local|staging] [--confirm-staging=junior-staging.up.railway.app]"); process.exitCode = 2; }
-  else runImport({ file, apply: process.argv.includes("--apply"), reportFile, target, stagingConfirmation }).then((report) => console.log(JSON.stringify(report, null, 2))).catch((error) => { console.error(error); process.exitCode = 1; }).finally(closePool);
+  const locationName = process.argv.find((value) => value.startsWith("--location="))?.slice(11) || DEFAULT_LOCATION_NAME;
+  if (!file) { console.error("Usage: node --env-file=.env scripts/inventory/import-chino-manager-inventory.js --file=/path/to.csv [--apply] [--report=/path/report.json] [--location='Chino shop'] [--target=local|staging] [--confirm-staging=junior-staging.up.railway.app]"); process.exitCode = 2; }
+  else runImport({ file, apply: process.argv.includes("--apply"), reportFile, target, stagingConfirmation, locationName }).then((report) => console.log(JSON.stringify(report, null, 2))).catch((error) => { console.error(error); process.exitCode = 1; }).finally(closePool);
 }
