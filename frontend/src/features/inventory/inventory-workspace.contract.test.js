@@ -40,7 +40,9 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /inventoryCountPanelPromise \|\|= import\("\.\/InventoryCountImportPanel\.jsx"\)[\s\S]*default: module\.InventoryCountImportPanel/);
   assert.match(workspace, /<Suspense fallback=/);
   assert.match(workspace, /invoiceWorkflowOpen \? \(\s*!workflowDetail \? <IconButton/);
-  assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} initialLocationId=\{locations\.some\(\(location\) => location\.id === locationId\) \? locationId : ""\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
+  assert.match(workspace, /const \[invoiceRunId, setInvoiceRunId\] = useState\(\(\) => initialParams\.get\("invoiceRun"\) \|\| ""\)/);
+  assert.match(workspace, /setInvoiceRunId\(invoiceRun\)/);
+  assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} initialLocationId=\{locations\.some\(\(location\) => location\.id === locationId\) \? locationId : ""\} initialRunId=\{invoiceRunId\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
   assert.match(workspace, /inventoryAction", "upload-invoice"/);
   assert.match(workspace, /<ContextBreadcrumbs/);
   assert.match(workspace, /workflowDetail\?\.label/);

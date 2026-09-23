@@ -94,6 +94,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [invoiceUploadOpen, setInvoiceUploadOpen] = useState(() => (
     initialParams.get("inventoryAction") === "upload-invoice"
   ));
+  const [invoiceRunId, setInvoiceRunId] = useState(() => initialParams.get("invoiceRun") || "");
   const [countUploadOpen, setCountUploadOpen] = useState(false);
   const [workflowDetail, setWorkflowDetail] = useState(null);
   const [query, setQuery] = useState("");
@@ -310,6 +311,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       setLocationId(requestedLocationId);
     }
     window.history.replaceState({}, "", inventoryUrl({ invoiceRun, upload: !invoiceRun }));
+    setInvoiceRunId(invoiceRun);
     setInvoiceWorkflowOpen(true);
     setInvoiceUploadOpen(!invoiceRun);
     setWorkflowDetail(null);
@@ -326,6 +328,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     const returnFocusId = invoiceWorkflowOpen ? "inventory-invoice-action" : countWorkflowOpen ? "inventory-import-count-action" : "";
     window.history.replaceState({}, "", inventoryUrl());
     setInvoiceWorkflowOpen(false);
+    setInvoiceRunId("");
     setCountWorkflowOpen(false);
     setInvoiceUploadOpen(false);
     setCountUploadOpen(false);
@@ -469,7 +472,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         onCreated={(part) => { setQuery(part.partNumber); setRefreshKey((value) => value + 1); }}
       /> : null}
 
-      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} initialLocationId={locations.some((location) => location.id === locationId) ? locationId : ""} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading count sheets</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
+      {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} initialLocationId={locations.some((location) => location.id === locationId) ? locationId : ""} initialRunId={invoiceRunId} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading count sheets</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 
       <OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={inventorySections} actions={sectionActions} headingLevel={presentation === "embedded" ? 2 : 1} />
       {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId) => { setInboundReceiptOrderId(poId); setInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}

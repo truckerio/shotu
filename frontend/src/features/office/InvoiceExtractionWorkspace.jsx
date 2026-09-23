@@ -145,7 +145,7 @@ function ReviewSection({ sectionId, title, summary, issueCount = 0, status = "",
   );
 }
 
-export function InvoiceExtractionWorkspace({ embedded = false, availableLocations, initialLocationId = "", uploadOpen: controlledUploadOpen, onUploadOpenChange, onContextChange }) {
+export function InvoiceExtractionWorkspace({ embedded = false, availableLocations, initialLocationId = "", initialRunId = "", uploadOpen: controlledUploadOpen, onUploadOpenChange, onContextChange }) {
   const [locations, setLocations] = useState(() => Array.isArray(availableLocations) ? availableLocations : []);
   const [locationId, setLocationId] = useState("");
   const [uploads, setUploads] = useState([]);
@@ -233,10 +233,9 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   }, [availableLocations, initialLocationId]);
 
   useEffect(() => {
-    const savedRunId = new URLSearchParams(window.location.search).get("invoiceRun");
-    if (!savedRunId) return;
-    loadSavedRun(savedRunId, false);
-  }, []);
+    if (!initialRunId) return;
+    loadSavedRun(initialRunId, false);
+  }, [initialRunId]);
 
   useEffect(() => {
     if (!draft || !reviewTitleRef.current) return;

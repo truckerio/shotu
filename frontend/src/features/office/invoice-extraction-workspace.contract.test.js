@@ -31,11 +31,22 @@ test("refreshed review restores only the authorized source route and keeps learn
 
 test("saved-run navigation aborts superseded requests and ignores stale responses", async () => {
   const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /initialRunId = ""/);
+  assert.match(source, /if \(!initialRunId\) return/);
+  assert.match(source, /loadSavedRun\(initialRunId, false\)/);
+  assert.match(source, /\[initialRunId\]/);
+  assert.doesNotMatch(source, /new URLSearchParams\(window\.location\.search\)\.get\("invoiceRun"\)/);
   assert.match(source, /savedRunRequestRef\.current\.controller\?\.abort\(\)/);
   assert.match(source, /const requestId = crypto\.randomUUID\(\)/);
   assert.match(source, /signal: controller\.signal/);
   assert.match(source, /if \(savedRunRequestRef\.current\.id !== requestId\) return/);
   assert.match(source, /if \(savedRunRequestRef\.current\.id === requestId\)/);
+});
+
+test("desktop review rail keeps natural row height so long invoices have a real scroll range", async () => {
+  const styles = await readFile(new URL("./invoice-extraction.css", import.meta.url), "utf8");
+  assert.match(styles, /\.inventory-workspace\.is-invoice-workflow > \.operational-collection-page-body \{ min-height:calc\(100dvh - 52px\); \}/);
+  assert.match(styles, /\.invoice-review-rail \{[^}]*align-content:start;[^}]*grid-auto-rows:max-content;[^}]*overflow-y:auto;/);
 });
 
 test("invoice review exposes breadcrumb context and protects unsaved corrections", async () => {
