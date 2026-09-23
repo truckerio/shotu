@@ -42,6 +42,16 @@ test("list is location scoped and reports role capabilities", async () => {
   });
 });
 
+test("labor commercial facts are visible to office but redacted from mechanics", async () => {
+  const priced = { id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", uomCode: "hr", pinned: false, source: { provider: "odoo", externalId: "7" }, odooPricing: { selling: { status: "known", amount: "120", currency: "USD" } } };
+  const dependencies = { findLocation: async () => location, listProducts: async () => [priced] };
+  const office = await readLaborProducts(new URLSearchParams({ locationId: LOCATION_ID }), context("office"), dependencies);
+  assert.equal(office.items[0].odooPricing.selling.amount, "120");
+  const mechanic = await readLaborProducts(new URLSearchParams({ locationId: LOCATION_ID }), context("mechanic"), dependencies);
+  assert.equal(mechanic.items[0].odooPricing, undefined);
+  assert.equal(mechanic.items[0].source, undefined);
+});
+
 test("service requires authentication and prevents unauthorized creation", async () => {
   await assert.rejects(readLaborProducts(new URLSearchParams({ locationId: LOCATION_ID }), null), (error) => error.statusCode === 401);
   await assert.rejects(addLaborProduct({ locationId: LOCATION_ID, name: "Diagnostics" }, context("mechanic")), (error) => error.statusCode === 403);

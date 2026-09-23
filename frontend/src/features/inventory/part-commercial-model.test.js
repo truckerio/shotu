@@ -14,6 +14,10 @@ test("header selling price follows company and effective location pricing", () =
   assert.equal(effectiveSellingPrice(company)?.amount, "84.50");
   assert.equal(effectiveSellingPrice(location, true)?.amount, "91.25");
   assert.equal(effectiveSellingPrice({ prices: {} }), null);
+  const provider = { prices: { selling: { current: null } }, odooPrices: { selling: { status: "known", amount: "72.50", currency: "USD", source: "odoo_catalog" } } };
+  assert.equal(effectiveSellingPrice(provider)?.amount, "72.50");
+  const cleared = { prices: { selling: { current: { status: "unknown", amount: null, currency: null } } }, odooPrices: provider.odooPrices };
+  assert.equal(effectiveSellingPrice(cleared)?.status, "unknown");
 });
 
 test("clearing a price sends paired null values and preserves optimistic version", () => {
@@ -40,6 +44,7 @@ test("location editing uses the override version while showing the effective fal
 test("commercial labels preserve price source and receipt evidence truth", () => {
   assert.equal(priceSourceLabel("location_override"), "Location override");
   assert.equal(priceSourceLabel("company_default"), "Company default");
+  assert.equal(priceSourceLabel("odoo_catalog"), "Odoo fallback");
   assert.equal(receiptCostBasisLabel({ basis: "source_invoice_line_missing_cost" }), "Invoice line · cost missing");
   assert.equal(receiptCostBasisLabel({ basis: "unpriced_receipt" }), "Receipt · cost missing");
   assert.equal(receiptDateBasisLabel({ dateBasis: "invoice_date" }), "Invoice date");

@@ -4,8 +4,9 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { after } from "node:test";
 import { closePool, query } from "../../db/pool.js";
-import { getInventoryPartCommercial } from "../../db/repositories/inventory-part-prices.repo.js";
+import { getInventoryPartCommercial, getInventoryPartPricingSource } from "../../db/repositories/inventory-part-prices.repo.js";
 import { importOdooPurchaseHistory } from "./odoo.purchase-history.repo.js";
+import { importOdooInventory } from "./odoo.admin.repo.js";
 
 const runPostgres = process.env.RUN_POSTGRES_INTEGRATION === "1";
 after(async () => { if (runPostgres) await closePool(); });
@@ -36,7 +37,7 @@ test("real PostgreSQL refreshes Odoo purchase history idempotently and exposes m
   try {
     await query("insert into companies(id,slug,name) values($1,$2,'Odoo purchase integration')", [companyId, `odoo-purchase-${suffix}`]);
     await query("insert into parts_catalog(id,company_id,normalized_part_number,part_number,description,uom_code) values($1,$2,$3,$4,'Filter','ea')", [partId, companyId, `FILTER${suffix}`, `FILTER-${suffix}`]);
-    await query("insert into odoo_product_mappings(company_id,external_id,catalog_part_id,default_code,display_name) values($1,'501',$2,$3,'Filter')", [companyId, partId, `FILTER-${suffix}`]);
+    await query("insert into odoo_product_mappings(company_id,external_id,catalog_part_id,default_code,display_name,internal_price,internal_currency,selling_price,selling_currency,commercial_updated_at) values($1,'501',$2,$3,'Filter',7.25,'USD',19.5,'USD','2026-09-03')", [companyId, partId, `FILTER-${suffix}`]);
     assert.equal((await importOdooPurchaseHistory(companyId, payload(12.5))).mappedLineCount, 1);
     assert.equal((await importOdooPurchaseHistory(companyId, payload(13.25))).purchaseLineCount, 1);
     const counts = await query("select (select count(*) from odoo_purchase_history_orders where company_id=$1)::int orders,(select count(*) from odoo_purchase_history_lines where company_id=$1)::int lines", [companyId]);
@@ -45,10 +46,37 @@ test("real PostgreSQL refreshes Odoo purchase history idempotently and exposes m
     assert.equal(commercial.purchaseOrders.latest.orderNumber, "P00071");
     assert.equal(commercial.purchaseOrders.latest.vendorName, "Fleet Supplier");
     assert.equal(commercial.purchaseOrders.latest.unitCost, "13.2500");
+    assert.equal(commercial.odooPrices.internal.amount, "7.2500");
+    assert.equal(commercial.odooPrices.selling.amount, "19.5000");
+    const pricingSource = await getInventoryPartPricingSource({ catalogPartId: partId, companyIds: [companyId], isAdmin: true, kind: "selling" });
+    assert.equal(pricingSource.price.source, "odoo_catalog");
+    assert.equal(pricingSource.price.amount, "19.5000");
   } finally {
     await query("delete from odoo_purchase_history_orders where company_id=$1", [companyId]).catch(() => {});
     await query("delete from odoo_product_mappings where company_id=$1", [companyId]).catch(() => {});
     await query("delete from parts_catalog where company_id=$1", [companyId]).catch(() => {});
+    await query("delete from companies where id=$1", [companyId]).catch(() => {});
+  }
+});
+
+test("real PostgreSQL catalog sync persists Odoo commercial snapshots idempotently", { skip: !runPostgres }, async () => {
+  const suffix = randomUUID().replaceAll("-", "");
+  const companyId = randomUUID();
+  const productId = Math.floor(Math.random() * 1_000_000) + 1_000_000;
+  const product = (standardPrice, sellingPrice) => ({
+    id: productId, default_code: `PRICE-${suffix}`, name: "Commercial filter", active: true,
+    uom_id: [1, "Units"], categ_id: [1, "Parts"], detailed_type: "product",
+    standard_price: standardPrice, lst_price: sellingPrice,
+    cost_currency_id: [1, "USD"], currency_id: [1, "USD"], write_date: "2026-09-22 12:00:00",
+  });
+  try {
+    await query("insert into companies(id,slug,name) values($1,$2,'Odoo commercial integration')", [companyId, `odoo-commercial-${suffix}`]);
+    assert.equal((await importOdooInventory(companyId, { products: [product(8.5, 21.25)] })).changedCount, 1);
+    assert.equal((await importOdooInventory(companyId, { products: [product(9, 22)] })).changedCount, 1);
+    const mapping = await query("select catalog_part_id,internal_price,internal_currency,selling_price,selling_currency from odoo_product_mappings where company_id=$1 and external_id=$2", [companyId, String(productId)]);
+    assert.equal(mapping.rows.length, 1);
+    assert.deepEqual(mapping.rows[0], { catalog_part_id: mapping.rows[0].catalog_part_id, internal_price: "9.0000", internal_currency: "USD", selling_price: "22.0000", selling_currency: "USD" });
+  } finally {
     await query("delete from companies where id=$1", [companyId]).catch(() => {});
   }
 });

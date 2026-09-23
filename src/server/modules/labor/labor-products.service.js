@@ -41,8 +41,10 @@ export async function readLaborProducts(searchParams, context, dependencies = {}
   const input = laborProductListSchema.parse(Object.fromEntries(searchParams));
   const location = await authorizedLocation(context, input.locationId, dependencies);
   const list = dependencies.listProducts || listLocalLaborProducts;
+  const products = await list({ companyId: location.company_id, locationId: location.id, q: input.q });
+  const canReadCommercial = ["office", "admin"].includes(context.actor.role);
   return {
-    items: await list({ companyId: location.company_id, locationId: location.id, q: input.q }),
+    items: canReadCommercial ? products : products.map(({ odooPricing: _pricing, source: _source, ...product }) => product),
     ...capabilities(context),
   };
 }

@@ -4,6 +4,7 @@ import { api } from "../../lib/api.js";
 import {
   createLaborProductPayload,
   laborProductLabel,
+  laborProviderPriceLabel,
   localLaborProductValue,
   normalizeLaborProductItem,
   normalizeLaborProductsResponse,
@@ -206,7 +207,7 @@ export function LaborProductSelector({ locationId = "", value = null, onChange, 
       {state === "error" ? <p role="alert">Labor products could not be loaded. Try again.</p> : null}
       {state === "empty" ? <p role="status">No local labor products match.</p> : null}
       {pinError ? <p role="alert">{pinError}</p> : null}
-      {state === "results" ? <ul>{orderedItems.map((item, index) => <li key={item.id} id={`${listboxId}-option-${index}`} ref={(element) => { optionRefs.current[index] = element; }} className={activeIndex === index ? "is-active" : ""} onMouseEnter={() => setActiveIndex(index)}><button type="button" className="labor-product-select-option" aria-pressed={productMatchesValue(item, value)} onClick={() => select(item)}><span><strong>{laborProductLabel(item)}</strong>{item.pinned ? <small>Pinned</small> : null}</span></button>{permissions.canPin ? <button type="button" aria-label={`${item.pinned ? "Unpin" : "Pin"} ${laborProductLabel(item)}`} onClick={(event) => togglePin(event, item)}>{item.pinned ? "Unpin" : "Pin"}</button> : null}</li>)}</ul> : null}
+      {state === "results" ? <ul>{orderedItems.map((item, index) => { const providerPrice = laborProviderPriceLabel(item); return <li key={item.id} id={`${listboxId}-option-${index}`} ref={(element) => { optionRefs.current[index] = element; }} className={activeIndex === index ? "is-active" : ""} onMouseEnter={() => setActiveIndex(index)}><button type="button" className="labor-product-select-option" aria-pressed={productMatchesValue(item, value)} onClick={() => select(item)}><span><strong>{laborProductLabel(item)}</strong>{providerPrice ? <small>{providerPrice}</small> : null}{item.pinned ? <small>Pinned</small> : null}</span></button>{permissions.canPin ? <button type="button" aria-label={`${item.pinned ? "Unpin" : "Pin"} ${laborProductLabel(item)}`} onClick={(event) => togglePin(event, item)}>{item.pinned ? "Unpin" : "Pin"}</button> : null}</li>; })}</ul> : null}
       {permissions.canCreate ? <button type="button" className="labor-product-create-action" onClick={() => { closeList(); setCreateOpen(true); }}>Create labor product</button> : null}
     </div> : null}
     {createOpen ? <CreateLaborProductDialog locationId={locationId} onClose={closeCreateDialog} onCreated={handleCreated} /> : null}

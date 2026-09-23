@@ -123,7 +123,13 @@ export function OdooIntegrationCard({ provider, status, onStatusChange }) {
         const historySummary = result.historySyncStatus === "completed"
           ? "Service history was already synchronized recently."
           : "Service history is syncing in the background.";
-        setNotice({ error: "", message: `Imported ${result.changedCount} catalog records. ${historySummary}` });
+        const purchaseSummary = result.purchaseHistorySyncStatus === "completed"
+          ? "Purchase history was already synchronized recently."
+          : "Purchase history is syncing in the background.";
+        const pricingSummary = Number.isInteger(result.pricedCount)
+          ? ` Pricing available for ${result.pricedCount}; ${result.unpricedCount || 0} remain Unknown.`
+          : "";
+        setNotice({ error: "", message: `Imported ${result.changedCount} catalog records.${pricingSummary} ${historySummary} ${purchaseSummary}` });
       } else {
         setNotice({ error: "", message: "Odoo.sh connection verified." });
       }

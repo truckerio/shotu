@@ -11,6 +11,31 @@ import { IntegrationHttpError } from "../core/integration-errors.js";
 
 const PROVIDER = "odoo";
 
+function commercialAmount(value) {
+  if (value === null || value === undefined || value === false || value === "") return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? String(value) : null;
+}
+
+function commercialCurrency(value) {
+  const currency = relationName(value).trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : null;
+}
+
+function firstCommercialValue(...values) {
+  return values.find((value) => value !== null && value !== undefined && value !== false && value !== "");
+}
+
+function odooCommercialSnapshot(product) {
+  return {
+    internalPrice: commercialAmount(product.standard_price),
+    internalCurrency: commercialCurrency(product.cost_currency_id || product.currency_id),
+    sellingPrice: commercialAmount(firstCommercialValue(product.lst_price, product.list_price)),
+    sellingCurrency: commercialCurrency(product.currency_id || product.cost_currency_id),
+    commercialUpdatedAt: product.write_date || null,
+  };
+}
+
 export function buildOdooInventoryBalances({ quants, mappedLocations, catalogIds }) {
   const balances = new Map();
   for (const quant of quants) {
@@ -237,6 +262,7 @@ export async function upsertOdooOutboundDiscovery(companyId, discovery) {
   const serviceProducts = (discovery.serviceProducts || []).map((product) => {
     const uomExternalId = relationExternalId(product.uom_id);
     const uom = uoms.get(uomExternalId) || {};
+    const commercial = odooCommercialSnapshot(product);
     return {
       external_id: String(product.id),
       default_code: String(product.default_code || ""),
@@ -248,6 +274,11 @@ export async function upsertOdooOutboundDiscovery(companyId, discovery) {
       uom_category_name: relationDisplayName(uom.category_id),
       active: product.active !== false,
       provider_updated_at: product.write_date || null,
+      internal_price: commercial.internalPrice,
+      internal_currency: commercial.internalCurrency,
+      selling_price: commercial.sellingPrice,
+      selling_currency: commercial.sellingCurrency,
+      commercial_updated_at: commercial.commercialUpdatedAt,
     };
   });
   try {
@@ -317,16 +348,20 @@ export async function upsertOdooOutboundDiscovery(companyId, discovery) {
         `insert into odoo_service_products (
            company_id, external_id, default_code, display_name, product_type,
            uom_external_id, uom_name, uom_category_external_id, uom_category_name,
-           active, provider_updated_at, last_seen_at, updated_at
+           active, provider_updated_at, internal_price, internal_currency,
+           selling_price, selling_currency, commercial_updated_at, last_seen_at, updated_at
          )
          select $1, source.external_id, source.default_code, source.display_name,
                 source.product_type, source.uom_external_id, source.uom_name,
                 source.uom_category_external_id, source.uom_category_name,
-                source.active, source.provider_updated_at, now(), now()
+                source.active, source.provider_updated_at, source.internal_price, source.internal_currency,
+                source.selling_price, source.selling_currency, source.commercial_updated_at, now(), now()
          from jsonb_to_recordset($2::jsonb) as source(
            external_id text, default_code text, display_name text, product_type text,
            uom_external_id text, uom_name text, uom_category_external_id text,
-           uom_category_name text, active boolean, provider_updated_at timestamptz
+           uom_category_name text, active boolean, provider_updated_at timestamptz,
+           internal_price numeric, internal_currency text, selling_price numeric,
+           selling_currency text, commercial_updated_at timestamptz
          )
          on conflict (company_id, external_id) do update
          set default_code = excluded.default_code, display_name = excluded.display_name,
@@ -335,6 +370,9 @@ export async function upsertOdooOutboundDiscovery(companyId, discovery) {
              uom_category_external_id = excluded.uom_category_external_id,
              uom_category_name = excluded.uom_category_name, active = excluded.active,
              provider_updated_at = excluded.provider_updated_at,
+             internal_price = excluded.internal_price, internal_currency = excluded.internal_currency,
+             selling_price = excluded.selling_price, selling_currency = excluded.selling_currency,
+             commercial_updated_at = excluded.commercial_updated_at,
              last_seen_at = now(), updated_at = now()`,
         [tenantId, JSON.stringify(serviceProducts)],
       );
@@ -1358,6 +1396,7 @@ export async function importOdooInventory(companyId, { products }) {
   const client = await getPool().connect();
   const syncMarker = new Date();
   let changed = 0;
+  let priced = 0;
   try {
     await client.query("begin");
     const unitsResult = await client.query(
@@ -1370,6 +1409,9 @@ export async function importOdooInventory(companyId, { products }) {
       if (unit.odoo_name) unitCodes.set(String(unit.odoo_name).toLowerCase(), definition);
     }
     for (const product of products) {
+      const commercial = odooCommercialSnapshot(product);
+      if ((commercial.internalPrice !== null && commercial.internalCurrency)
+        || (commercial.sellingPrice !== null && commercial.sellingCurrency)) priced += 1;
       const partNumber = String(product.default_code || product.barcode || `ODOO-${product.id}`).trim();
       const normalized = normalizePartNumber(partNumber);
       const unit = unitCodes.get(relationName(product.uom_id).toLowerCase()) || { code: "ea", decimalScale: 0 };
@@ -1410,14 +1452,20 @@ export async function importOdooInventory(companyId, { products }) {
       await client.query(
         `insert into odoo_product_mappings (
            company_id, external_id, catalog_part_id, barcode, default_code, display_name, active,
-           provider_updated_at, last_seen_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+           provider_updated_at, internal_price, internal_currency, selling_price, selling_currency,
+           commercial_updated_at, last_seen_at, updated_at
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
          on conflict (company_id, external_id) do update
          set barcode = excluded.barcode,
              default_code = excluded.default_code,
              display_name = excluded.display_name,
              active = excluded.active,
              provider_updated_at = excluded.provider_updated_at,
+             internal_price = excluded.internal_price,
+             internal_currency = excluded.internal_currency,
+             selling_price = excluded.selling_price,
+             selling_currency = excluded.selling_currency,
+             commercial_updated_at = excluded.commercial_updated_at,
              last_seen_at = now(),
              updated_at = now()`,
         [
@@ -1429,9 +1477,25 @@ export async function importOdooInventory(companyId, { products }) {
           product.name || product.display_name || partNumber,
           product.active !== false,
           product.write_date || null,
+          commercial.internalPrice,
+          commercial.internalCurrency,
+          commercial.sellingPrice,
+          commercial.sellingCurrency,
+          commercial.commercialUpdatedAt,
           syncMarker,
         ],
       );
+      if (String(product.detailed_type || product.type || "").toLowerCase() === "service") {
+        await client.query(
+          `update odoo_service_products
+           set internal_price=$3, internal_currency=$4, selling_price=$5, selling_currency=$6,
+               commercial_updated_at=$7, provider_updated_at=$8, last_seen_at=now(), updated_at=now()
+           where company_id=$1 and external_id=$2`,
+          [tenantId, String(product.id), commercial.internalPrice, commercial.internalCurrency,
+            commercial.sellingPrice, commercial.sellingCurrency, commercial.commercialUpdatedAt,
+            product.write_date || null],
+        );
+      }
       changed += 1;
     }
     await client.query(
@@ -1440,7 +1504,13 @@ export async function importOdooInventory(companyId, { products }) {
       [tenantId],
     );
     await client.query("commit");
-    return { fetchedCount: products.length, changedCount: changed, skippedUnmappedCount: 0 };
+    return {
+      fetchedCount: products.length,
+      changedCount: changed,
+      pricedCount: priced,
+      unpricedCount: products.length - priced,
+      skippedUnmappedCount: 0,
+    };
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;

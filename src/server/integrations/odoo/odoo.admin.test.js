@@ -207,7 +207,9 @@ test("Odoo sync imports catalog mappings without provider quantities or local id
   assert.doesNotMatch(importer, /insert into odoo_inventory_balances|update odoo_inventory_balances|insert into inventory_items/);
   assert.doesNotMatch(importer, /on conflict \(company_id, normalized_part_number\) do update/);
   assert.doesNotMatch(importer, /set catalog_part_id = excluded\.catalog_part_id/);
-  assert.match(importer, /provider_updated_at, last_seen_at, updated_at[\s\S]*\$8, \$9, now\(\)/);
+  assert.match(importer, /provider_updated_at, internal_price, internal_currency, selling_price, selling_currency/);
+  assert.match(importer, /commercial\.internalPrice[\s\S]*commercial\.sellingPrice/);
+  assert.match(importer, /last_seen_at = now\(\)/);
   assert.doesNotMatch(importer, /update odoo_product_mappings[\s\S]*set active = false/);
   assert.match(importer, /product\.active !== false/);
   assert.match(importer, /from part_reference_numbers reference/);
@@ -233,6 +235,14 @@ test("Odoo catalog sync fetches active products and explicitly reconciles only m
 test("Odoo catalog product read batches mapped inactive checks without loading the archived catalog", async () => {
   const calls = [];
   const client = {
+    async execute(model, method) {
+      assert.equal(model, "product.product");
+      assert.equal(method, "fields_get");
+      return Object.fromEntries([
+        "id", "default_code", "barcode", "name", "categ_id", "uom_id", "active", "write_date",
+        "type", "detailed_type", "standard_price", "lst_price", "currency_id", "cost_currency_id",
+      ].map((field) => [field, {}]));
+    },
     async searchReadAll(model, domain, fields, options) {
       calls.push({ model, domain, fields, options });
       if (domain[0][0] === "active") return [{ id: 7, active: true }, { id: 42, active: true }];
@@ -255,6 +265,8 @@ test("Odoo catalog product read batches mapped inactive checks without loading t
   assert.equal(calls[2].domain[0][2].length, 1);
   assert.deepEqual(calls[1].domain[1], ["active", "=", false]);
   assert.deepEqual(calls[1].options, { context: { active_test: false } });
+  assert.ok(calls[0].fields.includes("standard_price"));
+  assert.ok(calls[0].fields.includes("lst_price"));
 });
 
 test("Odoo repair text keeps work performed and does not treat generic labor product names as repairs", () => {

@@ -81,9 +81,10 @@ async function pagedSearchRead(client, model, domain, fields, maxRecords) {
 }
 
 export async function readOdooCatalogProducts(client, mappedExternalIds = []) {
-  const fields = [
+  const fields = await supportedFields(client, "product.product", [
     "id", "default_code", "barcode", "name", "categ_id", "uom_id", "active", "write_date",
-  ];
+    "type", "detailed_type", "standard_price", "lst_price", "list_price", "currency_id", "cost_currency_id",
+  ]);
   const products = await client.searchReadAll(
     "product.product",
     [["active", "=", true]],
@@ -277,7 +278,8 @@ export async function discoverOdooOutbound(companyId, actor = {}) {
     ]),
     supportedFields(client, "product.product", [
       "id", "default_code", "display_name", "name", "type", "detailed_type",
-      "uom_id", "active", "write_date",
+      "uom_id", "active", "write_date", "standard_price", "lst_price", "list_price",
+      "currency_id", "cost_currency_id",
     ]),
     supportedFields(client, "uom.uom", ["id", "name", "category_id", "active", "write_date"]),
   ]);

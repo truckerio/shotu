@@ -10,7 +10,27 @@ export function normalizeLaborProductItem(item = {}) {
     code: String(item.code || "").trim(),
     uomCode: "hr",
     pinned: Boolean(item.pinned),
+    ...(item.source?.provider ? { source: { provider: String(item.source.provider), externalId: String(item.source.externalId || "") } } : {}),
+    ...(item.odooPricing ? { odooPricing: {
+      internal: normalizeProviderPrice(item.odooPricing.internal),
+      selling: normalizeProviderPrice(item.odooPricing.selling),
+      updatedAt: item.odooPricing.updatedAt || null,
+    } } : {}),
   };
+}
+
+function normalizeProviderPrice(price = {}) {
+  const currency = String(price.currency || "").trim().toUpperCase();
+  const amount = price.amount === null || price.amount === undefined ? null : String(price.amount);
+  const known = price.status === "known" && amount !== null && /^[A-Z]{3}$/.test(currency);
+  return { status: known ? "known" : "unknown", amount: known ? amount : null, currency: known ? currency : null };
+}
+
+export function laborProviderPriceLabel(item = {}) {
+  const price = item.odooPricing?.selling;
+  if (price?.status !== "known") return "";
+  try { return `Odoo selling ${new Intl.NumberFormat(undefined, { style: "currency", currency: price.currency, maximumFractionDigits: 4 }).format(Number(price.amount))} / hr`; }
+  catch { return `Odoo selling ${price.currency} ${price.amount} / hr`; }
 }
 
 export function normalizeLaborProductsResponse(payload = {}) {

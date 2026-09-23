@@ -86,6 +86,19 @@ function publicPurchaseOrderLine(row) {
   };
 }
 
+function publicOdooPrice(amount, currency, mapping) {
+  const normalizedCurrency = validCurrency(currency);
+  const known = amount !== null && amount !== undefined && normalizedCurrency !== null;
+  return {
+    status: known ? "known" : "unknown",
+    amount: known ? String(amount) : null,
+    currency: known ? normalizedCurrency : null,
+    source: "odoo_catalog",
+    externalId: mapping?.external_id || null,
+    updatedAt: mapping?.commercial_updated_at || mapping?.provider_updated_at || null,
+  };
+}
+
 export async function getInventoryPartCommercial({ catalogPartId, companyIds, locationIds = [], isAdmin = false, locationId = null, historyLimit = 100 }) {
   const partResult = await query(
     `select catalog.id, catalog.company_id, catalog.part_number, catalog.description, catalog.uom_code,
@@ -102,7 +115,7 @@ export async function getInventoryPartCommercial({ catalogPartId, companyIds, lo
   );
   const part = partResult.rows[0];
   if (!part) return null;
-  const [observationsResult, coverageResult, pricesResult, purchaseOrdersResult] = await Promise.all([
+  const [observationsResult, coverageResult, pricesResult, purchaseOrdersResult, odooPriceResult] = await Promise.all([
     query(
       `select line.id as receipt_line_id, line.receipt_id, receipt.invoice_run_id,
               receipt.count_import_id, receipt.manual_intake_batch_id, receipt.serialization_batch_id, receipt.provider,
@@ -169,6 +182,17 @@ export async function getInventoryPartCommercial({ catalogPartId, companyIds, lo
        limit $3`,
       [part.company_id, catalogPartId, historyLimit],
     ),
+    query(
+      `select mapping.external_id, mapping.internal_price, mapping.internal_currency,
+              mapping.selling_price, mapping.selling_currency,
+              mapping.commercial_updated_at, mapping.provider_updated_at
+       from odoo_product_mappings mapping
+       where mapping.company_id=$1 and mapping.catalog_part_id=$2 and mapping.active
+       order by mapping.commercial_updated_at desc nulls last,
+                mapping.provider_updated_at desc nulls last, mapping.external_id
+       limit 1`,
+      [part.company_id, catalogPartId],
+    ),
   ]);
   const observations = observationsResult.rows.map(publicObservation);
   const coverageRow = coverageResult.rows[0] || {};
@@ -209,12 +233,17 @@ export async function getInventoryPartCommercial({ catalogPartId, companyIds, lo
     observations: purchaseOrderObservations,
     truncated: purchaseOrdersResult.rows.length >= historyLimit,
   };
+  const odooMapping = odooPriceResult.rows[0] || null;
   return {
     part: { catalogPartId: part.id, companyId: part.company_id, partNumber: part.part_number, description: part.description || "", uomCode: part.uom_code, displayUomCode: part.inventory_display_uom_code || part.uom_code, trackingMode: part.tracking_mode || null },
     scope: locationId ? { locationId: part.scope_location_id, locationName: part.scope_location_name } : { locationId: null, locationName: null },
     purchaseCost: receiptCosts,
     receiptCosts,
     purchaseOrders,
+    odooPrices: {
+      internal: publicOdooPrice(odooMapping?.internal_price, odooMapping?.internal_currency, odooMapping),
+      selling: publicOdooPrice(odooMapping?.selling_price, odooMapping?.selling_currency, odooMapping),
+    },
     prices: {
       internal: priceProjection("internal"),
       selling: priceProjection("selling"),
@@ -312,7 +341,11 @@ export async function appendInventoryPartPrice({ catalogPartId, companyIds, loca
 export async function getInventoryPartPricingSource({ catalogPartId, companyIds, locationIds = [], isAdmin = false, locationId = null, kind }) {
   const result = await query(`select catalog.id as catalog_part_id, catalog.company_id as catalog_company_id, catalog.uom_code,
       catalog.inventory_display_uom_code, catalog.tracking_mode,
-      price.*, actor.display_name as created_by_name, ${TAX_PROFILE_JSON}
+      price.*, actor.display_name as created_by_name, ${TAX_PROFILE_JSON},
+      provider.external_id provider_external_id,
+      case when $3='internal' then provider.internal_price else provider.selling_price end provider_amount,
+      case when $3='internal' then provider.internal_currency else provider.selling_currency end provider_currency,
+      provider.commercial_updated_at provider_commercial_updated_at
     from parts_catalog catalog
     left join lateral (
       select candidate.* from inventory_part_price_versions candidate
@@ -320,6 +353,13 @@ export async function getInventoryPartPricingSource({ catalogPartId, companyIds,
         and (candidate.location_id is null or candidate.location_id=$4)
       order by (candidate.location_id is not null) desc, candidate.version desc limit 1
     ) price on true
+    left join lateral (
+      select mapping.* from odoo_product_mappings mapping
+      where mapping.company_id=catalog.company_id and mapping.catalog_part_id=catalog.id and mapping.active
+      order by mapping.commercial_updated_at desc nulls last,
+               mapping.provider_updated_at desc nulls last, mapping.external_id
+      limit 1
+    ) provider on true
     left join user_profiles actor on actor.id=price.created_by
     left join inventory_tax_profile_versions tax_version
       on tax_version.company_id=price.company_id and tax_version.id=price.tax_profile_version_id
@@ -331,8 +371,17 @@ export async function getInventoryPartPricingSource({ catalogPartId, companyIds,
     limit 1`, [catalogPartId, companyIds, kind, locationId, locationIds, isAdmin]);
   const row = result.rows[0];
   if (!row) return null;
+  const providerPrice = publicOdooPrice(row.provider_amount, row.provider_currency, {
+    external_id: row.provider_external_id,
+    commercial_updated_at: row.provider_commercial_updated_at,
+  });
   return {
     part: { catalogPartId: row.catalog_part_id, companyId: row.catalog_company_id, uomCode: row.uom_code, displayUomCode: row.inventory_display_uom_code || row.uom_code, trackingMode: row.tracking_mode || null },
-    price: row.id ? publicPrice(row) : null,
+    price: row.id ? publicPrice(row) : providerPrice.status === "known" ? {
+      id: null, version: 0, amount: providerPrice.amount, currency: providerPrice.currency,
+      status: "known", taxTreatment: "not_configured", taxProfileVersionId: null,
+      taxProfile: null, source: "odoo_catalog", externalId: providerPrice.externalId,
+      effectiveAt: providerPrice.updatedAt,
+    } : null,
   };
 }

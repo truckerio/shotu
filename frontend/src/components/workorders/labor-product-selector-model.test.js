@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createLaborProductPayload,
   laborProductLabel,
+  laborProviderPriceLabel,
   laborProductSelectionPatch,
   localLaborProductValue,
   normalizeLaborProductsResponse,
@@ -20,6 +21,13 @@ test("normalizes only usable local labor products and capability flags", () => {
     canPin: true,
     items: [{ id: "labor-1", name: "Shop labor", code: "LAB", uomCode: "hr", pinned: true }],
   });
+});
+
+test("normalizes and labels Odoo labor selling price without copying it into workorder selection", () => {
+  const item = normalizeLaborProductsResponse({ items: [{ id: "labor-1", name: "Shop labor", odooPricing: { selling: { status: "known", amount: "125.0000", currency: "usd" }, internal: { status: "unknown" } } }] }).items[0];
+  assert.equal(item.odooPricing.selling.currency, "USD");
+  assert.match(laborProviderPriceLabel(item), /Odoo selling.*125/);
+  assert.equal(localLaborProductValue(item).odooPricing, undefined);
 });
 
 test("places pins first without making them mandatory selection rows", () => {

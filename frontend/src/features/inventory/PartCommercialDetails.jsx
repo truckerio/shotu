@@ -21,7 +21,7 @@ const purchaseOrderColumns = [
   { id: "cost", label: "Unit price" },
 ];
 
-function PriceEditor({ kind, label, current, editCurrent = current, expectedVersion, source, companyDefault, disabled, defaultCurrency, uomCode, onSaved }) {
+function PriceEditor({ kind, label, current, editCurrent = current, expectedVersion, source, companyDefault, providerPrice, disabled, defaultCurrency, uomCode, onSaved }) {
   const editView = configuredPriceView(editCurrent);
   const savedAmount = editCurrent?.amount ?? "";
   const savedCurrency = editCurrent?.currency || defaultCurrency || "";
@@ -48,6 +48,7 @@ function PriceEditor({ kind, label, current, editCurrent = current, expectedVers
       <Button type="submit" variant="primary" disabled={!dirty || !valid || busy || disabled}>{busy ? "Saving…" : "Save"}</Button>
     </div>
     {source === "location_override" && companyDefault ? <small className="inventory-commercial-fallback">Company default: {configuredPriceView(companyDefault).label}</small> : null}
+    {providerPrice?.status === "known" ? <small className="inventory-commercial-fallback">Odoo reference: {displayMoney(providerPrice.amount, providerPrice.currency)} per {uomCode || "unit"}</small> : null}
     {error ? <p role="alert">{error}</p> : null}
   </form>;
 }
@@ -74,7 +75,7 @@ export function PartCommercialDetails({ part, location = null, secondary = false
   const receiptLatest = costs.latest?.status === "known" ? costs.latest : null;
   const latest = receiptLatest || purchaseOrders.latest || costs.latest;
   const invoiceHref = (entry) => entry.source?.type === "invoice" && (entry.invoiceRunId || entry.source.id) ? `/?${new URLSearchParams({ adminView: "inventory", view: "inventory", invoiceRun: entry.invoiceRunId || entry.source.id })}` : "";
-  const editor = (kind, label) => { const projection = details.prices[kind], state = locationId ? locationPriceEditState(projection) : { draft: projection.current, expectedVersion: configuredPriceView(projection.current).version, effective: projection.current, companyDefault: null, source: null }; return <PriceEditor key={kind} kind={kind} label={label} current={state.effective} editCurrent={state.draft} expectedVersion={state.expectedVersion} source={locationId ? state.source : null} companyDefault={state.companyDefault} disabled={!details.capabilities.canEditPrices} defaultCurrency={latest?.currency || ""} uomCode={part.uomCode} onSaved={savePrice} />; };
+  const editor = (kind, label) => { const projection = details.prices[kind], state = locationId ? locationPriceEditState(projection) : { draft: projection.current, expectedVersion: configuredPriceView(projection.current).version, effective: projection.current, companyDefault: null, source: null }; const providerPrice = details.odooPrices?.[kind] || null; return <PriceEditor key={kind} kind={kind} label={label} current={state.effective} editCurrent={state.draft} expectedVersion={state.expectedVersion} source={locationId ? state.source : null} companyDefault={state.companyDefault} providerPrice={providerPrice} disabled={!details.capabilities.canEditPrices} defaultCurrency={latest?.currency || providerPrice?.currency || ""} uomCode={part.uomCode} onSaved={savePrice} />; };
   const contents = <section className="inventory-commercial-details" aria-label={locationId ? `Prices for ${details.scope?.locationName || location?.locationName || "location"}` : "Company price defaults"}>
     {error ? <p className="inventory-commercial-status" role="alert">{error}</p> : null}
     {locationId ? <p className="inventory-commercial-scope">{details.scope?.locationName || location?.locationName}</p> : null}

@@ -22,6 +22,16 @@ test("location price migration preserves company defaults and uses null-safe sco
   assert.doesNotMatch(sql, /update inventory_part_price_versions/i);
 });
 
+test("Odoo commercial migration keeps provider prices separate and links labor by stable identity", async () => {
+  const sql = await readFile(new URL("../../db/migrations/173_odoo_commercial_catalog.sql", import.meta.url), "utf8");
+  assert.match(sql, /alter table odoo_product_mappings[\s\S]*internal_price[\s\S]*selling_price/i);
+  assert.match(sql, /alter table odoo_service_products[\s\S]*internal_price[\s\S]*selling_price/i);
+  assert.match(sql, /alter table local_labor_products[\s\S]*source_external_id/i);
+  assert.match(sql, /foreign key \(company_id, source_external_id\)[\s\S]*references odoo_service_products/i);
+  assert.match(sql, /local_matches=1 and candidate\.source_matches=1/i);
+  assert.doesNotMatch(sql, /insert into inventory_part_price_versions/i);
+});
+
 test("commercial repository scopes costs by location, includes costless confirmed receipts and bounds each price kind", async () => {
   const source = await readFile(new URL("../../db/repositories/inventory-part-prices.repo.js", import.meta.url), "utf8");
   assert.match(source, /from inventory_receipt_lines line/i);
@@ -37,5 +47,8 @@ test("commercial repository scopes costs by location, includes costless confirme
   assert.match(source, /basis: "receipt_line_source_facts"/);
   assert.match(source, /from odoo_purchase_history_lines line/i);
   assert.match(source, /basis: "odoo_purchase_order_lines"/);
+  assert.match(source, /from odoo_product_mappings mapping/i);
+  assert.match(source, /odooPrices:/);
+  assert.match(source, /source: "odoo_catalog"/);
   assert.match(source, /location_id is not distinct from \$4::uuid/i);
 });
