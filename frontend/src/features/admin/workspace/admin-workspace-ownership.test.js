@@ -49,6 +49,7 @@ test("admin pages are owned outside the controller", () => {
 test("Settings makes storage layout an Inventory configuration destination", () => {
   assert.match(settings, /tab === "templates" \|\| tab === "storage-layout"/);
   assert.match(settings, /title="Storage layout"/);
+  assert.match(settings, /icon=\{Rows03\}/);
   assert.match(settings, /onManage=\{\(\) => changeTab\("storage-layout"\)\}/);
   assert.match(settings, /current="Storage layout"/);
   assert.match(settings, /<InventoryLocationsWorkspace/);

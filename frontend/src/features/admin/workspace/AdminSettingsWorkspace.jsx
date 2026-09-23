@@ -1,4 +1,4 @@
-import { PurchaseOrderApprovalSettings } from './PurchaseOrderApprovalSettings.jsx';
+import { Rows03 } from "@untitledui/icons";
 import { useEffect, useState } from "react";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
@@ -6,6 +6,7 @@ import { IntegrationsSettings } from "../integrations/IntegrationsSettings.jsx";
 import { IntegrationSummaryCard } from "../integrations/IntegrationSummaryCard.jsx";
 import { InspectionTemplatesPage } from "../templates/InspectionTemplatesPage.jsx";
 import { InventoryLocationsWorkspace } from "../../inventory/InventoryLocationsWorkspace.jsx";
+import { PurchaseOrderApprovalSettings } from "./PurchaseOrderApprovalSettings.jsx";
 
 function selectedSettingsTab() {
   const params = new URLSearchParams(window.location.search);
@@ -83,6 +84,7 @@ export function AdminSettingsWorkspace({ actor, locations }) {
       <IntegrationSummaryCard
         category="Inventory"
         description="Set up the storage hierarchy used for receiving, picking, and stock locations."
+        icon={Rows03}
         onManage={() => changeTab("storage-layout")}
         title="Storage layout"
       />
