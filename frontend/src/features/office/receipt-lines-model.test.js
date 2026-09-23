@@ -51,6 +51,27 @@ test("receive all uses each line's bounded limit but deliberately leaves seriali
   assert.equal(receiptLinesReady([{ ...received[0], serialNumbers: "A-1\nA-2" }, received[1]]), true);
 });
 
+test("exact core charge and credit offsets remain visible but never enter a receipt payload", () => {
+  const coreDraft = { lines: [
+    { partNumber: field("E74-1119:PEC"), description: field("Reman kit"), quantity: field(1), unitOfMeasure: field("ea"), lineTotal: field(1470) },
+    { partNumber: field("COREECVJ1500-C1:PEC"), description: field("Core charge"), quantity: field(1), unitOfMeasure: field("ea"), lineTotal: field(1995) },
+    { partNumber: field("COREECVJ1500-C1:PEC"), description: field("Core return"), quantity: field(-1), unitOfMeasure: field("ea"), lineTotal: field(-1995) },
+  ] };
+  const lines = initialReceiptLines(coreDraft, { receiptLines: [
+    { invoiceLineIndex: 0, invoiceOutstandingQuantity: 1, trackingMode: "quantity" },
+    { invoiceLineIndex: 1, invoiceOutstandingQuantity: 0, trackingMode: null, inventoryDisposition: "financial_offset", offsetLineIndex: 2 },
+    { invoiceLineIndex: 2, invoiceOutstandingQuantity: 0, trackingMode: null, inventoryDisposition: "financial_offset", offsetLineIndex: 1 },
+  ] });
+  const received = receiveAllReceiptLines(lines);
+  assert.equal(received[0].acceptedQuantity, "1");
+  assert.equal(received[1].invoiceQuantity, 1);
+  assert.equal(received[2].invoiceQuantity, -1);
+  assert.equal(received[1].acceptedQuantity, "");
+  assert.equal(received[2].acceptedQuantity, "");
+  assert.deepEqual(receiptLinePayload(received).map((entry) => entry.invoiceLineIndex), [0]);
+  assert.equal(receiptLinesReady(received), true);
+});
+
 test("held quantities require a hold location and findings and no-receipt payload cannot post", () => {
   const [line] = initialReceiptLines(draft, suggestion);
   const held = { ...line, heldQuantity: "1", serialNumbers: "A-1", holdLocation: "Quarantine A", notes: "Crushed carton", outcome: "damaged" };

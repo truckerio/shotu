@@ -12,6 +12,7 @@ import { InvoiceHistoryPanel } from "./InvoiceHistoryPanel.jsx";
 import { PhysicalReceiptConfirmation } from "./PhysicalReceiptConfirmation.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { CreateInventoryPartDialog } from "../inventory/CreateInventoryPartDialog.jsx";
+import { classifyInvoiceInventoryLines } from "../../../../shared/invoice-inventory-lines.js";
 import {
   confidenceState,
   firstInvoiceLineId,
@@ -176,6 +177,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const [reviewDirty, setReviewDirty] = useState(false);
   const [leaveReviewOpen, setLeaveReviewOpen] = useState(false);
   const [reextractOpen, setReextractOpen] = useState(false);
+  const [removeLineId, setRemoveLineId] = useState("");
   const [catalogQueries, setCatalogQueries] = useState({});
   const [createPartLineId, setCreatePartLineId] = useState("");
   const [activeLineId, setActiveLineId] = useState("");
@@ -713,6 +715,10 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   }
 
   const invoiceFullyReceived = invoiceDeliveryFullyReceived({ receipt, suggestion: purchaseOrderSuggestion });
+  const invoiceInventoryFacts = useMemo(() => classifyInvoiceInventoryLines(draft?.lines || []), [draft]);
+  const financialOffsetLineIndexes = useMemo(() => new Set(invoiceInventoryFacts
+    .filter((line) => line.inventoryDisposition === "financial_offset")
+    .map((line) => line.lineIndex)), [invoiceInventoryFacts]);
 
   function updateHeader(name, value) {
     reviewKeyRef.current = "";
@@ -756,6 +762,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     setReviewDirty(true);
     setActiveLineId(nextInvoiceLineIdAfterRemoval(draft.lines, lineId));
     setDraft((current) => removeInvoiceLine(current, lineId));
+    setRemoveLineId("");
   }
 
   function activateReviewPane(nextPane, event) {
@@ -825,6 +832,24 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
     </ModalOverlay>
   );
 
+  const removeLine = draft?.lines?.find((line) => line.id === removeLineId);
+  const removeLineDialog = (
+    <ModalOverlay className="invoice-upload-overlay" isOpen={Boolean(removeLine)} isDismissable onOpenChange={(open) => { if (!open) setRemoveLineId(""); }}>
+      <Modal className="invoice-upload-modal">
+        <Dialog className="invoice-upload-dialog invoice-review-leave-dialog" aria-labelledby="invoice-remove-line-title">
+          <div className="invoice-upload-dialog-heading">
+            <div><Heading slot="title" id="invoice-remove-line-title">Remove this extracted line?</Heading><p>{reviewValue(removeLine?.partNumber, "This line")} will be removed from the reviewed invoice. The source document stays unchanged.</p></div>
+            <button type="button" aria-label="Keep extracted line" onClick={() => setRemoveLineId("")}><XClose aria-hidden="true" /></button>
+          </div>
+          <div className="invoice-upload-dialog-actions">
+            <Button type="button" onClick={() => setRemoveLineId("")}>Keep line</Button>
+            <Button type="button" variant="danger" icon={Trash01} onClick={() => removeInvoiceReviewLine(removeLine.id)}>Remove line</Button>
+          </div>
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
+  );
+
   if (draft) {
     const deliveryComplete = invoiceFullyReceived;
     const deliveryReversed = receipt?.status === "reversed";
@@ -837,7 +862,7 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
       { id: "delivery", unresolved: deliveryPending || deliveryIssues > 0 },
     ]);
     return (
-      <>{uploadDialog}{leaveReviewDialog}{reextractDialog}<section className="invoice-extraction-workspace" aria-labelledby="invoice-review-title">
+      <>{uploadDialog}{leaveReviewDialog}{reextractDialog}{removeLineDialog}<section className="invoice-extraction-workspace" aria-labelledby="invoice-review-title">
         <header className="invoice-review-header">
           <div>
             <span className="invoice-draft-label">{receipt?.status === "posted" ? "Added · local inventory updated" : receipt?.status === "reversed" ? "Reversed · local inventory adjusted" : "Draft · inventory unchanged"}</span>
@@ -891,9 +916,11 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
                   const lineNumber = draft.lines.findIndex((candidate) => candidate.id === line.id) + 1;
                   const active = activeLineId === line.id;
                   const needsReview = invoiceLineNeedsReview(line);
+                  const financialOffset = financialOffsetLineIndexes.has(lineNumber - 1);
                   return <article className={`invoice-line-row${active ? " is-active" : ""}${needsReview ? " has-issues" : ""}`} key={line.id}>
-                    <button type="button" className="invoice-line-summary" aria-expanded={active} aria-controls={`invoice-line-editor-${line.id}`} onClick={() => setActiveLineId(active ? "" : line.id)}><span><strong>Line {lineNumber} · {reviewValue(line.partNumber, "No part number")}</strong><small>{reviewValue(line.description, "No description")}</small></span><span className="invoice-line-quantity">{line.quantity.value ?? "—"} {reviewValue(line.unitOfMeasure, "")}</span><span className="invoice-line-total">{reviewAmount(line.lineTotal, reviewValue(draft.currency, ""))}</span><span className={`invoice-line-state${needsReview ? " has-issues" : ""}`}>{needsReview ? "Review" : "Ready"}</span><span className="invoice-line-edit">{active ? "Close" : run.status === "reviewed" ? "View" : "Edit"}</span></button>
-                    {active ? <fieldset id={`invoice-line-editor-${line.id}`} className="invoice-line-card"><legend>Line {lineNumber} editor</legend>{run.status !== "reviewed" ? <div className="invoice-line-catalog-tools"><PartCatalogCombobox locationId={run.locationId || locationId} purpose="master_match" value={catalogQueries[line.id] ?? String(line.partNumber.value || "")} onChange={(value) => setCatalogQueries((current) => ({ ...current, [line.id]: value }))} onSelect={(part) => useCatalogPart(line.id, part)} label="Inventory part" inputAriaLabel={`Find inventory part for invoice line ${lineNumber}`} placeholder="Find existing inventory part" catalogEndpoint="/api/office/inventory/catalog" resultLimit={12} popupAriaLabel={`Inventory parts for invoice line ${lineNumber}`} /><Button type="button" onClick={() => setCreatePartLineId(line.id)}>Create new part</Button><small>Choose an existing part or create one. Review save and inventory receipt remain separate.</small></div> : null}{["partNumber", "description", "quantity", "unitOfMeasure", "unitPrice", "lineTotal"].map((name) => { const label = { partNumber: "Part number", description: "Description", quantity: "Quantity", unitOfMeasure: "Unit", unitPrice: "Unit price", lineTotal: "Line total" }[name]; const type = ["quantity", "unitPrice", "lineTotal"].includes(name) ? "number" : "text"; return <label key={name} className={line[name].confidence < 90 ? "needs-review" : ""}><span>{label}</span><input type={type} step={type === "number" ? "0.001" : undefined} value={line[name].value ?? ""} readOnly={run.status === "reviewed"} onChange={(event) => updateLine(line.id, name, event.target.value, type)} /><Confidence field={line[name]} /></label>; })}{run.status !== "reviewed" ? <Button type="button" icon={Trash01} className="invoice-remove-line" onClick={() => removeInvoiceReviewLine(line.id)}>Remove line</Button> : null}</fieldset> : null}
+                    <div className="invoice-line-row-heading"><button type="button" className="invoice-line-summary" aria-expanded={active} aria-controls={`invoice-line-editor-${line.id}`} onClick={() => setActiveLineId(active ? "" : line.id)}><span><strong>Line {lineNumber} · {reviewValue(line.partNumber, "No part number")}</strong><small>{reviewValue(line.description, "No description")}</small></span><span className="invoice-line-quantity">{line.quantity.value ?? "—"} {reviewValue(line.unitOfMeasure, "")}</span><span className="invoice-line-total">{reviewAmount(line.lineTotal, reviewValue(draft.currency, ""))}</span><span className={`invoice-line-state${needsReview ? " has-issues" : ""}${financialOffset && !needsReview ? " is-financial" : ""}`}>{needsReview ? "Review" : financialOffset ? "No stock" : "Ready"}</span><span className="invoice-line-edit">{active ? "Close" : run.status === "reviewed" ? "View" : "Edit"}</span></button>{run.status !== "reviewed" ? <Button type="button" icon={Trash01} className="invoice-line-remove-action" onClick={() => setRemoveLineId(line.id)} aria-label={`Remove invoice line ${lineNumber}`}>Remove</Button> : null}</div>
+                    {financialOffset ? <p className="invoice-line-financial-note">Financial charge/credit offset with line {Number(invoiceInventoryFacts[lineNumber - 1]?.offsetLineIndex) + 1} · excluded from inventory</p> : null}
+                    {active ? <fieldset id={`invoice-line-editor-${line.id}`} className="invoice-line-card"><legend>Line {lineNumber} editor</legend>{run.status !== "reviewed" ? <div className="invoice-line-catalog-tools"><PartCatalogCombobox locationId={run.locationId || locationId} purpose="master_match" value={catalogQueries[line.id] ?? String(line.partNumber.value || "")} onChange={(value) => setCatalogQueries((current) => ({ ...current, [line.id]: value }))} onSelect={(part) => useCatalogPart(line.id, part)} label="Inventory part" inputAriaLabel={`Find inventory part for invoice line ${lineNumber}`} placeholder="Find existing inventory part" catalogEndpoint="/api/office/inventory/catalog" resultLimit={12} popupAriaLabel={`Inventory parts for invoice line ${lineNumber}`} /><Button type="button" onClick={() => setCreatePartLineId(line.id)}>Create new part</Button><small>Choose an existing part or create one. Review save and inventory receipt remain separate.</small></div> : null}{["partNumber", "description", "quantity", "unitOfMeasure", "unitPrice", "lineTotal"].map((name) => { const label = { partNumber: "Part number", description: "Description", quantity: "Quantity", unitOfMeasure: "Unit", unitPrice: "Unit price", lineTotal: "Line total" }[name]; const type = ["quantity", "unitPrice", "lineTotal"].includes(name) ? "number" : "text"; return <label key={name} className={line[name].confidence < 90 ? "needs-review" : ""}><span>{label}</span><input type={type} step={type === "number" ? "0.001" : undefined} value={line[name].value ?? ""} readOnly={run.status === "reviewed"} onChange={(event) => updateLine(line.id, name, event.target.value, type)} /><Confidence field={line[name]} /></label>; })}</fieldset> : null}
                   </article>;
                 })}</div>
               </ReviewSection>;

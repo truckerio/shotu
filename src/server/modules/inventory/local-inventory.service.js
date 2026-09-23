@@ -18,6 +18,7 @@ import {
   invoiceHistoryQuerySchema,
 } from "./inventory.schemas.js";
 import { validateCompleteInvoiceAllocationPlan, validateInvoicePostingRoute } from "./inventory-purchase-invoice-allocation.service.js";
+import { physicalInvoiceLineIndexes } from "../../../../shared/invoice-inventory-lines.js";
 
 function publicError(code, message, statusCode = 422, retryable = false) {
   return new InventoryError(message, { code, statusCode, retryable });
@@ -51,7 +52,12 @@ function prepareLocalLines(draft) {
   }
   if (!draft.lines.length) throw publicError("INVENTORY_LINES_REQUIRED", "Add at least one invoice line before posting inventory.");
   if (draft.lines.length > 500) throw publicError("INVENTORY_LINE_LIMIT", "Post no more than 500 invoice lines at once.");
-  return draft.lines.map((line, lineIndex) => {
+  const physicalLineIndexes = physicalInvoiceLineIndexes(draft.lines);
+  const physicalLines = draft.lines
+    .map((line, lineIndex) => ({ line, lineIndex }))
+    .filter(({ lineIndex }) => physicalLineIndexes.has(lineIndex));
+  if (!physicalLines.length) throw publicError("INVENTORY_LINES_REQUIRED", "This invoice has no physical stock lines to receive.");
+  return physicalLines.map(({ line, lineIndex }) => {
     const partNumber = String(line.partNumber.value || "").trim();
     const normalizedPartNumber = normalizePartNumber(partNumber);
     if (!normalizedPartNumber) {

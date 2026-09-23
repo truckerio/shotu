@@ -1,4 +1,5 @@
 import { getPool } from "../pool.js";
+import { classifyInvoiceInventoryLines } from "../../../../shared/invoice-inventory-lines.js";
 
 const normalize = (value) => String(value || "").normalize("NFKC").trim().toLocaleUpperCase("en-US").replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -18,6 +19,8 @@ export async function suggestPurchaseInvoiceAllocations({ runId, companyIds, loc
     if (source.status !== "reviewed" || !source.reviewed_draft) return { kind: "review_required", version: Number(source.version) };
     const draft = source.reviewed_draft;
     const lines = Array.isArray(draft.lines) ? draft.lines : [];
+    const inventoryFacts = classifyInvoiceInventoryLines(lines);
+    const inventoryFactByIndex = new Map(inventoryFacts.map((fact) => [fact.lineIndex, fact]));
     const received = await client.query(`select line.line_index,sum(coalesce(delivery_line.usable_quantity,line.quantity))::numeric as quantity
       from local_inventory_receipt_lines line
       join local_inventory_receipts receipt on receipt.company_id=line.company_id and receipt.id=line.receipt_id
@@ -34,7 +37,11 @@ export async function suggestPurchaseInvoiceAllocations({ runId, companyIds, loc
     const receiptLines = lines.map((line, invoiceLineIndex) => ({
       invoiceLineIndex,
       purchaseLineId: null,
-      invoiceOutstandingQuantity: Math.max(Number(line.quantity?.value) - (receivedByLine.get(invoiceLineIndex) || 0), 0),
+      inventoryDisposition: inventoryFactByIndex.get(invoiceLineIndex)?.inventoryDisposition || "stock",
+      offsetLineIndex: inventoryFactByIndex.get(invoiceLineIndex)?.offsetLineIndex ?? null,
+      invoiceOutstandingQuantity: inventoryFactByIndex.get(invoiceLineIndex)?.inventoryDisposition === "financial_offset"
+        ? 0
+        : Math.max(Number(line.quantity?.value) - (receivedByLine.get(invoiceLineIndex) || 0), 0),
       trackingMode: trackingById.get(line.catalogPartId)?.tracking_mode || null,
       uomCode: trackingById.get(line.catalogPartId)?.uom_code || String(line.unitOfMeasure?.value || "").trim().toLowerCase(),
     }));
@@ -57,6 +64,7 @@ export async function suggestPurchaseInvoiceAllocations({ runId, companyIds, loc
     const matches = [];
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
+      if (inventoryFactByIndex.get(index)?.inventoryDisposition === "financial_offset") continue;
       const part = normalize(line.partNumber?.value);
       const uom = String(line.unitOfMeasure?.value || "").trim().toLowerCase();
       const invoiceQuantity = Number(line.quantity?.value);

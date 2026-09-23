@@ -217,6 +217,8 @@
 .invoice-lines { gap:8px; margin-top:10px; }
 .invoice-line-row { border:1px solid #e4e7ec; border-radius:9px; min-width:0; overflow:hidden; }
 .invoice-line-row.has-issues { border-color:#fdb022; }
+.invoice-line-row-heading { align-items:stretch; display:grid; grid-template-columns:minmax(0,1fr) auto; }
+.invoice-line-remove-action { align-self:center; background:transparent!important; color:#b42318!important; margin-right:6px; min-height:44px!important; }
 .invoice-line-summary { background:#fff!important; border:0!important; border-radius:0!important; color:#344054!important; display:grid!important; gap:6px 10px!important; grid-template-columns:minmax(0,1.5fr) minmax(72px,.55fr) minmax(88px,.65fr) auto auto; justify-content:stretch!important; min-height:56px!important; padding:8px 10px!important; text-align:left; width:100%; }
 .invoice-line-summary:hover,.invoice-line-row.is-active .invoice-line-summary { background:#f9fafb!important; }
 .invoice-line-summary:focus-visible { outline:3px solid #84caff; outline-offset:-3px; }
@@ -226,7 +228,9 @@
 .invoice-line-quantity,.invoice-line-total { align-self:center; font-size:12px; font-variant-numeric:tabular-nums; }
 .invoice-line-state { align-self:center; background:#ecfdf3; border-radius:999px; color:#067647; font-size:11px; font-weight:700; padding:3px 7px; }
 .invoice-line-state.has-issues { background:#fffaeb; color:#b54708; }
+.invoice-line-state.is-financial { background:#f2f4f7; color:#475467; }
 .invoice-line-edit { align-self:center; color:#175cd3; font-size:12px; font-weight:700; }
+.invoice-line-financial-note { background:#f8f9fc; border-top:1px solid #eaecf0; color:#475467; font-size:12px; margin:0; padding:7px 10px; }
 .invoice-line-card { border:0; border-radius:0; border-top:1px solid #eaecf0; }
 .invoice-line-card legend { margin-left:4px; }
 .invoice-line-card label.needs-review input { border-color:#fdb022; }
@@ -255,6 +259,8 @@
   .invoice-review-section-action { grid-column:2; grid-row:1 / span 2; }
   .invoice-review-section .invoice-fields-grid { grid-template-columns:minmax(0,1fr); }
   .invoice-line-summary { grid-template-columns:minmax(0,1fr) auto; }
+  .invoice-line-row-heading { grid-template-columns:minmax(0,1fr); }
+  .invoice-line-remove-action { justify-self:start; margin:0 8px 8px; }
   .invoice-line-summary>span:first-child { grid-column:1 / -1; }
   .invoice-line-quantity,.invoice-line-total { justify-self:start; }
   .invoice-line-state,.invoice-line-edit { justify-self:end; }

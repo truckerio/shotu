@@ -189,6 +189,9 @@ test("invoice items put unresolved rows first and render only the selected line 
   assert.match(source, /nextInvoiceLineIdAfterRemoval\(draft\.lines, lineId\)/);
   assert.match(source, /Unresolved lines appear first/);
   assert.match(source, /defaultOpen=\{lineIssues > 0\}/);
+  assert.match(source, /className="invoice-line-remove-action"[\s\S]*aria-label=\{`Remove invoice line \$\{lineNumber\}`\}/);
+  assert.match(source, /Remove this extracted line\?/);
+  assert.match(source, /Financial charge\/credit offset with line/);
 });
 
 test("unresolved disclosures lead DOM and keyboard order while completed sections start collapsed", async () => {

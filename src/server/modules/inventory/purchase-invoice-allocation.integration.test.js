@@ -28,6 +28,18 @@ test("PO suggestions and invoice allocation are scoped, atomic, idempotent, and 
       values($1,$2,$3,$4,$4,$5,'phase2.pdf','application/pdf',1,$6,'reviewed','test','test','test',$7::jsonb,now())`,[runId,companyId,locationId,actorId,hash(suffix),`phase2-${suffix}`,JSON.stringify(draft("PO-PHASE2"))]);
     const suggestion=await suggestPurchaseInvoiceAllocations({runId,companyIds:[companyId],locationIds:[locationId],isAdmin:false});
     assert.equal(suggestion.kind,"suggestions"); assert.equal(suggestion.candidates[0].purchaseLineId,lineId);
+    const coreDraft=draft("PO-PHASE2");
+    coreDraft.lines.push(
+      {id:"core-charge",partNumber:{value:"CORE-1",confidence:100,evidence:""},description:{value:"Core charge",confidence:100,evidence:""},quantity:{value:1,confidence:100,evidence:""},unitOfMeasure:{value:"ea",confidence:100,evidence:""},unitPrice:{value:1995,confidence:100,evidence:""},lineTotal:{value:1995,confidence:100,evidence:""}},
+      {id:"core-credit",partNumber:{value:"CORE-1",confidence:100,evidence:""},description:{value:"Core return",confidence:100,evidence:""},quantity:{value:-1,confidence:100,evidence:""},unitOfMeasure:{value:"ea",confidence:100,evidence:""},unitPrice:{value:1995,confidence:100,evidence:""},lineTotal:{value:-1995,confidence:100,evidence:""}},
+    );
+    await query("update invoice_extraction_runs set reviewed_draft=$2::jsonb where id=$1",[runId,JSON.stringify(coreDraft)]);
+    const coreSuggestion=await suggestPurchaseInvoiceAllocations({runId,companyIds:[companyId],locationIds:[locationId],isAdmin:false});
+    assert.equal(coreSuggestion.kind,"suggestions");
+    assert.deepEqual(coreSuggestion.candidates.map((entry)=>entry.invoiceLineIndex),[0]);
+    assert.deepEqual(coreSuggestion.receiptLines.map((entry)=>entry.inventoryDisposition),["stock","financial_offset","financial_offset"]);
+    assert.deepEqual(coreSuggestion.receiptLines.map((entry)=>entry.invoiceOutstandingQuantity),[1,0,0]);
+    await query("update invoice_extraction_runs set reviewed_draft=$2::jsonb where id=$1",[runId,JSON.stringify(draft("PO-PHASE2"))]);
     const wrongLocation=await suggestPurchaseInvoiceAllocations({runId,companyIds:[companyId],locationIds:[otherLocationId],isAdmin:false}); assert.equal(wrongLocation.kind,"not_found");
     await query("update parts_catalog set tracking_mode='serialized' where id=$1",[partId]);
     await query("update invoice_extraction_runs set reviewed_draft=jsonb_set(reviewed_draft,'{vendorName,value}','\"Wrong Vendor\"') where id=$1",[runId]);

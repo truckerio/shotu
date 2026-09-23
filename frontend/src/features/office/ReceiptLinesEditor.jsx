@@ -75,8 +75,13 @@ export function ReceiptLinesEditor({ runId = "", runVersion = 0, receiptEpisode 
   }
   return <section className="receipt-lines-editor" aria-labelledby={`${prefix}-title`}>
     <div className="receipt-lines-heading"><div><h4 id={`${prefix}-title`}>{directArrival ? "Arrival details" : "Received now"}</h4><p>{directArrival ? "Record what physically arrived and where available goods were put away." : "Enter only what physically arrived. Leave a line at zero when it has not arrived."}</p></div>{!directArrival ? <Button type="button" onClick={receiveAll} disabled={disabled || !lines.length}>Receive all</Button> : null}</div>
-    {lines.some((line) => !line.trackingMode) ? <p className="receipt-tracking-alert" role="alert">Tracking information is still loading. You cannot post this receipt yet.</p> : null}
+    {lines.some((line) => line.inventoryDisposition !== "financial_offset" && !line.trackingMode) ? <p className="receipt-tracking-alert" role="alert">Tracking information is still loading. You cannot post this receipt yet.</p> : null}
     {lines.map((line, index) => {
+      if (line.inventoryDisposition === "financial_offset") return <div key={line.invoiceLineIndex} className="receipt-line-card receipt-line-financial">
+        <div className="receipt-line-heading"><strong>{line.partNumber}</strong>{line.description ? <span>{line.description}</span> : null}</div>
+        <div className="receipt-line-summary-facts"><span>{sourceLabel} {line.invoiceQuantity} {line.uomCode}</span><strong>Financial offset · no stock</strong></div>
+        <p>This charge or credit offsets invoice line {Number(line.offsetLineIndex) + 1}. It stays on the invoice and is excluded from inventory.</p>
+      </div>;
       const received = Number(line.acceptedQuantity || 0) + Number(line.heldQuantity || 0) + Number(line.rejectedQuantity || 0) + Number(line.notReceivedQuantity || 0);
       const limit = receiptLineLimit(line);
       const lineDirectArrival = directArrival || line.receiptMode === "direct-arrival";

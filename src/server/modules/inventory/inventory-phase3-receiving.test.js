@@ -47,6 +47,23 @@ test("partial invoice receipt posts only accepted quantity and preserves excepti
   assert.equal(posted.receiptOutcomes[0].notReceivedQuantity,2);
 });
 
+test("exact core charge and credit offsets cannot affect invoice receipt stock",async()=>{
+  const coreDraft={...draft,lines:[
+    draft.lines[0],
+    {id:"core-charge",partNumber:{value:"CORE-1",confidence:100,evidence:""},description:{value:"Core charge",confidence:100,evidence:""},quantity:{value:1,confidence:100,evidence:""},unitOfMeasure:{value:"ea",confidence:100,evidence:""},unitPrice:{value:1995,confidence:100,evidence:""},lineTotal:{value:1995,confidence:100,evidence:""}},
+    {id:"core-credit",partNumber:{value:"CORE-1",confidence:100,evidence:""},description:{value:"Core return",confidence:100,evidence:""},quantity:{value:-1,confidence:100,evidence:""},unitOfMeasure:{value:"ea",confidence:100,evidence:""},unitPrice:{value:1995,confidence:100,evidence:""},lineTotal:{value:-1995,confidence:100,evidence:""}},
+  ]};
+  let posted;
+  await confirmReviewedInvoiceFullDelivery(RUN_ID,{expectedVersion:2,idempotencyKey:"phase3-core-offset",postingRoute:"no_purchase_order",noPurchaseOrderReason:"Supplier invoice without PO",receiptLines:[{invoiceLineIndex:0,acceptedQuantity:1,heldQuantity:0,rejectedQuantity:0,notReceivedQuantity:0,outcome:"accepted",notes:"",holdLocation:"",serialNumbers:[]}]},context,
+    {loadInvoice:async()=>({id:RUN_ID,company_id:COMPANY_ID,location_id:LOCATION_ID,status:"reviewed",version:2,reviewed_draft:{...coreDraft,purchaseOrderNumber:{value:"",confidence:100,evidence:""}}}),loadTrackingModes:async()=>[{catalogPartId:PART_ID,trackingMode:"quantity"}],postReceipt:async(input)=>{posted=input;return{kind:"posted",receipt:{id:input.receiptId,status:"posted",units:[]}};}});
+  assert.deepEqual(posted.lines.map((line)=>line.lineIndex),[0]);
+  assert.deepEqual(posted.receiptOutcomes.map((line)=>line.invoiceLineIndex),[0]);
+
+  await assert.rejects(confirmReviewedInvoiceFullDelivery(RUN_ID,{expectedVersion:2,idempotencyKey:"phase3-core-poison",postingRoute:"no_purchase_order",noPurchaseOrderReason:"Supplier invoice without PO",receiptLines:[{invoiceLineIndex:1,acceptedQuantity:1,heldQuantity:0,rejectedQuantity:0,notReceivedQuantity:0,outcome:"accepted",notes:"",holdLocation:"",serialNumbers:[]}]},context,
+    {loadInvoice:async()=>({id:RUN_ID,company_id:COMPANY_ID,location_id:LOCATION_ID,status:"reviewed",version:2,reviewed_draft:{...coreDraft,purchaseOrderNumber:{value:"",confidence:100,evidence:""}}}),loadTrackingModes:async()=>[{catalogPartId:PART_ID,trackingMode:"quantity"}],postReceipt:async()=>({kind:"posted",receipt:{status:"posted",units:[]}})}),
+  {code:"INVENTORY_RECEIPT_LINE_INVALID"});
+});
+
 test("missing saved tracking blocks partial receiving before the stock writer",async()=>{
   let wrote=false;
   await assert.rejects(confirmReviewedInvoiceFullDelivery(RUN_ID,{expectedVersion:2,idempotencyKey:"phase3-missing-track",confirmation:"all_received_undamaged",postingRoute:"no_purchase_order",noPurchaseOrderReason:"Invoice arrived without a purchase order."},context,

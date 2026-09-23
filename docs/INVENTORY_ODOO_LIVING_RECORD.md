@@ -1233,3 +1233,14 @@ Each implementation slice records applicable evidence:
 - Data/API changes: None.
 - Verification: Focused Invoice Intake, Inventory, and legacy Admin navigation contracts passed 68/68; the production build passed. Authenticated fresh-build localhost proof opened two different saved invoices inside the current Inventory URL. A long desktop review rail measured 570 px visible height against 1,145 px scroll height, then scrolled to reveal previously clipped Unit, Unit price, Line total, Remove line, and later review sections. Diff and final review evidence are recorded in the external task report.
 - Release evidence: Local changes only. No commit, push, deployment, hosted mutation, database schema change, or Odoo write was authorized.
+
+### INV-20260923-01 — Invoice financial offsets and visible line removal
+
+- Status: IMPLEMENTED LOCALLY; NOT RELEASED.
+- Decision/requirement: A same-part invoice charge and credit that exactly offset in quantity and money are financial evidence, not a physical stock receipt. Keep both lines visible while preventing either line from creating, subtracting, or blocking inventory. Make removal of an incorrect extracted line discoverable before approval.
+- Before: Reviewed receipt preparation rejected the whole invoice when any extracted line had a negative quantity. The positive half of a core charge/credit pair could still appear receivable, while Remove line was available only at the bottom of an expanded editor.
+- After: An exact same-part, same-UOM pair with opposite non-zero quantity and line total is classified as a financial offset. Both lines remain in reviewed invoice evidence, show No stock in review and Financial offset in delivery, have zero outstanding stock, are excluded from Receive all and receipt payloads, and are rejected by the server if a crafted receipt targets either line. Other positive lines continue through normal tracking, PO allocation, and physical receipt. Editable rows expose a 44 px Remove action with confirmation; approved invoice history remains immutable.
+- Canonical owners: `shared/invoice-inventory-lines.js`; invoice purchase-allocation repository; local invoice receipt service; `InvoiceExtractionWorkspace`; shared receipt-line model/editor.
+- Data/API changes: Additive response metadata only: receipt suggestion lines may include `inventoryDisposition: financial_offset` and `offsetLineIndex`. No migration or provider write.
+- Verification: Shared classification, client receipt, server receipt-defense, Invoice Intake, and Inventory tests passed; structure and production build passed. The actual local invoice `3047165133` retained the original three extracted lines while its approved reviewed draft contains only the physical `E74-1119:PEC` line, confirming the source evidence was not rewritten by prior review removal.
+- Release evidence: Local changes only. Commit/push and hosted deployment evidence are pending.
