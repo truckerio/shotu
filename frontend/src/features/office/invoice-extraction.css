@@ -70,8 +70,6 @@
 .invoice-review-header { justify-content:space-between; }
 .invoice-review-header>div { display:grid; gap:4px; }
 .invoice-review-header>button { flex:0 0 auto; }
-.invoice-draft-label { color:#b54708; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
-.invoice-batch-position { color:#475467; font-size:13px; font-weight:600; }
 .invoice-status { background:#eff8ff; border-radius:8px; color:#175cd3; margin-top:14px!important; padding:10px 12px; }
 .invoice-review-notes { color:#475467; margin-top:10px; max-width:100%; width:max-content; }
 .invoice-review-notes summary,.invoice-learning-option summary { align-items:center; border-radius:6px; cursor:pointer; display:flex; font-size:13px; font-weight:600; min-height:44px; padding:0 4px; width:max-content; }
@@ -166,7 +164,9 @@
   .invoice-field-heading { align-items:flex-start; }
   .invoice-field-meta { flex-wrap:wrap; justify-content:flex-end; }
   .invoice-line-card label:nth-of-type(2) { grid-column:auto; }
-  .invoice-review-header,.invoice-review-actions { align-items:stretch; flex-direction:column; }
+  .invoice-review-header { align-items:flex-start; flex-direction:row; }
+  .invoice-review-header>.button { width:auto; }
+  .invoice-review-actions { align-items:stretch; flex-direction:column; }
   .invoice-review-primary { align-items:stretch; flex-direction:column; }
   .invoice-review-primary>span { order:2; }
   .invoice-review-primary button { width:100%; }

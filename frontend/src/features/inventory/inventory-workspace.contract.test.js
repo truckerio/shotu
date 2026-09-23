@@ -45,6 +45,9 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /<InvoiceExtractionWorkspace embedded availableLocations=\{locations\} initialLocationId=\{locations\.some\(\(location\) => location\.id === locationId\) \? locationId : ""\} initialRunId=\{invoiceRunId\} uploadOpen=\{invoiceUploadOpen\} onUploadOpenChange=\{setInvoiceUploadOpen\} onContextChange=\{updateWorkflowDetail\} \/>/);
   assert.match(workspace, /inventoryAction", "upload-invoice"/);
   assert.match(workspace, /<ContextBreadcrumbs/);
+  assert.match(workspace, /invoiceWorkflowOpen \? \(\s*<Button type="button" className="inventory-invoice-back-button" icon=\{ArrowLeft\} onClick=\{backFromInvoiceWorkflow\}>Back<\/Button>/);
+  assert.match(workspace, /if \(workflowDetail\?\.onBack\) workflowDetail\.onBack\(\);\s*else closeInvoiceWorkflow\(\);/);
+  assert.match(workspace, /const inventorySubtitle = invoiceWorkflowOpen\s*\? ""/);
   assert.match(workspace, /workflowDetail\?\.label/);
   assert.match(workspace, /onClick: followWorkflowBreadcrumb/);
   assert.match(workspace, /onContextChange=\{updateWorkflowDetail\}/);
@@ -52,7 +55,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /isPlainPrimaryActivation\(event\)/);
   assert.match(workspace, /event\.preventDefault\(\)/);
   assert.match(workspace, /document\.getElementById\(returnFocusId\)\?\.focus/);
-  assert.doesNotMatch(workspace, />Back to inventory<\/Button>/);
+  assert.doesNotMatch(workspace, /Upload, review, and add parts without leaving inventory\./);
   assert.match(office, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
   assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
   assert.doesNotMatch(office, /<InvoiceExtractionWorkspace \/>/);

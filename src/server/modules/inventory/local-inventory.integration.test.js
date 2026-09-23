@@ -132,6 +132,41 @@ test("real PostgreSQL sorts stock by stocked locations before pagination with de
   }
 });
 
+test("real PostgreSQL stock search matches normalized primary part numbers", { skip: !runPostgres }, async () => {
+  const suffix = randomUUID().replaceAll("-", "");
+  const companyId = randomUUID();
+  const locationId = randomUUID();
+  const catalogPartId = randomUUID();
+  const partNumber = `E74-${suffix}:PEC`;
+  const normalizedPartNumber = `E74${suffix}PEC`.toUpperCase();
+  try {
+    await query("insert into companies (id, slug, name) values ($1, $2, $3)", [companyId, `stock-search-${suffix}`, "Stock search integration"]);
+    await query("insert into locations (id, company_id, name) values ($1, $2, 'Search shop')", [locationId, companyId]);
+    await query(
+      `insert into parts_catalog (
+         id, company_id, normalized_part_number, part_number, description, uom_code
+       ) values ($1, $2, $3, $4, 'Normalized stock search fixture', 'ea')`,
+      [catalogPartId, companyId, normalizedPartNumber, partNumber],
+    );
+
+    const result = await listLocalInventoryStock({
+      companyIds: [companyId],
+      isAdmin: true,
+      queryText: `e74 ${suffix} pec`,
+      limit: 20,
+      offset: 0,
+    });
+
+    assert.equal(result.total, 1);
+    assert.equal(result[0].catalogPartId, catalogPartId);
+    assert.equal(result[0].partNumber, partNumber);
+  } finally {
+    await query("delete from parts_catalog where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from locations where company_id = $1", [companyId]).catch(() => {});
+    await query("delete from companies where id = $1", [companyId]).catch(() => {});
+  }
+});
+
 test("real PostgreSQL posts one local balance under concurrent invoice retries", { skip: !runPostgres }, async () => {
   const suffix = randomUUID().replaceAll("-", "");
   const actorId = randomUUID();

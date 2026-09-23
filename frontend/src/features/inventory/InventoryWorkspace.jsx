@@ -355,6 +355,11 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     workflowDetail?.onBack?.();
   }
 
+  function backFromInvoiceWorkflow() {
+    if (workflowDetail?.onBack) workflowDetail.onBack();
+    else closeInvoiceWorkflow();
+  }
+
   function clearStockView() {
     setQuery("");
     setLocationId("all");
@@ -364,11 +369,13 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
 
   const inventoryTitle = invoiceWorkflowOpen ? "Invoice intake" : countWorkflowOpen ? "Starting inventory" : "";
   const inventorySubtitle = invoiceWorkflowOpen
-    ? "Upload, review, and add parts without leaving inventory."
+    ? ""
     : countWorkflowOpen
       ? "Import and review starting-inventory count sheets."
       : "";
-  const inventoryLeading = invoiceWorkflowOpen || countWorkflowOpen ? <ContextBreadcrumbs
+  const inventoryLeading = invoiceWorkflowOpen ? (
+    <Button type="button" className="inventory-invoice-back-button" icon={ArrowLeft} onClick={backFromInvoiceWorkflow}>Back</Button>
+  ) : countWorkflowOpen ? <ContextBreadcrumbs
     items={[
       {
         label: "Inventory",

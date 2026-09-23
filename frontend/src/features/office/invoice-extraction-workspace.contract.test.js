@@ -49,7 +49,7 @@ test("desktop review rail keeps natural row height so long invoices have a real 
   assert.match(styles, /\.invoice-review-rail \{[^}]*align-content:start;[^}]*grid-auto-rows:max-content;[^}]*overflow-y:auto;/);
 });
 
-test("invoice review exposes breadcrumb context and protects unsaved corrections", async () => {
+test("invoice review exposes compact parent context and protects unsaved corrections", async () => {
   const workspace = await readFile(new URL("./InvoiceExtractionWorkspace.jsx", import.meta.url), "utf8");
   assert.match(workspace, /onContextChange\?\.\(draft \? \{/);
   assert.match(workspace, /label: reviewBreadcrumbLabel/);
@@ -63,6 +63,9 @@ test("invoice review exposes breadcrumb context and protects unsaved corrections
   assert.match(workspace, /if \(draft && uploadOpen\) setUploadOpen\(false\)/);
   assert.match(workspace, /isOpen=\{uploadOpen && !draft\}/);
   assert.doesNotMatch(workspace, />Start another<\/Button>/);
+  assert.match(workspace, /id="invoice-review-title">\{receipt\?\.status === "posted" \? "Added" : receipt\?\.status === "reversed" \? "Reversed" : "Draft"\}<\/h2>/);
+  assert.match(workspace, /reviewCount \? `\$\{reviewCount\} values need attention\.` : "Ready for approval\."/);
+  assert.doesNotMatch(workspace, /<h2[^>]*>Review \{run\.fileName\}<\/h2>|Draft · inventory unchanged|No low-confidence values/);
 });
 
 test("invoice upload returns through the background queue and polls durable run state", async () => {
@@ -96,7 +99,7 @@ test("header upload control opens one compact dialog and leaves vendor identific
   assert.match(source, /const MAX_ENQUEUE_CONCURRENCY = 3/);
   assert.match(source, /enqueueUploadsInLanes\(uploads, token\)/);
   assert.match(source, /idempotencyKey: upload\.idempotencyKey/);
-  assert.match(source, /Invoice \{batchIndex \+ 1\} of \{batchRuns\.length\} · \{batchProgress\.ready\} ready/);
+  assert.doesNotMatch(source, /Invoice \{batchIndex \+ 1\} of \{batchRuns\.length\}/);
   assert.match(source, /isDismissable=\{busy !== "extract"\}/);
   assert.match(source, /Encrypted · Training use requires your approval/);
   assert.match(sharedDialog, /<ModalFrame[\s\S]*dialogClassName="shared-upload-dialog"/);
@@ -411,7 +414,8 @@ test("invoice history keeps truthful terminal actions and reversed receipt copy"
   ]);
   assert.match(history, /\["reviewed", "needs_review", "added", "reversed"\]\.includes\(invoice\.inventoryStatus\)/);
   assert.match(history, /invoice\.inventoryStatus === "reviewed" \? <Button[\s\S]*?>Add inventory<\/Button>/);
-  assert.match(workspace, /Reversed · local inventory adjusted/);
+  assert.match(workspace, /receipt\?\.status === "reversed" \? "Reversed" : "Draft"/);
+  assert.doesNotMatch(workspace, /Reversed · local inventory adjusted/);
   assert.match(workspace, /Receipt reversed · Inventory not added/);
   assert.match(workspace, /receipt\?\.status === "posted"/);
 });

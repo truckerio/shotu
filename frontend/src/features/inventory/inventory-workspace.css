@@ -1,4 +1,9 @@
 .inventory-workspace .page-header-actions .inventory-refresh-button { width: 40px; padding-inline: 0; }
+.inventory-workspace.is-invoice-workflow > .page-header { align-items:center; column-gap:10px; grid-template-columns:auto minmax(0,1fr) auto; row-gap:0; }
+.inventory-workspace.is-invoice-workflow > .page-header > .page-header-leading { align-self:center; grid-column:1; }
+.inventory-workspace.is-invoice-workflow > .page-header > .page-header-heading { grid-column:2; }
+.inventory-workspace.is-invoice-workflow > .page-header > .page-header-actions { grid-column:3; }
+.inventory-invoice-back-button { min-height:40px!important; }
 .inventory-workspace.is-section-root > .page-header { display: none; }
 .inventory-workspace.is-section-root > .operational-collection-page-body { margin-top: 0; }
 .inventory-custody { display: grid; gap: 16px; }
@@ -294,6 +299,8 @@
 .inventory-state.is-ready, .inventory-state.is-applied { color: #067647; background: #ecfdf3; }
 .inventory-state.is-unmatched, .inventory-state.is-duplicate, .inventory-state.is-invalid_quantity, .inventory-state.is-draft, .inventory-state.is-partial { color: #b54708; background: #fffaeb; }
 @media (max-width: 760px) {
+  .inventory-workspace.is-invoice-workflow > .page-header { grid-template-columns:auto minmax(0,1fr) auto; }
+  .inventory-invoice-back-button { min-height:44px!important; }
   .inventory-workspace .page-header-actions .inventory-refresh-button,
   .inventory-workspace .page-header-actions .inventory-invoice-upload-button { width: 44px; }
   .inventory-toolbar { grid-template-columns: minmax(0, 1fr); }

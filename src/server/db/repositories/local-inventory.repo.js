@@ -986,6 +986,7 @@ export async function listLocalInventoryStock({ companyIds, locationIds = [], is
               )) or $8 <> 'master')
          and ($5 = '%%'
            or lower(concat_ws(' ', catalog.part_number, catalog.description, catalog.manufacturer, catalog.barcode)) like $5 escape '\\'
+           or ($11 <> '%' and catalog.normalized_part_number like $11)
            or exists (select 1 from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id and lower(reference.reference_number) like $5 escape '\\')
            or exists (select 1 from part_reference_numbers reference where reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id and $11 <> '%' and reference.normalized_reference_number like $11)
            or exists (

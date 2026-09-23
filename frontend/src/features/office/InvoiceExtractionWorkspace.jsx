@@ -353,11 +353,6 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
   const totalsIssues = useMemo(() => totalFields.filter(([name, , , options]) => invoiceFieldNeedsReview(draft?.[name], options)).length, [draft, totalFields]);
   const deliveryIssues = useMemo(() => deliveryFields.filter(([name, , , options]) => invoiceFieldNeedsReview(draft?.[name], options)).length, [draft, deliveryFields]);
   const lineIssues = useMemo(() => (draft?.lines || []).filter((line) => invoiceLineNeedsReview(line)).length, [draft?.lines]);
-  const batchProgress = useMemo(() => ({
-    ready: batchRuns.filter((entry) => entry.run.draft && !entry.error).length,
-    processing: batchRuns.filter((entry) => entry.run.status === "processing" && !entry.error).length,
-    failed: batchRuns.filter((entry) => entry.error || entry.run.status === "failed").length,
-  }), [batchRuns]);
   const displayedPreviewUrl = previewUrl || (run?.sourceAvailable
     ? `/api/office/invoice-extractions/${encodeURIComponent(run.id)}/source`
     : "");
@@ -865,10 +860,8 @@ export function InvoiceExtractionWorkspace({ embedded = false, availableLocation
       <>{uploadDialog}{leaveReviewDialog}{reextractDialog}{removeLineDialog}<section className="invoice-extraction-workspace" aria-labelledby="invoice-review-title">
         <header className="invoice-review-header">
           <div>
-            <span className="invoice-draft-label">{receipt?.status === "posted" ? "Added · local inventory updated" : receipt?.status === "reversed" ? "Reversed · local inventory adjusted" : "Draft · inventory unchanged"}</span>
-            {batchRuns.length > 1 ? <span className="invoice-batch-position">Invoice {batchIndex + 1} of {batchRuns.length} · {batchProgress.ready} ready{batchProgress.processing ? ` · ${batchProgress.processing} extracting` : ""}{batchProgress.failed ? ` · ${batchProgress.failed} failed` : ""}</span> : null}
-            <h2 ref={reviewTitleRef} tabIndex={-1} id="invoice-review-title">Review {run.fileName}</h2>
-            <p>{reviewCount ? `${reviewCount} values need attention.` : "No low-confidence values. Confirm before approval."}</p>
+            <h2 ref={reviewTitleRef} tabIndex={-1} id="invoice-review-title">{receipt?.status === "posted" ? "Added" : receipt?.status === "reversed" ? "Reversed" : "Draft"}</h2>
+            <p>{reviewCount ? `${reviewCount} values need attention.` : "Ready for approval."}</p>
           </div>
           {run.sourceAvailable ? <Button type="button" icon={busy === "reextract" ? LoadingRefreshIcon : RefreshCw01} onClick={() => setReextractOpen(true)} disabled={Boolean(busy) || receipt?.status === "posted"} title={receipt?.status === "posted" ? "Reverse the posted receipt before re-extracting" : "Create a new extraction from the original file"}>{busy === "reextract" ? "Re-extracting…" : "Re-extract"}</Button> : null}
         </header>
