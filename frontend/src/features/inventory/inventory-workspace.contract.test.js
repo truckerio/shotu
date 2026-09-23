@@ -225,15 +225,17 @@ test("inventory sections own their page titles and actions instead of a persiste
 });
 
 test("stock has peer part and location modes with contextual physical counts", async () => {
-  const [workspace, locationsWorkspace, locationStock] = await Promise.all([
+  const [workspace, locationsWorkspace, locationStock, styles] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./InventoryLocationsWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./InventoryLocationStockWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, /const \[stockMode, setStockMode\] = useState\(\(\) => initialParams\.get\("stockMode"\) === "location" \? "location" : "part"\)/);
   assert.match(workspace, /ariaLabel="Inventory stock view"/);
   assert.match(workspace, /label: "By part"/);
   assert.match(workspace, /label: "By location"/);
+  assert.match(styles, /\.inventory-stock-mode-tabs \+ \.inventory-location-stock-workspace \{[^}]*box-sizing: border-box;[^}]*padding-top: 16px;/);
   assert.match(workspace, /<InventoryLocationStockWorkspace locations=\{locations\} initialShopId=\{stockLocationInitialShop\} initialPositionId=\{stockLocationInitialPosition\}[\s\S]*canApplyInventoryCount=\{canApplyInventoryCount\}[\s\S]*onOpenPart=\{openLocationPart\}[\s\S]*onAddStock=/);
   assert.doesNotMatch(workspace, /inventory-count-action|Storage layout|InventoryLocationsWorkspace/);
   assert.match(locationsWorkspace, /<h2 id="inventory-locations-title">Storage layout<\/h2>/);

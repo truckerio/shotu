@@ -6,6 +6,7 @@
 .inventory-invoice-back-button { min-height:40px!important; }
 .inventory-workspace.is-section-root > .page-header { display: none; }
 .inventory-workspace.is-section-root > .operational-collection-page-body { margin-top: 0; }
+.inventory-stock-mode-tabs + .inventory-location-stock-workspace { box-sizing: border-box; padding-top: 16px; }
 .inventory-custody { display: grid; gap: 16px; }
 .inventory-custody-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .inventory-custody-units, .inventory-custody-timeline { display: grid; gap: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid #e4e7ec; border-radius: 8px; list-style: none; }
