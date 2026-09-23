@@ -2,11 +2,11 @@ import { z } from "zod";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import {
   createInventoryPositionSchema, updateInventoryPositionSchema, moveInventoryPositionSchema,
-  startPositionCountSchema, recordPositionCountSchema, addPositionCountFoundPartSchema, recordPositionCountIdentitySchema, applyPositionCountSchema,
+  startPositionCountSchema, recordPositionCountSchema, addPositionCountFoundPartSchema, recordPositionCountIdentitySchema, submitPositionCountSchema, applyPositionCountSchema,
 } from "./inventory-position.schemas.js";
 import {
   listInventoryPositions, insertInventoryPosition, patchInventoryPosition, getPartPositions, moveInventoryStock,
-  listPositionStock, createPositionCount, getPositionCount, savePositionCountObservation, addPositionCountFoundPart, savePositionCountIdentity, applyPositionCountCorrection,
+  listPositionStock, createPositionCount, getPositionCount, savePositionCountObservation, addPositionCountFoundPart, savePositionCountIdentity, submitPositionCountObservations, applyPositionCountCorrection,
 } from "../../db/repositories/inventory-positions.repo.js";
 
 const uuid=z.string().uuid();
@@ -62,5 +62,7 @@ export async function recordPositionCountFoundPart(countId,rawInput,context,depe
   const result=map(await(dependencies.addFoundPart||addPositionCountFoundPart)({...scope(context),countId,...input}));const value=await(dependencies.getCount||getPositionCount)({...scope(context),countId});return{count:{...value,canApply:context.actor.role==="admin"},replayed:result.kind==="replay"};}
 export async function recordPositionCountIdentity(countId,rawInput,context,dependencies={}){countId=uuid.parse(countId);requireManager(context);const input=recordPositionCountIdentitySchema.parse(rawInput);
   const result=map(await(dependencies.saveIdentity||savePositionCountIdentity)({...scope(context),countId,...input}));const value=await(dependencies.getCount||getPositionCount)({...scope(context),countId});return{count:{...value,canApply:context.actor.role==="admin"},replayed:result.kind==="replay",alreadyObserved:Boolean(result.alreadyObserved)};}
+export async function submitPositionCount(countId,rawInput,context,dependencies={}){countId=uuid.parse(countId);requireManager(context);const input=submitPositionCountSchema.parse(rawInput);
+  const result=map(await(dependencies.submitCount||submitPositionCountObservations)({...scope(context),countId,...input}));const value=await(dependencies.getCount||getPositionCount)({...scope(context),countId});return{count:{...value,canApply:context.actor.role==="admin"},replayed:result.kind==="replay"};}
 export async function applyPositionCount(countId,rawInput,context,dependencies={}){countId=uuid.parse(countId);if(context.actor.role!=="admin")fail("INVENTORY_COUNT_APPLY_FORBIDDEN","Only Admin can apply inventory count corrections.",403);const input=applyPositionCountSchema.parse(rawInput);
   const result=map(await(dependencies.applyCount||applyPositionCountCorrection)({...scope(context),countId,...input}));const value=await(dependencies.getCount||getPositionCount)({...scope(context),countId});return{count:{...value,canApply:true},replayed:result.kind==="replay"};}

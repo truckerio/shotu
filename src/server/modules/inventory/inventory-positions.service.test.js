@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
-  createInventoryPosition, moveInventoryPosition, readPositionStock, startPositionCount, recordPositionCountFoundPart, recordPositionCountIdentity, applyPositionCount,
+  createInventoryPosition, moveInventoryPosition, readPositionStock, startPositionCount, recordPositionCountFoundPart, recordPositionCountIdentity, submitPositionCount, applyPositionCount,
 } from "./inventory-positions.service.js";
 
 const companyId=randomUUID(),locationId=randomUUID(),actorId=randomUUID(),partId=randomUUID(),positionId=randomUUID();
@@ -60,19 +60,27 @@ test("count apply stays Admin-only and exposes authoritative canApply",async()=>
   const countId=randomUUID();
   const started=await startPositionCount(locationId,{positionId,idempotencyKey:"count-start"},office,{createCount:async()=>({kind:"created",count:{id:countId,lines:[]}})});
   assert.equal(started.count.canApply,false);
-  await assert.rejects(()=>applyPositionCount(countId,{expectedVersion:1,idempotencyKey:"count-apply",reason:"Physical recount"},office,{}),
+  await assert.rejects(()=>applyPositionCount(countId,{expectedVersion:1,idempotencyKey:"count-apply"},office,{}),
     (error)=>error.code==="INVENTORY_COUNT_APPLY_FORBIDDEN");
-  const applied=await applyPositionCount(countId,{expectedVersion:1,idempotencyKey:"count-apply",reason:"Physical recount"},admin,
+  const applied=await applyPositionCount(countId,{expectedVersion:1,idempotencyKey:"count-apply"},admin,
     {applyCount:async()=>({kind:"applied"}),getCount:async()=>({id:countId,status:"applied",lines:[]})});
   assert.equal(applied.count.canApply,true);assert.equal(applied.count.status,"applied");
 });
 
 test("count apply maps lock contention to a plain retry conflict",async()=>{
   const countId=randomUUID();
-  await assert.rejects(()=>applyPositionCount(countId,{expectedVersion:1,idempotencyKey:"count-busy",reason:"Retry count"},admin,
+  await assert.rejects(()=>applyPositionCount(countId,{expectedVersion:1,idempotencyKey:"count-busy"},admin,
     {applyCount:async()=>({kind:"stock_busy"}),getCount:async()=>assert.fail("busy apply must not load a result")}),
   (error)=>error.code==="INVENTORY_POSITION_STOCK_BUSY"&&error.statusCode===409
     &&error.message==="This count or its stock is being updated. Wait a moment, then apply this count again.");
+});
+
+test("count submission is observation-only and remains available to Office",async()=>{
+  const countId=randomUUID();let captured;
+  const submitted=await submitPositionCount(countId,{expectedVersion:4,idempotencyKey:"count-submit"},office,{
+    submitCount:async(input)=>(captured=input,{kind:"ready"}),getCount:async()=>({id:countId,status:"ready",version:5,lines:[]}),
+  });
+  assert.equal(captured.countId,countId);assert.equal(captured.expectedVersion,4);assert.equal(submitted.count.status,"ready");assert.equal(submitted.count.canApply,false);
 });
 
 test("serial count identities preserve scanner evidence and map scope-safe errors",async()=>{

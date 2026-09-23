@@ -56,6 +56,12 @@
 .inventory-part-detail-primary-action { flex: 0 0 auto; margin-bottom: 6px; }
 .inventory-part-stock-overview, .inventory-stock-activity-page, .inventory-part-identity { padding-top: 20px; }
 .inventory-part-detail-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 0 0; }
+.inventory-part-detail-toolbar-context { display: flex; align-items: center; min-width: 0; gap: 10px; }
+.inventory-part-detail-toolbar-context > div { min-width: 0; }
+.inventory-part-detail-toolbar-context h3, .inventory-part-detail-toolbar-context p { margin: 0; }
+.inventory-part-detail-toolbar-context h3 { color: #101828; font-size: 18px; }
+.inventory-part-detail-toolbar-context p { margin-top: 2px; overflow: hidden; color: #667085; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-part-location-balance { padding: 20px 0 8px; }
 .inventory-part-location-summary { display: grid; gap: 18px; }
 .inventory-shop-usage { display: grid; gap: 12px; }
 .inventory-shop-usage > header, .inventory-audit-log-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

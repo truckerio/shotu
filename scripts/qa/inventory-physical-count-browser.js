@@ -27,7 +27,7 @@ async function createFixture(pool, config, actorId, viewport) {
   assert.ok(scope.rows[0], "QA company/location was not found.");
   const token = randomUUID().replaceAll("-", "");
   const ids = Object.fromEntries(["warehouse", "area", "aisle", "shelf", "bin", "otherBin", "aggregatePart", "serialPart", "aggregateItem", "serialItem", "run", "receipt", "receiptLine", "unit1", "unit2", "wrongUnit"].map((key) => [key, randomUUID()]));
-  const fixture = { ...scope.rows[0], ...ids, viewport, token, aggregateNumber: `QA-COUNT-A-${token.slice(0, 7).toUpperCase()}`, serialPartNumber: `QA-COUNT-S-${token.slice(0, 7).toUpperCase()}`, serial1: `QA-CS-${token.slice(0, 10).toUpperCase()}-1`, serial2: `QA-CS-${token.slice(0, 10).toUpperCase()}-2`, wrongSerial: `QA-CS-${token.slice(0, 10).toUpperCase()}-WRONG`, unknownSerial: `QA-CS-${token.slice(0, 10).toUpperCase()}-UNKNOWN`, reason: `Verified physical count ${viewport.width}` };
+  const fixture = { ...scope.rows[0], ...ids, viewport, token, aggregateNumber: `QA-COUNT-A-${token.slice(0, 7).toUpperCase()}`, serialPartNumber: `QA-COUNT-S-${token.slice(0, 7).toUpperCase()}`, serial1: `QA-CS-${token.slice(0, 10).toUpperCase()}-1`, serial2: `QA-CS-${token.slice(0, 10).toUpperCase()}-2`, wrongSerial: `QA-CS-${token.slice(0, 10).toUpperCase()}-WRONG`, unknownSerial: `QA-CS-${token.slice(0, 10).toUpperCase()}-UNKNOWN` };
   fixture.codes = { warehouse: `QA-W-${token.slice(0, 5).toUpperCase()}`, area: `QA-Z-${token.slice(0, 5).toUpperCase()}`, aisle: `QA-A-${token.slice(0, 5).toUpperCase()}`, shelf: `QA-SH-${token.slice(0, 5).toUpperCase()}`, bin: `QA-B1-${token.slice(0, 5).toUpperCase()}`, otherBin: `QA-B2-${token.slice(0, 5).toUpperCase()}` };
   const client = await pool.connect();
   try {
@@ -117,8 +117,12 @@ async function cleanupFixture(pool, fixture) {
 }
 
 async function openByLocation(page, config, fixture) {
+  let step = "open ordinary Stock";
+  try {
   await page.goto(new URL("/?view=inventory&adminView=inventory&inventorySection=stock", config.baseUrl).href, { waitUntil: "domcontentloaded" });
+  step = "switch to ordinary By location";
   await page.getByRole("group", { name: "Inventory stock view" }).getByRole("button", { name: "By location", exact: true }).click();
+  step = "choose ordinary stock shop";
   await page.getByRole("button", { name: new RegExp(config.locationName, "i") }).click();
   const warehouse = page.locator(`#inventory-stock-position-button-${fixture.warehouse}`);
   await warehouse.waitFor();
@@ -149,6 +153,48 @@ async function openByLocation(page, config, fixture) {
   await page.waitForFunction((id) => document.activeElement?.id === id, `inventory-stock-position-button-${fixture.bin}`);
   await page.keyboard.press("Enter");
   await page.getByRole("heading", { name: "Bin 1", exact: true }).waitFor();
+  } catch (error) {
+    throw new Error(`By-location proof failed at ${step}. URL: ${page.url()}. Page: ${(await page.locator("body").innerText()).slice(0,1800)}`, { cause: error });
+  }
+}
+
+async function assertCountEntryPoints(page, config, fixture) {
+  let step = "open Stock";
+  try {
+    await page.goto(new URL("/?view=inventory&adminView=inventory&inventorySection=stock", config.baseUrl).href, { waitUntil: "domcontentloaded" });
+    step = "verify Stock actions";
+    assert.equal(await page.getByRole("button", { name: "Starting inventory", exact: true }).count(), 0, "Starting inventory must not remain in the daily Stock header.");
+    assert.equal(await page.getByRole("button", { name: "Physical count", exact: true }).count(), 0, "Physical count must not remain in the global Stock header.");
+    await page.getByRole("group", { name: "Inventory stock view" }).getByRole("button", { name: "By location", exact: true }).click();
+    step = "open stock by location";
+    await page.getByText("Choose a shop", { exact: true }).waitFor();
+    assert.equal(new URL(page.url()).searchParams.get("stockMode"), "location");
+    step = "choose shop and inspect leaf count action";
+    await page.getByRole("button", { name: new RegExp(config.locationName, "i") }).click();
+    for (const id of [fixture.warehouse, fixture.area, fixture.aisle, fixture.shelf]) {
+      step = `expand count parent ${id}`;
+      await page.locator(`#inventory-stock-position-${id} .inventory-location-tree-toggle`).click();
+    }
+    assert.equal(await page.getByRole("button", { name: "Physical count", exact: true }).count(), 0, "Parent locations must not expose Physical count.");
+    step = "select exact count bin";
+    await page.locator(`#inventory-stock-position-button-${fixture.otherBin}`).click();
+    await page.getByRole("button", { name: "Physical count", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    step = "open Tasks physical counts";
+    await page.getByRole("button", { name: "Physical counts", exact: true }).click();
+    await page.getByRole("heading", { name: "Physical counts", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Import starting inventory", exact: true }).waitFor();
+    assert.equal(new URL(page.url()).searchParams.get("taskOwner"), "count");
+    step = "reload Tasks physical counts";
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Physical counts", exact: true }).waitFor();
+    step = "open starting inventory";
+    await page.getByRole("button", { name: "Import starting inventory", exact: true }).click();
+    await page.getByRole("heading", { name: "Starting inventory", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Import count sheet", exact: true }).waitFor();
+  } catch (error) {
+    throw new Error(`Count entry proof failed at ${step}: ${error.message}. URL: ${page.url()}. Page: ${(await page.locator("body").innerText()).slice(0,1800)}`, { cause: error });
+  }
 }
 
 async function enterAggregate(page, fixture, value) {
@@ -157,6 +203,21 @@ async function enterAggregate(page, fixture, value) {
   await input.focus();
   await page.keyboard.press("Enter");
   await page.locator(".position-count-line-state", { hasText: "Saved" }).waitFor();
+}
+
+async function assertInlineLocationHeader(page, fixture, locationName) {
+  await page.getByText(fixture.aggregateNumber, { exact: true }).click();
+  const back = page.getByRole("button", { name: "Back to all locations", exact: true });
+  const heading = page.locator(".inventory-part-detail-toolbar-context h3", { hasText: locationName });
+  const actions = page.getByRole("button", { name: `Actions for ${locationName}`, exact: true });
+  await back.waitFor(); await heading.waitFor(); await actions.waitFor();
+  const [backBox, headingBox, actionsBox] = await Promise.all([back.boundingBox(), heading.boundingBox(), actions.boundingBox()]);
+  assert.ok(backBox && headingBox && actionsBox, "Part location header controls must be rendered.");
+  assert.ok(headingBox.x >= backBox.x + backBox.width, "Location header must sit immediately after the Back control.");
+  assert.ok(actionsBox.x > headingBox.x + headingBox.width, "More actions must remain at the far right of the header row.");
+  assert.ok(Math.abs((backBox.y + backBox.height / 2) - (headingBox.y + headingBox.height / 2)) < 16, "Back and location header must be vertically aligned.");
+  assert.ok(Math.abs((actionsBox.y + actionsBox.height / 2) - (headingBox.y + headingBox.height / 2)) < 16, "More actions and location header must be vertically aligned.");
+  await page.getByRole("button", { name: "Close part details", exact: true }).click();
 }
 
 async function serial(page, value, expectedFeedback) {
@@ -183,11 +244,13 @@ async function runViewport(browser, pool, client, config, fixture) {
   const page = await context.newPage(); const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   try {
+    await assertCountEntryPoints(page, config, fixture);
     await openByLocation(page, config, fixture);
+    await assertInlineLocationHeader(page, fixture, config.locationName);
     await page.getByRole("button", { name: "Add stock", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Starting inventory", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Physical count", exact: true }).waitFor();
     await page.getByRole("button", { name: "Add stock here", exact: true }).first().waitFor();
-    await page.getByRole("button", { name: "Start count", exact: true }).click();
+    await page.getByRole("button", { name: "Physical count", exact: true }).click();
     await page.getByText("In progress", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Add found part", exact: true }).click();
     await page.getByRole("combobox", { name: "Choose a found master catalog part", exact: true }).waitFor();
@@ -195,17 +258,22 @@ async function runViewport(browser, pool, client, config, fixture) {
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await completeCount(page, fixture, 4);
     await moveAggregateAfterObservation(pool, fixture, client.actor.id);
-    await page.getByLabel("Apply reason").fill("First pass after movement");
-    await page.getByRole("button", { name: "Apply physical count", exact: true }).click();
+    await page.getByRole("button", { name: "Finish count", exact: true }).click();
     await page.getByText("Needs recount", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Count stock again", exact: true }).click();
     await page.getByText("In progress", { exact: true }).waitFor();
-    await enterAggregate(page, fixture, 3);
+    await enterAggregate(page, fixture, 2);
     await serial(page, fixture.serial1, "confirmed");
     await page.getByRole("button", { name: "Manual", exact: true }).click();
     await serial(page, fixture.serial2, "confirmed");
-    await page.getByLabel("Apply reason").fill(fixture.reason);
-    await page.getByRole("button", { name: "Apply physical count", exact: true }).click();
+    const beforeSubmit = await pool.query("select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3", [fixture.company_id, fixture.bin, fixture.aggregateItem]);
+    assert.equal(beforeSubmit.rows[0].quantity, "3.000");
+    await page.getByRole("button", { name: "Finish count", exact: true }).click();
+    await page.getByText("Submitted for review", { exact: true }).waitFor();
+    await page.getByText("System snapshot", { exact: true }).waitFor();
+    const afterSubmit = await pool.query("select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3", [fixture.company_id, fixture.bin, fixture.aggregateItem]);
+    assert.equal(afterSubmit.rows[0].quantity, "3.000", "submitting observations must not change inventory");
+    await page.getByRole("button", { name: "Reconcile inventory", exact: true }).click();
     await page.getByText("Applied", { exact: true }).waitFor();
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("group", { name: "Inventory stock view" }).getByRole("button", { name: "By location", exact: true }).click();
@@ -213,13 +281,18 @@ async function runViewport(browser, pool, client, config, fixture) {
     for (const id of [fixture.warehouse, fixture.area, fixture.aisle, fixture.shelf]) await page.locator(`#inventory-stock-position-${id} .inventory-location-tree-toggle`).click();
     await page.locator(`#inventory-stock-position-button-${fixture.bin}`).click();
     await page.getByRole("button", { name: "Resume count", exact: true }).click();
-    await page.getByText(fixture.reason, { exact: false }).waitFor();
+    await page.getByText(/Physical count correction/, { exact: false }).waitFor();
     await page.getByText(/Applied by QA Admin/).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, `Horizontal overflow at ${fixture.viewport.width}px`);
-    const evidence = await pool.query(`select status,apply_reason,created_by,applied_by from inventory_position_count_sessions where company_id=$1 and position_id=$2 order by created_at desc limit 1`, [fixture.company_id, fixture.bin]);
-    assert.deepEqual(evidence.rows[0], { status: "applied", apply_reason: fixture.reason, created_by: client.actor.id, applied_by: client.actor.id });
+    const evidence = await pool.query(`select status,apply_reason,created_by,submitted_by,applied_by,submitted_at is not null submitted from inventory_position_count_sessions where company_id=$1 and position_id=$2 order by created_at desc limit 1`, [fixture.company_id, fixture.bin]);
+    assert.equal(evidence.rows[0].status, "applied");
+    assert.match(evidence.rows[0].apply_reason, /^Physical count correction · /);
+    assert.equal(evidence.rows[0].created_by, client.actor.id);
+    assert.equal(evidence.rows[0].submitted_by, client.actor.id);
+    assert.equal(evidence.rows[0].applied_by, client.actor.id);
+    assert.equal(evidence.rows[0].submitted, true);
     assert.deepEqual(pageErrors, []);
-    return { viewport: `${fixture.viewport.width}x${fixture.viewport.height}`, nestedKeyboard: true, directAndSubtree: true, serialized: true, recountAndReload: true };
+    return { viewport: `${fixture.viewport.width}x${fixture.viewport.height}`, countEntryPoints: true, nestedKeyboard: true, directAndSubtree: true, inlineLocationHeader: true, serialized: true, observationOnlySubmit: true, adminReconciliation: true, recountAndReload: true };
   } finally { await context.close(); }
 }
 

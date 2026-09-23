@@ -43,3 +43,11 @@ test("found-part route preserves catalog version, observed quantity, and count v
   assert.equal(handled,true);assert.equal(captured.catalogPartId,catalogPartId);assert.equal(captured.expectedPartVersion,4);assert.equal(captured.observedQuantity,2);assert.equal(captured.expectedVersion,6);
   assert.equal(sent[0].status,200);assert.equal(sent[0].value.count.version,7);
 });
+
+test("count submit route records observations without requiring Admin",async()=>{
+  const countId=randomUUID();const body={expectedVersion:3,idempotencyKey:"route-count-submit"};let captured;
+  const sent=[];const helpers={requestContext:context,readBody:async()=>body,sendJson:(_res,status,value)=>sent.push({status,value})};
+  const handled=await handleInventoryPositionsApi({method:"POST"},{},new URL(`http://localhost/api/office/inventory/position-counts/${countId}/submit`),helpers,{
+    submitCount:async(input)=>(captured=input,{kind:"ready"}),getCount:async()=>({id:countId,status:"ready",version:4,lines:[]})});
+  assert.equal(handled,true);assert.equal(captured.actorId,actorId);assert.equal(captured.expectedVersion,3);assert.equal(sent[0].status,200);assert.equal(sent[0].value.count.status,"ready");
+});

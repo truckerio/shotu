@@ -65,10 +65,13 @@ export const recordPositionCountIdentitySchema = z.object({
   expectedVersion: z.number().int().min(1),
   idempotencyKey,
 }).strict();
+export const submitPositionCountSchema = z.object({
+  expectedVersion: z.number().int().min(1),
+  idempotencyKey,
+}).strict();
 export const applyPositionCountSchema = z.object({
   expectedVersion: z.number().int().min(1),
   idempotencyKey,
-  reason: z.string().trim().min(2).max(500),
 }).strict();
 
 export const inventoryPositionSchemas = { positionKind, positionUsage };

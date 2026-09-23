@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const sql=await readFile(new URL("../../db/migrations/134_inventory_physical_positions.sql",import.meta.url),"utf8");
 const identitySql=await readFile(new URL("../../db/migrations/163_inventory_position_count_identities.sql",import.meta.url),"utf8");
+const submissionSql=await readFile(new URL("../../db/migrations/172_inventory_position_count_submission.sql",import.meta.url),"utf8");
 
 test("physical positions keep hierarchy, usage, accounting and exact placement separate",()=>{
   assert.match(sql,/create table inventory_positions/i);
@@ -43,4 +44,12 @@ test("serialized counts persist identity, custody, and actor evidence",()=>{
   assert.match(identitySql,/input_mode varchar\(16\)/i);
   assert.match(identitySql,/add column if not exists applied_by/i);
   assert.match(identitySql,/observe_identity/i);
+});
+
+test("count submission is observation-only and enforces one active exact-position session",()=>{
+  assert.match(submissionSql,/submitted_by uuid references user_profiles/i);
+  assert.match(submissionSql,/submitted_at timestamptz/i);
+  assert.match(submissionSql,/action in \('observe','observe_identity','add_found','submit','apply'\)/i);
+  assert.match(submissionSql,/where status in \('open','ready'\)/i);
+  assert.match(submissionSql,/create unique index if not exists inventory_position_count_one_active_position_idx/i);
 });

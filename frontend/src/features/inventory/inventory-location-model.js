@@ -16,9 +16,9 @@ const SUBLOCATION_TYPES = {
   zone: ["aisle", "area", "zone", "room", "rack", "shelf", "bin"],
   room: ["aisle", "area", "zone", "room", "rack", "shelf", "bin"],
   area: ["aisle", "area", "zone", "room", "rack", "shelf", "bin"],
-  aisle: ["rack", "shelf", "bin", "area", "zone", "room", "aisle"],
-  rack: ["shelf", "bin", "area", "zone", "room", "aisle", "rack"],
-  shelf: ["bin", "area", "zone", "room", "aisle", "rack", "shelf"],
+  aisle: ["shelf", "rack"],
+  rack: ["shelf", "bin"],
+  shelf: ["bin"],
   bin: [],
 };
 

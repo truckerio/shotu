@@ -3,7 +3,7 @@ import { z } from 'zod';
 const uuid = z.string().uuid();
 export const inventoryTaskSourceTypeSchema = z.enum([
   'damage_inspection','receipt_exception','missing_invoice','invoice_po_decision',
-  'no_po_approval','transfer_receipt','position_recount','removed_part_custody',
+  'no_po_approval','transfer_receipt','position_recount','position_count_review','removed_part_custody',
 ]);
 
 export const inventoryTaskQueueQuerySchema = z.object({

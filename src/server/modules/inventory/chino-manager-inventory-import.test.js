@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertImportTarget, buildImportPlan, parseCsv } from "../../../../scripts/inventory/import-chino-manager-inventory.js";
+import { canonicalChinoCoordinate } from "../../../../scripts/inventory/repair-chino-position-hierarchy.js";
 
 const headers = "Part #,Part Name,Category,Fits / Description,Bin / Shelf,Opening Qty,Total In,Total Used,Current Qty,Reorder At,Status,Avg Cost,Sell Price,Inventory Value";
 
@@ -13,6 +14,17 @@ test("manager inventory plan aggregates repeated part and position rows", () => 
   assert.equal(plan.parts.length, 1);
   assert.equal(plan.parts[0].totalQuantity, 6);
   assert.deepEqual(plan.placements.map(({ positionKey, quantity }) => ({ positionKey, quantity })), [{ positionKey: "A1-B2-S3", quantity: 5 }, { positionKey: "A1-B2-S4", quantity: 1 }]);
+});
+
+test("manager coordinates map to aisle, shelf, then bin", () => {
+  assert.deepEqual(canonicalChinoCoordinate("A1-B2-S3"), {
+    aisleCode: "A1",
+    shelfCode: "A1-S3",
+    binCode: "A1-S3-B2",
+    shelfName: "Shelf 3",
+    binName: "Bin 2",
+  });
+  assert.equal(canonicalChinoCoordinate("SHOP-1"), null);
 });
 
 test("manager inventory plan preserves rows without supplied part numbers", () => {

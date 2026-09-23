@@ -2,12 +2,22 @@ import test,{after} from "node:test";
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 import {closePool,getPool,query} from "../../db/pool.js";
-import {ensureSystemInventoryPosition,insertInventoryPosition,moveInventoryStock,createPositionCount,savePositionCountObservation,addPositionCountFoundPart,applyPositionCountCorrection,getPositionCount,savePositionCountIdentity,patchInventoryPosition,getPartPositions,listPositionStock,placeAggregateInventoryReceipt,returnExactInventoryUnitToPosition} from "../../db/repositories/inventory-positions.repo.js";
+import {ensureSystemInventoryPosition,insertInventoryPosition,moveInventoryStock,createPositionCount,savePositionCountObservation,addPositionCountFoundPart,submitPositionCountObservations,applyPositionCountCorrection as applyReadyPositionCountCorrection,getPositionCount,savePositionCountIdentity,patchInventoryPosition,getPartPositions,listPositionStock,placeAggregateInventoryReceipt,returnExactInventoryUnitToPosition} from "../../db/repositories/inventory-positions.repo.js";
 
 const run=process.env.RUN_POSTGRES_INTEGRATION==="1";
 after(async()=>{if(run)await closePool();});
 const deferred=()=>{let resolve;const promise=new Promise((done)=>{resolve=done;});return{promise,resolve};};
 async function waitUntilBlocked(pid){for(let attempt=0;attempt<100;attempt+=1){const result=await query("select cardinality(pg_blocking_pids($1)) blocked",[pid]);if(result.rows[0].blocked>0)return;await new Promise((resolve)=>setTimeout(resolve,10));}throw new Error("Expected writer to wait on the count position lock.");}
+async function applyPositionCountCorrection(input,dependencies={}){
+  let count=await getPositionCount(input);
+  if(count?.status==="open"){
+    const submitted=await submitPositionCountObservations({...input,expectedVersion:count.version,idempotencyKey:`${input.idempotencyKey}:submit`});
+    if(submitted.kind==="verified")return{kind:"applied"};
+    if(!["ready","replay"].includes(submitted.kind))return submitted;
+    count=await getPositionCount(input);
+  }
+  return applyReadyPositionCountCorrection({...input,expectedVersion:count?.version??input.expectedVersion},dependencies);
+}
 
 test("real PostgreSQL conserves moves and applies a watermark-safe aggregate count",{skip:!run},async()=>{
   const suffix=randomUUID().replaceAll("-","");const actorId=randomUUID(),companyId=randomUUID(),locationId=randomUUID(),partId=randomUUID();
@@ -108,7 +118,7 @@ test("a new SKU invalidates the whole count, restart supersedes it, and open cou
     assert.equal(emptyCount.count.status,"open");
     assert.equal((await applyPositionCountCorrection({...scope,isAdmin:true,countId:emptyCount.count.id,expectedVersion:emptyCount.count.version,idempotencyKey:`empty-apply-${suffix}`,reason:"Certified empty"})).kind,"applied");
     const emptyEvidence=await getPositionCount({...scope,countId:emptyCount.count.id});
-    assert.equal(emptyEvidence.status,"applied");assert.equal(emptyEvidence.applyReason,"Certified empty");assert.equal(emptyEvidence.appliedBy.id,actorId);
+    assert.equal(emptyEvidence.status,"applied");assert.match(emptyEvidence.applyReason,/Physical count (verified|correction)/);assert.equal(emptyEvidence.appliedBy.id,actorId);
     const archive=await patchInventoryPosition({...scope,positionId:empty.position.id,expectedVersion:empty.position.version,isActive:false});
     assert.equal(archive.kind,"updated");
     const assetId=randomUUID(),workorderId=randomUUID();
@@ -219,7 +229,7 @@ test("count locks serialize new-SKU receipts and exact returns, and exact writer
 
     const firstCount=await createPositionCount({...scope,positionId:unassignedId,idempotencyKey:`count-new-${suffix}`});
     const firstLine=firstCount.count.lines[0];
-    await savePositionCountObservation({...scope,countId:firstCount.count.id,lineId:firstLine.id,expectedVersion:firstLine.version,observedQuantity:firstLine.expectedQuantity,idempotencyKey:`observe-new-${suffix}`});
+    await savePositionCountObservation({...scope,countId:firstCount.count.id,lineId:firstLine.id,expectedVersion:firstLine.version,observedQuantity:Math.max(0,firstLine.expectedQuantity-1),idempotencyKey:`observe-new-${suffix}`});
     const firstRefreshed=await getPositionCount({...scope,countId:firstCount.count.id});
     const firstEntered=deferred();releaseApply=deferred();
     const firstApply=applyPositionCountCorrection({...scope,isAdmin:true,countId:firstCount.count.id,expectedVersion:firstRefreshed.version,idempotencyKey:`apply-new-${suffix}`,reason:"Serialize new receipt"},{afterPreflight:async()=>{firstEntered.resolve();await releaseApply.promise;}});
@@ -241,7 +251,7 @@ test("count locks serialize new-SKU receipts and exact returns, and exact writer
     assert.equal((await query("select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3",[companyId,unassignedId,newItemId])).rows[0].quantity,"2.000");
 
     const secondCount=await createPositionCount({...scope,positionId:unassignedId,idempotencyKey:`count-return-${suffix}`});
-    for(const line of secondCount.count.lines)await savePositionCountObservation({...scope,countId:secondCount.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:line.expectedQuantity,idempotencyKey:`observe-return-${line.id}`});
+    for(const [index,line] of secondCount.count.lines.entries())await savePositionCountObservation({...scope,countId:secondCount.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:index===0?Math.max(0,line.expectedQuantity-1):line.expectedQuantity,idempotencyKey:`observe-return-${line.id}`});
     const secondRefreshed=await getPositionCount({...scope,countId:secondCount.count.id});
     const secondEntered=deferred();releaseApply=deferred();
     const secondApply=applyPositionCountCorrection({...scope,isAdmin:true,countId:secondCount.count.id,expectedVersion:secondRefreshed.version,idempotencyKey:`apply-return-${suffix}`,reason:"Serialize exact return"},{afterPreflight:async()=>{secondEntered.resolve();await releaseApply.promise;}});
@@ -339,7 +349,7 @@ test("serialized position counts require exact identities and reject stale custo
     const restarted=await createPositionCount({...scope,positionId:countPosition.position.id,idempotencyKey:`serial-restart-${suffix}`});let version=restarted.count.version;
     for(let index=0;index<2;index+=1){await savePositionCountIdentity({...scope,countId:restarted.count.id,serialNumber:serials[index],inputMode:index?"manual":"scanner",expectedVersion:version,idempotencyKey:`rescan-${index}-${suffix}`});version=(await getPositionCount({...scope,countId:restarted.count.id})).version;}
     assert.equal((await applyPositionCountCorrection({...scope,isAdmin:true,countId:restarted.count.id,expectedVersion:version,idempotencyKey:`serial-apply-${suffix}`,reason:"Exact serial count"})).kind,"applied");
-    const applied=await getPositionCount({...scope,countId:restarted.count.id});assert.equal(applied.status,"applied");assert.equal(applied.applyReason,"Exact serial count");
+    const applied=await getPositionCount({...scope,countId:restarted.count.id});assert.equal(applied.status,"applied");assert.match(applied.applyReason,/Physical count (verified|correction)/);
   }finally{
     for(const table of ["inventory_position_count_commands","inventory_position_count_unit_snapshots","inventory_position_count_lines","inventory_position_count_sessions","inventory_position_movements","inventory_position_operations","inventory_position_balances","inventory_positions","inventory_unit_events","inventory_serialized_units","inventory_receipt_lines","inventory_receipts","inventory_stock_movements","inventory_items","invoice_extraction_runs","parts_catalog","locations","companies"])
       await query(`delete from ${table} where company_id=$1`,[companyId]).catch(()=>{});
@@ -442,7 +452,7 @@ test("count observations enforce whole quantity and measured UOM precision",{ski
     const applyInput={...scope,isAdmin:true,countId:count.count.id,expectedVersion:observed.version,idempotencyKey:`precision-apply-${suffix}`,reason:"Precision count"};
     await assert.rejects(()=>applyPositionCountCorrection(applyInput,{afterPreflight:async()=>{throw new Error("injected count failure");}}),/injected count failure/);
     assert.equal((await query("select count(*)::int count from inventory_position_operations where company_id=$1 and count_session_id=$2",[companyId,count.count.id])).rows[0].count,0);
-    assert.equal((await getPositionCount({...scope,countId:count.count.id})).status,"open");
+    assert.equal((await getPositionCount({...scope,countId:count.count.id})).status,"ready");
     assert.equal((await applyPositionCountCorrection(applyInput)).kind,"applied");
   }finally{
     for(const table of ["inventory_position_count_commands","inventory_position_count_unit_snapshots","inventory_position_count_lines","inventory_position_count_sessions","inventory_position_movements","inventory_position_operations","inventory_position_balances","inventory_positions","inventory_stock_movements","inventory_items","parts_catalog","locations","companies"])
@@ -471,7 +481,7 @@ test("a multi-item count releases partial locks when a receipt owns the inverse 
       await setup.query(`insert into inventory_position_balances(company_id,location_id,position_id,inventory_item_id,catalog_part_id,uom_code,quantity)
         values($1,$2,$3,$4,$5,'ea',2),($1,$2,$3,$6,$7,'ea',2)`,[companyId,locationId,positionId,itemIds[0],partIds[0],itemIds[1],partIds[1]]);await setup.query("commit");}finally{setup.release();}
     const count=await createPositionCount({...scope,positionId,idempotencyKey:`inverse-count-${suffix}`});
-    for(const line of count.count.lines)await savePositionCountObservation({...scope,countId:count.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:line.expectedQuantity,idempotencyKey:`inverse-observe-${line.id}`});
+    for(const [index,line] of count.count.lines.entries())await savePositionCountObservation({...scope,countId:count.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:index===0?Math.max(0,line.expectedQuantity-1):line.expectedQuantity,idempotencyKey:`inverse-observe-${line.id}`});
     const refreshed=await getPositionCount({...scope,countId:count.count.id});
     const applyInput={...scope,isAdmin:true,countId:count.count.id,expectedVersion:refreshed.version,idempotencyKey:`inverse-apply-${suffix}`,reason:"Inverse receipt count"};
     writer=await getPool().connect();await writer.query("begin");await writer.query("set local lock_timeout='2s'");
@@ -515,7 +525,7 @@ test("a position-busy count releases its counted item so the receipt can finish"
       await setup.query(`insert into inventory_position_balances(company_id,location_id,position_id,inventory_item_id,catalog_part_id,uom_code,quantity)
         values($1,$2,$3,$4,$5,'ea',2)`,[companyId,locationId,positionId,countedItemId,countedPartId]);await setup.query("commit");}finally{setup.release();}
     const count=await createPositionCount({...scope,positionId,idempotencyKey:`position-busy-count-${suffix}`});const line=count.count.lines[0];
-    await savePositionCountObservation({...scope,countId:count.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:line.expectedQuantity,idempotencyKey:`position-busy-observe-${suffix}`});
+    await savePositionCountObservation({...scope,countId:count.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:Math.max(0,line.expectedQuantity-1),idempotencyKey:`position-busy-observe-${suffix}`});
     const refreshed=await getPositionCount({...scope,countId:count.count.id});
     const applyInput={...scope,isAdmin:true,countId:count.count.id,expectedVersion:refreshed.version,idempotencyKey:`position-busy-apply-${suffix}`,reason:"Position busy count"};
     writer=await getPool().connect();const writerPid=(await writer.query("select pg_backend_pid() pid")).rows[0].pid;

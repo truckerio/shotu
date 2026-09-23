@@ -119,7 +119,7 @@ test("Inventory Tasks is one actor-aware queue that routes work to canonical own
   assert.match(workspace, /openStockTransfer/);
   assert.match(workspace, /setTaskSection\('transfer'\)/);
   assert.match(workspace, /task\.sourceType === "removed_part_custody"/);
-  assert.match(workspace, /task\.sourceType === "position_recount"/);
+  assert.match(workspace, /\["position_recount", "position_count_review"\]\.includes\(task\.sourceType\)/);
   assert.match(workspace, /task\.sourceType === "invoice_po_decision"/);
   assert.match(workspace, /task\.sourceType === "missing_invoice"/);
   assert.match(workspace, /task\.sourceType === "receipt_exception"/);
@@ -178,7 +178,7 @@ test("inventory sections own their page titles and actions instead of a persiste
   assert.match(workspace, /<OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId=\{inventorySection\}/);
   assert.match(workspace, /actions=\{sectionActions\}/);
   assert.match(workspace, /headingLevel=\{presentation === "embedded" \? 2 : 1\}/);
-  assert.match(workspace, /inventorySection === "stock" \? stockActions : inventorySection === "inbound" \? inboundActions : null/);
+  assert.match(workspace, /inventorySection === "stock" \? stockActions : inventorySection === "inbound" \? inboundActions : inventorySection === "tasks" \? taskActions : null/);
   assert.doesNotMatch(workspace, /InventoryLocationsWorkspace|Storage layout/);
   assert.match(workspace, /function openStockByLocation\(shopId = ""\)/);
   assert.match(workspace, /setStockMode\("location"\);/);
@@ -244,7 +244,8 @@ test("stock has peer part and location modes with contextual physical counts", a
   assert.match(locationStock, /position\.systemKey != null \|\| position\.usage !== "storage" \|\| position\.isPickable !== true/);
   assert.match(locationStock, /inventory-location-layout inventory-location-stock-layout\$\{selected \? " has-detail" : ""\}/);
   assert.match(locationStock, /<PositionCountPanel key=\{`\$\{shopId\}:\$\{selectedPositionId\}`\} location=\{\{ id: shopId \}\} position=\{selected\}[\s\S]*canApplyInventoryCount=\{canApplyInventoryCount\}/);
-  assert.match(locationStock, /selected\.canStore \? <PositionCountPanel/);
+  assert.match(locationStock, /selectedIsCountableLeaf \? <PositionCountPanel/);
+  assert.match(locationStock, /selectedHasChildren = Boolean\(selected && positions\.some/);
   assert.match(locationStock, /key=\{`\$\{shopId\}:\$\{selectedPositionId\}`\}/);
   const countPanel = await readFile(new URL("./PositionCountPanel.jsx", import.meta.url), "utf8");
   assert.match(countPanel, /const activeStorageKey = useRef\(storageKey\)/);
@@ -254,9 +255,21 @@ test("stock has peer part and location modes with contextual physical counts", a
   assert.match(countPanel, /inputMode: serialInputMode/);
   assert.match(countPanel, /alreadyObserved/);
   assert.match(countPanel, /INVENTORY_POSITION_SERIAL_WRONG_POSITION/);
-  assert.match(countPanel, /Expected<\/small>/);
+  assert.match(countPanel, /System snapshot<\/small>/);
   assert.match(countPanel, /Counted<\/small>/);
   assert.match(countPanel, /Difference<\/small>/);
+  assert.match(countPanel, /\/submit/);
+  assert.match(countPanel, />Finish count<\/Button>/);
+  assert.match(countPanel, /<IconButton icon=\{ArrowLeft\} label="Back to location stock" onClick=\{\(\) => setExpanded\(false\)\} disabled=\{busy\} \/>/);
+  assert.doesNotMatch(countPanel, />Back<\/Button>/);
+  assert.match(countPanel, /status === "applied" && applyReason\.startsWith\("Physical count verified"\).*"Verified"/);
+  assert.doesNotMatch(countPanel, /Apply reason/);
+  assert.match(locationStock, /onModeChange=\{setCountMode\}/);
+  assert.doesNotMatch(locationStock, /countIntent|Choose a shelf or bin to count/);
+  assert.match(locationStock, /initialShopId && initialShopId !== shopId/);
+  assert.doesNotMatch(locationStock, /autoStart/);
+  assert.doesNotMatch(countPanel, /autoStart/);
+  assert.match(countPanel, /\{count \? "Resume count" : "Physical count"\}/);
   assert.match(countPanel, /count\.createdBy\?\.name/);
   assert.match(countPanel, /count\.applyReason/);
   assert.match(locationStock, /handleTreeKey/);
@@ -272,8 +285,16 @@ test("stock starts unified add stock and keeps location count handoffs", async (
     readFile(new URL("./AddInventoryStockDialog.jsx", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, />Add stock<\/Button>/);
-  assert.match(workspace, />Starting inventory<\/Button>/);
+  assert.doesNotMatch(workspace, /id="inventory-physical-count-action"/);
+  assert.doesNotMatch(workspace, /const stockActions = <[^;]*>Starting inventory<\/Button>/s);
   assert.match(workspace, />Record arrival<\/Button>/);
+  assert.match(workspace, /function openStockByLocation\(shopId = ""\)[\s\S]*setStockMode\("location"\)[\s\S]*stockMode: "location"/);
+  assert.doesNotMatch(workspace, /openPhysicalCountByLocation|physicalCountMode|countIntent/);
+  assert.match(workspace, /onOpenLocations=\{openStockByLocation\}/);
+  assert.match(workspace, /const taskActions = !taskWorkflow \? <Button[^>]*onClick=\{openPhysicalCountTasks\}>Physical counts<\/Button>/);
+  assert.match(workspace, /function openPhysicalCountTasks\(\)[\s\S]*setTaskSection\("count"\)[\s\S]*taskOwner: "count"/);
+  assert.match(workspace, /owner === "count" && !initialParams\.get\("taskId"\)/);
+  assert.match(workspace, /countWorkflowOpen \? "Starting inventory"/);
   assert.match(workspace, /onAddStock=\{\(\{ part, shopId, positionId, positionPath \}\) => setReceivingPart/);
   assert.match(workspace, /receiptPositionPath: positionPath, lockReceiptLocation: true/);
   assert.match(workspace, /onOpenStartingInventory=\{\(shopId\) => \{ if \(shopId\) setLocationId\(shopId\); openCountWorkflow\(\); \}\}/);
@@ -409,6 +430,7 @@ test("part detail makes each selected location commercial while defaults and she
   assert.match(workspace, /selectedLocation && shelvingOpen \? <>/);
   assert.match(workspace, /<IconButton icon=\{ArrowLeft\} label="Back to all locations" onClick=\{\(\) => setSelectedLocationId\(""\)\} \/>/);
   assert.match(workspace, /<div className="inventory-part-detail-toolbar">[\s\S]*?<IconButton icon=\{ArrowLeft\} label="Back to all locations"[\s\S]*?<PartLocationSettings part=\{selectedItem\} location=\{selectedLocation\}[\s\S]*?<\/div>/);
+  assert.match(workspace, /inventory-part-detail-toolbar-context[\s\S]*?Back to all locations[\s\S]*?selectedLocation\.locationName/);
   assert.doesNotMatch(workspace, /inventory-part-location-actions/);
   assert.doesNotMatch(workspace, /<IconButton icon=\{Rows03\} label="Open shelves and bins"/);
   assert.match(workspace, /onOpenShelves=\{\(\) => setShelvingOpen\(true\)\}/);

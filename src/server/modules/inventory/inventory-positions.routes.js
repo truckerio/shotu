@@ -1,7 +1,7 @@
 import {
   readInventoryPositions, createInventoryPosition, updateInventoryPosition,
   readPartPositions, readPositionStock, moveInventoryPosition, startPositionCount,
-  readPositionCount, recordPositionCount, recordPositionCountFoundPart, recordPositionCountIdentity, applyPositionCount,
+  readPositionCount, recordPositionCount, recordPositionCountFoundPart, recordPositionCountIdentity, submitPositionCount, applyPositionCount,
 } from "./inventory-positions.service.js";
 
 // Errors are handled by the canonical inventory route boundary.
@@ -59,6 +59,11 @@ export async function handleInventoryPositionsApi(req, res, url, helpers, depend
   match = /^\/api\/office\/inventory\/position-counts\/([^/]+)\/identities$/.exec(url.pathname);
   if (match && req.method === "PUT") {
     sendJson(res, 200, await recordPositionCountIdentity(decodeURIComponent(match[1]), await readBody(req), context, dependencies));
+    return true;
+  }
+  match = /^\/api\/office\/inventory\/position-counts\/([^/]+)\/submit$/.exec(url.pathname);
+  if (match && req.method === "POST") {
+    sendJson(res, 200, await submitPositionCount(decodeURIComponent(match[1]), await readBody(req), context, dependencies));
     return true;
   }
   match = /^\/api\/office\/inventory\/position-counts\/([^/]+)\/apply$/.exec(url.pathname);

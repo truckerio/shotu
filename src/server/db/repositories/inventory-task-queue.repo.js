@@ -85,6 +85,16 @@ const projection = `with task_source as (
   from inventory_position_count_sessions s join inventory_positions pos on pos.company_id=s.company_id and pos.id=s.position_id
   where s.status='needs_recount'
   union all
+  select s.company_id,s.location_id,'position_count_review',s.id,
+    coalesce(pos.code,pos.name,'Position'),coalesce(s.submitted_at,s.updated_at),s.version::text,
+    'Physical count needs review','Review count differences','Inventory is unchanged until an Admin reconciles this count',
+    'approve_count',array['approve_count']::text[],'admin','/?view=inventory&adminView=inventory&inventorySection=stock&stockMode=location&taskOwner=count_review&positionId='||s.position_id::text||'&taskLocation='||s.location_id::text
+  from inventory_position_count_sessions s join inventory_positions pos on pos.company_id=s.company_id and pos.id=s.position_id
+  where s.status='ready' and (
+    exists(select 1 from inventory_position_count_lines line where line.company_id=s.company_id and line.session_id=s.id and line.observed_quantity<>line.expected_quantity)
+    or exists(select 1 from inventory_position_count_unit_snapshots unit where unit.company_id=s.company_id and unit.session_id=s.id and unit.observed_at is null)
+  )
+  union all
   select c.company_id,c.location_id,'removed_part_custody',c.id,
     coalesce(u.serial_number,'Removed part'),c.created_at,c.case_version::text,
     case c.status when 'awaiting_handoff' then 'Removed part awaiting handoff' when 'received_pending_review' then 'Removed part needs inspection'
@@ -212,6 +222,8 @@ async function lockSourceOwner(client, input) {
     transfer_receipt: `select id from inventory_stock_tasks
       where company_id=$1 and (location_id=$2 or destination_id=$2) and id=$3 and kind='transfer' for update`,
     position_recount: `select id from inventory_position_count_sessions
+      where company_id=$1 and location_id=$2 and id=$3 for update`,
+    position_count_review: `select id from inventory_position_count_sessions
       where company_id=$1 and location_id=$2 and id=$3 for update`,
     removed_part_custody: `select id from inventory_reuse_cases
       where company_id=$1 and location_id=$2 and id=$3 for update`,

@@ -386,19 +386,28 @@
 .position-count-launcher h3, .position-count-launcher p { margin: 0; }
 .position-count-launcher p { margin-top: 3px; color: #667085; font-size: 12px; }
 .position-count-panel { min-height: 0; max-height: 52%; padding-top: 14px; overflow-y: auto; border-top: 1px solid #eaecf0; scroll-padding-bottom: 16px; }
+.inventory-location-stock-detail.is-counting .position-count-panel { max-height: none; }
 .position-count-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.position-count-title { display: flex; align-items: flex-start; min-width: 0; gap: 10px; }
+.position-count-title > div { min-width: 0; }
 .position-count-header-actions { display: flex; align-items: center; gap: 8px; }
+.position-count-progress, .inventory-location-count-scope { color: #175cd3; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .position-count-panel > header h3, .position-count-panel > header p { margin: 0; }
 .position-count-panel > header p { margin-top: 3px; color: #667085; font-size: 12px; }
 .position-count-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #667085; font-size: 12px; }
 .position-count-status, .position-count-line-state { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 999px; color: #344054; background: #f2f4f7; font-size: 11px; font-weight: 700; }
 .position-count-status.is-ready, .position-count-status.is-applied, .position-count-line-state.is-observed, .position-count-line-state.is-applied { color: #027a48; background: #ecfdf3; }
 .position-count-status.is-needs_recount, .position-count-line-state.is-needs_recount { color: #b54708; background: #fffaeb; }
-.position-count-lines .position-count-line { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(95px, auto) minmax(110px, 140px) minmax(80px, auto) auto; align-items: center; gap: 10px; }
+.position-count-lines .position-count-line { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, 280px) minmax(110px, 140px) minmax(80px, auto) auto; align-items: center; gap: 10px; }
+.position-count-lines.is-counting .position-count-line { grid-template-columns: minmax(150px, 1fr) minmax(220px, 300px) auto; }
 .position-count-line > div, .position-count-line > span, .position-count-line > label { display: grid; gap: 3px; min-width: 0; }
 .position-count-line > div small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .position-count-line > span small, .position-count-line > label small { color: #667085; font-size: 10px; font-weight: 600; text-transform: uppercase; }
 .position-count-line input { min-height: 40px; }
+.position-count-counter { display: grid; grid-template-columns: 40px minmax(80px, 1fr) 40px auto; align-items: center; gap: 6px; }
+.position-count-counter button { min-width: 40px; min-height: 40px; border: 1px solid #d0d5dd; border-radius: 6px; color: #344054; background: #fff; font: inherit; font-size: 18px; cursor: pointer; }
+.position-count-counter button:disabled { cursor: default; opacity: .55; }
+.position-count-counter > span { color: #475467; font-size: 12px; font-weight: 700; }
 .position-count-line .is-even { color: #027a48; }
 .position-count-line .is-different { color: #b54708; }
 .position-count-serials { display: grid; gap: 10px; padding: 14px; border: 1px solid #d0d5dd; border-radius: 8px; background: #f9fafb; }
@@ -432,6 +441,9 @@
 .position-count-found-quantity input { min-height: 44px; }
 .position-count-found-serialized { display: grid; gap: 10px; padding: 10px; border-radius: 7px; color: #344054; background: #fffaeb; font-size: 12px; }
 .position-count-found-serialized > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.position-count-review-action { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid #b2ddff; border-radius: 8px; background: #eff8ff; }
+.position-count-review-action strong, .position-count-review-action p { margin: 0; }
+.position-count-review-action p { margin-top: 3px; color: #475467; font-size: 12px; }
 @media (max-width: 700px) {
   .inventory-location-stock-workspace { height: auto; min-height: 0; }
   .inventory-location-stock-layout { height: auto; }
@@ -474,13 +486,15 @@
   .position-count-launcher .button { width: 100%; min-height: 44px; justify-content: center; }
   .position-count-panel { max-height: none; overflow: visible; }
   .position-count-panel > header { align-items: stretch; flex-direction: column; }
-  .position-count-header-actions, .position-count-found-heading { align-items: stretch; flex-direction: column; }
+  .position-count-title, .position-count-header-actions, .position-count-found-heading { align-items: stretch; flex-direction: column; }
   .position-count-header-actions .button, .position-count-found-heading .button, .position-count-found > form > .button { width: 100%; min-height: 44px; justify-content: center; }
   .position-count-panel > header .button { min-height: 44px; width: 100%; justify-content: center; }
-  .position-count-lines .position-count-line { grid-template-columns: minmax(0, 1fr) minmax(95px, 125px); }
+  .position-count-lines .position-count-line, .position-count-lines.is-counting .position-count-line { grid-template-columns: minmax(0, 1fr); }
   .position-count-line > div { grid-column: 1 / -1; }
   .position-count-line input { min-height: 44px; }
   .position-count-line-state { justify-self: start; }
+  .position-count-counter { grid-template-columns: 44px minmax(0, 1fr) 44px auto; }
+  .position-count-counter button { min-width: 44px; min-height: 44px; }
   .position-count-serial-progress { align-items: stretch; flex-direction: column; }
   .position-count-serial-progress > span { white-space: normal; }
   .position-count-serial-entry { grid-template-columns: minmax(0, 1fr); }

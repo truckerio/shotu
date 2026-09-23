@@ -33,7 +33,7 @@ function arrivalTarget(position, positionId) {
   return { positionId };
 }
 
-export function InventoryLocationStockWorkspace({ locations = [], initialShopId = "", initialPositionId = "", refreshKey = 0, canApplyInventoryCount = false, onOpenPart, onAddStock, onOpenStartingInventory }) {
+export function InventoryLocationStockWorkspace({ locations = [], initialShopId = "", initialPositionId = "", refreshKey = 0, canApplyInventoryCount = false, onShopChange, onOpenPart, onAddStock, onOpenStartingInventory }) {
   const [shopId, setShopId] = useState(initialShopId);
   const [positions, setPositions] = useState([]);
   const [selectedPositionId, setSelectedPositionId] = useState("");
@@ -45,8 +45,11 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
   const [error, setError] = useState("");
   const [stockRefreshKey, setStockRefreshKey] = useState(0);
   const [openingPartId, setOpeningPartId] = useState("");
+  const [countMode, setCountMode] = useState(false);
   const [initialPositionPending, setInitialPositionPending] = useState(Boolean(initialPositionId));
   const selected = positions.find((entry) => locationId(entry) === selectedPositionId) || null;
+  const selectedHasChildren = Boolean(selected && positions.some((entry) => entry.isActive !== false && String(entry.parentId || "") === selectedPositionId));
+  const selectedIsCountableLeaf = Boolean(selected?.canStore === true && !selectedHasChildren);
   const selectedArrivalTarget = arrivalTarget(selected, selectedPositionId);
   const tree = useMemo(
     () => visibleLocationTree(positions, expandedPositionIds),
@@ -65,7 +68,7 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
     }
   }, [shopId]);
   useEffect(() => { loadPositions(); }, [loadPositions]);
-  useEffect(() => { if (initialShopId) openShop(initialShopId); }, [initialShopId]);
+  useEffect(() => { if (initialShopId && initialShopId !== shopId) openShop(initialShopId); }, [initialShopId, shopId]);
   useEffect(() => { setInitialPositionPending(Boolean(initialPositionId)); }, [initialPositionId]);
   useEffect(() => {
     if (!initialPositionPending || !initialPositionId || !positions.length) return;
@@ -102,6 +105,8 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
     setExpandedPositionIds(new Set());
     setStock([]);
     setError("");
+    setCountMode(false);
+    onShopChange?.(nextShopId);
   }
   function closeShop() {
     const returnId = shopId;
@@ -110,9 +115,12 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
     setSelectedPositionId("");
     setStock([]);
     setError("");
+    setCountMode(false);
+    onShopChange?.("");
     window.requestAnimationFrame(() => document.getElementById(`inventory-stock-shop-${returnId}`)?.focus({ preventScroll: true }));
   }
   function selectPosition(id) {
+    setCountMode(false);
     setSelectedPositionId(id);
     window.requestAnimationFrame(() => document.getElementById("inventory-location-stock-detail")?.focus({ preventScroll: true }));
   }
@@ -203,13 +211,13 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
           </div>; })}
         </div> : <p>No storage locations yet.</p>}
       </section>
-      {selected ? <section className="inventory-location-detail inventory-location-stock-detail" id="inventory-location-stock-detail" tabIndex="-1" aria-live="polite">
-        <IconButton className="inventory-location-detail-back" icon={ArrowLeft} label="Back to location hierarchy" onClick={() => setSelectedPositionId("")} />
-        <header><div><h3>{locationName(selected)}</h3><p>{locationPathLabel(selected, positions)}</p></div><div className="inventory-location-detail-actions">{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}<label>Include <Dropdown value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Stock scope"><option value="subtree">This location and sublocations</option><option value="direct">This location only</option></Dropdown></label></div></header>
-        {loadingStock ? <p role="status"><RefreshCw01 className="loading-icon" /> Loading stock…</p> : stock.length ? <div className="inventory-location-stock-list">
+      {selected ? <section className={`inventory-location-detail inventory-location-stock-detail${countMode ? " is-counting" : ""}`} id="inventory-location-stock-detail" tabIndex="-1" aria-live="polite">
+        <IconButton className="inventory-location-detail-back" icon={ArrowLeft} label="Back to location hierarchy" onClick={() => { setCountMode(false); setSelectedPositionId(""); }} />
+        <header><div><h3>{locationName(selected)}</h3><p>{locationPathLabel(selected, positions)}</p></div>{countMode ? <span className="inventory-location-count-scope">Counting this exact location</span> : <div className="inventory-location-detail-actions">{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}<label>Include <Dropdown value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Stock scope"><option value="subtree">This location and sublocations</option><option value="direct">This location only</option></Dropdown></label></div>}</header>
+        {!countMode && (loadingStock ? <p role="status"><RefreshCw01 className="loading-icon" /> Loading stock…</p> : stock.length ? <div className="inventory-location-stock-list">
           {stock.map((item) => { const id = item.catalogPartId || item.partId || item.id || item.partNumber; const placements=item.placements||[]; return <button type="button" key={id} onClick={() => openPart(item)} disabled={!onOpenPart || Boolean(openingPartId)} aria-label={`Open details for ${item.partNumber || item.code || "part"} at ${locationName(selected)}`}><span><strong>{item.partNumber || item.code || "Part"}</strong><small>{item.description || item.name || "No description"}</small>{placements.length ? <span className="inventory-location-stock-placements">{placements.map((placement)=><small key={placement.positionId}><b>{compactPlacementPath(placement,scope === "subtree" && placement.depth > 0)}</b><span>{placement.name && placement.name !== placement.code ? `${placement.name} · ` : ""}{quantity(placement.quantity)} {item.uomCode || ""}</span></small>)}</span>:null}</span><span>{openingPartId === id ? "Opening…" : `${quantity(scope === "subtree" ? item.subtreeQuantity : item.directQuantity)} ${item.uomCode || ""}`}</span><ChevronRight aria-hidden="true" /></button>; })}
-        </div> : <div className="inventory-location-stock-empty"><strong>No stock in this scope</strong><p>{selectedArrivalTarget ? "Receive new goods here or start a physical count to certify what is present." : selected.canStore ? "Start a physical count to certify what is present in this location." : "Choose a broader scope or select a stock-holding location."}</p>{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}</div>}
-        {selected.canStore ? <PositionCountPanel key={`${shopId}:${selectedPositionId}`} location={{ id: shopId }} position={selected} initialOpen={Boolean(initialPositionId && initialPositionId === selectedPositionId)} canApplyInventoryCount={canApplyInventoryCount} onAddStock={(part) => addStockHere(part)} onOpenStartingInventory={() => onOpenStartingInventory?.(shopId)} onChanged={() => setStockRefreshKey((value) => value + 1)} /> : null}
+        </div> : <div className="inventory-location-stock-empty"><strong>No stock in this scope</strong><p>{selectedArrivalTarget ? "Receive new goods here or start a physical count to certify what is present." : selected.canStore ? "Start a physical count to certify what is present in this location." : "Choose a broader scope or select a stock-holding location."}</p>{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}</div>)}
+        {selectedIsCountableLeaf ? <PositionCountPanel key={`${shopId}:${selectedPositionId}`} location={{ id: shopId }} position={selected} initialOpen={Boolean(initialPositionId && initialPositionId === selectedPositionId)} canApplyInventoryCount={canApplyInventoryCount} onModeChange={setCountMode} onAddStock={(part) => addStockHere(part)} onOpenStartingInventory={() => onOpenStartingInventory?.(shopId)} onChanged={() => setStockRefreshKey((value) => value + 1)} /> : null}
       </section> : null}
     </div>
   </section>;

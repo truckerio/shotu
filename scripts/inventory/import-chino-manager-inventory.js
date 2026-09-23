@@ -203,10 +203,11 @@ async function buildPositions(client, context, plan) {
   if (required.has("SHOP-1")) positions.set("SHOP-1", await upsertPosition(client, { ...context, parentId: shopId, code: "SHOP-1", name: "Shelf 1", kind: "shelf", canStore: true }));
   for (const raw of [...required].filter((key) => /^A\d+-B\d+-S\d+$/.test(key)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
     const [, aisleNo, binNo, shelfNo] = raw.match(/^A(\d+)-B(\d+)-S(\d+)$/);
-    const aisleCode = `A${aisleNo}`, binCode = `${aisleCode}-B${binNo}`;
+    const aisleCode = `A${aisleNo}`, shelfCode = `${aisleCode}-S${shelfNo}`, binCode = `${shelfCode}-B${binNo}`;
     if (!positions.has(aisleCode)) positions.set(aisleCode, await upsertPosition(client, { ...context, parentId: shopId, code: aisleCode, name: `Aisle ${aisleNo}`, kind: "aisle" }));
-    if (!positions.has(binCode)) positions.set(binCode, await upsertPosition(client, { ...context, parentId: positions.get(aisleCode), code: binCode, name: `Bin ${binNo}`, kind: "bin" }));
-    if (!positions.has(raw)) positions.set(raw, await upsertPosition(client, { ...context, parentId: positions.get(binCode), code: raw, name: `Shelf ${shelfNo}`, kind: "shelf", canStore: true }));
+    if (!positions.has(shelfCode)) positions.set(shelfCode, await upsertPosition(client, { ...context, parentId: positions.get(aisleCode), code: shelfCode, name: `Shelf ${shelfNo}`, kind: "shelf" }));
+    if (!positions.has(binCode)) positions.set(binCode, await upsertPosition(client, { ...context, parentId: positions.get(shelfCode), code: binCode, name: `Bin ${binNo}`, kind: "bin", canStore: true }));
+    positions.set(raw, positions.get(binCode));
   }
   const unassigned = (await client.query("select id from inventory_positions where company_id=$1 and location_id=$2 and system_key='unassigned'", [COMPANY_ID, context.locationId])).rows[0];
   if (!unassigned) throw new Error("Chino Yard system unassigned position is missing.");

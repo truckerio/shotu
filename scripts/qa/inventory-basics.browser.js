@@ -110,7 +110,7 @@ try {
   await page.getByRole("button", { name: "Storage locations", exact: true }).click();
   await page.locator(".inventory-location-tree button").filter({ hasText: parent.code }).last().click();
   const startingCount = page.waitForResponse(response => response.url().endsWith("/position-counts") && response.request().method() === "POST");
-  await page.getByRole("button", { name: "Start count", exact: true }).click();
+  await page.getByRole("button", { name: "Physical count", exact: true }).click();
   const startedCount = await startingCount;
   assert.equal(startedCount.status(), 201, await startedCount.text());
   const observation = page.waitForResponse(response => /\/position-counts\/[^/]+\/lines\//.test(response.url()) && response.request().method() === "PUT");

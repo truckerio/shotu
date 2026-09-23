@@ -61,15 +61,17 @@ test("location hierarchy keeps warehouses first and uses natural aisle order", (
   assert.deepEqual(flattenLocationTree(arranged, "w1").map(({ location }) => location.code), ["A2", "A10"]);
   assert.deepEqual(visibleLocationTree(arranged, new Set(["w1"])).map(({ location }) => location.code), ["W1", "A2", "A10", "CORE", "SYS-RECEIVING", "455"]);
 });
-test("sublocation guidance recommends physical levels while allowing skipped levels", () => {
+test("sublocation guidance enforces aisle, shelf, then bin", () => {
   assert.deepEqual(
     sublocationTypeOptions("area").map(([value]) => value),
     ["aisle", "area", "zone", "room", "rack", "shelf", "bin"],
   );
   assert.equal(defaultSublocationType("area"), "aisle");
-  assert.equal(defaultSublocationType("aisle"), "rack");
+  assert.equal(defaultSublocationType("aisle"), "shelf");
+  assert.deepEqual(sublocationTypeOptions("aisle").map(([value]) => value), ["shelf", "rack"]);
   assert.equal(defaultSublocationType("rack"), "shelf");
   assert.equal(defaultSublocationType("shelf"), "bin");
+  assert.deepEqual(sublocationTypeOptions("shelf").map(([value]) => value), ["bin"]);
   assert.equal(canContainSublocations("bin"), false);
   assert.deepEqual(positionStorageDefaults("bin"), { usage: "storage", canStore: true, isPickable: true });
   assert.deepEqual(positionStorageDefaults("area"), { usage: "", canStore: false, isPickable: false });

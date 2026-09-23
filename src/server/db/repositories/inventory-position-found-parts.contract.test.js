@@ -19,3 +19,15 @@ test("found-part count migration and repository keep count adjustments separate 
   assert.match(apply,/insert into inventory_position_balances/);
   assert.match(apply,/movement_type,quantity_delta[\s\S]*'adjustment'/);
 });
+
+test("routine counting submits immutable observations before separate reconciliation",async()=>{
+  const repository=await readFile(new URL("./inventory-positions.repo.js",import.meta.url),"utf8");
+  const observe=repository.slice(repository.indexOf("export async function savePositionCountObservation"),repository.indexOf("export async function addPositionCountFoundPart"));
+  assert.doesNotMatch(observe,/expected_quantity=balance\.quantity|balance_version=balance\.version/);
+  const submit=repository.slice(repository.indexOf("export async function submitPositionCountObservations"),repository.indexOf("export async function applyPositionCountCorrection"));
+  assert.match(submit,/status='ready'/);
+  assert.doesNotMatch(submit,/inventory_stock_movements|quantity_on_hand|count_adjustment/);
+  const apply=repository.slice(repository.indexOf("export async function applyPositionCountCorrection"));
+  assert.match(apply,/session\.status!=="ready"/);
+  assert.match(apply,/Physical count correction/);
+});

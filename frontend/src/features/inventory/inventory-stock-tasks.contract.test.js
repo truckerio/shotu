@@ -7,7 +7,7 @@ test("cycle counts route operators to stock by location or count-sheet import",a
  assert.match(source,/if\(kind==='count'&&!initialTaskId\)return/);
  assert.match(source,/Physical counts/);
  assert.match(source,/Open stock by location/);
- assert.match(source,/Import count sheet/);
+ assert.match(source,/Import starting inventory/);
  assert.match(source,/onOpenLocations\?\.\(locationId\)/);
  assert.match(source,/onImportCount\?\.\(\)/);
 });
