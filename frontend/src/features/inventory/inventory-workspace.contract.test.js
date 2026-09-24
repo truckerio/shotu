@@ -470,6 +470,10 @@ test("part detail pages keep the daily stock facts visible and secondary records
   assert.match(activity, /item\.assetUnitNo \|\| "Unit not recorded"/);
   assert.match(activity, /item\.workorderSerial/);
   assert.match(activity, /item\.repairOrder/);
+  assert.match(activity, /item\.receiptDocument\?\.sourceAvailable/);
+  assert.match(activity, /setReceiptDocument\(item\.receiptDocument\)/);
+  assert.match(activity, /<InvoiceDocumentViewer/);
+  assert.match(activity, /invoice-extractions\/\$\{encodeURIComponent\(receiptDocument\.invoiceRunId\)\}\/source/);
   assert.match(activity, /href=\{receiptHref\(item\.receiptId\)\}>Open receipt<\/a>/);
   assert.match(activity, /inventorySection: "inbound", receiptId/);
   assert.doesNotMatch(activity, /<code>\{item\.receiptId\}<\/code>/);

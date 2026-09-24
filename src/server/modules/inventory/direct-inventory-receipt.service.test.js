@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { decideDirectReceiptApproval, directReceiptSchema, receiveDirectInventory, readDirectReceiptApproval, readDirectReceiptOutcome, readPartStockMovements } from "./direct-inventory-receipt.service.js";
 import { handleInventoryApi } from "./inventory.routes.js";
@@ -30,6 +31,13 @@ test("part movement history defaults to audit and forwards the optional Workorde
   assert.equal(calls[1].locationId, locationId);
   assert.equal(calls[1].page, 2);
   await assert.rejects(readPartStockMovements(catalogPartId, new URLSearchParams({ view: "usage" }), context, deps));
+});
+test("part movement history repository projects the canonical receipt's retained invoice source", async () => {
+  const source = await readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8");
+  assert.match(source, /inventory_receipts receipt/);
+  assert.match(source, /receiptDocument/);
+  assert.match(source, /invoiceRunId/);
+  assert.match(source, /sourceAvailable/);
 });
 test("direct receiving uses existing receipt owner, scoped location and unknown cost without invoice", async () => {
   let command;

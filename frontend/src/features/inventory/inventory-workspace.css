@@ -127,13 +127,22 @@
 .inventory-stock-activity-workorder:hover { text-decoration: underline; }
 .inventory-stock-activity-workorder:focus-visible { outline: 3px solid #84caff; outline-offset: 2px; border-radius: 4px; }
 .inventory-stock-activity-list .inventory-stock-activity-repair { color: #344054; }
-.inventory-stock-activity-receipt { display: inline-flex; align-items: center; min-height: 44px; width: fit-content; color: #175cd3; font-size: 12px; font-weight: 650; text-decoration: none; }
+.inventory-stock-activity-receipt { display: inline-flex; align-items: center; min-height: 44px; width: fit-content; padding: 0; border: 0; color: #175cd3; background: transparent; font: inherit; font-size: 12px; font-weight: 650; text-decoration: none; cursor: pointer; }
 .inventory-stock-activity-receipt:hover { text-decoration: underline; }
 .inventory-stock-activity-receipt:focus-visible { outline: 3px solid #84caff; outline-offset: 2px; border-radius: 4px; }
 .inventory-stock-activity-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #fecdca; border-radius: 8px; background: #fef3f2; color: #b42318; }
 .inventory-stock-activity-error p { margin: 0; }
 .inventory-stock-activity-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .inventory-stock-activity-pagination span { color: #667085; font-size: 13px; }
+.inventory-receipt-document-overlay { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 20px; background: rgb(16 24 40 / 55%); }
+.inventory-receipt-document-modal { width: min(1100px, 100%); height: min(900px, calc(100dvh - 40px)); min-height: 0; }
+.inventory-receipt-document-dialog { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; border-radius: 12px; outline: none; background: #fff; box-shadow: 0 24px 48px rgb(16 24 40 / 24%); }
+.inventory-receipt-document-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid #eaecf0; }
+.inventory-receipt-document-dialog > header h2, .inventory-receipt-document-dialog > header p { margin: 0; }
+.inventory-receipt-document-dialog > header p { margin-top: 3px; color: #667085; font-size: 13px; overflow-wrap: anywhere; }
+.inventory-receipt-document-dialog > header .button { flex: none; min-height: 44px; }
+.inventory-receipt-document-dialog > .invoice-document-viewer { align-self: stretch; height: 100%; min-height: 0; margin: 0; border: 0; border-radius: 0; position: static; }
+.inventory-receipt-document-dialog .invoice-document-content object { height: 100%; min-height: 480px; }
 .inventory-detail-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0; border: 0; color: #175cd3; background: transparent; font-weight: 700; cursor: pointer; }
 .inventory-detail-back svg { width: 18px; height: 18px; }
 .inventory-detail-back:focus-visible { outline: 3px solid #84caff; outline-offset: 3px; border-radius: 4px; }
@@ -376,6 +385,10 @@
   .inventory-location-settings-dialog > header, .inventory-location-settings-dialog > section, .inventory-location-settings-dialog > footer { padding-right: 16px; padding-left: 16px; }
   .inventory-stock-activity-error { align-items: stretch; flex-direction: column; }
   .inventory-stock-activity-error .button { width: 100%; justify-content: center; }
+  .inventory-receipt-document-overlay { align-items: end; padding: 0; }
+  .inventory-receipt-document-modal { width: 100%; height: calc(100dvh - 12px); }
+  .inventory-receipt-document-dialog { border-radius: 14px 14px 0 0; }
+  .inventory-receipt-document-dialog > header { padding: 14px 16px; }
   .inventory-shop-usage > header, .inventory-audit-log-heading { align-items: stretch; flex-direction: column; }
   .inventory-shop-usage > header .button, .inventory-audit-log-heading .button { width: 100%; justify-content: center; }
 }

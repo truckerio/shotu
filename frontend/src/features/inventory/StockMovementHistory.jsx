@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { RefreshCw01 } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { Button } from "../../components/ui/Button.jsx";
+import { ModalFrame } from "../../components/ui/ModalFrame.jsx";
+import { InvoiceDocumentViewer } from "../office/InvoiceDocumentViewer.jsx";
 
 const labels = { invoice_receipt: "Invoice delivery", direct_receipt: "Stock received", receipt_reversal: "Receipt reversed", issue: "Used on Workorder", return: "Returned to stock", transfer_in: "Transfer received", transfer_out: "Transfer dispatched", adjustment: "Count or correction" };
 function receiptHref(receiptId) {
@@ -17,7 +19,8 @@ export function StockMovementHistory({ partId, locationId = "", view = "audit", 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  useEffect(() => { setPage(1); }, [partId, locationId, view, refreshKey]);
+  const [receiptDocument, setReceiptDocument] = useState(null);
+  useEffect(() => { setPage(1); setReceiptDocument(null); }, [partId, locationId, view, refreshKey]);
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams({ page: String(page) });
@@ -32,6 +35,10 @@ export function StockMovementHistory({ partId, locationId = "", view = "audit", 
     return () => { active = false; };
   }, [partId, locationId, view, page, refreshKey, reloadKey]);
   return <div className="inventory-stock-activity" aria-busy={loading}>
+    {receiptDocument ? <ModalFrame overlayClassName="inventory-receipt-document-overlay" modalClassName="inventory-receipt-document-modal" dialogClassName="inventory-receipt-document-dialog" ariaLabelledBy="inventory-receipt-document-title" isDismissable onOpenChange={(open) => { if (!open) setReceiptDocument(null); }}>
+      <header><div><h2 id="inventory-receipt-document-title">Receipt document</h2><p>{receiptDocument.fileName}</p></div><Button type="button" onClick={() => setReceiptDocument(null)}>Close</Button></header>
+      <InvoiceDocumentViewer sourceUrl={`/api/office/invoice-extractions/${encodeURIComponent(receiptDocument.invoiceRunId)}/source`} mimeType={receiptDocument.mimeType} fileName={receiptDocument.fileName} title="Receipt document" />
+    </ModalFrame> : null}
     {error ? <div className="inventory-stock-activity-error" role="alert"><p>{error}</p><Button type="button" icon={RefreshCw01} onClick={() => setReloadKey((value) => value + 1)} disabled={loading}>Refresh</Button></div> : null}
     {loading ? <p role="status">Loading stock activity…</p> : null}
     {!loading && !error && data?.items.length === 0 ? <p className="inventory-detail-empty">{emptyMessage}</p> : null}
@@ -39,7 +46,7 @@ export function StockMovementHistory({ partId, locationId = "", view = "audit", 
       <header><strong>{labels[item.type] || "Stock movement"}</strong><span className={Number(item.quantity) >= 0 ? "is-in" : "is-out"}>{item.quantity > 0 ? "+" : ""}{item.quantity} {item.uomCode}</span></header>
       <p>{item.workorderId ? <><a className="inventory-stock-activity-workorder" href={workorderHref(item.workorderId)}>{item.assetUnitNo || "Unit not recorded"}{item.workorderSerial ? ` · ${item.workorderSerial}` : ""}</a> · </> : null}{item.locationName} · <time dateTime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time></p>
       {item.repairOrder ? <p className="inventory-stock-activity-repair">{item.repairOrder}</p> : null}
-      {item.receiptId ? <a className="inventory-stock-activity-receipt" href={receiptHref(item.receiptId)}>Open receipt</a> : null}
+      {item.receiptDocument?.sourceAvailable ? <button className="inventory-stock-activity-receipt" type="button" onClick={() => setReceiptDocument(item.receiptDocument)}>Open receipt</button> : item.receiptId ? <a className="inventory-stock-activity-receipt" href={receiptHref(item.receiptId)}>Open receipt</a> : null}
     </li>)}</ol> : null}
     {page > 1 || data?.hasMore ? <div className="inventory-stock-activity-pagination"><Button onClick={() => setPage((value) => value - 1)} disabled={loading || page === 1}>Previous</Button><span>Page {page}</span><Button onClick={() => setPage((value) => value + 1)} disabled={loading || !data?.hasMore}>Next</Button></div> : null}
   </div>;

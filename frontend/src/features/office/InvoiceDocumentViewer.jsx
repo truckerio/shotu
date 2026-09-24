@@ -9,7 +9,7 @@ import {
   nextDocumentRotation,
 } from "./invoice-document-viewer-model.js";
 
-export function InvoiceDocumentViewer({ sourceUrl = "", mimeType = "", fileName = "Invoice source" }) {
+export function InvoiceDocumentViewer({ sourceUrl = "", mimeType = "", fileName = "Invoice source", title = "Original invoice" }) {
   const viewerRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -43,9 +43,9 @@ export function InvoiceDocumentViewer({ sourceUrl = "", mimeType = "", fileName 
   }
 
   return (
-    <aside className="invoice-document-viewer" aria-label="Original invoice document" ref={viewerRef}>
+    <aside className="invoice-document-viewer" aria-label={`${title} viewer`} ref={viewerRef}>
       <header className="invoice-document-header">
-        <div className="invoice-document-title"><strong>Original invoice</strong><span>{hasSource ? fileName : "Source unavailable"}</span></div>
+        <div className="invoice-document-title"><strong>{title}</strong><span>{hasSource ? fileName : "Source unavailable"}</span></div>
         <div className="invoice-document-toolbar" role="toolbar" aria-label="Document viewer tools">
           <button type="button" onClick={() => setZoom((current) => changeDocumentZoom(current, "out"))} disabled={!hasSource || zoom <= DOCUMENT_ZOOM_MIN} aria-label="Zoom out" title="Zoom out"><ZoomOut /></button>
           <output aria-label="Document zoom">{documentZoomLabel(zoom)}</output>
@@ -61,8 +61,8 @@ export function InvoiceDocumentViewer({ sourceUrl = "", mimeType = "", fileName 
         {hasSource ? (
           <div className="invoice-document-content" style={{ width: `${zoom * 100}%`, transform: documentRotationTransform(rotation) }}>
             {isPdf
-              ? <object data={sourceUrl} type="application/pdf" title={`Original invoice: ${fileName}`}><a href={sourceUrl} target="_blank" rel="noreferrer">Open the uploaded PDF</a></object>
-              : <img src={sourceUrl} alt={`Original invoice: ${fileName}`} />}
+              ? <object data={sourceUrl} type="application/pdf" title={`${title}: ${fileName}`}><a href={sourceUrl} target="_blank" rel="noreferrer">Open the uploaded PDF</a></object>
+              : <img src={sourceUrl} alt={`${title}: ${fileName}`} />}
           </div>
         ) : (
           <div className="invoice-document-empty" role="status"><FileSearch01 aria-hidden="true" /><strong>Document source unavailable</strong><span>The reviewed values remain available, but the original file can no longer be displayed.</span></div>

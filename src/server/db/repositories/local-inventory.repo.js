@@ -36,9 +36,17 @@ export async function listPartStockMovements({ catalogPartId, companyIds, locati
     movement.created_at,movement.receipt_id,movement.workorder_id,location.name as location_name,
     workorder.serial as workorder_serial,
     asset.unit_no as asset_unit_no,
-    coalesce(aggregate_usage.repair_order,serialized_usage.repair_order,'') as repair_order
+    coalesce(aggregate_usage.repair_order,serialized_usage.repair_order,'') as repair_order,
+    invoice.id as invoice_run_id,invoice.file_name as invoice_file_name,invoice.mime_type as invoice_mime_type,
+    source.id as invoice_source_id,source.training_status as invoice_source_training_status
     from inventory_stock_movements movement
     join locations location on location.company_id=movement.company_id and location.id=movement.location_id
+    left join inventory_receipts receipt
+      on receipt.company_id=movement.company_id and receipt.id=movement.receipt_id
+    left join invoice_extraction_runs invoice
+      on invoice.company_id=receipt.company_id and invoice.id=receipt.invoice_run_id
+    left join invoice_source_documents source
+      on source.company_id=invoice.company_id and source.run_id=invoice.id
     left join operational_workorders workorder
       on workorder.company_id=movement.company_id and workorder.id=movement.workorder_id
     left join assets asset
@@ -58,6 +66,12 @@ export async function listPartStockMovements({ catalogPartId, companyIds, locati
     occurredAt: row.created_at, receiptId: row.receipt_id, locationName: row.location_name,
     workorderId: row.workorder_id || null, workorderSerial: row.workorder_serial || "",
     assetUnitNo: row.asset_unit_no || "", repairOrder: row.repair_order || "",
+    receiptDocument: row.invoice_run_id ? {
+      invoiceRunId: row.invoice_run_id,
+      fileName: row.invoice_file_name || "Invoice source",
+      mimeType: row.invoice_mime_type || "",
+      sourceAvailable: Boolean(row.invoice_source_id) && row.invoice_source_training_status !== "deleted",
+    } : null,
   })) };
 }
 
