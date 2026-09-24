@@ -10,6 +10,7 @@ import {
   destinationPositions,
   eligibleSerializedPositionUnits,
   moveDestinations,
+  occupiedPositions,
   isStalePositionError,
   positionDraftKey,
   positionMoveBody,
@@ -55,6 +56,7 @@ export function PartPositionsPanel({ item, part, location, initialSourcePosition
   const [loading, setLoading] = useState(Boolean(catalogPartId && locationId));
   const [error, setError] = useState("");
   const [stale, setStale] = useState(false);
+  const [showEmptyPositions, setShowEmptyPositions] = useState(false);
   const [draft, setDraft] = useState({
     sourcePositionId: initialSourcePositionId,
     destinationPositionId: "",
@@ -85,6 +87,7 @@ export function PartPositionsPanel({ item, part, location, initialSourcePosition
       quantity: "",
       serialUnitIds: [],
     });
+    setShowEmptyPositions(false);
     load();
   }, [initialSourcePositionId, load]);
   const positions = useMemo(() => responsePositions(data), [data]);
@@ -94,6 +97,9 @@ export function PartPositionsPanel({ item, part, location, initialSourcePosition
   const stockPositions = destinationPositions(positions).filter(
     (entry) => entry.isPickable === true && entry.supportsMove !== false,
   ).sort(naturalPositionCompare);
+  const occupiedStockPositions = occupiedPositions(stockPositions);
+  const visibleStockPositions = showEmptyPositions ? stockPositions : occupiedStockPositions;
+  const emptyPositionCount = stockPositions.length - occupiedStockPositions.length;
   const selectedSource = positions.find(
     (entry) => (entry.id || entry.positionId) === draft.sourcePositionId,
   );
@@ -101,7 +107,7 @@ export function PartPositionsPanel({ item, part, location, initialSourcePosition
     units,
     draft.sourcePositionId,
   );
-  const sourceOptions = [...stockPositions]
+  const sourceOptions = [...occupiedStockPositions]
     .sort(
       (left, right) => Number(right.quantity || 0) - Number(left.quantity || 0),
     )
@@ -195,12 +201,24 @@ export function PartPositionsPanel({ item, part, location, initialSourcePosition
     >
       <header>
         <h3 id="part-positions-title">Shelf positions</h3>
-        <IconButton
-          icon={RefreshCw01}
-          label="Refresh shelf positions"
-          onClick={load}
-          disabled={loading || busy}
-        />
+        <div className="part-positions-header-actions">
+          {emptyPositionCount ? (
+            <Button
+              type="button"
+              className="part-position-visibility-toggle"
+              aria-pressed={showEmptyPositions}
+              onClick={() => setShowEmptyPositions((value) => !value)}
+            >
+              {showEmptyPositions ? "Hide empty" : `Show empty (${emptyPositionCount})`}
+            </Button>
+          ) : null}
+          <IconButton
+            icon={RefreshCw01}
+            label="Refresh shelf positions"
+            onClick={load}
+            disabled={loading || busy}
+          />
+        </div>
       </header>
       {data?.reconciliationRequired ? (
         <p role="alert" className="ops-error">
@@ -222,18 +240,24 @@ export function PartPositionsPanel({ item, part, location, initialSourcePosition
         <p role="status">Loading positions…</p>
       ) : data && !data.reconciliationRequired ? (
         <>
-          <div className="part-position-list">
-            {stockPositions.map((entry) => (
-              <article key={entry.positionId || entry.id}>
-                <div>
-                  <strong>{positionLabel(entry)}</strong>
-                </div>
-                <span>
-                  {number(entry.quantity)} {data?.uomCode || subject?.uomCode}
-                </span>
-              </article>
-            ))}
-          </div>
+          {visibleStockPositions.length ? (
+            <div className="part-position-list">
+              {visibleStockPositions.map((entry) => (
+                <article key={entry.positionId || entry.id}>
+                  <div>
+                    <strong>{positionLabel(entry)}</strong>
+                  </div>
+                  <span>
+                    {number(entry.quantity)} {data?.uomCode || subject?.uomCode}
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="part-position-empty">
+              No shelves or bins currently hold this part.
+            </p>
+          )}
           <form className="part-position-move" onSubmit={move}>
             <h4>Put away or move stock</h4>
             <label>

@@ -27,7 +27,7 @@ function map(result){
   if(result.kind==="tracking_mismatch")fail("INVENTORY_POSITION_TRACKING_MISMATCH","The movement does not match this part's tracking method.",422);
   if(result.kind==="unit_conflict")fail("INVENTORY_POSITION_UNIT_CONFLICT","One or more exact units moved or changed before this operation.");
   if(result.kind==="insufficient_available")fail("INVENTORY_POSITION_INSUFFICIENT_AVAILABLE","The source location does not have enough unreserved stock.");
-  if(result.kind==="incomplete")fail("INVENTORY_POSITION_COUNT_INCOMPLETE","Record every count line before applying corrections.");
+  if(result.kind==="incomplete")fail("INVENTORY_POSITION_COUNT_INCOMPLETE","Count at least one part and finish every selected serialized part before continuing.");
   if(result.kind==="reserved_conflict")fail("INVENTORY_POSITION_COUNT_RESERVED","The counted quantity cannot be lower than stock reserved at this position.");
   if(result.kind==="stock_busy")fail("INVENTORY_POSITION_STOCK_BUSY","This count or its stock is being updated. Wait a moment, then apply this count again.");
   if(result.kind==="stock_conflict")fail("INVENTORY_POSITION_STOCK_CONFLICT","The accounted stock changed before this correction could apply.");

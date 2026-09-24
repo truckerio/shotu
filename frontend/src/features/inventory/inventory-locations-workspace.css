@@ -12,6 +12,8 @@
   min-height: 0;
 }
 .part-positions-panel > header { align-items: center; }
+.part-positions-header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.part-position-visibility-toggle.button { min-height: 44px; padding: 8px 12px; font-size: 13px; }
 .inventory-locations-workspace h2,
 .inventory-locations-workspace h3,
 .inventory-locations-workspace h4,
@@ -180,8 +182,7 @@
   border-radius: 6px;
   font: inherit;
 }
-.inventory-location-detail > form,
-.inventory-location-detail > .position-count-panel {
+.inventory-location-detail > form {
   display: grid;
   gap: 12px;
 }
@@ -335,6 +336,7 @@
   font-weight: 700;
   white-space: nowrap;
 }
+.part-position-empty { margin: 0; padding: 16px; border: 1px dashed #d0d5dd; border-radius: 8px; color: #667085; font-size: 13px; text-align: center; }
 .part-position-move {
   display: grid;
   gap: 12px;
@@ -361,90 +363,79 @@
 .inventory-location-stock-detail > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .inventory-location-stock-detail > header > div { display: grid; gap: 4px; }
 .inventory-location-detail-actions { display: flex !important; align-items: end; justify-content: flex-end; gap: 8px !important; }
+.inventory-location-detail-more { flex: 0 0 auto; margin-bottom: 1px; }
 .inventory-location-stock-detail > header h3, .inventory-location-stock-detail > header p { margin: 0; }
 .inventory-location-stock-detail > header p { color: #667085; font-size: 12px; }
 .inventory-location-stock-detail > header label { display: grid; gap: 5px; color: #475467; font-size: 11px; font-weight: 700; }
 .inventory-location-stock-detail select { min-height: 38px; padding: 0 9px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; font: inherit; }
 .inventory-location-stock-list { min-height: 0; max-height: calc(100dvh - 390px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #e4e7ec; border-radius: 8px; }
-.inventory-location-stock-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto 18px; align-items: center; width: 100%; min-height: 56px; padding: 10px 12px; border: 0; border-top: 1px solid #eaecf0; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.inventory-location-stock-list button:first-child { border-top: 0; }
-.inventory-location-stock-list button:hover { background: #f9fafb; }
-.inventory-location-stock-list button:focus-visible { position: relative; z-index: 1; outline: 2px solid #1570ef; outline-offset: -2px; }
-.inventory-location-stock-list button:disabled { cursor: wait; opacity: .7; }
-.inventory-location-stock-list button > span:first-child { display: grid; gap: 3px; min-width: 0; }
+.inventory-location-stock-list > button { display: grid; grid-template-columns: minmax(0, 1fr) auto 18px; align-items: center; width: 100%; min-height: 56px; padding: 10px 12px; border: 0; border-top: 1px solid #eaecf0; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.inventory-location-stock-list > button:first-child { border-top: 0; }
+.inventory-location-stock-list > button:hover { background: #f9fafb; }
+.inventory-location-stock-list > button:focus-visible { position: relative; z-index: 1; outline: 2px solid #1570ef; outline-offset: -2px; }
+.inventory-location-stock-list > button:disabled { cursor: wait; opacity: .7; }
+.inventory-location-stock-list > button > span:first-child { display: grid; gap: 3px; min-width: 0; }
 .inventory-location-stock-list small { overflow: hidden; color: #667085; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .inventory-location-stock-placements { display: grid; gap: 2px; margin-top: 4px; }
 .inventory-location-stock-placements small { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; white-space: normal; }
 .inventory-location-stock-placements b { color: #344054; font-size: 11px; }
 .inventory-location-stock-placements small > span { color: #667085; }
-.inventory-location-stock-list button > span:nth-child(2) { white-space: nowrap; font-weight: 700; }
-.inventory-location-stock-list button > svg { width: 16px; height: 16px; color: #667085; }
+.inventory-location-stock-list > button > span:nth-child(2) { white-space: nowrap; font-weight: 700; }
+.inventory-location-stock-list > button > svg { width: 16px; height: 16px; color: #667085; }
 .inventory-location-stock-empty { display: grid; gap: 4px; padding: 22px 16px; border: 1px dashed #d0d5dd; border-radius: 8px; color: #475467; text-align: center; }
 .inventory-location-stock-empty p { margin: 0; color: #667085; font-size: 12px; }
 .inventory-location-stock-empty .button { justify-self: center; margin-top: 8px; }
-.position-count-launcher { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 0; border-top: 1px solid #eaecf0; }
-.position-count-launcher h3, .position-count-launcher p { margin: 0; }
-.position-count-launcher p { margin-top: 3px; color: #667085; font-size: 12px; }
-.position-count-panel { min-height: 0; max-height: 52%; padding-top: 14px; overflow-y: auto; border-top: 1px solid #eaecf0; scroll-padding-bottom: 16px; }
-.inventory-location-stock-detail.is-counting .position-count-panel { max-height: none; }
-.position-count-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.position-count-title { display: flex; align-items: flex-start; min-width: 0; gap: 10px; }
-.position-count-title > div { min-width: 0; }
-.position-count-header-actions { display: flex; align-items: center; gap: 8px; }
-.position-count-progress, .inventory-location-count-scope { color: #175cd3; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.position-count-panel > header h3, .position-count-panel > header p { margin: 0; }
-.position-count-panel > header p { margin-top: 3px; color: #667085; font-size: 12px; }
-.position-count-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #667085; font-size: 12px; }
-.position-count-status, .position-count-line-state { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 999px; color: #344054; background: #f2f4f7; font-size: 11px; font-weight: 700; }
-.position-count-status.is-ready, .position-count-status.is-applied, .position-count-line-state.is-observed, .position-count-line-state.is-applied { color: #027a48; background: #ecfdf3; }
-.position-count-status.is-needs_recount, .position-count-line-state.is-needs_recount { color: #b54708; background: #fffaeb; }
-.position-count-lines .position-count-line { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(220px, 280px) minmax(110px, 140px) minmax(80px, auto) auto; align-items: center; gap: 10px; }
-.position-count-lines.is-counting .position-count-line { grid-template-columns: minmax(150px, 1fr) minmax(220px, 300px) auto; }
-.position-count-line > div, .position-count-line > span, .position-count-line > label { display: grid; gap: 3px; min-width: 0; }
-.position-count-line > div small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.position-count-line > span small, .position-count-line > label small { color: #667085; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-.position-count-line input { min-height: 40px; }
-.position-count-counter { display: grid; grid-template-columns: 40px minmax(80px, 1fr) 40px auto; align-items: center; gap: 6px; }
-.position-count-counter button { min-width: 40px; min-height: 40px; border: 1px solid #d0d5dd; border-radius: 6px; color: #344054; background: #fff; font: inherit; font-size: 18px; cursor: pointer; }
-.position-count-counter button:disabled { cursor: default; opacity: .55; }
-.position-count-counter > span { color: #475467; font-size: 12px; font-weight: 700; }
-.position-count-line .is-even { color: #027a48; }
-.position-count-line .is-different { color: #b54708; }
-.position-count-serials { display: grid; gap: 10px; padding: 14px; border: 1px solid #d0d5dd; border-radius: 8px; background: #f9fafb; }
-.position-count-serials > header h4, .position-count-serials > header p { margin: 0; }
-.position-count-serials > header p { margin-top: 3px; color: #667085; font-size: 12px; }
-.position-count-serial-group { display: grid; gap: 8px; padding: 10px; border: 1px solid #eaecf0; border-radius: 7px; background: #fff; }
-.position-count-serial-progress { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.position-count-serial-progress > div { display: grid; gap: 2px; min-width: 0; }
-.position-count-serial-progress small { color: #667085; font-size: 11px; }
-.position-count-serial-progress > span { color: #175cd3; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.position-count-serial-units { display: flex; flex-wrap: wrap; gap: 6px; }
-.position-count-serial-units > span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 8px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.position-count-serial-units > span.is-confirmed { border-color: #6ce9a6; color: #027a48; background: #ecfdf3; }
-.position-count-serial-units small { color: inherit; font-family: inherit; font-size: 9px; text-transform: uppercase; }
-.position-count-serial-entry { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: end; gap: 8px; }
-.position-count-mode { display: inline-flex; min-height: 44px; padding: 3px; border: 1px solid #d0d5dd; border-radius: 7px; background: #fff; }
-.position-count-mode button { min-height: 36px; padding: 0 10px; border: 0; border-radius: 5px; color: #475467; background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.position-count-mode button[aria-pressed="true"] { color: #175cd3; background: #eff8ff; }
-.position-count-serial-entry label { display: grid; gap: 5px; }
-.position-count-serial-entry input { min-height: 44px; }
-.position-count-feedback { margin: 0; padding: 9px 10px; border-radius: 6px; color: #027a48; background: #ecfdf3; font-size: 12px; }
-.position-count-feedback.is-duplicate { color: #175cd3; background: #eff8ff; }
-.position-count-feedback.is-error { color: #b42318; background: #fef3f2; }
-.position-count-found { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border: 1px dashed #98a2b3; border-radius: 8px; background: #fcfcfd; }
-.position-count-found-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.position-count-found-heading h4, .position-count-found-heading p, .position-count-found-serialized p { margin: 0; }
-.position-count-found-heading p { margin-top: 3px; color: #667085; font-size: 12px; }
-.position-count-found > form { display: grid; gap: 10px; }
-.position-count-found > form > label { display: grid; gap: 5px; color: #344054; font-size: 12px; font-weight: 700; }
-.position-count-found-quantity { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
-.position-count-found-quantity input { min-height: 44px; }
-.position-count-found-serialized { display: grid; gap: 10px; padding: 10px; border-radius: 7px; color: #344054; background: #fffaeb; font-size: 12px; }
-.position-count-found-serialized > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.position-count-review-action { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid #b2ddff; border-radius: 8px; background: #eff8ff; }
-.position-count-review-action strong, .position-count-review-action p { margin: 0; }
-.position-count-review-action p { margin-top: 3px; color: #475467; font-size: 12px; }
+.inventory-location-count-actions { display: flex !important; grid-auto-flow: column; align-items: center; justify-content: end; gap: 8px !important; }
+.inventory-location-count-scope { color: #175cd3; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.position-count-error { margin: 0; }
+.position-count-recount { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #fedf89; border-radius: 8px; background: #fffaeb; }
+.position-count-recount p { margin: 0; color: #93370d; font-size: 12px; }
+.inventory-location-count-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, auto); align-items: center; min-height: 56px; padding: 10px 12px; border-top: 1px solid #eaecf0; background: #fff; }
+.inventory-location-count-row:first-child { border-top: 0; }
+.inventory-location-count-row.is-counted { background: #f6fef9; }
+.inventory-location-count-part { display: grid; gap: 3px; min-width: 0; }
+.inventory-location-count-editor { display: grid; grid-template-columns: minmax(90px, 160px) auto 40px 40px; align-items: center; justify-content: end; gap: 6px; }
+.inventory-location-count-editor input { width: 100%; min-height: 40px; }
+.inventory-location-count-editor > span { color: #475467; font-size: 12px; font-weight: 700; }
+.inventory-location-count-trigger, .inventory-location-count-summary { border: 0; border-radius: 6px; color: #101828; background: transparent; font: inherit; cursor: pointer; }
+.inventory-location-count-trigger { display: grid; justify-items: end; min-height: 44px; padding: 4px 8px; }
+.inventory-location-count-trigger > span { font-weight: 700; }
+.inventory-location-count-trigger > small { color: #175cd3; font-size: 11px; font-weight: 700; }
+.inventory-location-count-trigger:hover, .inventory-location-count-summary:hover { background: #eff8ff; }
+.inventory-location-count-trigger:focus-visible, .inventory-location-count-summary:focus-visible { outline: 2px solid #1570ef; outline-offset: 1px; }
+.inventory-location-count-summary { display: grid; grid-template-columns: repeat(3, minmax(72px, auto)); gap: 14px; padding: 5px 8px; text-align: left; }
+.inventory-location-count-summary > span { display: grid; gap: 2px; }
+.inventory-location-count-summary small, .position-count-review-lines small { color: #667085; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.is-even { color: #027a48; }
+.is-different { color: #b54708; }
+.inventory-location-serial-count-row { grid-template-columns: minmax(0, 1fr) auto; }
+.inventory-location-serial-editor { grid-column: 1 / -1; display: grid; gap: 8px; padding-top: 10px; }
+.inventory-location-serial-units { display: flex; flex-wrap: wrap; gap: 6px; }
+.inventory-location-serial-units > span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 8px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.inventory-location-serial-units > span.is-confirmed { border-color: #6ce9a6; color: #027a48; background: #ecfdf3; }
+.inventory-location-serial-units small { color: inherit; font-size: 9px; text-transform: uppercase; }
+.inventory-location-serial-editor form { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 8px; }
+.inventory-location-serial-editor form > div { display: flex; min-height: 40px; padding: 3px; border: 1px solid #d0d5dd; border-radius: 7px; }
+.inventory-location-serial-editor form > div button { border: 0; border-radius: 5px; background: transparent; font: inherit; font-size: 11px; font-weight: 700; }
+.inventory-location-serial-editor form > div button[aria-pressed="true"] { color: #175cd3; background: #eff8ff; }
+.inventory-location-serial-editor input { width: 100%; min-height: 40px; }
+.position-count-help { margin: 0; color: #667085; font-size: 12px; }
+.position-count-starting { padding: 16px; color: #667085; text-align: center; }
+.position-count-review-overlay { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 16px; background: rgb(16 24 40 / 52%); }
+.position-count-review-modal { width: min(760px, 100%); max-height: min(760px, calc(100dvh - 32px)); }
+.position-count-review-dialog { display: grid; gap: 16px; max-height: inherit; padding: 20px; overflow: hidden; border-radius: 12px; background: #fff; box-shadow: 0 24px 48px rgb(16 24 40 / 22%); }
+.position-count-review-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.position-count-review-dialog h2, .position-count-review-dialog header p { margin: 0; }
+.position-count-review-dialog header p { margin-top: 4px; color: #667085; font-size: 13px; }
+.position-count-review-lines { min-height: 0; overflow: auto; border: 1px solid #eaecf0; border-radius: 8px; }
+.position-count-review-lines > div { display: grid; grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(84px, auto)); align-items: center; gap: 12px; padding: 11px 12px; border-top: 1px solid #eaecf0; }
+.position-count-review-lines > div:first-child { border-top: 0; }
+.position-count-review-lines span { display: grid; gap: 2px; min-width: 0; }
+.position-count-review-lines span:first-child small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.position-count-review-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 700px) {
+  .part-positions-panel > header { align-items: stretch; flex-direction: column; }
+  .part-positions-header-actions { justify-content: space-between; }
   .inventory-location-stock-workspace { height: auto; min-height: 0; }
   .inventory-location-stock-layout { height: auto; }
   .inventory-locations-workspace > header {
@@ -482,22 +473,20 @@
   .inventory-location-stock-detail > header label { width: 100%; }
   .inventory-location-stock-detail { height: auto; overflow: visible; }
   .inventory-location-stock-list { max-height: min(60dvh, 620px); }
-  .position-count-launcher { align-items: stretch; flex-direction: column; }
-  .position-count-launcher .button { width: 100%; min-height: 44px; justify-content: center; }
-  .position-count-panel { max-height: none; overflow: visible; }
-  .position-count-panel > header { align-items: stretch; flex-direction: column; }
-  .position-count-title, .position-count-header-actions, .position-count-found-heading { align-items: stretch; flex-direction: column; }
-  .position-count-header-actions .button, .position-count-found-heading .button, .position-count-found > form > .button { width: 100%; min-height: 44px; justify-content: center; }
-  .position-count-panel > header .button { min-height: 44px; width: 100%; justify-content: center; }
-  .position-count-lines .position-count-line, .position-count-lines.is-counting .position-count-line { grid-template-columns: minmax(0, 1fr); }
-  .position-count-line > div { grid-column: 1 / -1; }
-  .position-count-line input { min-height: 44px; }
-  .position-count-line-state { justify-self: start; }
-  .position-count-counter { grid-template-columns: 44px minmax(0, 1fr) 44px auto; }
-  .position-count-counter button { min-width: 44px; min-height: 44px; }
-  .position-count-serial-progress { align-items: stretch; flex-direction: column; }
-  .position-count-serial-progress > span { white-space: normal; }
-  .position-count-serial-entry { grid-template-columns: minmax(0, 1fr); }
-  .position-count-mode, .position-count-serial-entry .button { width: 100%; min-height: 44px; }
-  .position-count-mode button { flex: 1; }
+  .inventory-location-detail-more { align-self: end; min-width: 44px; min-height: 44px; margin: 0; }
+  .inventory-location-count-actions { grid-auto-flow: row; justify-items: stretch; }
+  .inventory-location-count-actions .button { width: 100%; min-height: 44px; justify-content: center; }
+  .inventory-location-count-scope { white-space: normal; }
+  .inventory-location-count-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .inventory-location-count-trigger { justify-items: start; width: 100%; }
+  .inventory-location-count-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .inventory-location-count-editor { grid-template-columns: minmax(0, 1fr) auto 44px 44px; justify-content: stretch; }
+  .inventory-location-count-editor input { min-height: 44px; }
+  .inventory-location-serial-editor form { grid-template-columns: minmax(0, 1fr); }
+  .inventory-location-serial-editor form > div, .inventory-location-serial-editor .button { width: 100%; min-height: 44px; }
+  .inventory-location-serial-editor form > div button { flex: 1; }
+  .position-count-review-lines > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .position-count-review-lines > div > span:first-child { grid-column: 1 / -1; }
+  .position-count-review-dialog > footer { flex-direction: column-reverse; }
+  .position-count-review-dialog > footer .button { width: 100%; min-height: 44px; justify-content: center; }
 }

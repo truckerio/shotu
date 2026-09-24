@@ -59,18 +59,20 @@
 .inventory-commercial-secondary > .inventory-commercial-details > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .inventory-commercial-editors { display: grid; }
 .inventory-commercial-price-heading { display: flex; align-items: center; gap: 8px; }
-.inventory-commercial-price-fields { display: grid; grid-template-columns: minmax(120px, 1fr) 140px auto auto; align-items: end; gap: 10px; }
+.inventory-commercial-price-fields { display: grid; grid-template-columns: minmax(120px, 1fr) 140px auto auto; align-items: end; gap: 10px; min-width: 0; max-width: 100%; }
 .inventory-commercial-price-fields label { display: grid; gap: 4px; min-width: 0; color: #344054; font-size: 12px; font-weight: 700; }
 .inventory-commercial-price-fields input { width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #98a2b3; border-radius: 8px; color: #101828; background: #fff; font: inherit; }
 .inventory-commercial-price-fields input:focus-visible { outline: 3px solid #84caff; outline-offset: 1px; }
 .inventory-commercial-price-fields .dropdown-select-trigger { min-height: 44px; }
 .inventory-commercial-price-fields > small { display: flex; align-items: center; min-height: 44px; white-space: nowrap; }
 .inventory-commercial-price-fields > .button { min-width: 76px; }
+.inventory-commercial-history, .inventory-commercial-configured-history { min-width: 0; max-width: 100%; }
+.inventory-commercial-history-table { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+.inventory-commercial-history-table .operational-data-table { min-width: 0; table-layout: fixed; }
 @media (max-width: 640px) {
   .inventory-commercial-price-fields { grid-template-columns: minmax(0, 1fr) minmax(120px, .7fr); }
   .inventory-commercial-price-fields > small { grid-column: 1; min-height: auto; }
   .inventory-commercial-price-fields > .button { grid-column: 2; grid-row: 2; }
-  .inventory-commercial-history-table { min-width: 0; }
   .inventory-commercial-history-table [role="row"] { min-width: 0; }
   .inventory-commercial-history-table [role="cell"], .inventory-commercial-history-table [role="rowheader"] { overflow-wrap: anywhere; }
 }

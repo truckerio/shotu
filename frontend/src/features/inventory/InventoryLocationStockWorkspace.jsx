@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronRight, MarkerPin01, RefreshCw01 } from "@untitledui/icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ChevronDown, ChevronRight, ClipboardCheck, DotsVertical, MarkerPin01, RefreshCw01 } from "@untitledui/icons";
+import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { Button } from "../../components/ui/Button.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
@@ -33,7 +34,7 @@ function arrivalTarget(position, positionId) {
   return { positionId };
 }
 
-export function InventoryLocationStockWorkspace({ locations = [], initialShopId = "", initialPositionId = "", refreshKey = 0, canApplyInventoryCount = false, onShopChange, onOpenPart, onAddStock, onOpenStartingInventory }) {
+export function InventoryLocationStockWorkspace({ locations = [], initialShopId = "", initialPositionId = "", refreshKey = 0, canApplyInventoryCount = false, onShopChange, onOpenPart, onAddStock }) {
   const [shopId, setShopId] = useState(initialShopId);
   const [positions, setPositions] = useState([]);
   const [selectedPositionId, setSelectedPositionId] = useState("");
@@ -45,8 +46,9 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
   const [error, setError] = useState("");
   const [stockRefreshKey, setStockRefreshKey] = useState(0);
   const [openingPartId, setOpeningPartId] = useState("");
-  const [countMode, setCountMode] = useState(false);
+  const [countMode, setCountMode] = useState({ active: false, selectedCount: 0, busy: false });
   const [initialPositionPending, setInitialPositionPending] = useState(Boolean(initialPositionId));
+  const countPanelRef = useRef(null);
   const selected = positions.find((entry) => locationId(entry) === selectedPositionId) || null;
   const selectedHasChildren = Boolean(selected && positions.some((entry) => entry.isActive !== false && String(entry.parentId || "") === selectedPositionId));
   const selectedIsCountableLeaf = Boolean(selected?.canStore === true && !selectedHasChildren);
@@ -105,7 +107,7 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
     setExpandedPositionIds(new Set());
     setStock([]);
     setError("");
-    setCountMode(false);
+    setCountMode({ active: false, selectedCount: 0, busy: false });
     onShopChange?.(nextShopId);
   }
   function closeShop() {
@@ -115,12 +117,12 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
     setSelectedPositionId("");
     setStock([]);
     setError("");
-    setCountMode(false);
+    setCountMode({ active: false, selectedCount: 0, busy: false });
     onShopChange?.("");
     window.requestAnimationFrame(() => document.getElementById(`inventory-stock-shop-${returnId}`)?.focus({ preventScroll: true }));
   }
   function selectPosition(id) {
-    setCountMode(false);
+    setCountMode({ active: false, selectedCount: 0, busy: false });
     setSelectedPositionId(id);
     window.requestAnimationFrame(() => document.getElementById("inventory-location-stock-detail")?.focus({ preventScroll: true }));
   }
@@ -211,13 +213,13 @@ export function InventoryLocationStockWorkspace({ locations = [], initialShopId 
           </div>; })}
         </div> : <p>No storage locations yet.</p>}
       </section>
-      {selected ? <section className={`inventory-location-detail inventory-location-stock-detail${countMode ? " is-counting" : ""}`} id="inventory-location-stock-detail" tabIndex="-1" aria-live="polite">
-        <IconButton className="inventory-location-detail-back" icon={ArrowLeft} label="Back to location hierarchy" onClick={() => { setCountMode(false); setSelectedPositionId(""); }} />
-        <header><div><h3>{locationName(selected)}</h3><p>{locationPathLabel(selected, positions)}</p></div>{countMode ? <span className="inventory-location-count-scope">Counting this exact location</span> : <div className="inventory-location-detail-actions">{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}<label>Include <Dropdown value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Stock scope"><option value="subtree">This location and sublocations</option><option value="direct">This location only</option></Dropdown></label></div>}</header>
-        {!countMode && (loadingStock ? <p role="status"><RefreshCw01 className="loading-icon" /> Loading stock…</p> : stock.length ? <div className="inventory-location-stock-list">
+      {selected ? <section className={`inventory-location-detail inventory-location-stock-detail${countMode.active ? " is-counting" : ""}`} id="inventory-location-stock-detail" tabIndex="-1" aria-live="polite">
+        <IconButton className="inventory-location-detail-back" icon={ArrowLeft} label="Back to location hierarchy" onClick={() => { setCountMode({ active: false, selectedCount: 0, busy: false }); setSelectedPositionId(""); }} />
+        <header><div><h3>{locationName(selected)}</h3><p>{locationPathLabel(selected, positions)}</p></div>{countMode.active ? <div className="inventory-location-count-actions"><span className="inventory-location-count-scope">Counting this exact location · {countMode.selectedCount} selected</span><Button type="button" onClick={() => countPanelRef.current?.exit()} disabled={countMode.busy}>Exit count</Button><Button type="button" variant="primary" onClick={() => countPanelRef.current?.review()} disabled={countMode.busy || countMode.selectedCount === 0}>Review count ({countMode.selectedCount})</Button></div> : <div className="inventory-location-detail-actions">{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}<label>Include <Dropdown value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Stock scope"><option value="subtree">This location and sublocations</option><option value="direct">This location only</option></Dropdown></label>{selectedIsCountableLeaf ? <MenuTrigger><AriaButton className="shared-icon-button is-neutral inventory-location-detail-more" aria-label={`More actions for ${locationName(selected)}`} title={`More actions for ${locationName(selected)}`}><DotsVertical aria-hidden="true" /></AriaButton><Popover className="inventory-location-actions-popover" placement="bottom end"><Menu className="inventory-location-actions-menu" aria-label={`More actions for ${locationName(selected)}`}><MenuItem className="inventory-location-actions-item" onAction={() => countPanelRef.current?.open()} textValue="Physical count"><ClipboardCheck aria-hidden="true" /><span>Physical count</span></MenuItem></Menu></Popover></MenuTrigger> : null}</div>}</header>
+        {!countMode.active && (loadingStock ? <p role="status"><RefreshCw01 className="loading-icon" /> Loading stock…</p> : stock.length ? <div className="inventory-location-stock-list">
           {stock.map((item) => { const id = item.catalogPartId || item.partId || item.id || item.partNumber; const placements=item.placements||[]; return <button type="button" key={id} onClick={() => openPart(item)} disabled={!onOpenPart || Boolean(openingPartId)} aria-label={`Open details for ${item.partNumber || item.code || "part"} at ${locationName(selected)}`}><span><strong>{item.partNumber || item.code || "Part"}</strong><small>{item.description || item.name || "No description"}</small>{placements.length ? <span className="inventory-location-stock-placements">{placements.map((placement)=><small key={placement.positionId}><b>{compactPlacementPath(placement,scope === "subtree" && placement.depth > 0)}</b><span>{placement.name && placement.name !== placement.code ? `${placement.name} · ` : ""}{quantity(placement.quantity)} {item.uomCode || ""}</span></small>)}</span>:null}</span><span>{openingPartId === id ? "Opening…" : `${quantity(scope === "subtree" ? item.subtreeQuantity : item.directQuantity)} ${item.uomCode || ""}`}</span><ChevronRight aria-hidden="true" /></button>; })}
         </div> : <div className="inventory-location-stock-empty"><strong>No stock in this scope</strong><p>{selectedArrivalTarget ? "Receive new goods here or start a physical count to certify what is present." : selected.canStore ? "Start a physical count to certify what is present in this location." : "Choose a broader scope or select a stock-holding location."}</p>{selectedArrivalTarget ? <Button type="button" variant="primary" onClick={() => addStockHere()}>Add stock here</Button> : null}</div>)}
-        {selectedIsCountableLeaf ? <PositionCountPanel key={`${shopId}:${selectedPositionId}`} location={{ id: shopId }} position={selected} initialOpen={Boolean(initialPositionId && initialPositionId === selectedPositionId)} canApplyInventoryCount={canApplyInventoryCount} onModeChange={setCountMode} onAddStock={(part) => addStockHere(part)} onOpenStartingInventory={() => onOpenStartingInventory?.(shopId)} onChanged={() => setStockRefreshKey((value) => value + 1)} /> : null}
+        {selectedIsCountableLeaf ? <PositionCountPanel ref={countPanelRef} key={`${shopId}:${selectedPositionId}`} location={{ id: shopId }} position={selected} initialOpen={Boolean(initialPositionId && initialPositionId === selectedPositionId)} canApplyInventoryCount={canApplyInventoryCount} onModeChange={setCountMode} onChanged={() => setStockRefreshKey((value) => value + 1)} /> : null}
       </section> : null}
     </div>
   </section>;

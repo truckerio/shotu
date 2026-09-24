@@ -178,7 +178,9 @@ async function assertCountEntryPoints(page, config, fixture) {
     assert.equal(await page.getByRole("button", { name: "Physical count", exact: true }).count(), 0, "Parent locations must not expose Physical count.");
     step = "select exact count bin";
     await page.locator(`#inventory-stock-position-button-${fixture.otherBin}`).click();
-    await page.getByRole("button", { name: "Physical count", exact: true }).waitFor();
+    await page.getByRole("button", { name: "More actions for Bin 2", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Physical count", exact: true }).waitFor();
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Tasks", exact: true }).click();
     step = "open Tasks physical counts";
     await page.getByRole("button", { name: "Physical counts", exact: true }).click();
@@ -198,11 +200,12 @@ async function assertCountEntryPoints(page, config, fixture) {
 }
 
 async function enterAggregate(page, fixture, value) {
+  const row = page.locator(".inventory-location-count-row").filter({ hasText: fixture.aggregateNumber });
+  await row.getByRole("button", { name: /Count this part/ }).click();
   const input = page.getByLabel(`Counted quantity for ${fixture.aggregateNumber}`, { exact: true });
   await input.fill(String(value));
-  await input.focus();
-  await page.keyboard.press("Enter");
-  await page.locator(".position-count-line-state", { hasText: "Saved" }).waitFor();
+  await row.getByRole("button", { name: `Save counted quantity for ${fixture.aggregateNumber}`, exact: true }).click();
+  await row.getByText("Counted", { exact: true }).waitFor();
 }
 
 async function assertInlineLocationHeader(page, fixture, locationName) {
@@ -220,25 +223,6 @@ async function assertInlineLocationHeader(page, fixture, locationName) {
   await page.getByRole("button", { name: "Close part details", exact: true }).click();
 }
 
-async function serial(page, value, expectedFeedback) {
-  const input = page.getByLabel(/Scan serial or barcode|Serial number/, { exact: true });
-  await input.fill(value);
-  await input.focus();
-  await page.keyboard.press("Enter");
-  await page.locator(".position-count-feedback", { hasText: expectedFeedback }).waitFor();
-}
-
-async function completeCount(page, fixture, expectedAggregate) {
-  await enterAggregate(page, fixture, expectedAggregate);
-  await serial(page, fixture.serial1, "confirmed");
-  await serial(page, fixture.serial1, "already confirmed");
-  await serial(page, fixture.wrongSerial, "belongs to another location");
-  await serial(page, fixture.unknownSerial, "was not found");
-  await page.getByRole("button", { name: "Manual", exact: true }).click();
-  await serial(page, fixture.serial2, "confirmed");
-  await page.getByText("2 of 2 confirmed", { exact: true }).waitFor();
-}
-
 async function runViewport(browser, pool, client, config, fixture) {
   const context = await browser.newContext({ storageState: await client.storageState(), viewport: fixture.viewport });
   const page = await context.newPage(); const pageErrors = [];
@@ -248,41 +232,31 @@ async function runViewport(browser, pool, client, config, fixture) {
     await openByLocation(page, config, fixture);
     await assertInlineLocationHeader(page, fixture, config.locationName);
     await page.getByRole("button", { name: "Add stock", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Physical count", exact: true }).waitFor();
     await page.getByRole("button", { name: "Add stock here", exact: true }).first().waitFor();
-    await page.getByRole("button", { name: "Physical count", exact: true }).click();
-    await page.getByText("In progress", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Add found part", exact: true }).click();
-    await page.getByRole("combobox", { name: "Choose a found master catalog part", exact: true }).waitFor();
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, `Found-part controls overflow at ${fixture.viewport.width}px`);
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await completeCount(page, fixture, 4);
+    await page.getByRole("button", { name: "More actions for Bin 1", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Physical count", exact: true }).click();
+    await page.getByText("Select only the parts you physically checked.", { exact: false }).waitFor();
+    await enterAggregate(page, fixture, 4);
+    await page.getByText("On hand", { exact: true }).waitFor();
+    await page.getByText("Variance", { exact: true }).waitFor();
+    assert.equal(await page.getByText(fixture.serial1, { exact: true }).count(), 0, "Untouched serialized identities must stay collapsed.");
     await moveAggregateAfterObservation(pool, fixture, client.actor.id);
-    await page.getByRole("button", { name: "Finish count", exact: true }).click();
-    await page.getByText("Needs recount", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Count stock again", exact: true }).click();
-    await page.getByText("In progress", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Review count (1)", exact: true }).click();
+    await page.getByText("1 untouched part stays unchanged.", { exact: false }).waitFor();
+    await page.getByRole("button", { name: "Apply 1 count", exact: true }).click();
+    await page.getByText("A selected part moved after it was counted.", { exact: false }).waitFor();
+    await page.getByRole("button", { name: "Start recount", exact: true }).click();
     await enterAggregate(page, fixture, 2);
-    await serial(page, fixture.serial1, "confirmed");
-    await page.getByRole("button", { name: "Manual", exact: true }).click();
-    await serial(page, fixture.serial2, "confirmed");
     const beforeSubmit = await pool.query("select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3", [fixture.company_id, fixture.bin, fixture.aggregateItem]);
     assert.equal(beforeSubmit.rows[0].quantity, "3.000");
-    await page.getByRole("button", { name: "Finish count", exact: true }).click();
-    await page.getByText("Submitted for review", { exact: true }).waitFor();
-    await page.getByText("System snapshot", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Review count (1)", exact: true }).click();
+    await page.getByText("1 untouched part stays unchanged.", { exact: false }).waitFor();
     const afterSubmit = await pool.query("select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3", [fixture.company_id, fixture.bin, fixture.aggregateItem]);
     assert.equal(afterSubmit.rows[0].quantity, "3.000", "submitting observations must not change inventory");
-    await page.getByRole("button", { name: "Reconcile inventory", exact: true }).click();
-    await page.getByText("Applied", { exact: true }).waitFor();
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page.getByRole("group", { name: "Inventory stock view" }).getByRole("button", { name: "By location", exact: true }).click();
-    await page.getByRole("button", { name: new RegExp(config.locationName, "i") }).click();
-    for (const id of [fixture.warehouse, fixture.area, fixture.aisle, fixture.shelf]) await page.locator(`#inventory-stock-position-${id} .inventory-location-tree-toggle`).click();
-    await page.locator(`#inventory-stock-position-button-${fixture.bin}`).click();
-    await page.getByRole("button", { name: "Resume count", exact: true }).click();
-    await page.getByText(/Physical count correction/, { exact: false }).waitFor();
-    await page.getByText(/Applied by QA Admin/).waitFor();
+    await page.getByRole("button", { name: "Apply 1 count", exact: true }).click();
+    await page.getByRole("button", { name: "More actions for Bin 1", exact: true }).waitFor();
+    const afterApply = await pool.query("select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3", [fixture.company_id, fixture.bin, fixture.aggregateItem]);
+    assert.equal(afterApply.rows[0].quantity, "2.000");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, `Horizontal overflow at ${fixture.viewport.width}px`);
     const evidence = await pool.query(`select status,apply_reason,created_by,submitted_by,applied_by,submitted_at is not null submitted from inventory_position_count_sessions where company_id=$1 and position_id=$2 order by created_at desc limit 1`, [fixture.company_id, fixture.bin]);
     assert.equal(evidence.rows[0].status, "applied");
@@ -292,7 +266,9 @@ async function runViewport(browser, pool, client, config, fixture) {
     assert.equal(evidence.rows[0].applied_by, client.actor.id);
     assert.equal(evidence.rows[0].submitted, true);
     assert.deepEqual(pageErrors, []);
-    return { viewport: `${fixture.viewport.width}x${fixture.viewport.height}`, countEntryPoints: true, nestedKeyboard: true, directAndSubtree: true, inlineLocationHeader: true, serialized: true, observationOnlySubmit: true, adminReconciliation: true, recountAndReload: true };
+    return { viewport: `${fixture.viewport.width}x${fixture.viewport.height}`, countEntryPoints: true, nestedKeyboard: true, directAndSubtree: true, inlineLocationHeader: true, selectiveAggregate: true, untouchedSerialized: true, adminReconciliation: true, selectedPartRecount: true };
+  } catch (error) {
+    throw new Error(`${error.message}. URL: ${page.url()}. Page: ${(await page.locator("body").innerText()).slice(0,2400)}`, { cause: error });
   } finally { await context.close(); }
 }
 

@@ -79,7 +79,7 @@ test("real PostgreSQL conserves moves and applies a watermark-safe aggregate cou
   }
 });
 
-test("a new SKU invalidates the whole count, restart supersedes it, and open counts block archive",{skip:!run},async()=>{
+test("a selective count ignores unselected SKU movement, changes only the observed part, and open counts block archive",{skip:!run},async()=>{
   const suffix=randomUUID().replaceAll("-","");const actorId=randomUUID(),companyId=randomUUID(),locationId=randomUUID(),partA=randomUUID(),partB=randomUUID();
   const scope={actorId,companyIds:[companyId],locationIds:[locationId],isAdmin:false,locationId};
   try{
@@ -98,29 +98,30 @@ test("a new SKU invalidates the whole count, restart supersedes it, and open cou
     const setup=await (await import("../../db/pool.js")).getPool().connect();let sourceId;
     try{await setup.query("begin");sourceId=await ensureSystemInventoryPosition(setup,{companyId,locationId,systemKey:"unassigned"});
       await setup.query(`insert into inventory_position_balances(company_id,location_id,position_id,inventory_item_id,catalog_part_id,uom_code,quantity)
-        values($1,$2,$3,$4,$5,'ea',6),($1,$2,$6,$4,$5,'ea',4),($1,$2,$3,$7,$8,'ea',10)`,
+        values($1,$2,$3,$4,$5,'ea',6),($1,$2,$6,$4,$5,'ea',4),($1,$2,$3,$7,$8,'ea',8),($1,$2,$6,$7,$8,'ea',2)`,
       [companyId,locationId,sourceId,itemByPart.get(partA),partA,bin.position.id,itemByPart.get(partB),partB]);await setup.query("commit");}finally{setup.release();}
     const count=await createPositionCount({...scope,positionId:bin.position.id,idempotencyKey:`count-${suffix}`});
-    const line=count.count.lines[0];
+    assert.equal(count.count.lines.length,2);
+    const line=count.count.lines.find((entry)=>entry.partId===partA);
     await savePositionCountObservation({...scope,countId:count.count.id,lineId:line.id,expectedVersion:line.version,observedQuantity:3,idempotencyKey:`observe-${suffix}`});
-    const moved=await moveInventoryStock({...scope,partId:partB,move:{fromPositionId:sourceId,toPositionId:bin.position.id,quantity:2,expectedSourceVersion:1,expectedDestinationVersion:null,idempotencyKey:`move-b-${suffix}`,reason:"Move new SKU during count"}});
+    const moved=await moveInventoryStock({...scope,partId:partB,move:{fromPositionId:sourceId,toPositionId:bin.position.id,quantity:2,expectedSourceVersion:1,expectedDestinationVersion:1,idempotencyKey:`move-b-${suffix}`,reason:"Move unselected SKU during count"}});
     assert.equal(moved.kind,"moved");
     const refreshed=await getPositionCount({...scope,countId:count.count.id});
     const apply=await applyPositionCountCorrection({...scope,isAdmin:true,countId:count.count.id,expectedVersion:refreshed.version,idempotencyKey:`apply-${suffix}`,reason:"Count with concurrent SKU"});
-    assert.equal(apply.kind,"needs_recount");
-    assert.equal((await query(`select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3`,[companyId,bin.position.id,itemByPart.get(partA)])).rows[0].quantity,"4.000");
-    assert.equal((await query(`select quantity_on_hand from inventory_items where id=$1`,[itemByPart.get(partA)])).rows[0].quantity_on_hand,"10.000");
-    const restarted=await createPositionCount({...scope,positionId:bin.position.id,idempotencyKey:`restart-${suffix}`});
-    assert.equal(restarted.count.lines.length,2);
+    assert.equal(apply.kind,"applied");
+    assert.equal((await query(`select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3`,[companyId,bin.position.id,itemByPart.get(partA)])).rows[0].quantity,"3.000");
+    assert.equal((await query(`select quantity_on_hand from inventory_items where id=$1`,[itemByPart.get(partA)])).rows[0].quantity_on_hand,"9.000");
+    assert.equal((await query(`select quantity from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=$3`,[companyId,bin.position.id,itemByPart.get(partB)])).rows[0].quantity,"4.000");
+    assert.equal((await query(`select quantity_on_hand from inventory_items where id=$1`,[itemByPart.get(partB)])).rows[0].quantity_on_hand,"10.000");
+    const nextCount=await createPositionCount({...scope,positionId:bin.position.id,idempotencyKey:`next-count-${suffix}`});
+    assert.equal(nextCount.count.lines.length,2);
     const old=await getPositionCount({...scope,countId:count.count.id});
-    assert.equal(old.status,"superseded");
+    assert.equal(old.status,"applied");
     const emptyCount=await createPositionCount({...scope,positionId:empty.position.id,idempotencyKey:`empty-count-${suffix}`});
     assert.equal(emptyCount.count.status,"open");
-    assert.equal((await applyPositionCountCorrection({...scope,isAdmin:true,countId:emptyCount.count.id,expectedVersion:emptyCount.count.version,idempotencyKey:`empty-apply-${suffix}`,reason:"Certified empty"})).kind,"applied");
-    const emptyEvidence=await getPositionCount({...scope,countId:emptyCount.count.id});
-    assert.equal(emptyEvidence.status,"applied");assert.match(emptyEvidence.applyReason,/Physical count (verified|correction)/);assert.equal(emptyEvidence.appliedBy.id,actorId);
+    assert.equal((await applyPositionCountCorrection({...scope,isAdmin:true,countId:emptyCount.count.id,expectedVersion:emptyCount.count.version,idempotencyKey:`empty-apply-${suffix}`,reason:"Certified empty"})).kind,"incomplete");
     const archive=await patchInventoryPosition({...scope,positionId:empty.position.id,expectedVersion:empty.position.version,isActive:false});
-    assert.equal(archive.kind,"updated");
+    assert.equal(archive.kind,"archive_blocked");
     const assetId=randomUUID(),workorderId=randomUUID();
     await query("insert into assets(id,company_id,location_id,provider,name,unit_no) values($1,$2,$3,'manual','Legacy truck',$4)",[assetId,companyId,locationId,`L-${suffix}`]);
     await query(`insert into operational_workorders(id,company_id,serial,asset_id,location_id,created_by_user_id,concern,status)

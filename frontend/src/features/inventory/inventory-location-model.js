@@ -238,6 +238,9 @@ export function destinationPositions(positions = []) {
     (position) => position?.canStore === true && position?.isActive !== false,
   );
 }
+export function occupiedPositions(positions = []) {
+  return positions.filter((position) => Number(position?.quantity || 0) > 0);
+}
 export function moveDestinations(positions = [], sourcePositionId = "") {
   return destinationPositions(positions).filter(
     (position) =>

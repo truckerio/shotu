@@ -726,22 +726,29 @@ export async function submitPositionCountObservations(input){const client=await 
   if(prior.rows[0]){await client.query("commit");return prior.rows[0].request_hash===requestHash?{kind:"replay"}:{kind:"idempotency_conflict"};}
   const selected=await client.query(`select session.*,position.code position_code,position.name position_name from inventory_position_count_sessions session join inventory_positions position on position.company_id=session.company_id and position.id=session.position_id where session.id=$1 and session.company_id=any($2::uuid[]) and ($4::boolean or session.location_id=any($3::uuid[])) for update of session`,[input.countId,input.companyIds,input.locationIds,input.isAdmin]);
   const session=selected.rows[0];if(!session){await client.query("rollback");return{kind:"not_found"};}if(session.version!==input.expectedVersion||session.status!=="open"){await client.query("rollback");return{kind:"stale"};}
-  const lines=await client.query(`select * from inventory_position_count_lines where company_id=$1 and session_id=$2 order by inventory_item_id,id for update`,[session.company_id,session.id]);
-  if(lines.rows.some((line)=>line.observed_quantity===null)){await client.query("rollback");return{kind:"incomplete"};}
-  const itemIds=lines.rows.map((line)=>line.inventory_item_id);
+  const lineResult=await client.query(`select * from inventory_position_count_lines where company_id=$1 and session_id=$2 and observed_quantity is not null order by inventory_item_id,id for update`,[session.company_id,session.id]);
+  const lines=lineResult.rows;
+  const itemIds=lines.map((line)=>line.inventory_item_id);
   const balances=itemIds.length?await client.query(`select * from inventory_position_balances where company_id=$1 and position_id=$2 and inventory_item_id=any($3::uuid[]) order by inventory_item_id for update`,[session.company_id,session.position_id,itemIds]):{rows:[]};
   const balanceByItem=new Map(balances.rows.map((row)=>[row.inventory_item_id,row]));
-  let needsRecount=lines.rows.some((line)=>{const balance=balanceByItem.get(line.inventory_item_id);return line.line_source==="found"&&Number(line.balance_version)===0&&!balance?false:!balance||balance.version!==line.balance_version;});
-  if(!needsRecount){const changed=await client.query(`select 1 from inventory_position_movements where company_id=$1 and location_id=$2 and event_ordinal>$3 and (from_position_id=$4 or to_position_id=$4) limit 1`,[session.company_id,session.location_id,session.start_watermark,session.position_id]);needsRecount=Boolean(changed.rows[0]);}
-  if(!needsRecount){const uncounted=await client.query(`select 1 from inventory_position_balances balance join parts_catalog part on part.company_id=balance.company_id and part.id=balance.catalog_part_id where balance.company_id=$1 and balance.position_id=$2 and balance.quantity<>0 and part.tracking_mode<>'serialized' and not(balance.inventory_item_id=any($3::uuid[])) limit 1`,[session.company_id,session.position_id,itemIds]);needsRecount=Boolean(uncounted.rows[0]);}
-  const serials=await client.query(`select snapshot.*,unit.current_position_id,unit.location_id unit_location_id,unit.status unit_status,unit.custody_version current_custody_version,unit.updated_at unit_updated_at from inventory_position_count_unit_snapshots snapshot join inventory_serialized_units unit on unit.company_id=snapshot.company_id and unit.id=snapshot.unit_id where snapshot.company_id=$1 and snapshot.session_id=$2 order by snapshot.unit_id for update of snapshot,unit`,[session.company_id,session.id]);
-  if(serials.rows.some((unit)=>!unit.observed_at)){await client.query("rollback");return{kind:"incomplete"};}
-  const currentSerialCount=await client.query(`select count(*)::int count from inventory_serialized_units where company_id=$1 and location_id=$2 and current_position_id=$3 and custody_holder_type='inventory_location'`,[session.company_id,session.location_id,session.position_id]);
-  if(currentSerialCount.rows[0].count!==serials.rowCount||serials.rows.some((unit)=>unit.current_position_id!==session.position_id||unit.unit_location_id!==session.location_id||unit.current_custody_version!==unit.custody_version_snapshot||unit.unit_status!==unit.status_snapshot||new Date(unit.unit_updated_at).getTime()!==new Date(unit.unit_updated_at_snapshot).getTime()))needsRecount=true;
-  const hasDifference=lines.rows.some((line)=>num(line.observed_quantity)!==num(line.expected_quantity));
-  if(needsRecount){await client.query(`update inventory_position_count_lines set status='needs_recount',version=version+1,updated_at=now() where company_id=$1 and session_id=$2`,[session.company_id,session.id]);await client.query(`update inventory_position_count_sessions set status='needs_recount',version=version+1,updated_at=now() where company_id=$1 and id=$2`,[session.company_id,session.id]);}
+  let needsRecount=lines.some((line)=>{const balance=balanceByItem.get(line.inventory_item_id);return line.line_source==="found"&&Number(line.balance_version)===0&&!balance?false:!balance||balance.version!==line.balance_version;});
+  for(const line of lines){
+    const changed=await client.query(`select 1 from inventory_position_movements where company_id=$1 and location_id=$2 and catalog_part_id=$3 and event_ordinal>$4 and (from_position_id=$5 or to_position_id=$5) limit 1`,[session.company_id,session.location_id,line.catalog_part_id,line.observation_watermark??session.start_watermark,session.position_id]);
+    if(changed.rows[0]){needsRecount=true;break;}
+  }
+  const allSerials=await client.query(`select snapshot.*,unit.current_position_id,unit.location_id unit_location_id,unit.status unit_status,unit.custody_version current_custody_version,unit.updated_at unit_updated_at from inventory_position_count_unit_snapshots snapshot join inventory_serialized_units unit on unit.company_id=snapshot.company_id and unit.id=snapshot.unit_id where snapshot.company_id=$1 and snapshot.session_id=$2 order by snapshot.unit_id for update of snapshot,unit`,[session.company_id,session.id]);
+  const selectedSerialPartIds=[...new Set(allSerials.rows.filter((unit)=>unit.observed_at).map((unit)=>unit.catalog_part_id))];
+  const serials=allSerials.rows.filter((unit)=>selectedSerialPartIds.includes(unit.catalog_part_id));
+  if(!lines.length&&!selectedSerialPartIds.length){await client.query("rollback");return{kind:"incomplete"};}
+  if(serials.some((unit)=>!unit.observed_at)){await client.query("rollback");return{kind:"incomplete"};}
+  if(selectedSerialPartIds.length){
+    const currentSerialCount=await client.query(`select count(*)::int count from inventory_serialized_units unit join inventory_receipt_lines line on line.company_id=unit.company_id and line.id=unit.receipt_line_id where unit.company_id=$1 and unit.location_id=$2 and unit.current_position_id=$3 and unit.custody_holder_type='inventory_location' and line.catalog_part_id=any($4::uuid[])`,[session.company_id,session.location_id,session.position_id,selectedSerialPartIds]);
+    if(currentSerialCount.rows[0].count!==serials.length||serials.some((unit)=>unit.current_position_id!==session.position_id||unit.unit_location_id!==session.location_id||unit.current_custody_version!==unit.custody_version_snapshot||unit.unit_status!==unit.status_snapshot||new Date(unit.unit_updated_at).getTime()!==new Date(unit.unit_updated_at_snapshot).getTime()))needsRecount=true;
+  }
+  const hasDifference=lines.some((line)=>num(line.observed_quantity)!==num(line.expected_quantity));
+  if(needsRecount){await client.query(`update inventory_position_count_lines set status='needs_recount',version=version+1,updated_at=now() where company_id=$1 and session_id=$2 and observed_quantity is not null`,[session.company_id,session.id]);await client.query(`update inventory_position_count_sessions set status='needs_recount',version=version+1,updated_at=now() where company_id=$1 and id=$2`,[session.company_id,session.id]);}
   else if(hasDifference)await client.query(`update inventory_position_count_sessions set status='ready',submitted_by=$3,submitted_at=now(),version=version+1,updated_at=now() where company_id=$1 and id=$2`,[session.company_id,session.id,input.actorId]);
-  else {const reason=`Physical count verified · ${session.position_code||session.position_name||"storage location"} · ${String(session.id).slice(0,8)}`;await client.query(`update inventory_position_count_lines set status='applied',version=version+1,updated_at=now() where company_id=$1 and session_id=$2`,[session.company_id,session.id]);await client.query(`update inventory_position_count_sessions set status='applied',submitted_by=$3,submitted_at=now(),applied_by=$3,applied_at=now(),apply_reason=$4,version=version+1,updated_at=now() where company_id=$1 and id=$2`,[session.company_id,session.id,input.actorId,reason]);}
+  else {const reason=`Physical count verified · ${session.position_code||session.position_name||"storage location"} · ${String(session.id).slice(0,8)}`;await client.query(`update inventory_position_count_lines set status='applied',version=version+1,updated_at=now() where company_id=$1 and session_id=$2 and observed_quantity is not null`,[session.company_id,session.id]);await client.query(`update inventory_position_count_sessions set status='applied',submitted_by=$3,submitted_at=now(),applied_by=$3,applied_at=now(),apply_reason=$4,version=version+1,updated_at=now() where company_id=$1 and id=$2`,[session.company_id,session.id,input.actorId,reason]);}
   await client.query(`insert into inventory_position_count_commands(company_id,actor_id,session_id,action,idempotency_key,request_hash) values($1,$2,$3,'submit',$4,$5)`,[session.company_id,input.actorId,session.id,input.idempotencyKey,requestHash]);
   await client.query("commit");return{kind:needsRecount?"needs_recount":hasDifference?"ready":"verified"};
 }catch(error){await client.query("rollback").catch(()=>{});throw error;}finally{client.release();}}
@@ -752,17 +759,19 @@ export async function applyPositionCountCorrection(input,dependencies={}){const 
   if(prior.rows[0]){await client.query("commit");return prior.rows[0].request_hash===requestHash?{kind:"replay"}:{kind:"idempotency_conflict"};}
   const selected=await client.query(`select session.*,position.code position_code,position.name position_name from inventory_position_count_sessions session join inventory_positions position on position.company_id=session.company_id and position.id=session.position_id where session.id=$1 and session.company_id=any($2::uuid[]) and ($4::boolean or session.location_id=any($3::uuid[])) for update of session nowait`,[input.countId,input.companyIds,input.locationIds,input.isAdmin]);
   const session=selected.rows[0];if(!session){await client.query("rollback");return{kind:"not_found"};}if(session.version!==input.expectedVersion||session.status!=="ready"){await client.query("rollback");return{kind:"stale"};}const reason=`Physical count correction · ${session.position_code||session.position_name||"storage location"} · ${String(session.id).slice(0,8)}`;
-  const lines=await client.query(`select line.* from inventory_position_count_lines line
-    where line.company_id=$1 and line.session_id=$2 order by line.inventory_item_id,line.id for update of line nowait`,[session.company_id,session.id]);
-  const aggregateIncomplete=lines.rows.some((line)=>line.observed_quantity===null);
+  const lineResult=await client.query(`select line.* from inventory_position_count_lines line
+    where line.company_id=$1 and line.session_id=$2 and line.observed_quantity is not null order by line.inventory_item_id,line.id for update of line nowait`,[session.company_id,session.id]);
+  const lines=lineResult.rows;
   const serialSnapshot=await client.query(`select snapshot.*,unit.current_position_id,unit.location_id unit_location_id,unit.status unit_status,
       unit.custody_version current_custody_version,unit.updated_at unit_updated_at
     from inventory_position_count_unit_snapshots snapshot join inventory_serialized_units unit on unit.company_id=snapshot.company_id and unit.id=snapshot.unit_id
     where snapshot.company_id=$1 and snapshot.session_id=$2 order by snapshot.unit_id for update of snapshot,unit nowait`,[session.company_id,session.id]);
-  const serialIncomplete=serialSnapshot.rows.some((unit)=>!unit.observed_at);
-  const currentSerialCount=await client.query(`select count(*)::int count from inventory_serialized_units where company_id=$1 and location_id=$2 and current_position_id=$3 and custody_holder_type='inventory_location'`,[session.company_id,session.location_id,session.position_id]);
-  let serialNeedsRecount=currentSerialCount.rows[0].count!==serialSnapshot.rowCount||serialSnapshot.rows.some((unit)=>unit.current_position_id!==session.position_id||unit.unit_location_id!==session.location_id||unit.current_custody_version!==unit.custody_version_snapshot||unit.unit_status!==unit.status_snapshot||new Date(unit.unit_updated_at).getTime()!==new Date(unit.unit_updated_at_snapshot).getTime());
-  const itemIds=lines.rows.map((line)=>line.inventory_item_id);
+  const selectedSerialPartIds=[...new Set(serialSnapshot.rows.filter((unit)=>unit.observed_at).map((unit)=>unit.catalog_part_id))];
+  const selectedSerials=serialSnapshot.rows.filter((unit)=>selectedSerialPartIds.includes(unit.catalog_part_id));
+  const serialIncomplete=selectedSerials.some((unit)=>!unit.observed_at);
+  let serialNeedsRecount=false;
+  if(selectedSerialPartIds.length){const currentSerialCount=await client.query(`select count(*)::int count from inventory_serialized_units unit join inventory_receipt_lines line on line.company_id=unit.company_id and line.id=unit.receipt_line_id where unit.company_id=$1 and unit.location_id=$2 and unit.current_position_id=$3 and unit.custody_holder_type='inventory_location' and line.catalog_part_id=any($4::uuid[])`,[session.company_id,session.location_id,session.position_id,selectedSerialPartIds]);serialNeedsRecount=currentSerialCount.rows[0].count!==selectedSerials.length||selectedSerials.some((unit)=>unit.current_position_id!==session.position_id||unit.unit_location_id!==session.location_id||unit.current_custody_version!==unit.custody_version_snapshot||unit.unit_status!==unit.status_snapshot||new Date(unit.unit_updated_at).getTime()!==new Date(unit.unit_updated_at_snapshot).getTime());}
+  const itemIds=lines.map((line)=>line.inventory_item_id);
   // Multi-line receipt transactions can already hold a different item/position.
   // Acquire the complete count lock set without waiting; rollback releases any
   // partial locks so receiving can finish and this unchanged command can retry.
@@ -773,16 +782,8 @@ export async function applyPositionCountCorrection(input,dependencies={}){const 
   const balances=await client.query(`select * from inventory_position_balances where company_id=$1 and position_id=$2
     and inventory_item_id=any($3::uuid[]) order by inventory_item_id for update`,[session.company_id,session.position_id,itemIds]);
   const balanceByItem=new Map(balances.rows.map((row)=>[row.inventory_item_id,row]));
-  const uncounted=await client.query(`select 1 from inventory_position_balances balance join parts_catalog part on part.company_id=balance.company_id and part.id=balance.catalog_part_id
-    where balance.company_id=$1 and balance.position_id=$2 and balance.quantity<>0 and part.tracking_mode<>'serialized'
-      and not(balance.inventory_item_id=any($3::uuid[])) limit 1`,[session.company_id,session.position_id,itemIds]);
-  const uncountedMovement=await client.query(`select 1 from inventory_position_movements movement
-    where movement.company_id=$1 and movement.location_id=$2 and movement.event_ordinal>$3
-      and (movement.from_position_id=$4 or movement.to_position_id=$4)
-      and not exists(select 1 from inventory_position_count_lines line where line.company_id=$1 and line.session_id=$5 and line.catalog_part_id=movement.catalog_part_id)
-    limit 1`,[session.company_id,session.location_id,session.start_watermark,session.position_id,session.id]);
-  let needsRecount=serialNeedsRecount||Boolean(uncounted.rows[0]||uncountedMovement.rows[0]);
-  for(const line of lines.rows){
+  let needsRecount=serialNeedsRecount;
+  for(const line of lines){
     const balance=balanceByItem.get(line.inventory_item_id);
     const missingFoundBalance=!balance&&line.line_source==="found"&&num(line.expected_quantity)===0&&Number(line.balance_version)===0;
     if((!balance&&!missingFoundBalance)||(balance&&balance.version!==line.balance_version)){needsRecount=true;break;}
@@ -798,7 +799,6 @@ export async function applyPositionCountCorrection(input,dependencies={}){const 
     await client.query(`insert into inventory_position_count_commands(company_id,actor_id,session_id,action,idempotency_key,request_hash) values($1,$2,$3,'apply',$4,$5)`,[session.company_id,input.actorId,session.id,input.idempotencyKey,requestHash]);
     await client.query("commit");return{kind:"needs_recount"};
   }
-  if(aggregateIncomplete){await client.query("rollback");return{kind:"incomplete"};}
   if(serialIncomplete){await client.query("rollback");return{kind:"serialized_review_required"};}
   const blocked=itemIds.length?await client.query(`select 1 from inventory_items item where item.company_id=$1 and item.id=any($2::uuid[]) and (
       exists(select 1 from inventory_position_reconciliation_exceptions exception where exception.company_id=item.company_id and exception.inventory_item_id=item.id and exception.status='open')
@@ -809,7 +809,7 @@ export async function applyPositionCountCorrection(input,dependencies={}){const 
   const operationId=randomUUID();
   await client.query(`insert into inventory_position_operations(id,company_id,location_id,actor_id,command_type,idempotency_key,request_hash,reason,count_session_id)
     values($1,$2,$3,$4,'count_adjustment',$5,$6,$7,$8)`,[operationId,session.company_id,session.location_id,input.actorId,input.idempotencyKey,requestHash,reason,session.id]);
-  for(const line of lines.rows){const balance=balanceByItem.get(line.inventory_item_id);
+  for(const line of lines){const balance=balanceByItem.get(line.inventory_item_id);
     const observed=num(line.observed_quantity),reserved=num(balance?.quantity_reserved),expected=num(line.expected_quantity),delta=observed-expected;
     if(observed<reserved){await client.query("rollback");return{kind:"reserved_conflict"};}
     if(balance)await client.query(`update inventory_position_balances set quantity=$4,version=version+1,updated_at=now() where company_id=$1 and position_id=$2 and inventory_item_id=$3`,[session.company_id,session.position_id,line.inventory_item_id,observed]);

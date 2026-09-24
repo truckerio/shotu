@@ -11,6 +11,7 @@ import {
   compactPlacementPath,
   locationPathLabel,
   moveDestinations,
+  occupiedPositions,
   positionDraftKey,
   positionMoveBody,
   positionStorageDefaults,
@@ -161,6 +162,17 @@ test("only active storage positions are destinations", () => {
       { id: "c", canStore: true, isActive: false },
     ]).map((entry) => entry.id),
     ["a"],
+  );
+});
+test("occupied positions exclude empty shelves and bins", () => {
+  assert.deepEqual(
+    occupiedPositions([
+      { id: "empty-number", quantity: 0 },
+      { id: "empty-string", quantity: "0" },
+      { id: "occupied-number", quantity: 2 },
+      { id: "occupied-string", quantity: "3.5" },
+    ]).map((entry) => entry.id),
+    ["occupied-number", "occupied-string"],
   );
 });
 test("a move cannot target its selected source", () => {
