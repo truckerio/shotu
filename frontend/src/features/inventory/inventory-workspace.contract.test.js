@@ -295,9 +295,11 @@ test("stock has peer part and location modes with contextual physical counts", a
 });
 
 test("stock starts unified add stock and keeps location count handoffs", async () => {
-  const [workspace, dialog] = await Promise.all([
+  const [workspace, dialog, locationStock, receiptEditor] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./AddInventoryStockDialog.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./InventoryLocationStockWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../office/ReceiptLinesEditor.jsx", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, />Add stock<\/Button>/);
   assert.doesNotMatch(workspace, /id="inventory-physical-count-action"/);
@@ -310,18 +312,32 @@ test("stock starts unified add stock and keeps location count handoffs", async (
   assert.match(workspace, /function openPhysicalCountTasks\(\)[\s\S]*setTaskSection\("count"\)[\s\S]*taskOwner: "count"/);
   assert.match(workspace, /owner === "count" && !initialParams\.get\("taskId"\)/);
   assert.match(workspace, /countWorkflowOpen \? "Starting inventory"/);
-  assert.match(workspace, /onAddStock=\{\(\{ part, shopId, positionId, positionPath \}\) => setReceivingPart/);
+  assert.match(workspace, /onAddStock=\{\(\{ part, locationParts, shopId, positionId, positionPath \}\) => setReceivingPart/);
   assert.match(workspace, /receiptPositionPath: positionPath, lockReceiptLocation: true/);
   assert.doesNotMatch(workspace, /onOpenStartingInventory=/);
-  assert.match(dialog, /PartCatalogCombobox locationId=\{shopId\} purpose="master_match" catalogEndpoint="\/api\/office\/inventory\/catalog"/);
+  assert.match(dialog, /<PartCatalogCombobox[\s\S]*locationId=\{shopId\}[\s\S]*purpose="master_match"[\s\S]*catalogEndpoint="\/api\/office\/inventory\/catalog"/);
   assert.match(dialog, /initialPositionId = ""/);
   assert.match(dialog, /lockLocation = false/);
-  assert.match(dialog, /contextualLocationLocked \? <div className="add-inventory-fixed-destination"/);
+  assert.match(dialog, /contextualLocationLocked \? <div className="add-inventory-destination"/);
   assert.match(dialog, /targetLocked=\{contextualLocationLocked\}/);
   assert.match(workspace, /lockLocation=\{Boolean\(receivingPart\.lockReceiptLocation\)\}/);
   assert.doesNotMatch(dialog, /value="physical_count"|Open stock by location|Import count sheet/);
-  assert.match(dialog, /ReceiptLinesEditor mode="direct-arrival"/);
+  assert.match(dialog, /ReceiptLinesEditor mode="direct-arrival" compactDirectArrival/);
   assert.match(dialog, /positions=\{positions\}/);
+  assert.match(dialog, /selectedPart \? "Part and location"/);
+  assert.match(dialog, />Stock arrival</);
+  assert.match(dialog, /Reason for no purchase order \*/);
+  assert.doesNotMatch(dialog, /Your signed-in account is recorded as the receiver|Record what physically arrived and where available goods were put away|\d+\. Quantity and confirmation/);
+  assert.match(receiptEditor, /compactArrival \|\| expandedLineIndex === index/);
+  assert.match(receiptEditor, /compactArrival \? null : <div className="receipt-line-summary"/);
+  assert.match(locationStock, /locationParts: stock/);
+  assert.match(locationStock, /setStock\(\[\]\);[\s\S]*setSelectedPositionId\(id\)/);
+  assert.match(locationStock, /onClick=\{\(\) => addStockHere\(\)\} disabled=\{loadingStock\}/);
+  assert.match(workspace, /locationParts=\{receivingPart\.locationParts \|\| \[\]\}/);
+  assert.match(dialog, /Parts already here/);
+  assert.match(dialog, /locationParts\.map/);
+  assert.match(dialog, /onClick=\{\(\) => selectPart\(entry\)\}/);
+  assert.match(dialog, /Search all company parts/);
 });
 
 test("Purchases posts one tracking-aware partial receipt instead of marking a whole PO received first", async () => {

@@ -25,14 +25,14 @@ test("real PostgreSQL creates local catalog identity without stock and protects 
     assert.equal(created.kind, "created");
     assert.equal(created.part.providerManaged, false);
     const persisted = await query(
-      `select catalog.source_provider, reference.reference_number,
+      `select catalog.source_provider, catalog.created_by, reference.reference_number,
               (select count(*)::int from inventory_items item where item.company_id=catalog.company_id and item.catalog_part_id=catalog.id) as stock_count,
               (select count(*)::int from odoo_product_mappings mapping where mapping.company_id=catalog.company_id and mapping.catalog_part_id=catalog.id) as mapping_count
        from parts_catalog catalog join part_reference_numbers reference on reference.company_id=catalog.company_id and reference.catalog_part_id=catalog.id
        where catalog.company_id=$1 and catalog.id=$2`,
       [companyId, created.part.id],
     );
-    assert.deepEqual(persisted.rows[0], { source_provider: "local", reference_number: `ODOO-${suffix}`, stock_count: 0, mapping_count: 0 });
+    assert.deepEqual(persisted.rows[0], { source_provider: "local", created_by: actorId, reference_number: `ODOO-${suffix}`, stock_count: 0, mapping_count: 0 });
     await importOdooInventory(companyId, { products: [{
       id: `product-${suffix}`, default_code: `ODOO-${suffix}`, barcode: "", name: "Odoo valve",
       uom_id: [1, "Units"], categ_id: [1, "Parts"], active: true, write_date: "2026-09-05 12:00:00",

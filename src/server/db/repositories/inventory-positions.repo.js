@@ -429,7 +429,7 @@ export async function listPositionStock(input) {
       group by line.catalog_part_id
     ), stock as (
       select * from aggregate_stock union all select * from serialized_stock
-    ) select part.id,part.part_number,part.description,part.uom_code,part.tracking_mode,
+    ) select part.id,part.part_number,part.description,part.uom_code,part.tracking_mode,part.version,
         stock.direct_quantity,stock.descendant_quantity,stock.direct_reserved,stock.descendant_reserved
       from stock join parts_catalog part on part.id=stock.catalog_part_id and part.company_id=any($3::uuid[])
       where $6::text='subtree' or stock.direct_quantity<>0 or stock.direct_reserved<>0
@@ -474,7 +474,7 @@ export async function listPositionStock(input) {
     const current=placementsByPart.get(row.catalog_part_id)||[];current.push(placement);placementsByPart.set(row.catalog_part_id,current);
   }
   return {scope:input.scope,parts:result.rows.map((row)=>{const directQuantity=num(row.direct_quantity);const descendantQuantity=num(row.descendant_quantity);const directReserved=num(row.direct_reserved);const descendantReserved=num(row.descendant_reserved);return {
-    id:row.id,partNumber:row.part_number,description:row.description,uomCode:row.uom_code,trackingMode:row.tracking_mode,
+    id:row.id,partNumber:row.part_number,description:row.description,uomCode:row.uom_code,trackingMode:row.tracking_mode,version:Number(row.version),
     directQuantity,descendantQuantity,subtreeQuantity:directQuantity+descendantQuantity,
     directReserved,descendantReserved,subtreeReserved:directReserved+descendantReserved,placements:placementsByPart.get(row.id)||[],
   };})};

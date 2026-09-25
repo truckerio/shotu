@@ -1185,7 +1185,21 @@ Each implementation slice records applicable evidence:
 - Canonical owners: `inventory_stock_movements` remains the single append-only history owner. The `workorder` query is a read projection filtered by `workorder_id`; it creates no new consumption or duplicate history.
 - Tracking behavior: Quantity and measured/bulk share aggregate presentation, including decimal canonical UOM for bulk. Serialized remains identity-first. The default movement API remains the full audit projection for compatibility.
 - Verification: Focused route/service/UI contracts passed 76/76 with one intentional legacy skip; real PostgreSQL aggregate lifecycle and Workorder-only movement projection passed 3/3; the full local unit suite passed 2,318 tests with 82 skipped and zero failures. Structure, syntax, production build, diff, live/ready health, and authenticated localhost checks passed. Rendered checks proved quantity usage for `180.10641.1` at Chino Yard (`-2 ea`, G2021, WO-000204, repair order and date), the shop-filtered and company-wide audit scopes, measured/bulk shop structure for `000628509` in `qt`, and serialized exact-unit structure plus audit handoff for `FUEL PUMP`.
-- Release evidence: Local changes only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
+
+### INV-20260924-01 — Signed-in user activity projection
+
+- Status: LOCAL VERIFIED; NOT RELEASED.
+- Decision/requirement: Give every signed-in user one Activity destination for their own meaningful operational history, reusing the established workorder timeline presentation.
+- Before: Workorder and part-detail timelines were object-specific. Users had no single place to review their own work across inventory, catalog, workorders, and inspections.
+- After: The profile menu opens a read-only Activity dialog over the user's current workspace, with category filters and bounded pagination. Activity is intentionally absent from primary and mobile navigation and does not change the current URL. It projects the actor's workorder creation/updates, inventory movements and serialized transitions, catalog creation/edits, and inspection lifecycle events.
+- Canonical owners: Existing append-only domain events and `inventory_stock_movements` remain truth. `user-activity.repo.js` is a scoped read projection; `WorkorderTimelineList` remains the shared presentation owner.
+- Data/API changes: Migration 174 adds nullable `parts_catalog.created_by` for future truthful local-part creation attribution. `GET /api/activity` is authenticated and paginated.
+- User-experience changes: Activity is available only from the existing profile menu for every role, with All, Workorders, Inventory, Parts, and Inspections filters. The dialog reuses the shared timeline and becomes a full-height contained surface on phones.
+- Authorization/security changes: The server derives actor, company, role, and current location scope from the authenticated request. It never accepts a target user ID and does not return another actor's events.
+- Failure/reconciliation behavior: Unknown historical part creators remain null rather than backfilled. The feed writes no audit records and excludes passive workorder-open noise.
+- Verification: Focused route, repository, service, presentation, profile-menu, and navigation contracts passed 31/31 before the final dialog-only adjustment and 23/23 afterward. The full local unit suite passed 2,339 tests with 84 intentional skips and zero failures; structure, syntax, migration, and production build checks passed. Authenticated localhost proved the profile-only dialog over the unchanged Inventory URL, 50-to-100 pagination, shared timeline data, close behavior, and no horizontal overflow at desktop and 390px phone widths.
+- Remaining gaps: Admin review of another user's history, export, and additional low-frequency administrative event families are not included in this slice.
+- Release evidence: Local changes and a local additive migration only. No commit, push, deployment, hosted mutation, accounting post, or Odoo write was authorized.
 
 ### INV-20260922-03 — Observation-only inline physical counts
 

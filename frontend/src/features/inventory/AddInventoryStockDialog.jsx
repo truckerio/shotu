@@ -30,7 +30,22 @@ function withFixedDestination(draft, locationId, targetPositionId) {
   };
 }
 
-export function AddInventoryStockDialog({ part = null, actorId, locations, initialLocationId = "", initialPositionId = "", lockLocation = false, locationContextLabel = "", onClose, onReceived }) {
+function compactDestination(shopName, locationLabel) {
+  const segments = String(locationLabel || "").split(" / ").map((segment) => segment.trim()).filter(Boolean);
+  const codes = segments.map((segment) => segment.split(" · ")[0].trim()).filter(Boolean);
+  const finalSegment = segments.at(-1) || "";
+  const name = finalSegment.split(" · ").at(-1)?.trim() || shopName;
+  return { name, path: [shopName, codes.join(" / ")].filter(Boolean).join(" · ") };
+}
+
+function trackingLabel(part) {
+  const unit = part.canonicalUomCode || part.uomCode;
+  if (part.trackingMode === "serialized") return `Serialized · ${unit}`;
+  if (part.trackingMode === "measured") return `Measured · ${unit}`;
+  return `Quantity · ${unit}`;
+}
+
+export function AddInventoryStockDialog({ part = null, locationParts = [], actorId, locations, initialLocationId = "", initialPositionId = "", lockLocation = false, locationContextLabel = "", onClose, onReceived }) {
   const titleId = useId();
   const initialPart = part?.catalogPartId ? part : null;
   const [selectedPart, setSelectedPart] = useState(initialPart);
@@ -51,6 +66,7 @@ export function AddInventoryStockDialog({ part = null, actorId, locations, initi
   const contextualLocationLocked = lockLocation && Boolean(shopId);
   const selectedShopName = locations.find((location) => location.id === shopId)?.name || "Selected shop";
   const destinationLabel = [selectedShopName, locationContextLabel].filter((value, index, values) => value && values.indexOf(value) === index).join(" · ");
+  const destination = compactDestination(selectedShopName, locationContextLabel);
   const storageKey = selectedPart ? receiptDraftKey(actorId, selectedPart.companyId, selectedPart.catalogPartId) + (selectedPart.purchaseLineId ? `:purchase:${selectedPart.purchaseLineId}` : selectedPart.purchaseRequestId ? `:request:${selectedPart.purchaseRequestId}` : "") + (contextualLocationLocked ? `:location:${shopId}:${preferredPositionId || "receiving"}` : "") : "";
   const locked = busy || Boolean(draft.attempt);
   const directFacts = useMemo(() => selectedPart ? directArrivalReceiptFacts(selectedPart) : [], [selectedPart]);
@@ -115,19 +131,22 @@ export function AddInventoryStockDialog({ part = null, actorId, locations, initi
   }
   return <ModalFrame overlayClassName="create-inventory-part-overlay" modalClassName="create-inventory-part-modal" dialogClassName="create-inventory-part-dialog add-inventory-stock-dialog" ariaLabelledBy={titleId} isDismissable={!busy} onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
     <form onSubmit={submit}>
-      <header><div><Heading slot="title" id={titleId}>{receipt ? "Stock received" : approvalRequest?.status === "pending" ? "Approval needed" : "Add inventory"}</Heading><p>{selectedPart ? `${selectedPart.partNumber} - ${selectedPart.description}` : contextualLocationLocked ? `Select the master catalog part to add at ${destinationLabel}.` : "Choose where stock arrived, then select its master catalog part."}</p></div></header>
+      <header><div><Heading slot="title" id={titleId}>{receipt ? "Stock received" : approvalRequest?.status === "pending" ? "Approval needed" : "Add inventory"}</Heading></div></header>
       {error ? <p role="alert" className="create-inventory-part-error">{error}</p> : null}
       {receipt ? <div role="status"><p>Received {receipt.lines?.[0]?.quantity} {receipt.lines?.[0]?.uomCode} at {receipt.locationName}.</p><p>Receipt reference: {receipt.id}</p>{receipt.disposition === "held" ? <p>Held for inspection. Open Tasks / Stock damage to review these goods before release.</p> : null}{receipt.labelBatch?.printUrl ? <a href={receipt.labelBatch.printUrl} target="_blank" rel="noreferrer">Print unit labels</a> : null}</div> : approvalRequest?.status === "pending" ? <div role="status"><p>This no-PO arrival is saved and waiting for purchasing approval.</p><p>Request reference: {approvalRequest.id}</p><p>Stock will be added after an approver confirms the original arrival.</p></div> : <>
-        <section className="add-inventory-section" aria-labelledby="add-inventory-context"><h3 id="add-inventory-context">1. {contextualLocationLocked ? "Part" : "Shop and part"}</h3><div className="create-inventory-part-fields">
-          {contextualLocationLocked ? <div className="add-inventory-fixed-destination"><span>Adding to</span><strong>{destinationLabel}</strong></div> : <label><span>Shop</span><Dropdown value={shopId} onChange={(event) => selectShop(event.target.value)} disabled={locked || Boolean(selectedPart?.purchaseLineId || selectedPart?.purchaseRequestId)} required><option value="">Choose shop</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>}
-          {selectedPart ? <div className="add-inventory-part-summary"><div><strong>{selectedPart.partNumber}</strong><span>{selectedPart.description}</span><small>{selectedPart.trackingMode} · {selectedPart.canonicalUomCode || selectedPart.uomCode}</small></div><Button type="button" onClick={() => { setSelectedPart(null); setPartQuery(""); }} disabled={locked}>Change part</Button></div> : <PartCatalogCombobox locationId={shopId} purpose="master_match" catalogEndpoint="/api/office/inventory/catalog" value={partQuery} onChange={setPartQuery} onSelect={selectPart} disabled={!shopId || locked} inputAriaLabel="Choose a master catalog part" popupAriaLabel="Matching master catalog parts" />}
+        <section className="add-inventory-section" aria-labelledby="add-inventory-context"><h3 id="add-inventory-context">{selectedPart ? "Part and location" : contextualLocationLocked ? "Choose part" : "Shop and part"}</h3><div className="create-inventory-part-fields">
+          {contextualLocationLocked ? <div className="add-inventory-destination"><span>Location</span><strong>{destination.name}</strong><small>{destination.path}</small></div> : <label><span>Shop</span><Dropdown value={shopId} onChange={(event) => selectShop(event.target.value)} disabled={locked || Boolean(selectedPart?.purchaseLineId || selectedPart?.purchaseRequestId)} required><option value="">Choose shop</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>}
+          {selectedPart ? <div className="add-inventory-part-summary"><div><strong>{selectedPart.partNumber}</strong><span>{selectedPart.description}</span><small>{trackingLabel(selectedPart)}</small></div><Button type="button" onClick={() => { setSelectedPart(null); setPartQuery(""); }} disabled={locked}>Change part</Button></div> : <>
+            {contextualLocationLocked && locationParts.length ? <section className="add-inventory-existing-parts" aria-labelledby="add-inventory-existing-parts-title"><div><strong id="add-inventory-existing-parts-title">Parts already here</strong><span>{locationParts.length}</span></div><div className="add-inventory-existing-part-list">{locationParts.map((entry) => <button type="button" key={entry.catalogPartId || entry.id} onClick={() => selectPart(entry)} disabled={locked}><span><strong>{entry.partNumber}</strong><small>{entry.description || "No description"}</small></span><span>{entry.subtreeQuantity ?? entry.directQuantity ?? 0} {entry.uomCode}</span></button>)}</div></section> : null}
+            <PartCatalogCombobox label={contextualLocationLocked && locationParts.length ? "Search all company parts" : "Part number or description"} locationId={shopId} purpose="master_match" catalogEndpoint="/api/office/inventory/catalog" value={partQuery} onChange={setPartQuery} onSelect={selectPart} disabled={!shopId || locked} inputAriaLabel="Choose a master catalog part" popupAriaLabel="Matching master catalog parts" />
+          </>}
         </div></section>
-        {selectedPart ? <section className="add-inventory-section" aria-labelledby="add-inventory-quantity"><h3 id="add-inventory-quantity">2. Quantity and confirmation</h3><p className="add-inventory-actor-note">Your signed-in account is recorded as the receiver.</p><div className="create-inventory-part-fields">
-            {draftReady ? <ReceiptLinesEditor mode="direct-arrival" facts={directFacts} initialLines={directArrivalInitialLines(selectedPart, draft)} runId={`direct:${selectedPart.catalogPartId}:${shopId}`} runVersion={selectedPart.version || 0} positions={positions} positionLoading={positionLoading} positionError={positionError} targetLocked={contextualLocationLocked} fixedTargetPositionId={preferredPositionId} fixedTargetLabel={destinationLabel} disabled={locked} onChange={updateReceiptLines} /> : <p role="status">Loading saved arrival details…</p>}
+        {selectedPart ? <section className="add-inventory-section" aria-labelledby="add-inventory-quantity"><h3 id="add-inventory-quantity">Stock arrival</h3><div className="create-inventory-part-fields">
+            {draftReady ? <ReceiptLinesEditor mode="direct-arrival" compactDirectArrival facts={directFacts} initialLines={directArrivalInitialLines(selectedPart, draft)} runId={`direct:${selectedPart.catalogPartId}:${shopId}`} runVersion={selectedPart.version || 0} positions={positions} positionLoading={positionLoading} positionError={positionError} targetLocked={contextualLocationLocked} fixedTargetPositionId={preferredPositionId} fixedTargetLabel={destinationLabel} disabled={locked} onChange={updateReceiptLines} /> : <p role="status">Loading saved arrival details…</p>}
             {positionError ? <Button type="button" onClick={() => setPositionReload((value) => value + 1)} disabled={locked || positionLoading}>Try storage locations again</Button> : null}
-            <label><span>Delivery reference (optional)</span><input maxLength={240} value={draft.reference} onChange={(event) => update("reference", event.target.value)} disabled={locked} /></label>
-            {!selectedPart.purchaseLineId ? <label><span>No purchase order reason</span><input required maxLength={240} value={draft.noPurchaseOrderReason || ""} onChange={(event) => update("noPurchaseOrderReason", event.target.value)} disabled={locked} placeholder="Why did these goods arrive without a PO?" /></label> : null}
-          </div><label className="direct-receipt-confirmation"><Checkbox checked={draft.confirmed} onChange={(event) => update("confirmed", event.target.checked)} disabled={locked} /><span>These new, company-owned goods have physically arrived at the selected shop.</span></label>{draft.attempt ? <p role="status">A receipt was submitted. Check its result before changing or submitting another receipt.</p> : null}
+            {!selectedPart.purchaseLineId ? <label><span>Reason for no purchase order *</span><input required maxLength={240} value={draft.noPurchaseOrderReason || ""} onChange={(event) => update("noPurchaseOrderReason", event.target.value)} disabled={locked} /></label> : null}
+            <label><span>Delivery reference <small>Optional</small></span><input maxLength={240} value={draft.reference} onChange={(event) => update("reference", event.target.value)} disabled={locked} /></label>
+          </div><label className="direct-receipt-confirmation"><Checkbox checked={draft.confirmed} onChange={(event) => update("confirmed", event.target.checked)} disabled={locked} /><span>I confirm these company-owned goods physically arrived at this shop.</span></label>{draft.attempt ? <p role="status">A receipt was submitted. Check its result before changing or submitting another receipt.</p> : null}
           </section> : null}
       </>}
       <footer><Button type="button" onClick={onClose} disabled={busy}>{receipt || approvalRequest?.status === "pending" ? "Done" : "Close"}</Button>{!receipt && !approvalRequest && selectedPart ? <Button type="submit" variant="primary" disabled={busy || !selectedPart.trackingMode || !draftReady || (!draft.attempt && !receiptReady)}>{busy ? "Checking receipt…" : draft.attempt ? "Check receipt" : "Receive stock"}</Button> : null}</footer>

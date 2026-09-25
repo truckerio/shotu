@@ -52,6 +52,7 @@ import { handleInspectionsApi } from "./src/server/routes/inspections.routes.js"
 import { handleProductModulesApi } from "./src/server/routes/product-modules.routes.js";
 import { handleInspectionTemplatesApi } from "./src/server/routes/inspection-templates.routes.js";
 import { handleLaborProductsApi } from "./src/server/routes/labor-products.routes.js";
+import { handleActivityApi } from "./src/server/routes/activity.routes.js";
 import { catalogUomConflictError } from "./src/server/modules/inventory/inventory.errors.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
@@ -829,6 +830,7 @@ async function handleApi(req, res) {
   if (await handleProofreadingApi(req, res, url, helpers)) return;
   if (await handleWorkorderDraftsApi(req, res, url, helpers)) return;
   if (await handleWorkorderPreferencesApi(req, res, url, helpers)) return;
+  if (await handleActivityApi(req, res, url, helpers)) return;
   if (await handleInspectionsApi(req, res, url, helpers)) return;
 
   const printArchiveLookupMatch = /^\/api\/workorders\/([^/]+)\/print-archives$/.exec(url.pathname);

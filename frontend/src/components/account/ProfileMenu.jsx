@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ChevronDown, Key01, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
+import { ChevronDown, Clock, Key01, LogOut01, UserCircle, Users01 } from "@untitledui/icons";
 import { Button, Dialog, DialogTrigger, Popover, Separator } from "react-aria-components";
 import { useKioskSession } from "../../features/kiosk/KioskSessionContext.jsx";
 import { purgeMechanicWorkStorage } from "../../features/mechanic/progress/mechanic-work-storage.js";
 import { authClient } from "../../lib/auth-client.js";
 import { ChangePasswordDialog } from "./ChangePasswordDialog.jsx";
 import { PasskeyManager } from "./PasskeyManager.jsx";
+import { UserActivityDialog } from "../../features/activity/UserActivityDialog.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import "./profile-menu.css";
 
@@ -29,6 +30,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
   const kioskSession = useKioskSession();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [passkeysOpen, setPasskeysOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const signOut = useCallback(async () => {
     try {
       await authClient.signOut();
@@ -53,6 +55,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
       });
     }
     actions.push(
+      { id: "activity", Icon: Clock, label: t("account.activity"), onAction: () => setActivityOpen(true) },
       { id: "passkeys", Icon: UserCircle, label: t("account.managePasskeys"), onAction: () => setPasskeysOpen(true) },
       { id: "change-password", Icon: Key01, label: t("account.changePassword"), onAction: () => setChangePasswordOpen(true) },
       { id: "sign-out", Icon: LogOut01, label: t("account.signOut"), onAction: signOut },
@@ -98,6 +101,11 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
       </Dialog>
     </Popover>
   );
+  const accountDialogs = <>
+    <UserActivityDialog isOpen={activityOpen} onOpenChange={setActivityOpen} locale={locale} />
+    <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
+    <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
+  </>;
 
   if (mobileNav) {
     return (
@@ -111,8 +119,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           {accountMenu}
         </DialogTrigger>
         </div>
-        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
-        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
+        {accountDialogs}
       </>
     );
   }
@@ -128,8 +135,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           {accountMenu}
         </DialogTrigger>
         </div>
-        <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
-        <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
+        {accountDialogs}
       </>
     );
   }
@@ -149,8 +155,7 @@ export function ProfileMenu({ actor, compactOnPhone = false, mobileAction = fals
           {accountMenu}
         </DialogTrigger>
       </div>
-      <ChangePasswordDialog isOpen={changePasswordOpen} onOpenChange={setChangePasswordOpen} locale={locale} />
-      <PasskeyManager isOpen={passkeysOpen} onOpenChange={setPasskeysOpen} locale={locale} />
+      {accountDialogs}
     </>
   );
 }

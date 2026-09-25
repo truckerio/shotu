@@ -30,7 +30,7 @@ export async function assertPrimaryPartIdentityAvailable(client, companyId, norm
   }
 }
 
-export async function createCompanyCatalogPart({ companyId, actorId: _actorId, description, partNumber, manufacturer, category, barcode, uomCode, trackingMode, referenceNumbers }) {
+export async function createCompanyCatalogPart({ companyId, actorId, description, partNumber, manufacturer, category, barcode, uomCode, trackingMode, referenceNumbers }) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
@@ -50,11 +50,11 @@ export async function createCompanyCatalogPart({ companyId, actorId: _actorId, d
     );
     if (conflict.rows[0]) { await client.query("rollback"); return { kind: "identity_conflict" }; }
     const inserted = await client.query(
-      `insert into parts_catalog(company_id,normalized_part_number,part_number,description,manufacturer,category,barcode,uom_code,tracking_mode,source_provider,updated_at)
-       select $1,$2,$3,$4,$5,$6,$7,$8,$9,'local',now()
+      `insert into parts_catalog(company_id,normalized_part_number,part_number,description,manufacturer,category,barcode,uom_code,tracking_mode,source_provider,created_by,updated_at)
+       select $1,$2,$3,$4,$5,$6,$7,$8,$9,'local',$10,now()
        where exists(select 1 from units_of_measure where code=$8 and active=true)
        returning *`,
-      [companyId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode, uomCode, trackingMode],
+      [companyId, normalizedPartNumber, partNumber, description, manufacturer, category, barcode, uomCode, trackingMode, actorId],
     );
     const row = inserted.rows[0];
     if (!row) { await client.query("rollback"); return { kind: "uom_invalid" }; }

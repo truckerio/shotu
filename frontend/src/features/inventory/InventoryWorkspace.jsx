@@ -571,7 +571,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         <Pagination currentPage={stockPage} pageCount={stockMeta.pageCount} setPage={setStockPage} total={stockMeta.total} label="parts" loading={refreshing} />
       </> : null}
       {canReconcileAuthority ? <InventoryAuthorityExceptionsPanel actorId={actorId} /> : null}
-      </> : <InventoryLocationStockWorkspace locations={locations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
+      </> : <InventoryLocationStockWorkspace locations={locations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, locationParts, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), locationParts, receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
       <SecondaryDetailPanel
         open={Boolean(selectedItem)}
         onOpenChange={(nextOpen) => {
@@ -663,7 +663,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       </SecondaryDetailPanel>
       </> : null}
       </>}
-      {receivingPart ? <AddInventoryStockDialog part={receivingPart} actorId={actorId} locations={locations.filter((location) => !receivingPart.companyId || !location.companyId || location.companyId === receivingPart.companyId)} initialLocationId={receivingPart.receiptLocationId || (locationId !== "all" && locationId !== "master" ? locationId : "")} initialPositionId={receivingPart.receiptPositionId || ""} lockLocation={Boolean(receivingPart.lockReceiptLocation)} locationContextLabel={receivingPart.receiptPositionPath || ""} onClose={() => setReceivingPart(null)} onReceived={() => setRefreshKey((value) => value + 1)} /> : null}
+      {receivingPart ? <AddInventoryStockDialog part={receivingPart} locationParts={receivingPart.locationParts || []} actorId={actorId} locations={locations.filter((location) => !receivingPart.companyId || !location.companyId || location.companyId === receivingPart.companyId)} initialLocationId={receivingPart.receiptLocationId || (locationId !== "all" && locationId !== "master" ? locationId : "")} initialPositionId={receivingPart.receiptPositionId || ""} lockLocation={Boolean(receivingPart.lockReceiptLocation)} locationContextLabel={receivingPart.receiptPositionPath || ""} onClose={() => setReceivingPart(null)} onReceived={() => setRefreshKey((value) => value + 1)} /> : null}
     </OperationalCollectionPage>
   );
 }

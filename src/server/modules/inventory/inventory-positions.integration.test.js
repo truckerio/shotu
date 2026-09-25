@@ -50,7 +50,7 @@ test("real PostgreSQL conserves moves and applies a watermark-safe aggregate cou
     assert.equal((await query("select quantity_on_hand from inventory_items where id=$1",[item.rows[0].id])).rows[0].quantity_on_hand,"10.000");
     assert.deepEqual(await listPositionStock({...scope,positionId:group.position.id,scope:"direct"}),{scope:"direct",parts:[]});
     const subtreeStock=await listPositionStock({...scope,positionId:group.position.id,scope:"subtree"});
-    assert.deepEqual(subtreeStock.parts,[{id:partId,partNumber:`POS-${suffix}`,description:"Position part",uomCode:"ea",trackingMode:"quantity",
+    assert.deepEqual(subtreeStock.parts,[{id:partId,partNumber:`POS-${suffix}`,description:"Position part",uomCode:"ea",trackingMode:"quantity",version:1,
       directQuantity:0,descendantQuantity:4,subtreeQuantity:4,directReserved:0,descendantReserved:0,subtreeReserved:0,
       placements:[{positionId:bin.position.id,code:"A1-S1-B1",name:"Bin 1",kind:"bin",depth:5,
         pathCodes:["W1","RECEIVING-AREA","INSPECTION-AREA","A1","A1-S1","A1-S1-B1"],
