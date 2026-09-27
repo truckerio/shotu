@@ -27,10 +27,25 @@ test("part movement history defaults to audit and forwards the optional Workorde
   await readPartStockMovements(catalogPartId, new URLSearchParams({ locationId, view: "workorder", page: "2" }), context, deps);
   assert.equal(calls[0].view, "audit");
   assert.equal(calls[0].page, 1);
+  assert.equal(calls[0].companyWideRead, true);
+  assert.equal(calls[0].isAdmin, true);
   assert.equal(calls[1].view, "workorder");
   assert.equal(calls[1].locationId, locationId);
   assert.equal(calls[1].page, 2);
   await assert.rejects(readPartStockMovements(catalogPartId, new URLSearchParams({ view: "usage" }), context, deps));
+});
+test("Office may read movement history at another company location without gaining receipt authority", async () => {
+  const otherLocationId = randomUUID();
+  let readScope;
+  await readPartStockMovements(catalogPartId, new URLSearchParams({ locationId: otherLocationId }), context, dependencies({
+    resolveReadLocationScope: async () => ({ companyIds: [companyId], locationIds: [otherLocationId], isAdmin: false, canManageLocation: false }),
+    listMovements: async (value) => { readScope = value; return { items: [] }; },
+  }));
+  assert.deepEqual(readScope.locationIds, [otherLocationId]);
+  await assert.rejects(receiveDirectInventory({ ...input(), locationId: otherLocationId }, context, dependencies({
+    loadLocation: async () => ({ id: otherLocationId, company_id: companyId }),
+    postReceipt: async () => assert.fail("other-location write reached persistence"),
+  })), (error) => error.code === "inventory_not_found");
 });
 test("part movement history repository projects the canonical receipt's retained invoice source", async () => {
   const source = await readFile(new URL("../../db/repositories/local-inventory.repo.js", import.meta.url), "utf8");

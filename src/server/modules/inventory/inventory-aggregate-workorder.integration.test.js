@@ -107,6 +107,8 @@ test("real PostgreSQL serializes measured reservations and consumes, adjusts, an
     await query("delete from inventory_position_movements where company_id=$1",[companyId]).catch(()=>{});
     await query("delete from inventory_position_operations where company_id=$1",[companyId]).catch(()=>{});
     await query("delete from inventory_aggregate_usage_position_allocations where company_id=$1",[companyId]).catch(()=>{});
+    await query("delete from inventory_aggregate_usage_cost_allocations where company_id=$1",[companyId]).catch(()=>{});
+    await query("delete from inventory_aggregate_cost_layers where company_id=$1",[companyId]).catch(()=>{});
     await query("delete from inventory_position_balances where company_id=$1",[companyId]).catch(()=>{});
     await query("delete from inventory_positions where company_id=$1",[companyId]).catch(()=>{});
     await query("delete from inventory_stock_movements where company_id=$1", [companyId]).catch(() => {});
@@ -165,7 +167,7 @@ test("revision resubmission and cancellation preserve the exact aggregate item i
     const movements=await query(`select from_position_id,to_position_id from inventory_position_movements where company_id=$1 and catalog_part_id=$2 order by event_ordinal`,[companyId,partA]);
     assert.deepEqual(movements.rows,[{from_position_id:positionId,to_position_id:null},{from_position_id:null,to_position_id:positionId}]);
   }finally{
-    for(const table of ["inventory_position_movements","inventory_position_operations","inventory_aggregate_usage_position_allocations","inventory_position_balances","inventory_positions","inventory_stock_movements","workorder_aggregate_part_usage_events","workorder_aggregate_part_usages","inventory_items","operational_workorders","assets","parts_catalog","locations","companies"])
+    for(const table of ["inventory_position_movements","inventory_position_operations","inventory_aggregate_usage_position_allocations","inventory_aggregate_usage_cost_allocations","inventory_aggregate_cost_layers","inventory_position_balances","inventory_positions","inventory_stock_movements","workorder_aggregate_part_usage_events","workorder_aggregate_part_usages","inventory_items","operational_workorders","assets","parts_catalog","locations","companies"])
       await query(`delete from ${table} where company_id=$1`,[companyId]).catch(()=>{});
     await query("delete from user_profiles where id=$1",[actorId]).catch(()=>{});
   }
@@ -208,7 +210,7 @@ test("create workorder reserves aggregate stock only from the chosen pickup posi
     assert.equal(reservedByPosition.get(chosenPositionId),"2.000");
     assert.equal(reservedByPosition.get(otherPositionId),"0.000");
   } finally {
-    for(const table of ["inventory_position_movements","inventory_position_operations","inventory_aggregate_usage_position_allocations","inventory_position_balances","inventory_positions","inventory_stock_movements","workorder_aggregate_part_usage_events","workorder_aggregate_part_usages","inventory_items","workorder_status_events","operational_workorders","assets","parts_catalog","locations","companies"])
+    for(const table of ["inventory_position_movements","inventory_position_operations","inventory_aggregate_usage_position_allocations","inventory_aggregate_usage_cost_allocations","inventory_aggregate_cost_layers","inventory_position_balances","inventory_positions","inventory_stock_movements","workorder_aggregate_part_usage_events","workorder_aggregate_part_usages","inventory_items","workorder_status_events","operational_workorders","assets","parts_catalog","locations","companies"])
       await query(`delete from ${table} where company_id=$1`,[companyId]).catch(()=>{});
     await query("delete from user_profiles where id=$1",[actorId]).catch(()=>{});
   }

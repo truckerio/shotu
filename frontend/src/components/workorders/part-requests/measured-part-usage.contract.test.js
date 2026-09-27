@@ -34,7 +34,7 @@ test("a newly selected measured part starts its repair order from the catalog de
 test("aggregate evidence stays in the canonical Parts row hierarchy", () => {
   assert.match(source, /<WorkorderPartsRow[\s\S]*className="used-part-aggregate-row"/);
   assert.match(source, /startOrdinal \+ index/);
-  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">[\s\S]*<AggregatePartUsageRows/);
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table"[^>]*>[\s\S]*<AggregatePartUsageRows/);
   assert.match(editor, /activeSerializedParts\.length \|\| savedParts\.length \|\| aggregatePartUsages\.length/);
   assert.doesNotMatch(editor, /purchaseRequests|PurchasePartRequestDialog/);
   assert.match(source, /const pickupPath = usage\.sourcePositionPath \|\| \(usage\.status === "reserved" \? "Pickup not assigned" : ""\)/);

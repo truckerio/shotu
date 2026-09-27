@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch } from "./inventory-labels.repo.js";
 import { placeAggregateInventoryReceipt, placeSerializedInventoryReceipt } from "./inventory-positions.repo.js";
+import { recordAggregateCostLayerPosition, recordAggregateReceiptCostLayer } from "./inventory-aggregate-cost-layers.repo.js";
 import {
   inspectInventoryAuthority,
   recordInventoryAuthorityCutover,
@@ -651,6 +652,17 @@ export async function applyInventoryCountImport({
             line.catalog_description || line.source_part_name || line.source_description || "",
             line.quantity, line.uom_code, serialized ? "serial" : "aggregate"],
         );
+        const costLayerId = serialized ? null : await recordAggregateReceiptCostLayer(client, {
+          companyId: stocktake.company_id,
+          locationId: stocktake.location_id,
+          catalogPartId: line.catalog_part_id,
+          receiptLineId,
+          quantity: line.quantity,
+          uomCode: line.uom_code,
+          unitCost: null,
+          currency: null,
+          costSource: "unknown",
+        });
         await recordInventoryAuthorityCutover(client, {
           claim: authorityClaims.get(line.id),
           companyId: stocktake.company_id,
@@ -718,9 +730,18 @@ export async function applyInventoryCountImport({
           receiptId, targetPositionId: line.target_position_id, reason: `Opening count row ${line.source_row}`,
         };
         if (serialized) await placeSerializedInventoryReceipt(client, { ...placement, unitIds });
-        else await placeAggregateInventoryReceipt(client, {
-          ...placement, inventoryItemId: balance.rows[0].id, quantity: line.quantity,
-        });
+        else {
+          const positionId = await placeAggregateInventoryReceipt(client, {
+            ...placement, inventoryItemId: balance.rows[0].id, quantity: line.quantity,
+          });
+          await recordAggregateCostLayerPosition(client, {
+            companyId: stocktake.company_id,
+            locationId: stocktake.location_id,
+            costLayerId,
+            positionId,
+            quantity: line.quantity,
+          });
+        }
         unitIds.forEach((unitId, index) => labelItems.push({
           id: randomUUID(),
           unitId,

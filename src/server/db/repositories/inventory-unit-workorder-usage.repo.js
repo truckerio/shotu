@@ -40,6 +40,7 @@ function publicUsage(row) {
     },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(row.price_snapshot_id ? { price: { id: row.price_snapshot_id, selection: row.price_selection, unitPrice: String(row.price_unit_price), totalPrice: String(row.price_total), currency: row.price_currency } } : {}),
   };
 }
 
@@ -64,7 +65,8 @@ function publicCandidate(row) {
 const USAGE_SELECT = `
   select usage.*, unit.serial_number, line.part_number, line.description,
          location.name as location_name, workorder.serial as workorder_serial,
-         asset.unit_no as asset_unit_no, asset.name as asset_name
+         asset.unit_no as asset_unit_no, asset.name as asset_name,
+         price.id price_snapshot_id,price.selection price_selection,price.unit_price price_unit_price,price.total_price price_total,price.currency price_currency
   from workorder_serialized_part_usages usage
   join inventory_serialized_units unit
     on unit.company_id = usage.company_id and unit.id = usage.unit_id
@@ -75,7 +77,8 @@ const USAGE_SELECT = `
   join operational_workorders workorder
     on workorder.company_id = usage.company_id and workorder.id = usage.workorder_id
   join assets asset
-    on asset.company_id = usage.company_id and asset.id = usage.asset_id`;
+    on asset.company_id = usage.company_id and asset.id = usage.asset_id
+  left join lateral(select snapshot.* from workorder_part_price_snapshots snapshot where snapshot.company_id=usage.company_id and snapshot.serialized_usage_id=usage.id order by snapshot.created_at desc,snapshot.id desc limit 1)price on true`;
 
 async function loadUsage(client, companyId, usageId) {
   const result = await client.query(
@@ -172,6 +175,7 @@ export async function listWorkorderInstalledSerializedPartSummaries({
     description: row.description || "",
     repairOrder: row.repair_order || "",
     status: row.status,
+    ...(row.price_snapshot_id ? { price: { id: row.price_snapshot_id, selection: row.price_selection, unitPrice: String(row.price_unit_price), totalPrice: String(row.price_total), currency: row.price_currency } } : {}),
   }));
 }
 

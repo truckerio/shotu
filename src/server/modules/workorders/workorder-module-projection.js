@@ -117,17 +117,25 @@ function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
         attachment: message.attachment,
       })),
     };
-    case "parts": return {
-      formData: formSlice(workorder, moduleKey),
-      installedSerializedParts: detail.installedSerializedParts || [],
-      aggregatePartUsages: detail.aggregatePartUsages || [],
-      partRequests: ["mechanic", "kiosk"].includes(viewerRole)
-        ? (detail.partRequests || []).map((request) => mechanicPartRequest(
-          request,
-          workorder.locationId || workorder.location?.id || null,
-        ))
-        : detail.partRequests || [],
-    };
+    case "parts": {
+      const canReadFinancials = ["office", "admin"].includes(viewerRole);
+      const withoutPrice = (entry) => {
+        if (canReadFinancials) return entry;
+        const { price: _price, costAllocations: _costAllocations, ...safe } = entry || {};
+        return safe;
+      };
+      return {
+        formData: formSlice(workorder, moduleKey),
+        installedSerializedParts: (detail.installedSerializedParts || []).map(withoutPrice),
+        aggregatePartUsages: (detail.aggregatePartUsages || []).map(withoutPrice),
+        partRequests: ["mechanic", "kiosk"].includes(viewerRole)
+          ? (detail.partRequests || []).map((request) => mechanicPartRequest(
+            request,
+            workorder.locationId || workorder.location?.id || null,
+          ))
+          : detail.partRequests || [],
+      };
+    }
     case "chat": return { messages: detail.messages || [] };
     case "activity": return { timeline: detail.timeline || [] };
     case "preview": return { available: true };

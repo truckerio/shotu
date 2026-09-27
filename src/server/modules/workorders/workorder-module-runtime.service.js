@@ -60,6 +60,7 @@ import {
   reserveMeasuredUsageForWorkorder,
 } from "../inventory/inventory-aggregate-workorder.service.js";
 import { listAggregateWorkorderUsages } from "../../db/repositories/inventory-aggregate-workorder-usage.repo.js";
+import { selectWorkorderPartPrice } from "./workorder-part-pricing.service.js";
 import {
   applyManualPartEvidence,
   listWorkorderManualPartEvidence,
@@ -344,6 +345,9 @@ export async function runWorkorderModuleAction(
     }
     if (action === "record" && input.operation === "aggregateUsageLifecycle") {
       return (dependencies.releaseMeasuredUsage || releaseOrReverseMeasuredUsageForWorkorder)(workorderId, input, context, dependencies);
+    }
+    if (action === "record" && input.operation === "partPriceSelection") {
+      return (dependencies.selectPartPrice || selectWorkorderPartPrice)(workorderId, input, context, dependencies);
     }
     if (["approve", "decline"].includes(action)) {
       const decision = action === "approve" ? "approved" : (input.decision === "needs_info" ? "needs_info" : "rejected");

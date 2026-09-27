@@ -8,18 +8,19 @@ const partId = "33333333-3333-4333-8333-333333333333";
 const companyId = "22222222-2222-4222-8222-222222222222";
 const locationId = "44444444-4444-4444-8444-444444444444";
 const context = { actor: { id: "11111111-1111-4111-8111-111111111111", role: "office" }, permissions: permissionsForRole("office"), companyIds: new Set([companyId]), locationIds: new Set([locationId]) };
+const adminContext = { ...context, actor: { ...context.actor, role: "admin" }, permissions: permissionsForRole("admin") };
 
 test("commercial read sends tenant and effective location scope and exposes capabilities", async () => {
   let received;
   const result = await readInventoryPartCommercial(partId, new URLSearchParams("limit=25"), context, { read: async (input) => { received = input; return { purchaseCost: {}, prices: {} }; } });
-  assert.deepEqual(received, { catalogPartId: partId, companyIds: [companyId], locationIds: [locationId], isAdmin: false, locationId: null, historyLimit: 25 });
-  assert.deepEqual(result.capabilities, { canReadCost: true, canEditPrices: true, canManageTaxProfiles: true });
+  assert.deepEqual(received, { catalogPartId: partId, companyIds: [companyId], locationIds: [], isAdmin: true, locationId: null, historyLimit: 25 });
+  assert.deepEqual(result.capabilities, { canReadCost: true, canEditPrices: false, canManageTaxProfiles: false });
 });
 
 test("location commercial read resolves one authorized company and location", async () => {
   let received;
   const result = await readInventoryPartCommercial(partId, new URLSearchParams(`locationId=${locationId}&limit=10`), context, {
-    resolveLocationScope: async (receivedContext, receivedLocationId) => {
+    resolveReadLocationScope: async (receivedContext, receivedLocationId) => {
       assert.strictEqual(receivedContext, context);
       assert.equal(receivedLocationId, locationId);
       return { companyIds: [companyId], locationIds: [locationId], isAdmin: false };
@@ -30,6 +31,15 @@ test("location commercial read resolves one authorized company and location", as
   assert.deepEqual(received, { catalogPartId: partId, companyIds: [companyId], locationIds: [locationId], isAdmin: false, locationId, historyLimit: 10 });
 });
 
+test("other-location commercial reads are visible but price capabilities are read only", async () => {
+  const otherLocationId = "55555555-5555-4555-8555-555555555555";
+  const result = await readInventoryPartCommercial(partId, new URLSearchParams(`locationId=${otherLocationId}`), context, {
+    resolveReadLocationScope: async () => ({ companyIds: [companyId], locationIds: [otherLocationId], isAdmin: false, canManageLocation: false }),
+    read: async () => ({ purchaseCost: {}, receiptCosts: {}, prices: {} }),
+  });
+  assert.deepEqual(result.capabilities, { canReadCost: true, canEditPrices: false, canManageTaxProfiles: false });
+});
+
 test("commercial read and price writes require separate financial permissions", async () => {
   await assert.rejects(() => readInventoryPartCommercial(partId, new URLSearchParams(), { ...context, permissions: new Set() }, { read: async () => ({}) }), (error) => error.statusCode === 403);
   await assert.rejects(() => setInventoryPartPrice(partId, "internal", { expectedVersion: 0, amount: "10.0000", currency: "USD", reason: "Initial price", idempotencyKey: "request-123" }, { ...context, permissions: new Set() }, { append: async () => ({}) }), (error) => error.statusCode === 403);
@@ -37,15 +47,19 @@ test("commercial read and price writes require separate financial permissions", 
 
 test("price write preserves zero, supports Unknown, hashes the canonical command and maps conflicts", async () => {
   let received;
-  const result = await setInventoryPartPrice(partId, "selling", { expectedVersion: 0, amount: "0", currency: "cad", reason: "No charge", idempotencyKey: "request-123" }, context, { append: async (input) => { received = input; return { kind: "saved", price: { version: 1 }, replayed: false }; } });
+  await assert.rejects(
+    () => setInventoryPartPrice(partId, "selling", { expectedVersion: 0, amount: "0", currency: "CAD", reason: "No charge", idempotencyKey: "request-office" }, context, { append: async () => assert.fail("Office company price write reached persistence") }),
+    (error) => error.code === "INVENTORY_COMPANY_WRITE_FORBIDDEN" && error.statusCode === 403,
+  );
+  const result = await setInventoryPartPrice(partId, "selling", { expectedVersion: 0, amount: "0", currency: "cad", reason: "No charge", idempotencyKey: "request-123" }, adminContext, { append: async (input) => { received = input; return { kind: "saved", price: { version: 1 }, replayed: false }; } });
   assert.equal(result.price.version, 1);
   assert.equal(received.amount, "0");
   assert.equal(received.currency, "CAD");
   assert.equal(received.requestHash, createHash("sha256").update(JSON.stringify({
     catalogPartId: partId, kind: "selling", expectedVersion: 0, amount: "0", currency: "CAD", reason: "No charge",
   })).digest("hex"));
-  await assert.rejects(() => setInventoryPartPrice(partId, "selling", { expectedVersion: 1, amount: null, currency: null, reason: "Clear price", idempotencyKey: "request-456" }, context, { append: async () => ({ kind: "stale" }) }), (error) => error.code === "INVENTORY_PART_PRICE_STALE");
-  await assert.rejects(() => setInventoryPartPrice(partId, "selling", { expectedVersion: 1, amount: null, currency: null, reason: "Clear price", idempotencyKey: "request-789" }, context, { append: async () => ({ kind: "idempotency_conflict" }) }), (error) => error.code === "INVENTORY_PART_PRICE_REPLAY_CONFLICT");
+  await assert.rejects(() => setInventoryPartPrice(partId, "selling", { expectedVersion: 1, amount: null, currency: null, reason: "Clear price", idempotencyKey: "request-456" }, adminContext, { append: async () => ({ kind: "stale" }) }), (error) => error.code === "INVENTORY_PART_PRICE_STALE");
+  await assert.rejects(() => setInventoryPartPrice(partId, "selling", { expectedVersion: 1, amount: null, currency: null, reason: "Clear price", idempotencyKey: "request-789" }, adminContext, { append: async () => ({ kind: "idempotency_conflict" }) }), (error) => error.code === "INVENTORY_PART_PRICE_REPLAY_CONFLICT");
 });
 
 test("location override write scopes authorization and request hash to the location", async () => {

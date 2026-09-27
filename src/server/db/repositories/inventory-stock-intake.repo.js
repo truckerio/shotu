@@ -3,6 +3,7 @@ import { getPool } from "../pool.js";
 import { inspectInventoryAuthority, recordInventoryAuthorityCutover, recordInventoryAuthorityException } from "./inventory-authority.repo.js";
 import { hasQuantityPrecision } from "../../modules/parts/quantity-uom.js";
 import { placeAggregateInventoryReceipt } from "./inventory-positions.repo.js";
+import { recordAggregateCostLayerPosition, recordAggregateReceiptCostLayer } from "./inventory-aggregate-cost-layers.repo.js";
 
 const MEASURED_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 const QUANTITY_CATEGORIES = new Set(["count", "packaging"]);
@@ -71,6 +72,17 @@ export async function postAggregateStockIntake(input) {
       (id,company_id,receipt_id,line_index,catalog_part_id,product_external_id,part_number,description,quantity,uom_code,tracking_mode)
       values ($1,$2,$3,0,$4,$5,$6,$7,$8,$9,'aggregate')`,
     [lineId, part.company_id, receiptId, part.id, `local-manual:${part.id}`, part.part_number, part.description || "", input.quantity, part.uom_code]);
+    const costLayerId = await recordAggregateReceiptCostLayer(client, {
+      companyId: part.company_id,
+      locationId: input.locationId,
+      catalogPartId: part.id,
+      receiptLineId: lineId,
+      quantity: input.quantity,
+      uomCode: part.uom_code,
+      unitCost: null,
+      currency: null,
+      costSource: "unknown",
+    });
     await recordInventoryAuthorityCutover(client, { claim: authority, companyId: part.company_id, locationId: input.locationId,
       catalogPartId: part.id, receiptId, receiptLineId: lineId });
     const balance = await client.query(`insert into inventory_items
@@ -88,11 +100,18 @@ export async function postAggregateStockIntake(input) {
       (company_id,location_id,catalog_part_id,receipt_id,receipt_line_id,movement_type,quantity_delta,uom_code,actor_id,reason,idempotency_key)
       values ($1,$2,$3,$4,$5,'manual_receipt',$6,$7,$8,'Physical stock intake',$9)`,
     [part.company_id, input.locationId, part.id, receiptId, lineId, input.quantity, part.uom_code, input.actorId, `manual-intake:${batchId}`]);
-    await placeAggregateInventoryReceipt(client, {
+    const positionId = await placeAggregateInventoryReceipt(client, {
       companyId: part.company_id, locationId: input.locationId, inventoryItemId: balance.rows[0].id,
       catalogPartId: part.id, uomCode: part.uom_code, quantity: input.quantity, actorId: input.actorId,
       idempotencyKey: `position:manual-intake:${batchId}`, requestHash, receiptId,
       reason: "Manual physical intake",
+    });
+    await recordAggregateCostLayerPosition(client, {
+      companyId: part.company_id,
+      locationId: input.locationId,
+      costLayerId,
+      positionId,
+      quantity: input.quantity,
     });
     await client.query("commit");
     return { kind: "posted", receiptId, quantity: input.quantity };

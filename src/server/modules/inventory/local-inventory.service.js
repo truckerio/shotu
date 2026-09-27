@@ -19,6 +19,7 @@ import {
 } from "./inventory.schemas.js";
 import { validateCompleteInvoiceAllocationPlan, validateInvoicePostingRoute } from "./inventory-purchase-invoice-allocation.service.js";
 import { physicalInvoiceLineIndexes } from "../../../../shared/invoice-inventory-lines.js";
+import { inventoryCompanyReadScope } from "./inventory-effective-scope.js";
 
 function publicError(code, message, statusCode = 422, retryable = false) {
   return new InventoryError(message, { code, statusCode, retryable });
@@ -33,11 +34,7 @@ function actorScope(requestContext) {
 }
 
 function companyInventoryReadScope(requestContext) {
-  return {
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: ["admin", "office"].includes(requestContext.actor.role),
-  };
+  return inventoryCompanyReadScope(requestContext);
 }
 
 function assertLocationAccess(locationId, requestContext) {

@@ -72,7 +72,7 @@ test("serialized part identity uses separate wrapping lines and top-aligned row 
 });
 
 test("detail rows reuse the Create Workorder operational table geometry across lifecycle stages", () => {
-  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">/);
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table"[^>]*>/);
   assert.match(editor, /<WorkorderPartsRow[\s\S]*?className="used-part-recorded-row"/);
   assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">/);
   assert.match(sharedParts, /"operational-parts-editor"/);
@@ -138,7 +138,7 @@ test("labor and inventory have separate labeled sections with responsive table h
   assert.match(editor, /<h3 id=\{partsSectionTitleId\}>\{t\("parts\.usedTitle"\)\}<\/h3>/);
   assert.match(editor, /t\("parts\.quantityUnit"\)/);
   assert.match(editor, /t\("parts\.statusAction"\)/);
-  assert.match(editor, /\{hasTablePartRows \|\| intakeOpen \? <WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">/);
+  assert.match(editor, /\{hasTablePartRows \|\| intakeOpen \? <WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table"[^>]*>/);
   assert.match(css, /\.used-parts-column-head,[\s\S]*?\.used-parts-items-table > \.operational-part-row\s*\{[^}]*grid-template-columns:/s);
   assert.match(css, /@container \(max-width: 760px\)[\s\S]*?\.used-parts-editor \.used-parts-column-head\s*\{[^}]*display:\s*none;/s);
   assert.match(css, /@container \(max-width: 760px\)[\s\S]*?\.used-parts-editor \.used-part-cell-label\s*\{[^}]*display:\s*block;/s);

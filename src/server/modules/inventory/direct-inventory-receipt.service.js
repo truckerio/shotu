@@ -5,7 +5,7 @@ import { findDirectReceiptPurchaseLine, findDirectReceiptOutcome, findDirectRece
 import { closeDirectReceiptApprovalRequest, createDirectReceiptApprovalRequest, findDirectReceiptApprovalOutcome, loadDirectReceiptApprovalRequest, readDirectReceiptApprovalDetail } from "../../db/repositories/direct-receipt-approvals.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { query } from '../../db/pool.js';
-import { effectiveInventoryScope, resolveInventoryLocationScope } from './inventory-effective-scope.js';
+import { effectiveInventoryScope, inventoryCompanyReadScope, resolveInventoryLocationScope, resolveInventoryReadLocationScope } from './inventory-effective-scope.js';
 import { assertInventoryQrConfigured, inventoryTokenFromCode, readInventoryQrToken } from "./inventory-qr.js";
 import { withInventoryLabels } from "./inventory-receiving.service.js";
 
@@ -47,11 +47,6 @@ export const directReceiptSchema = z.object({
 
 const scopeOptions={code:'INVENTORY_RECEIVE_FORBIDDEN',message:'Receiving requires Office or Admin access.'};
 const locationScope=(context,locationId,dependencies)=>resolveInventoryLocationScope(context,locationId,{loadLocation:dependencies.loadLocation,...scopeOptions});
-async function partScope(context,catalogPartId,dependencies){
-  const load=dependencies.loadPartScope|| (async()=>{const result=await query('select company_id from parts_catalog where id=$1 and company_id=any($2::uuid[])',[catalogPartId,[...context.companyIds]]);return result.rows[0]||null;});
-  const part=await load(catalogPartId,[...context.companyIds]);if(!part)throw inventoryNotFound();
-  return effectiveInventoryScope(context,{companyId:part.company_id||part.companyId,...scopeOptions});
-}
 async function outcomeScope(context,idempotencyKey,dependencies){
   const load=dependencies.loadOutcomeScope|| (async()=>{const result=await query(`select company_id,location_id from local_inventory_receipts where company_id=any($1::uuid[]) and created_by=$2 and idempotency_key=$3 and source_type='direct'
     union all select company_id,location_id from inventory_direct_receipt_approval_requests where company_id=any($1::uuid[]) and submitted_by=$2 and idempotency_key=$3::uuid limit 1`,[[...context.companyIds],context.actor.id,idempotencyKey]);return result.rows[0]||null;});
@@ -64,7 +59,9 @@ function failure(code, message) { return new InventoryError(message, { code, sta
 export async function readPartStockMovements(catalogPartId, searchParams, context, dependencies = {}) {
   const id = z.string().uuid().parse(catalogPartId);
   const parsed = z.object({ locationId: z.string().uuid().optional(), view: z.enum(["audit", "workorder"]).default("audit"), page: z.coerce.number().int().min(1).max(100000).default(1) }).strict().parse(Object.fromEntries(searchParams));
-  const authorized = parsed.locationId?await locationScope(context,parsed.locationId,dependencies):await partScope(context,id,dependencies);
+  const authorized = parsed.locationId
+    ? await (dependencies.resolveReadLocationScope || resolveInventoryReadLocationScope)(context, parsed.locationId, { loadLocation: dependencies.loadLocation })
+    : inventoryCompanyReadScope(context);
   const part = await (dependencies.findPart || findDirectReceiptPart)({ ...authorized, catalogPartId: id });
   if (!part) throw inventoryNotFound();
   return (dependencies.listMovements || listPartStockMovements)({ ...authorized, catalogPartId: id, ...parsed });

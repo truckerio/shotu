@@ -40,19 +40,37 @@ test("move contract keeps aggregate and exact payloads exclusive",async()=>{
     {moveStock:async()=>assert.fail("repository should not run")}),/Destination must differ from source/);
 });
 
-test("position stock reads direct or subtree scope through the tenant-scoped repository",async()=>{
-  let captured;
-  const result=await readPositionStock(locationId,positionId,"subtree",office,{listPositionStock:async(input)=>(captured=input,{scope:input.scope,parts:[{id:partId,directQuantity:2,descendantQuantity:3,subtreeQuantity:5}]})});
-  assert.equal(captured.locationId,locationId);assert.equal(captured.positionId,positionId);assert.equal(captured.scope,"subtree");
-  assert.deepEqual(result.parts[0],{id:partId,directQuantity:2,descendantQuantity:3,subtreeQuantity:5});
-  await readPositionStock(locationId,positionId,null,office,{listPositionStock:async(input)=>({scope:input.scope,parts:[]})});
+test("move reports incomplete batch placement as a recoverable reconciliation conflict",async()=>{
+  await assert.rejects(()=>moveInventoryPosition(partId,locationId,{fromPositionId:positionId,toPositionId:randomUUID(),quantity:2,expectedSourceVersion:1,idempotencyKey:"move-batch-gap",reason:"Put away"},office,
+    {moveStock:async()=>({kind:"batch_reconciliation_required"})}),
+  (error)=>error.code==="INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED"&&error.statusCode===409);
 });
 
-test("position stock rejects invalid scope and hides unavailable positions",async()=>{
+test("position stock reads direct or subtree scope through the tenant-scoped repository",async()=>{
+  let captured;
+  const readScope=async()=>({companyIds:[companyId],locationIds:[locationId],isAdmin:false,canManageLocation:true});
+  const result=await readPositionStock(locationId,positionId,"subtree",office,{resolveReadLocationScope:readScope,listPositionStock:async(input)=>(captured=input,{scope:input.scope,parts:[{id:partId,directQuantity:2,descendantQuantity:3,subtreeQuantity:5}]})});
+  assert.equal(captured.locationId,locationId);assert.equal(captured.positionId,positionId);assert.equal(captured.scope,"subtree");
+  assert.deepEqual(result.parts[0],{id:partId,directQuantity:2,descendantQuantity:3,subtreeQuantity:5});
+  await readPositionStock(locationId,positionId,null,office,{resolveReadLocationScope:async()=>({companyIds:[companyId],locationIds:[locationId],isAdmin:false}),listPositionStock:async(input)=>({scope:input.scope,parts:[]})});
+});
+
+test("position stock rejects invalid scope and cross-company or missing positions",async()=>{
   await assert.rejects(()=>readPositionStock(locationId,positionId,"all",office,{listPositionStock:async()=>assert.fail("repository should not run")}));
-  await assert.rejects(()=>readPositionStock(randomUUID(),positionId,"direct",office,{listPositionStock:async()=>assert.fail("repository should not run")}),
+  await assert.rejects(()=>readPositionStock(randomUUID(),positionId,"direct",office,{resolveReadLocationScope:async()=>{const error=new Error("Not found");error.code="inventory_not_found";throw error;},listPositionStock:async()=>assert.fail("repository should not run")}),
     (error)=>error.code==="inventory_not_found");
-  await assert.rejects(()=>readPositionStock(locationId,positionId,"direct",office,{listPositionStock:async()=>null}),
+  await assert.rejects(()=>readPositionStock(locationId,positionId,"direct",office,{resolveReadLocationScope:async()=>({companyIds:[companyId],locationIds:[locationId],isAdmin:false}),listPositionStock:async()=>null}),
+    (error)=>error.code==="inventory_not_found");
+});
+
+test("Office may read another company location's position stock but cannot move it",async()=>{
+  const otherLocationId=randomUUID();let readInput;
+  const value=await readPositionStock(otherLocationId,positionId,"direct",office,{
+    resolveReadLocationScope:async()=>({companyIds:[companyId],locationIds:[otherLocationId],isAdmin:false,canManageLocation:false}),
+    listPositionStock:async(input)=>(readInput=input,{parts:[]}),
+  });
+  assert.deepEqual(value,{parts:[]});assert.deepEqual(readInput.locationIds,[otherLocationId]);
+  await assert.rejects(()=>moveInventoryPosition(partId,otherLocationId,{fromPositionId:positionId,toPositionId:randomUUID(),quantity:1,expectedSourceVersion:1,idempotencyKey:"move-other",reason:"Not allowed"},office,{moveStock:async()=>assert.fail("write repository should not run")}),
     (error)=>error.code==="inventory_not_found");
 });
 

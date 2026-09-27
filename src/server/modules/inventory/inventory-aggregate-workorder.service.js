@@ -64,6 +64,7 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
   if (result.kind === "unsupported_uom") fail("AGGREGATE_USAGE_UOM_UNSUPPORTED", "The quantity and unit must match this part's saved tracking method and canonical unit.");
   if (result.kind === "insufficient_stock") fail("AGGREGATE_USAGE_INSUFFICIENT_STOCK", "Not enough unreserved measured inventory is available at this workorder location.");
   if (result.kind === "source_position_unavailable") fail("AGGREGATE_USAGE_POSITION_UNAVAILABLE", "The selected pickup location no longer has enough available stock.");
+  if (result.kind === "batch_reconciliation_required") fail("INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED", "This pickup location has incomplete batch placement. Reconcile it before using the part.");
   if (result.kind === "idempotency_conflict") fail("AGGREGATE_USAGE_REPLAY_CONFLICT", "That measured-usage request key was already used with different details.");
   return { usage: result.usage, replayed: result.kind === "replay" };
 }

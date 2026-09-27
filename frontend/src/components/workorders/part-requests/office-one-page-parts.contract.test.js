@@ -34,7 +34,7 @@ test("office Detail passes the shared labor control through the shared parts tab
 
 test("one-page Detail Parts stays on the shared table lifecycle surface", () => {
   assert.match(editor, /const onePage = presentation === "one-page"/);
-  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table">/);
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table"[^>]*>/);
   assert.match(editor, /activeSerializedParts\.map\(\(part, index\) => renderSerializedPartRow/);
   assert.match(editor, /recordedManualParts\.map\(\(part, index\) => renderRecordedPartRow/);
   assert.doesNotMatch(editor, /CompactWorkorderParts|if \(onePage\)/);

@@ -50,6 +50,16 @@ test("reserve validates precision strictly and forwards tenant, location, and wo
   );
 });
 
+test("reserve explains when the selected pickup position has unresolved batch lineage", async () => {
+  await assert.rejects(
+    reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
+      catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1", uomCode: "ea", repairOrder: "Install part",
+      idempotencyKey: "aggregate-batch-placement-gap",
+    }, context(), { reserveAggregateUsage: async () => ({ kind: "batch_reconciliation_required" }) }),
+    (error) => error.code === "INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED" && error.statusCode === 409,
+  );
+});
+
 test("mechanic cannot disguise an approved reversal as release", async () => {
   let called = false;
   await assert.rejects(
@@ -101,7 +111,8 @@ test("repository contract locks workorder identity and keeps event/movement delt
   assert.match(source, /usage\.company_id=\$1 and usage\.workorder_id=\$2 and usage\.location_id=\$3/);
   assert.match(source, /Math\.max\(1, Math\.min\(Number\(limit\) \|\| 200, 200\)\)/);
   const listProjection = source.slice(source.indexOf("export async function listAggregateWorkorderUsages"), source.indexOf("function publicUsage"));
-  assert.doesNotMatch(listProjection, /provider|external_id|receipt_id|invoice/i);
+  assert.match(listProjection, /receiptReference/);
+  assert.doesNotMatch(listProjection, /external_id|invoiceRunId/);
   assert.match(source, /catalog\.tracking_mode/);
   assert.match(source, /QUANTITY_CATEGORIES/);
   assert.match(source, /Number\.isInteger\(input\.quantity\)/);

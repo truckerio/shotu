@@ -8,7 +8,7 @@ import { requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
 import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
 import { calculateInventoryPricingPreview, isSupportedInventoryCurrency } from "./inventory-pricing.js";
-import { resolveInventoryLocationScope } from "./inventory-effective-scope.js";
+import { canManageInventoryCompanyScope, inventoryCompanyManageScope, inventoryCompanyReadScope, resolveInventoryLocationScope, resolveInventoryReadLocationScope } from "./inventory-effective-scope.js";
 
 const idSchema = z.string().uuid();
 const priceKindSchema = z.enum(["internal", "selling"]);
@@ -20,12 +20,8 @@ export async function readInventoryPartCommercial(catalogPartId, searchParams, c
   catalogPartId = idSchema.parse(catalogPartId);
   const query = inventoryPartCommercialQuerySchema.parse(Object.fromEntries(searchParams));
   const resolvedScope = query.locationId
-    ? await (dependencies.resolveLocationScope || resolveInventoryLocationScope)(context, query.locationId)
-    : {
-      companyIds: [...(context.companyIds || [])],
-      locationIds: [...(context.locationIds || [])],
-      isAdmin: context.actor.role === "admin",
-    };
+    ? await (dependencies.resolveReadLocationScope || resolveInventoryReadLocationScope)(context, query.locationId)
+    : inventoryCompanyReadScope(context);
   const result = await (dependencies.read || getInventoryPartCommercial)({
     catalogPartId,
     companyIds: resolvedScope.companyIds,
@@ -35,7 +31,8 @@ export async function readInventoryPartCommercial(catalogPartId, searchParams, c
     historyLimit: query.limit,
   });
   if (!result) throw inventoryNotFound();
-  const canWritePrices = context.permissions?.has(PERMISSION.INVENTORY_PRICE_WRITE) === true;
+  const canWritePrices = context.permissions?.has(PERMISSION.INVENTORY_PRICE_WRITE) === true
+    && (query.locationId ? resolvedScope.canManageLocation !== false : canManageInventoryCompanyScope(context, resolvedScope.companyIds));
   return { ...result, capabilities: { canReadCost: true, canEditPrices: canWritePrices, canManageTaxProfiles: canWritePrices } };
 }
 
@@ -46,11 +43,7 @@ async function writeInventoryPartPrice(catalogPartId, locationId, priceKind, raw
   const input = updateInventoryPartPriceSchema.parse(rawInput);
   const resolvedScope = locationId
     ? await (dependencies.resolveLocationScope || resolveInventoryLocationScope)(context, idSchema.parse(locationId))
-    : {
-      companyIds: [...(context.companyIds || [])],
-      locationIds: [...(context.locationIds || [])],
-      isAdmin: context.actor.role === "admin",
-    };
+    : (dependencies.companyManageScope || inventoryCompanyManageScope)(context);
   const command = {
     catalogPartId, ...(locationId ? { locationId } : {}), kind, expectedVersion: input.expectedVersion, amount: input.amount, currency: input.currency,
     ...(input.taxTreatment === undefined ? {} : { taxTreatment: input.taxTreatment }),

@@ -49,6 +49,54 @@
   grid-template-columns: 1fr;
 }
 
+.office-primary-nav {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.office-primary-nav button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #475467;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 11px;
+}
+
+.office-primary-nav button:hover {
+  background: #fff;
+  border-color: #e4e7ec;
+  color: #182230;
+}
+
+.office-primary-nav button.active {
+  background: #fff;
+  border-color: #d0d5dd;
+  color: #175cd3;
+}
+
+.office-primary-nav button:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: 2px;
+}
+
+.office-primary-nav svg {
+  height: 17px;
+  width: 17px;
+}
+
+.office-mobile-nav {
+  display: none;
+}
+
 .office-layout {
   align-items: start;
   display: grid;
@@ -180,5 +228,58 @@
 @media (max-width: 1180px) {
   .office-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .workspace-operations.office-home {
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .office-mobile-nav {
+    align-items: stretch;
+    background: rgb(255 255 255 / 96%);
+    border-top: 1px solid #d0d5dd;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    height: calc(58px + env(safe-area-inset-bottom));
+    left: 0;
+    padding: 4px 8px env(safe-area-inset-bottom);
+    position: fixed;
+    right: 0;
+    z-index: 90;
+  }
+
+  .office-mobile-nav button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    color: #667085;
+    display: flex;
+    flex-direction: column;
+    font: inherit;
+    font-size: var(--text-navigation);
+    font-weight: var(--weight-semibold);
+    gap: 2px;
+    justify-content: center;
+    min-height: 50px;
+    padding: 3px 4px;
+  }
+
+  .office-mobile-nav button.active {
+    background: #eff8ff;
+    color: #175cd3;
+  }
+
+  .office-mobile-nav button:focus-visible {
+    outline: 2px solid #84adff;
+    outline-offset: -2px;
+  }
+
+  .office-mobile-nav svg {
+    height: 20px;
+    width: 20px;
   }
 }

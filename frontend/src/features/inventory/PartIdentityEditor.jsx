@@ -13,7 +13,7 @@ function fieldIsEditable(part, field) {
   return (part.editableFields || []).includes(field);
 }
 
-export function PartIdentityEditor({ part, onEditStateChange, onReload, onSaved }) {
+export function PartIdentityEditor({ part, readOnly = false, onEditStateChange, onReload, onSaved }) {
   const [draft, setDraft] = useState(() => createPartIdentityDraft(part));
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -51,7 +51,7 @@ export function PartIdentityEditor({ part, onEditStateChange, onReload, onSaved 
     setMessage("");
   }, [part.catalogPartId, part.version]);
 
-  const canAddReference = draft.referenceNumbers.length < MAX_REFERENCE_NUMBERS && fieldIsEditable(part, "referenceNumbers");
+  const canAddReference = !readOnly && draft.referenceNumbers.length < MAX_REFERENCE_NUMBERS && fieldIsEditable(part, "referenceNumbers");
   const summaryErrors = useMemo(() => ({
     ...errors,
     ...(conflict ? { conflict: conflict.message } : {}),
@@ -99,6 +99,7 @@ export function PartIdentityEditor({ part, onEditStateChange, onReload, onSaved 
 
   async function submit(event) {
     event.preventDefault();
+    if (readOnly) return;
     const nextErrors = validatePartIdentityDraft(draft);
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
@@ -136,25 +137,25 @@ export function PartIdentityEditor({ part, onEditStateChange, onReload, onSaved 
       </div> : null}
       <div className="inventory-part-editor-grid">
         <FormField id="inventory-part-name" label="Part name" error={errors.description} required>
-          <input {...textEntryProps("name")} maxLength={1000} value={draft.description} onChange={(event) => update("description", event.target.value)} disabled={busy || !fieldIsEditable(part, "description")} />
+          <input {...textEntryProps("name")} maxLength={1000} value={draft.description} onChange={(event) => update("description", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "description")} />
         </FormField>
         {!providerManaged ? <FormField id="inventory-primary-part-number" label="Primary part number" error={errors.partNumber} required>
-          <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} disabled={busy || !fieldIsEditable(part, "partNumber")} />
+          <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "partNumber")} />
         </FormField> : null}
         <FormField id="inventory-manufacturer" label="Manufacturer">
-          <input {...textEntryProps("name")} maxLength={240} value={draft.manufacturer} onChange={(event) => update("manufacturer", event.target.value)} disabled={busy || !fieldIsEditable(part, "manufacturer")} />
+          <input {...textEntryProps("name")} maxLength={240} value={draft.manufacturer} onChange={(event) => update("manufacturer", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "manufacturer")} />
         </FormField>
         {!providerManaged ? <FormField id="inventory-category" label="Category">
-          <input {...textEntryProps("name")} maxLength={240} value={draft.category} onChange={(event) => update("category", event.target.value)} disabled={busy || !fieldIsEditable(part, "category")} />
+          <input {...textEntryProps("name")} maxLength={240} value={draft.category} onChange={(event) => update("category", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "category")} />
         </FormField> : null}
         {!providerManaged ? <FormField id="inventory-catalog-barcode" label="Catalog barcode">
-          <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.barcode} onChange={(event) => update("barcode", event.target.value)} disabled={busy || !fieldIsEditable(part, "barcode")} />
+          <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={draft.barcode} onChange={(event) => update("barcode", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "barcode")} />
         </FormField> : null}
         <FormField id="inventory-unit" label="Unit">
-          <UnitOfMeasurePicker uomCode={draft.uomCode} allowedUomCodes={allowedUomCodes} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={!uomEditable} />
+          <UnitOfMeasurePicker uomCode={draft.uomCode} allowedUomCodes={allowedUomCodes} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={readOnly || !uomEditable} />
         </FormField>
         <FormField id="inventory-tracking-mode" label="Tracking" error={errors.trackingMode} required>
-          <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy || !fieldIsEditable(part, "trackingMode")}>
+          <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "trackingMode")}>
             <option value="">Choose tracking</option>
             <option value="quantity">Quantity</option>
             <option value="serialized">Serialized</option>
@@ -168,16 +169,16 @@ export function PartIdentityEditor({ part, onEditStateChange, onReload, onSaved 
         <header>{canAddReference ? <Button type="button" icon={Plus} onClick={addReference} disabled={busy}>Add reference</Button> : null}</header>
         {draft.referenceNumbers.map((reference, index) => <div className="inventory-part-editor-reference-row" key={reference.id}>
           <FormField id={`inventory-reference-${reference.id}`} label={`Reference number ${index + 1}`} error={errors[`reference-${reference.id}`]}>
-            <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={reference.value} onChange={(event) => updateReference(reference.id, event.target.value)} disabled={busy || !fieldIsEditable(part, "referenceNumbers")} />
+            <input {...textEntryProps("identifier")} autoComplete="off" maxLength={200} value={reference.value} onChange={(event) => updateReference(reference.id, event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "referenceNumbers")} />
           </FormField>
-          <IconButton className="inventory-part-editor-remove" icon={MinusCircle} tone="danger" onClick={() => removeReference(reference.id)} disabled={busy || !fieldIsEditable(part, "referenceNumbers")} label={`Remove reference number ${index + 1}`} />
+          {!readOnly ? <IconButton className="inventory-part-editor-remove" icon={MinusCircle} tone="danger" onClick={() => removeReference(reference.id)} disabled={busy || !fieldIsEditable(part, "referenceNumbers")} label={`Remove reference number ${index + 1}`} /> : null}
         </div>)}
         </div>
       </details>
-      <ActionFooter stickyOnMobile message={busy ? "Saving part details…" : ""}>
+      {!readOnly ? <ActionFooter stickyOnMobile message={busy ? "Saving part details…" : ""}>
         <Button type="button" onClick={reset} disabled={busy || !dirty}>Reset</Button>
         <Button type="submit" variant="primary" disabled={busy || !dirty}>{busy ? "Saving" : "Save"}</Button>
-      </ActionFooter>
+      </ActionFooter> : null}
     </OperationalForm>
   );
 }

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getPool } from "../pool.js";
+import { moveAggregateCostLayerPositions } from "./inventory-aggregate-cost-layers.repo.js";
 
 const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const num = (value) => Number(value || 0);
@@ -576,11 +577,20 @@ export async function moveInventoryStock(input,dependencies={}) {
       await client.query(`insert into inventory_position_balances(company_id,location_id,position_id,inventory_item_id,catalog_part_id,uom_code,quantity)
         values($1,$2,$3,$4,$5,$6,$7) on conflict(company_id,position_id,inventory_item_id) do update set quantity=inventory_position_balances.quantity+excluded.quantity,version=inventory_position_balances.version+1,updated_at=now()`,
       [stock.company_id,input.locationId,input.move.toPositionId,stock.inventory_item_id,input.partId,stock.uom_code,input.move.quantity]);
+      await moveAggregateCostLayerPositions(client, {
+        companyId: stock.company_id,
+        locationId: input.locationId,
+        catalogPartId: input.partId,
+        uomCode: stock.uom_code,
+        fromPositionId: input.move.fromPositionId,
+        toPositionId: input.move.toPositionId,
+        quantity: input.move.quantity,
+      });
       await client.query(`insert into inventory_position_movements(operation_id,company_id,location_id,catalog_part_id,uom_code,quantity,from_position_id,to_position_id)
         values($1,$2,$3,$4,$5,$6,$7,$8)`,[operationId,stock.company_id,input.locationId,input.partId,stock.uom_code,input.move.quantity,input.move.fromPositionId,input.move.toPositionId]);movementCount=1;
     }
     await client.query("commit");return{kind:"moved",operation:{id:operationId,type:"move",movementCount}};
-  }catch(error){await client.query("rollback").catch(()=>{});throw error;}finally{client.release();}
+  }catch(error){await client.query("rollback").catch(()=>{});if(error?.code==="INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED")return{kind:"batch_reconciliation_required"};throw error;}finally{client.release();}
 }
 
 async function loadCount(client,input){

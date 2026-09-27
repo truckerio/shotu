@@ -10,7 +10,7 @@ const path=(location=locationId,position=positionId,query="")=>`http://localhost
 
 test("position stock route forwards subtree scope through the handler boundary",async()=>{
   const {sent,helpers}=harness();let captured;const partId=randomUUID();
-  const handled=await handleInventoryPositionsApi({method:"GET"},{},new URL(path(locationId,positionId,"?scope=subtree")),helpers,{listPositionStock:async(input)=>(captured=input,{scope:"subtree",parts:[{id:partId,subtreeQuantity:5}]})});
+  const handled=await handleInventoryPositionsApi({method:"GET"},{},new URL(path(locationId,positionId,"?scope=subtree")),helpers,{loadLocation:async()=>({id:locationId,company_id:companyId}),listPositionStock:async(input)=>(captured=input,{scope:"subtree",parts:[{id:partId,subtreeQuantity:5}]})});
   assert.equal(handled,true);assert.equal(captured.scope,"subtree");assert.equal(captured.locationId,locationId);assert.equal(captured.positionId,positionId);
   assert.deepEqual(sent,[{status:200,value:{scope:"subtree",parts:[{id:partId,subtreeQuantity:5}]}}]);
 });
@@ -23,7 +23,7 @@ test("position stock route rejects an invalid scope before calling the repositor
 
 test("position stock route hides an unauthorized location before calling the repository",async()=>{
   const {helpers}=harness();
-  await assert.rejects(()=>handleInventoryPositionsApi({method:"GET"},{},new URL(path(randomUUID(),positionId,"?scope=direct")),helpers,{listPositionStock:async()=>assert.fail("repository should not run")}),
+  await assert.rejects(()=>handleInventoryPositionsApi({method:"GET"},{},new URL(path(randomUUID(),positionId,"?scope=direct")),helpers,{loadLocation:async()=>null,listPositionStock:async()=>assert.fail("repository should not run")}),
     (error)=>error.code==="inventory_not_found"&&error.statusCode===404);
 });
 

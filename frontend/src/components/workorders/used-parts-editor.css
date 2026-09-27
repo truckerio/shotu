@@ -610,3 +610,14 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.workorder-part-price { min-width: 0; }
+.workorder-part-price select { width: 100%; min-height: 40px; border: 1px solid #98a2b3; border-radius: 8px; background: #fff; padding: 7px 9px; }
+.workorder-part-price strong,.workorder-part-price small { overflow-wrap: anywhere; }
+.workorder-part-price small[role="alert"] { color: #b42318; }
+.used-part-price-unavailable { color: #667085; font-size: 12px; align-self: center; }
+.workorder-part-price-layers summary { min-height: 32px; display: flex; align-items: center; cursor: pointer; color: #475467; font-size: 12px; font-weight: 700; }
+.workorder-part-price-layers ul { display: grid; gap: 6px; margin: 0; padding: 6px 0 0; list-style: none; }
+.workorder-part-price-layers li { display: grid; gap: 2px; }
+.workorder-part-price-layers li > span { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.workorder-part-price-layers li > span strong:last-child { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.workorder-part-price-layers li small { color: #667085; }

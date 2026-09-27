@@ -10,6 +10,7 @@ export const WORKORDER_PARTS_COLUMNS = Object.freeze({
   QUANTITY_UOM: "quantity-uom",
   REPAIR_ORDER: "repair-order",
   PICKUP: "pickup",
+  PRICE: "price",
   STATUS_ACTION: "status-action",
 });
 
@@ -30,6 +31,7 @@ export const WORKORDER_PARTS_COLUMN_DESCRIPTORS = Object.freeze({
   [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: Object.freeze({ track: "var(--workorder-parts-quantity-track, minmax(126px, 0.85fr))" }),
   [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: Object.freeze({ track: "minmax(0, 1fr)" }),
   [WORKORDER_PARTS_COLUMNS.PICKUP]: Object.freeze({ track: "minmax(180px, 1fr)" }),
+  [WORKORDER_PARTS_COLUMNS.PRICE]: Object.freeze({ track: "minmax(150px, .8fr)" }),
   [WORKORDER_PARTS_COLUMNS.STATUS_ACTION]: Object.freeze({ track: "minmax(220px, 0.9fr)" }),
 });
 

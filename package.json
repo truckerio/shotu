@@ -22,6 +22,7 @@
     "db:seed-demo-users": "node --env-file=.env src/server/db/seeds/demo-users.js",
     "db:seed-qa-roles": "node --env-file=.env src/server/db/seeds/qa-role-users.js",
     "db:seed-chino-volume": "node --env-file=.env src/server/db/seeds/chino-volume.js",
+    "db:seed-batch-cost-demo": "node --env-file=.env src/server/db/seeds/batch-cost-demo.js",
     "kiosk:pins:reset": "node scripts/kiosk/reset-mechanic-pins.js",
     "test:parts-helper": "node --test src/server/modules/parts-helper/parts-helper.test.js",
     "test:inventory:receiving": "node --test src/server/modules/inventory/direct-inventory-receipt.service.test.js frontend/src/features/inventory/direct-receipt-model.test.js",

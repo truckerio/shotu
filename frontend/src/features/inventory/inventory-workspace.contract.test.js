@@ -236,7 +236,7 @@ test("stock has peer part and location modes with contextual physical counts", a
   assert.match(workspace, /label: "By part"/);
   assert.match(workspace, /label: "By location"/);
   assert.match(styles, /\.inventory-stock-mode-tabs \+ \.inventory-location-stock-workspace \{[^}]*box-sizing: border-box;[^}]*padding-top: 16px;/);
-  assert.match(workspace, /<InventoryLocationStockWorkspace locations=\{locations\} initialShopId=\{stockLocationInitialShop\} initialPositionId=\{stockLocationInitialPosition\}[\s\S]*canApplyInventoryCount=\{canApplyInventoryCount\}[\s\S]*onOpenPart=\{openLocationPart\}[\s\S]*onAddStock=/);
+  assert.match(workspace, /<InventoryLocationStockWorkspace locations=\{browseLocations\} initialShopId=\{stockLocationInitialShop\} initialPositionId=\{stockLocationInitialPosition\}[\s\S]*canApplyInventoryCount=\{canApplyInventoryCount\}[\s\S]*onOpenPart=\{openLocationPart\}[\s\S]*onAddStock=/);
   assert.doesNotMatch(workspace, /inventory-count-action|Storage layout|InventoryLocationsWorkspace/);
   assert.match(locationsWorkspace, /<h2 id="inventory-locations-title">Storage layout<\/h2>/);
   assert.doesNotMatch(locationsWorkspace, /PositionCountPanel/);
@@ -292,6 +292,35 @@ test("stock has peer part and location modes with contextual physical counts", a
   assert.match(locationStock, /role="treeitem"/);
   const locationStyles = await readFile(new URL("./inventory-locations-workspace.css", import.meta.url), "utf8");
   assert.match(locationStyles, /\.inventory-location-stock-detail \{[^}]*grid-template-rows: repeat\(4, auto\);[^}]*align-content: start;/);
+});
+
+test("Office stock browsing separates company-wide visibility from assigned-location actions", async () => {
+  const [workspace, locationStock, commercial, identity, serialization, styles] = await Promise.all([
+    readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./InventoryLocationStockWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./PartCommercialDetails.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./PartIdentityEditor.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./PartSerializationPanel.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(workspace, /\/api\/office\/inventory\/browse-locations/);
+  assert.match(workspace, /const \[browseLocations, setBrowseLocations\]/);
+  assert.match(workspace, /manageableLocationIds/);
+  assert.match(workspace, /selectedLocationReadOnly/);
+  assert.match(workspace, /locations=\{browseLocations\}/);
+  assert.match(workspace, /View only/);
+  assert.match(workspace, /manageableCompanyIds/);
+  assert.match(workspace, /selectedCompanyCanManage/);
+  assert.match(workspace, /PartCommercialDetails key=\{`\$\{selectedItem\.catalogPartId\}:company-defaults`\} part=\{selectedItem\} readOnly=\{!selectedCompanyCanManage\}/);
+  assert.match(workspace, /readOnly=\{!selectedCompanyCanManage \|\| selectedLocationReadOnly\}/);
+  assert.match(locationStock, /canManageShop/);
+  assert.match(locationStock, /canManageShop && selectedArrivalTarget/);
+  assert.match(locationStock, /canManageShop && selectedIsCountableLeaf/);
+  assert.match(commercial, /manageableLocationIds\.has\(batch\.locationId\)/);
+  assert.match(commercial, /canEditSellingPolicy \?/);
+  assert.match(identity, /readOnly = false/);
+  assert.match(serialization, /!readOnly && custodyDetail\?\.capabilities\?\.route/);
+  assert.match(styles, /\.inventory-view-only-badge/);
 });
 
 test("stock starts unified add stock and keeps location count handoffs", async () => {
@@ -395,10 +424,12 @@ test("inventory stock opens the shared secondary part detail window", async () =
   assert.doesNotMatch(workspace, /Our inventory available|Our inventory 0/);
   assert.match(workspace, /setSelectedLocationId/);
   assert.match(workspace, /aria-label="Part detail pages"/);
-  for (const label of ["Stock", "Prices", "Audit log", "Details"]) assert.match(workspace, new RegExp(`label: "${label}"`));
+  for (const label of ["Stock", "Activity", "Details"]) assert.match(workspace, new RegExp(`label: "${label}"`));
+  assert.doesNotMatch(workspace, /label: "Prices"/);
   assert.match(workspace, /aria-current=\{partDetailPage === page\.id \? "page" : undefined\}/);
   assert.match(workspace, /partDetailPage === "stock"/);
-  assert.match(workspace, /partDetailPage === "prices"/);
+  assert.match(workspace, /<PartCommercialDetails key=\{`\$\{selectedItem\.catalogPartId\}:\$\{selectedLocation\.locationId\}`\} part=\{selectedItem\} location=\{selectedLocation\}/);
+  assert.match(workspace, /<PartCommercialDetails key=\{`\$\{selectedItem\.catalogPartId\}:company-defaults`\} part=\{selectedItem\}/);
   assert.match(workspace, /partDetailPage === "activity"/);
   assert.match(workspace, /partDetailPage === "details"/);
   assert.match(workspace, /<PartLocationSettings part=\{selectedItem\} location=\{location\}/);
@@ -455,8 +486,7 @@ test("part detail makes each selected location commercial while defaults and she
     readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, /part=\{selectedItem\} location=\{selectedLocation\}/);
-  assert.match(workspace, /selectedLocation\?\.locationId \|\| "company-defaults"/);
-  assert.match(workspace, /location=\{selectedLocation \|\| undefined\}/);
+  assert.match(workspace, /key=\{`\$\{selectedItem\.catalogPartId\}:company-defaults`\}/);
   assert.doesNotMatch(workspace, /secondary=\{!selectedLocation\}/);
   assert.match(workspace, /selectedLocation && shelvingOpen \? <>/);
   assert.match(workspace, /<IconButton icon=\{ArrowLeft\} label="Back to all locations" onClick=\{\(\) => setSelectedLocationId\(""\)\} \/>/);
@@ -475,7 +505,8 @@ test("part detail pages keep the daily stock facts visible and secondary records
     readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
   ]);
 
-  for (const label of ["On hand", "Our reserved", "Available"]) assert.match(workspace, new RegExp(`<span>${label}<\\/span>`));
+  for (const label of ["On hand", "Reserved", "Available"]) assert.match(workspace, new RegExp(`<span>${label}<\\/span>`));
+  assert.match(workspace, /className="is-primary"><span>Available<\/span>/);
   assert.match(workspace, /const stockedLocations =/);
   assert.match(workspace, /const otherLocations =/);
   assert.match(workspace, />Other locations <span>\{otherLocations\.length\}<\/span>/);
@@ -810,18 +841,18 @@ test("the main inventory page can create a zero-stock local catalog part", async
   assert.match(source, /setQuery\(part\.partNumber\)/);
 });
 
-test("part location history is tracking-aware and hands off to a visibly scoped audit log", async () => {
+test("part activity is visibly scoped and owns stock history", async () => {
   const [workspace, history, styles] = await Promise.all([
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./StockMovementHistory.jsx", import.meta.url), "utf8"),
     readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /\{ id: "activity", label: "Audit log" \}/);
+  assert.match(workspace, /\{ id: "activity", label: "Activity" \}/);
   assert.match(workspace, /selectedItem\.trackingMode === "quantity" \|\| selectedItem\.trackingMode === "measured_bulk"/);
-  assert.match(workspace, />Used on Workorders</);
-  assert.match(workspace, /locationId=\{selectedLocation\.locationId\} view="workorder"/);
-  assert.match(workspace, />View full audit log<\/Button>/);
-  assert.match(workspace, /<PartSerializationPanel[\s\S]*?showAddAction=\{false\}[\s\S]*?View full audit log/);
+  assert.doesNotMatch(workspace, />Used on Workorders</);
+  assert.doesNotMatch(workspace, />View full audit log<\/Button>/);
+  assert.match(workspace, /<StockMovementHistory partId=\{selectedItem\.catalogPartId\} locationId=\{selectedLocation\?\.locationId\} refreshKey=\{refreshKey\}/);
+  assert.match(workspace, />Activity<\/h3>/);
   assert.match(workspace, /Filtered to this shop/);
   assert.match(workspace, /All locations · Company-wide history/);
   assert.match(workspace, />Show all locations<\/Button>/);

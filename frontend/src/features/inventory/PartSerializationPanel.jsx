@@ -136,6 +136,7 @@ export function PartSerializationPanel({
   onAddStock,
   onMarkDamaged,
   showAddAction = true,
+  readOnly = false,
 }) {
   const rootRef = useRef(null);
   const backRef = useRef(null);
@@ -533,7 +534,7 @@ export function PartSerializationPanel({
         <div><dt>Reserved</dt><dd>{quantity(data.location.localQuantityReserved)} {uom}</dd></div>
         <div><dt>Available</dt><dd>{quantity(Math.max(0, data.location.localQuantityOnHand - data.location.localQuantityReserved))} {uom}</dd></div>
       </dl>
-      <StockIntakeControl catalogPartId={item.catalogPartId} locationId={location.locationId} initialData={data} onReceived={async () => { await load(); onInventoryChanged?.(); }} />
+      {!readOnly ? <StockIntakeControl catalogPartId={item.catalogPartId} locationId={location.locationId} initialData={data} onReceived={async () => { await load(); onInventoryChanged?.(); }} /> : null}
     </div>;
   }
 
@@ -678,7 +679,7 @@ export function PartSerializationPanel({
                   </div>
                 ) : null}
               </dl>
-              {custodyDetail?.capabilities?.route &&
+              {!readOnly && custodyDetail?.capabilities?.route &&
               custodyDetail?.unit?.status === "in_stock" &&
               custodyDetail?.unit?.custodyHolderType ===
                 "inventory_location" ? (
@@ -862,7 +863,7 @@ export function PartSerializationPanel({
                   </span>
                 </a>
               ) : null}
-              {showAddAction && data.units.length > 0 &&
+              {!readOnly && showAddAction && data.units.length > 0 &&
               data.canCreateAtLocation &&
               data.canCreateSerializedUnits &&
               !createOpen ? (
@@ -1057,7 +1058,7 @@ export function PartSerializationPanel({
               <QrCode01 />
               <strong>No serialized children yet</strong>
               <p>Add the physical units currently at this location.</p>
-              {showAddAction && data.canCreateAtLocation &&
+              {!readOnly && showAddAction && data.canCreateAtLocation &&
               data.canCreateSerializedUnits &&
               !createOpen ? (
                 <Button
@@ -1072,7 +1073,7 @@ export function PartSerializationPanel({
             </div>
           )}
 
-          {data.canCreateAtLocation &&
+          {!readOnly && data.canCreateAtLocation &&
           data.canCreateSerializedUnits &&
           createOpen ? (
             <form className="inventory-serial-create" onSubmit={createUnits}>

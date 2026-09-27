@@ -3,6 +3,7 @@ import { readApprovalPolicy, canApprovePurchase } from "./purchase-approval-sett
 import { getPool, query } from "../pool.js";
 import { createReceiptLabelBatch, loadReceiptLabelBatch } from "./inventory-labels.repo.js";
 import { placeAggregateInventoryReceipt, placeSerializedInventoryReceipt } from "./inventory-positions.repo.js";
+import { recordAggregateCostLayerPosition, recordAggregateReceiptCostLayer } from "./inventory-aggregate-cost-layers.repo.js";
 import { assertPrimaryPartIdentityAvailable } from "./parts-catalog-edit.repo.js";
 import { normalizePartNumber } from "../../modules/parts/part.constants.js";
 import {
@@ -585,6 +586,17 @@ export async function postLocalInventoryReceipt({
         );
       }
       if (acceptedQuantity > 0) {
+      const costLayerId = line.trackingMode !== "serialized" ? await recordAggregateReceiptCostLayer(client, {
+        companyId: source.company_id,
+        locationId: source.location_id,
+        catalogPartId,
+        receiptLineId: line.id,
+        quantity: acceptedQuantity,
+        uomCode: line.uomCode,
+        unitCost: line.unitCost ?? null,
+        currency: line.currency || null,
+        costSource: line.costSource || "unknown",
+      }) : null;
       await recordInventoryAuthorityCutover(client, {
         claim: line.authorityClaim,
         companyId: source.company_id,
@@ -656,9 +668,18 @@ export async function postLocalInventoryReceipt({
       if (availableUnitIds.length) await placeSerializedInventoryReceipt(client, {
         ...placement, unitIds: availableUnitIds,
       });
-      else await placeAggregateInventoryReceipt(client, {
+      else {
+        const positionId = await placeAggregateInventoryReceipt(client, {
         ...placement, inventoryItemId: balance.rows[0].id, quantity: acceptedQuantity,
-      });
+        });
+        await recordAggregateCostLayerPosition(client, {
+          companyId: source.company_id,
+          locationId: source.location_id,
+          costLayerId,
+          positionId,
+          quantity: acceptedQuantity,
+        });
+      }
       }
     }
     for (const allocation of purchaseInvoiceAllocations) {

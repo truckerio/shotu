@@ -5,6 +5,14 @@ import {
   releaseAggregateInventoryPositions, consumeAggregateInventoryPositions,
   adjustConsumedAggregateInventoryPositions,
 } from "./inventory-positions.repo.js";
+import {
+  adjustConsumedAggregateCostLayers,
+  consumeAggregateCostLayers,
+  pickAggregateCostLayers,
+  releaseAggregateCostLayers,
+  reserveAggregateCostLayers,
+  reverseAggregateCostLayers,
+} from "./inventory-aggregate-cost-layers.repo.js";
 
 const MEASURED_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 const QUANTITY_CATEGORIES = new Set(["count", "packaging"]);
@@ -29,7 +37,10 @@ export async function listAggregateWorkorderUsages({
             usage.catalog_part_id, usage.quantity, usage.adjustment_total,
             usage.uom_code, usage.status, usage.repair_order,
             catalog.part_number, catalog.description,
-            source.source_position_path
+            source.source_position_path,
+            price.id price_snapshot_id,price.selection price_selection,price.unit_price price_unit_price,price.total_price price_total,price.currency price_currency,
+            price_lines.price_allocations,
+            cost.cost_allocations
      from workorder_aggregate_part_usages usage
      join parts_catalog catalog
        on catalog.company_id=usage.company_id and catalog.id=usage.catalog_part_id
@@ -39,6 +50,61 @@ export async function listAggregateWorkorderUsages({
        join position_tree tree on tree.company_id=allocation.company_id and tree.id=allocation.position_id
        where allocation.company_id=usage.company_id and allocation.usage_id=usage.id
      ) source on true
+     left join lateral(select snapshot.* from workorder_part_price_snapshots snapshot where snapshot.company_id=usage.company_id and snapshot.aggregate_usage_id=usage.id order by snapshot.created_at desc,snapshot.id desc limit 1)price on true
+     left join lateral(
+       select jsonb_agg(jsonb_build_object(
+         'costLayerId',allocation.cost_layer_id,
+         'receiptLineId',allocation.receipt_line_id,
+         'sourceKind',layer.source_kind,
+         'quantity',allocation.quantity::text,
+         'unitPrice',allocation.unit_price::text,
+         'totalPrice',allocation.total_price::text,
+         'currency',allocation.currency,
+         'receivedAt',layer.received_at,
+         'receiptReference',coalesce(nullif(coalesce(run.reviewed_draft,run.extracted_draft) #>> '{invoiceNumber,value}',''),receipt.provider_picking_name,receipt.provider_marker,'')
+       ) order by layer.received_at,layer.id) price_allocations
+       from workorder_part_price_snapshot_allocations allocation
+       join inventory_aggregate_cost_layers layer
+         on layer.company_id=allocation.company_id and layer.id=allocation.cost_layer_id
+       left join inventory_receipt_lines line
+         on line.company_id=allocation.company_id and line.id=allocation.receipt_line_id
+       left join inventory_receipts receipt
+         on receipt.company_id=line.company_id and receipt.id=line.receipt_id
+       left join invoice_extraction_runs run
+         on run.company_id=receipt.company_id and run.id=receipt.invoice_run_id
+       where allocation.company_id=price.company_id and allocation.snapshot_id=price.id
+     ) price_lines on price.id is not null
+     left join lateral(
+       select jsonb_agg(jsonb_build_object(
+         'costLayerId',allocation.cost_layer_id,
+         'receiptLineId',layer.receipt_line_id,
+         'sourceKind',layer.source_kind,
+         'quantity',allocation.quantity::text,
+         'uomCode',layer.uom_code,
+         'unitCost',coalesce(revision.unit_cost,line.unit_cost,layer.unit_cost)::text,
+         'currency',coalesce(revision.currency,line.currency,layer.currency),
+         'costSource',case when revision.id is not null then 'manual_correction' else coalesce(line.cost_source,layer.cost_source) end,
+         'receivedAt',layer.received_at,
+         'receiptReference',coalesce(nullif(coalesce(run.reviewed_draft,run.extracted_draft) #>> '{invoiceNumber,value}',''),receipt.provider_picking_name,receipt.provider_marker,'')
+       ) order by layer.received_at,layer.id) cost_allocations
+       from inventory_aggregate_usage_cost_allocations allocation
+       join inventory_aggregate_cost_layers layer
+         on layer.company_id=allocation.company_id and layer.id=allocation.cost_layer_id
+       left join inventory_receipt_lines line
+         on line.company_id=layer.company_id and line.id=layer.receipt_line_id
+       left join lateral (
+         select correction.*
+         from inventory_aggregate_cost_layer_revisions correction
+         where correction.company_id=layer.company_id and correction.cost_layer_id=layer.id
+         order by correction.version desc limit 1
+       ) revision on true
+       left join inventory_receipts receipt
+         on receipt.company_id=line.company_id and receipt.id=line.receipt_id
+       left join invoice_extraction_runs run
+         on run.company_id=receipt.company_id and run.id=receipt.invoice_run_id
+       where allocation.company_id=usage.company_id and allocation.usage_id=usage.id
+         and allocation.status in ('reserved','picked','consumed')
+     ) cost on true
      where usage.company_id=$1 and usage.workorder_id=$2 and usage.location_id=$3
      order by usage.created_at, usage.id
      limit $4`,
@@ -58,6 +124,8 @@ export async function listAggregateWorkorderUsages({
     partNumber: row.part_number,
     description: row.description,
     sourcePositionPath: row.source_position_path || "",
+    costAllocations: row.cost_allocations || [],
+    ...(row.price_snapshot_id ? { price: { id: row.price_snapshot_id, selection: row.price_selection, unitPrice: String(row.price_unit_price), totalPrice: String(row.price_total), currency: row.price_currency, allocations: row.price_allocations || [] } } : {}),
   }));
 }
 
@@ -162,6 +230,16 @@ export async function reserveAggregateWorkorderUsage(input, transactionClient = 
         input.actorId, input.idempotencyKey, input.requestHash],
     );
     const usage = inserted.rows[0];
+    await reserveAggregateCostLayers(client, {
+      companyId: workorder.company_id,
+      locationId: workorder.location_id,
+      catalogPartId: input.catalogPartId,
+      uomCode: input.uomCode,
+      usageId: usage.id,
+      quantity: input.quantity,
+      quantityOnHand: stock.quantity_on_hand,
+      sourcePositionId: input.sourcePositionId,
+    });
     await reserveAggregateInventoryPositions(client, {
       companyId: workorder.company_id, locationId: workorder.location_id, inventoryItemId: stock.id,
       catalogPartId: input.catalogPartId, uomCode: input.uomCode, usageId: usage.id, quantity: input.quantity,
@@ -178,6 +256,9 @@ export async function reserveAggregateWorkorderUsage(input, transactionClient = 
     return { kind: "reserved", usage: publicUsage(usage) };
   } catch (error) {
     if (managesTransaction) await client.query("rollback").catch(() => {});
+    if (error?.code === "INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED") {
+      return { kind: "batch_reconciliation_required" };
+    }
     throw error;
   } finally { if (managesTransaction) client.release(); }
 }
@@ -213,7 +294,7 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
       await client.query("rollback"); return { kind: "unsupported_uom" };
     }
     const balance = await client.query(
-      `select id from inventory_items where company_id=$1 and location_id=$2
+      `select id,quantity_on_hand from inventory_items where company_id=$1 and location_id=$2
        and catalog_part_id=$3 and uom_code=$4 and source_provider='local' limit 1 for update`,
       [usage.company_id, usage.location_id, usage.catalog_part_id, usage.uom_code],
     );
@@ -225,6 +306,7 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
     if (["reserved", "installed_pending_approval"].includes(usage.status) && input.action === "release") {
       await releaseAggregateInventoryPositions(client, { companyId: usage.company_id, usageId: usage.id,
         actorId: input.actorId, workorderId: usage.workorder_id, reason: input.reason });
+      await releaseAggregateCostLayers(client, { companyId: usage.company_id, usageId: usage.id });
       await client.query(`update inventory_items set quantity_reserved=quantity_reserved-$3, updated_at=now() where company_id=$1 and id=$2`, [usage.company_id, balance.rows[0].id, usage.quantity]);
       await client.query(`update workorder_aggregate_part_usages set status='released', released_at=now(), finalized_by_user_id=$3, updated_at=now() where company_id=$1 and id=$2`, [usage.company_id, usage.id, input.actorId]);
       eventType = "released";
@@ -235,6 +317,7 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
         inventoryItemId: balance.rows[0].id, catalogPartId: usage.catalog_part_id, uomCode: usage.uom_code,
         usageId: usage.id, actorId: input.actorId, workorderId: usage.workorder_id,
         quantityDelta: -effectiveQuantity, reason: input.reason, idempotencyKey: input.idempotencyKey });
+      await reverseAggregateCostLayers(client, { companyId: usage.company_id, usageId: usage.id });
       await client.query(`update inventory_items set quantity_on_hand=quantity_on_hand+$3, updated_at=now() where company_id=$1 and id=$2`, [usage.company_id, balance.rows[0].id, effectiveQuantity]);
       await client.query(`update workorder_aggregate_part_usages set status='reversed', reversed_at=now(), finalized_by_user_id=$3, updated_at=now() where company_id=$1 and id=$2`, [usage.company_id, usage.id, input.actorId]);
       eventType = "reversed"; movementType = "return";
@@ -247,6 +330,15 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
         inventoryItemId: balance.rows[0].id, catalogPartId: usage.catalog_part_id, uomCode: usage.uom_code,
         usageId: usage.id, actorId: input.actorId, workorderId: usage.workorder_id,
         quantityDelta: consumptionDelta, reason: input.reason, idempotencyKey: input.idempotencyKey });
+      await adjustConsumedAggregateCostLayers(client, {
+        companyId: usage.company_id,
+        locationId: usage.location_id,
+        catalogPartId: usage.catalog_part_id,
+        uomCode: usage.uom_code,
+        usageId: usage.id,
+        quantityDelta: consumptionDelta,
+        quantityOnHand: balance.rows[0].quantity_on_hand,
+      });
       const adjusted = await client.query(
         `update inventory_items set quantity_on_hand=quantity_on_hand-$3, updated_at=now()
          where company_id=$1 and id=$2 and quantity_on_hand-$3 >= 0 returning id`,
@@ -295,6 +387,7 @@ export async function markAggregateUsagesPending(client, { workorderId, companyI
     await pickAggregateInventoryPositions(client, { companyId, locationId: row.location_id,
       catalogPartId: row.catalog_part_id, uomCode: row.uom_code, usageId: row.id, actorId,
       workorderId: row.workorder_id, reason: "Workorder usage moved off shelf pending approval" });
+    await pickAggregateCostLayers(client, { companyId, usageId: row.id });
     await client.query(`insert into workorder_aggregate_part_usage_events
       (company_id,usage_id,event_type,quantity_delta,actor_id) values ($1,$2,'installed_pending_approval',0,$3)`,
     [companyId, row.id, actorId]);
@@ -325,6 +418,7 @@ export async function releaseAggregateUsagesForCancelledWorkorder(client, { work
   for (const usage of usages.rows) {
     await releaseAggregateInventoryPositions(client, { companyId, usageId: usage.id, actorId,
       workorderId: usage.workorder_id, reason: reason || "Workorder cancelled" });
+    await releaseAggregateCostLayers(client, { companyId, usageId: usage.id });
     const released = await client.query(
       `update inventory_items set quantity_reserved=quantity_reserved-$4, updated_at=now()
        where company_id=$1 and location_id=$2 and catalog_part_id=$3 and uom_code=$5
@@ -363,6 +457,7 @@ export async function consumeAggregateUsagesForApproval(client, { workorderId, c
     );
     if (!balance.rows[0]) throw new Error("Aggregate inventory reservation changed before approval.");
     await consumeAggregateInventoryPositions(client, { companyId, usageId: usage.id });
+    await consumeAggregateCostLayers(client, { companyId, usageId: usage.id });
     await client.query(
       `update workorder_aggregate_part_usages set status='consumed', consumed_at=now(), finalized_by_user_id=$3, updated_at=now()
        where company_id=$1 and id=$2`, [companyId, usage.id, actorId],

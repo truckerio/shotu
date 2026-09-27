@@ -3,6 +3,7 @@ import { findAuthorizedInventoryLocation } from "../../db/repositories/inventory
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { createInventoryPartSchema, updateInventoryPartSchema } from "./inventory.schemas.js";
 import { z } from "zod";
+import { inventoryCompanyManageScope } from "./inventory-effective-scope.js";
 
 export async function createInventoryPart(input, requestContext, dependencies = {}) {
   if (!["office", "admin"].includes(requestContext.actor.role)) {
@@ -25,16 +26,14 @@ export async function createInventoryPart(input, requestContext, dependencies = 
 }
 
 export async function updateInventoryPart(catalogPartId, input, requestContext, dependencies = {}) {
-  if (!["office", "admin"].includes(requestContext.actor.role)) {
-    throw new InventoryError("Part details can only be changed by Office or Admin.", {
-      code: "INVENTORY_PART_FORBIDDEN",
-      statusCode: 403,
-    });
-  }
   if (!z.string().uuid().safeParse(catalogPartId).success) throw inventoryNotFound();
   const parsed = updateInventoryPartSchema.parse(input);
+  const companyScope = (dependencies.companyManageScope || inventoryCompanyManageScope)(requestContext, {
+    code: "INVENTORY_PART_FORBIDDEN",
+    message: "Company part details require Admin access.",
+  });
   const result = await (dependencies.updatePart || updateCompanyCatalogPart)({
-    catalogPartId, actorId: requestContext.actor.id, companyIds: [...(requestContext.companyIds || [])], ...parsed,
+    catalogPartId, actorId: requestContext.actor.id, companyIds: companyScope.companyIds, ...parsed,
   });
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "stale") throw new InventoryError("This part changed. Refresh it before saving.", { code: "INVENTORY_PART_STALE", statusCode: 409 });

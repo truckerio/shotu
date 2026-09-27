@@ -283,7 +283,7 @@ test("does not write countable inventory when QR signing is unavailable", async 
   assert.equal(wrote, false);
 });
 
-test("Office stock reads may select any location inside an authorized company", async () => {
+test("Office stock reads may browse other locations inside the actor's company", async () => {
   let input;
   await readLocalInventoryStock(
     new URLSearchParams({ locationId: OTHER_LOCATION_ID }),
@@ -292,8 +292,22 @@ test("Office stock reads may select any location inside an authorized company", 
   );
   assert.equal(input.locationId, OTHER_LOCATION_ID);
   assert.deepEqual(input.companyIds, [COMPANY_ID]);
+  assert.deepEqual(input.locationIds, []);
   assert.equal(input.isAdmin, true);
+  assert.equal(input.companyWideRead, true);
   assert.equal(input.sort, "available_desc");
+});
+
+test("Admin stock reads may span all locations inside an authorized company", async () => {
+  let input;
+  await readLocalInventoryStock(
+    new URLSearchParams({ locationId: OTHER_LOCATION_ID }),
+    context("admin"),
+    { listStock: async (nextInput) => { input = nextInput; return []; } },
+  );
+  assert.equal(input.locationId, OTHER_LOCATION_ID);
+  assert.deepEqual(input.companyIds, [COMPANY_ID]);
+  assert.equal(input.isAdmin, true);
 });
 
 test("Office stock reads forward the requested server-side sort before pagination", async () => {

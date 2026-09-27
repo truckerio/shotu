@@ -8,6 +8,7 @@ import {
   listInventoryPositions, insertInventoryPosition, patchInventoryPosition, getPartPositions, moveInventoryStock,
   listPositionStock, createPositionCount, getPositionCount, savePositionCountObservation, addPositionCountFoundPart, savePositionCountIdentity, submitPositionCountObservations, applyPositionCountCorrection,
 } from "../../db/repositories/inventory-positions.repo.js";
+import { resolveInventoryReadLocationScope } from "./inventory-effective-scope.js";
 
 const uuid=z.string().uuid();
 const positionStockScope=z.enum(["direct","subtree"]);
@@ -24,6 +25,7 @@ function map(result){
   if(result.kind==="archive_blocked")fail("INVENTORY_POSITION_ARCHIVE_BLOCKED","Move stock and archive child locations before archiving this location.");
   if(result.kind==="destination_not_eligible")fail("INVENTORY_POSITION_MOVE_UNSUPPORTED","Stock can currently move only between active available locations.",422);
   if(result.kind==="reconciliation_required")fail("INVENTORY_POSITION_RECONCILIATION_REQUIRED","This stock balance must be reconciled before position operations can continue.");
+  if(result.kind==="batch_reconciliation_required")fail("INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED","This stock has incomplete batch placement. Reconcile the batch position before moving it.");
   if(result.kind==="tracking_mismatch")fail("INVENTORY_POSITION_TRACKING_MISMATCH","The movement does not match this part's tracking method.",422);
   if(result.kind==="unit_conflict")fail("INVENTORY_POSITION_UNIT_CONFLICT","One or more exact units moved or changed before this operation.");
   if(result.kind==="insufficient_available")fail("INVENTORY_POSITION_INSUFFICIENT_AVAILABLE","The source location does not have enough unreserved stock.");
@@ -41,16 +43,20 @@ function map(result){
   return result;
 }
 
-export async function readInventoryPositions(locationId,context,dependencies={}){locationId=uuid.parse(locationId);ensureLocation(locationId,context);
-  return {positions:await(dependencies.listPositions||listInventoryPositions)({...scope(context),locationId})};}
+export async function readInventoryPositions(locationId,context,dependencies={}){locationId=uuid.parse(locationId);
+  const readScope=await(dependencies.resolveReadLocationScope||resolveInventoryReadLocationScope)(context,locationId,{loadLocation:dependencies.loadLocation});
+  return {positions:await(dependencies.listPositions||listInventoryPositions)({...readScope,locationId})};}
 export async function createInventoryPosition(locationId,rawInput,context,dependencies={}){locationId=uuid.parse(locationId);ensureLocation(locationId,context);requireManager(context);
   const result=map(await(dependencies.insertPosition||insertInventoryPosition)({...scope(context),locationId,...createInventoryPositionSchema.parse(rawInput)}));return{position:result.position,replayed:result.kind==="replay"};}
 export async function updateInventoryPosition(positionId,rawInput,context,dependencies={}){positionId=uuid.parse(positionId);requireManager(context);
     const result=map(await(dependencies.patchPosition||patchInventoryPosition)({...scope(context),positionId,...updateInventoryPositionSchema.parse(rawInput)}));return{position:result.position};}
-export async function readPositionStock(locationId,positionId,rawScope,context,dependencies={}){locationId=uuid.parse(locationId);positionId=uuid.parse(positionId);ensureLocation(locationId,context);
-  const value=await(dependencies.listPositionStock||listPositionStock)({...scope(context),locationId,positionId,scope:positionStockScope.parse(rawScope??"direct")});if(!value)throw inventoryNotFound();return value;}
-export async function readPartPositions(partId,locationId,context,dependencies={}){partId=uuid.parse(partId);locationId=uuid.parse(locationId);ensureLocation(locationId,context);
-  const value=await(dependencies.getPartState||getPartPositions)({...scope(context),partId,locationId});if(!value)throw inventoryNotFound();return value;}
+export async function readPositionStock(locationId,positionId,rawScope,context,dependencies={}){locationId=uuid.parse(locationId);positionId=uuid.parse(positionId);
+  const parsedScope=positionStockScope.parse(rawScope??"direct");
+  const readScope=await(dependencies.resolveReadLocationScope||resolveInventoryReadLocationScope)(context,locationId,{loadLocation:dependencies.loadLocation});
+  const value=await(dependencies.listPositionStock||listPositionStock)({...readScope,locationId,positionId,scope:parsedScope});if(!value)throw inventoryNotFound();return value;}
+export async function readPartPositions(partId,locationId,context,dependencies={}){partId=uuid.parse(partId);locationId=uuid.parse(locationId);
+  const readScope=await(dependencies.resolveReadLocationScope||resolveInventoryReadLocationScope)(context,locationId,{loadLocation:dependencies.loadLocation});
+  const value=await(dependencies.getPartState||getPartPositions)({...readScope,partId,locationId});if(!value)throw inventoryNotFound();return value;}
 export async function moveInventoryPosition(partId,locationId,rawInput,context,dependencies={}){partId=uuid.parse(partId);locationId=uuid.parse(locationId);ensureLocation(locationId,context);requireManager(context);
   const result=map(await(dependencies.moveStock||moveInventoryStock)({...scope(context),partId,locationId,move:moveInventoryPositionSchema.parse(rawInput)}));return{operation:result.operation,replayed:result.kind==="replay"};}
 export async function startPositionCount(locationId,rawInput,context,dependencies={}){locationId=uuid.parse(locationId);ensureLocation(locationId,context);requireManager(context);const input=startPositionCountSchema.parse(rawInput);

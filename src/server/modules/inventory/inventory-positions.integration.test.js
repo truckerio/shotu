@@ -43,10 +43,24 @@ test("real PostgreSQL conserves moves and applies a watermark-safe aggregate cou
     const shelf=await insertInventoryPosition({...scope,parentId:aisle.position.id,code:"A1-S1",name:"Shelf 1",kind:"shelf",usage:null,canStore:false,isPickable:false,idempotencyKey:`shelf-${suffix}`});
     const bin=await insertInventoryPosition({...scope,parentId:shelf.position.id,code:"A1-S1-B1",name:"Bin 1",kind:"bin",usage:"storage",canStore:true,isPickable:true,idempotencyKey:`bin-${suffix}`});
     assert.equal(bin.position.path,"Warehouse / Receiving area / Inspection area / Aisle 1 / Shelf 1 / Bin 1");
+    const layers=await query(`insert into inventory_aggregate_cost_layers(
+      company_id,location_id,catalog_part_id,source_kind,received_quantity,quantity_on_hand,uom_code,cost_source,received_at
+    ) values($1,$2,$3,'reconciliation',2,2,'ea','unknown','2026-01-01T00:00:00Z'),
+            ($1,$2,$3,'reconciliation',8,8,'ea','unknown','2026-02-01T00:00:00Z') returning id,quantity_on_hand`,[companyId,locationId,partId]);
+    await query(`insert into inventory_aggregate_cost_layer_positions(company_id,cost_layer_id,location_id,position_id,quantity_on_hand)
+      select $1,id,$2,$3,quantity_on_hand from unnest($4::uuid[],$5::numeric[]) input(id,quantity_on_hand)`,
+    [companyId,locationId,sourceId,layers.rows.map((row)=>row.id),layers.rows.map((row)=>row.quantity_on_hand)]);
     const invalidChild=await insertInventoryPosition({...scope,parentId:bin.position.id,code:"INVALID-AISLE",name:"Invalid aisle",kind:"aisle",usage:null,canStore:false,isPickable:false,idempotencyKey:`invalid-child-${suffix}`});
     assert.equal(invalidChild.kind,"invalid_parent_kind");
     const moved=await moveInventoryStock({...scope,partId,move:{fromPositionId:sourceId,toPositionId:bin.position.id,quantity:4,expectedSourceVersion:1,expectedDestinationVersion:null,idempotencyKey:`move-${suffix}`,reason:"Put away"}});
     assert.equal(moved.kind,"moved");
+    const batchPositions=await query(`select cost_layer_id,position_id,quantity_on_hand from inventory_aggregate_cost_layer_positions
+      where company_id=$1 and quantity_on_hand>0 order by cost_layer_id,position_id`,[companyId]);
+    assert.deepEqual(batchPositions.rows.map((row)=>({positionId:row.position_id,quantity:Number(row.quantity_on_hand)})).sort((a,b)=>a.quantity-b.quantity),[
+      {positionId:bin.position.id,quantity:2},
+      {positionId:bin.position.id,quantity:2},
+      {positionId:sourceId,quantity:6},
+    ].sort((a,b)=>a.quantity-b.quantity));
     assert.equal((await query("select quantity_on_hand from inventory_items where id=$1",[item.rows[0].id])).rows[0].quantity_on_hand,"10.000");
     assert.deepEqual(await listPositionStock({...scope,positionId:group.position.id,scope:"direct"}),{scope:"direct",parts:[]});
     const subtreeStock=await listPositionStock({...scope,positionId:group.position.id,scope:"subtree"});
@@ -73,7 +87,7 @@ test("real PostgreSQL conserves moves and applies a watermark-safe aggregate cou
     const invalid=await moveInventoryStock({...scope,partId,move:{fromPositionId:sourceId,toPositionId:bin.position.id,quantity:.5,expectedSourceVersion:2,expectedDestinationVersion:2,idempotencyKey:`fraction-${suffix}`,reason:"Invalid fraction"}});
     assert.equal(invalid.kind,"unsupported_uom");
   }finally{
-    for(const table of ["inventory_position_count_commands","inventory_position_count_unit_snapshots","inventory_position_count_lines","inventory_position_count_sessions","inventory_position_movements","inventory_position_operations","inventory_aggregate_usage_position_allocations","inventory_position_balances","inventory_position_admin_commands","inventory_position_reconciliation_exceptions","inventory_positions","inventory_stock_movements","inventory_items","parts_catalog","locations","companies"])
+    for(const table of ["inventory_position_count_commands","inventory_position_count_unit_snapshots","inventory_position_count_lines","inventory_position_count_sessions","inventory_position_movements","inventory_position_operations","inventory_aggregate_usage_position_allocations","inventory_aggregate_cost_layer_positions","inventory_aggregate_cost_layers","inventory_position_balances","inventory_position_admin_commands","inventory_position_reconciliation_exceptions","inventory_positions","inventory_stock_movements","inventory_items","parts_catalog","locations","companies"])
       await query(`delete from ${table} where company_id=$1`,[companyId]).catch(()=>{});
     await query("delete from user_profiles where id=$1",[actorId]).catch(()=>{});
   }

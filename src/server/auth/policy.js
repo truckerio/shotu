@@ -41,6 +41,9 @@ export function permissionForRequest(method, pathname) {
   if (["PUT", "PATCH"].includes(method) && /^\/api\/office\/inventory\/parts\/[^/]+\/prices\/(internal|selling)$/.test(pathname)) {
     return PERMISSION.INVENTORY_PRICE_WRITE;
   }
+  if (method === "PUT" && /^\/api\/office\/inventory\/batches\/[^/]+\/cost$/.test(pathname)) {
+    return PERMISSION.INVENTORY_PRICE_WRITE;
+  }
   if (pathname.startsWith("/api/office/")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/workorder-drafts")) return PERMISSION.WORKORDER_OFFICE;
   if (pathname.startsWith("/api/surveillance/")) return PERMISSION.WORKORDER_SURVEILLANCE;

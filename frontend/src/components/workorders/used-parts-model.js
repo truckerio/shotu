@@ -92,6 +92,7 @@ export function installedSerializedUsedParts(detail) {
       ...(status ? { status } : {}),
       ...(status === "installed_pending_approval" ? { pendingApproval: true } : {}),
       catalogPartId: part?.catalogPartId || null,
+      ...(part?.price ? { price: part.price } : {}),
     }];
   });
 }

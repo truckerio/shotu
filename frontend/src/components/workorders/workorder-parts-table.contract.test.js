@@ -47,7 +47,7 @@ test("Create and detail consume the shared contract without changing row childre
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.PRODUCT]: t\("create\.parts\.part"\)/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.QUANTITY_UOM]: t\("parts\.quantityUnit"\)/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.REPAIR_ORDER]: t\("create\.parts\.repairOrder"\)/);
-  assert.match(usedParts, /<WorkorderPartsColumnHead[\s\S]*?columns=\{DETAIL_WORKORDER_PARTS_COLUMNS\}/);
+  assert.match(usedParts, /<WorkorderPartsColumnHead[\s\S]*?columns=\{partColumns\}/);
   assert.match(usedParts, /WORKORDER_PARTS_COLUMNS\.PRODUCT]: t\("parts\.part"\)/);
   assert.match(usedParts, /WORKORDER_PARTS_COLUMNS\.QUANTITY_UOM]: t\("parts\.quantityUnit"\)/);
   assert.match(usedParts, /WORKORDER_PARTS_COLUMNS\.REPAIR_ORDER]: t\("parts\.repairOrder"\)/);

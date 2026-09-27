@@ -17,7 +17,7 @@ try {
   const { migrate } = await import("../../src/server/db/migrate.js");
   const { closePool } = await import("../../src/server/db/pool.js");
   try { await migrate(); } finally { await closePool(); }
-  const result = spawnSync(process.execPath, ["--test", "src/server/modules/inventory/direct-inventory-receipt.integration.test.js", "src/server/modules/inventory/inventory-stock-tasks-position.integration.test.js", "src/server/modules/inventory/inventory-purchasing-demand.integration.test.js", "src/server/modules/inventory/purchase-order-approval.integration.test.js", "src/server/modules/inventory/purchase-order-bills.integration.test.js"], {
+  const result = spawnSync(process.execPath, ["--test", "src/server/modules/inventory/direct-inventory-receipt.integration.test.js", "src/server/modules/inventory/inventory-fcfs-costing.integration.test.js", "src/server/modules/inventory/inventory-stock-tasks-position.integration.test.js", "src/server/modules/inventory/inventory-purchasing-demand.integration.test.js", "src/server/modules/inventory/purchase-order-approval.integration.test.js", "src/server/modules/inventory/purchase-order-bills.integration.test.js"], {
     env: { ...process.env, RUN_DIRECT_RECEIPT_INTEGRATION: "1", RUN_POSTGRES_INTEGRATION: "1" }, stdio: "inherit",
   });
   if (result.error) throw result.error;

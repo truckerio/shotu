@@ -7,6 +7,8 @@
 .inventory-workspace.is-section-root > .page-header { display: none; }
 .inventory-workspace.is-section-root > .operational-collection-page-body { margin-top: 0; }
 .inventory-stock-mode-tabs + .inventory-location-stock-workspace { box-sizing: border-box; padding-top: 16px; }
+.inventory-part-header-status, .inventory-detail-location-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.inventory-view-only-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 999px; background: #eef2f7; color: #475467; font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; }
 .inventory-custody { display: grid; gap: 16px; }
 .inventory-custody-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .inventory-custody-units, .inventory-custody-timeline { display: grid; gap: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid #e4e7ec; border-radius: 8px; list-style: none; }
@@ -76,11 +78,12 @@
 .inventory-shop-usage header p, .inventory-audit-log-heading p { margin: 0; color: #667085; font-size: 12px; }
 .inventory-part-location-audit-action { display: flex; justify-content: flex-end; }
 .inventory-stock-activity-page { display: grid; gap: 14px; }
-.inventory-detail-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; text-align: center; }
-.inventory-detail-metrics > div { display: grid; justify-items: center; align-content: start; gap: 4px; min-width: 0; padding: 6px 0; }
+.inventory-detail-metrics { display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)); gap: 16px; text-align: left; }
+.inventory-detail-metrics > div { display: grid; justify-items: start; align-content: start; gap: 4px; min-width: 0; padding: 6px 0; }
 .inventory-detail-metrics span, .inventory-detail-locations small, .inventory-detail-facts dt { color: #667085; font-size: 12px; }
-.inventory-detail-metrics strong { font-size: 17px; font-variant-numeric: tabular-nums; }
-.inventory-detail-metrics.is-part-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.inventory-detail-metrics strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+.inventory-detail-metrics > .is-primary strong { color: #101828; font-size: 24px; }
+.inventory-detail-metrics.is-part-overview { grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)); }
 .inventory-detail-metrics.is-part-overview > div { padding: 4px 0; }
 .inventory-detail-metrics.is-part-overview strong { font-size: 16px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .inventory-detail-provider-stock { margin: 8px 0 0; font-size: 12px; color: #667085; }
@@ -319,7 +322,7 @@
   .inventory-results-line { align-items: flex-start; flex-wrap: wrap; }
   .inventory-stock-row { grid-template-columns: 1fr auto; min-height: 58px; }
   .inventory-stock-row > .operational-collection-cell:nth-child(2), .inventory-stock-row > .operational-collection-cell:nth-child(3) { display: none; }
-  .inventory-detail-metrics { grid-template-columns: 1fr; }
+  .inventory-detail-metrics { grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)); }
   .inventory-serial-toolbar { align-items: stretch; flex-direction: column; }
   .inventory-serial-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .inventory-serial-filters label, .inventory-serial-filters select { width: 100%; }
@@ -379,6 +382,8 @@
 @media (max-width: 640px) {
   .inventory-part-detail-navigation { margin-inline: -16px; padding-inline: 16px; }
   .inventory-detail-location-row { grid-template-columns: minmax(0,1fr); }
+  .inventory-detail-metrics, .inventory-detail-metrics.is-part-overview { grid-template-columns: 1fr; gap: 4px; }
+  .inventory-detail-metrics > div { padding-block: 8px; }
   .inventory-detail-location-row > .inventory-location-actions-trigger { justify-self: end; margin: 0 12px 12px; }
   .inventory-location-settings-overlay { align-items: end; padding: 0; }
   .inventory-location-settings-modal { max-height: calc(100dvh - 16px); border-radius: 14px 14px 0 0; }

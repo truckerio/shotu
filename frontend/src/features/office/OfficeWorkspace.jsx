@@ -135,6 +135,7 @@ export function OfficeWorkspace({
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");
   const preferenceHydrated = useRef(false);
+  const lastOperationsTab = useRef("needs");
   const requestedWorkspace = useMemo(() => requestedOfficeWorkspace(window.location.search), []);
   const queuePreferences = useWorkorderPreferences("office");
   const partRequestCount = usePartRequestQueueCount({ refreshKey: partRequestRefreshKey, enabled: workorderAccess.canRead });
@@ -223,6 +224,15 @@ export function OfficeWorkspace({
     setMechanicFilter(normalized.mechanicFilter);
   }
 
+  function selectWorkspace(nextWorkspace) {
+    if (nextWorkspace === "operations") {
+      setActiveTab(lastOperationsTab.current);
+      return;
+    }
+    setProduct("workorders");
+    setActiveTab(nextWorkspace);
+  }
+
   function selectMechanic(nextMechanic) {
     setMechanicFilter(nextMechanic);
     setActiveTab((current) => officeTabForMechanicFilter(current, nextMechanic));
@@ -266,6 +276,7 @@ export function OfficeWorkspace({
     { key: "all", label: "All", count: allRows.length, icon: Briefcase02 },
     { key: "closed", label: "Closed", count: dashboard?.closed?.length || 0, icon: FileCheck02 },
   ];
+  const desktopQueueTabs = tabs.filter((tab) => !["inventory", "units"].includes(tab.key));
   const mobilePrimaryTabs = OFFICE_PRIMARY_TABS.map((tab) => ({
     ...tab,
     count: tab.key === "needs"
@@ -274,7 +285,7 @@ export function OfficeWorkspace({
         ? dashboard?.active?.length || 0
         : doneOdooRows.length,
   }));
-  const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key) || ["inventory", "units"].includes(tab.key));
+  const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key));
   const tabRows = ["inventory", "units"].includes(activeTab) ? [] : officeRowsForTab(activeTab, dashboard, allRows, needsRows);
   const filteredRows = tabRows
     .filter((row) => !lifecycleFilter || officeLifecycle(row) === lifecycleFilter)
@@ -283,28 +294,50 @@ export function OfficeWorkspace({
     .filter((row) => workorderMatchesSearch(row, search))
     .sort((left, right) => officeUrgency(left) - officeUrgency(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt));
 
+  useEffect(() => {
+    if (!["inventory", "units"].includes(activeTab)) lastOperationsTab.current = activeTab;
+  }, [activeTab]);
+
+  const officePrimaryNavigation = (
+    <nav className="office-primary-nav" aria-label="Office workspace">
+      <button className={!["inventory", "units"].includes(activeTab) ? "active" : ""} type="button" onClick={() => selectWorkspace("operations")}><Briefcase02 />Operations</button>
+      <button className={activeTab === "inventory" ? "active" : ""} type="button" onClick={() => selectWorkspace("inventory")}><Package />Inventory</button>
+      <button className={activeTab === "units" ? "active" : ""} type="button" onClick={() => selectWorkspace("units")}><Tool02 />Units</button>
+    </nav>
+  );
+  const officeMobileNavigation = (
+    <nav className="office-mobile-nav" aria-label="Office workspace">
+      <button className={!["inventory", "units"].includes(activeTab) ? "active" : ""} type="button" onClick={() => selectWorkspace("operations")}><Briefcase02 /><span>Operations</span></button>
+      <button className={activeTab === "inventory" ? "active" : ""} type="button" onClick={() => selectWorkspace("inventory")}><Package /><span>Inventory</span></button>
+      <button className={activeTab === "units" ? "active" : ""} type="button" onClick={() => selectWorkspace("units")}><Tool02 /><span>Units</span></button>
+    </nav>
+  );
+  const isOperationsWorkspace = !["inventory", "units"].includes(activeTab);
+  const pageTitle = activeTab === "inventory" ? "Inventory" : activeTab === "units" ? "Units" : "Workorders";
+
   if (product === "inspections" && inspectionAccess.canRead) {
     const switcher = workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); setCreatedInspectionId(""); }} /> : null;
     return (
       <main className="prototype mechanic-home office-home workspace-operations inspection-workspace">
-        <WorkspaceHeader actor={actor} className="role-home-account-header" />
+        <WorkspaceHeader actor={actor} className="role-home-account-header">{officePrimaryNavigation}</WorkspaceHeader>
         <PageHeader title="Inspections" actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => setCreatingInspection(true) : null} />} />
         {switcher}
         {creatingInspection
           ? <CreateInspectionPage actor={actor} access={{ canCreate: inspectionAccess.canWrite }} request={api} onCreated={(result) => { setCreatingInspection(false); setCreatedInspectionId(result?.inspection?.id || ""); }} onCancel={() => setCreatingInspection(false)} />
           : <InspectionExperience actor={actor} projection={inspectionAccess.canWrite ? "office" : "read_only"} initialInspectionId={createdInspectionId || initialInspectionId} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onOpenWorkorder={workorderAccess.canRead ? openDetail : null} />}
+        {officeMobileNavigation}
       </main>
     );
   }
 
   return (
     <main className="prototype mechanic-home office-home workspace-operations">
-      <WorkspaceHeader actor={actor} className="role-home-account-header" />
+      <WorkspaceHeader actor={actor} className="role-home-account-header">{officePrimaryNavigation}</WorkspaceHeader>
       <PageHeader
-        title="Workorders"
+        title={pageTitle}
         actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} />}
       />
-      {inspectionAccess.canRead ? <ProductModeSwitch value={product} onChange={setProduct} /> : null}
+      {inspectionAccess.canRead && isOperationsWorkspace ? <ProductModeSwitch value={product} onChange={setProduct} /> : null}
 
       <section className={`office-layout${["drafts", "inventory", "units", "parts"].includes(activeTab) ? " is-drafts" : ""}`}>
         {!["drafts", "inventory", "units", "parts"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
@@ -322,9 +355,9 @@ export function OfficeWorkspace({
         </aside> : null}
 
         <section className="mechanic-queue-shell office-table-shell">
-          <div className="queue-toolbar office-toolbar role-queue-toolbar">
+          {isOperationsWorkspace ? <div className="queue-toolbar office-toolbar role-queue-toolbar">
             <div className="role-desktop-queues">
-              <WorkorderQueueTabs tabs={tabs} activeTab={activeTab} onChange={selectQueue} />
+              <WorkorderQueueTabs tabs={desktopQueueTabs} activeTab={activeTab} onChange={selectQueue} />
             </div>
             <MobileQueueToolbar
               className="role-mobile-primary-queues"
@@ -371,7 +404,7 @@ export function OfficeWorkspace({
                     <option value="cancelled">Cancelled</option>
                   </Dropdown>
                 </div> : null}
-          </div>
+          </div> : null}
 
           {activeTab === "units" ? (
             <UnitsWorkspace actorId={actor?.id} presentation="embedded" />
@@ -446,6 +479,7 @@ export function OfficeWorkspace({
           )}
         </section>
       </section>
+      {officeMobileNavigation}
     </main>
   );
 }

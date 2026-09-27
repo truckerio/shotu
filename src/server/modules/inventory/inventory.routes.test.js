@@ -20,6 +20,9 @@ function context() {
     locationIds: new Set([LOCATION_ID]),
   };
 }
+function adminContext() {
+  return { ...context(), actor: { id: ACTOR_ID, role: "admin" } };
+}
 
 function helpers(body, requestContext = context()) {
   return {
@@ -424,7 +427,8 @@ test("bounded stock list route uses authenticated scope", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(response.payload.items, []);
   assert.deepEqual(inputs[0].companyIds, [COMPANY_ID]);
-  assert.deepEqual(inputs[0].locationIds, [LOCATION_ID]);
+  assert.deepEqual(inputs[0].locationIds, []);
+  assert.equal(inputs[0].isAdmin, true);
   assert.equal(inputs[0].queryText, "filter");
   assert.equal(inputs[0].limit, 25);
   assert.equal(inputs[0].sort, "low_stock_first");
@@ -827,7 +831,7 @@ test("part edit route returns the committed projection and emits supplemental au
   const response = {};
   const events = [];
   const body = { expectedVersion: 2, description: "Air valve", partNumber: "A-1", manufacturer: "Bendix", category: "Air", barcode: "123", uomCode: "ea", referenceNumbers: ["BW-1"] };
-  const routeHelpers = helpers(body);
+  const routeHelpers = helpers(body, adminContext());
   routeHelpers.emitAdministrativeAuditEvent = async (event) => events.push(event);
   const handled = await handleInventoryApi(
     { method: "PATCH", requestId: "request-part-edit" }, response,
@@ -868,7 +872,7 @@ test("catalog UOM trigger conflicts return an actionable retryable response", as
   const body = { expectedVersion: 2, description: "Air valve", partNumber: "A-1", manufacturer: "Bendix", category: "Air", barcode: "123", uomCode: "ea", referenceNumbers: [] };
   const handled = await handleInventoryApi(
     { method: "PATCH", requestId: "request-uom-conflict" }, response,
-    new URL("http://localhost/api/office/inventory/parts/33333333-3333-4333-8333-333333333333"), helpers(body),
+    new URL("http://localhost/api/office/inventory/parts/33333333-3333-4333-8333-333333333333"), helpers(body, adminContext()),
     { updatePart: async () => { throw Object.assign(new Error("database detail"), { constraint: "catalog_uom_activity_uom_mismatch" }); } },
   );
   assert.equal(handled, true);

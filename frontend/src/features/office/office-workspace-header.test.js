@@ -6,11 +6,30 @@ const workspace = readFileSync(new URL("./OfficeWorkspace.jsx", import.meta.url)
 const mechanicWorkspace = readFileSync(new URL("../mechanic/MechanicWorkspace.jsx", import.meta.url), "utf8");
 const surveillanceQueueView = readFileSync(new URL("../surveillance/workspace/SurveillanceQueueView.jsx", import.meta.url), "utf8");
 const roleWorkspaceCss = readFileSync(new URL("../role-workspaces.css", import.meta.url), "utf8");
+const officeCss = readFileSync(new URL("./office.css", import.meta.url), "utf8");
 
 test("Manager uses the shared workspace identity header and a separate page title", () => {
-  assert.match(workspace, /<WorkspaceHeader actor=\{actor\} className="role-home-account-header"\s*\/>/);
-  assert.match(workspace, /<PageHeader\s+title="Workorders"/);
+  assert.match(workspace, /<WorkspaceHeader actor=\{actor\} className="role-home-account-header">\{officePrimaryNavigation\}<\/WorkspaceHeader>/);
+  assert.match(workspace, /<PageHeader\s+title=\{pageTitle\}/);
   assert.match(workspace, /<WorkspaceCreateActions actor=\{actor\}/);
+});
+
+test("Office separates workspace destinations from workorder queues", () => {
+  assert.match(workspace, /<nav className="office-primary-nav" aria-label="Office workspace">/);
+  assert.match(workspace, />Operations<\/button>/);
+  assert.match(workspace, />Inventory<\/button>/);
+  assert.match(workspace, />Units<\/button>/);
+  assert.match(workspace, /const desktopQueueTabs = tabs\.filter\(\(tab\) => !\["inventory", "units"\]\.includes\(tab\.key\)\)/);
+  assert.match(workspace, /<WorkorderQueueTabs tabs=\{desktopQueueTabs\}/);
+  assert.match(workspace, /const mobileSecondaryTabs = tabs\.filter\(\(tab\) => OFFICE_SECONDARY_TAB_KEYS\.includes\(tab\.key\)\)/);
+  assert.match(workspace, /const isOperationsWorkspace = !\["inventory", "units"\]\.includes\(activeTab\)/);
+  assert.match(workspace, /\{isOperationsWorkspace \? <div className="queue-toolbar office-toolbar role-queue-toolbar">/);
+  assert.match(workspace, /inspectionAccess\.canRead && isOperationsWorkspace/);
+  assert.match(workspace, /activeTab === "inventory" \? "Inventory" : activeTab === "units" \? "Units" : "Workorders"/);
+  assert.match(workspace, /<nav className="office-mobile-nav" aria-label="Office workspace">/);
+  assert.match(officeCss, /@media \(max-width:\s*700px\)[\s\S]*\.office-mobile-nav\s*\{[\s\S]*display:\s*grid;/);
+  assert.match(officeCss, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(officeCss, /min-height:\s*50px/);
 });
 
 test("every operational role uses the same workspace identity and page-title structure", () => {
@@ -18,7 +37,7 @@ test("every operational role uses the same workspace identity and page-title str
     assert.match(source, /<WorkspaceHeader actor=\{actor\}/);
     assert.doesNotMatch(source, /title=\{<ProfileMenu/);
   }
-  assert.match(workspace, /<PageHeader\s+title="Workorders"/);
+  assert.match(workspace, /<PageHeader\s+title=\{pageTitle\}/);
   assert.match(mechanicWorkspace, /<PageHeader[\s\S]*?title=\{t\("mechanic\.workorders"\)\}/);
   assert.match(surveillanceQueueView, /<PageHeader title="Workorders"/);
 });
@@ -46,7 +65,7 @@ test("Office opens the newly created inspection instead of returning to the queu
 test("Manager queue controls clear incompatible Unassigned filters", () => {
   assert.match(workspace, /officeQueueFilterState\(nextTab, \{ lifecycleFilter, mechanicFilter \}\)/);
   assert.match(workspace, /officeTabForMechanicFilter\(current, nextMechanic\)/);
-  assert.match(workspace, /WorkorderQueueTabs tabs=\{tabs\} activeTab=\{activeTab\} onChange=\{selectQueue\}/);
+  assert.match(workspace, /WorkorderQueueTabs tabs=\{desktopQueueTabs\} activeTab=\{activeTab\} onChange=\{selectQueue\}/);
   assert.match(workspace, /onClick=\{\(\) => selectMechanic\(mechanic\.name\)\}/);
 });
 

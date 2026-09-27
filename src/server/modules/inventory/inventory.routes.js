@@ -1,6 +1,9 @@
 import { handleInventoryPositionsApi } from "./inventory-positions.routes.js";
 import { handleInventoryPricingApi } from "./inventory-pricing.routes.js";
 import { readInventoryPartCommercial, updateInventoryPartPrice } from "./inventory-part-prices.service.js";
+import { listInventoryBrowseLocations } from "./inventory-effective-scope.js";
+import { readSellingPolicy, writeSellingPolicy } from "./inventory-selling-policy.service.js";
+import { correctInventoryBatchCost } from "./inventory-batch-cost.service.js";
 import { listPurchaseBills, uploadPurchaseBill, downloadPurchaseBill } from './purchase-order-bills.service.js';
 import { getBills,postBill } from './inventory-bills.service.js';
 import { getInventoryReports } from './inventory-reports.service.js';
@@ -104,9 +107,54 @@ export async function handleInventoryApi(req, res, url, helpers, dependencies = 
   try {
     if (await handleInventoryPositionsApi(req, res, url, helpers, dependencies)) return true;
     if (await handleInventoryPricingApi(req, res, url, helpers, dependencies)) return true;
+    if (req.method === "GET" && url.pathname === "/api/office/inventory/browse-locations") {
+      helpers.sendJson(res, 200, await listInventoryBrowseLocations(helpers.requestContext, dependencies));
+      return true;
+    }
     const commercialPartId = pathId(url.pathname, /^\/api\/office\/inventory\/parts\/([^/]+)\/commercial$/);
     if (req.method === "GET" && commercialPartId) {
       helpers.sendJson(res, 200, await readInventoryPartCommercial(commercialPartId, url.searchParams, helpers.requestContext, dependencies));
+      return true;
+    }
+    const sellingPolicyMatch = /^\/api\/office\/inventory\/parts\/([^/]+)\/selling-policy$/.exec(url.pathname);
+    if (sellingPolicyMatch) {
+      const partId = decodeURIComponent(sellingPolicyMatch[1]);
+      const locationId = url.searchParams.get("locationId") || null;
+      if (req.method === "GET") {
+        helpers.sendJson(res, 200, await readSellingPolicy(partId, locationId, helpers.requestContext, dependencies));
+        return true;
+      }
+      if (req.method === "PUT") {
+        const body = await helpers.readBody(req);
+        helpers.sendJson(res, 200, await writeSellingPolicy(partId, locationId, body, helpers.requestContext, dependencies));
+        return true;
+      }
+    }
+    const batchCostMatch = /^\/api\/office\/inventory\/batches\/([^/]+)\/cost$/.exec(url.pathname);
+    if (req.method === "PUT" && batchCostMatch) {
+      const costLayerId = decodeURIComponent(batchCostMatch[1]);
+      const body = await helpers.readBody(req);
+      const result = await correctInventoryBatchCost(
+        costLayerId,
+        body,
+        helpers.requestContext,
+        dependencies,
+      );
+      await emitInventoryAudit(helpers, {
+        type: "inventory_batch_cost_corrected",
+        requestId: req.requestId || null,
+        actorId: helpers.requestContext.actor.id,
+        costLayerId,
+        catalogPartId: result.revision.catalogPartId,
+        locationId: result.revision.locationId,
+        revisionId: result.revision.id,
+        version: result.revision.version,
+        unitCost: result.revision.unitCost,
+        currency: result.revision.currency,
+        reason: body.reason,
+        replayed: result.replayed,
+      });
+      helpers.sendJson(res, 200, result);
       return true;
     }
     const priceMatch = /^\/api\/office\/inventory\/parts\/([^/]+)\/prices\/([^/]+)$/.exec(url.pathname);
