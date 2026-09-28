@@ -109,6 +109,10 @@ function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
     case "diagnosisRepair": return {
       ...pick(workorder, ["diagnosis", "workPerformed"]),
       formData: formSlice(workorder, moduleKey),
+      ...(["office", "admin"].includes(viewerRole) ? {
+        laborPrice: detail.laborPrice || null,
+        currentLaborRates: detail.currentLaborRates || {},
+      } : {}),
     };
     case "photos": return {
       attachments: (detail.messages || []).filter((message) => message.attachment).map((message) => ({
@@ -185,6 +189,11 @@ export function projectProtectedWorkorderDetail(detail, moduleDecisions, options
   if (detail.policy) output.policy = {
     mechanicCanRecordParts: detail.policy.mechanicCanRecordParts === true,
   };
+  if (["office", "admin"].includes(viewerRole)
+    && output.modules.parts && output.modules.diagnosisRepair
+    && detail.workorderPricing) {
+    output.workorderPricing = detail.workorderPricing;
+  }
   return output;
 }
 

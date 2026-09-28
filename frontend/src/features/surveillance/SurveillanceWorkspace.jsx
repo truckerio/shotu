@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { Briefcase02, CheckCircle } from "@untitledui/icons";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
+import { RoleNavigationRail } from "../../components/layout/RoleNavigationRail.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { InspectionExperience, ProductModeSwitch } from "../inspections/index.js";
 import { SurveillanceDetailPage } from "./workspace/SurveillanceDetailPage.jsx";
@@ -19,16 +21,17 @@ export function SurveillanceWorkspace({ actor, inspectionAccess = { canRead: fal
     rows: queue.rows,
     setError: queue.setError,
   });
+  const surveillanceRail = <RoleNavigationRail actor={actor} ariaLabel="Surveillance workspace" activeId={product} groups={[{ id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] }]} onNavigate={setProduct} />;
 
   if (product === "inspections" && inspectionAccess.canRead) {
     return (
       <main className="prototype mechanic-home workspace-operations">
-        <WorkspaceHeader actor={actor} className="role-home-account-header" locale="en" />
-        <div className="mechanic-home-content">
+        <WorkspaceHeader actor={actor} className="role-phone-account-header" locale="en" />
+        <div className="surveillance-role-shell">{surveillanceRail}<div className="mechanic-home-content">
           <PageHeader title="Inspections" />
-          {workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={setProduct} /> : null}
+          {workorderAccess.canRead ? <div className="role-phone-product-switch"><ProductModeSwitch value={product} onChange={setProduct} /></div> : null}
           <InspectionExperience actor={actor} projection="read_only" />
-        </div>
+        </div></div>
       </main>
     );
   }
@@ -54,6 +57,7 @@ export function SurveillanceWorkspace({ actor, inspectionAccess = { canRead: fal
       product={product}
       onProductChange={setProduct}
       workorderAccess={workorderAccess}
+      rail={surveillanceRail}
     />
   );
 }

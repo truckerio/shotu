@@ -360,6 +360,41 @@ test("stable refresh projection is bounded and scoped to the authorized actor", 
   assert.equal(request.limit, 100);
 });
 
+test("serialized usage refresh redacts financial fields from mechanics and kiosk sessions", async () => {
+  const pricedUsage = {
+    id: USAGE_ID,
+    status: "installed",
+    price: { selection: "selling_price", unitPrice: "20.0000", totalPrice: "20.0000", currency: "USD" },
+    costAllocations: [{ receiptLineId: "receipt-line-1", unitCost: "10.0000", totalCost: "10.0000" }],
+  };
+  for (const requestContext of [
+    context("mechanic"),
+    { ...context("mechanic"), sessionMode: "kiosk" },
+  ]) {
+    const result = await readSerializedUnitUsagesForWorkorder(WORKORDER_ID, requestContext, dependencies({
+      listUsages: async () => [pricedUsage],
+    }));
+    assert.deepEqual(result.usages, [{ id: USAGE_ID, status: "installed" }]);
+    assert.equal("price" in result.usages[0], false);
+    assert.equal("costAllocations" in result.usages[0], false);
+  }
+});
+
+test("serialized usage refresh keeps financial fields for Office and Admin", async () => {
+  const pricedUsage = {
+    id: USAGE_ID,
+    status: "installed",
+    price: { selection: "selling_price", unitPrice: "20.0000", totalPrice: "20.0000", currency: "USD" },
+    costAllocations: [{ receiptLineId: "receipt-line-1", unitCost: "10.0000", totalCost: "10.0000" }],
+  };
+  for (const role of ["office", "admin"]) {
+    const result = await readSerializedUnitUsagesForWorkorder(WORKORDER_ID, context(role), dependencies({
+      listUsages: async () => [pricedUsage],
+    }));
+    assert.deepEqual(result.usages, [pricedUsage]);
+  }
+});
+
 test("a granted Mechanic carries a server-derived role for assignment revalidation", async () => {
   let command;
   await issueSerializedUnitForWorkorder(

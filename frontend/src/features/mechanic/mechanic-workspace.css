@@ -1,6 +1,10 @@
 .mechanic-home {
   --mechanic-home-max-width: 1440px;
 }
+.mechanic-role-shell { display: grid; gap: 0; grid-template-columns: 220px minmax(0, 1fr); width: 100%; }
+.mechanic-role-shell > .mechanic-home-content { min-width: 0; }
+.role-phone-account-header,
+.role-phone-product-switch { display: none; }
 
 .mechanic-home-content {
   margin-inline: auto;
@@ -324,6 +328,9 @@
 }
 
 @media (max-width: 700px) {
+  .role-phone-account-header { display: flex; }
+  .role-phone-product-switch { display: flex; }
+  .mechanic-role-shell { display: block; }
   .mechanic-next-job {
     align-items: stretch;
     grid-template-columns: minmax(0, 1fr);

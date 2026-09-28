@@ -55,13 +55,21 @@
   color: #344054;
   cursor: pointer;
   display: grid;
-  font-size: var(--text-body);
-  font-weight: var(--weight-medium);
-  gap: 9px;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  gap: 8px;
   grid-template-columns: 20px minmax(0, 1fr) auto;
   min-height: 44px;
   outline: 0;
   padding: 8px 10px;
+}
+
+.workorder-object-summary h1 {
+  font-size: 24px;
+}
+
+.workorder-section-panel-heading h2 {
+  font-size: 20px;
 }
 
 .workorder-section-more-menu [role="menuitem"][data-focused] {
@@ -733,6 +741,12 @@
   outline: none;
   box-shadow: none;
   border-radius: 0;
+}
+
+@media (max-width: 700px) {
+  .workorder-unit-details-trigger {
+    height: 44px;
+  }
 }
 
 .control-panel[data-workorder-presentation="one-page"] :is(

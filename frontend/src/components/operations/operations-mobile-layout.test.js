@@ -28,7 +28,7 @@ test("Admin workspace uses the available viewport while retaining desktop gutter
   const adminCss = await readFile(adminCssUrl, "utf8");
 
   assert.match(adminCss, /\.admin-workspace-header\s*\{[^}]*max-width:\s*none;[^}]*padding:\s*20px 32px 0;[^}]*width:\s*100%;/s);
-  assert.match(adminCss, /\.admin-content\s*\{[^}]*max-width:\s*none;[^}]*padding:\s*32px 32px 60px;[^}]*width:\s*100%;/s);
+  assert.match(adminCss, /\.admin-content\s*\{[^}]*max-width:\s*none;[^}]*padding:\s*16px 32px 60px;[^}]*width:\s*100%;/s);
 });
 
 test("Operations cards use the shared tablet breakpoint with scoped compact overrides", async () => {

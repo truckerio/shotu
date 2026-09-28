@@ -1,8 +1,10 @@
 .admin-shell { min-height: 100vh; overflow-x: hidden; background: #f7f8fa; color: #182230; }
+.admin-shell-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+.admin-shell-content { min-width: 0; }
 .admin-workspace-header { box-sizing: border-box; margin: 0; max-width: none; padding: 20px 32px 0; width: 100%; }
-.admin-content { box-sizing: border-box; margin: 0; max-width: none; padding: 32px 32px 60px; width: 100%; }
+.admin-content { box-sizing: border-box; margin: 0; max-width: none; padding: 16px 32px 60px; width: 100%; }
 .admin-primary-nav { align-items: center; display: flex; gap: 4px; }
-.admin-primary-nav button { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #475467; cursor: pointer; display: inline-flex; font: inherit; font-size: var(--text-body); font-weight: var(--weight-semibold); gap: 7px; min-height: 38px; padding: 0 11px; }
+.admin-primary-nav button { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #475467; cursor: pointer; display: inline-flex; font: inherit; font-size: var(--text-body); font-weight: var(--weight-semibold); gap: 7px; min-height: 40px; padding: 0 11px; }
 .admin-primary-nav button:hover { background: #fff; border-color: #e4e7ec; color: #182230; }
 .admin-primary-nav button.active { background: #fff; border-color: #d0d5dd; color: #175cd3; }
 .admin-primary-nav button:focus-visible { outline: 2px solid #84adff; outline-offset: 2px; }
@@ -224,7 +226,7 @@
   .admin-template-preview .workorder-page { margin-bottom: calc(-8.5in * .18); transform: scale(.82); }
 }
 @media (min-width: 641px) and (max-width: 1007px) {
-  .admin-content { padding: 28px 20px 56px; }
+  .admin-content { padding: 16px 20px 56px; }
   .admin-workspace-header { padding: 18px 20px 0; }
   .admin-primary-nav button { min-height: 44px; }
   .admin-table-head,
@@ -246,7 +248,7 @@
   .admin-tabs button { min-height: 44px; }
   .admin-template-layout { grid-template-columns: 1fr; }
 }
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   .admin-shell { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
   .admin-content { padding: 20px 14px 32px; }
   .admin-workspace-header { display: none; }
@@ -445,3 +447,7 @@
 .po-approval-approvers legend { padding: 0 0 10px; font-size: 14px; font-weight: 600; }
 .po-approval-configuration label.po-approval-approver { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 @media (max-width: 600px) { .po-approval-fields { grid-template-columns: minmax(0, 1fr); } }
+
+@media (max-width: 700px) {
+  .admin-shell-layout { display: block; }
+}

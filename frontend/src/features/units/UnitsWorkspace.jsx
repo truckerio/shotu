@@ -66,7 +66,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "" }) {
   }
 
   return (
-    <OperationalCollectionPage title="Units" presentation={presentation} className={`${presentation === "page" ? "admin-content " : ""}units-workspace`}>
+    <OperationalCollectionPage title={presentation === "page" ? "Units" : ""} presentation={presentation} surface className={`${presentation === "page" ? "admin-content " : ""}units-workspace`}>
       <OperationalCollectionToolbar className="units-toolbar">
         <label className="units-search"><span>Search</span><input type="search" maxLength={120} value={filters.q} placeholder="Unit number, VIN, or plate" onChange={(event) => changeFilters({ ...filters, q: event.target.value })} /></label>
         <label><span>Type</span><Dropdown value={filters.type} onChange={(event) => changeFilters({ ...filters, type: event.target.value })} aria-label="Unit type"><option value="">All types</option><option value="Truck">Trucks</option><option value="Trailer">Trailers</option></Dropdown></label>

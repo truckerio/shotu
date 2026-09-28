@@ -78,6 +78,15 @@ test("custody guidance uses collapsed shared help while operational errors stay 
   assert.doesNotMatch(workspace, /subtitle="Find a truck or trailer/);
 });
 
+test("embedded Units uses the parent page heading and the shared elevated work surface", () => {
+  const workspace = readFileSync(new URL("./UnitsWorkspace.jsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("./units-workspace.css", import.meta.url), "utf8");
+
+  assert.match(workspace, /title=\{presentation === "page" \? "Units" : ""\}/);
+  assert.match(workspace, /presentation=\{presentation\} surface className=/);
+  assert.match(css, /\.units-workspace \.operational-collection-table\s*\{[\s\S]*?border:\s*1px solid #d0d5dd;[\s\S]*?border-radius:\s*8px;/);
+});
+
 test("uncertain custody command recovery round-trips only in the original actor scope and clears on confirmation", () => {
   const values = new Map(); const storage = { getItem: (key) => values.get(key) || null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) };
   const scope = { actorId: "actor-1", companyId: "company-1", locationId: "location-1", assetId: "asset-1" };

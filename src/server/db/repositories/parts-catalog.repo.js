@@ -23,6 +23,7 @@ function publicInventory(row) {
     quantityOnHand: publicQuantity(row.quantity_on_hand),
     quantityReserved: publicQuantity(row.quantity_reserved),
     available: publicQuantity(row.quantity_available),
+    lowStock: row.low_stock === true,
     serializationRequired: row.serialization_required === true,
     binLocation: row.bin_location || "",
     uomCode: row.inventory_uom_code || row.uom_code || DEFAULT_UOM_CODE,
@@ -193,6 +194,7 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         inventory.quantity_on_hand,
         inventory.quantity_reserved,
         inventory.quantity_available,
+        inventory.low_stock,
         inventory.serialization_required,
         inventory.bin_location,
         inventory.uom_code as inventory_uom_code,
@@ -216,7 +218,15 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
           item.quantity_on_hand,
           item.quantity_reserved,
           greatest(item.quantity_on_hand - item.quantity_reserved, 0) as quantity_available,
-          item.bin_location,
+          exists (
+            select 1
+            from inventory_replenishment_alerts alert
+            where alert.company_id = item.company_id
+              and alert.location_id = item.location_id
+              and alert.catalog_part_id = item.catalog_part_id
+              and alert.resolved_at is null
+          ) as low_stock,
+          physical_position.code as bin_location,
           item.uom_code,
           item.updated_at,
           exists (
@@ -236,6 +246,47 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         left join locations location
           on location.id = item.location_id
           and location.company_id = item.company_id
+        left join lateral (
+          select placement.code
+          from (
+            select
+              position.code,
+              greatest(balance.quantity - balance.quantity_reserved, 0) as available_quantity
+            from inventory_position_balances balance
+            join inventory_positions position
+              on position.company_id = balance.company_id
+              and position.location_id = balance.location_id
+              and position.id = balance.position_id
+            where balance.company_id = item.company_id
+              and balance.location_id = item.location_id
+              and balance.inventory_item_id = item.id
+              and balance.quantity > 0
+              and position.is_active
+              and coalesce(candidates.tracking_mode, 'quantity') <> 'serialized'
+            union all
+            select
+              position.code,
+              count(*) filter (where unit.status = 'in_stock')::numeric as available_quantity
+            from inventory_serialized_units unit
+            join inventory_receipt_lines receipt_line
+              on receipt_line.company_id = unit.company_id
+              and receipt_line.id = unit.receipt_line_id
+            join inventory_positions position
+              on position.company_id = unit.company_id
+              and position.location_id = unit.location_id
+              and position.id = unit.current_position_id
+            where unit.company_id = item.company_id
+              and unit.location_id = item.location_id
+              and receipt_line.catalog_part_id = item.catalog_part_id
+              and receipt_line.uom_code = item.uom_code
+              and unit.status in ('in_stock', 'reserved')
+              and position.is_active
+              and coalesce(candidates.tracking_mode, 'quantity') = 'serialized'
+            group by position.code
+          ) placement
+          order by placement.available_quantity desc, placement.code asc
+          limit 1
+        ) physical_position on true
         where $8::uuid is not null
           and item.company_id = candidates.company_id
           and item.source_provider = 'local'

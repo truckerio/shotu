@@ -156,3 +156,10 @@
     animation: none;
   }
 }
+
+@media (max-width: 700px) {
+  .dropdown-select-trigger,
+  .dropdown-select-option {
+    min-height: 44px;
+  }
+}

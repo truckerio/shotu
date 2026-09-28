@@ -14,7 +14,7 @@
   border-radius: 14px;
   box-shadow: 0 20px 60px rgb(10 13 18 / 28%);
   display: grid;
-  gap: 14px;
+  gap: 16px;
   max-width: 440px;
   padding: 24px;
   position: relative;
@@ -105,7 +105,7 @@
 }
 
 .office-handoff-modal h2 {
-  font-size: var(--text-heading);
+  font-size: 20px;
 }
 
 .office-handoff-modal textarea {
@@ -125,7 +125,7 @@
 }
 
 .office-close-modal h2 {
-  font-size: var(--text-heading);
+  font-size: 20px;
 }
 
 .office-close-modal textarea {
@@ -184,7 +184,7 @@
 }
 
 .mechanic-completion-modal h2 {
-  font-size: var(--text-heading);
+  font-size: 20px;
 }
 
 .mechanic-completion-modal textarea {
@@ -231,13 +231,13 @@
   color: #717680;
   cursor: pointer;
   display: flex;
-  height: 34px;
+  height: 44px;
   justify-content: center;
   padding: 0;
   position: absolute;
   right: 12px;
   top: 12px;
-  width: 34px;
+  width: 44px;
 }
 
 .close-button svg {

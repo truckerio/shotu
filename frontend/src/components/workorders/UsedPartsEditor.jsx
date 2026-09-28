@@ -31,6 +31,8 @@ import {
   WorkorderPartsTable,
 } from "./WorkorderPartsTable.jsx";
 import { WorkorderPartPriceCell } from "./WorkorderPartPriceCell.jsx";
+import { LaborPriceCell } from "./LaborPriceCell.jsx";
+import { WorkorderPricingSummary } from "./WorkorderPricingSummary.jsx";
 
 export function UsedPartsEditor({
   actorId,
@@ -153,6 +155,24 @@ export function UsedPartsEditor({
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0 || aggregatePartUsages.length > 0;
   const onePage = presentation === "one-page";
   const canViewPrices = ["office", "admin"].includes(role);
+  const laborPrice = detail?.modules?.diagnosisRepair?.data?.laborPrice || detail?.laborPrice || null;
+  const currentLaborRates = detail?.modules?.diagnosisRepair?.data?.currentLaborRates || detail?.currentLaborRates || {};
+  const workorderPricing = detail?.workorderPricing || detail?.modules?.parts?.data?.workorderPricing || null;
+  const savedForm = detail?.workorder?.formData || {};
+  const ratesForProduct = String(savedForm.laborProduct?.productId || "") === String(laborProduct?.productId || "")
+    ? currentLaborRates : {};
+  const laborDraftChanged = Number(savedForm.laborHours || 0) !== Number(laborHours || 0)
+    || String(savedForm.laborProduct?.productId || "") !== String(laborProduct?.productId || "");
+  const pricingForDisplay = laborDraftChanged && workorderPricing?.status === "complete"
+    ? { status: "incomplete", missingCount: 1 }
+    : workorderPricing;
+  const effectiveLocationId = locationId || detail?.workorder?.locationId || detail?.workorder?.location?.id || "";
+  const laborGridTemplate = canViewPrices
+    ? "24px minmax(0, 1.1fr) minmax(126px, .85fr) minmax(0, 1fr) minmax(220px, 1fr)"
+    : undefined;
+  const laborColumns = canViewPrices
+    ? [WORKORDER_PARTS_COLUMNS.PRODUCT, WORKORDER_PARTS_COLUMNS.QUANTITY_UOM, WORKORDER_PARTS_COLUMNS.REPAIR_ORDER, WORKORDER_PARTS_COLUMNS.PRICE]
+    : undefined;
   const partColumns = canViewPrices
     ? [
       ...DETAIL_WORKORDER_PARTS_COLUMNS.slice(0, -1),
@@ -219,7 +239,7 @@ export function UsedPartsEditor({
             ) : <span className="used-part-pending-repair">{t("parts.repairAfterInstalled")}</span>}
           </div>
           <span className="used-part-pickup-empty" aria-hidden="true"></span>
-          {canViewPrices ? <WorkorderPartPriceCell workorderId={detail.workorder.id} usageKind="serialized" usageId={part.usageId} price={part.price} onChanged={onChanged} /> : null}
+          {canViewPrices ? <WorkorderPartPriceCell workorderId={detail.workorder.id} usageKind="serialized" usageId={part.usageId} price={part.price} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} /> : null}
           <div className="used-part-serialized-actions">
             <span className="used-part-cell-label used-part-status-label">{t("parts.statusAction")}</span>
             <span className="used-part-serialized-status">
@@ -254,7 +274,7 @@ export function UsedPartsEditor({
         <div className="used-part-field used-part-recorded-value"><span className="used-part-cell-label">{t("parts.quantityUnit")}</span><strong>{quantity}</strong></div>
         <div className="used-part-field used-part-recorded-repair"><span className="used-part-cell-label">{t("parts.repairOrder")}</span>{part.repairOrder || <span aria-hidden="true">—</span>}</div>
         <span className="used-part-pickup-empty" aria-hidden="true"></span>
-        {canViewPrices ? <span className="used-part-price-unavailable">Not linked to inventory</span> : null}
+        {canViewPrices ? <span className="used-part-price-unavailable">Price unavailable · not linked to inventory</span> : null}
         <span className="used-part-recorded-status" aria-hidden="true"></span>
       </WorkorderPartsRow>
     );
@@ -267,7 +287,7 @@ export function UsedPartsEditor({
         <div className="used-part-field"><strong className="used-part-labor-name">{laborProductLabel(laborProduct)}</strong></div>
         <div className="used-part-field used-part-recorded-value"><strong>{laborHours ? formatQuantityUnit(laborHours, "hr") : "—"}</strong></div>
         <div className="used-part-field used-part-recorded-repair">{laborRepairOrder || <span aria-hidden="true">—</span>}</div>
-        <span aria-hidden="true"></span>
+        {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled /> : <span aria-hidden="true"></span>}
       </WorkorderPartsRow>
     );
   }
@@ -403,13 +423,13 @@ export function UsedPartsEditor({
 
   if (!partsEditable && !laborEditable) {
     const savedParts = recordedManualParts;
-    const hasLabor = Boolean(laborHours || laborRepairOrder);
+    const hasLabor = canViewPrices || Boolean(laborHours || laborRepairOrder);
     return (
       <div className="used-parts-editor workorder-parts-surface is-readonly" aria-label={t("parts.usedTitle")}>
         <p className="used-parts-readonly-state" role="status">{readOnlyText}</p>
         {hasLabor ? <section className="used-parts-section used-parts-labor-section" aria-labelledby={laborSectionTitleId}>
           <h3 id={laborSectionTitleId}>{t("parts.labor")}</h3>
-          <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table">
+          <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table" columns={laborColumns} gridTemplate={laborGridTemplate}>
             {renderReadonlyLaborRow()}
           </WorkorderPartsTable>
         </section> : null}
@@ -428,6 +448,7 @@ export function UsedPartsEditor({
           {!activeSerializedParts.length && !savedParts.length && !aggregatePartUsages.length ? <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p> : null}
           {serializedHistory}
         </section>
+        {canViewPrices ? <WorkorderPricingSummary pricing={pricingForDisplay} /> : null}
         {measuredDialog}
       </div>
     );
@@ -438,7 +459,7 @@ export function UsedPartsEditor({
       {!partsEditable ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
       <section className="used-parts-section used-parts-labor-section" aria-labelledby={laborSectionTitleId}>
         <h3 id={laborSectionTitleId}>{t("parts.labor")}</h3>
-        <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table">
+        <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table" columns={laborColumns} gridTemplate={laborGridTemplate}>
           <WorkorderPartsRow className="used-part-labor-row" aria-label={t("parts.laborHours")}>
             <strong>1</strong>
             <div className="used-part-field operational-part-labor-name">
@@ -474,7 +495,7 @@ export function UsedPartsEditor({
                 disabled={!laborEditable || laborRepairOrderDisabled}
               />
             </div>
-            <span aria-hidden="true"></span>
+            {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : <span aria-hidden="true"></span>}
           </WorkorderPartsRow>
         </WorkorderPartsTable>
       </section>
@@ -537,6 +558,7 @@ export function UsedPartsEditor({
           {message ? <span>{message}</span> : <span></span>}
         </div>
       </section>
+      {canViewPrices ? <WorkorderPricingSummary pricing={pricingForDisplay} /> : null}
       {measuredDialog}
     </div>
   );

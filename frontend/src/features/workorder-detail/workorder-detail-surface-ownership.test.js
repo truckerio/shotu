@@ -74,6 +74,8 @@ test("office/mechanic and surveillance details consume one structural surface", 
   assertUsesComponent(panelShell, "ArrowLeft", "WorkorderPanelShell");
   assert.doesNotMatch(panelShell, /ContextBreadcrumbs|breadcrumbs/);
   assert.match(surface, /back:\s*\{[\s\S]*label: context\.parent\.label,[\s\S]*onClick: context\.parent\.onClick/);
+  assert.match(panelShell, /<h1>\{context\.title\}<\/h1>/);
+  assert.doesNotMatch(panelShell, /<strong>\{context\.title\}<\/strong>/);
   assert.match(panelShell, /context\.back[\s\S]*onClick=\{context\.back\.onClick\}[\s\S]*aria-label=\{context\.back\.label\}/);
   assert.match(detailPage, /label: inspectionReturn \? "Inspection" : actorRole === "admin" \? "Operations" : isOfficeDetail \? "Office" : interfaceText\(locale, "mechanic\.myWork"\)/);
   assert.match(detailPage, /isPlainPrimaryActivation\(event\)/);
@@ -99,6 +101,7 @@ test("Create and Detail cannot drift into separate workorder panel markup", () =
   assert.match(panelShell, /<WorkorderObjectSummary/);
   assert.match(panelShell, /<WorkorderSectionNav/);
   assert.match(panelShell, /supportingPane/);
+  assert.match(createShell, /<h1>\{t\("create\.title"\)\}<\/h1>/);
 });
 
 test("canonical workorder header keeps context and actions in two grid columns", () => {

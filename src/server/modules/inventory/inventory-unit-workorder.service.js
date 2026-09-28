@@ -235,7 +235,13 @@ export async function readSerializedUnitUsagesForWorkorder(workorderId, context,
     ...scope,
     limit: 100,
   });
-  return { usages };
+  const canReadFinancials = ["admin", "office"].includes(context.actor.role)
+    && context.sessionMode !== "kiosk";
+  return {
+    usages: canReadFinancials
+      ? usages
+      : usages.map(({ price: _price, costAllocations: _costAllocations, ...usage }) => usage),
+  };
 }
 
 export async function updateSerializedUsageRepairOrderForWorkorder(workorderId, rawInput, context, dependencies = {}) {

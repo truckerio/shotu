@@ -26,6 +26,7 @@ test("activity projection binds the current actor and current tenant/location sc
   assert.match(captured.sql, /part\.created_by=\$1/);
   assert.match(captured.sql, /activity\.company_id=any\(\$2::uuid\[\]\)/);
   assert.match(captured.sql, /activity\.location_id=any\(\$3::uuid\[\]\)/);
+  assert.match(captured.sql, /event\.field_key like 'pricing\.%'[\s\S]*changed from[\s\S]*event\.old_value[\s\S]*event\.new_value/);
   assert.deepEqual(result, { items: [{ id: "workorder:1", category: "workorders" }], page: 2, pageSize: 10, total: 11, hasMore: false });
 });
 

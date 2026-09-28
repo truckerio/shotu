@@ -51,7 +51,7 @@ export function WorkorderPanelShell({
             <div className="workorder-context-content">
               {context.content || (
                 <>
-                  <strong>{context.title}</strong>
+                  <h1>{context.title}</h1>
                   {context.subtitle ? <span>{context.subtitle}</span> : null}
                 </>
               )}

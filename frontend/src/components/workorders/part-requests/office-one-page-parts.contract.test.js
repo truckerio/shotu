@@ -10,6 +10,8 @@ const panel = source("../PartRequestsPanel.jsx");
 const office = source("./OfficePartsSurface.jsx");
 const section = source("./UsedPartsSection.jsx");
 const editor = source("../UsedPartsEditor.jsx");
+const laborPrice = source("../LaborPriceCell.jsx");
+const measuredUsage = source("./MeasuredPartUsageDialog.jsx");
 const editorCss = source("../used-parts-editor.css");
 
 test("office one-page Parts reaches the used-parts editor without changing mechanic presentation", () => {
@@ -26,7 +28,7 @@ test("office Detail passes the shared labor control through the shared parts tab
   assert.match(panel, /onLaborProductChange,/);
   assert.match(office, /onLaborProductChange=\{onLaborProductChange\}/);
   assert.match(section, /onLaborProductChange=\{onLaborProductChange\}/);
-  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table">[\s\S]*?<LaborProductSelector[\s\S]*?<QuantityUnitInput/);
+  assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table"[^>]*>[\s\S]*?<LaborProductSelector[\s\S]*?<QuantityUnitInput/);
   assert.match(editor, /onChange=\{onLaborProductChange \|\| \(\(\) => \{\}\)\}/);
   assert.match(editor, /<LaborProductSelector[\s\S]*?disabled=\{!laborEditable\}/);
   assert.match(editor, /<QuantityUnitInput[\s\S]*?id="workorder-labor-hours"[\s\S]*?disabled=\{!laborEditable \|\| laborRepairOrderDisabled\}/);
@@ -53,4 +55,11 @@ test("office request actions remain rendered after the one-page table", () => {
   assert.match(office, /<OfficePartComposer detail=\{detail\} onChanged=\{onChanged\} \/>/);
   assert.match(office, /requests\.map\(\(request\) => \(/);
   assert.match(office, /presentation === "one-page" \? " is-one-page" : ""/);
+});
+
+test("pricing controls pin displayed labor rates and respect read-only Workorders", () => {
+  assert.match(laborPrice, /expectedRateVersionId/);
+  assert.match(editor, /usageKind="serialized"[^\n]*disabled=\{!partsEditable\}/);
+  assert.match(editor, /<LaborPriceCell[^\n]*disabled=\{!laborEditable\}/);
+  assert.match(measuredUsage, /usageKind="aggregate"[^\n]*disabled=\{!editable\}/);
 });

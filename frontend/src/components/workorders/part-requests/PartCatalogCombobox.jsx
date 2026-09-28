@@ -3,7 +3,9 @@ import { api } from "../../../lib/api.js";
 import { formatLocaleNumber, interfaceText } from "../../../i18n/index.js";
 import { textEntryProps } from "../../forms/text-entry-policy.js";
 import {
-  catalogInventoryText,
+  catalogAvailabilityText,
+  catalogInventoryContextText,
+  catalogInventoryIsLow,
   catalogPartDetails,
   normalizeCatalogResponse,
 } from "./catalog-parts-model.js";
@@ -254,25 +256,34 @@ export function PartCatalogCombobox({
         >
           {state === "results" ? (
             <ul role="presentation">
-              {items.map((part, index) => (
-                <li
-                  id={`${listboxId}-option-${index}`}
-                  role="option"
-                  aria-selected={activeIndex === index}
-                  className={activeIndex === index ? "is-active" : ""}
-                  key={part.id}
-                  ref={(element) => { optionRefs.current[index] = element; }}
-                  onClick={() => select(part)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                >
-                  <span className="part-catalog-option-heading">
-                    <strong>{part.partNumber}</strong>
-                    <small>{sourceLabel}</small>
-                  </span>
-                  <span>{catalogPartDetails(part, t, purpose)}</span>
-                  <small>{catalogInventoryText(part, t, (value) => formatLocaleNumber(value, locale))}</small>
-                </li>
-              ))}
+              {items.map((part, index) => {
+                const positionCode = catalogInventoryContextText(part);
+                return (
+                  <li
+                    id={`${listboxId}-option-${index}`}
+                    role="option"
+                    aria-selected={activeIndex === index}
+                    className={activeIndex === index ? "is-active" : ""}
+                    key={part.id}
+                    ref={(element) => { optionRefs.current[index] = element; }}
+                    onClick={() => select(part)}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    <span className="part-catalog-option-heading">
+                      <strong>{part.partNumber}</strong>
+                      <small className={masterMatch
+                        ? "part-catalog-source-label"
+                        : `part-catalog-availability${catalogInventoryIsLow(part) ? " is-low" : ""}`}>
+                        {masterMatch
+                          ? sourceLabel
+                          : catalogAvailabilityText(part, (value) => formatLocaleNumber(value, locale))}
+                      </small>
+                    </span>
+                    <span>{catalogPartDetails(part, t, purpose)}</span>
+                    {positionCode ? <small>{positionCode}</small> : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="part-catalog-state" role="status" aria-live="polite">

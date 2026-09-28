@@ -130,9 +130,9 @@
   white-space: nowrap;
 }
 
-/* Keep wide office forms within a comfortable scan and pointer range while
-   leaving the work surface flat. Detail Tools keeps this width boundary while
-   its sibling pane opens; Create preview uses its full split-pane width. */
+/* Keep wide office forms within a comfortable scan and pointer range. The
+   bounded form is a distinct work card while the page heading stays directly
+   on the application background. */
 @media (min-width: 1440px) {
   .split-layout:is(:not(.has-preview), .workorder-detail-layout.has-tools-layout) > .control-panel[data-workorder-presentation="one-page"] {
     --workorder-wide-form-width: 1280px;
@@ -155,10 +155,11 @@
   }
 
   .split-layout:is(:not(.has-preview), .workorder-detail-layout.has-tools-layout) .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout {
-    background: transparent;
-    border: 0;
-    border-radius: 0;
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
     box-sizing: border-box;
+    box-shadow: 0 8px 24px rgb(16 24 40 / 8%);
     margin: 16px auto 48px;
     max-width: var(--workorder-wide-form-width);
     overflow: visible;

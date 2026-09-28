@@ -223,6 +223,58 @@ test("canonical generic module routes expose protected reads and allowlisted mut
   assert.equal(calls[3][4], "close");
 });
 
+test("canonical Diagnosis pricing actions validate and forward audited labor inputs", async () => {
+  const calls = [];
+  const dependencies = {
+    runAction: async (...args) => { calls.push(args); return { saved: true }; },
+  };
+  const productId = "44444444-4444-4444-8444-444444444444";
+  const rateVersionId = "55555555-5555-4555-8555-555555555555";
+  const revision = {
+    operation: "laborRateRevision",
+    productId,
+    priceKind: "selling_price",
+    expectedVersion: 0,
+    amount: "125.5000",
+    currency: "USD",
+    reason: "Approved office labor rate",
+    idempotencyKey: "labor-rate-route-1",
+  };
+  const selection = {
+    operation: "laborPriceSelection",
+    selection: "selling_price",
+    expectedRateVersionId: rateVersionId,
+    reason: "Use the approved customer rate",
+    idempotencyKey: "labor-price-route-1",
+  };
+
+  await runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/diagnosisRepair/actions/record`,
+    body: revision,
+    dependencies,
+  });
+  await runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/diagnosisRepair/actions/record`,
+    body: selection,
+    dependencies,
+  });
+
+  assert.deepEqual(calls.map((call) => call.slice(2, 5)), [
+    ["diagnosisRepair", "record", revision],
+    ["diagnosisRepair", "record", selection],
+  ]);
+
+  await assert.rejects(runRoute({
+    method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/diagnosisRepair/actions/record`,
+    body: { ...selection, selection: "odoo_price" },
+    dependencies,
+  }), (error) => error.statusCode === 400);
+  assert.equal(calls.length, 2);
+});
+
 test("canonical Parts actions keep domain request identity separate from the HTTP trace", async () => {
   const calls = [];
   const dependencies = {

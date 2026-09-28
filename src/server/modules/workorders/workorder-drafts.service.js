@@ -15,6 +15,9 @@ import {
   updateWorkorderDraft,
 } from "../../db/repositories/workorder-drafts.repo.js";
 import { createWorkorderSchema } from "./workorder.schemas.js";
+import { authorizeWorkorderCreate } from "./workorder-module-access.service.js";
+import { workorderInputModules } from "./workorder-module-projection.js";
+import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
 
 function draftScope(context) {
   const actor = context?.actor;
@@ -184,7 +187,25 @@ export async function submitUserWorkorderDraft(context, id, input, dependencies 
       prepareCreateInput: async (draft) => {
         if (!draft.locationId) throw invalidRequest("Location is required before creating the workorder.");
         await accessibleLocation(context, draft.locationId, dependencies);
-        return { ...finalCreateInput(draft), createdByRole: actor.role };
+        const pricing = input.pricing || draft.payload?.pricing;
+        if (pricing && !["office", "admin"].includes(actor.role)) throw permissionDenied();
+        if (pricing && !input.pricing?.expectedFingerprint) {
+          throw new AuthError(409, "WORKORDER_PRICING_PREVIEW_REQUIRED", "Refresh the pricing preview before creating this workorder.");
+        }
+        const prepared = { ...finalCreateInput({ ...draft, payload: { ...draft.payload, ...(pricing ? { pricing } : {}) } }), createdByRole: actor.role, pricingActorId: actor.id };
+        if (pricing) {
+          await (dependencies.authorizeCreate || authorizeWorkorderCreate)(context, {
+            companyId: prepared.companyId, locationId: prepared.locationId,
+            moduleKeys: workorderInputModules(prepared, { create: true }),
+          });
+          if (prepared.formData?.laborProduct?.productId) {
+            prepared.formData.laborProduct = await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
+              companyId: prepared.companyId, locationId: prepared.locationId,
+              productId: prepared.formData.laborProduct.productId,
+            }, context);
+          }
+        }
+        return prepared;
       },
     });
     if (!result) throw resourceNotFound("Draft");

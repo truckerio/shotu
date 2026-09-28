@@ -49,6 +49,104 @@
   grid-template-columns: 1fr;
 }
 
+.office-shell {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: calc(100vh - 48px);
+}
+
+.office-navigation-rail {
+  background: #f9fafb;
+  border-right: 1px solid #e4e7ec;
+  min-width: 0;
+  padding: 16px 12px;
+}
+
+.office-rail-account {
+  min-height: 52px;
+}
+
+.office-rail-account .workspace-header-actions {
+  display: none;
+}
+
+.office-rail-divider {
+  background: #e4e7ec;
+  height: 1px;
+  margin: 14px 0 16px;
+}
+
+.office-rail-nav,
+.office-rail-nav section {
+  display: grid;
+  gap: 2px;
+}
+
+.office-rail-nav {
+  gap: 18px;
+}
+
+.office-rail-nav h2 {
+  color: #667085;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  letter-spacing: .04em;
+  margin: 0 0 4px;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.office-rail-nav button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #475467;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.office-rail-nav section button {
+  padding-left: 14px;
+}
+
+.office-rail-nav button:hover {
+  background: #f2f4f7;
+  color: #182230;
+}
+
+.office-rail-nav button.active {
+  background: #eff8ff;
+  color: #175cd3;
+  font-weight: var(--weight-semibold);
+}
+
+.office-rail-nav button:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: 2px;
+}
+
+.office-rail-nav svg {
+  flex: 0 0 auto;
+  height: 17px;
+  width: 17px;
+}
+
+.office-main-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 20px 24px;
+}
+
 .office-primary-nav {
   align-items: center;
   display: flex;
@@ -96,6 +194,7 @@
 .office-mobile-nav {
   display: none;
 }
+.office-phone-account-header { display: none; }
 
 .office-layout {
   align-items: start;
@@ -106,6 +205,29 @@
 
 .office-layout.is-drafts {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.office-primary-work-surface {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.office-primary-work-surface .office-mechanic-panel {
+  background: #f9fafb;
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid #e4e7ec;
+}
+
+.office-primary-work-surface .office-table-shell {
+  background: #fff;
+  border: 0;
+  border-radius: 0;
+}
+
+.office-inspection-work-surface {
+  padding-top: 16px;
 }
 
 .office-mechanic-panel {
@@ -183,6 +305,69 @@
   min-height: 560px;
 }
 
+.workspace-operations.office-home:is(.is-inventory-workspace, .is-units-workspace, .is-operations-workspace) {
+  gap: 12px;
+}
+
+.office-collection-page-header {
+  padding-inline: 12px;
+}
+
+.workspace-operations.office-home > .office-collection-page-header {
+  margin-top: 8px;
+}
+
+.workspace-operations .office-table-shell.is-frameless-collection {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.is-units-workspace .office-table-shell {
+  min-height: 0;
+}
+
+.is-units-workspace .units-workspace .operational-collection-page-body {
+  margin-top: 0;
+}
+
+.is-inventory-workspace .operational-collection-section-header {
+  border-bottom: 0;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.is-inventory-workspace .operational-collection-section-nav button {
+  min-height: 52px;
+}
+
+.is-inventory-workspace .operational-collection-tabs button {
+  min-height: 44px;
+}
+
+.is-inventory-workspace .operational-collection-toolbar {
+  margin-top: 16px;
+  padding-block: 12px;
+}
+
+.is-inventory-workspace .operational-collection-result-header {
+  min-height: 40px;
+}
+
+.is-operations-workspace .role-desktop-queues .mechanic-queue-tabs {
+  flex-wrap: nowrap;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.is-operations-workspace .role-desktop-queues .mechanic-queue-tabs button {
+  gap: 5px;
+  padding-inline: 4px;
+}
+
 .office-toolbar {
   display: grid;
   grid-template-columns: 1fr;
@@ -226,14 +411,67 @@
 }
 
 @media (max-width: 1180px) {
+  .office-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
   .office-layout {
     grid-template-columns: 1fr;
+  }
+
+  .office-primary-work-surface .office-mechanic-panel {
+    border-bottom: 1px solid #e4e7ec;
+    border-right: 0;
   }
 }
 
 @media (max-width: 700px) {
+  .office-phone-account-header { display: flex; }
+  .office-shell {
+    display: block;
+    min-height: 0;
+  }
+
+  .office-navigation-rail {
+    border-bottom: 1px solid #e4e7ec;
+    border-right: 0;
+    padding: 12px 16px;
+  }
+
+  .office-rail-nav {
+    gap: 12px;
+  }
+
+  .office-rail-nav section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .office-rail-nav h2 {
+    grid-column: 1 / -1;
+  }
+
+  .office-main-content {
+    padding: 12px 0 82px;
+  }
+
   .workspace-operations.office-home {
     padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .office-operations-page-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .office-operations-page-header .page-header-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .office-operations-page-header .page-header-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    width: auto;
   }
 
   .office-mobile-nav {

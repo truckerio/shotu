@@ -21,6 +21,21 @@ test("part creation and workorder updates keep identifiable record details", () 
   assert.deepEqual(workorder.details, [{ label: "Workorder", value: "WO-1" }]);
 });
 
+test("global Activity names a one-Workorder price override without losing before and after text", () => {
+  const item = userActivityTimelineItem({
+    id: "price-1",
+    source: "workorder_field",
+    category: "workorders",
+    action: "pricing.part.0",
+    actorName: "Alex",
+    actorRole: "office",
+    workorderSerial: "WO-1",
+    description: "FILTER-1 price changed from $18.00 internal price to $24.00 custom price",
+  });
+  assert.equal(item.title, "Workorder price changed");
+  assert.equal(item.description, "FILTER-1 price changed from $18.00 internal price to $24.00 custom price");
+});
+
 test("changing the activity filter keeps current rows until replacement data arrives", () => {
   const current = { items: [{ id: "event-1" }], page: 4, total: 81, hasMore: true, loading: false, loadingMore: true, error: "Old error" };
   assert.deepEqual(beginUserActivityLoad(current), {

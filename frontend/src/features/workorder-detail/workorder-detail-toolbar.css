@@ -4,7 +4,7 @@
   border: 1px solid #e1e4e8;
   border-radius: 8px;
   display: grid;
-  gap: 9px;
+  gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 8px;
 }
@@ -12,7 +12,7 @@
 .detail-context-actions {
   align-items: center;
   display: inline-flex !important;
-  gap: 7px !important;
+  gap: 8px !important;
   overflow: visible !important;
 }
 
@@ -35,15 +35,16 @@
   background: #1570ef;
   border-color: #1570ef;
   color: #fff;
-  font-size: var(--text-secondary);
+  font-size: 14px;
   font-weight: var(--weight-semibold);
   padding: 0 12px;
   width: auto;
+  height: 40px;
 }
 
 .detail-context-bar .detail-create-button span {
   color: #fff;
-  font-size: var(--text-secondary);
+  font-size: 14px;
   font-weight: var(--weight-semibold);
 }
 
@@ -182,6 +183,7 @@
   min-width: 0;
 }
 
+.detail-context-bar h1,
 .detail-context-bar strong,
 .detail-context-bar span:not(.ops-status) {
   overflow: hidden;
@@ -189,9 +191,8 @@
   white-space: nowrap;
 }
 
-.detail-context-bar strong {
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
+.detail-context-bar h1 {
+  margin: 0;
 }
 
 .workorder-context-content span {

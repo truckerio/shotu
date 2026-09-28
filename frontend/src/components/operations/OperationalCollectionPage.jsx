@@ -11,15 +11,18 @@ export function OperationalCollectionPage({
   leading = null,
   actions = null,
   presentation = "page",
+  showTitle = true,
+  surface = false,
   className = "",
   children,
 }) {
   const embedded = presentation === "embedded";
+  const hasHeader = Boolean((showTitle && title) || subtitle || leading || actions);
 
   return (
     <section className={joinClasses("operational-collection-page", `is-${presentation}`, className)}>
-      <PageHeader title={title} subtitle={subtitle} leading={leading} actions={actions} headingLevel={embedded ? 2 : 1} />
-      <div className="operational-collection-page-body">{children}</div>
+      {hasHeader ? <PageHeader title={title} subtitle={subtitle} leading={leading} actions={actions} headingLevel={embedded ? 2 : 1} showTitle={showTitle} /> : null}
+      <div className={joinClasses("operational-collection-page-body", surface && "operational-collection-surface")}>{children}</div>
     </section>
   );
 }
@@ -45,13 +48,13 @@ export function OperationalCollectionTabs({ items, activeId, onChange, ariaLabel
   );
 }
 
-export function OperationalCollectionSectionHeader({ items, activeId, onChange, ariaLabel, actions = null, className = "", headingLevel = 1 }) {
+export function OperationalCollectionSectionHeader({ items, activeId, onChange, ariaLabel, actions = null, className = "", headingLevel = 1, showHeading = true }) {
   const activeItem = items.find((item) => item.id === activeId) || items[0];
   const Heading = headingLevel === 2 ? "h2" : "h1";
 
   return (
-    <header className={joinClasses("operational-collection-section-header", className)}>
-      <Heading>{activeItem?.label}</Heading>
+    <header className={joinClasses("operational-collection-section-header", !showHeading && "is-heading-external", className)}>
+      {showHeading ? <Heading>{activeItem?.label}</Heading> : null}
       <nav className="operational-collection-section-nav" aria-label={ariaLabel}>
         {items.filter((item) => item.id !== activeItem?.id).map((item) => (
           <button key={item.id} type="button" onClick={() => onChange(item.id)}>

@@ -20,7 +20,7 @@ test("mechanic used-parts interface text is owned by the selected locale", () =>
   assert.equal(interfaceText("en", "parts.addPart"), "Add part");
   assert.equal(interfaceText("es", "parts.addPart"), "Agregar pieza");
   assert.equal(interfaceText("pa", "parts.addPart"), "ਪਾਰਟ ਜੋੜੋ");
-  assert.equal(interfaceText("en", "create.parts.add"), "Add approved part");
+  assert.equal(interfaceText("en", "create.parts.add"), "Add line");
 });
 
 test("installed serialized summaries keep identity locked, edit only repair wording, and feed every preview", () => {

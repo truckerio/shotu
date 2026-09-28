@@ -20,7 +20,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /<OperationalCollectionPage/);
   assert.match(workspace, /presentation=\{presentation\}/);
   assert.match(workspace, /<OperationalCollectionTabs/);
-  assert.match(workspace, /<OperationalCollectionToolbar className="inventory-toolbar">/);
+  assert.match(workspace, /<OperationalCollectionToolbar className="inventory-toolbar inventory-stock-toolbar">/);
   assert.match(workspace, /<OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">/);
   assert.match(workspace, /<OperationalCollectionTable/);
   assert.match(workspace, /<OperationalCollectionRow/);
@@ -48,6 +48,13 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /invoiceWorkflowOpen \? \(\s*<Button type="button" className="inventory-invoice-back-button" icon=\{ArrowLeft\} onClick=\{backFromInvoiceWorkflow\}>Back<\/Button>/);
   assert.match(workspace, /if \(workflowDetail\?\.onBack\) workflowDetail\.onBack\(\);\s*else closeInvoiceWorkflow\(\);/);
   assert.match(workspace, /const inventorySubtitle = invoiceWorkflowOpen\s*\? ""/);
+  assert.match(workspace, /!showSectionNavigation && presentation === "page"[\s\S]*?INVENTORY_SECTIONS\.find\(\(section\) => section\.id === inventorySection\)\?\.label \|\| "Stock"/);
+  assert.match(workspace, /showSectionNavigationOnPhone = false/);
+  assert.match(workspace, /inventory-phone-section-navigation[\s\S]*?ariaLabel="Inventory sections"/);
+  assert.match(workspace, /<OperationalCollectionPage[\s\S]*?title=\{inventoryTitle\}[\s\S]*?leading=\{inventoryLeading\}[\s\S]*?actions=\{inventoryActions\}[\s\S]*?showTitle=\{presentation !== "embedded"\}/);
+  assert.match(workspace, /const inventoryActions = countWorkflowOpen[\s\S]*?!showSectionNavigation && !onSectionActionsChange \? sectionActions : null;/);
+  assert.doesNotMatch(workspace, /inventory-embedded-section-actions/);
+  assert.match(workspace, /onSectionActionsChange\?\.\(invoiceWorkflowOpen \|\| countWorkflowOpen \? null : sectionActions\)/);
   assert.match(workspace, /workflowDetail\?\.label/);
   assert.match(workspace, /onClick: followWorkflowBreadcrumb/);
   assert.match(workspace, /onContextChange=\{updateWorkflowDetail\}/);
@@ -56,10 +63,41 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /event\.preventDefault\(\)/);
   assert.match(workspace, /document\.getElementById\(returnFocusId\)\?\.focus/);
   assert.doesNotMatch(workspace, /Upload, review, and add parts without leaving inventory\./);
-  assert.match(office, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
-  assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
+  assert.match(office, /<InventoryWorkspace key=\{inventoryWorkspaceResetKey\} actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" activeSection=\{inventorySection\} onSectionChange=\{syncInventorySection\} onSectionTitleChange=\{setInventoryPageTitle\} onSectionActionsChange=\{setInventoryHeaderActions\} showSectionNavigation=\{false\} showSectionNavigationOnPhone \/>/);
+  assert.match(admin, /<InventoryWorkspace key=\{inventoryWorkspaceKey\} actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" activeSection=\{inventorySection\} onSectionChange=\{onInventorySectionChange\} onSectionTitleChange=\{onInventorySectionTitleChange\} showSectionNavigation=\{false\} showSectionNavigationOnPhone \/>/);
   assert.doesNotMatch(office, /<InvoiceExtractionWorkspace \/>/);
   assert.doesNotMatch(admin, />Invoices<\/button>/);
+});
+
+test("embedded workflow headers keep context and actions without a duplicate effective title", async () => {
+  const [workspace, collectionPage, pageHeader] = await Promise.all([
+    readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/operations/OperationalCollectionPage.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/layout/PageHeader.jsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(workspace, /const inventoryTitle = invoiceWorkflowOpen[\s\S]*?"Invoice intake"[\s\S]*?countWorkflowOpen[\s\S]*?"Starting inventory"[\s\S]*?!showSectionNavigation && presentation === "page"/);
+  assert.match(workspace, /onSectionTitleChange\?\.\(\s*invoiceWorkflowOpen\s*\? "Invoice intake"\s*: countWorkflowOpen\s*\? "Starting inventory"/);
+  assert.match(workspace, /const inventoryLeading = invoiceWorkflowOpen \?/);
+  assert.match(workspace, /const inventoryActions = countWorkflowOpen \?/);
+  assert.match(workspace, /showTitle=\{presentation !== "embedded"\}/);
+  assert.match(collectionPage, /showTitle = true/);
+  assert.match(collectionPage, /const hasHeader = Boolean\(\(showTitle && title\) \|\| subtitle \|\| leading \|\| actions\);/);
+  assert.match(collectionPage, /<PageHeader title=\{title\} subtitle=\{subtitle\} leading=\{leading\} actions=\{actions\} headingLevel=\{embedded \? 2 : 1\} showTitle=\{showTitle\} \/>/);
+  assert.match(pageHeader, /\{showTitle \? <Heading>\{title\}<\/Heading> : null\}/);
+});
+
+test("stock filters preserve search priority and compact the secondary controls on phone", async () => {
+  const [workspace, styles] = await Promise.all([
+    readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
+    readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(workspace, /<section className="operational-collection-surface inventory-section-surface"[\s\S]*?<OperationalCollectionTabs[\s\S]*?<OperationalCollectionTable/);
+  assert.match(workspace, /aria-label=\{`\$\{INVENTORY_SECTIONS\.find/);
+  assert.match(styles, /\.inventory-stock-table \.operational-collection-table-head > span:not\(:first-child\)\s*\{\s*justify-content:\s*flex-end;\s*text-align:\s*right;/);
+  assert.match(styles, /\.inventory-stock-row > \.operational-collection-cell:not\(:first-child\)\s*\{\s*justify-items:\s*end;\s*text-align:\s*right;/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /\.inventory-stock-toolbar \.inventory-search-field\s*\{\s*grid-column:\s*1 \/ -1;/);
+  assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/);
 });
 
 test("Inbound owns the global arrival and invoice entry points while Purchasing keeps contextual supplier intake", async () => {
@@ -87,7 +125,7 @@ test("Inbound owns the global arrival and invoice entry points while Purchasing 
   assert.match(workspace, /onInvoice=\{\(requestedLocationId\)=>openInvoiceWorkflow\("", requestedLocationId\)\}/);
   assert.match(workspace, /setLocationId\(requestedLocationId\)/);
   assert.match(workspace, /<InventoryInboundWorkspace/);
-  assert.match(workspace, /onReceivePurchaseOrder=\{\(poId\) => \{ setInboundReceiptOrderId\(poId\); setInventorySection\('purchases'\); \}\}/);
+  assert.match(workspace, /onReceivePurchaseOrder=\{\(poId\) => \{ setInboundReceiptOrderId\(poId\); selectInventorySection\('purchases'\); \}\}/);
   assert.match(workspace, /onAddInventory=\{\(requestedLocationId\) => setReceivingPart\(\{ receiptLocationId: requestedLocationId \}\)\}/);
 });
 
@@ -183,6 +221,9 @@ test("inventory sections own their page titles and actions instead of a persiste
   assert.match(workspace, /<OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId=\{inventorySection\}/);
   assert.match(workspace, /actions=\{sectionActions\}/);
   assert.match(workspace, /headingLevel=\{presentation === "embedded" \? 2 : 1\}/);
+  assert.match(workspace, /showHeading=\{presentation !== "embedded"\}/);
+  assert.match(workspace, /onSectionTitleChange\?\.\(\s*invoiceWorkflowOpen\s*\? "Invoice intake"\s*: countWorkflowOpen\s*\? "Starting inventory"\s*: INVENTORY_SECTIONS\.find\(\(section\) => section\.id === inventorySection\)\?\.label \|\| "Stock"/);
+  assert.match(workspace, /\}, \[countWorkflowOpen, inventorySection, invoiceWorkflowOpen, onSectionTitleChange\]\);/);
   assert.match(workspace, /inventorySection === "stock" \? stockActions : inventorySection === "inbound" \? inboundActions : inventorySection === "tasks" \? taskActions : null/);
   assert.doesNotMatch(workspace, /InventoryLocationsWorkspace|Storage layout/);
   assert.match(workspace, /function openStockByLocation\(shopId = ""\)/);
@@ -220,8 +261,9 @@ test("inventory sections own their page titles and actions instead of a persiste
   assert.match(locationStyles, /@media \(max-width: 700px\)[\s\S]*?\.inventory-location-layout\.has-detail \.inventory-location-tree \{ display: none; \}/);
   assert.match(locationsWorkspace, /const activeLocationId = shopId;/);
   assert.doesNotMatch(locationsWorkspace, /aria-label="Shop location"/);
-  assert.match(styles, /\.inventory-workspace\.is-section-root > \.page-header \{ display: none; \}/);
-  assert.match(styles, /\.inventory-workspace\.is-section-root > \.operational-collection-page-body \{ margin-top: 0; \}/);
+  assert.doesNotMatch(styles, /\.inventory-workspace\.is-section-root > \.page-header/);
+  assert.match(styles, /\.inventory-workspace\.is-section-root\.is-page > \.operational-collection-page-body \{ margin-top: var\(--space-3\); \}/);
+  assert.match(styles, /\.inventory-workspace\.is-section-root\.is-embedded > \.operational-collection-page-body \{ margin-top: 0; \}/);
 });
 
 test("stock has peer part and location modes with contextual physical counts", async () => {
@@ -340,7 +382,7 @@ test("stock starts unified add stock and keeps location count handoffs", async (
   assert.match(workspace, /const taskActions = !taskWorkflow \? <Button[^>]*onClick=\{openPhysicalCountTasks\}>Physical counts<\/Button>/);
   assert.match(workspace, /function openPhysicalCountTasks\(\)[\s\S]*setTaskSection\("count"\)[\s\S]*taskOwner: "count"/);
   assert.match(workspace, /owner === "count" && !initialParams\.get\("taskId"\)/);
-  assert.match(workspace, /countWorkflowOpen \? "Starting inventory"/);
+  assert.match(workspace, /countWorkflowOpen[\s\S]*?\? "Starting inventory"/);
   assert.match(workspace, /onAddStock=\{\(\{ part, locationParts, shopId, positionId, positionPath \}\) => setReceivingPart/);
   assert.match(workspace, /receiptPositionPath: positionPath, lockReceiptLocation: true/);
   assert.doesNotMatch(workspace, /onOpenStartingInventory=/);
@@ -797,8 +839,8 @@ test("only the admin workspace enables applying physically counted inventory", a
     readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8"),
     readFile(new URL("../office/OfficeWorkspace.jsx", import.meta.url), "utf8"),
   ]);
-  assert.match(admin, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" \/>/);
-  assert.match(office, /<InventoryWorkspace actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" \/>/);
+  assert.match(admin, /<InventoryWorkspace key=\{inventoryWorkspaceKey\} actorId=\{actor\?\.id\} canApplyInventoryCount=\{actor\?\.role === "admin"\} canReconcileAuthority=\{actor\?\.role === "admin"\} presentation="page" activeSection=\{inventorySection\} onSectionChange=\{onInventorySectionChange\} onSectionTitleChange=\{onInventorySectionTitleChange\} showSectionNavigation=\{false\} showSectionNavigationOnPhone \/>/);
+  assert.match(office, /<InventoryWorkspace key=\{inventoryWorkspaceResetKey\} actorId=\{actor\?\.id\} canApplyInventoryCount=\{false\} presentation="embedded" activeSection=\{inventorySection\} onSectionChange=\{syncInventorySection\} onSectionTitleChange=\{setInventoryPageTitle\} onSectionActionsChange=\{setInventoryHeaderActions\} showSectionNavigation=\{false\} showSectionNavigationOnPhone \/>/);
   assert.match(workspace, /canApplyInventoryCount=\{canApplyInventoryCount\}/);
   assert.match(panel, /stocktake\.readyCount && canApplyInventoryCount/);
   assert.match(panel, /An administrator must confirm the physical count before adding inventory/);
@@ -839,6 +881,23 @@ test("the main inventory page can create a zero-stock local catalog part", async
   assert.match(source, />New part<\/Button>/);
   assert.match(source, /<CreateInventoryPartDialog[\s\S]*locations=\{locations\}/);
   assert.match(source, /setQuery\(part\.partNumber\)/);
+});
+
+test("desktop inventory section actions stay compact inside the navigation line", async () => {
+  const styles = await readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8");
+  assert.match(styles, /@media \(min-width: 761px\)[\s\S]*?\.inventory-workspace\.is-section-root \.operational-collection-section-nav button\s*\{[^}]*min-height:\s*32px;/);
+  assert.match(styles, /\.inventory-workspace\.is-section-root \.operational-collection-section-actions\.page-header-actions \.button\s*\{[^}]*font-size:\s*var\(--text-body\);[^}]*font-weight:\s*var\(--weight-semibold\);[^}]*height:\s*32px;[^}]*line-height:\s*16px;[^}]*padding:\s*4px 16px;/s);
+  assert.match(styles, /\.inventory-workspace\.is-section-root \.operational-collection-section-actions\.page-header-actions \.inventory-refresh-button\s*\{[^}]*height:\s*32px;[^}]*min-width:\s*32px;[^}]*width:\s*32px;/s);
+  assert.match(styles, /\.inventory-workspace\.is-section-root \.operational-collection-section-actions\.page-header-actions \.inventory-refresh-button > svg\s*\{[^}]*height:\s*16px;[^}]*width:\s*16px;/s);
+});
+
+test("inventory filters keep the 40px desktop baseline while header actions align at 44px", async () => {
+  const styles = await readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8");
+  assert.match(styles, /\.inventory-workspace \.page-header-actions \.inventory-refresh-button\s*\{[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*width:\s*44px;/s);
+  assert.match(styles, /\.inventory-workspace \.page-header-actions \.inventory-invoice-upload-button\s*\{[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*width:\s*44px;/s);
+  assert.match(styles, /\.inventory-search-control\s*\{[^}]*min-height:\s*40px;/);
+  assert.match(styles, /\.inventory-scope-field select,\s*\.inventory-stock-sort select\s*\{[^}]*min-height:\s*40px;/);
+  assert.match(styles, /@media \(min-width: 761px\)[\s\S]*?\.inventory-workspace\.is-section-root \.operational-collection-section-nav button\s*\{[^}]*min-height:\s*32px;/);
 });
 
 test("part activity is visibly scoped and owns stock history", async () => {

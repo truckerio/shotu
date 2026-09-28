@@ -33,16 +33,17 @@ test("Create panels keep one useful heading layer", () => {
   assert.match(createLocation, /showTitle=\{false\}[\s\S]*<FormSection title=\{t\("create\.location\.repairLocation"\)\}>/);
   assert.match(createSchedule, /const dates = onePage \?[\s\S]*: <FormSection title=\{t\("create\.schedule\.workDates"\)\}>/);
   assert.match(createSchedule, /showTitle=\{false\}/);
-  assert.match(createParts, /showTitle=\{!compactLayout\}/);
+  assert.match(createParts, /headerAction=\{partsHeaderActions\}/);
+  assert.doesNotMatch(createParts, /showTitle=\{!compactLayout\}/);
   assert.match(createParts, /compactLayout \? \([\s\S]*create-parts-labor-title/);
   assert.match(createParts, /function LegacyCreatePartsEditor/);
 });
 
-test("title-hidden Create help stays beside the visible section heading", () => {
+test("Create help stays beside the visible section heading", () => {
   assert.match(createConcern, /<FormSection[\s\S]*title=\{t\("create\.concern\.problem"\)\}[\s\S]*action=\{<SectionHelpDisclosure/);
   assert.doesNotMatch(createConcern, /headerAction=/);
-  assert.match(createParts, /headerAction=\{compactLayout \? null : partsHelp\}/);
-  assert.match(createParts, /className="create-parts-group-heading has-help"[\s\S]*create-parts-labor-title[\s\S]*\{partsHelp\}/);
+  assert.match(createParts, /const partsHeaderActions = \([\s\S]*\{partsHelp\}[\s\S]*headerAction=\{partsHeaderActions\}/);
+  assert.match(createParts, /className="create-parts-group-heading"[\s\S]*create-parts-labor-title/);
 });
 
 test("panel sections support one minimal visible title or a title-hidden Create layout", () => {

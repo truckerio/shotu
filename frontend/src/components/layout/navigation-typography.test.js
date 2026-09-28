@@ -6,7 +6,7 @@ function source(relativePath) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("shared mobile navigation labels use the 12px navigation token", () => {
+test("shared mobile navigation labels use the 14px semibold navigation token", () => {
   const typography = source("../../typography.css");
   const consumers = [
     source("../../features/admin/admin.css"),
@@ -15,6 +15,6 @@ test("shared mobile navigation labels use the 12px navigation token", () => {
     source("../workorders/workorder-object-page.css"),
   ];
 
-  assert.match(typography, /--text-navigation:\s*12px;/);
+  assert.match(typography, /--text-navigation:\s*14px;/);
   for (const consumer of consumers) assert.match(consumer, /font-size:\s*var\(--text-navigation\);/);
 });

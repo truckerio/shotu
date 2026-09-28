@@ -109,7 +109,7 @@ test("repository contract locks workorder identity and keeps event/movement delt
   assert.match(source, /`aggregate-\$\{eventType\}:\$\{usage\.id\}/);
   assert.doesNotMatch(source, /`aggregate-reversal:\$\{usage\.id\}/);
   assert.match(source, /usage\.company_id=\$1 and usage\.workorder_id=\$2 and usage\.location_id=\$3/);
-  assert.match(source, /Math\.max\(1, Math\.min\(Number\(limit\) \|\| 200, 200\)\)/);
+  assert.match(source, /Math\.max\(1, Math\.min\(Number\(limit\) \|\| 200, 201\)\)/);
   const listProjection = source.slice(source.indexOf("export async function listAggregateWorkorderUsages"), source.indexOf("function publicUsage"));
   assert.match(listProjection, /receiptReference/);
   assert.doesNotMatch(listProjection, /external_id|invoiceRunId/);

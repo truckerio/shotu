@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  catalogAvailabilityText,
+  catalogInventoryContextText,
+  catalogInventoryIsLow,
   catalogInventoryText,
   catalogPartDetails,
   normalizeCatalogPart,
@@ -43,12 +46,31 @@ test("normalizes catalog and location inventory without leaking API shape", () =
   assert.equal(result.items[0].partNumber, "LF14000NN");
   assert.equal(result.items[0].inventory.itemId, "stock-1");
   assert.equal(result.items[0].inventory.available, 6);
+  assert.equal(result.items[0].inventory.lowStock, false);
   assert.equal(result.items[0].trackingMode, "measured_bulk");
   assert.equal(result.items[0].decimalScale, 2);
   assert.equal(result.items[0].version, 7);
   assert.equal(result.items[0].providerManaged, true);
   assert.deepEqual(result.items[0].referenceNumbers, ["ALT-1"]);
   assert.equal(catalogInventoryText(result.items[0]), "6 pc available at Chino · Bin A-12");
+  assert.equal(catalogAvailabilityText(result.items[0]), "6 pc");
+  assert.equal(catalogInventoryContextText(result.items[0]), "A-12");
+  assert.equal(catalogInventoryIsLow(result.items[0]), false);
+});
+
+test("catalog availability uses replenishment alerts and zero stock as low-stock evidence", () => {
+  const alerted = normalizeCatalogPart({
+    id: "part-low",
+    partNumber: "LOW-1",
+    uomCode: "ea",
+    inventory: { available: 2, lowStock: true, locationName: "Chino" },
+  });
+  const empty = normalizeCatalogPart({ id: "part-empty", partNumber: "EMPTY-1", uomCode: "ea" });
+
+  assert.equal(catalogAvailabilityText(alerted), "2 pc");
+  assert.equal(catalogInventoryIsLow(alerted), true);
+  assert.equal(catalogInventoryIsLow(empty), true);
+  assert.equal(catalogInventoryContextText(empty), "");
 });
 
 test("distinguishes an empty company catalog from a query with no matches", () => {

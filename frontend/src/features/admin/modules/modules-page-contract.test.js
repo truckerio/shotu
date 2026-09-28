@@ -30,7 +30,8 @@ test("Modules page uses the canonical catalog and progressive module management"
 
 test("admin shell exposes Modules as a first-class destination", () => {
   assert.match(shell, /<ModulesPage/);
-  assert.match(shell, />Modules<\/button>/);
+  assert.match(shell, /\{ id: "modules", label: "Modules", icon: Shield03 \}/);
+  assert.match(shell, /<RoleNavigationRail[\s\S]*groups=\{groups\}/);
   assert.match(workspace, /adminView=modules/);
   assert.match(workspace, /modulePageProps/);
   assert.match(workspace, /useAdminModulesController/);

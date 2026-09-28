@@ -103,6 +103,9 @@ test("phone parts editor uses the same shared responsive row and action geometry
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-part-recorded-value,[\s\S]*?grid-column:\s*3;[^}]*justify-items:\s*end;/s);
   assert.match(css, /\.used-parts-section-heading \.mechanic-scan-trigger\.is-table-action\s*\{[^}]*justify-content:\s*center;[^}]*margin-left:\s*auto;[^}]*min-height:\s*44px;/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.used-parts-actions\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
+  assert.match(css, /\.used-parts-section > h3,[\s\S]*?font-size:\s*18px;/s);
+  assert.match(css, /\.workorder-part-price-layers summary\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*var\(--weight-semibold\);/s);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.workorder-part-price-layers summary\s*\{[^}]*min-height:\s*44px;/s);
 });
 
 test("used-parts intake and labor stay compact without hiding accessible names", () => {

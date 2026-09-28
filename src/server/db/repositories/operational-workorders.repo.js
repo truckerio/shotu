@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { createPricingFingerprint } from "./workorder-create-pricing.repo.js";
+import { saveWorkorderPartPriceSnapshot } from "./workorder-part-pricing.repo.js";
+import { saveWorkorderLaborPriceSnapshot } from "./workorder-labor-pricing.repo.js";
 import { getPool, query } from "../pool.js";
 import { DEFAULT_COMPANY_ID } from "../company.js";
 import { reserveWorkorderSerials } from "./serial-counters.repo.js";
@@ -542,7 +545,16 @@ async function addFieldEvents(client, { workorderId, changes, changedByUserId })
   }
 }
 
+function priceAuditValue(amount, currency, label) {
+  const value = Number(amount);
+  const formatted = Number.isFinite(value) && currency
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value)
+    : String(amount ?? "");
+  return `${formatted} ${label}`.trim();
+}
+
 export async function createOperationalWorkorderInTransaction(input, client) {
+  const pricingUsages = new Map();
   const companyId = input.companyId || DEFAULT_COMPANY_ID;
   const mechanicUserIds = [...new Set(input.mechanicUserIds || [])];
   await validateInitialMechanics(client, {
@@ -619,6 +631,22 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       throw new WorkorderLifecycleConflictError(
         "WORKORDER_SOURCE_POSITION_INVALID",
         "The selected pickup location does not match its inventory part.",
+      );
+    }
+  }
+  if (["office", "admin"].includes(input.createdByRole)) {
+    const requiredPartIndexes = new Set([
+      ...selections.map(({ partIndex }) => partIndex),
+      ...positionSelections.map(({ partIndex }) => partIndex),
+    ]);
+    const pricedPartIndexes = new Set((input.pricing?.parts || []).map(({ partIndex }) => partIndex));
+    const laborPricingRequired = Number(sourceFormData.laborHours) > 0;
+    const missingPartPricing = [...requiredPartIndexes].some((partIndex) => !pricedPartIndexes.has(partIndex));
+    if ((missingPartPricing || laborPricingRequired && !input.pricing?.labor) ||
+        (requiredPartIndexes.size || laborPricingRequired) && !input.pricing?.expectedFingerprint) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_PRICING_REQUIRED",
+        "Choose and verify a price for every labor and inventory row before creating this workorder.",
       );
     }
   }
@@ -741,6 +769,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
         messages[selectionResult.kind] || "The selected serialized parts could not be reserved.",
       );
     }
+    for (const usage of selectionResult.usages || []) pricingUsages.set(usage.partIndex, { usageId: usage.usageId, usageKind: "serialized" });
   }
   for (const selection of positionSelections) {
     const part = sourceParts[selection.partIndex];
@@ -773,6 +802,60 @@ export async function createOperationalWorkorderInTransaction(input, client) {
         messages[aggregateResult.kind] || "The selected pickup location could not be reserved.",
       );
     }
+    pricingUsages.set(selection.partIndex, { usageId: aggregateResult.usage.id, usageKind: "aggregate" });
+  }
+  if (input.pricing) {
+    if (!["office", "admin"].includes(input.createdByRole)) throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_FORBIDDEN", "Only Office or Admin may select prices.");
+    const pricingScope = { workorderId: result.rows[0].id, actorId: input.pricingActorId || input.createdByUserId,
+      companyIds: [companyId], locationIds: [input.locationId], isAdmin: input.createdByRole === "admin" };
+    const pricedParts = [];
+    const priceOverrideEvents = [];
+    for (const selection of input.pricing.parts || []) {
+      const usage = pricingUsages.get(selection.partIndex);
+      if (!usage) throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_ROW_INVALID", "Pricing must match a reserved inventory row.");
+      const saved = await saveWorkorderPartPriceSnapshot({ ...pricingScope, ...usage, selection: selection.selection,
+        customUnitPrice: selection.customUnitPrice,
+        reason: selection.customUnitPrice === undefined ? "Selected during workorder creation" : "Manual Workorder price override during creation",
+        idempotencyKey: `create-price:${result.rows[0].id}:${selection.partIndex}`,
+        requestHash: createHash("sha256").update(JSON.stringify(selection)).digest("hex") }, client);
+      if (saved.kind !== "saved") throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_CHANGED", "Part pricing changed. Refresh the preview and try again.");
+      pricedParts.push({ partIndex: selection.partIndex, price: saved.snapshot });
+      if (saved.snapshot.manualOverride) {
+        const partNumber = sourceParts[selection.partIndex]?.partNo || `Part ${selection.partIndex + 1}`;
+        priceOverrideEvents.push({
+          fieldKey: `pricing.part.${selection.partIndex}`,
+          fieldLabel: `${partNumber} price`,
+          oldValue: priceAuditValue(saved.snapshot.baseUnitPrice, saved.snapshot.currency,
+            selection.selection === "batch_cost" ? "internal price" : "selling price"),
+          newValue: priceAuditValue(saved.snapshot.unitPrice, saved.snapshot.currency, "custom price"),
+        });
+      }
+    }
+    let labor = { price: null };
+    if (input.pricing.labor) {
+      const saved = await saveWorkorderLaborPriceSnapshot({ ...pricingScope, selection: input.pricing.labor.selection,
+        customUnitPrice: input.pricing.labor.customUnitPrice,
+        reason: input.pricing.labor.customUnitPrice === undefined ? "Selected during workorder creation" : "Manual Workorder price override during creation",
+        idempotencyKey: `create-labor-price:${result.rows[0].id}`,
+        requestHash: createHash("sha256").update(JSON.stringify(input.pricing.labor)).digest("hex") }, client);
+      if (saved.kind !== "saved") throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_CHANGED", "Labor pricing changed. Refresh the preview and try again.");
+      labor = { price: saved.laborPrice };
+      if (saved.laborPrice.manualOverride) priceOverrideEvents.push({
+        fieldKey: "pricing.labor",
+        fieldLabel: "Labor price",
+        oldValue: priceAuditValue(saved.laborPrice.baseUnitPrice, saved.laborPrice.currency,
+          input.pricing.labor.selection === "internal_cost" ? "internal price" : "selling price"),
+        newValue: priceAuditValue(saved.laborPrice.unitPrice, saved.laborPrice.currency, "custom price"),
+      });
+    }
+    if (createPricingFingerprint(input, pricedParts, labor) !== input.pricing.expectedFingerprint) {
+      throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_CHANGED", "Prices or batches changed. Review the refreshed preview and try again.");
+    }
+    await addFieldEvents(client, {
+      workorderId: result.rows[0].id,
+      changes: priceOverrideEvents,
+      changedByUserId: pricingScope.actorId,
+    });
   }
   return { id: result.rows[0].id, serial };
 }

@@ -10,9 +10,6 @@ import { WorkorderDetailPage } from "../../features/workorder-detail/WorkorderDe
 import { InventoryScanWorkspace } from "../../features/inventory/InventoryScanWorkspace.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { productModuleCapabilities } from "./product-module-access.js";
-import { InspectionExperience } from "../../features/inspections/index.js";
-import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
-import { PageHeader } from "../../components/layout/PageHeader.jsx";
 
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx")
   .then((module) => ({ default: module.AdminWorkspace })));
@@ -91,9 +88,6 @@ export function RoleWorkspaceOutlet({
   }
 
   if (workspace === "surveillance") {
-    if (inspectionAccess.canRead && !workorderAccess.canRead) {
-      return <main className="prototype mechanic-home workspace-operations"><WorkspaceHeader actor={actor} className="role-home-account-header" locale="en" /><div className="mechanic-home-content"><PageHeader title="Inspections" /><InspectionExperience actor={actor} projection="read_only" /></div></main>;
-    }
     return <SurveillanceWorkspace actor={actor} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} />;
   }
 

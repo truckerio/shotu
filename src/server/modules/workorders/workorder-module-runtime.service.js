@@ -1,4 +1,5 @@
 import { AuthError, invalidRequest, permissionDenied } from "../../auth/errors.js";
+import { readCreatePricing } from "../../db/repositories/workorder-create-pricing.repo.js";
 import { isDeepStrictEqual } from "node:util";
 import { acknowledgeChatReceipts } from "../chat/chat-receipts.service.js";
 import {
@@ -62,6 +63,12 @@ import {
 import { listAggregateWorkorderUsages } from "../../db/repositories/inventory-aggregate-workorder-usage.repo.js";
 import { selectWorkorderPartPrice } from "./workorder-part-pricing.service.js";
 import {
+  reviseWorkorderLaborRate,
+  selectWorkorderLaborPrice,
+  workorderPricingSummary,
+} from "./workorder-labor-pricing.service.js";
+import { readWorkorderLaborPricing } from "../../db/repositories/workorder-labor-pricing.repo.js";
+import {
   applyManualPartEvidence,
   listWorkorderManualPartEvidence,
 } from "../../db/repositories/workorder-manual-part-evidence.repo.js";
@@ -82,18 +89,18 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
   const formData = detail.workorder.formData || {};
   const hasManualEvidence = Array.isArray(formData.parts)
     && formData.parts.some((part) => part?.evidenceId);
-  const [installedSerializedParts, aggregatePartUsages, manualPartEvidence] = await Promise.all([
+  const [installedRows, aggregateRows, manualPartEvidence] = await Promise.all([
     listInstalledParts({
       workorderId: detail.workorder.id,
       companyId: detail.workorder.companyId,
       locationId: detail.workorder.locationId,
-      limit: 2000,
+      limit: 2001,
     }),
     listMeasuredParts({
       workorderId: detail.workorder.id,
       companyId: detail.workorder.companyId,
       locationId: detail.workorder.locationId,
-      limit: 200,
+      limit: 201,
     }),
     hasManualEvidence ? listManualEvidence({
       workorderId: detail.workorder.id,
@@ -102,6 +109,9 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
       limit: 100,
     }) : [],
   ]);
+  const pricingRowsTruncated = installedRows.length > 2000 || aggregateRows.length > 200;
+  const installedSerializedParts = installedRows.slice(0, 2000);
+  const aggregatePartUsages = aggregateRows.slice(0, 200);
   return {
     ...detail,
     workorder: {
@@ -113,6 +123,7 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
     },
     installedSerializedParts,
     aggregatePartUsages,
+    pricingRowsTruncated,
   };
 }
 
@@ -123,6 +134,26 @@ export async function projectLoadedProtectedWorkorderDetail(
   dependencies = {},
 ) {
   const enriched = await withInstalledSerializedParts(detail, decisions, dependencies);
+  if (["office", "admin"].includes(options.viewerRole)
+    && decisions?.diagnosisRepair
+    && decisions.diagnosisRepair.access !== "hidden") {
+    const readLaborPricing = dependencies.readLaborPricing || readWorkorderLaborPricing;
+    const labor = (detail.workorder.formData?.laborProduct?.productId
+      || Number(detail.workorder.formData?.laborHours) > 0) ? await readLaborPricing({
+      companyId: detail.workorder.companyId,
+      locationId: detail.workorder.locationId,
+      workorderId: detail.workorder.id,
+      productId: detail.workorder.formData?.laborProduct?.productId || null,
+    }) : { laborPrice: null, currentLaborRates: {} };
+    enriched.laborPrice = labor.laborPrice
+      && labor.laborPrice.productId === detail.workorder.formData?.laborProduct?.productId
+      && Number(labor.laborPrice.hours) === Number(detail.workorder.formData?.laborHours)
+      ? labor.laborPrice : null;
+    enriched.currentLaborRates = labor.currentLaborRates;
+    if (decisions?.parts && decisions.parts.access !== "hidden") {
+      enriched.workorderPricing = workorderPricingSummary({ ...enriched, laborPrice: enriched.laborPrice });
+    }
+  }
   return projectProtectedWorkorderDetail(enriched, decisions, options);
 }
 
@@ -280,6 +311,19 @@ export async function runWorkorderModuleAction(
   }
   const actorId = context.actor.id;
 
+  if (moduleKey === "diagnosisRepair" && action === "record") {
+    if (input.operation === "laborRateRevision") {
+      return (dependencies.reviseLaborRate || reviseWorkorderLaborRate)(
+        workorderId, input, context, authorization, dependencies,
+      );
+    }
+    if (input.operation === "laborPriceSelection") {
+      return (dependencies.selectLaborPrice || selectWorkorderLaborPrice)(
+        workorderId, input, context, dependencies,
+      );
+    }
+  }
+
   if (moduleKey === "assignment") {
     if (action === "accept") {
       if (context.actor.role !== "mechanic") throw permissionDenied();
@@ -406,6 +450,10 @@ export async function readWorkorderUnitHistory(context, workorderId, input = {},
 }
 
 export async function createWorkorderRuntime(context, input, rawInput = input, dependencies = {}) {
+  if (input.pricing && !["office", "admin"].includes(context.actor.role)) throw permissionDenied();
+  if (input.pricing && !input.pricing.expectedFingerprint) {
+    throw new AuthError(409, "WORKORDER_PRICING_PREVIEW_REQUIRED", "Refresh the pricing preview before creating this workorder.");
+  }
   requireCompanyAccess(context, input.companyId);
   requireLocationAccess(context, input.locationId);
   const authorizeCreate = dependencies.authorizeCreate || authorizeWorkorderCreate;
@@ -445,6 +493,21 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
     }
     throw mapped;
   }
+}
+
+export async function previewCreateWorkorderPricing(context, input, dependencies = {}) {
+  if (!["office", "admin"].includes(context.actor.role)) throw permissionDenied();
+  requireCompanyAccess(context, input.companyId);
+  requireLocationAccess(context, input.locationId);
+  if (!input.locationId) throw invalidRequest("Choose a location first.");
+  await (dependencies.authorizeCreate || authorizeWorkorderCreate)(context, {
+    companyId: input.companyId, locationId: input.locationId,
+    moduleKeys: workorderInputModules(input, { create: true }),
+  });
+  if (input.formData?.laborProduct?.productId) await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
+    productId: input.formData.laborProduct.productId, companyId: input.companyId, locationId: input.locationId,
+  }, context);
+  return (dependencies.readPricing || readCreatePricing)(input);
 }
 
 export async function workorderCreateContext(context, dependencies = {}) {

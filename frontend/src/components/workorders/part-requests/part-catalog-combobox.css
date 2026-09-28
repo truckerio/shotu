@@ -73,6 +73,16 @@
   font-size: 12px;
 }
 
+.part-catalog-popup .part-catalog-availability {
+  color: #175cd3;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.part-catalog-popup .part-catalog-availability.is-low {
+  color: #b42318;
+}
+
 .part-catalog-state {
   color: #475467;
   font-size: 13px;

@@ -7,6 +7,7 @@ export function PageHeader({
   actions = null,
   className = "",
   headingLevel = 1,
+  showTitle = true,
 }) {
   const Heading = headingLevel === 2 ? "h2" : "h1";
 
@@ -15,7 +16,7 @@ export function PageHeader({
       {leading ? <div className="page-header-leading">{leading}</div> : null}
       <div className="page-header-heading">
         <div className="page-header-copy">
-          <Heading>{title}</Heading>
+          {showTitle ? <Heading>{title}</Heading> : null}
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
       </div>

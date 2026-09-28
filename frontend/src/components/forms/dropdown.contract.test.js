@@ -25,6 +25,7 @@ test("shared dropdown supplies accessible selection, chevron, and motion", async
   assert.match(css, /\.dropdown-select-popover\[data-entering\]/);
   assert.match(css, /\.dropdown-select-popover\[data-exiting\]/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.dropdown-select-trigger,[\s\S]*?\.dropdown-select-option\s*\{[^}]*min-height:\s*44px;/);
 });
 
 test("runtime JSX no longer renders native select fields", async () => {

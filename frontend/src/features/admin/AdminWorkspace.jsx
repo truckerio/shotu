@@ -14,6 +14,12 @@ import {
   HIDDEN_PASSWORDS, templateForm, userLocationIds,
 } from "./workspace/admin-workspace-model.js";
 import "./admin.css";
+
+function requestedInventorySection(search = "") {
+  const section = new URLSearchParams(search).get("inventorySection");
+  return ["stock", "inbound", "purchases", "tasks", "reports"].includes(section) ? section : "stock";
+}
+
 export function AdminWorkspace({
   actor,
   drafts = [], draftLoading = false,
@@ -28,6 +34,9 @@ export function AdminWorkspace({
 }) {
   const [locations, setLocations] = useState([]);
   const [view, setView] = useState(() => initialAdminView(window.location.search));
+  const [inventoryWorkspaceKey, setInventoryWorkspaceKey] = useState(0);
+  const [inventorySection, setInventorySection] = useState(() => requestedInventorySection(window.location.search));
+  const [, setInventoryPageTitle] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("work");
@@ -118,6 +127,20 @@ export function AdminWorkspace({
       ? "?adminView=settings&settingsTab=integrations"
       : `?adminView=${nextView}`;
     window.history.replaceState({}, "", `/${query}`);
+  }
+
+  function changeInventorySection(nextSection) {
+    setView("inventory");
+    setSelectedId(null);
+    setDetail(null);
+    setTab("work");
+    setInventorySection(nextSection);
+    const url = new URL(window.location.href);
+    url.searchParams.set("adminView", "inventory");
+    url.searchParams.set("view", "inventory");
+    url.searchParams.set("inventorySection", nextSection);
+    window.history.replaceState({}, "", url);
+    setInventoryWorkspaceKey((current) => current + 1);
   }
 
   async function createLocation(event) {
@@ -394,6 +417,11 @@ export function AdminWorkspace({
         actor={actor}
         view={view}
         changeView={changeView}
+        onInventoryDestination={changeInventorySection}
+        inventoryWorkspaceKey={inventoryWorkspaceKey}
+        inventorySection={inventorySection}
+        onInventorySectionChange={setInventorySection}
+        onInventorySectionTitleChange={setInventoryPageTitle}
         state={state}
         locations={locations}
         draftQueue={draftQueue}

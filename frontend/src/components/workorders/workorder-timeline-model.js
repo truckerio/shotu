@@ -53,6 +53,7 @@ export function timelineEventTitle(event, locale = "en") {
   }
   if (event.type === "field") {
     if (event.field_key === "work_details_updated") return t("timeline.workDetailsUpdated");
+    if (String(event.field_key || "").startsWith("pricing.")) return "Workorder price changed";
     return `${event.field_label || event.action || t("timeline.field")} ${t("timeline.changed")}`;
   }
   if (event.type === "assignment") {
@@ -107,6 +108,9 @@ export function timelineEventDescription(event, locale = "en") {
       } catch {
         return t("timeline.usedPartsUpdated");
       }
+    }
+    if (String(event.field_key || "").startsWith("pricing.")) {
+      return `${event.field_label || "Price"} changed from ${event.old_value || "unknown"} to ${event.new_value || "unknown"}.`;
     }
     const label = event.field_label || t("timeline.field");
     if (event.new_value) return `${label} ${t("timeline.updatedTo")} ${event.new_value}.`;

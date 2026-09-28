@@ -57,6 +57,11 @@ test("detail shows office instructions only to authorized operational projection
   assert.match(detail, /aria-label="Office instructions"/);
 });
 
+test("inspection detail remains subordinate to the host page heading", () => {
+  assert.match(detail, /<h2>\{inspection\.unitNo \|\| "Unit not recorded"\}<\/h2>/);
+  assert.doesNotMatch(detail, /<h1>/);
+});
+
 test("printing and workorder findings cross their durable inspection APIs", () => {
   assert.match(experience, /\/print-archives/);
   assert.match(experience, /await renderAndPrintInspectionSlip\(popup, result\.html\)/);

@@ -7,6 +7,7 @@ import { repairOrderAfterCatalogSelection } from "../../../components/workorders
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { PartRepairOrderField } from "../../../components/workorders/part-requests/PartRepairOrderField.jsx";
 import { LaborProductSelector } from "../../../components/workorders/LaborProductSelector.jsx";
+import { formatWorkorderMoney } from "../../../components/workorders/workorder-pricing-model.js";
 import {
   defaultUsedPartQuantity,
   usedPartQuantityAfterPartNumberChange,
@@ -41,6 +42,7 @@ import {
 import { CreatePartScanner } from "./CreatePartScanner.jsx";
 import { CreateSerializedUnitPicker } from "./CreateSerializedUnitPicker.jsx";
 import { CreateStockDropdown } from "./CreateStockDropdown.jsx";
+import { CreateLaborPriceCell, CreatePartPriceCell } from "./CreateWorkorderPriceCell.jsx";
 import "./create-parts-module.css";
 
 const COMPACT_PARTS_QUERY = "(max-width: 700px)";
@@ -52,6 +54,24 @@ function serializedPartSummary(part, locale = "en") {
     .map((serial) => String(serial || "").trim())
     .filter(Boolean))];
   return serials.length ? `${SERIAL_LABEL[locale] || SERIAL_LABEL.en}: ${serials.join(", ")}` : "";
+}
+
+function partHasExactInventorySource(part) {
+  if (!part?.catalogPartId || part.purchaseRequested === true) return false;
+  if (createPartRequiresSerializedUnits(part)) return Array.isArray(part.serializedUnitIds) && part.serializedUnitIds.length > 0;
+  if (catalogPartRequiresSourcePosition(part)) return Boolean(part.sourcePositionId);
+  return false;
+}
+
+function CreatePricingTotal({ pricing }) {
+  const summary = pricing?.preview?.summary;
+  const total = summary?.status === "complete"
+    ? formatWorkorderMoney(summary.grandTotal, summary.currency)
+    : null;
+  return <div className="create-pricing-total-row">
+    <span>Total</span>
+    <strong>{total || "—"}</strong>
+  </div>;
 }
 
 function catalogPartSelection(part, catalogPart) {
@@ -68,6 +88,8 @@ function catalogPartSelection(part, catalogPart) {
     sourcePositionPath: "",
     serializedUnitIds: [],
     serializedSerialNumbers: [],
+    priceSelection: "",
+    customUnitPrice: "",
   };
 }
 
@@ -92,14 +114,14 @@ function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationI
 }
 
 function LegacyCreatePartsEditor({
-  requestPartButton,
   historyEnabled = false,
-  canAddPart,
   errors,
   laborHours,
   laborLabel,
   laborProduct,
   laborRepairOrder,
+  laborPriceSelection,
+  laborCustomUnitPrice,
   locale,
   locationId,
   onAdd,
@@ -107,24 +129,33 @@ function LegacyCreatePartsEditor({
   onLaborHoursChange,
   onLaborProductChange,
   onLaborRepairOrderChange,
+  onLaborPriceSelectionChange,
+  onLaborCustomUnitPriceChange,
   onRemove,
   onOpenSerialPicker,
   onReplaceSerializedUnits,
   parts = [],
+  pricing,
   serialPickerIndex,
   t,
 }) {
+  const canViewPrices = pricing?.enabled === true;
+  const columns = canViewPrices
+    ? [...DEFAULT_WORKORDER_PARTS_COLUMNS, WORKORDER_PARTS_COLUMNS.PRICE]
+    : DEFAULT_WORKORDER_PARTS_COLUMNS;
+  const previewByPartIndex = new Map((pricing?.preview?.parts || []).map((entry) => [entry.partIndex, entry]));
   return (
     <div className="create-known-parts-content workorder-parts-surface">
       {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
-      <WorkorderPartsTable id="create-known-parts-editor" tabIndex={-1} columns={DEFAULT_WORKORDER_PARTS_COLUMNS}>
+      <WorkorderPartsTable id="create-known-parts-editor" tabIndex={-1} columns={columns}>
         <WorkorderPartsColumnHead
           className="create-parts-column-head"
-          columns={DEFAULT_WORKORDER_PARTS_COLUMNS}
+          columns={columns}
           labels={{
             [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("create.parts.part"),
             [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
             [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("create.parts.repairOrder"),
+            [WORKORDER_PARTS_COLUMNS.PRICE]: "Price",
           }}
         />
         <WorkorderPartsRow className="operational-part-labor-row">
@@ -152,6 +183,14 @@ function LegacyCreatePartsEditor({
             aria-label={t("create.parts.repairWork")}
             placeholder={t("create.parts.repairWork")}
           />
+          {canViewPrices ? <CreateLaborPriceCell
+            selection={laborPriceSelection}
+            customUnitPrice={laborCustomUnitPrice}
+            preview={pricing?.preview?.labor}
+            previewStatus={pricing?.status}
+            onChange={onLaborPriceSelectionChange}
+            onCustomUnitPriceChange={onLaborCustomUnitPriceChange}
+          /> : null}
           <span aria-hidden="true"></span>
         </WorkorderPartsRow>
         {parts.map((part, index) => (
@@ -171,6 +210,8 @@ function LegacyCreatePartsEditor({
                 trackingMode: null,
                 sourcePositionId: null,
                 sourcePositionPath: "",
+                priceSelection: "",
+                customUnitPrice: "",
               })}
               onSelect={(catalogPart) => {
                 onChange(index, catalogPartSelection(part, catalogPart));
@@ -196,7 +237,7 @@ function LegacyCreatePartsEditor({
               onClose={() => onOpenSerialPicker(-1)}
               part={part}
             /></div>
-            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
+            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
             <PartRepairOrderField
               historyEnabled={historyEnabled}
               locationId={locationId}
@@ -208,30 +249,23 @@ function LegacyCreatePartsEditor({
             >
               <input {...textEntryProps("narrative")} value={part.repairOrder} onChange={(event) => onChange(index, "repairOrder", event.target.value)} aria-label={`${t("create.parts.repairOrder")} ${index + 1}`} placeholder={t("create.parts.repairOrder")} />
             </PartRepairOrderField>
+            {canViewPrices ? <CreatePartPriceCell
+              customUnitPrice={part.customUnitPrice}
+              eligible={partHasExactInventorySource(part)}
+              selection={part.priceSelection}
+              preview={previewByPartIndex.get(index)}
+              previewStatus={pricing?.status}
+              onChange={(selection) => onChange(index, { priceSelection: selection, customUnitPrice: "" })}
+              onCustomUnitPriceChange={(customUnitPrice) => onChange(index, { customUnitPrice })}
+            /> : null}
             <IconButton className="create-part-remove-icon" icon={Trash01} tone="danger" onClick={() => onRemove(index)} disabled={parts.length <= 1} label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")} />
           </WorkorderPartsRow>
         ))}
       </WorkorderPartsTable>
       <WorkorderPartsActions className="create-parts-actions">
-        {requestPartButton}
         <Button type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={() => onAdd()} disabled={parts.length >= 18}>
           {t("create.parts.add")}
         </Button>
-        <CreatePartScanner
-          disabled={!canAddPart}
-          locationId={locationId}
-          locale={locale}
-          onScanned={(unit) => onAdd({
-            catalogPartId: unit.catalogPartId,
-            partNo: unit.partNumber,
-            qty: "1",
-            uomCode: unit.uomCode,
-            repairOrder: repairOrderAfterCatalogSelection("", unit),
-            serializedUnitIds: [unit.id],
-            serializedSerialNumbers: [unit.serialNumber],
-            serializationRequired: true,
-          })}
-        />
       </WorkorderPartsActions>
     </div>
   );
@@ -247,14 +281,19 @@ export function CreatePartsModule({
   laborHours = "",
   laborProduct = null,
   laborRepairOrder = "",
+  laborPriceSelection = "",
+  laborCustomUnitPrice = "",
   locationId,
   locale = "en",
   parts = [],
+  pricing,
   onAdd,
   onChange,
   onLaborHoursChange,
   onLaborProductChange,
   onLaborRepairOrderChange,
+  onLaborPriceSelectionChange,
+  onLaborCustomUnitPriceChange,
   onRemove,
   onReplaceSerializedUnits,
 }) {
@@ -270,7 +309,7 @@ export function CreatePartsModule({
   const requestPartButton=['office','admin'].includes(actorRole)?<Button type="button" className="create-parts-compact-action" icon={Plus} disabled={!locationId} title={!locationId?'Choose a work order location first':undefined} onClick={()=>{
     const index=parts.findIndex(part=>String(part.partNo||'').trim()&&!part.catalogPartId);
     if(index<0){setRequestMessage('Enter the missing part, quantity, and unit first.');startAddingPart();return;}
-    onChange(index,{purchaseRequested:true,sourcePositionId:null,sourcePositionPath:'',serializedUnitIds:[],serializedSerialNumbers:[]});
+    onChange(index,{purchaseRequested:true,sourcePositionId:null,sourcePositionPath:'',serializedUnitIds:[],serializedSerialNumbers:[],priceSelection:"",customUnitPrice:""});
     setRequestMessage(`${parts[index].partNo}: Part request will be created when this Workorder is saved.`);
   }}>Request part</Button>:null;
 
@@ -284,15 +323,17 @@ export function CreatePartsModule({
   const renderIndexes = createPartRenderIndexes(parts, editingPartIndex);
   const hasLabor = Boolean(String(laborHours || "").trim() || String(laborRepairOrder || "").trim());
   const canAddPart = parts.length < 18 || firstBlankIndex >= 0;
+  const canViewPrices = pricing?.enabled === true;
+  const previewByPartIndex = new Map((pricing?.preview?.parts || []).map((entry) => [entry.partIndex, entry]));
 
   useEffect(() => {
     if (previousLocationRef.current === locationId) return;
     previousLocationRef.current = locationId;
     parts.forEach((part, index) => {
       if (part.serializedUnitIds?.length) {
-        onChange(index, { qty: "", serializedUnitIds: [], serializedSerialNumbers: [] });
+        onChange(index, { qty: "", serializedUnitIds: [], serializedSerialNumbers: [], priceSelection: "", customUnitPrice: "" });
       }
-      if (part.sourcePositionId) onChange(index, { sourcePositionId: null, sourcePositionPath: "" });
+      if (part.sourcePositionId) onChange(index, { sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" });
     });
     setSerialPickerIndex(-1);
   }, [locationId, onChange, parts]);
@@ -358,6 +399,8 @@ export function CreatePartsModule({
         trackingMode: null,
         sourcePositionId: null,
         sourcePositionPath: "",
+        priceSelection: "",
+        customUnitPrice: "",
       });
     } else {
       onRemove(index);
@@ -380,6 +423,23 @@ export function CreatePartsModule({
     });
     setLaborOpen(false);
     setEditingPartIndex(targetIndex);
+  }
+
+  function addScannedPartFromHeader(unit) {
+    if (compactLayout) {
+      addScannedPart(unit);
+      return;
+    }
+    onAdd({
+      catalogPartId: unit.catalogPartId,
+      partNo: unit.partNumber,
+      qty: "1",
+      uomCode: unit.uomCode,
+      repairOrder: repairOrderAfterCatalogSelection("", unit),
+      serializedUnitIds: [unit.id],
+      serializedSerialNumbers: [unit.serialNumber],
+      serializationRequired: true,
+    });
   }
 
   function renderCompactPart(part, index, ordinal) {
@@ -436,6 +496,8 @@ export function CreatePartsModule({
               trackingMode: null,
               sourcePositionId: null,
               sourcePositionPath: "",
+              priceSelection: "",
+              customUnitPrice: "",
             })}
             onSelect={(catalogPart) => {
               onChange(index, catalogPartSelection(part, catalogPart));
@@ -465,8 +527,8 @@ export function CreatePartsModule({
             id={`known-part-quantity-${index}`}
             quantity={part.qty}
             uomCode={part.uomCode}
-            onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })}
-            onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "" })}
+            onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })}
+            onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })}
             quantityLabel={t("create.parts.quantity")}
             unitLabel={t("create.parts.unit")}
             locale={locale}
@@ -493,6 +555,15 @@ export function CreatePartsModule({
             />
             </PartRepairOrderField>
           </div>
+          {canViewPrices ? <CreatePartPriceCell
+            customUnitPrice={part.customUnitPrice}
+            eligible={partHasExactInventorySource(part)}
+            selection={part.priceSelection}
+            preview={previewByPartIndex.get(index)}
+            previewStatus={pricing?.status}
+            onChange={(selection) => onChange(index, { priceSelection: selection, customUnitPrice: "" })}
+            onCustomUnitPriceChange={(customUnitPrice) => onChange(index, { customUnitPrice })}
+          /> : null}
         </div>
         <footer className="create-part-editor-actions">
           <Button type="button" variant="primary" onClick={() => finishEditingPart(index)}>{t("common.done")}</Button>
@@ -514,19 +585,30 @@ export function CreatePartsModule({
       <p>{t("create.parts.scanDraftHelp")}</p>
     </SectionHelpDisclosure>
   );
+  const partsHeaderActions = (
+    <div className="create-parts-header-actions">
+      {requestPartButton}
+      <CreatePartScanner
+        disabled={!canAddPart}
+        locationId={locationId}
+        locale={locale}
+        onScanned={addScannedPartFromHeader}
+      />
+      {partsHelp}
+    </div>
+  );
 
   return (
-    <ProgressiveWorkorderSection id="parts" className="create-parts-card" title={t("create.parts.title")} headerAction={compactLayout ? null : partsHelp} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted showTitle={!compactLayout}>
+    <ProgressiveWorkorderSection id="parts" className="create-parts-card" title={t("create.parts.title")} headerAction={partsHeaderActions} activeSection={activeSection} onSelect={() => {}} displayMode="panel" keepMounted>
       {compactLayout ? (
         <div className="create-known-parts-content create-parts-compact" id="create-known-parts-editor" ref={rootRef} tabIndex={-1}>
           {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
 
           <section className="create-parts-group" aria-labelledby="create-parts-labor-title">
-            <div className="create-parts-group-heading has-help">
+            <div className="create-parts-group-heading">
               <div>
                 <h3 id="create-parts-labor-title">{t("create.parts.laborAndWork")}</h3>
               </div>
-              {partsHelp}
             </div>
             {laborOpen ? (
               <div className="create-labor-editor">
@@ -557,6 +639,14 @@ export function CreatePartsModule({
                       placeholder={t("create.parts.repairWork")}
                     />
                   </label>
+                  {canViewPrices ? <CreateLaborPriceCell
+                    selection={laborPriceSelection}
+                    customUnitPrice={laborCustomUnitPrice}
+                    preview={pricing?.preview?.labor}
+                    previewStatus={pricing?.status}
+                    onChange={onLaborPriceSelectionChange}
+                    onCustomUnitPriceChange={onLaborCustomUnitPriceChange}
+                  /> : null}
                 </div>
               </div>
             ) : (
@@ -599,24 +689,22 @@ export function CreatePartsModule({
             )}
 
             <WorkorderPartsActions className="create-parts-actions">
-              {requestPartButton}
               <Button type="button" className="create-parts-compact-action create-parts-add-button" variant="primary" icon={Plus} onClick={startAddingPart} disabled={!canAddPart}>
-                {filledIndexes.length ? t("create.parts.addAnother") : t("create.parts.add")}
+                {t("create.parts.add")}
               </Button>
-              <CreatePartScanner disabled={!canAddPart} locationId={locationId} locale={locale} onScanned={addScannedPart} />
             </WorkorderPartsActions>
           </section>
         </div>
       ) : (
         <LegacyCreatePartsEditor
-          requestPartButton={requestPartButton}
           historyEnabled={historyEnabled}
-          canAddPart={canAddPart}
           errors={errors}
           laborHours={laborHours}
           laborLabel={laborLabel}
           laborProduct={laborProduct}
           laborRepairOrder={laborRepairOrder}
+          laborPriceSelection={laborPriceSelection}
+          laborCustomUnitPrice={laborCustomUnitPrice}
           locale={locale}
           locationId={locationId}
           onAdd={onAdd}
@@ -624,14 +712,22 @@ export function CreatePartsModule({
           onLaborHoursChange={onLaborHoursChange}
           onLaborProductChange={onLaborProductChange}
           onLaborRepairOrderChange={onLaborRepairOrderChange}
+          onLaborPriceSelectionChange={onLaborPriceSelectionChange}
+          onLaborCustomUnitPriceChange={onLaborCustomUnitPriceChange}
           onRemove={onRemove}
           onOpenSerialPicker={setSerialPickerIndex}
           onReplaceSerializedUnits={onReplaceSerializedUnits}
           parts={parts}
+          pricing={pricing}
           serialPickerIndex={serialPickerIndex}
           t={t}
         />
       )}
+      {canViewPrices ? <div className="create-pricing-footer">
+        {pricing.status === "error" ? <p role="alert">{pricing.message}</p> : null}
+        <CreatePricingTotal pricing={pricing} />
+        {pricing.hasPriceableRows && pricing.status !== "ready" && pricing.status !== "error" ? <p role="status">Updating prices…</p> : null}
+      </div> : null}
       {requestMessage?<p role="status">{requestMessage}</p>:null}
       {requestPartButton&&!locationId?<p>Choose a location to request a part.</p>:null}
     </ProgressiveWorkorderSection>

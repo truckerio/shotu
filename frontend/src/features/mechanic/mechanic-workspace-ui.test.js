@@ -34,6 +34,9 @@ test("phone mechanic home shows three important queues and keeps secondary queue
   assert.match(workspace, /className="mechanic-secondary-queues"[\s\S]*tabs=\{phoneSecondaryTabs\}/);
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mechanic-primary-queues \.mechanic-queue-tabs[\s\S]*grid-template-columns:\s*repeat\(3,/);
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mechanic-home-more[\s\S]*display:\s*block/);
+  assert.match(workspace, /<WorkspaceHeader actor=\{actor\} className="role-phone-account-header"/);
+  assert.match(workspace, /role-phone-product-switch/);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.role-phone-account-header \{ display: flex; \}/);
 });
 
 test("search stays outside the compact More disclosure", () => {

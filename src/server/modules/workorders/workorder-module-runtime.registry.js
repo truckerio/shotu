@@ -84,6 +84,28 @@ const ACTIONS = Object.freeze({
     assign: assignMechanicsSchema,
     reassign: reassignWorkorderSchema,
   }),
+  diagnosisRepair: Object.freeze({
+    record: z.discriminatedUnion("operation", [
+      z.object({
+        operation: z.literal("laborRateRevision"),
+        productId: id,
+        locationId: id.nullable().optional(),
+        priceKind: z.enum(["internal_cost", "selling_price"]),
+        expectedVersion: z.number().int().min(0),
+        amount: z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,4})?$/).nullable(),
+        currency: z.string().regex(/^[A-Z]{3}$/).nullable(),
+        reason: z.string().trim().min(2).max(500),
+        idempotencyKey: z.string().trim().min(8).max(160),
+      }).strict(),
+      z.object({
+        operation: z.literal("laborPriceSelection"),
+        selection: z.enum(["internal_cost", "selling_price"]),
+        expectedRateVersionId: id.optional(),
+        reason: z.string().trim().min(2).max(500),
+        idempotencyKey: z.string().trim().min(8).max(160),
+      }).strict(),
+    ]),
+  }),
   parts: Object.freeze({
     request: createPartRequestSchema,
     record: z.discriminatedUnion("operation", [

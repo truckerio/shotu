@@ -32,6 +32,17 @@ test("catalog popup presents locally backed identities as our inventory", () => 
   assert.doesNotMatch(source, />Odoo</);
 });
 
+test("catalog options promote available quantity and keep lower metadata non-duplicative", () => {
+  assert.match(source, /catalogAvailabilityText\(part, \(value\) => formatLocaleNumber/);
+  assert.match(source, /catalogInventoryIsLow\(part\)/);
+  assert.match(source, /const positionCode = catalogInventoryContextText\(part\)/);
+  assert.match(source, /positionCode \? <small>\{positionCode\}<\/small> : null/);
+  assert.doesNotMatch(source, /<small>\{sourceLabel\}<\/small>/);
+  assert.doesNotMatch(source, /<small>\{catalogInventoryText\(part/);
+  assert.match(styles, /\.part-catalog-popup \.part-catalog-availability\s*\{[^}]*color:\s*#175cd3[^}]*white-space:\s*nowrap/s);
+  assert.match(styles, /\.part-catalog-popup \.part-catalog-availability\.is-low\s*\{[^}]*color:\s*#b42318/s);
+});
+
 test("catalog normalization preserves serialized inventory tracking for create flows", () => {
   const part = normalizeCatalogPart({
     id: "part-1",

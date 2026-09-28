@@ -5,6 +5,17 @@
   width: 100%;
 }
 
+.surveillance-role-shell { display: grid; gap: 0; grid-template-columns: 220px minmax(0, 1fr); width: 100%; }
+.surveillance-role-content { min-width: 0; }
+.role-phone-account-header,
+.role-phone-product-switch { display: none; }
+
+@media (max-width: 700px) {
+  .surveillance-role-shell { display: block; }
+  .role-phone-account-header { display: flex; }
+  .role-phone-product-switch { display: flex; }
+}
+
 .surveillance-queue-shell {
   max-width: none;
   margin-inline: auto;
@@ -40,7 +51,7 @@
 
 .surveillance-work-panel {
   display: grid;
-  gap: 20px;
+  gap: 16px;
 }
 
 .surveillance-copy-grid {
@@ -277,8 +288,8 @@
 .surveillance-desktop-queues { min-width: 0; }
 .surveillance-filter-row { align-items: center; display: flex; gap: 8px; padding: 0 14px 12px; }
 .surveillance-filter-row .mechanic-search { flex: 1; margin: 0; }
-.surveillance-filter-row select { background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; min-height: 38px; padding: 0 10px; }
-.surveillance-filter-row .date-picker-control { min-height: 38px; }
+.surveillance-filter-row select { background: #fff; border: 1px solid #d0d5dd; border-radius: 6px; min-height: 40px; padding: 0 10px; }
+.surveillance-filter-row .date-picker-control { min-height: 40px; }
 .surveillance-date-filter {
   align-items: center;
   display: flex;

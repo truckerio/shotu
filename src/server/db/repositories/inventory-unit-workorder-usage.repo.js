@@ -360,6 +360,7 @@ export async function listAvailableSerializedUnitsForCreate({
 }
 
 export async function reserveSerializedUnitsForCreatedWorkorder(input, client) {
+  const usages = [];
   const workorder = await lockWorkorder(client, { ...input, actorRole: input.actorRole || "office" });
   if (!workorder) return { kind: "missing" };
   if (!CREATE_RESERVATION_STATUSES.has(workorder.status)) return { kind: "workorder_state" };
@@ -415,6 +416,7 @@ export async function reserveSerializedUnitsForCreatedWorkorder(input, client) {
           unit.id, unit.catalog_part_id, unit.uom_code, selection.repairOrder || "", input.actorId,
           `create:${workorder.id}:${unit.id}`, input.requestHash],
       );
+      usages.push({ partIndex: selection.partIndex, usageId: inserted.rows[0].id, unitId: unit.id });
       await client.query(
         `insert into inventory_unit_events (
            company_id, unit_id, event_type, actor_id, usage_id, workorder_id, asset_id, details
@@ -441,7 +443,7 @@ export async function reserveSerializedUnitsForCreatedWorkorder(input, client) {
     );
     if (!updatedItem.rows[0]) return { kind: "stock_mismatch" };
   }
-  return { kind: "reserved", count: unitIds.length };
+  return { kind: "reserved", count: unitIds.length, usages };
 }
 
 export async function listWorkorderInstalledSerializedParts({

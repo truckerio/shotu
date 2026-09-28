@@ -38,7 +38,7 @@ export async function listAggregateWorkorderUsages({
             usage.uom_code, usage.status, usage.repair_order,
             catalog.part_number, catalog.description,
             source.source_position_path,
-            price.id price_snapshot_id,price.selection price_selection,price.unit_price price_unit_price,price.total_price price_total,price.currency price_currency,
+            price.id price_snapshot_id,price.selection price_selection,price.unit_price price_unit_price,price.quantity price_quantity,price.total_price price_total,price.currency price_currency,
             price_lines.price_allocations,
             cost.cost_allocations
      from workorder_aggregate_part_usages usage
@@ -108,7 +108,7 @@ export async function listAggregateWorkorderUsages({
      where usage.company_id=$1 and usage.workorder_id=$2 and usage.location_id=$3
      order by usage.created_at, usage.id
      limit $4`,
-    [companyId, workorderId, locationId, Math.max(1, Math.min(Number(limit) || 200, 200))],
+    [companyId, workorderId, locationId, Math.max(1, Math.min(Number(limit) || 200, 201))],
   );
   return result.rows.map((row) => ({
     id: row.id,
@@ -125,7 +125,7 @@ export async function listAggregateWorkorderUsages({
     description: row.description,
     sourcePositionPath: row.source_position_path || "",
     costAllocations: row.cost_allocations || [],
-    ...(row.price_snapshot_id ? { price: { id: row.price_snapshot_id, selection: row.price_selection, unitPrice: String(row.price_unit_price), totalPrice: String(row.price_total), currency: row.price_currency, allocations: row.price_allocations || [] } } : {}),
+    ...(row.price_snapshot_id ? { price: { id: row.price_snapshot_id, selection: row.price_selection, unitPrice: String(row.price_unit_price), quantity: String(row.price_quantity), totalPrice: String(row.price_total), currency: row.price_currency, allocations: row.price_allocations || [] } } : {}),
   }));
 }
 

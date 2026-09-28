@@ -44,6 +44,7 @@ function activityTitle(event, locale) {
   if (event.source === "workorder_status") return humanizeStatus(event.action, locale) || "Workorder updated";
   if (event.source === "workorder_field") {
     if (event.action === "work_details_updated") return "Work details updated";
+    if (String(event.action || "").startsWith("pricing.")) return "Workorder price changed";
     return `${event.description || words(event.action, "Workorder field")} updated`;
   }
   if (event.source === "workorder_part") return words(event.action, "Workorder part updated");

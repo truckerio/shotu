@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dropdown } from "../forms/Dropdown.jsx";
 import { api } from "../../lib/api.js";
+import { formatWorkorderMoney, workorderLineTotal } from "./workorder-pricing-model.js";
 
 function money(value, currency) {
   if (value === null || value === undefined || !currency) return "Not selected";
@@ -24,6 +25,7 @@ export function WorkorderPartPriceCell({
   usageKind,
   usageId,
   price,
+  quantity,
   onChanged,
   disabled = false,
   batchCostAvailable = true,
@@ -32,6 +34,7 @@ export function WorkorderPartPriceCell({
   const [current, setCurrent] = useState(price || null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => setCurrent(price || null), [price]);
   const visibleAllocations = costAllocations.length ? costAllocations : (current?.allocations || []);
   const allocationCurrencies = new Set(visibleAllocations.map((allocation) => allocation.currency).filter(Boolean));
   const hasKnownAllocationCosts = visibleAllocations.length > 0
@@ -97,7 +100,10 @@ export function WorkorderPartPriceCell({
         </option>
         <option value="selling_price">Selling price</option>
       </Dropdown>
-      <strong>{money(current?.unitPrice, current?.currency)}</strong>
+      <div className="workorder-price-values">
+        <span>Unit price <strong>{current?.selection ? formatWorkorderMoney(current.unitPrice, current.currency) || "Unknown" : "Not selected"}</strong></span>
+        <span>Line total <strong>{workorderLineTotal(current, quantity) || "Incomplete"}</strong></span>
+      </div>
       {visibleAllocations.length ? <details className="workorder-part-price-layers">
         <summary>FCFS · {visibleAllocations.length} {visibleAllocations.length === 1 ? "batch" : "batches"}{allocationTotal === null ? "" : ` · ${money(allocationTotal, allocationCurrency)} total`}</summary>
         <ul>{visibleAllocations.map((allocation) => {

@@ -99,6 +99,44 @@ test("hidden Parts access does not query or expose installed serialized summarie
   assert.equal("parts" in result.modules, false);
 });
 
+test("Office pricing fails closed when the bounded aggregate usage view is truncated", async () => {
+  let requestedLimit = 0;
+  const result = await protectedWorkorderDetail(context, "wo-1", {
+    resolveModules: async () => ({ decisions: {
+      diagnosisRepair: { access: "write", source: "default" },
+      parts: { access: "write", source: "default" },
+    } }),
+    loadDetail: async () => ({
+      workorder: {
+        id: "wo-1",
+        companyId: "company-1",
+        locationId: "location-1",
+        formData: { parts: [] },
+      },
+    }),
+    listInstalledParts: async () => [],
+    listAggregateUsages: async ({ limit }) => {
+      requestedLimit = limit;
+      return Array.from({ length: 201 }, (_, index) => ({
+        id: `usage-${index}`,
+        effectiveQuantity: 1,
+        status: "consumed",
+        price: {
+          selection: "selling_price",
+          quantity: "1.000",
+          totalPrice: "1.0000",
+          currency: "USD",
+        },
+      }));
+    },
+  });
+
+  assert.equal(requestedLimit, 201);
+  assert.equal(result.modules.parts.data.aggregatePartUsages.length, 200);
+  assert.equal(result.workorderPricing.status, "incomplete");
+  assert.equal(result.workorderPricing.missingCount, 1);
+});
+
 test("Unit history runtime forwards query input through the dedicated reader", async () => {
   const calls = [];
   const result = await readWorkorderUnitHistory(context, "wo-1", { limit: "10", cursor: "next" }, {

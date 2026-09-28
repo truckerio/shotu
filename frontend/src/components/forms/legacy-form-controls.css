@@ -9,7 +9,7 @@
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   justify-content: center;
-  min-height: 36px;
+  min-height: 40px;
   padding: 7px 8px;
 }
 
@@ -61,8 +61,21 @@ select {
 .control-panel input,
 .control-panel select,
 .control-panel textarea {
-  min-height: 38px;
+  min-height: 40px;
   padding: 8px 10px;
+}
+
+/* The label or option row owns the touch target; the native control stays a
+ * compact visual affordance even inside dense control panels. */
+input[type="checkbox"],
+input[type="radio"] {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  resize: none;
+  width: 18px;
 }
 
 input:focus,
@@ -156,3 +169,18 @@ textarea:focus {
 
 .shared-action-row {display:flex;align-items:center;flex-wrap:wrap;gap:10px;min-width:0;}
 .shared-action-row > .button {margin:0;}
+
+@media (max-width: 700px) {
+  .done-action,
+  .button,
+  .button.primary,
+  .button.success,
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .control-panel input:not([type="checkbox"]):not([type="radio"]),
+  .control-panel select,
+  .control-panel textarea {
+    min-height: 44px;
+  }
+}

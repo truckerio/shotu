@@ -41,7 +41,11 @@ export async function listUserActivity(requestContext, input = {}, dependencies 
       union all
       select ('workorder-field:' || event.id)::text, 'workorder_field', 'workorders', event.field_key,
         event.created_at, workorder.company_id, workorder.location_id, workorder.id, workorder.serial,
-        null::text, event.field_label, null::numeric, null::text, workorder.id, workorder.serial
+        null::text,
+        case when event.field_key like 'pricing.%'
+          then concat(event.field_label,' changed from ',event.old_value,' to ',event.new_value)
+          else event.field_label end,
+        null::numeric, null::text, workorder.id, workorder.serial
       from workorder_field_events event join operational_workorders workorder on workorder.id=event.workorder_id
       where event.changed_by_user_id=$1
       union all

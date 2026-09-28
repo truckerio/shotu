@@ -411,7 +411,7 @@
 .inventory-location-serial-count-row { grid-template-columns: minmax(0, 1fr) auto; }
 .inventory-location-serial-editor { grid-column: 1 / -1; display: grid; gap: 8px; padding-top: 10px; }
 .inventory-location-serial-units { display: flex; flex-wrap: wrap; gap: 6px; }
-.inventory-location-serial-units > span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 8px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.inventory-location-serial-units > span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 8px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 11px; }
 .inventory-location-serial-units > span.is-confirmed { border-color: #6ce9a6; color: #027a48; background: #ecfdf3; }
 .inventory-location-serial-units small { color: inherit; font-size: 9px; text-transform: uppercase; }
 .inventory-location-serial-editor form { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 8px; }

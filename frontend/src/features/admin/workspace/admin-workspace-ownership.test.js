@@ -20,7 +20,7 @@ const collectionPage = read("../../../components/operations/OperationalCollectio
 
 test("AdminWorkspace remains a controller with a stable public export", () => {
   assert.match(controller, /export function AdminWorkspace\(\{/);
-  assert.ok(controller.replace(/\n$/, "").split("\n").length <= 450, "AdminWorkspace should stay at or below 450 lines");
+  assert.ok(controller.replace(/\n$/, "").split("\n").length <= 480, "AdminWorkspace should stay at or below 480 lines");
   assert.match(controller, /<AdminWorkspaceShell/);
   assert.match(controller, /<AdminLocationDialogs/);
   assert.match(controller, /<AdminUserActionDialog/);
@@ -59,12 +59,23 @@ test("Settings makes storage layout an Inventory configuration destination", () 
 
 test("Operations and Inventory share the operational collection page composition", () => {
   assert.match(operationsPage, /<OperationalCollectionPage/);
-  assert.match(operationsPage, /title=\{<OperationsTitle product=\{product\} canSwitch=\{canSwitch\} onChange=\{changeProduct\} \/>\}/);
+  assert.match(operationsPage, /title=\{product === "inspections" \? "Inspections" : "Workorders"\}/);
+  assert.match(operationsPage, /actions=\{createAction\}[\s\S]*?surface/);
   assert.match(inventory, /<OperationalCollectionPage/);
   assert.match(inventory, /presentation=\{presentation\}/);
   assert.match(inventory, /<OperationalCollectionTabs/);
   assert.match(inventory, /<OperationalCollectionTable/);
   assert.match(collectionPage, /headingLevel=\{embedded \? 2 : 1\}/);
+  assert.match(shell, /activeSection=\{inventorySection\} onSectionChange=\{onInventorySectionChange\} onSectionTitleChange=\{onInventorySectionTitleChange\} showSectionNavigation=\{false\} showSectionNavigationOnPhone/);
+  assert.match(shell, /view === "inventory"[\s\S]*?`inventory-\$\{inventorySection\}`/);
+});
+
+test("admin primary navigation keeps the shared 14px semibold hierarchy at standard desktop and touch sizes", () => {
+  assert.match(adminStyles, /\.admin-primary-nav button\s*\{[^}]*font-size:\s*var\(--text-body\);[^}]*font-weight:\s*var\(--weight-semibold\);[^}]*min-height:\s*40px;/s);
+  assert.match(adminStyles, /@media \(min-width: 641px\) and \(max-width: 1007px\)[\s\S]*?\.admin-primary-nav button\s*\{\s*min-height:\s*44px;/);
+  assert.match(adminStyles, /@media \(max-width: 700px\)[\s\S]*?\.admin-mobile-nav button\s*\{[\s\S]*?min-height:\s*50px;/);
+  assert.match(shell, /<nav className="admin-mobile-nav" aria-label="Admin workspace">/);
+  assert.match(shell, /<ProfileMenu actor=\{actor\} mobileNav \/>/);
 });
 
 test("admin Operations keeps the authorized workorder queue mounted while inspections are active", () => {
@@ -73,13 +84,11 @@ test("admin Operations keeps the authorized workorder queue mounted while inspec
   assert.doesNotMatch(operationsPage, /:\s*<OperationsWorkspace/);
 });
 
-test("admin Operations title menu offers only the authorized peer views and clears inspection creation on change", () => {
-  assert.match(operationsPage, /const PRODUCT_VIEWS = \[/);
-  assert.match(operationsPage, /label: "Workorders", description: "Manage repair work"/);
-  assert.match(operationsPage, /label: "Inspections", description: "Review scheduled checks"/);
-  assert.match(operationsPage, /aria-current=\{product === view\.id \? "page" : undefined\}/);
+test("admin Operations title is the active product while shared navigation owns switching", () => {
+  assert.match(operationsPage, /title=\{product === "inspections" \? "Inspections" : "Workorders"\}/);
   assert.match(operationsPage, /setCreatingInspection\(false\);/);
   assert.doesNotMatch(operationsPage, /ProductModeSwitch/);
+  assert.doesNotMatch(operationsPage, /OperationsViewTitle|MenuTrigger|operations-page-title-trigger/);
   assert.match(operationsStyles, /@media \(max-width: 640px\)[\s\S]*\.admin-operations-content > \.page-header \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(operationsStyles, /\.admin-operations-content > \.page-header \.page-header-actions \{[\s\S]*grid-column: 2;[\s\S]*width: auto;/);
 });

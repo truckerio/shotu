@@ -3,12 +3,22 @@
 }
 
 .operational-collection-page-body {
-  margin-top: 24px;
+  margin-top: var(--space-6);
   min-width: 0;
 }
 
 .operational-collection-page.is-embedded .operational-collection-page-body {
   margin-top: 18px;
+}
+
+.operational-collection-surface {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgb(16 24 40 / 6%), 0 14px 32px -16px rgb(16 24 40 / 24%);
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 16px 16px;
 }
 
 .operational-collection-tabs-wrap {
@@ -31,7 +41,7 @@
   cursor: pointer;
   display: flex;
   font: inherit;
-  font-size: var(--text-secondary);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   gap: 7px;
   min-height: 46px;
@@ -82,9 +92,12 @@
   min-width: 0;
 }
 
+.operational-collection-section-header.is-heading-external {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .operational-collection-section-header :is(h1, h2) {
   color: var(--foreground-brand-primary, #175cd3);
-  font-size: var(--text-page-title);
   letter-spacing: -.02em;
   line-height: var(--leading-tight);
   margin: 0;
@@ -106,7 +119,7 @@
   display: flex;
   flex: 0 0 auto;
   font: inherit;
-  font-size: var(--text-secondary);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
   gap: 7px;
   min-height: 58px;
@@ -135,6 +148,7 @@
 }
 
 .operational-collection-section-actions {
+  align-self: center;
   min-width: max-content;
 }
 
@@ -152,8 +166,13 @@
     padding-top: 10px;
   }
 
-  .operational-collection-section-header :is(h1, h2) {
-    font-size: 22px;
+  .operational-collection-section-header.is-heading-external {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .operational-collection-section-header.is-heading-external .operational-collection-section-nav {
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .operational-collection-section-nav {
@@ -177,7 +196,16 @@
     min-width: 0;
   }
 
+  .operational-collection-section-header.is-heading-external {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .operational-collection-section-nav {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .operational-collection-section-header.is-heading-external .operational-collection-section-nav {
     grid-column: 1;
     grid-row: auto;
   }
@@ -281,6 +309,12 @@
   .operational-collection-page-body,
   .operational-collection-page.is-embedded .operational-collection-page-body {
     margin-top: 18px;
+  }
+
+  .operational-collection-surface {
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgb(16 24 40 / 8%);
+    padding: 0 12px 12px;
   }
 
   .operational-collection-tabs button {

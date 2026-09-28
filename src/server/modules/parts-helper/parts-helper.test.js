@@ -117,7 +117,7 @@ test("catalog search derives company and location from authorized workorder", as
       calls.push({ type: "search", companyId, options });
       return {
         catalogAvailable: true,
-        items: [{ id: "part-1", source: "local", inventory: { locationId: "location-1", available: 0 } }],
+        items: [{ id: "part-1", source: "local", inventory: { locationId: "location-1", available: 0, lowStock: true } }],
       };
     },
   });
@@ -135,7 +135,7 @@ test("catalog search derives company and location from authorized workorder", as
   assert.deepEqual(result, {
     query: "LF90",
     catalogAvailable: true,
-    items: [{ id: "part-1", source: "local", inventory: { locationId: "location-1", available: 0 } }],
+    items: [{ id: "part-1", source: "local", inventory: { locationId: "location-1", available: 0, lowStock: true } }],
   });
 });
 

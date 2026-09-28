@@ -42,11 +42,14 @@ test("shared header renders only the declared visible columns", () => {
 });
 
 test("Create and detail consume the shared contract without changing row children", () => {
-  assert.match(createParts, /columns=\{DEFAULT_WORKORDER_PARTS_COLUMNS\}/);
-  assert.match(createParts, /<WorkorderPartsColumnHead[\s\S]*?className="create-parts-column-head"[\s\S]*?columns=\{DEFAULT_WORKORDER_PARTS_COLUMNS\}/);
+  assert.match(createParts, /const canViewPrices = pricing\?\.enabled === true;/);
+  assert.match(createParts, /const columns = canViewPrices[\s\S]*?\.\.\.DEFAULT_WORKORDER_PARTS_COLUMNS, WORKORDER_PARTS_COLUMNS\.PRICE[\s\S]*?: DEFAULT_WORKORDER_PARTS_COLUMNS;/);
+  assert.match(createParts, /<WorkorderPartsTable[\s\S]*?columns=\{columns\}/);
+  assert.match(createParts, /<WorkorderPartsColumnHead[\s\S]*?className="create-parts-column-head"[\s\S]*?columns=\{columns\}/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.PRODUCT]: t\("create\.parts\.part"\)/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.QUANTITY_UOM]: t\("parts\.quantityUnit"\)/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.REPAIR_ORDER]: t\("create\.parts\.repairOrder"\)/);
+  assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.PRICE]: "Price"/);
   assert.match(usedParts, /<WorkorderPartsColumnHead[\s\S]*?columns=\{partColumns\}/);
   assert.match(usedParts, /WORKORDER_PARTS_COLUMNS\.PRODUCT]: t\("parts\.part"\)/);
   assert.match(usedParts, /WORKORDER_PARTS_COLUMNS\.QUANTITY_UOM]: t\("parts\.quantityUnit"\)/);

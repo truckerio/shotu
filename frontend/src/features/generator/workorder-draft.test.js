@@ -266,3 +266,70 @@ test("labor repair order is meaningful and survives create draft restore", () =>
   assert.equal(formValuesFromWorkorderDraft(payload, { workPerformed: "", parts: [] }).workPerformed, "Inspect and adjust brakes");
   assert.equal(isMeaningfulWorkorderDraft(payload), true);
 });
+
+test("office draft pricing follows normalized serialized part indexes and preserves explicit Workorder overrides", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { role: "office", companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      laborPriceSelection: "internal_cost",
+      laborCustomUnitPrice: "42.50",
+      parts: [{
+        catalogPartId: "11111111-1111-4111-8111-111111111111",
+        partNo: "TIRE",
+        qty: "2",
+        uomCode: "ea",
+        repairOrder: "Replace",
+        serializationRequired: true,
+        serializedUnitIds: ["22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"],
+        serializedSerialNumbers: ["SER-1", "SER-2"],
+        priceSelection: "batch_cost",
+        customUnitPrice: "125.75",
+        unitPrice: "999.00",
+      }],
+    },
+  });
+
+  assert.deepEqual(payload.pricing, {
+    parts: [
+      { partIndex: 0, selection: "batch_cost", customUnitPrice: "125.75" },
+      { partIndex: 1, selection: "batch_cost", customUnitPrice: "125.75" },
+    ],
+    labor: { selection: "internal_cost", customUnitPrice: "42.50" },
+  });
+  assert.equal(payload.formData.parts.length, 2);
+  assert.ok(payload.formData.parts.every((part) => !Object.hasOwn(part, "priceSelection") && !Object.hasOwn(part, "unitPrice")));
+  const restored = formValuesFromWorkorderDraft(payload, { parts: [] });
+  assert.deepEqual(restored.parts.map((part) => part.priceSelection), ["batch_cost", "batch_cost"]);
+  assert.deepEqual(restored.parts.map((part) => part.customUnitPrice), ["125.75", "125.75"]);
+  assert.equal(restored.laborPriceSelection, "internal_cost");
+  assert.equal(restored.laborCustomUnitPrice, "42.50");
+});
+
+test("mechanic create payload strips financial pricing preferences", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { role: "mechanic", companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      laborPriceSelection: "selling_price",
+      parts: [{ catalogPartId: "11111111-1111-4111-8111-111111111111", partNo: "FILTER", qty: "1", priceSelection: "selling_price" }],
+    },
+  });
+  assert.equal(Object.hasOwn(payload, "pricing"), false);
+  assert.equal(Object.hasOwn(payload.formData.parts[0], "priceSelection"), false);
+});
+
+test("manual, requested, and inventory parts without exact source stay unpriced", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { role: "office", companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      parts: [
+        { partNo: "MANUAL", qty: "1", priceSelection: "selling_price" },
+        { catalogPartId: "11111111-1111-4111-8111-111111111111", partNo: "REQUEST", qty: "1", trackingMode: "quantity", sourcePositionId: "position-1", purchaseRequested: true, priceSelection: "batch_cost" },
+        { catalogPartId: "22222222-2222-4222-8222-222222222222", partNo: "NO-SOURCE", qty: "1", trackingMode: "quantity", priceSelection: "batch_cost" },
+      ],
+    },
+  });
+  assert.equal(Object.hasOwn(payload, "pricing"), false);
+});

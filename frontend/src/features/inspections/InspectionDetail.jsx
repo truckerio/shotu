@@ -232,7 +232,7 @@ export function InspectionDetail({ inspection = {}, projection = "mechanic", act
   return <section className="inspection-detail" aria-label="Inspection detail">
     {onBack ? <Button className="inspection-back" icon={ArrowLeft} type="button" onClick={onBack}>Inspections</Button> : null}
     <header className="inspection-detail-header">
-      <div className="inspection-detail-heading"><div><span>{template.label}</span><h1>{inspection.unitNo || "Unit not recorded"}</h1></div><span className={`inspection-status is-${inspection.status || "unknown"}`}>{inspection.status === "completed" && inspection.result ? inspectionResultLabel(inspection.result) : inspectionStatusLabel(inspection.status)}</span></div>
+      <div className="inspection-detail-heading"><div><span>{template.label}</span><h2>{inspection.unitNo || "Unit not recorded"}</h2></div><span className={`inspection-status is-${inspection.status || "unknown"}`}>{inspection.status === "completed" && inspection.result ? inspectionResultLabel(inspection.result) : inspectionStatusLabel(inspection.status)}</span></div>
       <dl className="inspection-detail-meta"><div><dt>Inspection</dt><dd>{inspection.number || "Not recorded"}</dd></div><div><dt>Location</dt><dd>{inspection.locationName || "Not recorded"}</dd></div><div><dt>Mechanic</dt><dd>{inspection.mechanicName || "Unassigned"}</dd></div>{inspection.dueAt ? <div><dt>Due</dt><dd>{formatUiDate(inspection.dueAt)}</dd></div> : null}</dl>
     </header>
     {actionError && canClaim ? <p className="inspection-action-error" role="alert">{actionError}</p> : null}

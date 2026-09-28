@@ -57,7 +57,7 @@ export function CreateWorkorderShell({
         back: { label: backLabel, onClick: onBack },
         content: (
           <>
-            <strong>{t("create.title")}</strong>
+            <h1>{t("create.title")}</h1>
             {canSaveDraft ? (
               <DraftSaveStatus
                 status={workorderDraft.status}

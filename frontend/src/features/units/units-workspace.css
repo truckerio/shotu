@@ -1,8 +1,13 @@
-.units-workspace .units-toolbar { grid-template-columns: minmax(180px, 1fr) minmax(140px, 200px) auto; }
+.units-workspace .units-toolbar { grid-template-columns: minmax(180px, 1fr) minmax(140px, 200px) auto; padding-block: 12px; }
 .units-toolbar label { display: grid; gap: 6px; min-width: 0; font-size: var(--text-secondary); }
 .units-search input { width: 100%; min-height: 44px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 10px 12px; font: inherit; box-sizing: border-box; }
 .units-search input:focus-visible { outline: 2px solid #2e6ee6; outline-offset: 2px; }
-.units-workspace .operational-collection-table { --operational-collection-columns: minmax(140px, 1fr) minmax(85px, .6fr) minmax(140px, 1fr) minmax(160px, 1.2fr); }
+.units-workspace .operational-collection-table {
+  --operational-collection-columns: minmax(140px, 1fr) minmax(85px, .6fr) minmax(140px, 1fr) minmax(160px, 1.2fr);
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  overflow: hidden;
+}
 .units-workspace .operational-collection-cell { overflow-wrap: anywhere; }
 .units-feedback { padding-block: 16px; }
 .units-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-block: 16px; }
@@ -43,6 +48,7 @@
 .unit-parts-form > div:last-child .button { width: 100%; }
 @media (max-width: 700px) {
   .units-workspace .units-toolbar { grid-template-columns: 1fr; }
+  .units-workspace .operational-collection-table { border: 0; border-radius: 0; overflow: visible; }
   .units-pagination { justify-content: space-between; }
   .unit-parts-list li { align-items: stretch; flex-direction: column; }
   .unit-parts-list .button { width: 100%; }

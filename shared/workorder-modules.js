@@ -85,7 +85,7 @@ export const WORKORDER_MODULES = Object.freeze([
     description: "Mechanic diagnosis and work performed.",
     surfaces: Object.freeze(["detail"]),
     capabilities: Object.freeze(["read", "write"]),
-    actions: Object.freeze(["update"]),
+    actions: Object.freeze(["update", "record"]),
     writeRolesBySurface: Object.freeze({ detail: Object.freeze(["mechanic", "admin"]) }),
   }),
   Object.freeze({

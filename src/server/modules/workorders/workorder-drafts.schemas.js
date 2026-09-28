@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { invalidRequest } from "../../auth/errors.js";
+import { createWorkorderPricingSchema } from "./workorder.schemas.js";
 
 const MAX_DRAFT_PAYLOAD_BYTES = 256 * 1024;
 
@@ -32,6 +33,7 @@ export const updateWorkorderDraftSchema = z.object({
 
 export const submitWorkorderDraftSchema = z.object({
   version: z.number().int().positive().optional(),
+  pricing: createWorkorderPricingSchema.optional(),
 }).strict();
 
 export const takeoverWorkorderDraftSchema = z.object({

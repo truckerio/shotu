@@ -79,6 +79,23 @@ export const workorderFormDataSchema = z.object({
   });
 }).transform((formData) => normalizeWorkorderFormData(formData));
 
+const customUnitPriceSchema = z.string().trim()
+  .regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,4})?$/, "Enter a valid custom unit price with up to four decimals.");
+
+export const createWorkorderPricingSchema = z.object({
+  parts: z.array(z.object({
+    partIndex: z.number().int().min(0).max(17),
+    selection: z.enum(["batch_cost", "selling_price"]),
+    customUnitPrice: customUnitPriceSchema.optional(),
+  }).strict()).max(18).default([]),
+  labor: z.object({
+    selection: z.enum(["internal_cost", "selling_price"]),
+    customUnitPrice: customUnitPriceSchema.optional(),
+  }).strict().optional(),
+  expectedFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+}).strict().refine((value) => new Set(value.parts.map((row) => row.partIndex)).size === value.parts.length,
+  "Choose one price source per part row.");
+
 export const createWorkorderSchema = z.object({
   companyId: z.string()
     .regex(DATABASE_UUID_PATTERN, "Select a valid company.")
@@ -93,8 +110,15 @@ export const createWorkorderSchema = z.object({
   formData: workorderFormDataSchema.default({}),
   inventoryUnitSelections: z.array(inventoryUnitSelectionSchema).max(18).default([]),
   inventoryPositionSelections: z.array(inventoryPositionSelectionSchema).max(18).default([]),
+  pricing: createWorkorderPricingSchema.optional(),
 }).superRefine((input, context) => {
   const parts = Array.isArray(input.formData?.parts) ? input.formData.parts : [];
+  for (const selection of input.pricing?.parts || []) {
+    const part = parts[selection.partIndex];
+    if (!part?.catalogPartId || part.purchaseRequested === true) {
+      context.addIssue({ code: "custom", path: ["pricing", "parts"], message: "Prices require an inventory part row." });
+    }
+  }
   const selectionsByPartIndex = new Map(input.inventoryUnitSelections.map((selection) => [selection.partIndex, selection]));
   const allUnitIds = input.inventoryUnitSelections.flatMap((selection) => selection.unitIds);
   const positionsByPartIndex = new Map(input.inventoryPositionSelections.map((selection) => [selection.partIndex, selection]));

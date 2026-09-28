@@ -17,6 +17,7 @@ function normalizeInventory(raw = {}) {
     locationName: raw.locationName || raw.location?.name || "",
     binLocation: raw.binLocation || raw.bin || "",
     available,
+    lowStock: raw.lowStock === true || raw.low_stock === true,
     serializationRequired: raw.serializationRequired === true,
     uomCode: normalizeUomCode(raw.uomCode || raw.unit || raw.unitCode),
   };
@@ -92,4 +93,19 @@ export function catalogInventoryText(part, localeText = null, formatNumber = Str
     ? ` · ${localeText ? localeText("parts.bin") : "Bin"} ${inventory.binLocation}`
     : "";
   return `${formatNumber(inventory.available)} ${inventory.uomCode || part.uomCode} ${localeText ? localeText("parts.available") : "available"}${location}${bin}`;
+}
+
+export function catalogAvailabilityText(part, formatNumber = String) {
+  const inventory = part.inventory || {};
+  return `${formatNumber(numberOrZero(inventory.available))} ${inventory.uomCode || part.uomCode}`;
+}
+
+export function catalogInventoryIsLow(part) {
+  const inventory = part.inventory || {};
+  return inventory.lowStock === true || numberOrZero(inventory.available) <= 0;
+}
+
+export function catalogInventoryContextText(part) {
+  const inventory = part.inventory || {};
+  return inventory.binLocation || "";
 }

@@ -24,6 +24,7 @@ export function useRoleRouterCommands({
   setResumedDraft,
   workorderDraft,
   workorderDraftPayload,
+  createPricing,
 }) {
   async function createWorkorder(event) {
     event?.preventDefault?.();
@@ -56,13 +57,21 @@ export function useRoleRouterCommands({
         }
         return;
       }
+      if (createPricing?.hasPriceableRows && !createPricing.complete) {
+        throw new Error(createPricing.status === "error"
+          ? createPricing.message || "Prices could not be verified. Try again."
+          : "Wait for the selected prices to finish updating before creating the workorder.");
+      }
       const savedDraft = await workorderDraft.flush();
       if (!savedDraft?.id || !savedDraft?.version) {
         throw new Error("The draft could not be saved. Try again before creating the workorder.");
       }
       const result = await api(`/api/workorder-drafts/${encodeURIComponent(savedDraft.id)}/submit`, {
         method: "POST",
-        body: JSON.stringify({ version: savedDraft.version }),
+        body: JSON.stringify({
+          version: savedDraft.version,
+          ...(createPricing?.submitPricing ? { pricing: createPricing.submitPricing } : {}),
+        }),
       });
       workorderDraft.reset(null);
       setResumedDraft(null);
@@ -77,6 +86,7 @@ export function useRoleRouterCommands({
       const opened = await openOfficeWorkorder(result.workorder.id);
       if (!opened) finishRoleWorkspace();
     } catch (error) {
+      if (error?.code === "WORKORDER_PRICING_CHANGED") createPricing?.refresh?.();
       setCreateState({ busy: false, message: error.message, error: true });
     }
   }

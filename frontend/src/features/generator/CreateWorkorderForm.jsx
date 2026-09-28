@@ -23,6 +23,7 @@ export function CreateWorkorderForm({
   errorFocusKey,
   errorFocusReady = true,
   form,
+  createPricing,
   locationLoadState,
   locations,
   locale = "en",
@@ -85,9 +86,17 @@ export function CreateWorkorderForm({
       laborRepairOrder: form.workPerformed,
       locationId: form.locationId,
       parts: form.parts,
+      pricing: createPricing,
+      laborPriceSelection: form.laborPriceSelection,
+      laborCustomUnitPrice: form.laborCustomUnitPrice,
       onAdd: onAddPart,
       onChange: onPartChange,
       onLaborHoursChange: (value) => onFieldChange("laborHours", value),
+      onLaborPriceSelectionChange: (value) => {
+        onFieldChange("laborPriceSelection", value);
+        onFieldChange("laborCustomUnitPrice", "");
+      },
+      onLaborCustomUnitPriceChange: (value) => onFieldChange("laborCustomUnitPrice", value),
       onLaborProductChange: presentation === "one-page" ? (value) => Object.entries(laborProductSelectionPatch(form, value)).forEach(([field, next]) => onFieldChange(field, next)) : undefined,
       onLaborRepairOrderChange: (value) => onFieldChange("workPerformed", value),
       onRemove: onRemovePart,

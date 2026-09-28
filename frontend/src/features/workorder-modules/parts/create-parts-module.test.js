@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./CreatePartsModule.jsx", import.meta.url), "utf8");
+const priceCell = readFileSync(new URL("./CreateWorkorderPriceCell.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./create-parts-module.css", import.meta.url), "utf8");
+const legacyControls = readFileSync(new URL("../../../components/forms/legacy-form-controls.css", import.meta.url), "utf8");
 const serializedPicker = readFileSync(new URL("./CreateSerializedUnitPicker.jsx", import.meta.url), "utf8");
+const stockDropdown = readFileSync(new URL("./CreateStockDropdown.jsx", import.meta.url), "utf8");
 const nestedDropdown = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitNestedDropdown.jsx", import.meta.url), "utf8");
 const nestedCss = readFileSync(new URL("../../../components/workorders/part-requests/serialized-unit-nested-dropdown.css", import.meta.url), "utf8");
 const childPicker = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitChildPicker.jsx", import.meta.url), "utf8");
@@ -53,6 +56,10 @@ test("compact Parts keeps touch geometry and one-column phone editing", () => {
   assert.match(sharedPartsCss, /@media \(max-width: 700px\)[\s\S]*?\.workorder-parts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
   assert.match(css, /\.create-stock-dropdown\s*\{[^}]*width:\s*min\(29rem, calc\(100vw - 32px\)\)/s);
   assert.match(css, /\.create-stock-positions input\[type="radio"\]\s*\{[^}]*width:\s*18px/s);
+  assert.match(css, /\.create-stock-positions label\s*\{[^}]*min-height:\s*48px/s);
+  assert.match(legacyControls, /input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\),/);
+  assert.ok(legacyControls.indexOf('input[type="radio"]') > legacyControls.indexOf(".control-panel input,"));
+  assert.match(legacyControls, /input\[type="checkbox"\],[\s\S]*?input\[type="radio"\]\s*\{[^}]*height:\s*18px;[^}]*min-height:\s*0;[^}]*padding:\s*0;[^}]*width:\s*18px;/s);
 });
 
 test("desktop retains the existing create Parts grid", () => {
@@ -99,14 +106,74 @@ test("serialized parent selection opens one shared nested dropdown and derives q
   assert.match(nestedCss, /max-height:\s*min\(34rem, calc\(100dvh - 32px\)\)/);
 });
 
+test("quantity and bulk parts choose a position while batch allocation stays automatic", () => {
+  assert.match(source, /<CreateStockDropdown/);
+  assert.match(stockDropdown, /legend>Pick from<\/legend>/);
+  assert.match(stockDropdown, /selling-policy\?locationId=/);
+  assert.match(stockDropdown, /Automatic · oldest first/);
+  assert.match(stockDropdown, /allocationQuantity/);
+  assert.doesNotMatch(stockDropdown, /name=\{`source-batch-/);
+  assert.match(stockDropdown, /batchCoverageMissing/);
+  assert.match(stockDropdown, /Review this position in Inventory/);
+  assert.match(stockDropdown, /disabled=\{requiresSourcePosition && \(!selectedPosition \|\| batchCoverageMissing\)\}/);
+  assert.match(css, /\.create-stock-batch-allocation\s*\{[^}]*min-height:\s*44px/s);
+});
+
 test("catalog and scanned selections carry descriptions into each Repair order", () => {
   assert.match(source, /repairOrder:\s*repairOrderAfterCatalogSelection\(part\.repairOrder, catalogPart, part\.catalogPartId\)/);
   assert.equal((source.match(/repairOrder: repairOrderAfterCatalogSelection\("", unit\)/g) || []).length, 2);
   assert.doesNotMatch(source, /repairOrderAfterNestedSelection/);
 });
 
-test("help aligns with the visible Parts heading in both layouts", () => {
-  assert.match(source, /headerAction=\{compactLayout \? null : partsHelp\}/);
-  assert.match(source, /className="create-parts-group-heading has-help"[\s\S]*create-parts-labor-title[\s\S]*\{partsHelp\}/);
-  assert.match(css, /\.create-parts-group-heading\.has-help\s*\{[^}]*align-items:\s*center/s);
+test("request and scan actions align with the visible Parts heading", () => {
+  assert.match(source, /className="create-parts-header-actions"[\s\S]*\{requestPartButton\}[\s\S]*<CreatePartScanner/);
+  assert.match(source, /headerAction=\{partsHeaderActions\}/);
+  assert.doesNotMatch(source, /headerAction=\{compactLayout \? null : partsHelp\}/);
+  assert.match(css, /\.create-parts-header-actions\s*\{[^}]*display:\s*flex/s);
+  assert.match(css, /\.create-parts-card \.workorder-section-panel-heading\s*\{[^}]*flex-wrap:\s*wrap/s);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-parts-card \.workorder-section-panel-heading\s*\{[^}]*display:\s*grid/s);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-parts-header-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\) auto/s);
+});
+
+test("Add line remains below numbered rows and pricing totals remain at the section bottom", () => {
+  const tableEnd = source.indexOf("</WorkorderPartsTable>");
+  const addLine = source.indexOf('t("create.parts.add")', tableEnd);
+  const pricingFooter = source.lastIndexOf('className="create-pricing-footer"');
+  assert.ok(tableEnd >= 0 && addLine > tableEnd);
+  assert.ok(pricingFooter > addLine);
+  assert.doesNotMatch(source, /<WorkorderPartsActions className="create-parts-actions">\s*\{requestPartButton\}/s);
+});
+
+test("unlinked pricing uses a quiet field and row price cells omit inline totals", () => {
+  assert.match(priceCell, /aria-label="Price" className="create-price-empty-field" disabled placeholder="Price"/);
+  assert.doesNotMatch(priceCell, /className="create-price-label"/);
+  assert.doesNotMatch(priceCell, /Unpriced until received and linked to exact inventory/);
+  assert.doesNotMatch(priceCell, /<span>Total/);
+  assert.match(priceCell, /className="create-inline-price-control"/);
+  assert.doesNotMatch(priceCell, /FCFS/);
+});
+
+test("office and admin Create Parts expose controlled server-preview pricing in desktop and compact layouts", () => {
+  assert.match(source, /pricing\?\.enabled === true/);
+  assert.match(source, /WORKORDER_PARTS_COLUMNS\.PRICE/);
+  assert.match(source, /<CreateLaborPriceCell/);
+  assert.match(source, /<CreatePartPriceCell/);
+  assert.match(source, /selection=\{part\.priceSelection\}/);
+  assert.match(source, /eligible=\{partHasExactInventorySource\(part\)\}/);
+  assert.match(source, /purchaseRequested:true,[^}]*priceSelection:""/);
+  assert.match(source, /onChange=\{\(selection\) => onChange\(index, \{ priceSelection: selection, customUnitPrice: "" \}\)\}/);
+  assert.match(source, /onCustomUnitPriceChange=\{\(customUnitPrice\) => onChange\(index, \{ customUnitPrice \}\)\}/);
+  assert.match(priceCell, /priceOptionLabel\(internalPrice, "internal price"\)/);
+  assert.match(priceCell, /priceOptionLabel\(sellingPrice, "selling price"\)/);
+  assert.match(priceCell, /aria-label="Workorder unit price"/);
+  assert.match(priceCell, /className="create-price-source-menu"/);
+  assert.doesNotMatch(priceCell, /Change price/);
+  assert.match(source, /<CreatePricingTotal pricing=\{pricing\}/);
+  assert.match(source, /summary\?\.status === "complete"[\s\S]*formatWorkorderMoney\(summary\.grandTotal, summary\.currency\)/);
+  assert.match(css, /\.create-inline-price-control\s*\{[^}]*min-height:\s*40px/s);
+  assert.match(css, /\.create-inline-price-control\s*\{[^}]*position:\s*relative/s);
+  assert.match(css, /\.create-price-source-menu\s*\{[^}]*inset:\s*0[^}]*position:\s*absolute[^}]*width:\s*100%/s);
+  assert.match(css, /\.create-workorder-price-cell \.create-price-source-menu \.dropdown-select-trigger\s*\{[^}]*justify-content:\s*flex-end[^}]*width:\s*100%/s);
+  assert.match(css, /\.create-price-source-menu \.dropdown-select-chevron\s*\{[^}]*pointer-events:\s*auto[^}]*width:\s*36px/s);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-inline-price-control\s*\{[^}]*min-height:\s*44px/s);
 });

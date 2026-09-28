@@ -53,6 +53,7 @@ function loadInventoryCountPanel() {
   return inventoryCountPanelPromise;
 }
 const InventoryCountImportPanel = lazy(loadInventoryCountPanel);
+const INVENTORY_SECTIONS = [{ id: "stock", label: "Stock" }, { id: "inbound", label: "Inbound" }, { id: "purchases", label: "Purchasing" }, { id: "tasks", label: "Tasks" }, { id: "reports", label: "Reports" }];
 
 function quantity(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(Number(value || 0));
@@ -81,7 +82,7 @@ function stockItemKey(item) {
   return `${item.companyId}:${item.catalogPartId}`;
 }
 
-export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = false, canReconcileAuthority = false, presentation = "page" }) {
+export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = false, canReconcileAuthority = false, presentation = "page", activeSection = "", onSectionChange = null, onSectionTitleChange = null, onSectionActionsChange = null, showSectionNavigation = true, showSectionNavigationOnPhone = false }) {
   const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const [invoiceWorkflowOpen, setInvoiceWorkflowOpen] = useState(() => (
     initialParams.get("view") === "invoices"
@@ -123,7 +124,9 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [createPartOpen, setCreatePartOpen] = useState(false);
   const [receivingPart, setReceivingPart] = useState(null);
   const [stockPage, setStockPage] = useState(1);
-  const [inventorySection, setInventorySection] = useState(() => ["inbound", "purchases", "tasks", "reports"].includes(initialParams.get("inventorySection")) ? initialParams.get("inventorySection") : "stock");
+  const [inventorySection, setInventorySection] = useState(() => INVENTORY_SECTIONS.some((section) => section.id === activeSection)
+    ? activeSection
+    : ["inbound", "purchases", "tasks", "reports"].includes(initialParams.get("inventorySection")) ? initialParams.get("inventorySection") : "stock");
   const [inboundReceiptOrderId, setInboundReceiptOrderId] = useState("");
   const [reportPurchaseOrderId] = useState(() => initialParams.get("purchaseOrderId") || "");
   const [reportPurchaseOrderNumber] = useState(() => initialParams.get("purchaseOrderNumber") || "");
@@ -141,6 +144,18 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     return null;
   });
   const [stockMeta, setStockMeta] = useState({ pageCount: 1, total: 0, counts: { all: 0, available: 0, reserved: 0, out: 0 } });
+
+  useEffect(() => {
+    if (!INVENTORY_SECTIONS.some((section) => section.id === activeSection) || activeSection === inventorySection) return;
+    setInventorySection(activeSection);
+    setTaskWorkflow(null);
+    setInboundSource({ receiptId: "", deliveryId: "" });
+  }, [activeSection, inventorySection]);
+
+  function selectInventorySection(nextSection) {
+    setInventorySection(nextSection);
+    onSectionChange?.(nextSection);
+  }
 
   useEffect(() => {
     let active = true;
@@ -264,7 +279,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     setTaskLocationId(sourceLocationId);
     setTaskSection('transfer');
     setTaskWorkflow({ kind: 'stock' });
-    setInventorySection('tasks');
+    selectInventorySection('tasks');
     closeSelectedPart();
   }
 
@@ -273,7 +288,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     setTaskLocationId(sourceLocationId);
     setTaskSection("damage");
     setTaskWorkflow({ kind: "stock" });
-    setInventorySection("tasks");
+    selectInventorySection("tasks");
     closeSelectedPart();
   }
 
@@ -385,7 +400,13 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     setStockSort(DEFAULT_STOCK_SORT);
   }
 
-  const inventoryTitle = invoiceWorkflowOpen ? "Invoice intake" : countWorkflowOpen ? "Starting inventory" : "";
+  const inventoryTitle = invoiceWorkflowOpen
+    ? "Invoice intake"
+    : countWorkflowOpen
+      ? "Starting inventory"
+      : !showSectionNavigation && presentation === "page"
+        ? INVENTORY_SECTIONS.find((section) => section.id === inventorySection)?.label || "Stock"
+        : "";
   const inventorySubtitle = invoiceWorkflowOpen
     ? ""
     : countWorkflowOpen
@@ -408,12 +429,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     ]}
     current={workflowDetail?.label || inventoryTitle}
   /> : null;
-  const inventoryActions = countWorkflowOpen ? (
-    <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Import count sheet</Button>
-  ) : invoiceWorkflowOpen ? (
-    !workflowDetail ? <IconButton className="inventory-invoice-upload-button" icon={UploadCloud02} label="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} /> : null
-  ) : null;
-
   const stockActions = <>
     <Button type="button" variant="primary" onClick={() => setReceivingPart({})} disabled={!locations.length}>Add stock</Button>
     <IconButton className="inventory-refresh-button" icon={RefreshCw01} label="Refresh inventory" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading} />
@@ -424,11 +439,31 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     <Button type="button" icon={UploadCloud02} onClick={() => openInvoiceWorkflow()}>Upload invoice</Button>
   </>;
   const taskActions = !taskWorkflow ? <Button type="button" onClick={openPhysicalCountTasks}>Physical counts</Button> : null;
-  const inventorySections = [{ id: "stock", label: "Stock" }, { id: "inbound", label: "Inbound" }, { id: "purchases", label: "Purchasing" }, { id: "tasks", label: "Tasks" }, { id: "reports", label: "Reports" }];
   const sectionActions = inventorySection === "stock" ? stockActions : inventorySection === "inbound" ? inboundActions : inventorySection === "tasks" ? taskActions : null;
+  const inventoryActions = countWorkflowOpen ? (
+    <Button type="button" variant="primary" icon={UploadCloud02} onClick={() => setCountUploadOpen(true)}>Import count sheet</Button>
+  ) : invoiceWorkflowOpen ? (
+    !workflowDetail ? <IconButton className="inventory-invoice-upload-button" icon={UploadCloud02} label="Upload invoices" aria-haspopup="dialog" onClick={() => setInvoiceUploadOpen(true)} /> : null
+  ) : !showSectionNavigation && !onSectionActionsChange ? sectionActions : null;
+
+  useEffect(() => {
+    onSectionActionsChange?.(invoiceWorkflowOpen || countWorkflowOpen ? null : sectionActions);
+  }, [countWorkflowOpen, inventorySection, invoiceWorkflowOpen, loading, locations.length, onSectionActionsChange, taskWorkflow]);
+
+  useEffect(() => () => onSectionActionsChange?.(null), [onSectionActionsChange]);
+
+  useEffect(() => {
+    onSectionTitleChange?.(
+      invoiceWorkflowOpen
+        ? "Invoice intake"
+        : countWorkflowOpen
+          ? "Starting inventory"
+          : INVENTORY_SECTIONS.find((section) => section.id === inventorySection)?.label || "Stock",
+    );
+  }, [countWorkflowOpen, inventorySection, invoiceWorkflowOpen, onSectionTitleChange]);
 
   function changeInventorySection(nextSection) {
-    setInventorySection(nextSection);
+    selectInventorySection(nextSection);
     setTaskWorkflow(null);
     setInboundSource({ receiptId: "", deliveryId: "" });
     const url = new URL(window.location.href);
@@ -454,17 +489,17 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     if (task.sourceType === "damage_inspection") { setTaskSection("damage"); setTaskLocationId(location); setTaskWorkflow({ kind: "stock", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "damage", taskId: task.sourceId, taskLocation: location }); return; }
     if (task.sourceType === "transfer_receipt") { setTaskSection("transfer"); setTaskLocationId(location); setTaskWorkflow({ kind: "stock", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "transfer", taskId: task.sourceId, taskLocation: location }); return; }
     if (task.sourceType === "removed_part_custody") { setTaskLocationId(location); setTaskWorkflow({ kind: "custody", task }); openExactTaskUrl({ inventorySection: "tasks", taskOwner: "custody", reuseCaseId: task.sourceId, taskLocation: location }); return; }
-    if (["position_recount", "position_count_review"].includes(task.sourceType)) { const positionId = task.actionTarget?.positionId || new URL(task.deepLink, window.location.href).searchParams.get("positionId") || ""; setStockLocationInitialShop(location); setStockLocationInitialPosition(positionId); setStockMode("location"); setInventorySection("stock"); openExactTaskUrl({ inventorySection: "stock", stockMode: "location", positionId, taskLocation: location }); return; }
+    if (["position_recount", "position_count_review"].includes(task.sourceType)) { const positionId = task.actionTarget?.positionId || new URL(task.deepLink, window.location.href).searchParams.get("positionId") || ""; setStockLocationInitialShop(location); setStockLocationInitialPosition(positionId); setStockMode("location"); selectInventorySection("stock"); openExactTaskUrl({ inventorySection: "stock", stockMode: "location", positionId, taskLocation: location }); return; }
     if (task.sourceType === "invoice_po_decision") { openInvoiceWorkflow(task.sourceId, location); return; }
-    if (task.sourceType === "missing_invoice") { setInboundSource({ receiptId: task.sourceId, deliveryId: "" }); setInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", receiptId: task.sourceId, taskLocation: location }); return; }
-    if (task.sourceType === "receipt_exception") { setInboundSource({ receiptId: "", deliveryId: task.sourceId }); setInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", deliveryId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "missing_invoice") { setInboundSource({ receiptId: task.sourceId, deliveryId: "" }); selectInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", receiptId: task.sourceId, taskLocation: location }); return; }
+    if (task.sourceType === "receipt_exception") { setInboundSource({ receiptId: "", deliveryId: task.sourceId }); selectInventorySection("inbound"); openExactTaskUrl({ inventorySection: "inbound", deliveryId: task.sourceId, taskLocation: location }); return; }
     window.location.assign(task.deepLink);
   }
 
   function openStockByLocation(shopId = "") {
     setStockLocationInitialShop(shopId);
     setStockMode("location");
-    setInventorySection("stock");
+    selectInventorySection("stock");
     openExactTaskUrl({ inventorySection: "stock", stockMode: "location", taskLocation: shopId });
   }
 
@@ -477,7 +512,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     setTaskSection("count");
     setTaskLocationId("");
     setTaskWorkflow({ kind: "stock", task: null });
-    setInventorySection("tasks");
+    selectInventorySection("tasks");
     openExactTaskUrl({ inventorySection: "tasks", taskOwner: "count" });
   }
 
@@ -489,6 +524,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       subtitle={inventorySubtitle}
       leading={inventoryLeading}
       actions={inventoryActions}
+      showTitle={presentation !== "embedded"}
     >
       {createPartOpen ? <CreateInventoryPartDialog
         locationId={locations.some((location) => location.id === locationId) ? locationId : ""}
@@ -499,9 +535,12 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
 
       {invoiceWorkflowOpen ? <InvoiceExtractionWorkspace embedded availableLocations={locations} initialLocationId={locations.some((location) => location.id === locationId) ? locationId : ""} initialRunId={invoiceRunId} uploadOpen={invoiceUploadOpen} onUploadOpenChange={setInvoiceUploadOpen} onContextChange={updateWorkflowDetail} /> : countWorkflowOpen ? <Suspense fallback={<div className="inventory-empty"><Package /><strong>Loading count sheets</strong></div>}><InventoryCountImportPanel locations={locations} initialImportId={initialParams.get("countImport") || ""} uploadOpen={countUploadOpen} onUploadOpenChange={setCountUploadOpen} canApplyInventoryCount={canApplyInventoryCount} onApplied={() => setRefreshKey((value) => value + 1)} onContextChange={updateWorkflowDetail} /></Suspense> : <>
 
-      <OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={inventorySections} actions={sectionActions} headingLevel={presentation === "embedded" ? 2 : 1} />
-      {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId) => { setInboundReceiptOrderId(poId); setInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}
-      {inventorySection==='purchases'?<InventoryPurchases key={inventorySection} locations={locations} actorId={actorId} view={inventorySection} initialReceiptOrderId={inboundReceiptOrderId} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} onInvoice={(requestedLocationId)=>openInvoiceWorkflow("", requestedLocationId)} onStock={()=>setInventorySection('stock')}/>:null}
+      {showSectionNavigation ? <OperationalCollectionSectionHeader ariaLabel="Other inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={INVENTORY_SECTIONS} actions={sectionActions} headingLevel={presentation === "embedded" ? 2 : 1} showHeading={presentation !== "embedded"} /> : <>
+        {showSectionNavigationOnPhone ? <div className="inventory-phone-section-navigation"><OperationalCollectionSectionHeader ariaLabel="Inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={INVENTORY_SECTIONS} headingLevel={presentation === "embedded" ? 2 : 1} showHeading={false} /></div> : null}
+      </>}
+      <section className="operational-collection-surface inventory-section-surface" aria-label={`${INVENTORY_SECTIONS.find((section) => section.id === inventorySection)?.label || "Stock"} workspace`}>
+      {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId) => { setInboundReceiptOrderId(poId); selectInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}
+      {inventorySection==='purchases'?<InventoryPurchases key={inventorySection} locations={locations} actorId={actorId} view={inventorySection} initialReceiptOrderId={inboundReceiptOrderId} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} onInvoice={(requestedLocationId)=>openInvoiceWorkflow("", requestedLocationId)} onStock={()=>selectInventorySection('stock')}/>:null}
       {inventorySection==='reports'?<InventoryReports locations={locations}/>:null}
       {inventorySection==='tasks'?taskWorkflow?<section className="inventory-task-owner"><IconButton icon={ArrowLeft} label="Back to My work" onClick={closeTaskOwner} />{taskWorkflow.kind==='custody'?<InventoryCustodyWorkspace locations={locations} actorId={actorId} initialTab="returns" initialLocationId={taskLocationId} initialCaseId={taskWorkflow.task.sourceId} hidePrimaryTabs/>:<InventoryStockTasks
           key={taskSection}
@@ -515,7 +554,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           onImportCount={openCountWorkflow}
         />}</section>:<InventoryTaskQueue locations={locations} onOpenTask={openTaskOwner}/>:null}
 
-      {inventorySection === "stock" ? <><OperationalCollectionTabs
+      {inventorySection === "stock" ? <>
+      <OperationalCollectionTabs
         className="inventory-stock-mode-tabs"
         ariaLabel="Inventory stock view"
         activeId={stockMode}
@@ -535,7 +575,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         }))}
       />
 
-      <OperationalCollectionToolbar className="inventory-toolbar">
+      <OperationalCollectionToolbar className="inventory-toolbar inventory-stock-toolbar">
         <label className="inventory-toolbar-field inventory-search-field"><span>Search</span><span className="inventory-search-control"><SearchMd /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Part number, description, manufacturer, or barcode" aria-label="Search inventory" /></span></label>
         <label className="inventory-toolbar-field inventory-scope-field"><span>Inventory view</span><Dropdown value={locationId} onChange={(event) => setLocationId(event.target.value)} aria-label="Inventory view"><option value="all">All locations</option><option value="master">Odoo master catalog</option>{browseLocations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.canManage === false ? " · View only" : ""}</option>)}</Dropdown></label>
         <label className="inventory-toolbar-field inventory-stock-sort"><span>Sort</span><Dropdown value={stockSort} onChange={(event) => setStockSort(event.target.value)} aria-label="Sort inventory stock">
@@ -590,7 +630,9 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
       </> : null}
       {canReconcileAuthority ? <InventoryAuthorityExceptionsPanel actorId={actorId} /> : null}
       </> : <InventoryLocationStockWorkspace locations={browseLocations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, locationParts, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), locationParts, receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
-      <SecondaryDetailPanel
+      </> : null}
+      </section>
+      {inventorySection === "stock" ? <SecondaryDetailPanel
         open={Boolean(selectedItem)}
         onOpenChange={(nextOpen) => {
           if (!nextOpen && !partIdentityBusy && !partIdentityDirty) closeSelectedPart();
@@ -676,8 +718,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
             />
           </section> : null}
         </> : null}
-      </SecondaryDetailPanel>
-      </> : null}
+      </SecondaryDetailPanel> : null}
       </>}
       {receivingPart ? <AddInventoryStockDialog part={receivingPart} locationParts={receivingPart.locationParts || []} actorId={actorId} locations={locations.filter((location) => !receivingPart.companyId || !location.companyId || location.companyId === receivingPart.companyId)} initialLocationId={receivingPart.receiptLocationId || (locationId !== "all" && locationId !== "master" ? locationId : "")} initialPositionId={receivingPart.receiptPositionId || ""} lockLocation={Boolean(receivingPart.lockReceiptLocation)} locationContextLabel={receivingPart.receiptPositionPath || ""} onClose={() => setReceivingPart(null)} onReceived={() => setRefreshKey((value) => value + 1)} /> : null}
     </OperationalCollectionPage>

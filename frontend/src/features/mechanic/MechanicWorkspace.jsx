@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase02, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
+import { Briefcase02, CheckCircle, Clock, FileCheck02, Inbox01, RefreshCw01, SearchMd, Users01 } from "@untitledui/icons";
 import { PageHeader } from "../../components/layout/PageHeader.jsx";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
+import { RoleNavigationRail } from "../../components/layout/RoleNavigationRail.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
@@ -209,14 +210,15 @@ export function MechanicWorkspace({
       createLabel={t("mechanic.createWorkorder")}
     />
   );
+  const mechanicRail = <RoleNavigationRail actor={actor} locale={locale} ariaLabel="Mechanic workspace" activeId={product} groups={[{ id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] }]} onNavigate={(nextProduct) => { setProduct(nextProduct); setCreatingInspection(false); setCreatedInspectionId(""); }} />;
 
   if (product === "inspections" && inspectionAccess.canRead) {
     return (
       <main className="prototype mechanic-home workspace-operations inspection-workspace">
-        <WorkspaceHeader actor={actor} className="role-home-account-header" locale={locale} />
-        <div className="mechanic-home-content">
+        <WorkspaceHeader actor={actor} className="role-phone-account-header" locale={locale} />
+        <div className="mechanic-role-shell">{mechanicRail}<div className="mechanic-home-content">
           <PageHeader title="Inspections" actions={createActions} />
-          {workorderAccess.canRead && !combinedQueueEnabled ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); setCreatedInspectionId(""); }} /> : null}
+          {workorderAccess.canRead && !combinedQueueEnabled ? <div className="role-phone-product-switch"><ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); setCreatedInspectionId(""); }} /></div> : null}
           {creatingInspection ? (
             <CreateInspectionPage
               actor={actor}
@@ -228,21 +230,20 @@ export function MechanicWorkspace({
           ) : (
           <InspectionExperience actor={actor} projection="mechanic" initialInspectionId={initialInspectionId || createdInspectionId} onBack={combinedQueueEnabled ? () => { setProduct("workorders"); setCreatedInspectionId(""); } : null} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onOpenWorkorder={workorderAccess.canRead ? openWorkorder : null} />
           )}
-        </div>
+        </div></div>
       </main>
     );
   }
 
   return (
     <main className="prototype mechanic-home workspace-operations">
-      <WorkspaceHeader actor={actor} className="role-home-account-header" locale={locale} />
-      <div className="mechanic-home-content">
+      <WorkspaceHeader actor={actor} className="role-phone-account-header" locale={locale} />
+      <div className="mechanic-role-shell">{mechanicRail}<div className="mechanic-home-content">
         <PageHeader
           title={t("mechanic.workorders")}
           actions={createActions}
         />
-        {inspectionAccess.canRead && !combinedQueueEnabled ? <ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); }} /> : null}
-
+        {inspectionAccess.canRead && !combinedQueueEnabled ? <div className="role-phone-product-switch"><ProductModeSwitch value={product} onChange={(value) => { setProduct(value); setCreatingInspection(false); }} /></div> : null}
         {!online ? <p className="workspace-connection-state" role="status">{t("mechanic.offline")}</p> : null}
         <section className="mechanic-queue-shell" aria-label={t("mechanic.work")}>
           <div className="mechanic-primary-queues">
@@ -350,7 +351,7 @@ export function MechanicWorkspace({
             </div>
           </details>
         </section>
-      </div>
+      </div></div>
     </main>
   );
 }

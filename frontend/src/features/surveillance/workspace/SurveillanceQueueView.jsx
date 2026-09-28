@@ -3,8 +3,8 @@ import { DatePicker } from "../../../components/forms/DatePicker.jsx";
 import { RefreshCw01, SearchMd } from "@untitledui/icons";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
-import { ProductModeSwitch } from "../../inspections/ProductModeSwitch.jsx";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.jsx";
+import { ProductModeSwitch } from "../../inspections/ProductModeSwitch.jsx";
 import { MobileQueueToolbar } from "../../../components/operations/MobileQueueToolbar.jsx";
 import { ProgressiveQueue } from "../../../components/responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../../../components/responsive/ProgressiveQueue.js";
@@ -18,7 +18,7 @@ import {
   isSurveillancePhonePrimaryTab,
 } from "../surveillanceQueue.js";
 
-export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, inspectionAccess = { canRead: false }, product = "workorders", onProductChange, workorderAccess = { canRead: true } }) {
+export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, rail, inspectionAccess = { canRead: false }, product = "workorders", onProductChange, workorderAccess = { canRead: true } }) {
   const {
     activeDatePreset,
     activeTab,
@@ -49,9 +49,10 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, inspectio
 
   return (
     <main className="prototype mechanic-home surveillance-home workspace-operations">
-      <WorkspaceHeader actor={actor} />
+      <WorkspaceHeader actor={actor} className="role-phone-account-header" />
+      <div className="surveillance-role-shell">{rail}<div className="surveillance-role-content">
       <PageHeader title="Workorders" />
-      {inspectionAccess.canRead && workorderAccess.canRead ? <ProductModeSwitch value={product} onChange={onProductChange} /> : null}
+      {inspectionAccess.canRead && workorderAccess.canRead ? <div className="role-phone-product-switch"><ProductModeSwitch value={product} onChange={onProductChange} /></div> : null}
       <section className="mechanic-queue-shell surveillance-queue-shell">
         <div className="queue-toolbar surveillance-toolbar">
           <div className="surveillance-desktop-queues">
@@ -152,6 +153,7 @@ export function SurveillanceQueueView({ actor, queue, onOpenWorkorder, inspectio
           )}
         </div>
       </section>
+      </div></div>
     </main>
   );
 }

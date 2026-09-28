@@ -33,6 +33,8 @@ function publicSnapshot(row, allocations = []) {
     quantity: String(row.quantity),
     totalPrice: String(row.total_price),
     currency: row.currency,
+    baseUnitPrice: row.base_unit_price === null || row.base_unit_price === undefined ? null : String(row.base_unit_price),
+    manualOverride: row.manual_override === true,
     receiptLineId: row.receipt_line_id || null,
     sellingPolicyVersionId: row.selling_policy_version_id || null,
     allocations,
@@ -73,10 +75,10 @@ async function snapshotAllocations(client, companyId, snapshotId) {
   }));
 }
 
-export async function saveWorkorderPartPriceSnapshot(input) {
-  const client = await getPool().connect();
+export async function saveWorkorderPartPriceSnapshot(input, transactionClient = null) {
+  const client = transactionClient || await getPool().connect();
   try {
-    await client.query("begin");
+    if (!transactionClient) await client.query("begin");
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [
       `workorder-part-price:${input.actorId}:${input.idempotencyKey}`,
     ]);
@@ -88,7 +90,7 @@ export async function saveWorkorderPartPriceSnapshot(input) {
     );
     if (replay.rows[0]) {
       const allocations = await snapshotAllocations(client, replay.rows[0].company_id, replay.rows[0].id);
-      await client.query("commit");
+      if (!transactionClient) await client.query("commit");
       return replay.rows[0].request_hash === input.requestHash
         ? { kind: "saved", snapshot: publicSnapshot(replay.rows[0], allocations), replayed: true }
         : { kind: "idempotency_conflict" };
@@ -131,11 +133,11 @@ export async function saveWorkorderPartPriceSnapshot(input) {
     );
     const row = selected.rows[0];
     if (!row) {
-      await client.query("rollback");
+      if (!transactionClient) await client.query("rollback");
       return { kind: "not_found" };
     }
     if (["closed", "odoo_entered", "cancelled"].includes(row.workorder_status)) {
-      await client.query("rollback");
+      if (!transactionClient) await client.query("rollback");
       return { kind: "locked" };
     }
 
@@ -144,7 +146,7 @@ export async function saveWorkorderPartPriceSnapshot(input) {
       usageId: row.usage_id,
     });
     if (!serialized && !costAllocations.length) {
-      await client.query("rollback");
+      if (!transactionClient) await client.query("rollback");
       return { kind: "batch_cost_unavailable" };
     }
 
@@ -156,7 +158,7 @@ export async function saveWorkorderPartPriceSnapshot(input) {
     let pricedAllocations = [];
     if (serialized && input.selection === "batch_cost") {
       if (!row.receipt_line_id || row.unit_cost === null || !row.batch_currency) {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "batch_cost_unavailable" };
       }
       unitPrice = String(row.unit_cost);
@@ -164,7 +166,7 @@ export async function saveWorkorderPartPriceSnapshot(input) {
       receiptLineId = row.receipt_line_id;
     } else if (serialized) {
       if (!row.policy_id) {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "selling_policy_unavailable" };
       }
       try {
@@ -177,18 +179,18 @@ export async function saveWorkorderPartPriceSnapshot(input) {
           row.batch_currency,
         );
       } catch {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "batch_cost_unavailable" };
       }
       if (!currency) {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "currency_unavailable" };
       }
       receiptLineId = row.receipt_line_id || null;
       policyId = row.policy_id;
     } else {
       if (input.selection === "selling_price" && !row.policy_id) {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "selling_policy_unavailable" };
       }
       try {
@@ -212,12 +214,12 @@ export async function saveWorkorderPartPriceSnapshot(input) {
           return { ...allocation, unitPrice: fixedFour(price), totalPrice: fixedFour(total), currency: allocationCurrency };
         });
       } catch {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "batch_cost_unavailable" };
       }
       const currencies = new Set(pricedAllocations.map((allocation) => allocation.currency));
       if (currencies.size !== 1) {
-        await client.query("rollback");
+        if (!transactionClient) await client.query("rollback");
         return { kind: "currency_unavailable" };
       }
       currency = pricedAllocations[0].currency;
@@ -230,12 +232,20 @@ export async function saveWorkorderPartPriceSnapshot(input) {
 
     const quantity = String(row.quantity);
     totalPrice ||= fixedFour(roundDivide(scaled(unitPrice, 4) * scaled(quantity, 3), QUANTITY_SCALE));
+    const selectedUnitPrice = unitPrice;
+    const customPrice = input.customUnitPrice === undefined ? null : fixedFour(scaled(input.customUnitPrice, 4));
+    const manualOverride = customPrice !== null && scaled(customPrice, 4) !== scaled(selectedUnitPrice, 4);
+    if (manualOverride) {
+      unitPrice = customPrice;
+      totalPrice = fixedFour(roundDivide(scaled(unitPrice, 4) * scaled(quantity, 3), QUANTITY_SCALE));
+    }
     const saved = await client.query(
       `insert into workorder_part_price_snapshots(
          company_id,workorder_id,serialized_usage_id,aggregate_usage_id,selection,
          unit_price,quantity,total_price,currency,receipt_line_id,selling_policy_version_id,
+         base_unit_price,manual_override,
          created_by,reason,idempotency_key,request_hash
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        returning *`,
       [
         row.company_id,
@@ -249,6 +259,8 @@ export async function saveWorkorderPartPriceSnapshot(input) {
         currency,
         receiptLineId,
         policyId,
+        manualOverride ? selectedUnitPrice : null,
+        manualOverride,
         input.actorId,
         input.reason,
         input.idempotencyKey,
@@ -264,12 +276,12 @@ export async function saveWorkorderPartPriceSnapshot(input) {
           allocation.quantity, allocation.unitPrice, allocation.totalPrice, allocation.currency],
       );
     }
-    await client.query("commit");
+    if (!transactionClient) await client.query("commit");
     return { kind: "saved", snapshot: publicSnapshot(saved.rows[0], pricedAllocations), replayed: false };
   } catch (error) {
-    await client.query("rollback").catch(() => {});
+    if (!transactionClient) await client.query("rollback").catch(() => {});
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 }

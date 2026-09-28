@@ -57,6 +57,7 @@ export function CreateWorkorderPage({
   vehicleLookup,
   workorderCountLabel,
   workorderDraft,
+  createPricing,
   draftLeaveBusy,
   draftLeaveOpen,
   addPartRow,
@@ -125,7 +126,9 @@ export function CreateWorkorderPage({
     surface: WORKORDER_SURFACES.CREATE,
     userId: actor.id,
   }), [actor.id, actor.role, locationPolicy]);
-  const canCreate = createSections.some((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW && section.modulePolicy?.canWrite);
+  const hasWritableCreateModule = createSections.some((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW && section.modulePolicy?.canWrite);
+  const pricingBlocksCreate = createPricing?.hasPriceableRows && !createPricing.complete;
+  const canCreate = hasWritableCreateModule && !pricingBlocksCreate;
   const deferredPreviewSource = useDeferredValue(form);
   const previewForm = useMemo(
     () => createWorkorderPreviewForm(deferredPreviewSource, assignment),
@@ -265,6 +268,7 @@ export function CreateWorkorderPage({
               errorFocusKey={officeCreateAttempt}
               errorFocusReady={errorFocusReady}
               form={form}
+              createPricing={createPricing}
               locationLoadState={officeLocationsState}
               locations={officeLocations}
               message={createStatusMessage}

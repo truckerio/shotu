@@ -14,6 +14,7 @@ import { createDraftBaselineFromForm, createInitialDraftBaseline, createInitialW
 import { vehicleMileage, vehicleModelText } from "../../features/create-workorder/vehicle-lookup-model.js";
 import { useVehicleLookupController } from "../../features/create-workorder/useVehicleLookupController.js";
 import { useWorkorderDraftLifecycle } from "../../features/create-workorder/useWorkorderDraftLifecycle.js";
+import { useCreateWorkorderPricing } from "../../features/create-workorder/useCreateWorkorderPricing.js";
 import { useCreateLocationController } from "../../features/create-workorder/useCreateLocationController.js";
 import { useWorkorderPrintController } from "../../features/create-workorder/useWorkorderPrintController.js";
 import { useMechanicWorkorderActions } from "../../features/mechanic/useMechanicWorkorderActions.js";
@@ -238,6 +239,7 @@ export function RoleRouter({ actor }) {
     setWorkspace,
     workspace,
   });
+  const createPricing = useCreateWorkorderPricing({ active: workspace === "generator" && !activeWorkorder, actorRole: actor.role, payload: workorderDraftPayload });
   const {
     finishRoleWorkspace: finishOpenOfficeWorkspace,
     openCreateWorkspace: openOfficeGenerator,
@@ -407,6 +409,7 @@ export function RoleRouter({ actor }) {
     setResumedDraft,
     workorderDraft,
     workorderDraftPayload,
+    createPricing,
   });
   useInitialRoleRouteHydration({
     actor,
@@ -481,7 +484,7 @@ export function RoleRouter({ actor }) {
         previewFullscreen, previewGridRef, previewRef, previewSerials, printMenuOpen,
         printState, primaryActionLabel, range, selectedVehicle,
         showEmbeddedPreview: detailViewModel.showEmbeddedPreview, vehicleLookup,
-        workorderCountLabel, workorderDraft, draftLeaveBusy, draftLeaveOpen,
+        workorderCountLabel, workorderDraft, draftLeaveBusy, draftLeaveOpen, createPricing,
         addPartRow, applyVehicle, createOfficeWorkorder, discardDraftAndLeave,
         jumpToPreview, openActiveUnitWorkorder, openFullscreenPreview, openOfficeWorkspace, reloadOfficeLocations: loadCreateLocations,
         removePartRow, replacePartSerializedUnits, saveDraftAndLeave, selectOfficeLocation, setCreateAssignment,

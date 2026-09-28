@@ -24,6 +24,7 @@ import {
   runWorkorderModuleAction,
   createWorkorderRuntime,
   workorderCreateContext,
+  previewCreateWorkorderPricing,
 } from "../modules/workorders/workorder-module-runtime.service.js";
 import { createWorkorderSchema } from "../modules/workorders/workorder.schemas.js";
 
@@ -67,6 +68,12 @@ function unitHistoryRoute(pathname) {
 
 export async function handleWorkorderModulesApi(req, res, url, helpers, dependencies = {}) {
   const { sendJson, readBody, requestContext } = helpers;
+  if (req.method === "POST" && url.pathname === "/api/workorders/create-pricing-preview") {
+    const rawInput = await readBody(req);
+    const input = validated(createWorkorderSchema, { ...rawInput, concern: rawInput.concern || "Pricing preview" });
+    sendJson(res, 200, await (dependencies.previewCreatePricing || previewCreateWorkorderPricing)(requestContext, input));
+    return true;
+  }
   if (req.method === "GET" && url.pathname === "/api/workorders/create-context") {
     const loadCreateContext = dependencies.createContext || workorderCreateContext;
     sendJson(res, 200, await loadCreateContext(requestContext));

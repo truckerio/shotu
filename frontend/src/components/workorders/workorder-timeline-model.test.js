@@ -65,6 +65,18 @@ test("timeline titles and descriptions use human labels without raw arrows", () 
   assert.equal(timelineEventDescription(assignment).includes("->"), false);
 });
 
+test("manual Workorder price overrides show the original and custom values", () => {
+  const event = {
+    type: "field",
+    field_key: "pricing.part.0",
+    field_label: "FILTER-1 price",
+    old_value: "$18.00 internal price",
+    new_value: "$24.00 custom price",
+  };
+  assert.equal(timelineEventTitle(event), "Workorder price changed");
+  assert.equal(timelineEventDescription(event), "FILTER-1 price changed from $18.00 internal price to $24.00 custom price.");
+});
+
 test("multi-event timeline keeps distinct operational activity readable", () => {
   const events = [
     { id: 1, type: "status", from_status: "created", to_status: "assigned", note: "Assigned by office." },
