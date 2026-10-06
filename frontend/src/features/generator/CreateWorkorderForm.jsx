@@ -44,6 +44,9 @@ export function CreateWorkorderForm({
   onSubmit,
   onUnitChange,
   onVehicleSelect,
+  authorizationSection = null,
+  customerControl = null,
+  customerDiscountControl = null,
   presentation = "panel",
   sections = [],
   selectedVehicle,
@@ -77,6 +80,7 @@ export function CreateWorkorderForm({
     parts: {
       actorId,
       actorRole,
+      discountControl: customerDiscountControl,
       historyEnabled: presentation === "one-page",
       activeSection: mobileSection,
       errors: localizedErrors,
@@ -103,13 +107,14 @@ export function CreateWorkorderForm({
       onReplaceSerializedUnits: onReplacePartSerializedUnits,
     },
     schedule: { activeSection: mobileSection, form, locale, onChange: onFieldChange, presentation },
-    unit: { activeSection: mobileSection, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation, selectedVehicle, vehicleLookup },
+    unit: { activeSection: mobileSection, customerControl, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation, selectedVehicle, vehicleLookup },
   };
 
   return (
     <OperationalForm ref={mobileScrollRef} id={CREATE_WORKORDER_FORM_ID} className="create-workorder-form" data-mobile-section={mobileSection} busy={busy} onSubmit={onSubmit} noValidate>
       <FormValidationDialog errors={summaryErrors} focusKey={errorFocusKey} focusReady={errorFocusReady} onFocusTarget={onErrorFocusTarget} title={t("create.checkDetails")} />
       {message && !summaryErrors.length ? <p className="create-workorder-form-message" role={error ? "alert" : "status"}>{message}</p> : null}
+      {authorizationSection}
       <WorkorderCreateModuleHost presentation={presentation} sections={sections} moduleProps={moduleProps} />
     </OperationalForm>
   );

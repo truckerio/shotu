@@ -14,10 +14,14 @@ import {
   takeoverWorkorderDraft,
   updateWorkorderDraft,
 } from "../../db/repositories/workorder-drafts.repo.js";
+import { CustomerDirectoryIdentityError } from "../../db/repositories/customer-directory.repo.js";
 import { createWorkorderSchema } from "./workorder.schemas.js";
 import { authorizeWorkorderCreate } from "./workorder-module-access.service.js";
 import { workorderInputModules } from "./workorder-module-projection.js";
 import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
+import { createHash } from "node:crypto";
+import { issueInformationalDraftEstimate } from "../customer-documents/customer-documents.service.js";
+import { bindInformationalEstimateToWorkorder } from "../../db/repositories/customer-documents.repo.js";
 
 function draftScope(context) {
   const actor = context?.actor;
@@ -40,6 +44,9 @@ async function accessibleLocation(context, locationId, dependencies = {}) {
 }
 
 function mapDraftError(error) {
+  if (error instanceof CustomerDirectoryIdentityError) {
+    throw new AuthError(error.statusCode, error.code, error.message);
+  }
   if (error instanceof WorkorderLifecycleConflictError) {
     throw new AuthError(error.statusCode, error.code, error.message);
   }
@@ -71,6 +78,37 @@ function finalCreateInput(draft) {
   };
 }
 
+export async function prepareUserWorkorderDraftSubmission(context, draft, pricingOverride, dependencies = {}) {
+  const { actor } = draftScope(context);
+  if (!draft.locationId) throw invalidRequest("Location is required before creating the workorder.");
+  await accessibleLocation(context, draft.locationId, dependencies);
+  const pricing = pricingOverride || draft.payload?.pricing;
+  if (pricing && !["office", "admin"].includes(actor.role)) throw permissionDenied();
+  if (pricing && !pricing.expectedFingerprint) {
+    throw new AuthError(409, "WORKORDER_PRICING_PREVIEW_REQUIRED", "Refresh the pricing preview before creating this workorder.");
+  }
+  const prepared = {
+    ...finalCreateInput({ ...draft, payload: { ...draft.payload, ...(pricing ? { pricing } : {}) } }),
+    createdByRole: actor.role,
+    pricingActorId: actor.id,
+    authorizationClassification: draft.authorizationClassification,
+    authorizationExceptionReason: draft.authorizationExceptionReason,
+  };
+  if (pricing) {
+    await (dependencies.authorizeCreate || authorizeWorkorderCreate)(context, {
+      companyId: prepared.companyId, locationId: prepared.locationId,
+      moduleKeys: workorderInputModules(prepared, { create: true }),
+    });
+    if (prepared.formData?.laborProduct?.productId) {
+      prepared.formData.laborProduct = await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
+        companyId: prepared.companyId, locationId: prepared.locationId,
+        productId: prepared.formData.laborProduct.productId,
+      }, context);
+    }
+  }
+  return prepared;
+}
+
 export async function listUserWorkorderDrafts(context, { type = "workorder" }, dependencies = {}) {
   const { actor, companyIds } = draftScope(context);
   const listDrafts = dependencies.listDrafts || listActiveWorkorderDrafts;
@@ -85,6 +123,9 @@ export async function listUserWorkorderDrafts(context, { type = "workorder" }, d
 
 export async function createUserWorkorderDraft(context, input, dependencies = {}) {
   const { actor, companyIds } = draftScope(context);
+  if (["internal_fleet", "exempt"].includes(input.authorizationClassification) && actor.role !== "admin") {
+    throw permissionDenied();
+  }
   const location = input.locationId
     ? await accessibleLocation(context, input.locationId, dependencies)
     : null;
@@ -99,6 +140,8 @@ export async function createUserWorkorderDraft(context, input, dependencies = {}
       userId: actor.id,
       type: input.type,
       payload: input.payload,
+      authorizationClassification: input.authorizationClassification || "approval_not_required",
+      authorizationExceptionReason: input.authorizationExceptionReason || null,
     });
   } catch (error) {
     mapDraftError(error);
@@ -130,6 +173,9 @@ export async function updateUserWorkorderDraft(context, id, input, dependencies 
     role: actor.role,
   });
   if (!ownership) throw resourceNotFound("Draft");
+  if (["internal_fleet", "exempt"].includes(input.authorizationClassification) && actor.role !== "admin") {
+    throw permissionDenied();
+  }
 
   if (input.locationId) {
     const location = await accessibleLocation(context, input.locationId, dependencies);
@@ -184,29 +230,25 @@ export async function submitUserWorkorderDraft(context, id, input, dependencies 
       role: actor.role,
       userId: actor.id,
       version: input.version,
-      prepareCreateInput: async (draft) => {
-        if (!draft.locationId) throw invalidRequest("Location is required before creating the workorder.");
-        await accessibleLocation(context, draft.locationId, dependencies);
-        const pricing = input.pricing || draft.payload?.pricing;
-        if (pricing && !["office", "admin"].includes(actor.role)) throw permissionDenied();
-        if (pricing && !input.pricing?.expectedFingerprint) {
-          throw new AuthError(409, "WORKORDER_PRICING_PREVIEW_REQUIRED", "Refresh the pricing preview before creating this workorder.");
-        }
-        const prepared = { ...finalCreateInput({ ...draft, payload: { ...draft.payload, ...(pricing ? { pricing } : {}) } }), createdByRole: actor.role, pricingActorId: actor.id };
-        if (pricing) {
-          await (dependencies.authorizeCreate || authorizeWorkorderCreate)(context, {
-            companyId: prepared.companyId, locationId: prepared.locationId,
-            moduleKeys: workorderInputModules(prepared, { create: true }),
-          });
-          if (prepared.formData?.laborProduct?.productId) {
-            prepared.formData.laborProduct = await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
-              companyId: prepared.companyId, locationId: prepared.locationId,
-              productId: prepared.formData.laborProduct.productId,
-            }, context);
-          }
-        }
-        return prepared;
+      activationPolicy: null,
+      issueInformationalEstimate: ({ draft, preparedInput, client }) => (
+        dependencies.issueInformationalEstimate || issueInformationalDraftEstimate
+      )(context, draft, preparedInput, client, dependencies),
+      bindInformationalEstimate: async ({ estimate, workorderId, client }) => {
+        const command = {
+          companyId: estimate.revision.companyId, locationId: estimate.revision.locationId,
+          documentId: estimate.revision.documentId, revisionId: estimate.revision.id,
+          draftId: id, workorderId, actorId: actor.id,
+          idempotencyKey: `informational-bind:${id}`,
+        };
+        const requestHash = createHash("sha256").update(JSON.stringify(command)).digest("hex");
+        return (dependencies.bindInformationalEstimate || bindInformationalEstimateToWorkorder)(
+          { ...command, requestHash }, { client },
+        );
       },
+      prepareCreateInput: (draft) => prepareUserWorkorderDraftSubmission(
+        context, draft, input.pricing || draft.payload?.pricing, dependencies,
+      ),
     });
     if (!result) throw resourceNotFound("Draft");
     return result;

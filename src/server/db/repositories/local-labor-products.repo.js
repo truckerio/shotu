@@ -78,7 +78,7 @@ export async function findActiveLocalLaborProduct({ companyId, locationId, produ
   return publicProduct(result.rows[0]);
 }
 
-export async function createLocalLaborProduct({ companyId, name, code = "", description = "", actorId }) {
+export async function createLocalLaborProduct({ companyId, name, code = "", description = "", uomCode = "hr", actorId }) {
   const client = await getPool().connect();
   try {
     await client.query("begin");
@@ -99,10 +99,10 @@ export async function createLocalLaborProduct({ companyId, name, code = "", desc
     }
     const inserted = await client.query(
       `insert into local_labor_products (
-         company_id, name, normalized_name, code, normalized_code, description, created_by_user_id
-       ) values ($1, $2, $3, $4, $5, $6, $7)
+         company_id, name, normalized_name, code, normalized_code, description, uom_code, created_by_user_id
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8)
        returning id, name, code, description, uom_code, false as pinned`,
-      [companyId, name, normalizedName, code, normalizedCode, normalizedDescription, actorId],
+      [companyId, name, normalizedName, code, normalizedCode, normalizedDescription, uomCode, actorId],
     );
     await client.query("commit");
     return { kind: "created", product: publicProduct(inserted.rows[0]) };
@@ -123,11 +123,11 @@ function normalizeLaborCode(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function hourlyOdooLaborSql() {
+function supportedOdooLaborSql() {
   return `product.product_type = 'service'
           and product.active = true
-          and product.uom_name ~* '^hours?$'
-          and product.uom_category_name ~* 'time'`;
+          and ((product.uom_name ~* '^hours?$' and product.uom_category_name ~* 'time')
+            or (product.uom_name ~* '^each$' and product.uom_category_name ~* '(unit|number|count)'))`;
 }
 
 /**
@@ -145,36 +145,37 @@ export async function importOdooLaborProducts({ companyId, externalIds, actorId 
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [`local-labor-products:${companyId}`]);
     const source = await client.query(
       `select product.external_id, product.display_name, product.default_code,
-              product.internal_price, product.internal_currency,
+              product.uom_name, product.internal_price, product.internal_currency,
               product.selling_price, product.selling_currency, product.commercial_updated_at
          from odoo_service_products product
         where product.company_id = $1
           and product.external_id = any($2::text[])
-          and ${hourlyOdooLaborSql()}
+          and ${supportedOdooLaborSql()}
         order by product.external_id`,
       [companyId, requestedIds],
     );
     if (source.rows.length !== requestedIds.length) {
-      throw new Error("One or more selected Odoo labor products are not active hourly services for this company.");
+      throw new Error("One or more selected Odoo labor products are not active supported services for this company.");
     }
     const products = [];
     for (const sourceProduct of source.rows) {
       const name = String(sourceProduct.display_name || "").trim();
       const code = String(sourceProduct.default_code || "").trim();
+      const uomCode = /^each$/i.test(String(sourceProduct.uom_name || "").trim()) ? "ea" : "hr";
       if (!name) throw new Error("An Odoo labor product is missing a name.");
       const normalizedName = normalizeLaborName(name);
       const normalizedCode = normalizeLaborCode(code);
       const inserted = await client.query(
         `insert into local_labor_products (
-           company_id, name, normalized_name, code, normalized_code, created_by_user_id,
+           company_id, name, normalized_name, code, normalized_code, uom_code, created_by_user_id,
            source_provider, source_external_id
-         ) values ($1, $2, $3, $4, $5, $6, 'odoo', $7)
+         ) values ($1, $2, $3, $4, $5, $6, $7, 'odoo', $8)
          on conflict do nothing
-         returning id, name, code, source_provider, source_external_id`,
-        [companyId, name, normalizedName, code, normalizedCode, actorId, sourceProduct.external_id],
+         returning id, name, code, uom_code, source_provider, source_external_id`,
+        [companyId, name, normalizedName, code, normalizedCode, uomCode, actorId, sourceProduct.external_id],
       );
       let existing = inserted.rows[0] || (await client.query(
-        `select id, name, code, active, source_provider, source_external_id from local_labor_products
+        `select id, name, code, uom_code, active, source_provider, source_external_id from local_labor_products
           where company_id = $1
             and ((source_provider='odoo' and source_external_id=$4)
               or normalized_name = $2 or ($3 <> '' and normalized_code = $3))
@@ -188,12 +189,15 @@ export async function importOdooLaborProducts({ companyId, externalIds, actorId 
       if (existing.source_external_id && existing.source_external_id !== sourceProduct.external_id) {
         throw new Error(`Odoo labor product ${sourceProduct.external_id} conflicts with a different linked local labor product.`);
       }
+      if (existing.uom_code !== uomCode) {
+        throw new Error(`Odoo labor product ${sourceProduct.external_id} unit conflicts with the local labor product.`);
+      }
       if (!inserted.rows[0] && !existing.source_external_id) {
         existing = (await client.query(
           `update local_labor_products
            set source_provider='odoo', source_external_id=$3, updated_at=now()
            where company_id=$1 and id=$2 and source_provider is null and source_external_id is null
-           returning id,name,code,active,source_provider,source_external_id`,
+           returning id,name,code,uom_code,active,source_provider,source_external_id`,
           [companyId, existing.id, sourceProduct.external_id],
         )).rows[0] || existing;
       }

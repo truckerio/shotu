@@ -17,3 +17,10 @@ test("local labor product descriptions are optional and capped at the repair-ord
   assert.match(sql, /add column if not exists description text not null default ''/i);
   assert.match(sql, /char_length\(description\) <= 2000/i);
 });
+
+test("flat service migration preserves hourly rows and requires whole flat service quantities", async () => {
+  const sql = await readFile(new URL("../../db/migrations/194_labor_service_units.sql", import.meta.url), "utf8");
+  assert.match(sql, /drop constraint local_labor_products_uom_code_check/i);
+  assert.match(sql, /uom_code in \('hr', 'ea'\)/i);
+  assert.match(sql, /uom_code <> 'ea' or hours = trunc\(hours\)/i);
+});

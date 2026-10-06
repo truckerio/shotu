@@ -147,11 +147,15 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
          wo.id, wo.serial, wo.status, wo.work_performed, wo.updated_at,
          wo.form_data->>'mileage' as mileage,
          wo.form_data->'laborProduct'->>'productId' as local_labor_product_id,
+         local_labor.uom_code as local_labor_uom_code,
+         local_labor.source_external_id as local_labor_source_external_id,
          case
            when coalesce(wo.form_data->>'laborHours', '') ~ '^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$'
              and (wo.form_data->>'laborHours')::numeric > 0
              then (wo.form_data->>'laborHours')::numeric
-           else preparation.labor_hours
+           when local_labor.id is null and nullif(wo.form_data->'laborProduct'->>'productId', '') is null
+             then preparation.labor_hours
+           else null
          end as effective_labor_hours,
          jsonb_typeof(coalesce(wo.form_data->'parts', '[]'::jsonb)) = 'array' as parts_valid,
          preparation.id as preparation_id,
@@ -177,8 +181,10 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
          settings.service_action_external_id,
          settings.service_action_base_url,
          settings.service_action_database,
-         settings.labor_product_external_id,
-         settings.labor_uom_external_id,
+         case when wo.form_data->'laborProduct'->>'productId' is null
+           then settings.labor_product_external_id else local_labor.source_external_id end as labor_product_external_id,
+         case when wo.form_data->'laborProduct'->>'productId' is null
+           then settings.labor_uom_external_id else labor.uom_external_id end as labor_uom_external_id,
          labor.display_name as labor_product_name,
          labor.active as labor_product_active,
          labor.uom_external_id as labor_product_uom_external_id,
@@ -197,9 +203,15 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
          on warehouse.company_id = location_mapping.company_id
         and warehouse.external_id = location_mapping.warehouse_external_id
        left join odoo_service_order_settings settings on settings.company_id = wo.company_id
+       left join local_labor_products local_labor
+         on local_labor.company_id=wo.company_id
+        and local_labor.id::text=wo.form_data->'laborProduct'->>'productId'
+        and local_labor.active=true and local_labor.source_provider='odoo'
        left join odoo_service_products labor
-         on labor.company_id = settings.company_id
-        and labor.external_id = settings.labor_product_external_id
+         on labor.company_id = wo.company_id
+        and labor.product_type = 'service'
+        and labor.external_id = case when wo.form_data->'laborProduct'->>'productId' is null
+          then settings.labor_product_external_id else local_labor.source_external_id end
        where wo.company_id = $1 and wo.id = $2
        limit 1`,
       [tenantId, workorderId],
@@ -329,11 +341,15 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
   ]);
   const row = mainResult.rows[0];
   if (!row) return { workorder: null, preparation: null, vehicle: null, warehouse: null, labor: null, parts: [] };
+  const providerUomCode = /^hours?$/i.test(String(row.labor_product_uom_name || "").trim())
+    && /time/i.test(String(row.labor_product_uom_category_name || "")) ? "hr"
+    : /^each$/i.test(String(row.labor_product_uom_name || "").trim())
+      && /(unit|number|count)/i.test(String(row.labor_product_uom_category_name || "")) ? "ea" : "";
   const laborUomMatches = String(row.labor_product_uom_external_id || "") === String(row.labor_uom_external_id || "")
-    && /^hours?$/i.test(String(row.labor_product_uom_name || "").trim())
-    && /time/i.test(String(row.labor_product_uom_category_name || ""));
+    && providerUomCode === (row.local_labor_product_id ? row.local_labor_uom_code : "hr");
   return {
     localLaborProductId: row.local_labor_product_id || null,
+    localLaborMapped: Boolean(row.local_labor_source_external_id && laborUomMatches),
     workorder: {
       id: row.id,
       serial: row.serial,
@@ -366,7 +382,7 @@ export async function readOdooOutboundReadiness(companyId, workorderId) {
       productExternalId: row.labor_product_external_id,
       productName: row.labor_product_name || "",
       active: row.settings_active && row.labor_product_active,
-      uomCode: laborUomMatches ? "hr" : "",
+      uomCode: laborUomMatches ? providerUomCode : "",
       uomExternalId: row.labor_uom_external_id || null,
     } : null,
     settings: row.integration_account_id ? {

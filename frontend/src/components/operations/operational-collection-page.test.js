@@ -18,8 +18,8 @@ test("operational collection template owns page, tabs, toolbar, result, and tabl
   assert.match(component, /export function OperationalCollectionTable/);
   assert.match(component, /export function OperationalCollectionRow/);
   assert.match(component, /export function OperationalCollectionCell/);
-  assert.match(styles, /\.operational-collection-page-body\s*\{[^}]*margin-top:\s*var\(--space-6\);/s);
-  assert.match(styles, /\.operational-collection-surface\s*\{[^}]*border:\s*1px solid #e4e7ec;[^}]*border-radius:\s*12px;[^}]*box-shadow:/s);
+  assert.match(styles, /\.operational-collection-page-body\s*\{[^}]*margin-top:\s*var\(--workspace-card-gap\);/s);
+  assert.match(styles, /\.operational-collection-surface\s*\{[^}]*border:\s*1px solid var\(--workspace-card-border\);[^}]*border-radius:\s*var\(--workspace-card-radius\);[^}]*box-shadow:/s);
   assert.match(styles, /\.operational-collection-table\s*\{[^}]*border-bottom:\s*1px solid #d0d5dd;/s);
 });
 

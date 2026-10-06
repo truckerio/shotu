@@ -5,6 +5,14 @@ export const DEFAULT_LABOR_PRODUCT = Object.freeze({
   uomCode: "hr",
 });
 
+export function validLaborQuantity(value, uomCode = "hr") {
+  if (uomCode !== "hr" && uomCode !== "ea") return false;
+  const raw = String(value ?? "").trim();
+  if (!(uomCode === "ea" ? /^(?:0|[1-9]\d*)$/ : /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/).test(raw)) return false;
+  const quantity = Number(raw);
+  return quantity > 0 && quantity <= 9999;
+}
+
 export function normalizeLaborProduct(product) {
   if (!product || typeof product !== "object" || Array.isArray(product)) {
     return { ...DEFAULT_LABOR_PRODUCT };
@@ -14,7 +22,7 @@ export function normalizeLaborProduct(product) {
     code: String(product.code || product.defaultCode || product.default_code || "").trim(),
     name: String(product.name || product.displayName || product.display_name || "").trim()
       || DEFAULT_LABOR_PRODUCT.name,
-    uomCode: "hr",
+    uomCode: product.uomCode === "ea" || product.uom_code === "ea" ? "ea" : "hr",
   };
 }
 
@@ -43,7 +51,7 @@ export function localLaborProductSnapshot(product) {
     externalId: "",
     code: String(product.code || product.defaultCode || product.default_code || "").trim(),
     name,
-    uomCode: "hr",
+    uomCode: product.uomCode === "ea" || product.uom_code === "ea" ? "ea" : "hr",
     ...(description ? { description } : {}),
   };
 }

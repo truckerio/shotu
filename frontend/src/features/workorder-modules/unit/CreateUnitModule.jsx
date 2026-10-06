@@ -29,7 +29,7 @@ export function normalizedVehicleTagNames(tagNames) {
   }, []);
 }
 
-export function CreateUnitModule({ access, activeSection, errors, form, locale = "en", locationContent, onChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation = "panel", selectedVehicle, vehicleLookup }) {
+export function CreateUnitModule({ access, activeSection, customerControl = null, errors, form, locale = "en", locationContent, onChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation = "panel", selectedVehicle, vehicleLookup }) {
   const [unitDetailsOpen, setUnitDetailsOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const [resultsDismissed, setResultsDismissed] = useState(false);
@@ -37,7 +37,7 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
   const lookupRef = useRef(null);
   const resultIdPrefix = useId().replaceAll(":", "");
   const selectedVehicleId = selectedVehicle?.id || selectedVehicle?.provider_vehicle_id || "";
-  const vehicleTags = normalizedVehicleTagNames(selectedVehicle?.tag_names);
+  const vehicleTags = normalizedVehicleTagNames(selectedVehicle?.tag_names || selectedVehicle?.tagNames);
   const vehicleResults = (vehicleLookup.results || []).slice(0, 6);
   const resultsOpen = lookupFocused && !resultsDismissed && vehicleResults.length > 0;
   const t = (key) => interfaceText(locale, key);
@@ -101,7 +101,7 @@ export function CreateUnitModule({ access, activeSection, errors, form, locale =
   if (!access) return null;
   const UnitSection = onePage ? "div" : FormSection;
   const UnitDetails = onePage ? UnitDetailsPopover : OptionalSection;
-  const customerField = <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required requiredLabel={t("create.required")} />;
+  const customerField = customerControl || <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required requiredLabel={t("create.required")} />;
   return (
     <ProgressiveWorkorderSection
       id="unit"

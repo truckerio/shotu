@@ -64,6 +64,14 @@ test("vehicle selection is scoped to the selected repair-location company", () =
   assert.match(source, /!vehicleCompanyId\(selectedVehicle\)/);
 });
 
+test("a Samsara owner change clears stale canonical customer identity before relinking", () => {
+  assert.match(source, /const customerChanged = Boolean\(vehicle\.owner_name\)/);
+  assert.match(source, /customerAccountId: ""/);
+  assert.match(source, /customerContactId: ""/);
+  assert.match(source, /customerAddress: ""/);
+  assert.match(source, /customerContactEmail: ""/);
+});
+
 test("active workorder units stay visible with their blocking message", () => {
   assert.match(source, /if \(!vehicleCanBeSelected\(vehicle, activeWorkorderId\)\)/);
   assert.match(source, /activeWorkorderUnavailableMessage\(exactMatch\)/);

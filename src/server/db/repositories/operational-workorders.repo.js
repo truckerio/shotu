@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { assertWorkorderLaborQuantity } from "./workorder-labor-quantity.js";
 import { createPricingFingerprint } from "./workorder-create-pricing.repo.js";
 import { saveWorkorderPartPriceSnapshot } from "./workorder-part-pricing.repo.js";
 import { saveWorkorderLaborPriceSnapshot } from "./workorder-labor-pricing.repo.js";
@@ -22,6 +23,12 @@ import {
   reserveAggregateWorkorderUsage,
   resetAggregateUsagesForRevision,
 } from "./inventory-aggregate-workorder-usage.repo.js";
+import {
+  assertCurrentExternalEstimateAccepted,
+  isRepairProgressMutation,
+  WorkorderLifecycleConflictError,
+} from "./workorder-customer-authorization.repo.js";
+export { WorkorderLifecycleConflictError } from "./workorder-customer-authorization.repo.js";
 import {
   applyManualPartEvidence,
   listLockedWorkorderManualPartEvidence,
@@ -222,15 +229,6 @@ export function publicWorkorderRow(row) {
     mechanics: Array.isArray(row.mechanics) ? row.mechanics : [],
     mechanicIds: Array.isArray(row.mechanic_ids) ? row.mechanic_ids : [],
   };
-}
-
-export class WorkorderLifecycleConflictError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.name = "WorkorderLifecycleConflictError";
-    this.statusCode = 409;
-    this.code = code;
-  }
 }
 
 function lifecycleConflict(code, message) {
@@ -553,7 +551,90 @@ function priceAuditValue(amount, currency, label) {
   return `${formatted} ${label}`.trim();
 }
 
+export async function assertWorkorderAuthorizationPolicy(input, client) {
+  const legacyTrustedCaller = !input.authorizationClassification;
+  const classification = legacyTrustedCaller ? "internal_fleet" : input.authorizationClassification;
+  const activationPolicy = legacyTrustedCaller ? "legacy_internal_fleet_direct_v1" : input.activationPolicy;
+  const exceptionReason = legacyTrustedCaller
+    ? "Legacy trusted server repository caller"
+    : input.authorizationExceptionReason;
+  const authority = legacyTrustedCaller
+    ? "legacy_server_repository"
+    : input.authorizationAuthority || input.createdByRole || "unknown";
+  if (!new Set(["approval_not_required", "required_external_customer", "internal_fleet", "exempt"]).has(classification)) {
+    throw new WorkorderLifecycleConflictError("WORKORDER_AUTHORIZATION_CLASSIFICATION_REQUIRED", "Choose a valid Workorder authorization path.");
+  }
+  if (input.authorizationAuthority === "mechanic_self_create" && input.assetId) {
+    const ownership = (await client.query(
+      `select asset.owner_name,company.name company_name
+         from assets asset
+         join companies company on company.id=asset.company_id
+        where asset.company_id=$1 and asset.id=$2
+        for share of asset,company`,
+      [input.companyId || DEFAULT_COMPANY_ID, input.assetId],
+    )).rows[0];
+    if (!ownership) {
+      throw new WorkorderLifecycleConflictError("WORKORDER_AUTHORIZATION_EXCEPTION_INVALID", "The selected unit is unavailable.");
+    }
+    const normalizeOwner = (value) => String(value || "").trim().toLocaleLowerCase("en-US").replace(/\s+/g, " ");
+    const owner = normalizeOwner(ownership.owner_name);
+    const tenant = normalizeOwner(ownership.company_name);
+    if (owner && (!tenant || owner !== tenant)) {
+      throw new WorkorderLifecycleConflictError(
+        "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED",
+        "A unit with a named external owner requires the Office Estimate workflow.",
+      );
+    }
+  }
+  if (classification === "required_external_customer") {
+    if (activationPolicy !== "accepted_customer_estimate_v1" || !input.acceptedEstimateRevisionId
+      || !input.authorizationSourceDraftId || !input.pricing?.expectedFingerprint) {
+      throw new WorkorderLifecycleConflictError("CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED", "An accepted current Estimate is required.");
+    }
+    const accepted = await client.query(
+      `select revision.id
+         from customer_document_revisions revision
+         join customer_documents document
+           on document.company_id=revision.company_id and document.id=revision.document_id
+        where revision.company_id=$1 and revision.location_id=$2 and revision.id=$3
+          and document.document_type='estimate'
+          and document.draft_id=$4
+          and revision.snapshot #>> '{sourceEvidence,id}'=$4::text
+          and revision.snapshot #>> '{sourceEvidence,pricingFingerprint}'=$5
+          and coalesce(revision.snapshot #>> '{unit,id}','')=coalesce($6::text,'')
+          and revision.id=(select latest.id from customer_document_revisions latest
+            where latest.company_id=revision.company_id and latest.document_id=revision.document_id
+            order by latest.revision_number desc limit 1)
+          and exists (select 1 from customer_document_events event
+            where event.company_id=revision.company_id and event.revision_id=revision.id and event.event_type='accepted')
+          and not exists (select 1 from customer_document_events event
+            where event.company_id=revision.company_id and event.revision_id=revision.id
+              and event.event_type in ('declined','changes_requested','voided','superseded'))
+        for share of revision,document`,
+      [input.companyId, input.locationId, input.acceptedEstimateRevisionId,
+        input.authorizationSourceDraftId, input.pricing.expectedFingerprint, input.assetId || null],
+    );
+    if (!accepted.rows[0]) throw new WorkorderLifecycleConflictError("CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED", "The accepted Estimate is no longer current.");
+  } else if (classification === "approval_not_required") {
+    if (activationPolicy !== "approval_not_required_v1" || exceptionReason || input.acceptedEstimateRevisionId
+      || !["office", "admin"].includes(input.createdByRole)) {
+      throw new WorkorderLifecycleConflictError("WORKORDER_AUTHORIZATION_POLICY_INVALID", "Approval-not-required creation requires Office authority.");
+    }
+  } else if (activationPolicy !== "legacy_internal_fleet_direct_v1"
+    || !String(exceptionReason || "").trim()
+    || (!legacyTrustedCaller && input.createdByRole !== "admin"
+      && !["system_inspection_followup", "mechanic_self_create"].includes(input.authorizationAuthority))) {
+    throw new WorkorderLifecycleConflictError("WORKORDER_AUTHORIZATION_EXCEPTION_INVALID", "An audited internal or exempt authorization reason is required.");
+  }
+  return {
+    classification, activationPolicy, exceptionReason: exceptionReason || null,
+    acceptedEstimateRevisionId: input.acceptedEstimateRevisionId || null, authority,
+  };
+}
+
 export async function createOperationalWorkorderInTransaction(input, client) {
+  assertWorkorderLaborQuantity(input.formData);
+  const authorizationEvidence = await assertWorkorderAuthorizationPolicy(input, client);
   const pricingUsages = new Map();
   const companyId = input.companyId || DEFAULT_COMPANY_ID;
   const mechanicUserIds = [...new Set(input.mechanicUserIds || [])];
@@ -688,6 +769,16 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       JSON.stringify(formData),
       formData.workPerformed || "",
     ]
+  );
+  await client.query(
+    `insert into workorder_authorization_events(
+       company_id,location_id,workorder_id,classification,activation_policy,exception_reason,
+       accepted_estimate_revision_id,actor_user_id,authority
+     ) values($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [companyId, input.locationId || null, result.rows[0].id, authorizationEvidence.classification,
+      authorizationEvidence.activationPolicy, authorizationEvidence.exceptionReason,
+      authorizationEvidence.acceptedEstimateRevisionId, input.createdByUserId || null,
+      authorizationEvidence.authority],
   );
   for (const part of pendingPurchaseRequests) {
     const partNumber=String(part.partNo||'').trim();
@@ -884,6 +975,13 @@ export async function updateOperationalWorkorder(workorderId, input) {
     const beforeResult = await client.query("select * from operational_workorders where id = $1 for update", [workorderId]);
     const before = beforeResult.rows[0];
     if (!before) throw new Error("Workorder not found.");
+    const changesRepairProgress = isRepairProgressMutation(before, input);
+    if (changesRepairProgress) {
+      await assertCurrentExternalEstimateAccepted(client, {
+        companyId: before.company_id,
+        workorderId: before.id,
+      });
+    }
     if (input.expectedUpdatedAt && new Date(input.expectedUpdatedAt).getTime() !== new Date(before.updated_at).getTime()) {
       throw lifecycleConflict("WORKORDER_STALE", "This workorder changed elsewhere. Reload before saving.");
     }
@@ -931,9 +1029,14 @@ export async function updateOperationalWorkorder(workorderId, input) {
         [nextAssetId, before.company_id],
       )
       : { rows: [] };
-    const laborHoursIncluded = Object.prototype.hasOwnProperty.call(input, "laborHours");
+    const hasTopLevelLaborHours = Object.prototype.hasOwnProperty.call(input, "laborHours");
+    const hasNestedLaborHours = Object.prototype.hasOwnProperty.call(input.formData || {}, "laborHours");
+    const laborHoursIncluded = hasTopLevelLaborHours || hasNestedLaborHours;
+    const requestedLaborHours = hasTopLevelLaborHours
+      ? input.laborHours
+      : input.formData?.laborHours;
     const requestedFormData = laborHoursIncluded
-      ? { ...(guardedFormData || before.form_data || {}), laborHours: input.laborHours ?? "" }
+      ? { ...(guardedFormData || before.form_data || {}), laborHours: requestedLaborHours ?? "" }
       : guardedFormData;
     const normalizedInput = requestedFormData === undefined
       ? input
@@ -943,6 +1046,7 @@ export async function updateOperationalWorkorder(workorderId, input) {
           assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
         }),
       };
+    if (normalizedInput.formData) assertWorkorderLaborQuantity(normalizedInput.formData);
     const changes = changedFields(before, normalizedInput);
     await client.query(
       `
@@ -1346,7 +1450,7 @@ export async function recordWorkorderOpened({ workorderId, userId, actorRole }) 
   try {
     await client.query("begin");
     const current = await client.query(
-      "select id, status, started_at from operational_workorders where id = $1 for update",
+      "select id, company_id, status, started_at from operational_workorders where id = $1 for update",
       [workorderId],
     );
     const workorder = current.rows[0];
@@ -1359,6 +1463,10 @@ export async function recordWorkorderOpened({ workorderId, userId, actorRole }) 
         [workorderId, userId],
       );
       if (assignment.rows[0]) {
+        await assertCurrentExternalEstimateAccepted(client, {
+          companyId: workorder.company_id,
+          workorderId: workorder.id,
+        });
         await client.query(
           `update operational_workorders
            set status = $2, started_at = now(), updated_at = now()
@@ -1629,6 +1737,13 @@ export async function acceptOperationalWorkorder(workorderId, mechanicUserId) {
     if (mechanicIds.includes(mechanicUserId)) {
       throw lifecycleConflict("WORKORDER_ALREADY_ACCEPTED", "You have already joined this workorder.");
     }
+    if (acceptsUnassignedWork) {
+      const scope = await client.query("select company_id from operational_workorders where id = $1", [workorderId]);
+      await assertCurrentExternalEstimateAccepted(client, {
+        companyId: scope.rows[0].company_id,
+        workorderId: workorder.id,
+      });
+    }
     await client.query(
       `insert into workorder_mechanic_assignments (
          workorder_id, mechanic_user_id, assignment_role, assigned_by_user_id, reason
@@ -1875,11 +1990,16 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
       ...(laborHours !== undefined ? { laborHours } : {}),
     };
     const nextInput = { formData: nextFormData };
+    if (laborHours !== undefined) assertWorkorderLaborQuantity(nextFormData);
     const partsChanged = JSON.stringify(canonicalJson(formData.parts || [])) !== JSON.stringify(canonicalJson(persistedParts));
     const laborChanged = laborHours !== undefined && String(formData.laborHours || "") !== String(laborHours || "");
     const changes = partsChanged || laborChanged ? changedFields(before, nextInput) : [];
 
     if (changes.length) {
+      await assertCurrentExternalEstimateAccepted(client, {
+        companyId: before.company_id,
+        workorderId: before.id,
+      });
       await client.query(
         `update operational_workorders
          set form_data = $3::jsonb,
@@ -1948,6 +2068,10 @@ export async function markOperationalWorkorderDone(
     );
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
+    await assertCurrentExternalEstimateAccepted(client, {
+      companyId: workorder.company_id,
+      workorderId: workorder.id,
+    });
     const eligibleStatuses = requireAssignedMechanic
       ? [WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS]
       : [WORKORDER_STATUS.OPEN, WORKORDER_STATUS.ACCEPTED, WORKORDER_STATUS.IN_PROGRESS];
@@ -2263,6 +2387,10 @@ export async function closeOperationalWorkorder(workorderId, officeUserId, note 
     const current = await client.query("select id, company_id, status from operational_workorders where id = $1 for update", [workorderId]);
     const workorder = current.rows[0];
     if (!workorder) throw new Error("Workorder not found.");
+    await assertCurrentExternalEstimateAccepted(client, {
+      companyId: workorder.company_id,
+      workorderId: workorder.id,
+    });
     if (workorder.status !== WORKORDER_STATUS.MECHANIC_DONE) {
       throw lifecycleConflict("WORKORDER_NOT_READY_FOR_APPROVAL", "Only workorders ready for Manager review can be approved.");
     }
@@ -2385,6 +2513,13 @@ export async function setOperationalWorkorderMechanics(workorderId, officeUserId
 
     if (!addedIds.length && !removedIds.length && currentPrimaryId === nextPrimaryId) {
       throw new Error("Select a different mechanic team before updating the assignment.");
+    }
+    if (workorder.status === WORKORDER_STATUS.OPEN && nextPrimaryId) {
+      const scope = await client.query("select company_id from operational_workorders where id = $1", [workorderId]);
+      await assertCurrentExternalEstimateAccepted(client, {
+        companyId: scope.rows[0].company_id,
+        workorderId: workorder.id,
+      });
     }
 
     if (removedIds.length) {

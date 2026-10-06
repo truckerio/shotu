@@ -60,6 +60,7 @@ export async function addLaborProduct(input, context, dependencies = {}) {
     name: parsed.name,
     code: parsed.code,
     description: parsed.description,
+    uomCode: parsed.uomCode,
     actorId: context.actor.id,
   });
   if (result.kind === "duplicate") {

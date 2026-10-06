@@ -1,4 +1,6 @@
 import { getPool } from "../pool.js";
+import { assertWorkorderLaborQuantity } from "./workorder-labor-quantity.js";
+import { assertCurrentExternalEstimateAccepted } from "./workorder-customer-authorization.repo.js";
 
 const TERMINAL_STATUSES = new Set(["mechanic_done", "closed", "odoo_entered", "cancelled"]);
 
@@ -52,6 +54,7 @@ export async function saveMechanicWorkorderProgress({
       `
         select
           wo.id,
+          wo.company_id,
           wo.status,
           wo.diagnosis,
           wo.work_performed,
@@ -99,6 +102,7 @@ export async function saveMechanicWorkorderProgress({
       laborHours: laborHours === undefined ? before.laborHours : textValue(laborHours),
     };
     const changes = changedDetails(before, next);
+    if (laborHours !== undefined) assertWorkorderLaborQuantity({ ...current.form_data, laborHours: next.laborHours });
     const existingPendingFields = Array.isArray(current.progress_pending_fields)
       ? current.progress_pending_fields.map(String)
       : [];
@@ -111,6 +115,10 @@ export async function saveMechanicWorkorderProgress({
       await client.query("commit");
       return publicProgress(current);
     }
+    await assertCurrentExternalEstimateAccepted(client, {
+      companyId: current.company_id,
+      workorderId: current.id,
+    });
 
     const updatedResult = await client.query(
       `

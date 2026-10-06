@@ -112,7 +112,8 @@ test("used-parts intake and labor stay compact without hiding accessible names",
   assert.match(editor, /partsEditable && intakeOpen \? <WorkorderPartsRow id="workorder-part-intake-row" className="used-part-intake-row" ref=\{intakeRowRef\}>/);
   assert.match(editor, /inputAriaLabel=\{t\("parts\.numberOrDescription"\)\}/);
   assert.doesNotMatch(editor, /part-row-head/);
-  assert.match(editor, /<WorkorderPartsRow className="used-part-labor-row" aria-label=\{t\("parts\.laborHours"\)\}>\s*<strong>1<\/strong>/);
+  assert.match(editor, /<WorkorderPartsRow className="used-part-labor-row" aria-label=\{laborQuantityLabel\}>\s*<strong>1<\/strong>/);
+  assert.match(editor, /laborQuantityLabel = laborUomCode === "ea" \? "Service quantity" : t\("parts\.laborHours"\)/);
   assert.match(editor, /<div className="used-parts-section-heading">\s*<h3 id=\{partsSectionTitleId\}>\{t\("parts\.usedTitle"\)\}<\/h3>\s*\{serializedToolbar\}\s*<\/div>/);
   assert.match(editor, /<WorkorderPartsActions className="used-parts-actions">[\s\S]*?t\("parts\.addPart"\)[\s\S]*?<\/WorkorderPartsActions> : null/);
   // One toolbar in each exclusive editable and read-only branch.

@@ -32,7 +32,7 @@ export const laborProductSchema = z.object({
   code: z.string().trim().max(100).default(""),
   name: z.string().trim().min(1).max(300),
   description: z.string().trim().max(2000).optional(),
-  uomCode: z.literal("hr").default("hr"),
+  uomCode: z.enum(["hr", "ea"]).default("hr"),
   pinned: z.boolean().optional(),
 }).strict().transform(({ pinned: _pinned, ...product }) => product);
 
@@ -49,6 +49,12 @@ export const workorderFormDataSchema = z.object({
   laborProduct: laborProductSchema.nullable().optional(),
   workPerformed: z.string().trim().max(5000, "Repair order must be 5000 characters or less.").optional(),
 }).catchall(z.unknown()).superRefine((formData, context) => {
+  const quantity = String(formData.laborHours ?? "").trim();
+  if (quantity && (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(quantity)
+    || Number(quantity) <= 0 || Number(quantity) > 9999
+    || (formData.laborProduct?.uomCode === "ea" && !Number.isInteger(Number(quantity))))) {
+    context.addIssue({ code: "custom", path: ["laborHours"], message: "Enter a positive labor quantity; flat services require whole numbers." });
+  }
   if (formData.parts === undefined) return;
   if (!Array.isArray(formData.parts)) {
     context.addIssue({ code: "custom", path: ["parts"], message: "Parts must be a list." });
@@ -111,7 +117,15 @@ export const createWorkorderSchema = z.object({
   inventoryUnitSelections: z.array(inventoryUnitSelectionSchema).max(18).default([]),
   inventoryPositionSelections: z.array(inventoryPositionSelectionSchema).max(18).default([]),
   pricing: createWorkorderPricingSchema.optional(),
+  authorizationClassification: z.enum(["approval_not_required", "required_external_customer", "internal_fleet", "exempt"]).optional(),
+  authorizationExceptionReason: z.string().trim().min(2).max(1000).nullable().optional(),
 }).superRefine((input, context) => {
+  if (["internal_fleet", "exempt"].includes(input.authorizationClassification) && !input.authorizationExceptionReason) {
+    context.addIssue({ code: "custom", path: ["authorizationExceptionReason"], message: "Provide an authorization exception reason." });
+  }
+  if (input.authorizationClassification === "required_external_customer" && input.authorizationExceptionReason) {
+    context.addIssue({ code: "custom", path: ["authorizationExceptionReason"], message: "External customer authorization does not use an exception reason." });
+  }
   const parts = Array.isArray(input.formData?.parts) ? input.formData.parts : [];
   for (const selection of input.pricing?.parts || []) {
     const part = parts[selection.partIndex];

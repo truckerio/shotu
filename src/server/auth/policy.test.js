@@ -9,6 +9,10 @@ test("public auth and OAuth callback routes require no app permission", () => {
   assert.equal(permissionForRequest("GET", "/api/invitations/token"), null);
   assert.equal(permissionForRequest("POST", "/api/invitations/token/accept"), null);
   assert.equal(permissionForRequest("GET", "/api/kiosk/context"), null);
+  assert.equal(permissionForRequest("GET", "/api/customer-portal/document"), null);
+  assert.equal(permissionForRequest("POST", "/api/customer-portal/responses"), null);
+  assert.equal(permissionForRequest("GET", "/api/customer-portal/chat"), null);
+  assert.equal(permissionForRequest("POST", "/api/customer-portal/chat"), null);
 });
 
 test("route families map to domain permissions", () => {
@@ -57,6 +61,8 @@ test("route families map to domain permissions", () => {
   );
   assert.equal(permissionForRequest("GET", "/api/admin/locations"), PERMISSION.ADMIN_MANAGE);
   assert.equal(permissionForRequest("POST", "/api/kiosk/event"), PERMISSION.AUTHENTICATED);
+  assert.equal(permissionForRequest("GET", "/api/customer-documents/revisions/1"), PERMISSION.CUSTOMER_DOCUMENT_READ);
+  assert.equal(permissionForRequest("POST", "/api/customer-documents/revisions"), PERMISSION.CUSTOMER_DOCUMENT_WRITE);
 });
 
 test("pricing previews and reusable tax profiles use financial permissions", () => {

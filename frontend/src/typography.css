@@ -21,6 +21,12 @@
   --space-4: 16px;
   --space-6: 24px;
   --space-8: 32px;
+  --workspace-background: #f7f8fa;
+  --workspace-gutter: 5px;
+  --workspace-card-gap: 5px;
+  --workspace-card-radius: 12px;
+  --workspace-card-border: #e4e7ec;
+  --workspace-card-shadow: 0 1px 3px rgb(16 24 40 / 8%);
   --leading-tight: 1.25;
   --leading-body: 1.45;
   --weight-regular: 400;
@@ -83,6 +89,12 @@ textarea {
 }
 
 @media (max-width: 700px) {
+  :root {
+    --workspace-gutter: 12px;
+    --workspace-card-gap: 8px;
+    --workspace-card-radius: 10px;
+  }
+
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {

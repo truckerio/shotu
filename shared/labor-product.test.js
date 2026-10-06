@@ -6,6 +6,7 @@ import {
   laborProductLabel,
   localLaborProductSnapshot,
   normalizeLaborProduct,
+  validLaborQuantity,
 } from "./labor-product.js";
 
 test("labor product label uses the Admin-selected code and name", () => {
@@ -61,4 +62,17 @@ test("local labor snapshot preserves its repair-order description", () => {
     uomCode: "hr",
     description: "Diagnose the no-start condition and verify the repair.",
   });
+});
+
+test("labor products preserve flat service units and default legacy products to hours", () => {
+  assert.equal(normalizeLaborProduct({ uom_code: "ea" }).uomCode, "ea");
+  assert.equal(localLaborProductSnapshot({ id: "service-1", name: "Wheel alignment", uomCode: "ea" }).uomCode, "ea");
+  assert.equal(localLaborProductSnapshot({ id: "hour-1", name: "Diagnosis" }).uomCode, "hr");
+});
+
+test("flat service quantities are whole counts while hourly labor permits hundredths", () => {
+  assert.equal(validLaborQuantity("2.50", "hr"), true);
+  assert.equal(validLaborQuantity("2.50", "ea"), false);
+  assert.equal(validLaborQuantity("2", "ea"), true);
+  assert.equal(validLaborQuantity("0", "ea"), false);
 });

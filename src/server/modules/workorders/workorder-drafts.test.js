@@ -47,6 +47,8 @@ function draftRow(overrides = {}) {
     payload: { concern: "Inspect an air leak." },
     updated_at: "2026-07-25T12:00:00.000Z",
     submitted_workorder_id: null,
+    authorization_classification: "internal_fleet",
+    authorization_exception_reason: "Test fleet workorder",
     ...overrides,
   };
 }
@@ -82,6 +84,53 @@ test("a location-free draft derives its company from the actor membership", asyn
   });
   assert.equal(received.companyId, companyId);
   assert.equal(received.locationId, null);
+  assert.equal(received.authorizationClassification, "approval_not_required");
+});
+
+test("approval-not-required submit issues and binds an Estimate around one Workorder create", async () => {
+  const events = [];
+  const estimateRevisionId = "66666666-6666-4666-8666-666666666666";
+  const client = {
+    async query(sql) {
+      if (/select \*[\s\S]*from workorder_drafts[\s\S]*for update/i.test(sql)) {
+        events.push("lock");
+        return { rows: [draftRow({ authorization_classification: "approval_not_required", authorization_exception_reason: null })] };
+      }
+      if (/update workorder_drafts[\s\S]*status = 'submitted'/i.test(sql)) {
+        events.push("submit");
+        return { rows: [draftRow({ authorization_classification: "approval_not_required", authorization_exception_reason: null,
+          status: "submitted", version: 3, submitted_workorder_id: workorderId })] };
+      }
+      if (/insert into workorder_draft_events/i.test(sql)) return { rows: [] };
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  };
+  const result = await submitWorkorderDraftInTransaction({
+    id: draftId, companyIds: [companyId], userId: actorId, version: 2, activationPolicy: null,
+    prepareCreateInput: async () => { events.push("prepare"); return {
+      concern: "Inspect", formData: { customerCompanyName: "Typed Fleet" },
+    }; },
+    issueInformationalEstimate: async ({ draft, preparedInput }) => {
+      events.push("issue");
+      assert.equal(draft.payload.formData.customerAccountId, "customer-1");
+      assert.equal(preparedInput.formData.customerAccountId, "customer-1");
+      return { revision: { id: estimateRevisionId } };
+    },
+    bindInformationalEstimate: async () => { events.push("bind"); },
+  }, client, {
+    resolveCustomerIdentity: async ({ formData }) => {
+      events.push("resolve-customer");
+      return { formData: { ...formData, customerAccountId: "customer-1" } };
+    },
+    createWorkorder: async (input) => {
+      assert.equal(input.activationPolicy, "approval_not_required_v1");
+      assert.equal(input.formData.customerAccountId, "customer-1");
+      events.push("create");
+      return { id: workorderId };
+    },
+  });
+  assert.deepEqual(events, ["lock", "prepare", "resolve-customer", "issue", "create", "submit", "bind"]);
+  assert.equal(result.estimateRevisionId, estimateRevisionId);
 });
 
 test("draft creation derives tenant and user ownership from the authenticated location", async () => {
@@ -303,6 +352,7 @@ test("draft submission maps an active-unit conflict before the generic request h
 
 test("repeated submission returns the original workorder without creating another serial", async () => {
   let creates = 0;
+  let customerResolutions = 0;
   const client = {
     async query(sql) {
       assert.match(sql, /for update/i);
@@ -324,6 +374,10 @@ test("repeated submission returns the original workorder without creating anothe
       throw new Error("Submitted drafts must not be validated again.");
     },
   }, client, {
+    resolveCustomerIdentity: async () => {
+      customerResolutions += 1;
+      return { formData: {} };
+    },
     createWorkorder: async () => {
       creates += 1;
       return { id: "unexpected" };
@@ -331,6 +385,7 @@ test("repeated submission returns the original workorder without creating anothe
   });
 
   assert.equal(creates, 0);
+  assert.equal(customerResolutions, 0);
   assert.equal(result.workorderId, workorderId);
   assert.equal(result.idempotent, true);
 });

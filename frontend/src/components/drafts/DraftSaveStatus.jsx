@@ -13,6 +13,7 @@ export function DraftSaveStatus({
   status,
   error = null,
   showPristine = false,
+  iconOnly = false,
   labels = {},
   className = "",
 }) {
@@ -25,13 +26,15 @@ export function DraftSaveStatus({
 
   return (
     <span
-      className={`draft-save-status is-${status} ${className}`.trim()}
+      className={`draft-save-status is-${status} ${iconOnly ? "is-icon-only icon-tooltip" : ""} ${className}`.trim()}
+      data-tooltip={iconOnly ? label : undefined}
+      tabIndex={iconOnly ? 0 : undefined}
       role={status === "error" ? "alert" : "status"}
       aria-live={status === "error" ? "assertive" : "polite"}
       aria-atomic="true"
     >
       <Icon aria-hidden="true" />
-      <span>{label}</span>
+      <span className={iconOnly ? "draft-save-status-label" : undefined}>{label}</span>
     </span>
   );
 }

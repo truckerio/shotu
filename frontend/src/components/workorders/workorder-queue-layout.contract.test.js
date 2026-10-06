@@ -12,7 +12,7 @@ test("non-queue destinations do not invent zero workorder counts", async () => {
 });
 
 test("mechanic page header keeps one composition step above the queue", () => {
-  assert.match(mechanicCss, /\.mechanic-home-content:has\(>\s*\.mechanic-queue-shell\)\s*\{[^}]*display:\s*grid;[^}]*gap:\s*16px;/s);
+  assert.match(mechanicCss, /\.mechanic-home-content:has\(>\s*\.mechanic-queue-shell\)\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--workspace-card-gap\);/s);
   assert.match(mechanicCss, /\.mechanic-home-content\s*>\s*\.page-header\s*\{[^}]*margin-top:\s*0;/s);
 });
 

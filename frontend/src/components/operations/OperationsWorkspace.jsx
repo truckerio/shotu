@@ -14,7 +14,6 @@ import { MobileQueueToolbar } from "./MobileQueueToolbar.jsx";
 import {
   OperationalCollectionCell,
   OperationalCollectionRow,
-  OperationalCollectionResultHeader,
   OperationalCollectionTable,
   OperationalCollectionTabs,
   OperationalCollectionToolbar,
@@ -458,12 +457,8 @@ export function OperationsWorkspace({
       </OperationalCollectionToolbar> : null}
 
       {filters.category !== "drafts" && filters.category !== "parts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
-      <OperationalCollectionResultHeader className="operations-list-header">
-        <span><strong>{activeCategory.label}</strong>{filters.category === "drafts" || filters.category === "parts" || !list.loading ? ` · ${filters.category === "drafts" ? visibleDraftCount : filters.category === "parts" ? categoryCounts.parts : list.total}` : ""}</span>
-        {filters.category !== "drafts" && filters.category !== "parts" && filters.locationId && !fixedLocationId ? <span>{locations.find((location) => location.id === filters.locationId)?.name}</span> : null}
-      </OperationalCollectionResultHeader>
-
-      {filters.category === "drafts" ? (
+      <div className="operations-results-scroll">
+        {filters.category === "drafts" ? (
         <WorkorderDraftQueue
           role={actor?.role}
           actorId={actor?.id}
@@ -477,7 +472,7 @@ export function OperationsWorkspace({
           onTakeover={onTakeoverDraft}
           onRefresh={onRefreshDrafts}
         />
-      ) : filters.category === "parts" ? (
+        ) : filters.category === "parts" ? (
         <PartRequestQueue
           filters={partFilters}
           locations={locations}
@@ -486,7 +481,7 @@ export function OperationsWorkspace({
           onOpenWorkorder={onOpenWorkorder}
           refreshKey={refreshKey}
         />
-      ) : <OperationalCollectionTable
+        ) : <OperationalCollectionTable
         className="operations-table"
         ariaLabel={`${activeCategory.label} workorders`}
         busy={list.loading}
@@ -536,9 +531,10 @@ export function OperationsWorkspace({
             renderItem={(item) => <OperationRow item={item} onOpenWorkorder={onOpenWorkorder} />}
           />
         ) : null}
-      </OperationalCollectionTable>}
+        </OperationalCollectionTable>}
 
-      {filters.category !== "drafts" && filters.category !== "parts" ? <Pagination currentPage={page} pageCount={list.pageCount} setPage={setPage} total={list.total} label="workorders" loading={list.loading} /> : null}
+        {filters.category !== "drafts" && filters.category !== "parts" ? <Pagination currentPage={page} pageCount={list.pageCount} setPage={setPage} total={list.total} label="workorders" loading={list.loading} /> : null}
+      </div>
     </section>
   );
 }

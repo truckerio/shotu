@@ -53,6 +53,8 @@ import { handleProductModulesApi } from "./src/server/routes/product-modules.rou
 import { handleInspectionTemplatesApi } from "./src/server/routes/inspection-templates.routes.js";
 import { handleLaborProductsApi } from "./src/server/routes/labor-products.routes.js";
 import { handleActivityApi } from "./src/server/routes/activity.routes.js";
+import { handleCustomerDocumentsApi } from "./src/server/routes/customer-documents.routes.js";
+import { handleCustomerDirectoryApi } from "./src/server/routes/customer-directory.routes.js";
 import { catalogUomConflictError } from "./src/server/modules/inventory/inventory.errors.js";
 import { startInvoiceRetention, stopInvoiceRetention } from "./src/server/modules/invoice-extraction/invoice-retention.worker.js";
 import { startInventoryCountRetention, stopInventoryCountRetention } from "./src/server/modules/inventory/inventory-count-retention.worker.js";
@@ -814,6 +816,8 @@ async function handleApi(req, res) {
   if (await handleInspectionTemplatesApi(req, res, url, helpers)) return;
   if (await handleKioskApi(req, res, url, helpers)) return;
   if (await handleConfigApi(req, res, url, helpers)) return;
+  if (await handleCustomerDocumentsApi(req, res, url, helpers)) return;
+  if (await handleCustomerDirectoryApi(req, res, url, helpers)) return;
   if (await handleVehiclesApi(req, res, url, helpers)) return;
   if (await handleIntegrationsApi(req, res, url, helpers)) return;
   if (await handleMechanicApi(req, res, url, helpers)) return;

@@ -160,7 +160,7 @@ test("canonical create context exposes allowed assignment choices for any grante
   assert.equal(canLoadCreateMechanics({ activeWorkorder: { id: "wo-1" }, actorRole: "admin", selectedLocationId: "loc-1" }), false);
 });
 
-test("assignment transitions clear stale selection during reload and preserve it when disabled", () => {
+test("restored assignments survive location hydration, while an explicit location change clears them", () => {
   const selected = {
     error: "old",
     loading: false,
@@ -173,10 +173,10 @@ test("assignment transitions clear stale selection during reload and preserve it
     mechanicUserIds: [],
     mechanics: [{ id: "mechanic-1" }],
   });
-  assert.deepEqual(createAssignmentLoadedState([{ id: "mechanic-2" }]), {
+  assert.deepEqual(createAssignmentLoadedState([{ id: "mechanic-2" }], selected), {
     error: "",
     loading: false,
-    mechanicUserIds: [],
+    mechanicUserIds: ["mechanic-1"],
     mechanics: [{ id: "mechanic-2" }],
   });
   assert.deepEqual(createAssignmentClearedState(selected), {

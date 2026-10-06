@@ -190,7 +190,7 @@ export function IntegrationsSettings({ onOpenTemplates, additionalSettings = nul
       ? odooProvider.description
       : selectedIntegration === "clients"
         ? "Manage company-scoped credentials for trusted external systems."
-        : "Company-level connections and configuration.";
+        : "";
 
   return (
     <section className="admin-content admin-settings-content">
@@ -211,7 +211,6 @@ export function IntegrationsSettings({ onOpenTemplates, additionalSettings = nul
         <div className="integration-page-heading">
           <div>
             <h2>Integrations</h2>
-            <p>Connect external systems once for every authorized company location.</p>
           </div>
         </div>
       ) : null}
@@ -287,7 +286,6 @@ export function IntegrationsSettings({ onOpenTemplates, additionalSettings = nul
           <div className="integration-page-heading">
             <div>
               <h2 id="settings-templates-heading">Company settings</h2>
-              <p>Manage templates and purchasing rules for your company.</p>
             </div>
           </div>
           <div className="integration-provider-grid">

@@ -3,7 +3,7 @@ import { Dropdown } from "../forms/Dropdown.jsx";
 import { api } from "../../lib/api.js";
 import { formatWorkorderMoney, workorderLineTotal } from "./workorder-pricing-model.js";
 
-export function LaborPriceCell({ workorderId, locationId, productId, hours, price, currentRates = {}, onChanged, disabled = false }) {
+export function LaborPriceCell({ workorderId, locationId, productId, hours, uomCode = "hr", price, currentRates = {}, onChanged, disabled = false }) {
   const [current, setCurrent] = useState(price || null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -88,7 +88,7 @@ export function LaborPriceCell({ workorderId, locationId, productId, hours, pric
       <option value="selling_price" disabled={currentRates.selling_price?.status !== "known"}>Selling price</option>
     </Dropdown>
     <div className="workorder-price-values">
-      <span>Rate <strong>{formatWorkorderMoney(selectedPrice?.unitPrice, selectedPrice?.currency) || "Not selected"} / hr</strong></span>
+      <span>Rate <strong>{formatWorkorderMoney(selectedPrice?.unitPrice, selectedPrice?.currency) || "Not selected"} / {uomCode === "ea" ? "service" : "hr"}</strong></span>
       <span>Line total <strong>{workorderLineTotal(selectedPrice, hours) || "Incomplete"}</strong></span>
     </div>
     {productId ? <details className="workorder-labor-rates" open={ratesOpen} onToggle={(event) => setRatesOpen(event.currentTarget.open)}>

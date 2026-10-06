@@ -69,7 +69,7 @@ export function AdminWorkspaceShell({
   }
 
   return (
-    <main className="admin-shell">
+    <main className={`admin-shell${view === "operations" ? " is-operations" : ""}`}>
       <style>{workorderTemplateStyles}</style>
       <div className="admin-shell-layout">
         <RoleNavigationRail actor={actor} ariaLabel="Admin workspace" groups={groups} items={[{ id: "units", label: "Units", variant: "parent" }]} activeId={activeId} onNavigate={navigate} />

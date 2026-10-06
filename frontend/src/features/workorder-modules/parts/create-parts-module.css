@@ -74,10 +74,11 @@
 }
 
 .create-price-source-menu {
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  width: 100%;
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 36px;
+  position: relative;
+  width: 36px;
 }
 
 .create-workorder-price-cell .create-price-source-menu .dropdown-select-trigger {
@@ -87,7 +88,6 @@
   box-shadow: none;
   justify-content: flex-end;
   padding: 0;
-  pointer-events: none;
   width: 100%;
 }
 
@@ -100,8 +100,12 @@
   box-sizing: border-box;
   height: 38px;
   padding: 11px 10px;
-  pointer-events: auto;
   width: 36px;
+}
+
+.dropdown-select-popover.create-price-source-popover {
+  min-width: min(240px, calc(100vw - 32px));
+  width: min(240px, calc(100vw - 32px));
 }
 
 .create-workorder-price-cell > small {

@@ -1,4 +1,4 @@
-import { Rows03 } from "@untitledui/icons";
+import { File02, Rows03 } from "@untitledui/icons";
 import { useEffect, useState } from "react";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
@@ -7,12 +7,13 @@ import { IntegrationSummaryCard } from "../integrations/IntegrationSummaryCard.j
 import { InspectionTemplatesPage } from "../templates/InspectionTemplatesPage.jsx";
 import { InventoryLocationsWorkspace } from "../../inventory/InventoryLocationsWorkspace.jsx";
 import { PurchaseOrderApprovalSettings } from "./PurchaseOrderApprovalSettings.jsx";
+import { CommercialProfileSettings } from "../commercial/CommercialProfileSettings.jsx";
 
 function selectedSettingsTab() {
   const params = new URLSearchParams(window.location.search);
   if (params.has("samsara")) return "integrations";
   const tab = params.get("settingsTab");
-  return tab === "templates" || tab === "storage-layout" ? tab : "integrations";
+  return tab === "templates" || tab === "storage-layout" || tab === "commercial" ? tab : "integrations";
 }
 
 export function AdminSettingsWorkspace({ actor, locations }) {
@@ -60,6 +61,8 @@ export function AdminSettingsWorkspace({ actor, locations }) {
     );
   }
 
+  if (tab === "commercial") return <CommercialProfileSettings actor={actor} locations={locations} />;
+
   return tab === "templates" ? (
     <>
       <div className="admin-content" style={{ paddingBottom: 0 }}>
@@ -89,6 +92,7 @@ export function AdminSettingsWorkspace({ actor, locations }) {
         title="Storage layout"
       />
       <PurchaseOrderApprovalSettings locations={locations} embedded />
+      <IntegrationSummaryCard icon={File02} title="Customer commercial profile" onManage={() => changeTab("commercial")} />
     </>}
   />;
 }

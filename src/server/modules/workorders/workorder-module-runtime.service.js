@@ -38,6 +38,7 @@ import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
 import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
+import { assertWorkorderLaborQuantity } from "../../db/repositories/workorder-labor-quantity.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import {
@@ -148,6 +149,7 @@ export async function projectLoadedProtectedWorkorderDetail(
     enriched.laborPrice = labor.laborPrice
       && labor.laborPrice.productId === detail.workorder.formData?.laborProduct?.productId
       && Number(labor.laborPrice.hours) === Number(detail.workorder.formData?.laborHours)
+      && (labor.laborPrice.uomCode || "hr") === (detail.workorder.formData?.laborProduct?.uomCode || "hr")
       ? labor.laborPrice : null;
     enriched.currentLaborRates = labor.currentLaborRates;
     if (decisions?.parts && decisions.parts.access !== "hidden") {
@@ -450,10 +452,33 @@ export async function readWorkorderUnitHistory(context, workorderId, input = {},
 }
 
 export async function createWorkorderRuntime(context, input, rawInput = input, dependencies = {}) {
+  const mechanic = context.actor.role === "mechanic";
+  const customerIdentity = String(input.formData?.customerCompanyName || rawInput?.formData?.customerCompanyName || "").trim();
+  if (mechanic && customerIdentity) {
+    throw new AuthError(409, "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED", "Customer Workorders must be issued and accepted through the Office Estimate workflow.");
+  }
+  if (mechanic) {
+    input = {
+      ...input,
+      authorizationClassification: "internal_fleet",
+      authorizationExceptionReason: "Server-owned mechanic self-create workflow",
+    };
+  }
   if (input.pricing && !["office", "admin"].includes(context.actor.role)) throw permissionDenied();
   if (input.pricing && !input.pricing.expectedFingerprint) {
     throw new AuthError(409, "WORKORDER_PRICING_PREVIEW_REQUIRED", "Refresh the pricing preview before creating this workorder.");
   }
+  if (!input.authorizationClassification) {
+    throw new AuthError(409, "WORKORDER_AUTHORIZATION_CLASSIFICATION_REQUIRED", "Choose the Workorder authorization path before creating it.");
+  }
+  if (input.authorizationClassification === "required_external_customer") {
+    throw new AuthError(409, "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED", "Create this customer Workorder from its accepted Estimate.");
+  }
+  if (input.authorizationClassification === "approval_not_required") {
+    throw new AuthError(409, "CUSTOMER_ESTIMATE_ISSUE_REQUIRED", "Create this Workorder from its Office draft so its informational Estimate is issued and linked.");
+  }
+  if (["internal_fleet", "exempt"].includes(input.authorizationClassification)
+    && context.actor.role !== "admin" && !mechanic) throw permissionDenied();
   requireCompanyAccess(context, input.companyId);
   requireLocationAccess(context, input.locationId);
   const authorizeCreate = dependencies.authorizeCreate || authorizeWorkorderCreate;
@@ -473,7 +498,7 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
       locationId: input.locationId,
     }, context)
     : await loadLaborProduct(input.companyId);
-  const mechanic = context.actor.role === "mechanic";
+  assertWorkorderLaborQuantity({ ...input.formData, laborProduct });
   try {
     return await create({
       ...input,
@@ -485,6 +510,8 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
       createdByRole: context.actor.role,
       mechanicUserIds: mechanic ? [context.actor.id] : input.mechanicUserIds,
       startImmediately: mechanic,
+      activationPolicy: "legacy_internal_fleet_direct_v1",
+      authorizationAuthority: mechanic ? "mechanic_self_create" : context.actor.role,
     });
   } catch (error) {
     const mapped = mapActiveAssetConflict(error);
@@ -504,9 +531,13 @@ export async function previewCreateWorkorderPricing(context, input, dependencies
     companyId: input.companyId, locationId: input.locationId,
     moduleKeys: workorderInputModules(input, { create: true }),
   });
-  if (input.formData?.laborProduct?.productId) await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
-    productId: input.formData.laborProduct.productId, companyId: input.companyId, locationId: input.locationId,
-  }, context);
+  if (input.formData?.laborProduct?.productId) {
+    const laborProduct = await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
+      productId: input.formData.laborProduct.productId, companyId: input.companyId, locationId: input.locationId,
+    }, context);
+    input = { ...input, formData: { ...input.formData, laborProduct } };
+    assertWorkorderLaborQuantity(input.formData);
+  }
   return (dependencies.readPricing || readCreatePricing)(input);
 }
 

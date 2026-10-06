@@ -1,10 +1,6 @@
 .kiosk-shell {
   align-items: center;
-  background-color: #f8fafc;
-  background-image:
-    linear-gradient(#e9edf2 1px, transparent 1px),
-    linear-gradient(90deg, #e9edf2 1px, transparent 1px);
-  background-size: 32px 32px;
+  background: var(--workspace-background);
   box-sizing: border-box;
   color: #181d27;
   display: grid;
@@ -16,9 +12,9 @@
 
 .kiosk-panel {
   background: #fff;
-  border: 1px solid #dfe4ea;
-  border-radius: 12px;
-  box-shadow: 0 18px 48px rgb(16 24 40 / 10%);
+  border: 1px solid var(--workspace-card-border);
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
   box-sizing: border-box;
   max-width: 1120px;
   min-width: 0;

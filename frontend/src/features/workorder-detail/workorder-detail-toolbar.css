@@ -201,8 +201,82 @@
   font-weight: var(--weight-medium);
 }
 
+.office-create-nav .workorder-context-content {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.office-create-nav h1 {
+  flex: 0 0 auto;
+  font-weight: var(--weight-medium);
+}
+
 .office-create-nav .draft-save-status {
   margin-top: 0;
+  min-width: 0;
+}
+
+.office-create-nav {
+  min-height: 56px;
+}
+
+.create-workorder-page .detail-context-bar.office-create-nav {
+  overflow: visible;
+}
+
+.office-create-nav .workorder-context-main {
+  gap: 8px;
+}
+
+.office-create-nav .workorder-context-main > button,
+.office-create-nav .detail-context-actions > button {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 7px;
+}
+
+.office-create-nav .workorder-context-main > button,
+.office-create-nav .preview-pane-toggle {
+  flex: 0 0 40px;
+  width: 40px;
+}
+
+.office-create-nav .detail-context-actions > button:not(.preview-pane-toggle) {
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0 12px;
+}
+
+.office-create-nav .draft-save-status.is-icon-only {
+  flex: 0 0 24px;
+  height: 24px;
+  justify-content: center;
+  overflow: visible;
+  position: relative;
+  top: 2px;
+  width: 24px;
+}
+
+.office-create-nav .draft-save-status.is-icon-only:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #1570ef;
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .office-create-nav .workorder-context-main > button,
+  .office-create-nav .detail-context-actions > button {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .office-create-nav .workorder-context-main > button,
+  .office-create-nav .preview-pane-toggle {
+    flex-basis: 44px;
+    width: 44px;
+  }
 }
 
 .mechanic-action-message {

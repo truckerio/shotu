@@ -59,6 +59,8 @@ export function Dropdown({
   onBlur,
   onChange,
   onFocus,
+  placement = "bottom start",
+  popoverClassName = "",
   required = false,
   style,
   value = "",
@@ -102,7 +104,7 @@ export function Dropdown({
         </SelectValue>
         <ChevronDown className="dropdown-select-chevron" aria-hidden="true" />
       </Button>
-      <Popover className="dropdown-select-popover" placement="bottom start">
+      <Popover className={joinClassNames("dropdown-select-popover", popoverClassName)} placement={placement}>
         <ListBox className="dropdown-select-listbox" items={options}>
           {(option) => (
             <ListBoxItem

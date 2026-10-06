@@ -23,6 +23,13 @@ test("compact Create Parts hides untouched placeholders behind one editor", () =
   assert.match(source, /data-part-editor-index=\{index\}/);
 });
 
+test("hourly and flat service labor use their selected quantity and price units", () => {
+  assert.equal((source.match(/uomCode=\{laborUomCode\}/g) || []).length, 4);
+  assert.equal((source.match(/laborUomCode === "ea" \? "Service quantity"/g) || []).length, 2);
+  assert.match(source, /laborHours \? `\$\{laborHours\} \$\{laborUomCode\}`/);
+  assert.doesNotMatch(priceCell, /<small>Price per/);
+});
+
 test("manual and scanned additions reuse the first hidden blank row", () => {
   assert.match(source, /const targetIndex = firstBlankIndex >= 0 \? firstBlankIndex : parts\.length;/);
   assert.match(source, /if \(firstBlankIndex < 0\) onAdd\(\);/);
@@ -167,13 +174,18 @@ test("office and admin Create Parts expose controlled server-preview pricing in 
   assert.match(priceCell, /priceOptionLabel\(sellingPrice, "selling price"\)/);
   assert.match(priceCell, /aria-label="Workorder unit price"/);
   assert.match(priceCell, /className="create-price-source-menu"/);
+  assert.match(priceCell, /placement="bottom end"/);
+  assert.match(priceCell, /popoverClassName="create-price-source-popover"/);
   assert.doesNotMatch(priceCell, /Change price/);
   assert.match(source, /<CreatePricingTotal pricing=\{pricing\}/);
   assert.match(source, /summary\?\.status === "complete"[\s\S]*formatWorkorderMoney\(summary\.grandTotal, summary\.currency\)/);
   assert.match(css, /\.create-inline-price-control\s*\{[^}]*min-height:\s*40px/s);
   assert.match(css, /\.create-inline-price-control\s*\{[^}]*position:\s*relative/s);
-  assert.match(css, /\.create-price-source-menu\s*\{[^}]*inset:\s*0[^}]*position:\s*absolute[^}]*width:\s*100%/s);
+  assert.match(css, /\.create-price-source-menu\s*\{[^}]*grid-column:\s*3[^}]*grid-row:\s*1[^}]*min-width:\s*36px[^}]*position:\s*relative[^}]*width:\s*36px/s);
+  assert.doesNotMatch(css, /\.create-price-source-menu\s*\{[^}]*pointer-events:\s*none/s);
+  assert.doesNotMatch(css, /\.create-workorder-price-cell \.create-price-source-menu \.dropdown-select-trigger\s*\{[^}]*pointer-events:\s*none/s);
   assert.match(css, /\.create-workorder-price-cell \.create-price-source-menu \.dropdown-select-trigger\s*\{[^}]*justify-content:\s*flex-end[^}]*width:\s*100%/s);
-  assert.match(css, /\.create-price-source-menu \.dropdown-select-chevron\s*\{[^}]*pointer-events:\s*auto[^}]*width:\s*36px/s);
+  assert.match(css, /\.create-price-source-menu \.dropdown-select-chevron\s*\{[^}]*width:\s*36px/s);
+  assert.match(css, /\.dropdown-select-popover\.create-price-source-popover\s*\{[^}]*min-width:\s*min\(240px, calc\(100vw - 32px\)\)[^}]*width:\s*min\(240px, calc\(100vw - 32px\)\)/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-inline-price-control\s*\{[^}]*min-height:\s*44px/s);
 });

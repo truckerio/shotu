@@ -84,7 +84,10 @@ test("integration landing uses equal summary cards and mounts configuration only
   assert.match(settings, /selectedIntegration === "samsara"/);
   assert.match(settings, /selectedIntegration === "clients"/);
   assert.match(summaryCard, />Manage</);
-  assert.match(styles, /\.integration-summary-card[\s\S]*min-height:\s*260px/);
+  assert.match(summaryCard, /facts\.length \? <dl/);
+  assert.match(summaryCard, /statusLabel \? <span/);
+  assert.doesNotMatch(summaryCard, /integration-description|\{category\}/);
+  assert.doesNotMatch(settings, /Company-level connections and configuration\.|Connect external systems once|Manage templates and purchasing rules/);
   assert.match(styles, /\.integration-detail-view > \.integration-card[\s\S]*max-width:\s*none/);
 });
 

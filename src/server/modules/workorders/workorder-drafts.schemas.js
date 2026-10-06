@@ -3,6 +3,7 @@ import { invalidRequest } from "../../auth/errors.js";
 import { createWorkorderPricingSchema } from "./workorder.schemas.js";
 
 const MAX_DRAFT_PAYLOAD_BYTES = 256 * 1024;
+const authorizationClassification = z.enum(["approval_not_required", "required_external_customer", "internal_fleet", "exempt"]);
 
 const draftPayloadSchema = z.record(z.string(), z.unknown())
   .refine(
@@ -20,16 +21,24 @@ export const createWorkorderDraftSchema = z.object({
   type: draftTypeSchema,
   locationId: z.string().uuid("Select a valid location.").nullable().optional(),
   payload: draftPayloadSchema.default({}),
+  authorizationClassification: authorizationClassification.optional(),
+  authorizationExceptionReason: z.string().trim().min(2).max(1000).nullable().optional(),
 }).strict();
 
 export const updateWorkorderDraftSchema = z.object({
   version: z.number().int().positive(),
   locationId: z.string().uuid("Select a valid location.").nullable().optional(),
   payload: draftPayloadSchema.optional(),
+  authorizationClassification: authorizationClassification.optional(),
+  authorizationExceptionReason: z.string().trim().min(2).max(1000).nullable().optional(),
 }).strict().refine(
-  (input) => input.locationId !== undefined || input.payload !== undefined,
+  (input) => input.locationId !== undefined || input.payload !== undefined || input.authorizationClassification !== undefined,
   "Provide a location or payload to save.",
-);
+).superRefine((input, context) => {
+  const exception = ["internal_fleet", "exempt"].includes(input.authorizationClassification);
+  if (exception && !input.authorizationExceptionReason) context.addIssue({ code: "custom", path: ["authorizationExceptionReason"], message: "Provide an authorization exception reason." });
+  if (input.authorizationClassification === "required_external_customer" && input.authorizationExceptionReason) context.addIssue({ code: "custom", path: ["authorizationExceptionReason"], message: "External customer authorization does not use an exception reason." });
+});
 
 export const submitWorkorderDraftSchema = z.object({
   version: z.number().int().positive().optional(),

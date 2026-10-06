@@ -53,6 +53,8 @@ function InlinePriceControl({
       <Dropdown
         aria-label="Price source"
         className="create-price-source-menu"
+        placement="bottom end"
+        popoverClassName="create-price-source-popover"
         value={selection}
         onChange={(event) => onSelectionChange(event.target.value)}
       >

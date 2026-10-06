@@ -236,42 +236,44 @@ export function WorkorderDraftQueue({
         ) : null}
       </div>
 
-      {error ? (
-        <div className="workorder-drafts-error" role="alert">
-          <strong>Drafts could not be loaded.</strong>
-          <span>{error}</span>
-          {typeof onRefresh === "function" ? <Button type="button" onClick={onRefresh}>Try again</Button> : null}
-        </div>
-      ) : null}
-      {loading ? <div className="workorder-drafts-loading" role="status" aria-label="Loading drafts">{[1, 2, 3].map((item) => <span key={item} />)}</div> : null}
-      {!loading && !error && !visibleDrafts.length ? <EmptyState filtered={Boolean(search || filter !== "all" || activeLocationId)} /> : null}
-      {!loading && !error && visibleDrafts.length ? (
-        <div className="workorder-drafts-table" role="table" aria-label="Saved workorder drafts">
-          <div className="workorder-drafts-table-head" role="row">
-            <span>Unit / draft</span><span>Location</span><span>Owner</span><span>Last saved</span><span>Completeness</span><span>Actions</span>
+      <div className="workorder-drafts-results">
+        {error ? (
+          <div className="workorder-drafts-error" role="alert">
+            <strong>Drafts could not be loaded.</strong>
+            <span>{error}</span>
+            {typeof onRefresh === "function" ? <Button type="button" onClick={onRefresh}>Try again</Button> : null}
           </div>
-          <div role="rowgroup">
-            {visibleDrafts.map((draft) => {
-              const canOpen = typeof canOpenOverride === "function"
-                ? Boolean(canOpenOverride(draft))
-                : draftBelongsToActor(draft, actorId);
-              return (
-                <DraftRow
-                  key={draft.id}
-                  draft={draft}
-                  role={role}
-                  actorId={actorId}
-                  canOpen={canOpen}
-                  busy={busyId === draft.id}
-                  onOpen={onOpen}
-                  onDiscard={setDiscardDraft}
-                  onTakeover={onTakeover}
-                />
-              );
-            })}
+        ) : null}
+        {loading ? <div className="workorder-drafts-loading" role="status" aria-label="Loading drafts">{[1, 2, 3].map((item) => <span key={item} />)}</div> : null}
+        {!loading && !error && !visibleDrafts.length ? <EmptyState filtered={Boolean(search || filter !== "all" || activeLocationId)} /> : null}
+        {!loading && !error && visibleDrafts.length ? (
+          <div className="workorder-drafts-table" role="table" aria-label="Saved workorder drafts">
+            <div className="workorder-drafts-table-head" role="row">
+              <span>Unit / draft</span><span>Location</span><span>Owner</span><span>Last saved</span><span>Completeness</span><span>Actions</span>
+            </div>
+            <div role="rowgroup">
+              {visibleDrafts.map((draft) => {
+                const canOpen = typeof canOpenOverride === "function"
+                  ? Boolean(canOpenOverride(draft))
+                  : draftBelongsToActor(draft, actorId);
+                return (
+                  <DraftRow
+                    key={draft.id}
+                    draft={draft}
+                    role={role}
+                    actorId={actorId}
+                    canOpen={canOpen}
+                    busy={busyId === draft.id}
+                    onOpen={onOpen}
+                    onDiscard={setDiscardDraft}
+                    onTakeover={onTakeover}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <DraftDiscardDialog
         open={Boolean(discardDraft)}

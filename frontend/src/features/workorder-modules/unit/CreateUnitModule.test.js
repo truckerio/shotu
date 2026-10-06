@@ -15,7 +15,7 @@ test("vehicle tags accept only bounded, unique strings", () => {
 });
 
 test("vehicle tags become editable customer company suggestions", () => {
-  assert.match(source, /normalizedVehicleTagNames\(selectedVehicle\?\.tag_names\)/);
+  assert.match(source, /normalizedVehicleTagNames\(selectedVehicle\?\.tag_names \|\| selectedVehicle\?\.tagNames\)/);
   assert.match(source, /suggestions=\{vehicleTags\}/);
   assert.match(source, /suggestionsLabel=\{t\("create\.unit\.vehicleTags"\)\}/);
   assert.doesNotMatch(source, /operational-vehicle-tag-picker/);

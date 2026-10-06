@@ -100,7 +100,16 @@ export function useWorkorderDraftLifecycle({
   }, [activeWorkorder, draft.draft?.id, workspace]);
 
   const restoreWorkorderDraft = useCallback((savedDraft) => {
-    setForm((current) => formValuesFromWorkorderDraft(savedDraft.payload, current));
+    const restoredPayload = {
+      ...savedDraft.payload,
+      authorizationClassification: savedDraft.authorizationClassification === "unclassified"
+        ? ""
+        : savedDraft.authorizationClassification || savedDraft.payload?.authorizationClassification,
+      authorizationExceptionReason: savedDraft.authorizationExceptionReason
+        ?? savedDraft.payload?.authorizationExceptionReason
+        ?? "",
+    };
+    setForm((current) => formValuesFromWorkorderDraft(restoredPayload, current));
     setCreateAssignment((current) => ({
       ...current,
       mechanicUserIds: savedDraft.payload?.mechanicUserIds || [],

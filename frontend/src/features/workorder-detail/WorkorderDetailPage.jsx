@@ -33,6 +33,7 @@ import { RETURN_CATEGORIES } from "./workorder-handoff.js";
 import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOdooModule.js";
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
+import { WorkorderCustomerDocumentsPanel } from "../customer-documents/WorkorderCustomerDocumentsPanel.jsx";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
 import { inspectionReturnContext, inspectionWorkspaceSearch, workspaceSearchForRole } from "../../app/routes/route-state.js";
 import {
@@ -430,6 +431,17 @@ export function WorkorderDetailPage({
         </div>
         <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
       </div>,
+    }] : []),
+    ...(["office", "admin"].includes(actor.role) ? [{
+      id: "customer-documents",
+      label: "Customer documents",
+      content: <WorkorderCustomerDocumentsPanel
+        companyId={activeWorkorder.workorder.companyId || ""}
+        locationId={activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
+        workorderId={activeWorkorder.workorder.id}
+        workorderVersion={activeWorkorder.workorder.progressVersion || 1}
+        workorderStatus={detailStatus}
+      />,
     }] : []),
     ...["activity", "completion", "odoo"].flatMap((id) => {
       const section = visibleDetailSections.find((entry) => entry.id === id);

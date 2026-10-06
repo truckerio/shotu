@@ -84,10 +84,11 @@ function inputPartRows(form) {
   });
   const laborHours = String(form.laborHours || "").trim();
   const workPerformed = printableLaborRepairOrder(form.workPerformed, inputParts);
+  const laborUomCode = form.laborProduct?.uomCode === "ea" ? "ea" : "hr";
   const rows = laborHours || workPerformed ? [{
     partNo: laborProductLabel(form.laborProduct),
     qty: laborHours,
-    uomCode: "hr",
+    uomCode: laborUomCode,
     repairOrder: workPerformed,
   }, ...inputParts] : inputParts;
   return rows.length ? rows : emptyPartRows();
@@ -107,7 +108,7 @@ export function workorderQuantityTotals(form = {}) {
   ), 0);
 
   return {
-    labor: formatQuantity(positiveQuantity(form.laborHours), "hr"),
+    labor: formatQuantity(positiveQuantity(form.laborHours), form.laborProduct?.uomCode === "ea" ? "ea" : "hr"),
     parts: partsQuantity > 0 ? String(Number(partsQuantity.toFixed(3))) : "",
   };
 }

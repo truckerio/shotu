@@ -1,13 +1,13 @@
-.role-navigation-rail { background:#f9fafb; border-right:1px solid #e4e7ec; box-sizing:border-box; min-width:0; padding:16px 12px; width:100%; }
+.role-navigation-rail { background:transparent; border:0; box-sizing:border-box; min-width:0; padding:10px; width:100%; }
 .role-navigation-account { height:44px; min-height:44px; }
 .role-navigation-account .profile-menu { min-width:0; width:100%; }
 .role-navigation-account .profile-menu-trigger { box-sizing:border-box; height:44px; min-height:44px; min-width:0; padding-right:10px; width:100%; }
 .role-navigation-account .profile-menu-identity strong { max-width:none; }
 .role-navigation-account .profile-menu-trigger > svg { flex:0 0 auto; margin-left:auto; }
-.role-navigation-divider { background:#e4e7ec; height:1px; margin:14px 0 16px; }
+.role-navigation-divider { background:#e4e7ec; height:1px; margin:10px 0; }
 .role-navigation-list, .role-navigation-list section, .role-navigation-children { display:grid; gap:2px; }
-.role-navigation-list { gap:14px; overflow:hidden; }
-.role-navigation-list button { align-items:center; background:transparent; border:0; border-radius:6px; color:#475467; cursor:pointer; display:flex; font:inherit; font-size:var(--text-body); gap:9px; min-height:44px; padding:0 10px; text-align:left; width:100%; }
+.role-navigation-list { gap:10px; overflow:hidden; }
+.role-navigation-list button { align-items:center; background:transparent; border:0; border-radius:6px; color:#475467; cursor:pointer; display:flex; font:inherit; font-size:var(--text-body); gap:9px; min-height:40px; padding:0 10px; text-align:left; width:100%; }
 .role-navigation-list button:hover { background:#f2f4f7; color:#182230; }
 .role-navigation-list button.active { background:#eff8ff; color:#175cd3; font-weight:var(--weight-semibold); }
 .role-navigation-list button:focus-visible { outline:2px solid #84adff; outline-offset:2px; }

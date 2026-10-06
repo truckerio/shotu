@@ -7,6 +7,8 @@ export async function createWorkorderDraft(payload) {
       type: "workorder",
       locationId: payload.locationId || null,
       payload,
+      authorizationClassification: payload.authorizationClassification || undefined,
+      authorizationExceptionReason: payload.authorizationExceptionReason || null,
     }),
   });
   return result.draft;
@@ -19,6 +21,8 @@ export async function updateWorkorderDraft(draftId, { version, payload }) {
       version,
       locationId: payload.locationId || null,
       payload,
+      authorizationClassification: payload.authorizationClassification || undefined,
+      authorizationExceptionReason: payload.authorizationExceptionReason || null,
     }),
   });
   return result.draft;

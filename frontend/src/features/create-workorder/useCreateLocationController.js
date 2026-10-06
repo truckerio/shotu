@@ -131,8 +131,7 @@ export function useCreateLocationController({
       return undefined;
     }
 
-    setAssignment(createAssignmentLoadingState());
-    setAssignment(createAssignmentLoadedState(selectedLocation?.mechanics));
+    setAssignment((current) => createAssignmentLoadedState(selectedLocation?.mechanics, current));
     return undefined;
   }, [activeWorkorder, actorRole, selectedLocation]);
 
@@ -140,6 +139,10 @@ export function useCreateLocationController({
     const patch = createLocationSelectionPatch(locations, locationId);
     if (!patch) return null;
 
+    const currentLocationId = resolveCreateLocation(locations, currentFormRef.current.locationId)?.location?.id || "";
+    if (currentLocationId !== patch.locationId) {
+      setAssignment((current) => createAssignmentLoadingState(current));
+    }
     callbacksRef.current.onClearLocationError("locationId");
     callbacksRef.current.onFormPatch(patch, {
       reason: "location-selected",

@@ -9,6 +9,7 @@ import { publicQuantity, quantityLabel } from "../../modules/parts/quantity-uom.
 import { WORKORDER_STATUS } from "../../modules/workorders/workorder.constants.js";
 import { DEFAULT_UOM_CODE } from "../../../../shared/units-of-measure.js";
 import { assertPrimaryPartIdentityAvailable } from "./parts-catalog-edit.repo.js";
+import { assertCurrentExternalEstimateAccepted } from "./workorder-customer-authorization.repo.js";
 
 const TERMINAL_WORKORDER_STATUSES = [WORKORDER_STATUS.MECHANIC_DONE, WORKORDER_STATUS.CLOSED, WORKORDER_STATUS.ODOO_ENTERED, WORKORDER_STATUS.CANCELLED];
 const ALLOCATION_TOLERANCE = 0.0005;
@@ -704,6 +705,10 @@ async function restoreWorkorderWhenResolved(client, workorder, actorUserId) {
   );
   const nextStatus = resume.rows[0]?.resume_workorder_status
     || (workorder.has_primary_mechanic ? WORKORDER_STATUS.IN_PROGRESS : WORKORDER_STATUS.OPEN);
+  await assertCurrentExternalEstimateAccepted(client, {
+    companyId: workorder.company_id,
+    workorderId: workorder.id,
+  });
   await setWorkorderStatus(client, {
     workorderId: workorder.id,
     fromStatus: workorder.status,
@@ -857,6 +862,7 @@ export async function decidePartRequest(workorderId, requestId, input, actorUser
     }));
     await restoreWorkorderWhenResolved(client, {
       id: workorderId,
+      company_id: request.company_id,
       status: request.workorder_status,
       has_primary_mechanic: request.has_primary_mechanic,
     }, actorUserId);

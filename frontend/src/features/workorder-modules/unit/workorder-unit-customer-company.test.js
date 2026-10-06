@@ -5,7 +5,7 @@ import test from "node:test";
 const source = readFileSync(new URL("./WorkorderUnitModule.jsx", import.meta.url), "utf8");
 
 test("detail unit customer company reuses the editable Samsara tag combobox", () => {
-  assert.match(source, /import \{ CustomerCompanyField \} from "\.\.\/\.\.\/\.\.\/components\/forms\/index\.js";/);
+  assert.match(source, /import \{[^}]*CustomerCompanyField[^}]*\} from "\.\.\/\.\.\/\.\.\/components\/forms\/index\.js";/);
   assert.match(source, /import \{ normalizedVehicleTagNames \} from "\.\/CreateUnitModule\.jsx";/);
   assert.match(source, /selectedVehicle,/);
   assert.match(source, /normalizedVehicleTagNames\(selectedVehicle\?\.tag_names \|\| selectedVehicle\?\.tagNames\)/);

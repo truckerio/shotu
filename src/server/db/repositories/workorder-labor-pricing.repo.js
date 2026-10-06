@@ -1,4 +1,6 @@
 import { getPool, query } from "../pool.js";
+import { validLaborQuantity } from "../../../../shared/labor-product.js";
+import { readEffectiveLaborPriceSources } from "./workorder-labor-price-sources.repo.js";
 
 const terminalStatuses = new Set(["closed", "odoo_entered", "cancelled"]);
 
@@ -13,6 +15,7 @@ function rate(row) {
     amount: row.amount === null ? null : String(row.amount),
     currency: row.currency || null,
     createdAt: row.created_at,
+    sellingPolicyVersionId: row.selling_policy_version_id || null,
   };
 }
 
@@ -21,8 +24,10 @@ function snapshot(row) {
     id: row.id,
     productId: row.labor_product_id,
     rateVersionId: row.rate_version_id,
+    sellingPolicyVersionId: row.selling_policy_version_id || null,
     selection: row.selection,
     hours: String(row.hours),
+    uomCode: row.uom_code || "hr",
     unitPrice: String(row.unit_price),
     totalPrice: String(row.total_price),
     currency: row.currency,
@@ -32,11 +37,8 @@ function snapshot(row) {
   };
 }
 
-function normalizedHours(value) {
-  const raw = String(value ?? "").trim();
-  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(raw)) return null;
-  const hours = Number(raw);
-  return hours > 0 && hours <= 9999 ? hours : null;
+function normalizedQuantity(value, uomCode) {
+  return validLaborQuantity(value, uomCode) ? Number(value) : null;
 }
 
 function scaledPrice(value) {
@@ -46,14 +48,9 @@ function scaledPrice(value) {
 }
 
 async function currentRate(client, companyId, locationId, productId, priceKind) {
-  const result = await client.query(
-    `select * from labor_rate_versions
-     where company_id=$1 and labor_product_id=$3 and price_kind=$4
-       and (location_id is null or location_id=$2)
-     order by (location_id is not null) desc,version desc limit 1`,
-    [companyId, locationId, productId, priceKind],
-  );
-  return result.rows[0] || null;
+  const rates = await readEffectiveLaborPriceSources({ companyId, locationId, productId },
+    (sql, params) => client.query(sql, params));
+  return rates.find((row) => row.price_kind === priceKind) || null;
 }
 
 export async function appendLaborRateVersion(input) {
@@ -153,8 +150,13 @@ export async function saveWorkorderLaborPriceSnapshot(input, transactionClient =
       return { kind: "locked" };
     }
     const productId = workorder.form_data?.laborProduct?.productId;
-    const hours = normalizedHours(workorder.form_data?.laborHours);
-    if (!productId || !hours) {
+    const product = productId ? (await client.query(
+      `select uom_code from local_labor_products where company_id=$1 and id=$2 and active=true`,
+      [workorder.company_id, productId],
+    )).rows[0] : null;
+    const uomCode = product?.uom_code;
+    const hours = normalizedQuantity(workorder.form_data?.laborHours, uomCode);
+    if (!product || !hours || (workorder.form_data?.laborProduct?.uomCode || "hr") !== uomCode) {
       if (!transactionClient) await client.query("rollback");
       return { kind: "labor_incomplete" };
     }
@@ -177,14 +179,14 @@ export async function saveWorkorderLaborPriceSnapshot(input, transactionClient =
     const unitPrice = `${effectiveAmount / 10000n}.${(effectiveAmount % 10000n).toString().padStart(4, "0")}`;
     const result = await client.query(
       `insert into workorder_labor_price_snapshots(
-         company_id,workorder_id,labor_product_id,rate_version_id,selection,hours,
+         company_id,workorder_id,labor_product_id,rate_version_id,selection,hours,uom_code,
          unit_price,total_price,currency,base_unit_price,manual_override,
-         created_by,reason,idempotency_key,request_hash
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
-      [workorder.company_id, workorder.id, productId, selectedRate.id, input.selection,
-        hours, unitPrice, totalPrice, selectedRate.currency,
+         created_by,reason,idempotency_key,request_hash,selling_policy_version_id
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) returning *`,
+      [workorder.company_id, workorder.id, productId, selectedRate.selling_policy_version_id ? null : selectedRate.id, input.selection,
+        hours, uomCode, unitPrice, totalPrice, selectedRate.currency,
         manualOverride ? selectedRate.amount : null, manualOverride,
-        input.actorId, input.reason, input.idempotencyKey, input.requestHash],
+        input.actorId, input.reason, input.idempotencyKey, input.requestHash, selectedRate.selling_policy_version_id || null],
     );
     if (!transactionClient) await client.query("commit");
     return { kind: "saved", laborPrice: snapshot(result.rows[0]), replayed: false };
@@ -201,16 +203,10 @@ export async function readWorkorderLaborPricing({ companyId, locationId, workord
     query(`select * from workorder_labor_price_snapshots
            where company_id=$1 and workorder_id=$2
            order by created_at desc,id desc limit 1`, [companyId, workorderId]),
-    productId ? query(
-      `select distinct on (price_kind) * from labor_rate_versions
-       where company_id=$1 and labor_product_id=$2
-         and (location_id is null or location_id=$3)
-       order by price_kind,(location_id is not null) desc,version desc`,
-      [companyId, productId, locationId],
-    ) : Promise.resolve({ rows: [] }),
+    readEffectiveLaborPriceSources({ companyId, locationId, productId }),
   ]);
   return {
     laborPrice: snapshot(snapshotResult.rows[0]) || null,
-    currentLaborRates: Object.fromEntries(rates.rows.map((row) => [row.price_kind, rate(row)])),
+    currentLaborRates: Object.fromEntries(rates.map((row) => [row.price_kind, rate(row)])),
   };
 }

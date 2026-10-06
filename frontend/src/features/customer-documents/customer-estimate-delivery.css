@@ -1,0 +1,49 @@
+.customer-estimate-delivery {
+  border: 1px solid #d7dde5;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 16px;
+}
+
+.customer-estimate-delivery h3,
+.customer-estimate-delivery p {
+  margin: 0;
+}
+
+.customer-estimate-delivery > p {
+  color: #52606d;
+}
+
+.customer-estimate-delivery label {
+  display: grid;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.customer-estimate-delivery label span {
+  color: #52606d;
+  font-weight: 400;
+}
+
+.customer-estimate-delivery input {
+  border: 1px solid #8693a5;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px;
+}
+
+.customer-estimate-delivery .button {
+  justify-self: start;
+}
+
+@media (max-width: 700px) {
+  .customer-estimate-delivery .button {
+    justify-self: stretch;
+    min-height: 44px;
+    width: 100%;
+  }
+}

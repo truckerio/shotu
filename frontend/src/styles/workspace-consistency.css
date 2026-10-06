@@ -1,0 +1,223 @@
+/* Shared workspace geometry. Keep content-specific grids and document layouts
+ * in their feature owners; these rules only align the surrounding surfaces. */
+.customer-portal-page {
+  background: var(--workspace-background);
+  padding: 16px var(--workspace-gutter);
+}
+
+.customer-portal-page :is(.customer-portal-response, .customer-portal-state, .customer-portal-discussion) {
+  border-color: var(--workspace-card-border);
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.admin-shell .admin-content > .page-header,
+.office-main-content > .page-header,
+.mechanic-home-content > .page-header,
+.surveillance-role-content > .page-header {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+:is(.admin-shell, .prototype) :is(.integration-card, .admin-module-card,
+  .admin-module-manager, .admin-modules-empty, .product-module-panel, .inspection-template-catalog, .inspection-template-editor,
+  .inspection-template-assignments, .inventory-location-panel,
+  .inspection-detail-primary, .inspection-detail-support, .inventory-scan-card) {
+  border-color: var(--workspace-card-border);
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
+}
+
+.admin-content > :is(.admin-panel, .admin-template-form, .admin-location-table) {
+  margin-top: var(--workspace-card-gap);
+}
+
+.admin-shell .commercial-profile-settings {
+  max-width: none;
+  padding: 10px var(--workspace-gutter) var(--workspace-gutter);
+}
+
+.admin-shell .commercial-profile-grid {
+  gap: 16px;
+  margin-top: var(--workspace-card-gap);
+}
+
+.admin-shell .commercial-profile-grid > :is(form, aside) {
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
+  padding: 16px;
+}
+
+.admin-shell .integration-page-heading {
+  margin-top: 16px;
+}
+
+.admin-shell :is(.integration-provider-grid, .admin-settings-tabs) {
+  margin-top: var(--workspace-card-gap);
+}
+
+.admin-shell .admin-settings-content {
+  max-width: none;
+}
+
+.admin-shell .admin-module-manager {
+  margin-top: var(--workspace-card-gap);
+}
+
+.admin-shell .admin-modules-empty {
+  margin-top: var(--workspace-card-gap);
+}
+
+.admin-shell .admin-location-work {
+  background: #fff;
+  border: 1px solid var(--workspace-card-border);
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
+  margin-top: var(--workspace-card-gap);
+  padding: 0 16px 16px;
+}
+
+@media (min-width: 701px) {
+  /* A page owns the viewport; its work surface owns overflow. Avoid giving
+   * long directories a different bottom gutter from the Operations queue. */
+  .admin-shell .operational-collection-page.is-page:not(.admin-operations-content) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px var(--workspace-gutter) var(--workspace-gutter);
+  }
+
+  .admin-shell .operational-collection-page.is-page > .page-header {
+    flex-shrink: 0;
+  }
+
+  .admin-shell .operational-collection-page.is-page:not(.admin-operations-content) > .operational-collection-page-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: var(--workspace-card-gap);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .admin-shell .inventory-workspace.is-section-root.is-page > .operational-collection-page-body {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .admin-shell .inventory-workspace.is-section-root.is-page .inventory-section-surface {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .workspace-operations.mechanic-home,
+  .prototype.surveillance-home {
+    gap: 0;
+    padding: 0;
+  }
+
+  .office-shell {
+    min-height: 100dvh;
+  }
+
+  .office-main-content {
+    align-content: start;
+    gap: var(--workspace-card-gap);
+  }
+
+  .office-main-content > .page-header,
+  .mechanic-home-content > .page-header,
+  .surveillance-role-content > .page-header,
+  .admin-content:not(.admin-operations-content) > .page-header {
+    padding-bottom: 8px;
+  }
+
+  :is(.mechanic-role-shell, .surveillance-role-shell) >
+    :is(.mechanic-home-content, .surveillance-role-content) {
+    box-sizing: border-box;
+    gap: var(--workspace-card-gap);
+    padding: 10px var(--workspace-gutter) var(--workspace-gutter);
+  }
+
+  .workspace-operations.office-home:is(.is-inventory-workspace, .is-units-workspace, .is-operations-workspace) {
+    gap: 0;
+  }
+
+  .office-main-content .office-table-shell {
+    min-height: 0;
+  }
+
+  .office-primary-work-surface .office-table-shell {
+    box-shadow: none;
+  }
+
+  .office-main-content .office-inspection-work-surface {
+    padding-top: 16px;
+  }
+
+  .inventory-workspace.is-section-root.is-page > .operational-collection-page-body {
+    margin-top: var(--workspace-card-gap);
+  }
+
+  .inventory-workspace.is-section-root > .operational-collection-page-body >
+    .operational-collection-section-header {
+    margin-bottom: var(--workspace-card-gap);
+  }
+
+  .admin-shell .operational-collection-tabs-wrap,
+  .workspace-operations .mechanic-primary-queues {
+    border-bottom: 0;
+  }
+
+  .prototype.workorder-detail-page,
+  .workorder-detail-page .workorder-detail-layout,
+  .workorder-detail-page .control-panel {
+    background: var(--workspace-background);
+  }
+
+  .workorder-detail-page .detail-context-bar {
+    background: transparent;
+    border-bottom: 0;
+    padding-inline: 10px;
+  }
+
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] .workorder-one-page-stack {
+    background: #fff;
+    border: 1px solid var(--workspace-card-border);
+    border-radius: var(--workspace-card-radius);
+    box-shadow: var(--workspace-card-shadow);
+    margin: var(--workspace-card-gap) var(--workspace-gutter);
+    padding: 20px 24px 24px;
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-shell .admin-content,
+  .admin-shell .commercial-profile-settings {
+    padding-inline: var(--workspace-gutter);
+  }
+
+  .admin-shell .admin-location-work {
+    padding: 0 12px 12px;
+  }
+
+  .workspace-operations .mechanic-queue-shell {
+    background: #fff;
+    border: 1px solid var(--workspace-card-border);
+    border-radius: var(--workspace-card-radius);
+    box-shadow: var(--workspace-card-shadow);
+  }
+
+  .workspace-operations .office-primary-work-surface .office-table-shell {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

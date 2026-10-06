@@ -43,6 +43,7 @@ export function CreateWorkorderShell({
   previewOpen,
   presentation = "panel",
   supportingPane,
+  customerDocumentAction = null,
 }) {
   const t = (key) => interfaceText(locale, key);
   const unit = createSummaryValue(form.unitNo, t("create.noUnitSelected"));
@@ -57,12 +58,13 @@ export function CreateWorkorderShell({
         back: { label: backLabel, onClick: onBack },
         content: (
           <>
-            <h1>{t("create.title")}</h1>
+            <h1>{t("detail.workorder")}</h1>
             {canSaveDraft ? (
               <DraftSaveStatus
                 status={workorderDraft.status}
                 error={workorderDraft.error}
                 showPristine
+                iconOnly
                 labels={{ dirty: t("create.draftChanged") }}
                 className="office-create-draft-status"
               />
@@ -82,6 +84,7 @@ export function CreateWorkorderShell({
               <span>{officeCreateState.busy ? t("create.creating") : t("create.create")}</span>
             </button>
           ) : null}
+          {!isPhone ? customerDocumentAction : null}
           {!isPhone && previewVisible ? (
             <PreviewToggle
               open={previewActive}
@@ -110,6 +113,7 @@ export function CreateWorkorderShell({
               <span>{officeCreateState.busy ? t("create.creating") : t("create.title")}</span>
             </button>
           </div>
+          {customerDocumentAction ? <div className="create-workorder-mobile-action">{customerDocumentAction}</div> : null}
           {presentation === "panel" ? (
             <div className="create-workorder-mobile-nav">
               <WorkorderSectionNav

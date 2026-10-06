@@ -4,6 +4,7 @@ import {
   pickExactUnitForWorkorderInstallation,
 } from "./inventory-exact-position-lifecycle.repo.js";
 import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventory-provider.js";
+import { assertCurrentExternalEstimateAccepted } from "./workorder-customer-authorization.repo.js";
 
 const ISSUE_STATUSES = new Set(["accepted", "in_progress"]);
 const CREATE_RESERVATION_STATUSES = new Set(["open", "accepted", "in_progress"]);
@@ -519,6 +520,10 @@ export async function updateSerializedUsageRepairOrder(input) {
       await client.query("commit");
       return { kind: "unchanged", usage: unchanged };
     }
+    await assertCurrentExternalEstimateAccepted(client, {
+      companyId: workorder.company_id,
+      workorderId: workorder.id,
+    });
     await client.query(
       `update workorder_serialized_part_usages
        set repair_order = $3, updated_at = now()
@@ -588,6 +593,10 @@ export async function issueSerializedUnitToWorkorder(input) {
       await client.query("commit");
       return { kind, usage };
     }
+    await assertCurrentExternalEstimateAccepted(client, {
+      companyId: workorder.company_id,
+      workorderId: workorder.id,
+    });
     if (!ISSUE_STATUSES.has(workorder.status)) {
       await client.query("rollback");
       return { kind: "workorder_state" };
@@ -757,6 +766,12 @@ export async function finalizeSerializedUnitUsage(input) {
     )) {
       await client.query("rollback");
       return { kind: "unit_state" };
+    }
+    if (input.disposition === "installed") {
+      await assertCurrentExternalEstimateAccepted(client, {
+        companyId: workorder.company_id,
+        workorderId: workorder.id,
+      });
     }
     if (input.disposition === "returned") {
       const item = await client.query(

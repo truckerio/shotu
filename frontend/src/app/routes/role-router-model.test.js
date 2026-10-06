@@ -18,6 +18,10 @@ test("create state has one shared template baseline and mechanic ownership", () 
   assert.equal(form.locationId, "yard-1");
   assert.equal(form.mechanicName, "Mechanic One");
   assert.equal(form.laborHours, "");
+  assert.equal(form.authorizationClassification, "approval_not_required");
+  assert.equal(form.customerAddress, "");
+  assert.equal(form.customerContactName, "");
+  assert.equal(form.customerContactEmail, "");
   assert.equal(form.headerTitle, baseline.formData.headerTitle);
   assert.equal(form.parts.length, 3);
   assert.deepEqual(createDraftBaselineFromForm(form), baseline);
@@ -50,6 +54,12 @@ test("create reset preserves location and template while clearing workorder cont
     part.partNo === "" && part.qty === "" && part.uomCode === "pc" && part.repairOrder === ""
   )));
   assert.equal(reset.workDate, "2026-08-02");
+  assert.equal(reset.authorizationClassification, "approval_not_required");
+  assert.equal(reset.customerAccountId, "");
+  assert.equal(reset.customerContactId, "");
+  assert.equal(reset.customerAddress, "");
+  assert.equal(reset.customerContactName, "");
+  assert.equal(reset.customerContactEmail, "");
 });
 
 test("mechanic create reset assigns the current mechanic", () => {

@@ -85,11 +85,11 @@ export function createAssignmentLoadingState(current = EMPTY_CREATE_ASSIGNMENT) 
   };
 }
 
-export function createAssignmentLoadedState(mechanics = []) {
+export function createAssignmentLoadedState(mechanics = [], current = EMPTY_CREATE_ASSIGNMENT) {
   return {
+    ...current,
     error: "",
     loading: false,
-    mechanicUserIds: [],
     mechanics: Array.isArray(mechanics) ? mechanics : [],
   };
 }

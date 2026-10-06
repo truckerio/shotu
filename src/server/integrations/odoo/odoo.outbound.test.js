@@ -86,6 +86,7 @@ function providerProducts() {
     ["85226", {
       id: 85226,
       display_name: "[PTR001] LABOR HOURS",
+      type: "service",
       active: true,
       uom_id: [4, "Hours"],
       lst_price: 150,
@@ -214,9 +215,27 @@ test("selected local labor fails closed instead of using the configured Odoo def
   assert.equal(result.ready, false);
   assert.deepEqual(result.blockers.find((entry) => entry.code === "ODOO_LOCAL_LABOR_UNMAPPED"), {
     code: "ODOO_LOCAL_LABOR_UNMAPPED",
-    message: "This workorder uses a local labor product. Odoo export is unavailable until labor mapping is supported.",
+    message: "Map this labor product to an active Odoo service with the same unit before export.",
     field: "laborProduct",
   });
+});
+
+test("mapped flat labor exports whole service quantity with its Odoo unit", () => {
+  const data = readyData();
+  data.localLaborProductId = "44444444-4444-4444-8444-444444444444";
+  data.localLaborMapped = true;
+  data.labor = { productExternalId: "999", productName: "Alignment", active: true, uomCode: "ea", uomExternalId: "1" };
+  data.preparation.laborHours = 2;
+  const products = providerProducts();
+  products.set("999", { id: 999, display_name: "Alignment", active: true, type: "service", uom_id: [1, "Each"], lst_price: 100, standard_price: 50, sale_delay: 0 });
+  assert.equal(evaluateOdooOutboundReadiness(data, { configured: true }).ready, true);
+  const payload = buildOdooDraftPayload(data, stableOdooWorkorderMarker(companyId, workorderId), { products });
+  assert.equal(payload.order_line[0][2].product_id, 999);
+  products.get("999").type = "consu";
+  assert.throws(() => buildOdooDraftPayload(data, stableOdooWorkorderMarker(companyId, workorderId), { products }), (error) => error.code === "ODOO_LABOR_PRODUCT_INVALID");
+  assert.equal(payload.order_line[0][2].product_uom_qty, 2);
+  data.preparation.laborHours = 2.5;
+  assert.ok(evaluateOdooOutboundReadiness(data, { configured: true }).blockers.some((entry) => entry.code === "ODOO_LABOR_INVALID"));
 });
 
 test("workorder mileage normalizes for Odoo and invalid values fail before draft creation", () => {
@@ -733,7 +752,7 @@ test("outbound implementation contains durable state but no confirm/invoice call
   assert.match(repository, /jsonb_typeof\(wo\.form_data->'parts'\) = 'array'/);
   assert.match(repository, /wo\.form_data->>'mileage' as mileage/);
   assert.match(repository, /wo\.form_data->>'laborHours'/);
-  assert.match(repository, /else preparation\.labor_hours[\s\S]*end as effective_labor_hours/);
+  assert.match(repository, /when local_labor\.id is null and nullif[\s\S]*then preparation\.labor_hours[\s\S]*else null[\s\S]*end as effective_labor_hours/);
   assert.match(repository, /source_uom\.reference_code = expected_uom\.reference_code/);
   assert.match(repository, /source_uom\.conversion_factor \/ expected_uom\.conversion_factor/);
   assert.match(repository, /when catalog\.uom_code = 'ea'[\s\S]*then \(part\.value->>'qty'\)::numeric/);

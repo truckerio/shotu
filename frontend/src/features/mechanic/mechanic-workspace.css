@@ -8,14 +8,14 @@
 
 .mechanic-home-content {
   margin-inline: auto;
-  max-width: var(--mechanic-home-max-width);
+  max-width: none;
   min-width: 0;
   width: 100%;
 }
 
 .mechanic-home-content:has(> .mechanic-queue-shell) {
   display: grid;
-  gap: 16px;
+  gap: var(--workspace-card-gap);
 }
 
 .mechanic-home-content > .page-header {

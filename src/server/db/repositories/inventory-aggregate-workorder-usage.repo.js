@@ -13,6 +13,7 @@ import {
   reserveAggregateCostLayers,
   reverseAggregateCostLayers,
 } from "./inventory-aggregate-cost-layers.repo.js";
+import { assertCurrentExternalEstimateAccepted } from "./workorder-customer-authorization.repo.js";
 
 const MEASURED_CATEGORIES = new Set(["liquid_volume", "mass", "gas_volume", "length"]);
 const QUANTITY_CATEGORIES = new Set(["count", "packaging"]);
@@ -177,6 +178,10 @@ export async function reserveAggregateWorkorderUsage(input, transactionClient = 
     );
     const workorder = selected.rows[0];
     if (!workorder) { await finish("rollback"); return { kind: "not_found" }; }
+    await assertCurrentExternalEstimateAccepted(client, {
+      companyId: workorder.company_id,
+      workorderId: workorder.id,
+    });
     if (!["open", "accepted", "in_progress"].includes(workorder.status)) {
       await finish("rollback"); return { kind: "inactive_workorder" };
     }
@@ -326,6 +331,12 @@ export async function releaseOrReverseAggregateWorkorderUsage(input) {
       const effectiveQuantity = Number(usage.quantity) + Number(usage.adjustment_total);
       const consumptionDelta = Number(input.targetQuantity) - effectiveQuantity;
       if (consumptionDelta === 0) { await client.query("rollback"); return { kind: "terminal" }; }
+      if (consumptionDelta > 0) {
+        await assertCurrentExternalEstimateAccepted(client, {
+          companyId: usage.company_id,
+          workorderId: usage.workorder_id,
+        });
+      }
       await adjustConsumedAggregateInventoryPositions(client, { companyId: usage.company_id, locationId: usage.location_id,
         inventoryItemId: balance.rows[0].id, catalogPartId: usage.catalog_part_id, uomCode: usage.uom_code,
         usageId: usage.id, actorId: input.actorId, workorderId: usage.workorder_id,

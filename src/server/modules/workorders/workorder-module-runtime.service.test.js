@@ -546,6 +546,7 @@ test("canonical create derives actor identity and preserves mechanic start seman
   let authorized;
   const result = await createWorkorderRuntime(mechanicContext, {
     companyId: "company-1", locationId: "location-1", concern: "Inspect", mechanicUserIds: [], formData: { workPerformed: "Inspect brakes" },
+    authorizationClassification: "internal_fleet", authorizationExceptionReason: "Fleet road repair",
   }, {
     companyId: "company-1",
     locationId: "location-1",
@@ -553,7 +554,7 @@ test("canonical create derives actor identity and preserves mechanic start seman
     concern: "Inspect",
     officeNotes: "",
     formData: {
-      customerCompanyName: "Long Haul",
+      customerCompanyName: "",
       workStartDate: "2026-08-10",
       unitNo: "G2026",
       mechanicConcern: "Inspect",
@@ -579,7 +580,7 @@ test("active-unit creation conflicts are returned as actionable HTTP errors", as
   });
   await assert.rejects(
     createWorkorderRuntime({
-      actor: { id: "actor-1", role: "office" },
+      actor: { id: "actor-1", role: "admin" },
       companyIds: new Set(["company-1"]),
       locationIds: new Set(["location-1"]),
     }, {
@@ -588,6 +589,7 @@ test("active-unit creation conflicts are returned as actionable HTTP errors", as
       concern: "Inspect",
       mechanicUserIds: [],
       formData: {},
+      authorizationClassification: "internal_fleet", authorizationExceptionReason: "Fleet inspection",
     }, {
       companyId: "company-1",
       locationId: "location-1",
@@ -608,7 +610,7 @@ test("create persists only the trusted local labor snapshot", async () => {
   const localId = "44444444-4444-4444-8444-444444444444";
   let resolved;
   const result = await createWorkorderRuntime({
-    actor: { id: "actor-1", role: "office" },
+    actor: { id: "actor-1", role: "admin" },
     companyIds: new Set(["company-1"]),
     locationIds: new Set(["location-1"]),
   }, {
@@ -617,6 +619,7 @@ test("create persists only the trusted local labor snapshot", async () => {
     concern: "Inspect",
     mechanicUserIds: [],
     formData: { laborProduct: { productId: localId, externalId: "", name: "Untrusted", code: "BAD", uomCode: "hr" } },
+    authorizationClassification: "internal_fleet", authorizationExceptionReason: "Fleet service",
   }, {
     companyId: "company-1", locationId: "location-1", concern: "Inspect", formData: { laborProduct: { productId: localId } },
   }, {
@@ -632,6 +635,26 @@ test("create persists only the trusted local labor snapshot", async () => {
   assert.deepEqual(result.formData.laborProduct, {
     productId: localId, externalId: "", name: "Diagnostics", code: "DIAG", uomCode: "hr",
   });
+});
+
+test("direct create cannot bypass an external-customer Estimate acceptance", async () => {
+  await assert.rejects(createWorkorderRuntime({
+    actor: { id: "actor-1", role: "office" }, companyIds: new Set(["company-1"]), locationIds: new Set(["location-1"]),
+  }, {
+    companyId: "company-1", locationId: "location-1", concern: "Customer repair", mechanicUserIds: [], formData: {},
+    authorizationClassification: "required_external_customer",
+  }, {}, { create: async () => assert.fail("direct external creation must not reach persistence") }),
+  (error) => error.code === "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED");
+});
+
+test("mechanic self-create cannot classify a named customer job as internal fleet", async () => {
+  await assert.rejects(createWorkorderRuntime({
+    actor: { id: "mechanic-1", role: "mechanic" }, companyIds: new Set(["company-1"]), locationIds: new Set(["location-1"]),
+  }, {
+    companyId: "company-1", locationId: "location-1", concern: "Customer repair", mechanicUserIds: [],
+    formData: { customerCompanyName: "External Customer" },
+  }, {}, { create: async () => assert.fail("customer job must not use mechanic self-create") }),
+  (error) => error.code === "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED");
 });
 
 test("create context exposes the company-selected labor product to every location", async () => {

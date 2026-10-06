@@ -83,6 +83,12 @@ export function buildWorkorderDraftPayload({
     assetId: selectedVehicle?.id || null,
     concern: text(form.mechanicConcern),
     officeNotes: text(form.officeNotes),
+    ...(["admin", "office"].includes(actor.role) && form.authorizationClassification ? {
+      authorizationClassification: form.authorizationClassification,
+      authorizationExceptionReason: ["internal_fleet", "exempt"].includes(form.authorizationClassification)
+        ? text(form.authorizationExceptionReason)
+        : null,
+    } : {}),
     ...(!isMechanicCreate ? {
       mechanicUserIds: [...new Set(mechanicUserIds.filter(Boolean))],
     } : {}),
@@ -110,6 +116,11 @@ export function buildWorkorderDraftPayload({
     formData: {
       companyName: text(form.customerCompanyName),
       customerCompanyName: text(form.customerCompanyName),
+      customerAccountId: text(form.customerAccountId),
+      customerContactId: text(form.customerContactId),
+      customerAddress: text(form.customerAddress),
+      customerContactName: text(form.customerContactName),
+      customerContactEmail: text(form.customerContactEmail),
       headerTitle: text(form.headerTitle),
       brandTop: text(form.brandTop),
       brandBottom: text(form.brandBottom),
@@ -152,6 +163,11 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
     || text(payload?.officeNotes)
     || payload?.mechanicUserIds?.length
     || text(form.customerCompanyName)
+    || text(form.customerAccountId)
+    || text(form.customerContactId)
+    || text(form.customerAddress)
+    || text(form.customerContactName)
+    || text(form.customerContactEmail)
     || text(form.unitNo)
     || text(form.unitType)
     || text(form.licenseNo)
@@ -199,6 +215,11 @@ export function formValuesFromWorkorderDraft(payload, currentForm) {
     ...saved,
     locationId: payload?.locationId || currentForm.locationId,
     customerCompanyName: saved.customerCompanyName || saved.companyName || "",
+    customerAccountId: saved.customerAccountId || "",
+    customerContactId: saved.customerContactId || "",
+    customerAddress: saved.customerAddress || "",
+    customerContactName: saved.customerContactName || "",
+    customerContactEmail: saved.customerContactEmail || "",
     mechanicConcern: saved.mechanicConcern || payload?.concern || "",
     workPerformed: saved.workPerformed || "",
     laborPriceSelection: ["internal_cost", "selling_price"].includes(payload?.pricing?.labor?.selection)
@@ -206,6 +227,10 @@ export function formValuesFromWorkorderDraft(payload, currentForm) {
       : "",
     laborCustomUnitPrice: text(payload?.pricing?.labor?.customUnitPrice),
     officeNotes: payload?.officeNotes || "",
+    authorizationClassification: Object.hasOwn(payload || {}, "authorizationClassification")
+      ? payload.authorizationClassification || ""
+      : currentForm.authorizationClassification || "approval_not_required",
+    authorizationExceptionReason: payload?.authorizationExceptionReason || "",
     parts: savedParts.length ? savedParts : currentForm.parts,
   };
 }

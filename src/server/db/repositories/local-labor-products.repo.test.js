@@ -67,7 +67,7 @@ test("pin mutation derives the tenant from selected active rows", async () => {
   assert.equal(product.description, "Diagnose no-start");
 });
 
-test("Odoo labor snapshot copy is tenant-scoped, hourly-only, replay-safe, and rolls back invalid batches", { skip: !runPostgres }, async () => {
+test("Odoo labor snapshot copy is tenant-scoped, unit-aware, replay-safe, and rolls back invalid batches", { skip: !runPostgres }, async () => {
   const companyId = randomUUID();
   const otherCompanyId = randomUUID();
   const suffix = randomUUID().replaceAll("-", "");
@@ -86,7 +86,7 @@ test("Odoo labor snapshot copy is tenant-scoped, hourly-only, replay-safe, and r
       [companyId, validId, "LAB", "Shop labor", true, "Hours", "Working Time", "75.0000", "USD", "140.0000", "USD"],
       [companyId, freshId, "FRESH", "Fresh labor", true, "Hours", "Working Time"],
       [companyId, disabledId, "DIS", "Disabled labor", false, "Hours", "Working Time"],
-      [companyId, eachId, "EACH", "Each service", true, "Each", "Unit"],
+      [companyId, eachId, "EACH", "Each service", true, "Each", "Number"],
       [companyId, existingId, "EXIST", "Existing labor", true, "Hours", "Working Time"],
       [companyId, blankId, "BLANK", "", true, "Hours", "Working Time"],
       [otherCompanyId, foreignId, "FOREIGN", "Foreign labor", true, "Hours", "Working Time"],
@@ -101,30 +101,30 @@ test("Odoo labor snapshot copy is tenant-scoped, hourly-only, replay-safe, and r
     await query(`insert into local_labor_products (company_id, name, normalized_name, code, normalized_code)
       values ($1, 'Existing labor', 'existing labor', 'EXIST', 'exist')`, [companyId]);
 
-    const first = await importOdooLaborProducts({ companyId, externalIds: [validId, existingId] });
-    assert.deepEqual(first.products.map((product) => [product.externalId, product.created]).sort(), [[existingId, false], [validId, true]]);
+    const first = await importOdooLaborProducts({ companyId, externalIds: [validId, existingId, eachId] });
+    assert.deepEqual(first.products.map((product) => [product.externalId, product.created]).sort(), [[eachId, true], [existingId, false], [validId, true]]);
     const linked = await query("select source_provider,source_external_id from local_labor_products where company_id=$1 and normalized_name='shop labor'", [companyId]);
     assert.deepEqual(linked.rows[0], { source_provider: "odoo", source_external_id: validId });
     const listed = await listLocalLaborProducts({ companyId, locationId: randomUUID(), q: "shop" });
     assert.equal(listed[0].odooPricing.internal.amount, "75.0000");
     assert.equal(listed[0].odooPricing.selling.amount, "140.0000");
+    assert.equal((await listLocalLaborProducts({ companyId, locationId: randomUUID(), q: "each" }))[0].uomCode, "ea");
     const replay = await Promise.all([
       importOdooLaborProducts({ companyId, externalIds: [validId, existingId] }),
       importOdooLaborProducts({ companyId, externalIds: [validId, existingId] }),
     ]);
     assert.deepEqual(replay.flatMap((result) => result.products).map((product) => product.created), [false, false, false, false]);
-    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 2);
+    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 3);
     await query("update odoo_service_products set display_name='Renamed in Odoo',default_code='RENAMED' where company_id=$1 and external_id=$2", [companyId, validId]);
     const renamedReplay = await importOdooLaborProducts({ companyId, externalIds: [validId] });
     assert.equal(renamedReplay.products[0].productId, first.products.find((product) => product.externalId === validId).productId);
-    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 2);
+    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 3);
     assert.equal((await query("select name from local_labor_products where company_id=$1 and source_external_id=$2", [companyId, validId])).rows[0].name, "Shop labor");
 
-    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [disabledId] }), /not active hourly services/i);
-    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [eachId] }), /not active hourly services/i);
-    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [foreignId] }), /not active hourly services/i);
+    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [disabledId] }), /not active supported services/i);
+    await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [foreignId] }), /not active supported services/i);
     await assert.rejects(importOdooLaborProducts({ companyId, externalIds: [freshId, blankId] }), /missing a name/i);
-    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 2);
+    assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1", [companyId])).rows[0].count, 3);
     assert.equal((await query("select count(*)::int as count from local_labor_products where company_id=$1 and normalized_name='fresh labor'", [companyId])).rows[0].count, 0);
   } finally {
     await query("delete from companies where id = any($1::uuid[])", [[companyId, otherCompanyId]]).catch(() => {});

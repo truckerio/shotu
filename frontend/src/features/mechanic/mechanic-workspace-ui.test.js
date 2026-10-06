@@ -48,9 +48,8 @@ test("search stays outside the compact More disclosure", () => {
   assert.equal(workspace.slice(moreStart).includes('t("mechanic.searchWorkorders")'), false);
 });
 
-test("mechanic home keeps a readable desktop column and overflow-safe children", () => {
-  assert.match(css, /--mechanic-home-max-width:\s*1440px/);
-  assert.match(css, /\.mechanic-home-content[\s\S]*max-width:\s*var\(--mechanic-home-max-width\)/);
+test("mechanic home uses the available desktop width and overflow-safe children", () => {
+  assert.match(css, /\.mechanic-home-content[\s\S]*max-width:\s*none/);
   assert.match(css, /\.mechanic-home-content[\s\S]*min-width:\s*0/);
   assert.match(css, /\.mechanic-next-job[\s\S]*overflow-wrap:\s*anywhere/);
   assert.match(css, /@media \(max-width:\s*1366px\)/);

@@ -4,6 +4,7 @@ import {
   getOperationalWorkorderById,
   mapActiveAssetConflict,
 } from "./operational-workorders.repo.js";
+import { resolveWorkorderCustomerIdentity } from "./customer-directory.repo.js";
 
 export class WorkorderDraftConflictError extends Error {
   constructor(code, message) {
@@ -65,6 +66,8 @@ export function publicWorkorderDraftRow(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     submittedWorkorderId: row.submitted_workorder_id,
+    authorizationClassification: row.authorization_classification || "unclassified",
+    authorizationExceptionReason: row.authorization_exception_reason || null,
   };
 }
 
@@ -146,6 +149,8 @@ export async function createWorkorderDraft({
   userId,
   type = "workorder",
   payload = {},
+  authorizationClassification = "approval_not_required",
+  authorizationExceptionReason = null,
 }) {
   const client = await getPool().connect();
   let draft;
@@ -164,10 +169,11 @@ export async function createWorkorderDraft({
     if (active.rows[0].count >= 25) throw new WorkorderDraftLimitError();
     const result = await client.query(
       `insert into workorder_drafts (
-         company_id, location_id, created_by_user_id, owner_user_id, last_edited_by_user_id, type, payload
-       ) values ($1, $2, $3, $3, $3, $4, $5::jsonb)
+         company_id, location_id, created_by_user_id, owner_user_id, last_edited_by_user_id, type, payload,
+         authorization_classification, authorization_exception_reason
+       ) values ($1, $2, $3, $3, $3, $4, $5::jsonb, $6, $7)
        returning *`,
-      [companyId, locationId, userId, type, JSON.stringify(payload)],
+      [companyId, locationId, userId, type, JSON.stringify(payload), authorizationClassification, authorizationExceptionReason],
     );
     await recordDraftEvent({
       draftId: result.rows[0].id,
@@ -238,6 +244,8 @@ export async function updateWorkorderDraft({
   version,
   locationId,
   payload,
+  authorizationClassification,
+  authorizationExceptionReason,
 }) {
   const scope = editableScope({ companyIds, locationIds, userId, role }, 2);
   const hasLocation = locationId !== undefined;
@@ -248,10 +256,15 @@ export async function updateWorkorderDraft({
   const locationValueParam = versionParam + 3;
   const payloadFlagParam = versionParam + 4;
   const payloadValueParam = versionParam + 5;
+  const authorizationFlagParam = versionParam + 6;
+  const authorizationValueParam = versionParam + 7;
+  const authorizationReasonParam = versionParam + 8;
   const result = await query(
     `update workorder_drafts as d
         set location_id = case when $${locationFlagParam}::boolean then $${locationValueParam}::uuid else d.location_id end,
             payload = case when $${payloadFlagParam}::boolean then d.payload || $${payloadValueParam}::jsonb else d.payload end,
+            authorization_classification = case when $${authorizationFlagParam}::boolean then $${authorizationValueParam} else d.authorization_classification end,
+            authorization_exception_reason = case when $${authorizationFlagParam}::boolean then $${authorizationReasonParam} else d.authorization_exception_reason end,
             last_edited_by_user_id = $${editorParam},
             version = version + 1,
             updated_at = now()
@@ -269,6 +282,9 @@ export async function updateWorkorderDraft({
       hasLocation ? locationId : null,
       hasPayload,
       JSON.stringify(payload || {}),
+      authorizationClassification !== undefined,
+      authorizationClassification || "unclassified",
+      authorizationExceptionReason || null,
     ],
   );
   if (result.rows[0]) {
@@ -278,7 +294,12 @@ export async function updateWorkorderDraft({
       actorUserId: userId,
       action: "updated",
       version: result.rows[0].version,
-      details: { locationChanged: hasLocation, payloadChanged: hasPayload },
+      details: {
+        locationChanged: hasLocation,
+        payloadChanged: hasPayload,
+        authorizationClassification: authorizationClassification || undefined,
+        authorizationExceptionReason: authorizationClassification ? authorizationExceptionReason || null : undefined,
+      },
     });
     return publicWorkorderDraftRow(result.rows[0]);
   }
@@ -337,6 +358,11 @@ export async function submitWorkorderDraftInTransaction({
   userId,
   version,
   prepareCreateInput,
+  activationPolicy = "legacy_internal_fleet_direct_v1",
+  acceptedEstimateRevisionId = null,
+  authorizationSourceDraftId = null,
+  issueInformationalEstimate = null,
+  bindInformationalEstimate = null,
 }, client, dependencies = {}) {
   const createWorkorder = dependencies.createWorkorder || createOperationalWorkorderInTransaction;
   const scope = editableScope({ companyIds, locationIds, userId, role }, 2);
@@ -360,6 +386,22 @@ export async function submitWorkorderDraftInTransaction({
   if (draftRow.status !== "active") {
     throw new WorkorderDraftConflictError("DRAFT_NOT_ACTIVE", "This draft is no longer active.");
   }
+  const classification = draftRow.authorization_classification || "unclassified";
+  const chosenActivationPolicy = activationPolicy || (classification === "approval_not_required"
+    ? "approval_not_required_v1" : "legacy_internal_fleet_direct_v1");
+  if (classification === "unclassified") {
+    throw new WorkorderDraftConflictError("DRAFT_AUTHORIZATION_CLASSIFICATION_REQUIRED", "Choose the Workorder authorization path before submitting.");
+  }
+  if (classification === "required_external_customer" && chosenActivationPolicy !== "accepted_customer_estimate_v1") {
+    throw new WorkorderDraftConflictError("CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED", "Activate this draft from its accepted current Estimate.");
+  }
+  if (classification === "approval_not_required" && chosenActivationPolicy !== "approval_not_required_v1") {
+    throw new WorkorderDraftConflictError("DRAFT_AUTHORIZATION_POLICY_INVALID", "This draft requires the standard approval-not-required creation path.");
+  }
+  if (["internal_fleet", "exempt"].includes(classification)
+    && (!draftRow.authorization_exception_reason || chosenActivationPolicy !== "legacy_internal_fleet_direct_v1")) {
+    throw new WorkorderDraftConflictError("DRAFT_AUTHORIZATION_EXCEPTION_INVALID", "This authorization exception is incomplete.");
+  }
   if (version !== undefined && version !== draftRow.version) {
     throw new WorkorderDraftConflictError(
       "DRAFT_VERSION_CONFLICT",
@@ -367,11 +409,37 @@ export async function submitWorkorderDraftInTransaction({
     );
   }
 
-  const createInput = await prepareCreateInput({
+  let preparedInput = await prepareCreateInput({
     ...publicWorkorderDraftRow(draftRow),
     companyId: draftRow.company_id,
     createdByUserId: draftRow.created_by_user_id,
   });
+  const resolveCustomerIdentity = dependencies.resolveCustomerIdentity || resolveWorkorderCustomerIdentity;
+  const resolvedIdentity = await resolveCustomerIdentity({
+    companyId: draftRow.company_id,
+    actorId: userId,
+    formData: preparedInput.formData,
+  }, client);
+  preparedInput = { ...preparedInput, formData: resolvedIdentity.formData };
+  const resolvedDraft = {
+    ...publicWorkorderDraftRow(draftRow),
+    payload: {
+      ...(draftRow.payload || {}),
+      formData: resolvedIdentity.formData,
+    },
+  };
+  const createInput = {
+    ...preparedInput,
+    activationPolicy: chosenActivationPolicy,
+    ...(acceptedEstimateRevisionId ? { acceptedEstimateRevisionId } : {}),
+    ...(authorizationSourceDraftId ? { authorizationSourceDraftId } : {}),
+  };
+  const informationalEstimate = classification === "approval_not_required"
+    ? await issueInformationalEstimate?.({ draft: resolvedDraft, preparedInput, client })
+    : null;
+  if (classification === "approval_not_required" && !informationalEstimate?.revision?.id) {
+    throw new WorkorderDraftConflictError("CUSTOMER_ESTIMATE_ISSUE_REQUIRED", "An informational Estimate is required before creating this Workorder.");
+  }
   let created;
   try {
     created = await createWorkorder(createInput, client);
@@ -398,12 +466,21 @@ export async function submitWorkorderDraftInTransaction({
     actorUserId: userId,
     action: "submitted",
     version: submitted.rows[0].version,
-    details: { workorderId: created.id },
+    details: {
+      workorderId: created.id,
+      activationPolicy: chosenActivationPolicy,
+      authorizationClassification: classification,
+      authorizationExceptionReason: draftRow.authorization_exception_reason || null,
+    },
   }, client);
+  if (informationalEstimate) {
+    await bindInformationalEstimate({ estimate: informationalEstimate, workorderId: created.id, client });
+  }
   return {
     draft: publicWorkorderDraftRow(submitted.rows[0]),
     workorderId: created.id,
     idempotent: false,
+    estimateRevisionId: informationalEstimate?.revision?.id || null,
   };
 }
 

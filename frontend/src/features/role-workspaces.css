@@ -4,10 +4,10 @@
 
 .workspace-operations .mechanic-queue-shell,
 .workspace-operations .office-mechanic-panel {
-  background: rgb(255 255 255 / 62%);
-  border-color: #e4e7ec;
-  border-radius: 6px;
-  box-shadow: none;
+  background: #fff;
+  border-color: var(--workspace-card-border);
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
 }
 
 .workspace-operations > .page-header {

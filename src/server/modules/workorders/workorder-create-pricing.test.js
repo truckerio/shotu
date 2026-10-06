@@ -113,3 +113,18 @@ test("serialized preview requires local provider, reservable custody and a picka
   assert.equal(result.parts[0].status, "incomplete");
   assert.equal(result.parts[0].price, null);
 });
+test("create pricing uses canonical labor unit and rejects spoofed fractional flat service", async () => {
+  const client = { async query(sql) {
+    assert.match(sql, /join local_labor_products product/);
+    return { rows: [{ id: "rate", labor_product_id: "product", price_kind: "selling_price", amount: "25.0000", currency: "USD", product_uom_code: "ea" }] };
+  } };
+  const input = { companyId: "company", locationId: "shop", formData: { parts: [], laborProduct: { productId: "product", uomCode: "ea" }, laborHours: "2" }, pricing: { labor: { selection: "selling_price" } } };
+  const good = await readCreatePricing(input, client);
+  assert.equal(good.labor.price.totalPrice, "50.0000");
+  assert.equal(good.labor.price.uomCode, "ea");
+  for (const formData of [{ ...input.formData, laborHours: "1.5" }, { ...input.formData, laborHours: "1.5", laborProduct: { productId: "product", uomCode: "hr" } }]) {
+    const invalid = await readCreatePricing({ ...input, formData }, client);
+    assert.equal(invalid.labor.status, "incomplete");
+    assert.equal(invalid.labor.price, null);
+  }
+});

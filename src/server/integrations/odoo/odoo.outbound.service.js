@@ -100,20 +100,23 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
       "customerExternalId",
     ));
   }
-  if (!laborHours || laborHours <= 0 || Math.round(laborHours * 100) !== laborHours * 100) {
-    blockers.push(blocker("ODOO_LABOR_INVALID", "Add actual labor hours in the Parts section with no more than two decimal places.", "laborHours"));
+  const laborUomCode = labor?.uomCode || "hr";
+  if (!laborHours || laborHours <= 0 || Math.round(laborHours * 100) !== laborHours * 100
+    || (laborUomCode === "ea" && !Number.isInteger(laborHours))) {
+    blockers.push(blocker("ODOO_LABOR_INVALID", "Enter a positive labor quantity using the selected service unit.", "laborHours"));
   }
   if (!String(workorder?.workPerformed || "").trim()) {
     blockers.push(blocker("ODOO_WORK_PERFORMED_MISSING", "A repair order is required for the labor description.", "workPerformed"));
   }
-  if (data?.localLaborProductId) {
+  if (data?.localLaborProductId && !data.localLaborMapped) {
     blockers.push(blocker(
       "ODOO_LOCAL_LABOR_UNMAPPED",
-      "This workorder uses a local labor product. Odoo export is unavailable until labor mapping is supported.",
+      "Map this labor product to an active Odoo service with the same unit before export.",
       "laborProduct",
     ));
-  } else if (!labor?.productExternalId || labor.active === false || labor.uomCode !== "hr") {
-    blockers.push(blocker("ODOO_LABOR_PRODUCT_INVALID", "Configure an active Odoo labor product using Hours.", "laborProduct"));
+  } else if (!labor?.productExternalId || labor.active === false || !["hr", "ea"].includes(labor.uomCode)
+    || (!data?.localLaborProductId && labor.uomCode !== "hr")) {
+    blockers.push(blocker("ODOO_LABOR_PRODUCT_INVALID", "Select an active Odoo labor service with a matching unit.", "laborProduct"));
   }
   for (const part of parts) {
     if (!part.productExternalId || part.productActive === false) {
@@ -151,7 +154,7 @@ export function evaluateOdooOutboundReadiness(data, { configured }) {
     } : null,
     labor: {
       productExternalId: String(labor?.productExternalId || ""),
-      uom: labor?.uomCode === "hr" ? "hr" : "",
+      uom: ["hr", "ea"].includes(labor?.uomCode) ? labor.uomCode : "",
       hours: laborHours,
     },
     parts: parts.map((part) => ({
@@ -331,7 +334,7 @@ function mappedProductIds(data) {
 async function readCurrentMappedProducts(client, data) {
   const productIds = mappedProductIds(data);
   const productRows = await client.execute("product.product", "read", [productIds], {
-    fields: ["id", "display_name", "name", "active", "uom_id", "standard_price", "sale_delay"],
+    fields: ["id", "display_name", "name", "active", "type", "uom_id", "standard_price", "sale_delay"],
   });
   if (productRows.length !== productIds.length || productRows.some((product) => product.active === false)) {
     throw new OdooOutboundError("ODOO_PART_UNMAPPED", "One or more mapped Odoo products are missing or inactive.");
@@ -340,8 +343,14 @@ async function readCurrentMappedProducts(client, data) {
 }
 
 function requireCurrentProductUoms(data, products) {
+  if (products.get(String(data.labor.productExternalId))?.type !== "service") {
+    throw new OdooOutboundError("ODOO_LABOR_PRODUCT_INVALID", "The selected Odoo labor product must remain a service.");
+  }
   const labor = productDetail(products, data.labor.productExternalId, { field: "laborProduct" });
-  if (String(labor.uomId) !== String(data.labor.uomExternalId || "")) {
+  const laborUomName = String(labor.uomName || "").trim();
+  const expectedUnitMatches = data.labor.uomCode === "ea"
+    ? /^each$/i.test(laborUomName) : /^hours?$/i.test(laborUomName);
+  if (String(labor.uomId) !== String(data.labor.uomExternalId || "") || !expectedUnitMatches) {
     throw new OdooOutboundError(
       "ODOO_LABOR_PRODUCT_INVALID",
       "The Odoo labor product unit changed. Rediscover products and review the labor mapping.",
@@ -371,6 +380,7 @@ function orderLine({ sequence, product, quantity, name }) {
 }
 
 export function buildOdooDraftPayload(data, marker, { products = new Map(), addresses = {} } = {}) {
+  requireCurrentProductUoms(data, products);
   const workorder = data.workorder;
   const preparation = data.preparation;
   const vehicle = data.vehicle;

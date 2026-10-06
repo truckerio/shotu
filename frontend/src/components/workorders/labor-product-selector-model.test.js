@@ -19,7 +19,7 @@ test("normalizes only usable local labor products and capability flags", () => {
   }), {
     canCreate: true,
     canPin: true,
-    items: [{ id: "labor-1", name: "Shop labor", code: "LAB", uomCode: "hr", pinned: true }],
+    items: [{ id: "labor-1", name: "Shop labor", code: "LAB", uomCode: "ea", pinned: true }],
   });
 });
 
@@ -28,6 +28,7 @@ test("normalizes and labels Odoo labor selling price without copying it into wor
   assert.equal(item.odooPricing.selling.currency, "USD");
   assert.match(laborProviderPriceLabel(item), /Odoo selling.*125/);
   assert.equal(localLaborProductValue(item).odooPricing, undefined);
+  assert.match(laborProviderPriceLabel({ ...item, uomCode: "ea" }), /\/ service$/);
 });
 
 test("places pins first without making them mandatory selection rows", () => {
@@ -50,8 +51,9 @@ test("local selection preserves the product id while legacy values remain displa
 
 test("create payload trims optional values and rejects missing local context", () => {
   assert.deepEqual(createLaborProductPayload({ locationId: " loc-1 ", name: " Shop labor ", code: " LAB " }), {
-    locationId: "loc-1", name: "Shop labor", code: "LAB",
+    locationId: "loc-1", name: "Shop labor", code: "LAB", uomCode: "hr",
   });
+  assert.equal(createLaborProductPayload({ locationId: "loc-1", name: "Inspection", uomCode: "ea" }).uomCode, "ea");
   assert.equal(createLaborProductPayload({ locationId: "loc-1", name: " " }), null);
 });
 
@@ -79,4 +81,15 @@ test("reselecting labour preserves a cleared Repair order while new selections g
   assert.deepEqual(laborProductSelectionPatch(form, product), { laborProduct: product });
   const next = { productId: "labor-2", description: "Replace sensor" };
   assert.deepEqual(laborProductSelectionPatch(form, next), { laborProduct: next, workPerformed: "Replace sensor" });
+});
+
+test("switching hourly labor to a flat service clears quantity and price choices", () => {
+  const oldProduct = { productId: "labor-1", uomCode: "hr" };
+  const flatProduct = localLaborProductValue({ id: "labor-2", name: "Inspection", uomCode: "ea" });
+  assert.deepEqual(laborProductSelectionPatch({
+    laborProduct: oldProduct, laborHours: "2.5", laborPriceSelection: "selling_price", laborCustomUnitPrice: "150", workPerformed: "Custom note",
+  }, flatProduct), {
+    laborProduct: flatProduct, laborHours: "", laborPriceSelection: "", laborCustomUnitPrice: "",
+  });
+  assert.equal(flatProduct.uomCode, "ea");
 });

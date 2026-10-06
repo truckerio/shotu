@@ -8,7 +8,7 @@ export function normalizeLaborProductItem(item = {}) {
     name,
     ...(String(item.description || "").trim() ? { description: String(item.description).trim() } : {}),
     code: String(item.code || "").trim(),
-    uomCode: "hr",
+    uomCode: item.uomCode === "ea" ? "ea" : "hr",
     pinned: Boolean(item.pinned),
     ...(item.source?.provider ? { source: { provider: String(item.source.provider), externalId: String(item.source.externalId || "") } } : {}),
     ...(item.odooPricing ? { odooPricing: {
@@ -29,8 +29,9 @@ function normalizeProviderPrice(price = {}) {
 export function laborProviderPriceLabel(item = {}) {
   const price = item.odooPricing?.selling;
   if (price?.status !== "known") return "";
-  try { return `Odoo selling ${new Intl.NumberFormat(undefined, { style: "currency", currency: price.currency, maximumFractionDigits: 4 }).format(Number(price.amount))} / hr`; }
-  catch { return `Odoo selling ${price.currency} ${price.amount} / hr`; }
+  const unit = item.uomCode === "ea" ? "service" : "hr";
+  try { return `Odoo selling ${new Intl.NumberFormat(undefined, { style: "currency", currency: price.currency, maximumFractionDigits: 4 }).format(Number(price.amount))} / ${unit}`; }
+  catch { return `Odoo selling ${price.currency} ${price.amount} / ${unit}`; }
 }
 
 export function normalizeLaborProductsResponse(payload = {}) {
@@ -65,7 +66,7 @@ export function localLaborProductValue(item = {}) {
     code: normalized.code,
     name: normalized.name,
     ...(normalized.description ? { description: normalized.description } : {}),
-    uomCode: "hr",
+    uomCode: normalized.uomCode,
   } : null;
 }
 
@@ -73,13 +74,14 @@ export function productMatchesValue(item, value) {
   return Boolean(item?.id) && String(value?.productId || "").trim() === item.id;
 }
 
-export function createLaborProductPayload({ locationId, name, code, description } = {}) {
+export function createLaborProductPayload({ locationId, name, code, description, uomCode = "hr" } = {}) {
   const cleanedName = String(name || "").trim();
   const cleanedCode = String(code || "").trim();
   if (!String(locationId || "").trim() || !cleanedName) return null;
   return {
     locationId: String(locationId).trim(),
     name: cleanedName,
+    uomCode: uomCode === "ea" ? "ea" : "hr",
     ...(cleanedCode ? { code: cleanedCode } : {}),
     ...(String(description || "").trim() ? { description: String(description).trim() } : {}),
   };
@@ -87,8 +89,11 @@ export function createLaborProductPayload({ locationId, name, code, description 
 
 export function laborProductSelectionPatch(form, product) {
   const repairOrder = repairOrderAfterCatalogSelection(form.workPerformed, product || {}, form.laborProduct?.productId);
+  const previousUnit = form.laborProduct?.uomCode === "ea" ? "ea" : "hr";
+  const nextUnit = product?.uomCode === "ea" ? "ea" : "hr";
   return {
     laborProduct: product,
+    ...(previousUnit !== nextUnit ? { laborHours: "", laborPriceSelection: "", laborCustomUnitPrice: "" } : {}),
     ...(repairOrder !== form.workPerformed ? { workPerformed: repairOrder } : {}),
   };
 }

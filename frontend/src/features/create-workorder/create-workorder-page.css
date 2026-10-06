@@ -52,6 +52,189 @@
   flex: 0 0 auto;
 }
 
+.create-workorder-approval-request {
+  display: grid;
+  gap: 12px;
+}
+
+.create-workorder-authorization-exceptions p {
+  color: #535862;
+  margin: 0;
+}
+
+.create-workorder-approval-toggle {
+  align-items: center;
+  display: flex;
+  font-weight: var(--weight-semibold);
+  gap: 8px;
+}
+
+.create-workorder-approval-toggle input {
+  block-size: 20px;
+  inline-size: 20px;
+}
+
+.create-workorder-approval-choice {
+  display: grid;
+  font-weight: var(--weight-semibold);
+  gap: 6px;
+}
+
+.create-workorder-authorization-exceptions {
+  border-top: 1px solid #e9eaeb;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.create-workorder-authorization-exceptions summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+}
+
+.create-customer-editor-heading,
+.create-customer-editor-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.create-customer-editor-backdrop {
+  align-items: center;
+  background: rgb(16 24 40 / 45%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 30;
+}
+
+.create-customer-editor {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgb(16 24 40 / 30%);
+  inline-size: min(100%, 520px);
+  max-block-size: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 20px;
+}
+
+.create-customer-editor form {
+  display: grid;
+  gap: 16px;
+}
+
+.create-customer-editor label {
+  display: grid;
+  font-weight: var(--weight-semibold);
+  gap: 6px;
+}
+
+.create-customer-editor label span {
+  color: #667085;
+  font-weight: var(--weight-normal);
+}
+
+.create-customer-editor input,
+.create-customer-editor textarea {
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  min-block-size: 42px;
+  padding: 8px;
+  inline-size: 100%;
+}
+
+.create-customer-directory-field {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.create-customer-directory-field .operational-form-field {
+  min-width: 0;
+}
+
+.workorder-one-page-stack .workorder-compact-unit-fields > .create-customer-directory-field {
+  align-items: center;
+  grid-template-columns: var(--unit-label-width) minmax(0, 1fr) auto;
+}
+
+.workorder-one-page-stack .create-customer-directory-field > .operational-form-field {
+  display: contents;
+}
+
+.workorder-one-page-stack .create-customer-directory-field .operational-form-field-label {
+  grid-column: 1;
+}
+
+.workorder-one-page-stack .create-customer-directory-field :is(.customer-company-combobox, #customer-company-name) {
+  grid-column: 2;
+}
+
+.workorder-one-page-stack .create-customer-directory-field .operational-form-field-error {
+  grid-column: 2 / 4;
+}
+
+.workorder-one-page-stack .create-customer-directory-field .workorder-unit-popover {
+  grid-column: 3;
+  grid-row: 1;
+  position: static;
+}
+
+.create-customer-directory-popover {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  max-width: min(440px, calc(100vw - 32px));
+  min-width: min(360px, calc(100vw - 32px));
+  padding: 0;
+}
+
+.create-customer-directory-popover > label {
+  display: grid;
+  font-weight: var(--weight-semibold);
+  gap: 6px;
+}
+
+.customer-directory-address,
+.create-customer-directory-popover > :is(.create-workorder-approval-request, .create-workorder-authorization-exceptions) {
+  grid-column: 1 / -1;
+}
+
+.create-customer-directory-popover :is(input, .dropdown-select-trigger),
+.create-customer-directory-popover output {
+  min-height: 44px;
+}
+
+.create-customer-directory-popover output {
+  align-items: center;
+  background: #f9fafb;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  box-sizing: border-box;
+  display: flex;
+  min-height: 40px;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 540px) {
+  .create-customer-directory-popover {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-directory-address,
+  .create-customer-directory-popover > :is(.create-workorder-approval-request, .create-workorder-authorization-exceptions) {
+    grid-column: auto;
+  }
+}
+
 @media (max-width: 1180px) {
   .prototype.create-workorder-page.is-keyboard-open {
     height: var(--create-visual-viewport-height, 100dvh);
@@ -94,6 +277,22 @@
 }
 
 @media (max-width: 700px) {
+  .create-customer-editor-heading,
+  .create-customer-editor-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .create-customer-editor-heading .button,
+  .create-customer-editor-actions .button {
+    min-block-size: 44px;
+    width: 100%;
+  }
+
+  .create-customer-directory-popover {
+    min-width: min(360px, calc(100vw - 32px));
+  }
+
   .create-location-load-error {
     align-items: stretch;
     flex-direction: column;

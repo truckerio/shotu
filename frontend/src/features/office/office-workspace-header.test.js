@@ -16,7 +16,7 @@ test("Manager uses an integrated Office rail with a separate page title", () => 
   assert.match(rail, /<WorkspaceHeader actor=\{actor\}/);
   assert.match(workspace, /<PageHeader[\s\S]*?title=\{pageTitle\}/);
   assert.match(workspace, /className=\{\["inventory", "units"\]\.includes\(activeTab\) \? "office-collection-page-header" : "office-operations-page-header"\}/);
-  assert.match(officeCss, /\.office-collection-page-header\s*\{[\s\S]*?padding-inline:\s*12px;/);
+  assert.match(officeCss, /\.office-collection-page-header\s*\{[\s\S]*?padding-inline:\s*0;/);
   assert.match(officeCss, /\.workspace-operations\.office-home > \.office-collection-page-header\s*\{[\s\S]*?margin-top:\s*8px;/);
   assert.doesNotMatch(officeCss, /\.office-collection-page-header \.page-header-copy h1/);
   assert.doesNotMatch(officeCss, /margin-bottom:\s*-6px|transform:\s*translateY\(-2px\)/);
@@ -30,19 +30,20 @@ test("Manager uses an integrated Office rail with a separate page title", () => 
 test("Office separates workspace destinations from workorder queues", () => {
   assert.match(workspace, /id: "operations", label: "Operations"/);
   assert.match(workspace, /id: "workorders", label: "Workorders"/);
+  assert.match(workspace, /id: "customers", label: "Customers"/);
   assert.match(workspace, /id: "inspections", label: "Inspections"/);
   assert.match(workspace, /id: "inventory", label: "Inventory"/);
   assert.match(workspace, /id: "inventory-stock", label: "Stock"/);
   assert.match(workspace, /id: "units", label: "Units"/);
   assert.match(workspace, /activeSection=\{inventorySection\} onSectionChange=\{syncInventorySection\}/);
   assert.match(workspace, /showSectionNavigation=\{false\}/);
-  assert.match(workspace, /const desktopQueueTabs = tabs\.filter\(\(tab\) => !\["inventory", "units"\]\.includes\(tab\.key\)\)/);
+  assert.match(workspace, /const desktopQueueTabs = tabs\.filter\(\(tab\) => !\["customers", "inventory", "units"\]\.includes\(tab\.key\)\)/);
   assert.match(workspace, /<WorkorderQueueTabs tabs=\{desktopQueueTabs\}/);
   assert.match(workspace, /const mobileSecondaryTabs = tabs\.filter\(\(tab\) => OFFICE_SECONDARY_TAB_KEYS\.includes\(tab\.key\)\)/);
   assert.match(workspace, /const isOperationsWorkspace = !\["inventory", "units"\]\.includes\(activeTab\)/);
   assert.match(workspace, /workspace-operations is-\$\{activeTab === "inventory" \? "inventory" : activeTab === "units" \? "units" : "operations"\}-workspace/);
   assert.match(workspace, /actions=\{isOperationsWorkspace \? <WorkspaceCreateActions[\s\S]*?\/> : null\}/);
-  assert.match(workspace, /\{isOperationsWorkspace \? <div className="queue-toolbar office-toolbar role-queue-toolbar">/);
+  assert.match(workspace, /\{isOperationsWorkspace && activeTab !== "customers" \? <div className="queue-toolbar office-toolbar role-queue-toolbar">/);
   assert.match(workspace, /product === "inspections" \? "Inspections" : "Workorders"/);
   assert.match(workspace, /isOperationsWorkspace \? " operational-collection-surface office-primary-work-surface" : ""/);
   assert.match(workspace, /<section className="operational-collection-surface office-inspection-work-surface">/);
@@ -68,6 +69,7 @@ test("Office rail selections replace stale Inventory workflow URL state", () => 
   assert.match(workspace, /function replaceOfficeWorkspaceRoute\(view = ""\)/);
   assert.match(workspace, /if \(view\) url\.searchParams\.set\("view", view\);\s*else url\.searchParams\.delete\("view"\);\s*for \(const key of INVENTORY_ROUTE_PARAMS\) url\.searchParams\.delete\(key\);/);
   assert.match(workspace, /if \(nextWorkspace === "operations"\) \{\s*replaceOfficeWorkspaceRoute\(\);/);
+  assert.match(workspace, /if \(nextWorkspace === "customers"\) replaceOfficeWorkspaceRoute\("customers"\);/);
   assert.match(workspace, /if \(nextWorkspace === "units"\) replaceOfficeWorkspaceRoute\("units"\);/);
   assert.match(workspace, /url\.searchParams\.set\("view", "inventory"\);\s*for \(const key of INVENTORY_ROUTE_PARAMS\) url\.searchParams\.delete\(key\);\s*url\.searchParams\.set\("inventorySection", nextSection\);/);
   assert.match(workspace, /setInventoryWorkspaceResetKey\(\(current\) => current \+ 1\)/);

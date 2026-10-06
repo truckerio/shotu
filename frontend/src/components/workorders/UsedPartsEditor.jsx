@@ -155,6 +155,8 @@ export function UsedPartsEditor({
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0 || aggregatePartUsages.length > 0;
   const onePage = presentation === "one-page";
   const canViewPrices = ["office", "admin"].includes(role);
+  const laborUomCode = laborProduct?.uomCode === "ea" ? "ea" : "hr";
+  const laborQuantityLabel = laborUomCode === "ea" ? "Service quantity" : t("parts.laborHours");
   const laborPrice = detail?.modules?.diagnosisRepair?.data?.laborPrice || detail?.laborPrice || null;
   const currentLaborRates = detail?.modules?.diagnosisRepair?.data?.currentLaborRates || detail?.currentLaborRates || {};
   const workorderPricing = detail?.workorderPricing || detail?.modules?.parts?.data?.workorderPricing || null;
@@ -162,7 +164,8 @@ export function UsedPartsEditor({
   const ratesForProduct = String(savedForm.laborProduct?.productId || "") === String(laborProduct?.productId || "")
     ? currentLaborRates : {};
   const laborDraftChanged = Number(savedForm.laborHours || 0) !== Number(laborHours || 0)
-    || String(savedForm.laborProduct?.productId || "") !== String(laborProduct?.productId || "");
+    || String(savedForm.laborProduct?.productId || "") !== String(laborProduct?.productId || "")
+    || (savedForm.laborProduct?.uomCode === "ea" ? "ea" : "hr") !== laborUomCode;
   const pricingForDisplay = laborDraftChanged && workorderPricing?.status === "complete"
     ? { status: "incomplete", missingCount: 1 }
     : workorderPricing;
@@ -282,12 +285,12 @@ export function UsedPartsEditor({
 
   function renderReadonlyLaborRow() {
     return (
-      <WorkorderPartsRow className="used-part-labor-row" aria-label={t("parts.laborHours")}>
+      <WorkorderPartsRow className="used-part-labor-row" aria-label={laborQuantityLabel}>
         <strong>1</strong>
         <div className="used-part-field"><strong className="used-part-labor-name">{laborProductLabel(laborProduct)}</strong></div>
-        <div className="used-part-field used-part-recorded-value"><strong>{laborHours ? formatQuantityUnit(laborHours, "hr") : "—"}</strong></div>
+        <div className="used-part-field used-part-recorded-value"><strong>{laborHours ? formatQuantityUnit(laborHours, laborUomCode) : "—"}</strong></div>
         <div className="used-part-field used-part-recorded-repair">{laborRepairOrder || <span aria-hidden="true">—</span>}</div>
-        {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled /> : <span aria-hidden="true"></span>}
+        {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} uomCode={laborUomCode} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled /> : <span aria-hidden="true"></span>}
       </WorkorderPartsRow>
     );
   }
@@ -460,7 +463,7 @@ export function UsedPartsEditor({
       <section className="used-parts-section used-parts-labor-section" aria-labelledby={laborSectionTitleId}>
         <h3 id={laborSectionTitleId}>{t("parts.labor")}</h3>
         <WorkorderPartsTable className="detail-operational-parts-editor used-parts-labor-table" columns={laborColumns} gridTemplate={laborGridTemplate}>
-          <WorkorderPartsRow className="used-part-labor-row" aria-label={t("parts.laborHours")}>
+          <WorkorderPartsRow className="used-part-labor-row" aria-label={laborQuantityLabel}>
             <strong>1</strong>
             <div className="used-part-field operational-part-labor-name">
               <span className="used-part-label">{t("parts.labor")}</span>
@@ -475,9 +478,9 @@ export function UsedPartsEditor({
             <QuantityUnitInput
               id="workorder-labor-hours"
               quantity={laborHours}
-              uomCode="hr"
+              uomCode={laborUomCode}
               onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
-              quantityLabel={t("parts.laborHours")}
+              quantityLabel={laborQuantityLabel}
               unitLabel={t("parts.unit")}
               disabled={!laborEditable || laborRepairOrderDisabled}
               unitReadOnly
@@ -495,7 +498,7 @@ export function UsedPartsEditor({
                 disabled={!laborEditable || laborRepairOrderDisabled}
               />
             </div>
-            {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : <span aria-hidden="true"></span>}
+            {canViewPrices ? <LaborPriceCell workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} uomCode={laborUomCode} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : <span aria-hidden="true"></span>}
           </WorkorderPartsRow>
         </WorkorderPartsTable>
       </section>

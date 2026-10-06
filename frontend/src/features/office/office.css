@@ -142,9 +142,9 @@
 
 .office-main-content {
   display: grid;
-  gap: 12px;
+  gap: var(--workspace-card-gap);
   min-width: 0;
-  padding: 16px 20px 24px;
+  padding: 10px var(--workspace-gutter) var(--workspace-gutter);
 }
 
 .office-primary-nav {
@@ -310,7 +310,7 @@
 }
 
 .office-collection-page-header {
-  padding-inline: 12px;
+  padding-inline: 0;
 }
 
 .workspace-operations.office-home > .office-collection-page-header {

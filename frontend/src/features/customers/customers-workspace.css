@@ -1,0 +1,15 @@
+.customers-workspace .customers-toolbar { grid-template-columns: minmax(220px, 480px); padding-block: 12px; }
+.customers-search { display: grid; gap: 6px; min-width: 0; color: #344054; font-size: var(--text-secondary); font-weight: var(--weight-medium); }
+.customers-search input { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 10px 12px; font: inherit; }
+.customers-search input:focus-visible { outline: 2px solid #2e6ee6; outline-offset: 2px; }
+.customers-workspace .operational-collection-table { --operational-collection-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) minmax(280px, 1.6fr); border: 1px solid #d0d5dd; border-radius: 8px; overflow: hidden; }
+.customers-workspace .operational-collection-cell { overflow-wrap: anywhere; }
+.customers-contact-cell { display: grid; gap: 3px; min-width: 0; }
+.customers-contact-cell span { color: #667085; font-size: var(--text-caption); overflow-wrap: anywhere; }
+.customers-feedback { padding-block: 16px; }
+.customers-feedback .button { min-height: 44px; }
+.customers-detail-value { color: #475467; margin: 0; overflow-wrap: anywhere; }
+.customers-contact-list { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.customers-contact-list li { display: grid; gap: 3px; border: 1px solid #e4e7ec; border-radius: 8px; padding: 12px; }
+.customers-contact-list span { color: #667085; font-size: var(--text-secondary); overflow-wrap: anywhere; }
+@media (max-width: 700px) { .customers-workspace .customers-toolbar { grid-template-columns: 1fr; } .customers-workspace .operational-collection-table { border: 0; border-radius: 0; overflow: visible; } .customers-workspace .operational-collection-row { grid-template-columns: 1fr; } }

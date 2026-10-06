@@ -18,6 +18,7 @@ import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.j
 import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
 import { InventoryWorkspace } from "../inventory/InventoryWorkspace.jsx";
 import { UnitsWorkspace } from "../units/UnitsWorkspace.jsx";
+import { CustomersWorkspace } from "../customers/CustomersWorkspace.jsx";
 import { CreateInspectionPage, InspectionExperience } from "../inspections/index.js";
 import { inspectionReturnContext } from "../../app/routes/route-state.js";
 import {
@@ -49,7 +50,7 @@ function uniqueRows(...groups) {
 function requestedOfficeWorkspace(search = "") {
   const requested = new URLSearchParams(search).get("view");
   if (requested === "invoices") return "inventory";
-  return ["drafts", "inventory", "units"].includes(requested) ? requested : "";
+  return ["customers", "drafts", "inventory", "units"].includes(requested) ? requested : "";
 }
 
 function requestedInventoryPageTitle(search = "") {
@@ -194,7 +195,7 @@ export function OfficeWorkspace({
     if (!queuePreferences.ready || preferenceHydrated.current) return;
     const saved = queuePreferences.filters;
     const savedActiveTab = saved.activeTab === "invoices" ? "inventory" : saved.activeTab;
-    const savedTabCandidate = !requestedWorkspace && ["needs", "open", "active", "parts", "done", "doneOdoo", "drafts", "inventory", "units", "all", "closed"].includes(savedActiveTab)
+    const savedTabCandidate = !requestedWorkspace && ["needs", "open", "active", "parts", "done", "doneOdoo", "customers", "drafts", "inventory", "units", "all", "closed"].includes(savedActiveTab)
       ? savedActiveTab
       : requestedWorkspace || "needs";
     const savedTab = officeQueueForViewport(
@@ -250,6 +251,7 @@ export function OfficeWorkspace({
       setActiveTab(lastOperationsTab.current);
       return;
     }
+    if (nextWorkspace === "customers") replaceOfficeWorkspaceRoute("customers");
     if (nextWorkspace === "units") replaceOfficeWorkspaceRoute("units");
     setProduct("workorders");
     setActiveTab(nextWorkspace);
@@ -323,13 +325,14 @@ export function OfficeWorkspace({
     { key: "active", label: "Active", count: dashboard?.active?.length || 0, icon: Clock },
     { key: "parts", label: "Parts", count: partRequestCount.loaded ? partRequestCount.total : null, icon: Tool02 },
     { key: "done", label: "Ready review", count: dashboard?.done?.length || 0, icon: CheckCircle },
+    { key: "customers", label: "Customers", count: null, icon: Briefcase02 },
     { key: "drafts", label: "Drafts", count: drafts.length, icon: File02 },
     { key: "inventory", label: "Inventory", count: null, icon: Package },
     { key: "units", label: "Units", count: null, icon: Tool02 },
     { key: "all", label: "All", count: allRows.length, icon: Briefcase02 },
     { key: "closed", label: "Closed", count: dashboard?.closed?.length || 0, icon: FileCheck02 },
   ];
-  const desktopQueueTabs = tabs.filter((tab) => !["inventory", "units"].includes(tab.key));
+  const desktopQueueTabs = tabs.filter((tab) => !["customers", "inventory", "units"].includes(tab.key));
   const mobilePrimaryTabs = OFFICE_PRIMARY_TABS.map((tab) => ({
     ...tab,
     count: tab.key === "needs"
@@ -339,7 +342,7 @@ export function OfficeWorkspace({
         : doneOdooRows.length,
   }));
   const mobileSecondaryTabs = tabs.filter((tab) => OFFICE_SECONDARY_TAB_KEYS.includes(tab.key));
-  const tabRows = ["inventory", "units"].includes(activeTab) ? [] : officeRowsForTab(activeTab, dashboard, allRows, needsRows);
+  const tabRows = ["customers", "inventory", "units"].includes(activeTab) ? [] : officeRowsForTab(activeTab, dashboard, allRows, needsRows);
   const filteredRows = tabRows
     .filter((row) => !lifecycleFilter || officeLifecycle(row) === lifecycleFilter)
     .filter((row) => !mechanicFilter || rowMechanicNames(row).includes(mechanicFilter))
@@ -360,16 +363,16 @@ export function OfficeWorkspace({
   );
   const isOperationsWorkspace = !["inventory", "units"].includes(activeTab);
   const officeRail = (
-    <RoleNavigationRail actor={actor} ariaLabel="Office workspace" activeId={activeTab === "inventory" ? `inventory-${inventorySection}` : activeTab === "units" ? "units" : product}
+    <RoleNavigationRail actor={actor} ariaLabel="Office workspace" activeId={activeTab === "customers" ? "customers" : activeTab === "inventory" ? `inventory-${inventorySection}` : activeTab === "units" ? "units" : product}
       groups={[
-        { id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] },
+        { id: "operations", label: "Operations", items: [{ id: "workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "customers", label: "Customers", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] },
         { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-inbound", label: "Inbound", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: Package }, { id: "inventory-tasks", label: "Tasks", icon: Package }, { id: "inventory-reports", label: "Reports", icon: Package }] },
       ]}
       items={[{ id: "units", label: "Units", variant: "parent" }]}
-      onNavigate={(id) => id === "workorders" || id === "inspections" ? selectOperationsProduct(id) : id === "units" ? selectWorkspace("units") : selectInventorySection(id.replace("inventory-", ""))}
+      onNavigate={(id) => id === "workorders" || id === "inspections" ? selectOperationsProduct(id) : id === "customers" ? selectWorkspace("customers") : id === "units" ? selectWorkspace("units") : selectInventorySection(id.replace("inventory-", ""))}
     />
   );
-  const pageTitle = activeTab === "inventory" ? inventoryPageTitle : activeTab === "units" ? "Units" : product === "inspections" ? "Inspections" : "Workorders";
+  const pageTitle = activeTab === "customers" ? "Customers" : activeTab === "inventory" ? inventoryPageTitle : activeTab === "units" ? "Units" : product === "inspections" ? "Inspections" : "Workorders";
 
   if (product === "inspections" && inspectionAccess.canRead) {
     return (
@@ -402,8 +405,8 @@ export function OfficeWorkspace({
         title={pageTitle}
         actions={isOperationsWorkspace ? <WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} /> : activeTab === "inventory" ? inventoryHeaderActions : null}
       />
-      <section className={`office-layout${["drafts", "inventory", "units", "parts"].includes(activeTab) ? " is-drafts" : ""}${isOperationsWorkspace ? " operational-collection-surface office-primary-work-surface" : ""}`}>
-        {!["drafts", "inventory", "units", "parts"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
+      <section className={`office-layout${["customers", "drafts", "inventory", "units", "parts"].includes(activeTab) ? " is-drafts" : ""}${isOperationsWorkspace ? " operational-collection-surface office-primary-work-surface" : ""}`}>
+        {!["customers", "drafts", "inventory", "units", "parts"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
           <div className="office-panel-head"><strong>Mechanics</strong><span>{mechanics.length}</span></div>
           <button className={!mechanicFilter ? "active" : ""} type="button" onClick={() => selectMechanic("")}>
             <span>All mechanics</span><strong>{allRows.length}</strong>
@@ -418,7 +421,7 @@ export function OfficeWorkspace({
         </aside> : null}
 
         <section className={`mechanic-queue-shell office-table-shell${["inventory", "units"].includes(activeTab) ? " is-frameless-collection" : ""}`}>
-          {isOperationsWorkspace ? <div className="queue-toolbar office-toolbar role-queue-toolbar">
+          {isOperationsWorkspace && activeTab !== "customers" ? <div className="queue-toolbar office-toolbar role-queue-toolbar">
             <div className="role-desktop-queues">
               <WorkorderQueueTabs tabs={desktopQueueTabs} activeTab={activeTab} onChange={selectQueue} />
             </div>
@@ -469,7 +472,9 @@ export function OfficeWorkspace({
                 </div> : null}
           </div> : null}
 
-          {activeTab === "units" ? (
+          {activeTab === "customers" ? (
+            <CustomersWorkspace actor={actor} />
+          ) : activeTab === "units" ? (
             <UnitsWorkspace actorId={actor?.id} presentation="embedded" />
           ) : activeTab === "inventory" ? (
             <InventoryWorkspace key={inventoryWorkspaceResetKey} actorId={actor?.id} canApplyInventoryCount={false} presentation="embedded" activeSection={inventorySection} onSectionChange={syncInventorySection} onSectionTitleChange={setInventoryPageTitle} onSectionActionsChange={setInventoryHeaderActions} showSectionNavigation={false} showSectionNavigationOnPhone />

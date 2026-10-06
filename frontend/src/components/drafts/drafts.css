@@ -93,6 +93,15 @@
   animation: draft-status-spin 900ms linear infinite;
 }
 
+.draft-save-status.is-icon-only .draft-save-status-label {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .draft-save-status.is-saved {
   color: #067647;
 }

@@ -3,7 +3,7 @@
 }
 
 .operational-collection-page-body {
-  margin-top: var(--space-6);
+  margin-top: var(--workspace-card-gap);
   min-width: 0;
 }
 
@@ -13,9 +13,9 @@
 
 .operational-collection-surface {
   background: #fff;
-  border: 1px solid #e4e7ec;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgb(16 24 40 / 6%), 0 14px 32px -16px rgb(16 24 40 / 24%);
+  border: 1px solid var(--workspace-card-border);
+  border-radius: var(--workspace-card-radius);
+  box-shadow: var(--workspace-card-shadow);
   box-sizing: border-box;
   min-width: 0;
   padding: 0 16px 16px;
@@ -312,8 +312,8 @@
   }
 
   .operational-collection-surface {
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgb(16 24 40 / 8%);
+    border-radius: var(--workspace-card-radius);
+    box-shadow: var(--workspace-card-shadow);
     padding: 0 12px 12px;
   }
 

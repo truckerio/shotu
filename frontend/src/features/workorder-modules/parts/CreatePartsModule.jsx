@@ -144,6 +144,7 @@ function LegacyCreatePartsEditor({
     ? [...DEFAULT_WORKORDER_PARTS_COLUMNS, WORKORDER_PARTS_COLUMNS.PRICE]
     : DEFAULT_WORKORDER_PARTS_COLUMNS;
   const previewByPartIndex = new Map((pricing?.preview?.parts || []).map((entry) => [entry.partIndex, entry]));
+  const laborUomCode = laborProduct?.uomCode === "ea" ? "ea" : "hr";
   return (
     <div className="create-known-parts-content workorder-parts-surface">
       {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
@@ -166,9 +167,9 @@ function LegacyCreatePartsEditor({
           <QuantityUnitInput
             id="create-workorder-labor-hours"
             quantity={laborHours}
-            uomCode="hr"
+            uomCode={laborUomCode}
             onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
-            quantityLabel={t("create.parts.laborHours")}
+            quantityLabel={laborUomCode === "ea" ? "Service quantity" : t("create.parts.laborHours")}
             unitLabel={t("create.parts.unit")}
             locale={locale}
             unitReadOnly
@@ -184,6 +185,7 @@ function LegacyCreatePartsEditor({
             placeholder={t("create.parts.repairWork")}
           />
           {canViewPrices ? <CreateLaborPriceCell
+            uomCode={laborUomCode}
             selection={laborPriceSelection}
             customUnitPrice={laborCustomUnitPrice}
             preview={pricing?.preview?.labor}
@@ -274,6 +276,7 @@ function LegacyCreatePartsEditor({
 export function CreatePartsModule({
   actorId,
   actorRole,
+  discountControl = null,
   historyEnabled = false,
   access,
   activeSection,
@@ -315,6 +318,7 @@ export function CreatePartsModule({
 
   const t = (key) => interfaceText(locale, key);
   const configuredLaborLabel = laborProductLabel(laborProduct);
+  const laborUomCode = laborProduct?.uomCode === "ea" ? "ea" : "hr";
   const laborLabel = configuredLaborLabel === "Labor hours" && !laborProduct?.code
     ? t("create.parts.laborHours")
     : configuredLaborLabel;
@@ -621,9 +625,9 @@ export function CreatePartsModule({
                   <QuantityUnitInput
                     id="create-workorder-labor-hours"
                     quantity={laborHours}
-                    uomCode="hr"
+                    uomCode={laborUomCode}
                     onValueChange={({ quantity }) => onLaborHoursChange(quantity)}
-                    quantityLabel={t("create.parts.laborHours")}
+                    quantityLabel={laborUomCode === "ea" ? "Service quantity" : t("create.parts.laborHours")}
                     unitLabel={t("create.parts.unit")}
                     locale={locale}
                     unitReadOnly
@@ -640,6 +644,7 @@ export function CreatePartsModule({
                     />
                   </label>
                   {canViewPrices ? <CreateLaborPriceCell
+                    uomCode={laborUomCode}
                     selection={laborPriceSelection}
                     customUnitPrice={laborCustomUnitPrice}
                     preview={pricing?.preview?.labor}
@@ -662,7 +667,7 @@ export function CreatePartsModule({
                 <span>
                   <strong>{laborLabel}</strong>
                   <small>{hasLabor
-                    ? [laborHours ? `${laborHours} hr` : "", laborRepairOrder].filter(Boolean).join(" · ")
+                    ? [laborHours ? `${laborHours} ${laborUomCode}` : "", laborRepairOrder].filter(Boolean).join(" · ")
                     : t("create.parts.notEntered")}</small>
                 </span>
                 <span>{t(hasLabor ? "create.parts.edit" : "create.parts.addLabor")}</span>
@@ -726,6 +731,7 @@ export function CreatePartsModule({
       {canViewPrices ? <div className="create-pricing-footer">
         {pricing.status === "error" ? <p role="alert">{pricing.message}</p> : null}
         <CreatePricingTotal pricing={pricing} />
+        {discountControl}
         {pricing.hasPriceableRows && pricing.status !== "ready" && pricing.status !== "error" ? <p role="status">Updating prices…</p> : null}
       </div> : null}
       {requestMessage?<p role="status">{requestMessage}</p>:null}

@@ -15,7 +15,7 @@ export function apiErrorDetails(body = {}) {
 }
 
 export async function api(path, options = {}) {
-  const { timeoutMs = 0, ...fetchOptions } = options;
+  const { timeoutMs = 0, headers: requestHeaders, ...fetchOptions } = options;
   const controller = timeoutMs > 0 && !fetchOptions.signal ? new AbortController() : null;
   const timeout = controller
     ? setTimeout(() => controller.abort(), timeoutMs)
@@ -23,7 +23,11 @@ export async function api(path, options = {}) {
   try {
     const response = await fetch(path, {
       credentials: "same-origin",
-      headers: { "content-type": "application/json", accept: "application/json" },
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        ...requestHeaders,
+      },
       ...fetchOptions,
       signal: fetchOptions.signal || controller?.signal,
     });

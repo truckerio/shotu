@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { InventoryError } from "../inventory/inventory.errors.js";
+import { validLaborQuantity } from "../../../../shared/labor-product.js";
 import {
   appendLaborRateVersion,
   saveWorkorderLaborPriceSnapshot,
@@ -75,7 +76,7 @@ export async function selectWorkorderLaborPrice(workorderId, input, context, dep
   });
   if (result.kind === "not_found") fail("WORKORDER_LABOR_PRICE_NOT_FOUND", "Workorder was not found.", 404);
   if (result.kind === "locked") fail("WORKORDER_LABOR_PRICE_LOCKED", "Labor price cannot change after this workorder is closed.");
-  if (result.kind === "labor_incomplete") fail("WORKORDER_LABOR_INCOMPLETE", "Select a labor product and record labor hours first.", 422);
+  if (result.kind === "labor_incomplete") fail("WORKORDER_LABOR_INCOMPLETE", "Select a labor product and enter a valid quantity for its unit first.", 422);
   if (result.kind === "rate_unavailable") fail("WORKORDER_LABOR_RATE_UNAVAILABLE", "A known local labor rate and currency are required.", 422);
   if (result.kind === "rate_changed") fail("WORKORDER_LABOR_RATE_CHANGED", "Labor rate changed. Refresh and select it again.");
   if (result.kind === "idempotency_conflict") fail("WORKORDER_LABOR_PRICE_REPLAY_CONFLICT", "This request key was used with different details.");
@@ -109,8 +110,11 @@ export function workorderPricingSummary({
   const manual = (Array.isArray(form.parts) ? form.parts : []).filter((part) => Number(part?.qty) > 0);
   const aggregate = aggregatePartUsages.filter((usage) => !["released", "reversed"].includes(usage.status));
   const laborExpected = Number(form.laborHours) > 0;
+  const laborQuantityValid = validLaborQuantity(form.laborHours, form.laborProduct?.uomCode || "hr");
   const laborCurrent = laborExpected && laborPrice
+    && laborQuantityValid
     && laborPrice.productId === form.laborProduct?.productId
+    && (laborPrice.uomCode || "hr") === (form.laborProduct?.uomCode || "hr")
     && sameHours(laborPrice.hours, form.laborHours);
   const rows = [
     ...installedSerializedParts.map((part) => ({ kind: "part", price: part.price, quantity: 1, requiresQuantity: false })),

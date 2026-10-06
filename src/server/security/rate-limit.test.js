@@ -60,6 +60,10 @@ test("sensitive route classification limits mutations and expensive OAuth start"
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/invoice-extractions"), "invoice");
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/inventory/count-imports"), "inventoryUpload");
   assert.equal(sensitiveRateLimitPolicy("POST", "/api/office/inventory/parts/part-1/locations/location-1/units"), "inventoryUpload");
+  assert.equal(sensitiveRateLimitPolicy("GET", "/api/customer-portal/document"), "customerPortalRead");
+  assert.equal(sensitiveRateLimitPolicy("POST", "/api/customer-portal/responses"), "customerPortalMutation");
+  assert.equal(sensitiveRateLimitPolicy("GET", "/api/customer-portal/chat"), "customerPortalRead");
+  assert.equal(sensitiveRateLimitPolicy("POST", "/api/customer-portal/chat"), "customerPortalMutation");
   assert.equal(sensitiveRateLimitPolicy("GET", "/api/office/invoice-extractions/run-1"), null);
 });
 
@@ -69,6 +73,8 @@ test("auth limiter gives users a short typo-friendly retry window", () => {
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.kiosk.limit, 10);
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.invoice.limit, 10);
   assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.inventoryUpload.limit, 5);
+  assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.customerPortalRead.limit, 120);
+  assert.equal(SENSITIVE_RATE_LIMIT_POLICIES.customerPortalMutation.limit, 30);
 });
 
 test("body-heavy uploads defer rate limiting until authenticated actor identity exists", () => {

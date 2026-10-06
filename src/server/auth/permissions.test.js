@@ -17,6 +17,9 @@ test("role permission matrix keeps domain capabilities separate", () => {
   assert.equal(roleHasPermission("office", PERMISSION.INVENTORY_COST_READ), true);
   assert.equal(roleHasPermission("office", PERMISSION.INVENTORY_PRICE_WRITE), true);
   assert.equal(roleHasPermission("office", PERMISSION.INVENTORY_LOCATION_MANAGE), true);
+  assert.equal(roleHasPermission("office", PERMISSION.CUSTOMER_DOCUMENT_READ), true);
+  assert.equal(roleHasPermission("office", PERMISSION.CUSTOMER_DOCUMENT_WRITE), true);
+  assert.equal(roleHasPermission("mechanic", PERMISSION.CUSTOMER_DOCUMENT_READ), false);
   assert.equal(roleHasPermission("mechanic", PERMISSION.INVENTORY_COST_READ), false);
   assert.equal(roleHasPermission("surveillance", PERMISSION.WORKORDER_SURVEILLANCE), true);
   assert.equal(roleHasPermission("admin", PERMISSION.INTEGRATION_ADMIN), true);

@@ -100,8 +100,17 @@ export function useVehicleLookupController({
     const currentForm = formRef.current;
     const modelText = vehicleModelText(vehicle);
     clearCreateErrors("unitNo", ...(vehicle.owner_name ? ["customerCompanyName"] : []));
+    const customerChanged = Boolean(vehicle.owner_name)
+      && String(vehicle.owner_name).trim().toLocaleLowerCase() !== String(currentForm.customerCompanyName || "").trim().toLocaleLowerCase();
     const vehiclePatch = {
       customerCompanyName: vehicle.owner_name || currentForm.customerCompanyName,
+      ...(customerChanged ? {
+        customerAccountId: "",
+        customerContactId: "",
+        customerAddress: "",
+        customerContactName: "",
+        customerContactEmail: "",
+      } : {}),
       unitNo: vehicle.unit_no || vehicle.name || currentForm.unitNo,
       unitType: vehicle.unit_type || currentForm.unitType,
       licenseNo: vehicle.license_plate || currentForm.licenseNo,

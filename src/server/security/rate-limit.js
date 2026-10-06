@@ -7,6 +7,8 @@ export const SENSITIVE_RATE_LIMIT_POLICIES = Object.freeze({
   kiosk: Object.freeze({ limit: 10, windowMs: 60_000 }),
   invoice: Object.freeze({ limit: 10, windowMs: 60_000 }),
   inventoryUpload: Object.freeze({ limit: 5, windowMs: 60_000 }),
+  customerPortalRead: Object.freeze({ limit: 120, windowMs: 60_000 }),
+  customerPortalMutation: Object.freeze({ limit: 30, windowMs: 60_000 }),
 });
 
 function positiveInteger(value, name) {
@@ -104,6 +106,14 @@ export function sensitiveRateLimitPolicy(method, pathname) {
   }
   if (normalizedMethod === "POST" && /^\/api\/office\/inventory\/parts\/[^/]+\/locations\/[^/]+\/units$/.test(path)) {
     return "inventoryUpload";
+  }
+  if (normalizedMethod === "GET"
+    && ["/api/customer-portal/document", "/api/customer-portal/chat"].includes(path)) {
+    return "customerPortalRead";
+  }
+  if (normalizedMethod === "POST"
+    && ["/api/customer-portal/responses", "/api/customer-portal/chat"].includes(path)) {
+    return "customerPortalMutation";
   }
   return null;
 }

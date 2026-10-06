@@ -101,7 +101,7 @@ test("Create and Detail cannot drift into separate workorder panel markup", () =
   assert.match(panelShell, /<WorkorderObjectSummary/);
   assert.match(panelShell, /<WorkorderSectionNav/);
   assert.match(panelShell, /supportingPane/);
-  assert.match(createShell, /<h1>\{t\("create\.title"\)\}<\/h1>/);
+  assert.match(createShell, /<h1>\{t\("detail\.workorder"\)\}<\/h1>/);
 });
 
 test("canonical workorder header keeps context and actions in two grid columns", () => {

@@ -40,6 +40,7 @@ test("operational catalog search is purpose-gated by local availability", async 
   const source = await readFile(repositoryUrl, "utf8");
 
   assert.match(source, /\["issue", "request", "master_match", "workorder_assignment"\]\.includes\(values\.purpose\)/);
+  assert.match(source, /join units_of_measure uom[\s\S]*uom\.category <> 'time'/);
   assert.match(source, /\$11::text in \('master_match', 'workorder_assignment'\)/);
   assert.match(source, /inventory\.id is not null[\s\S]*\$11::text = 'request'[\s\S]*inventory\.quantity_available > 0/);
   assert.match(source, /case when inventory\.id is not null then 'local'/);

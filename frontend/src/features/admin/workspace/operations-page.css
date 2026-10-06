@@ -1,3 +1,143 @@
+.admin-content.admin-operations-content {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  padding: 0 var(--workspace-gutter) var(--workspace-gutter);
+}
+
+.admin-shell.is-operations .role-navigation-rail {
+  background: transparent;
+  border-right: 0;
+  padding: 10px;
+}
+
+.admin-shell.is-operations .role-navigation-divider {
+  margin: 10px 0;
+}
+
+.admin-shell.is-operations .role-navigation-list {
+  gap: 10px;
+}
+
+.admin-shell.is-operations .role-navigation-list button {
+  min-height: 40px;
+}
+
+.admin-operations-content > .page-header {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  margin: 0 -5px;
+  padding: 10px 5px 8px;
+}
+
+.admin-operations-content > .operational-collection-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  margin-top: var(--workspace-card-gap);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-operations-content > .operational-collection-page-body > div:not([hidden]) {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-operations-content .operations-workspace,
+.admin-operations-content .operations-results-scroll,
+.admin-operations-content .workorder-drafts-queue,
+.admin-operations-content .part-request-queue {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-operations-content .operations-workspace {
+  flex: 1 1 auto;
+}
+
+.admin-operations-content .operations-workspace > .operational-collection-tabs-wrap {
+  border-bottom: 0;
+}
+
+.admin-operations-content .operations-results-scroll,
+.admin-operations-content .workorder-drafts-queue,
+.admin-operations-content .part-request-queue,
+.admin-operations-content .workorder-drafts-results,
+.admin-operations-content :is(.operations-table, .part-request-queue-table) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.admin-operations-content .workorder-drafts-results,
+.admin-operations-content :is(.operations-table, .part-request-queue-table) {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.admin-operations-content :is(.workorder-drafts-table-head, .operational-collection-table-head) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+@media (max-width: 700px) {
+  .admin-content.admin-operations-content {
+    height: auto;
+    min-height: calc(100dvh - 66px - env(safe-area-inset-bottom));
+    overflow: visible;
+    padding: 12px 12px 16px;
+  }
+
+  .admin-operations-content > .page-header {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .admin-operations-content > .operational-collection-page-body {
+    display: block;
+    flex: none;
+    margin-top: 8px;
+    overflow: visible;
+  }
+
+
+  .admin-operations-content > .operational-collection-page-body > div:not([hidden]) {
+    display: block;
+    overflow: visible;
+  }
+
+  .admin-operations-content .operations-workspace,
+  .admin-operations-content .operations-results-scroll,
+  .admin-operations-content .workorder-drafts-queue,
+  .admin-operations-content .part-request-queue {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .admin-operations-content .workorder-drafts-results,
+  .admin-operations-content :is(.operations-table, .part-request-queue-table) {
+    overflow: visible;
+  }
+
+  .admin-operations-content :is(.workorder-drafts-table-head, .operational-collection-table-head) {
+    position: static;
+  }
+}
+
 @media (max-width: 640px) {
   .admin-operations-content > .page-header {
     grid-template-columns: minmax(0, 1fr) auto;

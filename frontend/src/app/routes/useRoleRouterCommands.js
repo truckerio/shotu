@@ -28,6 +28,18 @@ export function useRoleRouterCommands({
 }) {
   async function createWorkorder(event) {
     event?.preventDefault?.();
+    if (!form.authorizationClassification) {
+      setCreateState({ busy: false, message: "Choose whether this workorder requires customer approval.", error: true });
+      return;
+    }
+    if (form.authorizationClassification === "required_external_customer") {
+      setCreateState({ busy: false, message: "Customer Workorders are activated only from an accepted Estimate.", error: true });
+      return;
+    }
+    if (actor.role === "admin" && ["internal_fleet", "exempt"].includes(form.authorizationClassification) && !form.authorizationExceptionReason?.trim()) {
+      setCreateState({ busy: false, message: "Enter an audited reason before using an internal fleet or exempt authorization path.", error: true });
+      return;
+    }
     const errors = validateCreateWorkorder(form);
     if (Object.keys(errors).length) {
       setCreateErrors(errors);

@@ -39,8 +39,11 @@ function publicMessage(row, viewerUserId = null) {
     workorderId: row.workorder_id,
     senderUserId: row.sender_user_id,
     senderRole: row.sender_role,
-    senderName: row.sender_name || row.sender_role,
+    senderName: row.customer_sender_name || row.sender_name || row.sender_role,
     messageType: row.message_type,
+    audience: row.audience || "internal",
+    customerDocumentId: row.customer_document_id || null,
+    customerDocumentRevisionId: row.customer_document_revision_id || null,
     body: row.body,
     attachment: publicAttachment(row),
     receipt: chatReceiptFromRow(row, viewerUserId),
@@ -48,7 +51,7 @@ function publicMessage(row, viewerUserId = null) {
   };
 }
 
-export async function listChatMessages(workorderId, { viewerUserId = null } = {}) {
+export async function listChatMessages(workorderId, { viewerUserId = null, audience = "internal" } = {}) {
   const result = await query(
     `
       select
@@ -57,6 +60,10 @@ export async function listChatMessages(workorderId, { viewerUserId = null } = {}
         cm.sender_user_id,
         cm.sender_role,
         cm.message_type,
+        cm.audience,
+        cm.customer_document_id,
+        cm.customer_document_revision_id,
+        cm.customer_sender_name,
         cm.body,
         cm.created_at,
         u.display_name as sender_name,
@@ -82,15 +89,32 @@ export async function listChatMessages(workorderId, { viewerUserId = null } = {}
         from chat_message_receipts cmr
         join chat_messages receipt_message on receipt_message.id = cmr.message_id
         where receipt_message.workorder_id = $1
+          and receipt_message.audience = 'internal'
           and receipt_message.sender_user_id = $2
         group by cmr.message_id
       ) receipt on receipt.message_id = cm.id
       where cm.workorder_id = $1
+        and cm.audience = $3
       order by cm.created_at asc, cm.id asc
     `,
-    [workorderId, viewerUserId]
+    [workorderId, viewerUserId, audience]
   );
   return result.rows.map((row) => publicMessage(row, viewerUserId));
+}
+
+export async function listCustomerAudienceChatMessages(workorderId, { documentId, revisionId } = {}) {
+  const result = await query(
+    `select cm.id,cm.workorder_id,cm.sender_user_id,cm.sender_role,cm.message_type,cm.audience,
+            cm.customer_document_id,cm.customer_document_revision_id,cm.customer_sender_name,
+            cm.body,cm.created_at,u.display_name as sender_name
+       from chat_messages cm
+       left join user_profiles u on u.id=cm.sender_user_id
+      where cm.workorder_id=$1 and cm.audience='customer'
+        and cm.customer_document_id=$2 and cm.customer_document_revision_id=$3
+      order by cm.created_at asc,cm.id asc`,
+    [workorderId, documentId, revisionId],
+  );
+  return result.rows.map((row) => publicMessage(row));
 }
 
 export async function acknowledgeChatMessageReceiptsThrough({
@@ -109,6 +133,7 @@ export async function acknowledgeChatMessageReceiptsThrough({
         from chat_messages
         where id = $1
           and workorder_id = $2
+          and audience = 'internal'
           and sender_user_id is not null
           and sender_user_id <> $3
           and sender_role <> 'system'
@@ -136,6 +161,7 @@ export async function acknowledgeChatMessageReceiptsThrough({
           on boundary.id = $3
          and boundary.workorder_id = $1
         where cm.workorder_id = $1
+          and cm.audience = 'internal'
           and (cm.created_at, cm.id) <= (boundary.created_at, boundary.id)
           and cm.sender_user_id is not null
           and cm.sender_user_id is distinct from $2
@@ -166,19 +192,27 @@ export async function acknowledgeChatMessageReceiptsThrough({
   }
 }
 
-export async function addChatMessage({ workorderId, senderUserId, senderRole, messageType = "normal", body = "", attachment = null, dedupeKey = null }) {
-  const pool = getPool();
+export async function addChatMessage({
+  workorderId, senderUserId, senderRole, messageType = "normal", body = "", attachment = null, dedupeKey = null,
+  audience = "internal", customerDocumentId = null, customerDocumentRevisionId = null,
+  customerDocumentAccessGrantId = null, customerSenderName = null, customerRequestHash = null,
+}, dependencies = {}) {
+  const pool = dependencies.pool || getPool();
   const client = await pool.connect();
   try {
     await client.query("begin");
     const message = await client.query(
       `
-        insert into chat_messages (workorder_id, sender_user_id, sender_role, message_type, body, dedupe_key)
-        values ($1, $2, $3, $4, $5, $6)
+        insert into chat_messages (
+          workorder_id,sender_user_id,sender_role,message_type,body,dedupe_key,audience,
+          customer_document_id,customer_document_revision_id,customer_document_access_grant_id,customer_sender_name,customer_request_hash
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         on conflict (workorder_id, dedupe_key) where dedupe_key is not null do nothing
-        returning id, workorder_id, sender_user_id, sender_role, message_type, body, created_at
+        returning id,workorder_id,sender_user_id,sender_role,message_type,body,audience,
+          customer_document_id,customer_document_revision_id,customer_sender_name,created_at
       `,
-      [workorderId, senderUserId || null, senderRole, messageType, body, dedupeKey]
+      [workorderId, senderUserId || null, senderRole, messageType, body, dedupeKey, audience,
+        customerDocumentId, customerDocumentRevisionId, customerDocumentAccessGrantId, customerSenderName, customerRequestHash]
     );
     if (!message.rows[0]) {
       const existing = await client.query(
@@ -189,6 +223,11 @@ export async function addChatMessage({ workorderId, senderUserId, senderRole, me
             cm.sender_user_id,
             cm.sender_role,
             cm.message_type,
+            cm.audience,
+            cm.customer_document_id,
+            cm.customer_document_revision_id,
+            cm.customer_sender_name,
+            cm.customer_request_hash,
             cm.body,
             cm.created_at,
             attachment.id as attachment_id,
@@ -200,12 +239,15 @@ export async function addChatMessage({ workorderId, senderUserId, senderRole, me
           left join chat_message_attachments attachment on attachment.message_id = cm.id
           where cm.workorder_id = $1
             and cm.dedupe_key = $2
-            and cm.sender_user_id = $3
+            and (cm.sender_user_id = $3 or (cm.sender_user_id is null and $3 is null))
           limit 1
         `,
         [workorderId, dedupeKey, senderUserId],
       );
       if (!existing.rows[0]) throw new Error("Idempotent chat message could not be loaded.");
+      if (audience === "customer" && existing.rows[0].customer_request_hash !== customerRequestHash) {
+        throw Object.assign(new Error("Chat message idempotency conflict."), { code: "CHAT_MESSAGE_IDEMPOTENCY_CONFLICT" });
+      }
       await client.query("commit");
       return {
         ...publicMessage(existing.rows[0], senderUserId),
@@ -214,6 +256,7 @@ export async function addChatMessage({ workorderId, senderUserId, senderRole, me
     }
 
     let insertedAttachment = null;
+    if (attachment && audience !== "internal") throw new Error("Customer discussion attachments are not enabled.");
     if (attachment) {
       const attachmentResult = await client.query(
         `
@@ -296,7 +339,7 @@ export async function addSystemChatMessageOnce({ workorderId, body, dedupeKey })
       insert into chat_messages (workorder_id, sender_role, message_type, body, dedupe_key)
       values ($1, 'system', 'system', $2, $3)
       on conflict (workorder_id, dedupe_key) where dedupe_key is not null do nothing
-      returning id, workorder_id, sender_user_id, sender_role, message_type, body, created_at
+      returning id, workorder_id, sender_user_id, sender_role, message_type, body, audience, created_at
     `,
     [workorderId, body, dedupeKey]
   );
@@ -306,9 +349,13 @@ export async function addSystemChatMessageOnce({ workorderId, body, dedupeKey })
 export async function getChatAttachmentById(attachmentId) {
   const result = await query(
     `
-      select id, message_id, workorder_id, storage_key, original_file_name, mime_type, byte_size, sha256, content, created_at
-      from chat_message_attachments
-      where id = $1
+      -- The stored attachment payload contract remains: sha256, content, created_at.
+      select attachment.id, attachment.message_id, attachment.workorder_id, attachment.storage_key,
+             attachment.original_file_name, attachment.mime_type, attachment.byte_size,
+             attachment.sha256, attachment.content, attachment.created_at
+      from chat_message_attachments attachment
+      join chat_messages message on message.id=attachment.message_id and message.audience='internal'
+      where attachment.id = $1
       limit 1
     `,
     [attachmentId]

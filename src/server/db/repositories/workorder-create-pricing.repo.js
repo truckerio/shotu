@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { getPool } from "../pool.js";
 import { calculateSellingUnitPrice, sellingPolicyCurrency } from "../../modules/inventory/inventory-selling-policy.js";
 import { workorderPricingSummary } from "../../modules/workorders/workorder-labor-pricing.service.js";
+import { validLaborQuantity } from "../../../../shared/labor-product.js";
+import { readEffectiveLaborPriceSources } from "./workorder-labor-price-sources.repo.js";
 
 const fixed = (value) => `${value / 10000n}.${String(value % 10000n).padStart(4, "0")}`;
 function scaled(value, digits) {
@@ -46,6 +48,7 @@ function priceEvidence(price) {
   if (!price) return null;
   return {
     selection: price.selection, quantity: scaled(price.quantity ?? price.hours, 3).toString(),
+    uomCode: price.uomCode || (price.hours === undefined ? null : "hr"),
     unitPrice: scaled(price.unitPrice, 4).toString(), totalPrice: scaled(price.totalPrice, 4).toString(), currency: price.currency,
     baseUnitPrice: price.baseUnitPrice == null ? null : scaled(price.baseUnitPrice, 4).toString(),
     manualOverride: price.manualOverride === true,
@@ -65,6 +68,7 @@ export function createPricingFingerprint(input, parts, labor) {
     units: input.inventoryUnitSelections || [], positions: input.inventoryPositionSelections || [],
     laborProductId: input.formData?.laborProduct?.productId || null,
     laborHours: String(input.formData?.laborHours || ""),
+    laborUomCode: input.formData?.laborProduct?.uomCode || "hr",
     parts: [...parts].sort((a,b) => a.partIndex-b.partIndex).map((row) => ({ partIndex: row.partIndex, price: priceEvidence(row.price) })),
     labor: priceEvidence(labor?.price),
   })).digest("hex");
@@ -168,23 +172,27 @@ export async function readCreatePricing(input, transactionClient = null) {
         parts.push({ partIndex, status: selected ? "incomplete" : "unselected", price: null, reason: error.message, options });
       }
     }
-    const rates = input.formData?.laborProduct?.productId ? (await client.query(`select distinct on(price_kind) * from labor_rate_versions
-      where company_id=$1 and labor_product_id=$3 and (location_id is null or location_id=$2)
-      order by price_kind,(location_id is not null) desc,version desc`,
-    [input.companyId, input.locationId, input.formData.laborProduct.productId])).rows : [];
+    const rates = await readEffectiveLaborPriceSources({ companyId: input.companyId, locationId: input.locationId,
+      productId: input.formData?.laborProduct?.productId }, (sql, params) => client.query(sql, params));
     const currentRates = Object.fromEntries(rates.map((row) => [row.price_kind, { id: row.id, version: row.version,
-      locationId: row.location_id, amount: row.amount, currency: row.currency, status: row.amount === null ? "unknown" : "known" }]));
+      locationId: row.location_id, amount: row.amount, currency: row.currency, status: row.amount === null ? "unknown" : "known",
+      sellingPolicyVersionId: row.selling_policy_version_id || null }]));
     const labor = { status: "incomplete", price: null, currentRates };
     const selectedRate = rates.find((row) => row.price_kind === input.pricing?.labor?.selection);
     if (selectedRate?.amount !== null && selectedRate?.currency && Number(input.formData.laborHours) > 0) {
       try {
+        const uomCode = selectedRate.product_uom_code || input.formData?.laborProduct?.uomCode || "hr";
+        if (uomCode !== (input.formData?.laborProduct?.uomCode || "hr")) throw new Error("Labor unit changed.");
+        if (!validLaborQuantity(input.formData.laborHours, uomCode)) throw new Error("Invalid labor quantity.");
         const hours = scaled(input.formData.laborHours, 2);
-        labor.price = applyCreatePriceOverride({ selection: selectedRate.price_kind, productId: selectedRate.labor_product_id, rateVersionId: selectedRate.id,
-          hours: String(input.formData.laborHours), unitPrice: selectedRate.amount,
+        labor.price = applyCreatePriceOverride({ selection: selectedRate.price_kind, productId: selectedRate.labor_product_id,
+          rateVersionId: selectedRate.selling_policy_version_id ? null : selectedRate.id,
+          sellingPolicyVersionId: selectedRate.selling_policy_version_id || null,
+          hours: String(input.formData.laborHours), uomCode, unitPrice: selectedRate.amount,
           totalPrice: fixed(divide(scaled(selectedRate.amount, 4) * hours, 100n)), currency: selectedRate.currency },
         input.pricing?.labor?.customUnitPrice);
         labor.status = "known";
-      } catch { labor.reason = "Enter valid labor hours."; }
+      } catch { labor.reason = "Enter a valid quantity for the labor unit."; }
     }
     const summary = workorderPricingSummary({ workorder: { formData: { ...input.formData,
       parts: input.formData.parts.filter((_, index) => !parts.some((row) => row.partIndex === index && row.price)) } },

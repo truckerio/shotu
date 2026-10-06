@@ -9,9 +9,18 @@ export function permissionForRequest(method, pathname) {
   if (PUBLIC_PATHS.has(pathname) && method === "GET") return null;
   if (pathname === "/api/kiosk/context" && method === "GET") return null;
   if (pathname === "/api/integrations/samsara/oauth/callback" && method === "GET") return null;
+  if (pathname === "/api/customer-portal/document" && method === "GET") return null;
+  if (pathname === "/api/customer-portal/responses" && method === "POST") return null;
+  if (pathname === "/api/customer-portal/chat" && ["GET", "POST"].includes(method)) return null;
   if (pathname.startsWith("/api/integrations/odoo/v1/")) return null;
   if (pathname.startsWith("/api/integrations/")) return PERMISSION.INTEGRATION_ADMIN;
   if (pathname.startsWith("/api/admin/")) return PERMISSION.ADMIN_MANAGE;
+  if (pathname.startsWith("/api/customer-documents/")) {
+    return method === "GET" ? PERMISSION.CUSTOMER_DOCUMENT_READ : PERMISSION.CUSTOMER_DOCUMENT_WRITE;
+  }
+  if (pathname === "/api/customers" || pathname.startsWith("/api/customers/")) {
+    return PERMISSION.WORKORDER_OFFICE;
+  }
   if (pathname.startsWith("/api/mechanic/chat-media/") && method === "GET") return PERMISSION.WORKORDER_CHAT_READ;
   if (pathname.startsWith("/api/mechanic/")) return PERMISSION.WORKORDER_MECHANIC;
   if (method === "POST" && /^\/api\/office\/inventory\/count-imports\/[^/]+\/apply$/.test(pathname)) {

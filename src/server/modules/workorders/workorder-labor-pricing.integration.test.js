@@ -12,7 +12,7 @@ const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 after(async () => { if (enabled) await closePool(); });
 
-test("real PostgreSQL preserves scoped labor rates and immutable Workorder prices", { skip: !enabled }, async () => {
+for (const uomCode of ["hr", "ea"]) test(`real PostgreSQL preserves scoped ${uomCode} labor rates and immutable Workorder prices`, { skip: !enabled }, async () => {
   const suffix = randomUUID().replaceAll("-", "");
   const actorId = randomUUID();
   const companyId = randomUUID();
@@ -46,13 +46,18 @@ test("real PostgreSQL preserves scoped labor rates and immutable Workorder price
       [locationId, companyId, otherLocationId, outsideLocationId, otherCompanyId]);
     await query("insert into assets(id,company_id,location_id,provider,name,unit_no) values($1,$2,$3,'manual','Labor demo truck',$4)",
       [assetId, companyId, locationId, `LABOR-${suffix.slice(0, 8)}`]);
-    await query(`insert into local_labor_products(id,company_id,name,normalized_name,code,normalized_code,created_by_user_id)
-      values($1,$2,$3,$4,$5,$6,$7)`, [productId, companyId, `Labor ${suffix}`, `labor ${suffix}`, `L-${suffix}`, `l-${suffix}`, actorId]);
+    await query(`insert into local_labor_products(id,company_id,name,normalized_name,code,normalized_code,created_by_user_id,uom_code)
+      values($1,$2,$3,$4,$5,$6,$7,$8)`, [productId, companyId, `Labor ${suffix}`, `labor ${suffix}`, `L-${suffix}`, `l-${suffix}`, actorId, uomCode]);
     await query(`insert into operational_workorders
       (id,company_id,serial,asset_id,location_id,created_by_user_id,concern,status,form_data)
       values($1,$2,$3,$4,$5,$6,'Labor pricing test','in_progress',$7::jsonb)`,
     [workorderId, companyId, `WO-LABOR-${suffix}`, assetId, locationId, actorId,
-      JSON.stringify({ laborProduct: { productId }, laborHours: "2.35" })]);
+      JSON.stringify({ laborProduct: { productId, uomCode }, laborHours: uomCode === "ea" ? "2" : "2.35" })]);
+    if (uomCode === "ea") {
+      await query("update operational_workorders set form_data=jsonb_set(form_data,'{laborHours}','\"1.5\"') where id=$1", [workorderId]);
+      assert.equal((await saveWorkorderLaborPriceSnapshot(selection())).kind, "labor_incomplete");
+      await query("update operational_workorders set form_data=jsonb_set(form_data,'{laborHours}','\"2\"') where id=$1", [workorderId]);
+    }
 
     const companyRateCommand = rate({ idempotencyKey: `company-selling-${suffix}`, requestHash: hash("company selling") });
     const companyRate = await appendLaborRateVersion(companyRateCommand);
@@ -72,8 +77,9 @@ test("real PostgreSQL preserves scoped labor rates and immutable Workorder price
       idempotencyKey: `company-price-${suffix}`, requestHash: hash("company price"),
     }));
     assert.equal(first.kind, "saved");
-    assert.equal(first.laborPrice.hours, "2.35");
-    assert.equal(first.laborPrice.totalPrice, "46.8825");
+    assert.equal(first.laborPrice.hours, uomCode === "ea" ? "2.00" : "2.35");
+    assert.equal(first.laborPrice.uomCode, uomCode);
+    assert.equal(first.laborPrice.totalPrice, uomCode === "ea" ? "39.9000" : "46.8825");
 
     const overrideRate = await appendLaborRateVersion(rate({
       locationId, amount: "21.0050", idempotencyKey: `shop-selling-${suffix}`,
@@ -82,7 +88,7 @@ test("real PostgreSQL preserves scoped labor rates and immutable Workorder price
     const effective = await readWorkorderLaborPricing({ companyId, locationId, workorderId, productId });
     assert.equal(effective.currentLaborRates.selling_price.id, overrideRate.rate.id);
     assert.equal(effective.laborPrice.id, first.laborPrice.id, "later rates cannot rewrite an existing price");
-    assert.equal(effective.laborPrice.totalPrice, "46.8825");
+    assert.equal(effective.laborPrice.totalPrice, uomCode === "ea" ? "39.9000" : "46.8825");
     const otherShop = await readWorkorderLaborPricing({ companyId, locationId: otherLocationId, workorderId, productId });
     assert.equal(otherShop.currentLaborRates.selling_price.id, companyRate.rate.id);
     const changedRate = await saveWorkorderLaborPriceSnapshot(selection({
@@ -98,7 +104,7 @@ test("real PostgreSQL preserves scoped labor rates and immutable Workorder price
     const second = await saveWorkorderLaborPriceSnapshot(shopSelection);
     assert.equal(second.kind, "saved");
     assert.equal(second.laborPrice.unitPrice, "21.0050");
-    assert.equal(second.laborPrice.totalPrice, "49.3618", "hourly rate times hours rounds to four decimals");
+    assert.equal(second.laborPrice.totalPrice, uomCode === "ea" ? "42.0100" : "49.3618", "unit rate times quantity rounds to four decimals");
     assert.equal((await saveWorkorderLaborPriceSnapshot(shopSelection)).laborPrice.id, second.laborPrice.id);
     assert.equal((await saveWorkorderLaborPriceSnapshot({ ...shopSelection, requestHash: hash("changed") })).kind, "idempotency_conflict");
     assert.equal((await query("select count(*)::int as count from workorder_labor_price_snapshots where company_id=$1 and workorder_id=$2",
@@ -134,7 +140,7 @@ test("real PostgreSQL preserves scoped labor rates and immutable Workorder price
     assert.equal((await saveWorkorderLaborPriceSnapshot(selection())).kind, "locked");
     const immutable = await readWorkorderLaborPricing({ companyId, locationId, workorderId, productId });
     assert.equal(immutable.laborPrice.id, second.laborPrice.id);
-    assert.equal(immutable.laborPrice.totalPrice, "49.3618");
+    assert.equal(immutable.laborPrice.totalPrice, uomCode === "ea" ? "42.0100" : "49.3618");
   } finally {
     await query("delete from workorder_labor_price_snapshots where company_id=$1", [companyId]).catch(() => {});
     await query("delete from labor_rate_versions where company_id=$1", [companyId]).catch(() => {});

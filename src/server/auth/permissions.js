@@ -17,6 +17,8 @@ export const PERMISSION = Object.freeze({
   INVENTORY_COST_READ: "inventory:cost-read",
   INVENTORY_PRICE_WRITE: "inventory:price-write",
   INVENTORY_LOCATION_MANAGE: "inventory:location-manage",
+  CUSTOMER_DOCUMENT_READ: "customer-document:read",
+  CUSTOMER_DOCUMENT_WRITE: "customer-document:write",
   ADMIN_MANAGE: "admin:manage",
 });
 
@@ -42,6 +44,8 @@ const ROLE_PERMISSIONS = Object.freeze({
     PERMISSION.INVENTORY_COST_READ,
     PERMISSION.INVENTORY_PRICE_WRITE,
     PERMISSION.INVENTORY_LOCATION_MANAGE,
+    PERMISSION.CUSTOMER_DOCUMENT_READ,
+    PERMISSION.CUSTOMER_DOCUMENT_WRITE,
   ]),
   surveillance: new Set([PERMISSION.AUTHENTICATED, PERMISSION.WORKORDER_SURVEILLANCE]),
   admin: new Set(Object.values(PERMISSION)),
