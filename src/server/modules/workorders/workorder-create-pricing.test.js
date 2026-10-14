@@ -5,6 +5,7 @@ import { createWorkorderPricingSchema } from "./workorder.schemas.js";
 import { previewCreateWorkorderPricing, createWorkorderRuntime } from "./workorder-module-runtime.service.js";
 import { handleWorkorderModulesApi } from "../../routes/workorder-modules.routes.js";
 import { submitWorkorderDraftSchema } from "./workorder-drafts.schemas.js";
+import { permissionsForRole } from "../../auth/permissions.js";
 
 test("create preview uses weighted exact batches and preserves allocation totals", () => {
   const price = priceCreateAllocations([
@@ -52,13 +53,14 @@ test("pricing command rejects client amounts and duplicate rows", () => {
 });
 
 test("mechanics cannot preview or attach create prices", async () => {
-  const context = { actor: { role: "mechanic" } };
-  await assert.rejects(previewCreateWorkorderPricing(context, {}), (error) => error.statusCode === 403);
-  await assert.rejects(createWorkorderRuntime(context, { pricing: {} }), (error) => error.statusCode === 403);
+  const context = { actor: { role: "mechanic" }, companyIds: new Set(["company"]), companyRoles: new Map([["company", "mechanic"]]), locationIds: new Set(["shop"]), permissions: permissionsForRole("mechanic") };
+  await assert.rejects(previewCreateWorkorderPricing(context, { companyId: "company", locationId: "shop" }), (error) => error.statusCode === 403);
+  await assert.rejects(createWorkorderRuntime(context, { companyId: "company", locationId: "shop", pricing: {} }), (error) => error.statusCode === 403);
 });
 
 test("create requires a reviewed fingerprint whenever prices are selected", async () => {
-  await assert.rejects(createWorkorderRuntime({ actor: { role: "office" } }, { pricing: { parts: [] } }),
+  const context = { actor: { role: "office" }, companyIds: new Set(["company"]), companyRoles: new Map([["company", "office"]]), locationIds: new Set(["shop"]), permissions: permissionsForRole("office") };
+  await assert.rejects(createWorkorderRuntime(context, { companyId: "company", locationId: "shop", pricing: { parts: [] } }),
     (error) => error.code === "WORKORDER_PRICING_PREVIEW_REQUIRED");
 });
 

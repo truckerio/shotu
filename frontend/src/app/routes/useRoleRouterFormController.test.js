@@ -76,6 +76,57 @@ test("diagnosis module changes do not race the administrative autosave", () => {
   assert.deepEqual(autosaveCalls, []);
 });
 
+test("customer-document adjustment intent enters the Office backup and autosave queue", () => {
+  const values = new Map();
+  const priorWindow = globalThis.window;
+  globalThis.window = { localStorage: {
+    getItem: (key) => values.get(key) ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, value),
+  } };
+  try {
+    const autosaveCalls = [];
+    let update;
+    const controller = createRoleRouterFormController({
+      activeWorkorder: {
+        allowedActions: { update: true },
+        workorder: { id: "workorder-1" },
+      },
+      actorId: "office-1",
+      form: { workEndDate: "" },
+      isOfficeDetail: true,
+      officeActionsRef: { current: { queueOfficeWorkorderAutosave: () => autosaveCalls.push("queued") } },
+      setActiveWorkorder: () => {},
+      setCreateErrors: () => {},
+      setForm: (next) => { update = next; },
+      setUsedPartsDirty: () => {},
+    });
+    const adjustments = {
+      lineDiscounts: [],
+      documentDiscount: { kind: "percentage", value: "", reason: "" },
+      overrideReasons: [],
+    };
+    const revisionId = "22222222-2222-4222-8222-222222222222";
+
+    controller.updateField("customerDocumentAdjustments", adjustments);
+    assert.deepEqual(update({ existing: true }), { existing: true, customerDocumentAdjustments: adjustments });
+    controller.updateField("customerDocumentAdjustmentBaseRevisionId", revisionId);
+    assert.deepEqual(update({ customerDocumentAdjustments: adjustments }), {
+      customerDocumentAdjustments: adjustments,
+      customerDocumentAdjustmentBaseRevisionId: revisionId,
+    });
+
+    assert.deepEqual(JSON.parse([...values.values()][0]), {
+      customerDocumentAdjustments: adjustments,
+      customerDocumentAdjustmentBaseRevisionId: revisionId,
+    });
+    assert.deepEqual(autosaveCalls, ["queued", "queued"]);
+  } finally {
+    if (priorWindow === undefined) delete globalThis.window;
+    else globalThis.window = priorWindow;
+  }
+});
+
 test("scanned approved parts replace a blank draft row and preserve exact catalog identity", () => {
   let update;
   const controller = createRoleRouterFormController({

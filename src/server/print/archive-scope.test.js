@@ -39,3 +39,17 @@ test("archive API projections redact server storage paths", () => {
   assert.deepEqual(safeArchiveJob({ id: "job-a", pdfPath: "/secret/file.pdf" }), { id: "job-a" });
   assert.deepEqual(safeArchiveShare({ id: "share-a", packagePath: "/secret/share" }), { id: "share-a" });
 });
+
+test("one company admin role cannot expose another company's mechanic archives", () => {
+  const mixed = { actor: { role: "admin" }, sessionMode: "standard", companyIds: new Set(["A", "B"]),
+    companyRoles: new Map([["A", "admin"], ["B", "mechanic"]]), locationIds: new Set(["B-location"]) };
+  const jobs = [{ id: "A-job", companyId: "A", locationId: "A-other" }, { id: "B-job", companyId: "B", locationId: "B-location" }];
+  assert.equal(canReadArchiveJob(mixed, jobs[0]), true);
+  assert.equal(canReadArchiveJob(mixed, jobs[1]), false);
+  const result = scopeArchiveLedger({ companies: { A: {}, B: {} }, jobs, workorders: {}, shares: [], activity: [] }, mixed);
+  assert.deepEqual(result.jobs.map((job) => job.id), ["A-job"]);
+  assert.deepEqual(Object.keys(result.companies), ["A"]);
+  mixed.companyRoles.set("B", "office");
+  assert.equal(canReadArchiveJob(mixed, jobs[1]), true);
+  assert.equal(canReadArchiveJob(mixed, { ...jobs[1], locationId: "B-other" }), false);
+});

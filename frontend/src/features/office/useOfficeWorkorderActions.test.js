@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   buildOfficeWorkorderPatch,
   createOfficeAutosaveQueue,
+  createOfficeWorkorderIdentityTracker,
   loadOfficeWorkorder,
   officeActionValidationMessage,
   patchOfficeWorkorder,
+  persistOfficeWorkorderSave,
   runOfficeWorkorderAction,
   saveOfficeUsedPartsRequest,
 } from "./useOfficeWorkorderActions.js";
@@ -101,6 +103,12 @@ test("office save patch keeps administrative fields and excludes mechanic-owned 
       authorizedBy: "Office",
       laborProduct: { productId: "11111111-1111-4111-8111-111111111111", name: "Shop labor", code: "LAB", uomCode: "hr" },
       parts: [{ partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" }],
+      customerDocumentAdjustments: {
+        lineDiscounts: [],
+        documentDiscount: { kind: "percentage", value: "", reason: "" },
+        overrideReasons: [],
+      },
+      customerDocumentAdjustmentBaseRevisionId: "22222222-2222-4222-8222-222222222222",
     },
   });
 
@@ -113,11 +121,128 @@ test("office save patch keeps administrative fields and excludes mechanic-owned 
   assert.equal(payload.formData.companyName, "Long Haul");
   assert.deepEqual(payload.formData.laborProduct, { productId: "11111111-1111-4111-8111-111111111111", name: "Shop labor", code: "LAB", uomCode: "hr" });
   assert.deepEqual(payload.formData.parts, [{ partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" }]);
+  assert.deepEqual(payload.formData.customerDocumentAdjustments, {
+    lineDiscounts: [],
+    documentDiscount: { kind: "percentage", value: "", reason: "" },
+    overrideReasons: [],
+  });
+  assert.equal(payload.formData.customerDocumentAdjustmentBaseRevisionId, "22222222-2222-4222-8222-222222222222");
   for (const mechanicOwnedField of ["diagnosis", "workPerformed", "mechanicName", "startTime", "endTime", "managerName"]) {
     assert.equal(Object.hasOwn(payload.formData, mechanicOwnedField), false);
   }
   assert.equal(Object.hasOwn(payload, "actorId"), false);
   assert.equal(Object.hasOwn(payload, "userId"), false);
+});
+
+test("an unrelated Office save omits unchanged customer-document intent", () => {
+  const adjustments = {
+    lineDiscounts: [],
+    documentDiscount: { kind: "fixed", value: "25", reason: "Service recovery" },
+    overrideReasons: [],
+  };
+  const revisionId = "22222222-2222-4222-8222-222222222222";
+  const payload = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: {
+        id: "wo-readonly",
+        updatedAt: "revision-1",
+        formData: {
+          workStartDate: "2026-08-02",
+          customerDocumentAdjustments: adjustments,
+          customerDocumentAdjustmentBaseRevisionId: revisionId,
+        },
+      },
+    },
+    selectedVehicle: null,
+    form: {
+      workStartDate: "2026-08-03",
+      parts: [],
+      customerDocumentAdjustments: {
+        overrideReasons: [],
+        documentDiscount: { reason: "Service recovery", value: "25", kind: "fixed" },
+        lineDiscounts: [],
+      },
+      customerDocumentAdjustmentBaseRevisionId: revisionId,
+    },
+  });
+
+  assert.equal(Object.hasOwn(payload.formData, "customerDocumentAdjustments"), false);
+  assert.equal(Object.hasOwn(payload.formData, "customerDocumentAdjustmentBaseRevisionId"), false);
+  assert.equal(payload.formData.workStartDate, "2026-08-03");
+});
+
+test("Office save patch preserves explicit customer-document clears and marker changes", () => {
+  const payload = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: {
+        id: "wo-write",
+        updatedAt: "revision-1",
+        formData: {
+          customerDocumentAdjustments: {
+            lineDiscounts: [],
+            documentDiscount: { kind: "fixed", value: "25", reason: "Service recovery" },
+            overrideReasons: [],
+          },
+          customerDocumentAdjustmentBaseRevisionId: "22222222-2222-4222-8222-222222222222",
+        },
+      },
+    },
+    selectedVehicle: null,
+    form: {
+      parts: [],
+      customerDocumentAdjustments: null,
+      customerDocumentAdjustmentBaseRevisionId: "",
+    },
+  });
+
+  assert.equal(payload.formData.customerDocumentAdjustments, null);
+  assert.equal(payload.formData.customerDocumentAdjustmentBaseRevisionId, "");
+});
+
+test("discount autosave omits saved labor hours from the administrative payload", () => {
+  const payload = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: {
+        id: "wo-discount",
+        updatedAt: "revision-1",
+        formData: {
+          laborHours: "2",
+          customerDocumentAdjustments: null,
+          customerDocumentAdjustmentBaseRevisionId: "",
+        },
+      },
+    },
+    selectedVehicle: null,
+    form: {
+      laborHours: "2",
+      parts: [],
+      customerDocumentAdjustments: {
+        lineDiscounts: [],
+        documentDiscount: { kind: "fixed", value: "5", reason: "Fleet discount" },
+        overrideReasons: [],
+      },
+      customerDocumentAdjustmentBaseRevisionId: "",
+    },
+  });
+
+  assert.equal(Object.hasOwn(payload.formData, "laborHours"), false);
+  assert.equal(payload.formData.customerDocumentAdjustments.documentDiscount.value, "5");
+});
+
+test("an explicit Office labor-hours edit remains in the save payload", () => {
+  const payload = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: {
+        id: "wo-labor",
+        updatedAt: "revision-1",
+        formData: { laborHours: "2" },
+      },
+    },
+    selectedVehicle: null,
+    form: { laborHours: "3.5", parts: [] },
+  });
+
+  assert.equal(payload.formData.laborHours, "3.5");
 });
 
 test("office save patch explicitly clears a previously selected labor product", () => {
@@ -134,6 +259,94 @@ test("office save patch explicitly clears a previously selected labor product", 
   });
 
   assert.equal(payload.formData.laborProduct, null);
+});
+
+test("office save patch does not serialize an ID-less labor placeholder", () => {
+  const unsavedPlaceholder = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: { id: "wo-1", updatedAt: "revision-1", formData: { laborProduct: null } },
+    },
+    selectedVehicle: null,
+    form: { laborProduct: { code: "PTR001", name: "Default labor" }, parts: [] },
+  });
+  assert.equal(unsavedPlaceholder.formData.laborProduct, null);
+
+  const savedProduct = { productId: "11111111-1111-4111-8111-111111111111", code: "LAB", name: "Shop labor" };
+  const hydratedPlaceholder = buildOfficeWorkorderPatch({
+    activeWorkorder: {
+      workorder: { id: "wo-1", updatedAt: "revision-1", formData: { laborProduct: savedProduct } },
+    },
+    selectedVehicle: null,
+    form: { laborProduct: { code: "PTR001", name: "Default labor" }, parts: [] },
+  });
+  assert.deepEqual(hydratedPlaceholder.formData.laborProduct, savedProduct);
+});
+
+test("in-flight office save writes its captured ID but discards completion after navigation", async () => {
+  const tracker = createOfficeWorkorderIdentityTracker("wo-old");
+  const savingIdentity = tracker.update("wo-old");
+  let resolvePatch;
+  const patchPending = new Promise((resolve) => { resolvePatch = resolve; });
+  const calls = [];
+  const applied = [];
+  const request = async (path, options) => {
+    calls.push([path, options]);
+    if (options?.method === "PATCH") return patchPending;
+    throw new Error("A stale save must not reload its former detail.");
+  };
+
+  const saving = persistOfficeWorkorderSave({
+    applyDetail: (...args) => applied.push(args),
+    automatic: true,
+    isCurrent: () => tracker.isCurrent(savingIdentity),
+    payload: { expectedUpdatedAt: "revision-old" },
+    request,
+    workorderId: "wo-old",
+  });
+
+  tracker.update("wo-new");
+  resolvePatch({ workorder: { id: "wo-old" } });
+  assert.deepEqual(await saving, { saved: true, stale: true, detail: null });
+  assert.deepEqual(calls, [[
+    "/api/office/workorders/wo-old",
+    { method: "PATCH", body: JSON.stringify({ expectedUpdatedAt: "revision-old" }) },
+  ]]);
+  assert.deepEqual(applied, []);
+});
+
+test("in-flight office reload cannot apply its former detail after navigation", async () => {
+  const tracker = createOfficeWorkorderIdentityTracker("wo-old");
+  const savingIdentity = tracker.update("wo-old");
+  let resolveReload;
+  const reloadPending = new Promise((resolve) => { resolveReload = resolve; });
+  const applied = [];
+  const request = async (_path, options) => options?.method === "PATCH"
+    ? { workorder: { id: "wo-old" } }
+    : reloadPending;
+
+  const saving = persistOfficeWorkorderSave({
+    applyDetail: (...args) => applied.push(args),
+    automatic: false,
+    isCurrent: () => tracker.isCurrent(savingIdentity),
+    payload: { expectedUpdatedAt: "revision-old" },
+    request,
+    workorderId: "wo-old",
+  });
+
+  await Promise.resolve();
+  tracker.update("wo-new");
+  resolveReload({ workorder: { id: "wo-old", status: "open" } });
+  assert.deepEqual(await saving, { saved: true, stale: true, detail: null });
+  assert.deepEqual(applied, []);
+});
+
+test("office save identity generations reject stale completion after navigating away and back", () => {
+  const tracker = createOfficeWorkorderIdentityTracker("wo-1");
+  const firstVisit = tracker.update("wo-1");
+  tracker.update("wo-2");
+  const secondVisit = tracker.update("wo-1");
+  assert.equal(tracker.isCurrent(firstVisit), false);
+  assert.equal(tracker.isCurrent(secondVisit), true);
 });
 
 test("manual Unit replacement detaches the previously selected asset", () => {

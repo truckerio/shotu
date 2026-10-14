@@ -9,12 +9,14 @@ import { InventoryReports } from './InventoryReports.jsx';
 import { InventoryTaskQueue } from './InventoryTaskQueue.jsx';
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronRight, Package, Plus, RefreshCw01, SearchMd, UploadCloud02 } from "@untitledui/icons";
+import { ArrowLeft, ChevronRight, MarkerPin01, Package, Plus, RefreshCw01, SearchMd, SwitchVertical01, UploadCloud02 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
 import { ContextBreadcrumbs } from "../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
-import { Pagination } from "../../components/ui/Pagination.jsx";
+import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
+import { useCheckpointPages } from "../../components/operations/useCheckpointPages.js";
+import { readCheckpointPosition } from "../../components/operations/checkpoint-position.js";
 import { SecondaryDetailPanel, SecondaryDetailSection } from "../../components/ui/SecondaryDetailPanel.jsx";
 import {
   OperationalCollectionCell,
@@ -22,9 +24,9 @@ import {
   OperationalCollectionResultHeader,
   OperationalCollectionRow,
   OperationalCollectionSectionHeader,
-  OperationalCollectionTable,
   OperationalCollectionTabs,
   OperationalCollectionToolbar,
+  OperationalCollectionTable,
 } from "../../components/operations/OperationalCollectionPage.jsx";
 import { api } from "../../lib/api.js";
 import { InvoiceExtractionWorkspace } from "../office/InvoiceExtractionWorkspace.jsx";
@@ -105,10 +107,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [stockMode, setStockMode] = useState(() => initialParams.get("stockMode") === "location" ? "location" : "part");
   const [locations, setLocations] = useState([]);
   const [browseLocations, setBrowseLocations] = useState([]);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stockLoaded, setStockLoaded] = useState(false);
-  const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedStockKey, setSelectedStockKey] = useState("");
   const [selectedLocationPart, setSelectedLocationPart] = useState(null);
@@ -123,7 +121,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [partHeaderPrice, setPartHeaderPrice] = useState({ scopeKey: "", label: "" });
   const [createPartOpen, setCreatePartOpen] = useState(false);
   const [receivingPart, setReceivingPart] = useState(null);
-  const [stockPage, setStockPage] = useState(1);
   const [inventorySection, setInventorySection] = useState(() => INVENTORY_SECTIONS.some((section) => section.id === activeSection)
     ? activeSection
     : ["inbound", "purchases", "tasks", "reports"].includes(initialParams.get("inventorySection")) ? initialParams.get("inventorySection") : "stock");
@@ -143,7 +140,6 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     if (owner === "custody" && initialParams.get("reuseCaseId")) return { kind: "custody", task: { sourceId: initialParams.get("reuseCaseId") } };
     return null;
   });
-  const [stockMeta, setStockMeta] = useState({ pageCount: 1, total: 0, counts: { all: 0, available: 0, reserved: 0, out: 0 } });
 
   useEffect(() => {
     if (!INVENTORY_SECTIONS.some((section) => section.id === activeSection) || activeSection === inventorySection) return;
@@ -175,49 +171,37 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
     return () => { active = false; };
   }, []);
 
+  const [stockQuery, setStockQuery] = useState(query);
   useEffect(() => {
-    if (invoiceWorkflowOpen || countWorkflowOpen) {
-      setLoading(false);
-      return undefined;
-    }
-    let active = true;
-    setLoading(true);
-    setError("");
-    const timer = window.setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({ limit: "20", page: String(stockPage) });
-        params.set("sort", stockSort);
-        if (query.trim()) params.set("q", query.trim());
-        if (stockFilter !== "all") params.set("availability", stockFilter);
-        if (locationId === "master") params.set("scope", "master");
-        else if (locationId !== "all") params.set("locationId", locationId);
-        const result = await api(`/api/office/inventory/stock?${params}`);
-        if (active) {
-          setItems(result.items || []);
-          setStockMeta({ pageCount: Number(result.pageCount) || 1, total: Number(result.total) || 0, counts: result.counts || { all: 0, available: 0, reserved: 0, out: 0 } });
-          setStockLoaded(true);
-        }
-      } catch (nextError) {
-        if (active) setError(nextError.message);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }, 200);
-    return () => {
-      window.clearTimeout(timer);
-      active = false;
-    };
-  }, [countWorkflowOpen, invoiceWorkflowOpen, locationId, query, refreshKey, stockFilter, stockPage, stockSort]);
-
-  useEffect(() => setStockPage(1), [locationId, query, stockFilter, stockSort]);
-
+    const timer = window.setTimeout(() => setStockQuery(query), 200);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const stockQueryKey = JSON.stringify([actorId, locationId, stockQuery.trim(), stockFilter, stockSort]);
+  const initialStockPage = useMemo(() => readCheckpointPosition(`inventory-stock:${stockQueryKey}`)?.page || 1, [stockQueryKey]);
+  const stockQueue = useCheckpointPages({
+    queryKey: stockQueryKey, refreshKey, getItemKey: stockItemKey, initialPage: initialStockPage,
+    enabled: !invoiceWorkflowOpen && !countWorkflowOpen && inventorySection === "stock" && stockMode === "part",
+    fetchPage: async (page, { signal }) => {
+      const params = new URLSearchParams({ limit: "20", page: String(page), sort: stockSort });
+      if (stockQuery.trim()) params.set("q", stockQuery.trim());
+      if (stockFilter !== "all") params.set("availability", stockFilter);
+      if (locationId === "master") params.set("scope", "master");
+      else if (locationId !== "all") params.set("locationId", locationId);
+      const result = await api(`/api/office/inventory/stock?${params}`, { signal });
+      return { ...result, page, meta: { counts: result.counts } };
+    },
+  });
+  const items = useMemo(() => stockQueue.pages.flatMap((batch) => batch.items), [stockQueue.pages]);
+  const stockLoaded = stockQueue.pages.length > 0;
+  const loading = stockQueue.loading || stockQueue.loadingMore;
+  const error = stockQueue.error?.message || "";
+  const stockMeta = { total: stockQueue.total, counts: stockQueue.pages[0]?.meta?.counts || { all: 0, available: 0, reserved: 0, out: 0 } };
   const stockCounts = stockMeta.counts;
-  const initialLoading = loading && !stockLoaded;
-  const refreshing = loading && stockLoaded;
+  const initialLoading = stockQueue.loading && !stockLoaded;
+  const refreshing = stockQueue.loadingMore;
   const selectedItem = useMemo(() => {
-    const item = selectedLocationPart && stockItemKey(selectedLocationPart) === selectedStockKey
-      ? selectedLocationPart
-      : items.find((entry) => stockItemKey(entry) === selectedStockKey) || null;
+    const item = items.find((entry) => stockItemKey(entry) === selectedStockKey)
+      || (selectedLocationPart && stockItemKey(selectedLocationPart) === selectedStockKey ? selectedLocationPart : null);
     return item && partIdentityOverride?.catalogPartId === item.catalogPartId ? { ...item, ...partIdentityOverride } : item;
   }, [items, partIdentityOverride, selectedLocationPart, selectedStockKey]);
   const selectedLocation = selectedItem?.locations.find((location) => location.locationId === selectedLocationId) || null;
@@ -259,7 +243,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   }
 
   function openListedPart(item) {
-    setSelectedLocationPart(null);
+    setSelectedLocationPart(item);
     setSelectedPositionContext(null);
     setSelectedStockKey(stockItemKey(item));
   }
@@ -562,51 +546,41 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         onChange={changeStockMode}
         items={[{ id: "part", label: "By part" }, { id: "location", label: "By location" }]}
       />
-      {stockMode === "part" ? <><OperationalCollectionTabs
-        className="inventory-stock-tabs"
-        ariaLabel="Filter stock by availability"
-        activeId={stockFilter}
-        onChange={setStockFilter}
-        items={STOCK_FILTER_OPTIONS.map((option) => ({
-          id: option.value,
-          label: option.label,
-          count: stockLoaded ? stockCounts[option.value] : "-",
-          countLabel: `${stockLoaded ? stockCounts[option.value] : "Unavailable"} parts`,
-        }))}
-      />
-
+      {stockMode === "part" ? <>
       <OperationalCollectionToolbar className="inventory-toolbar inventory-stock-toolbar">
+        <label className="inventory-toolbar-field inventory-queue-field"><span>Queue</span><Dropdown value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} aria-label="Filter stock by availability">{STOCK_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}{stockLoaded ? ` (${stockCounts[option.value]})` : ""}</option>)}</Dropdown></label>
         <label className="inventory-toolbar-field inventory-search-field"><span>Search</span><span className="inventory-search-control"><SearchMd /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Part number, description, manufacturer, or barcode" aria-label="Search inventory" /></span></label>
-        <label className="inventory-toolbar-field inventory-scope-field"><span>Inventory view</span><Dropdown value={locationId} onChange={(event) => setLocationId(event.target.value)} aria-label="Inventory view"><option value="all">All locations</option><option value="master">Odoo master catalog</option>{browseLocations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.canManage === false ? " · View only" : ""}</option>)}</Dropdown></label>
-        <label className="inventory-toolbar-field inventory-stock-sort"><span>Sort</span><Dropdown value={stockSort} onChange={(event) => setStockSort(event.target.value)} aria-label="Sort inventory stock">
+        <div className="inventory-stock-icon-controls">
+        <Dropdown icon={MarkerPin01} className={locationId !== "all" ? "is-active" : ""} popoverClassName="inventory-stock-control-popover" value={locationId} onChange={(event) => setLocationId(event.target.value)} aria-label="Inventory view" title={`Location: ${locationId === "all" ? "All locations" : locationId === "master" ? "Odoo master catalog" : browseLocations.find((location) => location.id === locationId)?.name || "Selected location"}`}><option value="all">All locations</option><option value="master">Odoo master catalog</option>{browseLocations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.canManage === false ? " · View only" : ""}</option>)}</Dropdown>
+        <Dropdown icon={SwitchVertical01} className={stockSort !== DEFAULT_STOCK_SORT ? "is-active" : ""} popoverClassName="inventory-stock-control-popover" value={stockSort} onChange={(event) => setStockSort(event.target.value)} aria-label="Sort inventory stock" title="Sort inventory stock">
           <option value="available_desc">Most available</option>
           <option value="low_stock_first">Low stock first</option>
           <option value="part_asc">Part number</option>
           <option value="reserved_desc">Most reserved</option>
           <option value="locations_desc">Most locations</option>
-        </Dropdown></label>
+        </Dropdown>
+        </div>
       </OperationalCollectionToolbar>
 
       {error ? <p className="ops-error" role="alert">{error}</p> : null}
-      {initialLoading ? <div className="inventory-empty"><RefreshCw01 className="loading-icon" /><strong>Loading inventory</strong></div> : null}
+      {initialLoading ? <div className="inventory-stock-skeleton" role="status" aria-label="Loading inventory" aria-busy="true"><OperationalCollectionTable className="inventory-stock-table" ariaLabel="Inventory loading" columns={[{ id: "part", label: "Part" }, { id: "on-hand", label: "Our on hand" }, { id: "reserved", label: "Reserved" }, { id: "available", label: "Our available" }]}>{Array.from({ length: 10 }, (_, index) => <OperationalCollectionRow className="inventory-stock-row" key={index}><OperationalCollectionCell><span className="inventory-skeleton-bar is-part" /><span className="inventory-skeleton-bar is-description" /></OperationalCollectionCell>{[0, 1, 2].map((cell) => <OperationalCollectionCell key={cell}><span className="inventory-skeleton-bar" /></OperationalCollectionCell>)}</OperationalCollectionRow>)}</OperationalCollectionTable></div> : null}
 
       {stockLoaded ? <>
         <OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">
           <span>{refreshing ? <><RefreshCw01 className="inventory-results-progress" aria-hidden="true" />Updating results</> : <><strong>{stockMeta.total}</strong> part{stockMeta.total === 1 ? "" : "s"} · {locationId === "master" ? "Odoo master catalog" : locationId === "all" ? "All locations" : browseLocations.find((location) => location.id === locationId)?.name || "Selected location"}</>}</span>
           {(query || locationId !== "all" || stockFilter !== "all" || stockSort !== DEFAULT_STOCK_SORT) ? <Button type="button" onClick={clearStockView}>Reset view</Button> : null}
         </OperationalCollectionResultHeader>
-        {items.length ? <OperationalCollectionTable
-          className={`inventory-stock-table inventory-data-table${refreshing ? " is-refreshing" : ""}`}
+        <CheckpointCollection queue={stockQueue} label="parts" pageSize={20} getItemKey={stockItemKey}
+          storageKey={`inventory-stock:${stockQueryKey}`}
+          className="inventory-stock-table inventory-data-table"
           ariaLabel="Inventory parts"
-          busy={refreshing}
           columns={[
             { id: "part", label: "Part" },
             { id: "on-hand", label: "Our on hand" },
             { id: "reserved", label: "Reserved" },
             { id: "available", label: "Our available" },
           ]}
-        >
-          {items.map((item) => {
+          renderItem={(item) => {
             const state = stockState(item);
             const stateText = stockStateLabel(state);
             return <OperationalCollectionRow
@@ -624,9 +598,10 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
                 : state === "reserved" ? <><strong>{quantity(item.quantityAvailable)} {item.uomCode} available</strong><small>{quantity(item.quantityReserved)} {item.uomCode} reserved</small></>
                   : <><strong>{quantity(item.quantityAvailable)} {item.uomCode}</strong><small className="inventory-availability-meta"><span>{Number(item.locationCount || 0)} stocked location{Number(item.locationCount || 0) === 1 ? "" : "s"}</span>{item.lowStock ? <span className="inventory-availability-low">Low stock</span> : null}</small></>}
             </OperationalCollectionCell>
-          </OperationalCollectionRow>})}
-        </OperationalCollectionTable> : query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
-        <Pagination currentPage={stockPage} pageCount={stockMeta.pageCount} setPage={setStockPage} total={stockMeta.total} label="parts" loading={refreshing} />
+          </OperationalCollectionRow>}}
+        >
+          {query || locationId !== "all" || stockFilter !== "all" ? <div className="inventory-empty"><Package /><strong>No matching stock</strong><p>Change the filters or use Reset view above.</p></div> : <div className="inventory-empty"><Package /><strong>No local inventory yet</strong><p>Review an invoice and choose “Add to inventory.”</p></div>}
+        </CheckpointCollection>
       </> : null}
       {canReconcileAuthority ? <InventoryAuthorityExceptionsPanel actorId={actorId} /> : null}
       </> : <InventoryLocationStockWorkspace locations={browseLocations} initialShopId={stockLocationInitialShop} initialPositionId={stockLocationInitialPosition} refreshKey={refreshKey} canApplyInventoryCount={canApplyInventoryCount} onShopChange={setStockLocationInitialShop} onOpenPart={openLocationPart} onAddStock={({ part, locationParts, shopId, positionId, positionPath }) => setReceivingPart({ ...(part || {}), locationParts, receiptLocationId: shopId, receiptPositionId: positionId, receiptPositionPath: positionPath, lockReceiptLocation: true })} />}
@@ -651,7 +626,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
             <nav className="inventory-part-detail-pages" aria-label="Part detail pages">
               {[{ id: "stock", label: "Stock" }, { id: "activity", label: "Activity" }, { id: "details", label: "Details" }].map((page) => <button key={page.id} type="button" aria-current={partDetailPage === page.id ? "page" : undefined} disabled={partIdentityDirty && page.id !== "details"} onClick={() => { setPartDetailPage(page.id); setShelvingOpen(false); }}>{page.label}</button>)}
             </nav>
-            {partDetailPage === "stock" && !selectedLocationReadOnly ? <Button className="inventory-part-detail-primary-action" type="button" variant="primary" onClick={() => setReceivingPart(selectedLocation ? { ...selectedItem, receiptLocationId: selectedLocation.locationId, receiptPositionId: selectedPositionContext?.positionId || "", receiptPositionPath: selectedPositionContext?.positionPath || selectedLocation.locationName, lockReceiptLocation: true } : selectedItem)} disabled={!selectedItem.trackingMode}>Add stock</Button> : null}
+            {partDetailPage === "stock" && !selectedLocationReadOnly && ["quantity", "serialized", "measured_bulk"].includes(selectedItem.trackingMode) ? <Button className="inventory-part-detail-primary-action" type="button" variant="primary" onClick={() => setReceivingPart(selectedLocation ? { ...selectedItem, receiptLocationId: selectedLocation.locationId, receiptPositionId: selectedPositionContext?.positionId || "", receiptPositionPath: selectedPositionContext?.positionPath || selectedLocation.locationName, lockReceiptLocation: true } : selectedItem)}>Add stock</Button> : null}
           </div>
 
           {partDetailPage === "stock" ? selectedLocation && shelvingOpen ? <>
@@ -660,9 +635,12 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
           </> : selectedLocation ? <>
             <div className="inventory-part-detail-toolbar">
               <div className="inventory-part-detail-toolbar-context"><IconButton icon={ArrowLeft} label="Back to all locations" onClick={() => setSelectedLocationId("")} /><div><span className="inventory-detail-location-name"><h3>{selectedLocation.locationName}</h3>{selectedLocationReadOnly ? <span className="inventory-view-only-badge">View only</span> : null}</span><p>{selectedPositionContext?.positionPath || (selectedLocationReadOnly ? "Company inventory · no changes allowed" : "")}</p></div></div>
-              {!selectedLocationReadOnly ? <PartLocationSettings part={selectedItem} location={selectedLocation} onOpenShelves={() => setShelvingOpen(true)} onDamage={(sourceLocationId) => openStockDamage(selectedItem, sourceLocationId)} onTransfer={(sourceLocationId) => openStockTransfer(selectedItem, sourceLocationId)} onSaved={() => setRefreshKey((value) => value + 1)} /> : null}
+              {!selectedLocationReadOnly && selectedItem.trackingMode !== "no_stock" ? <PartLocationSettings part={selectedItem} location={selectedLocation} onOpenShelves={() => setShelvingOpen(true)} onDamage={(sourceLocationId) => openStockDamage(selectedItem, sourceLocationId)} onTransfer={(sourceLocationId) => openStockTransfer(selectedItem, sourceLocationId)} onSaved={() => setRefreshKey((value) => value + 1)} /> : null}
             </div>
-            {selectedItem.trackingMode === "quantity" || selectedItem.trackingMode === "measured_bulk" ? <div className="inventory-part-location-summary">
+            {selectedItem.trackingMode === "no_stock" ? <div className="inventory-part-location-summary">
+              <section className="inventory-part-location-balance" aria-label="No stock tracking"><p><strong>No stock tracking.</strong> Quantity is recorded on the Workorder without inventory receipts, reservations, or movements.</p></section>
+              <PartCommercialDetails key={`${selectedItem.catalogPartId}:${selectedLocation.locationId}`} part={selectedItem} location={selectedLocation} readOnly={selectedLocationReadOnly} manageableLocationIds={manageableLocationIds} onChanged={() => setRefreshKey((value) => value + 1)} />
+            </div> : selectedItem.trackingMode === "quantity" || selectedItem.trackingMode === "measured_bulk" ? <div className="inventory-part-location-summary">
               <section className="inventory-part-location-balance" aria-label={`${selectedLocation.locationName} stock balance`}>
                 <div className="inventory-detail-metrics">
                   <div className="is-primary"><span>Available</span><strong>{quantity(selectedLocation.quantityAvailable)} {selectedItem.uomCode}</strong></div>
@@ -685,7 +663,9 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
               <PartCommercialDetails key={`${selectedItem.catalogPartId}:${selectedLocation.locationId}`} part={selectedItem} location={selectedLocation} readOnly={selectedLocationReadOnly} manageableLocationIds={manageableLocationIds} onChanged={() => setRefreshKey((value) => value + 1)} />
             </>}
           </> : <>
-            <section className="inventory-part-stock-overview" aria-label="Inventory summary">
+            {selectedItem.trackingMode === "no_stock" ? <section className="inventory-part-stock-overview" aria-label="No stock tracking">
+              <p><strong>No stock tracking.</strong> Use this item on Workorders without receiving, counting, reserving, or moving stock.</p>
+            </section> : <section className="inventory-part-stock-overview" aria-label="Inventory summary">
               {!selectedItem.trackingMode ? <p>Review tracking in Details before adding stock.</p> : null}
               <div className="inventory-detail-metrics">
                 <div className="is-primary"><span>Available</span><strong>{quantity(selectedItem.quantityAvailable)} {selectedItem.uomCode}</strong></div>
@@ -693,11 +673,11 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
                 <div><span>Reserved</span><strong>{quantity(selectedItem.quantityReserved)} {selectedItem.uomCode}</strong></div>
               </div>
               {Number(selectedItem.odooQuantityOnHand || 0) > 0 ? <p className="inventory-detail-provider-stock">Odoo · read-only · {quantity(selectedItem.odooQuantityOnHand)} {selectedItem.uomCode}</p> : null}
-            </section>
-            <SecondaryDetailSection title="Locations">
+            </section>}
+            {selectedItem.trackingMode !== "no_stock" ? <SecondaryDetailSection title="Locations">
               {stockedLocations.length ? <div className="inventory-detail-locations">{stockedLocations.map(partLocationRow)}</div> : <p className="inventory-detail-empty">No stock at any location.</p>}
               {otherLocations.length ? <details className="inventory-detail-other-locations"><summary>Other locations <span>{otherLocations.length}</span></summary><div className="inventory-detail-locations">{otherLocations.map(partLocationRow)}</div></details> : null}
-            </SecondaryDetailSection>
+            </SecondaryDetailSection> : null}
             <PartCommercialDetails key={`${selectedItem.catalogPartId}:company-defaults`} part={selectedItem} readOnly={!selectedCompanyCanManage} manageableLocationIds={manageableLocationIds} onChanged={() => setRefreshKey((value) => value + 1)} />
           </> : null}
 

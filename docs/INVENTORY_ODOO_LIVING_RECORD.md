@@ -80,6 +80,12 @@ Boundary rule: Workorder Generator may store workflow state and projections. It 
 
 ## Current Verified State
 
+### Collection loading (2026-10-11, local implementation and focused checks)
+
+Stock's By part / By location page tabs remain unchanged. In By part, counted availability is a Queue dropdown, Location and Sort are accessible icon-only dropdowns, and the initial table load uses reduced-motion-aware skeleton rows. These controls retain existing read scopes and checkpoint loading; no stock or pricing commands changed.
+
+Inventory Stock, invoices, count imports, authority exceptions, Inbound, Purchasing, Tasks, stock tasks, movement history, custody and serialized-unit lists use the shared checkpoint collection viewport and bounded loading engine. Stock and Reconciliation reports load independently; capped report summaries are not presented as paginated collections. Exact page APIs preserve existing permission filters and cursor compatibility. No inventory mutation or schema ownership changes. Final verification evidence is recorded in the change entry below.
+
 ### Developer source integration (2026-09-15, local)
 
 Currency entry uses the shared `CurrencySelector` dropdown in purchase orders, supplier bills, part prices, tax profiles and purchase approval settings. Existing currency values and API payloads are retained.
@@ -107,6 +113,8 @@ Part detail now presents compact stock totals, a single Prices summary, contextu
 ### Tracking-aware manual intake — local implementation, 2026-09-10
 
 Saved catalog tracking now chooses physical intake: serialized parts retain exact-unit creation and labels; `quantity` uses whole counts/packages; `measured_bulk` uses the canonical measurement and precision. Inventory, Create, and saved Workorder aggregate intake reuse `StockIntakeControl`. Catalog selection does not receive or issue stock. Unreviewed count parts are not silently treated as serialized.
+
+`IMPLEMENTED` locally on 2026-10-07: `no_stock` is the fourth catalog tracking policy for services and other non-inventory charges. Time-UOM catalog rows require it. No-stock rows may be added directly to a Workorder with quantity and canonical UOM, but cannot enter receiving, counts, positions, transfers, stocking, purchasing, fulfillment, serialized, aggregate-usage, or stock-movement tables. Labor remains separately owned by `local_labor_products` and stays stock-independent. Office/Admin pricing uses only a fixed selling policy and an immutable Workorder line snapshot; no receipt cost or physical usage is fabricated.
 
 The new `/api/office/inventory/parts/:id/locations/:id/stock-intake` endpoint records an idempotent manual intake batch, confirmed receipt, aggregate receipt line, movement, and local balance in one transaction. Migration `130_inventory_manual_stock_intake.sql` is required. It was tested on disposable PostgreSQL, not applied to the configured database. Authenticated in-app verification and deployment remain unverified.
 
@@ -1330,3 +1338,40 @@ Each implementation slice records applicable evidence:
 - Consumers: Create, saved Workorder rates/snapshot writes, customer-document Workorder evidence, and draft Estimate price-version lineage use the same source facts. No copied labor-rate ledger or stock requirement added.
 - Verification: Migration rehearsed in a rolled-back local transaction, then applied through the checksum-aware runner. Eleven PostgreSQL checks passed for immutable snapshots, provenance/fingerprint parity, overrides, scope, explicit Unknown, unit/ambiguity/markup exclusions, and stale evidence rollback. Fifty-five focused unit/frontend checks passed; structure, build and diff checks passed. Fresh authenticated browser showed the $100.00 selling-price option, $300.00 total for three hours, and persistence after draft reload. The user's draft price source was selected during this check; no real Workorder submitted.
 - Release boundary: Local schema/application only. No commit, push, hosted migration, deployment, configured-price change, or provider write.
+
+### INV-20261007-01 — No-stock catalog tracking and Workorder charges
+
+- Status: IMPLEMENTED AND VERIFIED LOCALLY; NOT RELEASED.
+- Decision/requirement: Keep labor stock-independent and add the same explicit no-stock behavior for other catalog charges, including time-quantity items.
+- Before: Catalog tracking allowed only quantity, measured/bulk, or serialized physical stock. Time-based catalog parts were excluded from Workorder part search, and non-inventory charges had no canonical Workorder price evidence.
+- After: Catalogs support `no_stock`; time units force that policy. Existing general part editors expose the choice, while physical-count review and stock actions exclude it. Create and Detail can add the catalog row directly with canonical quantity/UOM and a server-owned line ID. No reservation, receipt, position, unit, usage, or movement is created.
+- Canonical owners: `parts_catalog.tracking_mode` owns part policy; `local_labor_products` continues to own labor; Workorder form rows own no-stock line identity; `workorder_part_price_snapshots` owns immutable selected selling evidence.
+- Data/API changes: Migrations `196_no_stock_tracking.sql` and `197_no_stock_workorder_prices.sql`; protected part pricing accepts a no-stock line ID and derives catalog/UOM/quantity from locked Workorder state. No-stock prices require an applicable fixed selling policy.
+- User-experience changes: Existing tracking controls add No stock. Time UOM applies and locks it. Inventory hides Add stock, locations, balances, and physical settings for these rows. Workorder part selection requires no position or serial and Office/Admin can select its selling price.
+- Authorization/security changes: Existing company/location and Workorder module permissions remain authoritative. Server catalog policy overrides client claims; mechanic/kiosk projections remain price-redacted.
+- Failure/reconciliation behavior: Database triggers fail closed across physical inventory tables. Physical-history parts cannot be converted silently. Batch cost, missing/stale fixed policy, UOM/catalog drift, line-ID replacement, physical count, receipt, stocking, purchase, fulfillment, or movement attempts fail without stock mutation.
+- Verification: Both migrations applied through the local checksum-aware runner. Focused PostgreSQL proof covers time-policy enforcement, a direct physical-table rejection, Workorder creation, fixed selling snapshot, zero physical usage/movement, and customer-document projection. Focused unit/contract suites and the production build are recorded in the task report.
+- Release evidence: Local application and PostgreSQL only. No commit, push, deployment, hosted migration, Odoo write, or production mutation was authorized.
+- Remaining gaps: Hosted and authenticated fresh-browser proof remain separate release checks. Non-stock procurement/accounting remains intentionally out of scope.
+
+### INV-20261011-01 — Shared bounded checkpoint collection loading
+
+- Status: IMPLEMENTED locally, focused tests and production build passed; not released.
+- Decision/requirement: Replace one-page-at-a-time inventory pagination with Workorders-style lazy loading and direct checkpoint jumps.
+- Before: A shared rail changed presentation, but Stock and other collections still replaced a single page.
+- After: Exact-page collections share a five-visible/nine-cache-page controller, cancellation, full-window refresh, measured anchors, retained virtual extent and a shared viewport. Client-array collections slice current data with bounded rendering. Report Stock/Reconciliation load independently; capped summaries remain explicitly limited.
+- Canonical owners: `CheckpointCollection.jsx`, `useCheckpointPages.js`, `checkpoint-pages.js`, `checkpoint-extent.js`, `useClientCheckpointPages.js`, and both existing shared table adapters. Consumer detail state remains separate from loaded windows.
+- Data/API changes: Optional exact-page reads for Units and custody preserve cursor contracts and reject mixed pagination. Inbound, Purchasing, Tasks, movements and Reports supply exact scoped totals. Custody Stock groups by current tenant-scoped catalog identity rather than historical receipt text. No schema or physical command changes.
+- User-experience changes: Stock, invoice/count lists, authority exceptions, Inbound, Purchasing, Tasks, activity, custody, serialization and relevant report tables load on scroll; direct jumps retain slim checkpoint navigation. Semantic table spacers preserve headers and are disabled for keyboard interaction.
+- Authorization/security changes: Existing tenant, role and location boundaries remain in server readers; protected route negatives were tested. No provider writes or inventory mutations.
+- Failure/reconciliation behavior: Stale requests are aborted/generation-checked, failed batches expose retry, count shrink clamps safely, and selected detail survives window eviction.
+- Verification: 644 focused inventory/queue tests passed with 78 DB-dependent skips; Units 43/43 passed; final shared-owner tests 93/93 passed. Build and independent review passed. Authenticated Stock showed 6674 parts, rapid scrolling, and final 14-row checkpoint. Real report API/UI verified a 1121-record virtual extent. Full verify has one pre-existing Modules icon contract failure; DB-mutating integration, hosted and physical-device proof were not run. Large build chunks remain an existing advisory.
+- Release evidence: Localhost rebuilt/restarted and database readiness confirmed. No commit, push, deployment, migrations, production changes or stock writes.
+- Remaining gaps: This is not a measured FPS benchmark. The unused, unmounted `InventoryBills` component retains its legacy footer; capped report summaries are not full-history collections.
+
+### 2026-10-11 — Compact Stock controls and skeleton loading
+
+- Scope: Stock By part toolbar only; By location retains its existing page owner. Availability tabs become a counted Queue field. Shared Dropdown supports opt-in icon triggers without changing ordinary dropdowns.
+- UX and failure behavior: Location/Sort retain selected option state, accessible names, keyboard opening/dismissal and active tint. Initial empty result loading renders ten table-shaped skeleton rows; checkpoint prefetch keeps existing data mounted. Reduced motion disables shimmer.
+- Verification: 62 focused Stock/shared dropdown/checkpoint tests passed; build passed with existing large-chunk advisory. Authenticated desktop and phone checks verified counted Queue, location/sort selections, keyboard Enter/Escape and Reset view. Phone controls measured 44px with no horizontal body overflow. Independent review caught and resolved a stale dropdown contract assertion.
+- Boundaries: Existing permission/read APIs retained. No inventory writes, migrations, commits, pushes or deployment. This is not a new FPS measurement.

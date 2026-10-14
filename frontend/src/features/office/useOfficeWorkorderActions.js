@@ -4,10 +4,16 @@ import { resolveWorkPerformed } from "../../../../shared/workorder-completion.js
 const ADMINISTRATIVE_FORM_EXCLUSIONS = new Set([
   "diagnosis",
   "workPerformed",
+  "laborHours",
   "mechanicName",
   "startTime",
   "endTime",
   "managerName",
+]);
+
+const CUSTOMER_DOCUMENT_FORM_FIELDS = new Set([
+  "customerDocumentAdjustments",
+  "customerDocumentAdjustmentBaseRevisionId",
 ]);
 
 function requireDependency(value, name) {
@@ -56,6 +62,56 @@ export function createOfficeAutosaveQueue() {
   };
 }
 
+export function createOfficeWorkorderIdentityTracker(initialWorkorderId = "") {
+  let current = { id: String(initialWorkorderId || ""), generation: 0 };
+  return {
+    update(workorderId) {
+      const id = String(workorderId || "");
+      if (id !== current.id) current = { id, generation: current.generation + 1 };
+      return current;
+    },
+    isCurrent(identity) {
+      return current === identity;
+    },
+  };
+}
+
+function normalizedLaborProduct(formLaborProduct, savedLaborProduct) {
+  if (formLaborProduct == null) return null;
+  if (String(formLaborProduct?.productId || "").trim()) return formLaborProduct;
+  if (String(savedLaborProduct?.productId || "").trim()) return savedLaborProduct;
+  return null;
+}
+
+function sameFormValue(left, right) {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => sameFormValue(value, right[index]));
+  }
+  if (left && right && typeof left === "object" && typeof right === "object") {
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    return leftKeys.length === rightKeys.length
+      && leftKeys.every((key, index) => key === rightKeys[index] && sameFormValue(left[key], right[key]));
+  }
+  return false;
+}
+
+function changedCustomerDocumentFields(form, savedForm) {
+  return Object.fromEntries([...CUSTOMER_DOCUMENT_FORM_FIELDS]
+    .filter((key) => Object.hasOwn(form, key) && !sameFormValue(form[key], savedForm[key]))
+    .map((key) => [key, form[key]]));
+}
+
+function changedLaborHours(form, savedForm) {
+  if (!Object.hasOwn(form, "laborHours")) return {};
+  const requested = String(form.laborHours ?? "").trim();
+  const saved = String(savedForm.laborHours ?? "").trim();
+  return requested === saved ? {} : { laborHours: form.laborHours ?? "" };
+}
+
 export function buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehicle }) {
   const workorder = activeWorkorder?.workorder;
   if (!workorder) throw new TypeError("An active workorder is required.");
@@ -63,8 +119,12 @@ export function buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehic
   const currentUnitNo = String(form.unitNo || "").trim().toLowerCase();
 
   const savedAdministrativeForm = Object.fromEntries(
-    Object.entries(workorder.formData || {}).filter(([key]) => !ADMINISTRATIVE_FORM_EXCLUSIONS.has(key)),
+    Object.entries(workorder.formData || {}).filter(([key]) => (
+      !ADMINISTRATIVE_FORM_EXCLUSIONS.has(key) && !CUSTOMER_DOCUMENT_FORM_FIELDS.has(key)
+    )),
   );
+  const changedCustomerDocumentForm = changedCustomerDocumentFields(form, workorder.formData || {});
+  const changedLaborForm = changedLaborHours(form, workorder.formData || {});
 
   return {
     assetId: selectedVehicle?.id || (currentUnitNo === savedUnitNo ? workorder.asset?.id : null) || null,
@@ -95,8 +155,10 @@ export function buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehic
       authorizedBy: form.authorizedBy,
       // Labor selection is office-owned form data. Keep an explicit null so a
       // cleared selector does not silently retain the previously saved product.
-      laborProduct: form.laborProduct || null,
+      laborProduct: normalizedLaborProduct(form.laborProduct, workorder.formData?.laborProduct),
       parts: form.parts,
+      ...changedLaborForm,
+      ...changedCustomerDocumentForm,
     },
     expectedUpdatedAt: workorder.updatedAt,
   };
@@ -125,6 +187,24 @@ export async function saveOfficeUsedPartsRequest({ request, workorderId, parts }
     method: "PATCH",
     body: JSON.stringify({ parts }),
   });
+}
+
+export async function persistOfficeWorkorderSave({
+  applyDetail,
+  automatic,
+  isCurrent,
+  payload,
+  request,
+  workorderId,
+}) {
+  await patchOfficeWorkorder({ request, workorderId, payload });
+  if (!isCurrent()) return { saved: true, stale: true, detail: null };
+
+  const detail = await loadOfficeWorkorder({ request, workorderId });
+  if (!isCurrent()) return { saved: true, stale: true, detail: null };
+
+  applyDetail(detail, { refreshForm: !automatic });
+  return { saved: true, stale: false, detail };
 }
 
 export function useOfficeWorkorderActions({
@@ -158,6 +238,13 @@ export function useOfficeWorkorderActions({
   if (!autosaveQueueRef.current) autosaveQueueRef.current = createOfficeAutosaveQueue();
   const autosaveRevisionRef = useRef(0);
   const [autosaveRevision, setAutosaveRevision] = useState(0);
+  const workorderIdentityTrackerRef = useRef(null);
+  if (!workorderIdentityTrackerRef.current) {
+    workorderIdentityTrackerRef.current = createOfficeWorkorderIdentityTracker(
+      activeWorkorder?.workorder?.id,
+    );
+  }
+  const workorderIdentity = workorderIdentityTrackerRef.current.update(activeWorkorder?.workorder?.id);
 
   const applyDetail = useCallback((detail, { refreshForm = true } = {}) => {
     setActiveWorkorder(detail);
@@ -196,14 +283,21 @@ export function useOfficeWorkorderActions({
 
     const automatic = options?.automatic === true;
     const savingRevision = autosaveRevisionRef.current;
+    const savingQueue = autosaveQueueRef.current;
+    const savingIdentity = workorderIdentity;
+    const isCurrent = () => workorderIdentityTrackerRef.current.isCurrent(savingIdentity);
     setOfficeDetailState({ busy: true, message: "Saving..." });
     try {
-      const result = await patchOfficeWorkorder({
+      const result = await persistOfficeWorkorderSave({
+        applyDetail,
+        automatic,
+        isCurrent,
+        payload: buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehicle }),
         request,
         workorderId: workorder.id,
-        payload: buildOfficeWorkorderPatch({ activeWorkorder, form, selectedVehicle }),
       });
-      const detail = await reloadOfficeWorkorder(result.workorder.id, { refreshForm: !automatic });
+      if (result.stale) return true;
+      const { detail } = result;
       if (autosaveRevisionRef.current === savingRevision) {
         requireDependency(clearEditBackup, "clearEditBackup")(actorId, detail.workorder.id);
       }
@@ -213,10 +307,10 @@ export function useOfficeWorkorderActions({
       });
       return true;
     } catch (error) {
-      setOfficeDetailState({ busy: false, message: error.message, error: true });
+      if (isCurrent()) setOfficeDetailState({ busy: false, message: error.message, error: true });
       return false;
     } finally {
-      if (autosaveQueueRef.current.finish({
+      if (savingQueue.finish({
         currentRevision: autosaveRevisionRef.current,
         savingRevision,
       })) {
@@ -229,10 +323,11 @@ export function useOfficeWorkorderActions({
     clearEditBackup,
     form,
     isOfficeDetail,
-    reloadOfficeWorkorder,
+    applyDetail,
     request,
     selectedVehicle,
     setOfficeDetailState,
+    workorderIdentity,
   ]);
 
   useEffect(() => {

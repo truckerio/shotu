@@ -5,9 +5,6 @@ import test from "node:test";
 const createCss = readFileSync(new URL("./create-workorder-page.css", import.meta.url), "utf8");
 const createPage = readFileSync(new URL("./CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const createShell = readFileSync(new URL("./CreateWorkorderShell.jsx", import.meta.url), "utf8");
-const previewController = readFileSync(new URL("../workorder-detail/useWorkorderPreviewController.js", import.meta.url), "utf8");
-const routeNavigation = readFileSync(new URL("../../app/routes/useRoleRouteNavigation.js", import.meta.url), "utf8");
-const draftLifecycle = readFileSync(new URL("./useWorkorderDraftLifecycle.js", import.meta.url), "utf8");
 const workorderPanelShell = readFileSync(
   new URL("../../components/workorders/WorkorderPanelShell.jsx", import.meta.url),
   "utf8",
@@ -34,12 +31,12 @@ test("Create and shared detail navigation use the same phone breakpoint", () => 
   assert.match(sharedNavigationCss, /@media \(max-width: 700px\)/);
 });
 
-test("tablet Create starts collapsed and its Preview toggle opens fullscreen", () => {
-  assert.match(previewController, /const \[previewPanelOpen, setPreviewPanelOpen\] = useState\(false\)/);
-  assert.match(previewController, /if \(isCompact && \(isWorkorderDetail \|\| !isPhone\)\)/);
-  assert.match(routeNavigation, /openCreateWorkspace[\s\S]*setPreviewPanelOpen\(false\)/);
-  assert.match(draftLifecycle, /restoreWorkorderDraft[\s\S]*setPreviewPanelOpen\(false\)/);
-  assert.match(createPage, /previewActive=\{showEmbeddedPreview \|\| previewFullscreen\}/);
+test("Create replaces its legacy Preview surfaces with one Documents supporting panel", () => {
+  assert.match(createPage, /import \{ DocumentsPanel \}/);
+  assert.match(createPage, /previewOpen=\{customerPreviewOpen\}/);
+  assert.match(createPage, /supportingPane=\{<DocumentsPanel[\s\S]*open=\{customerPreviewOpen\}/);
+  assert.doesNotMatch(createPage, /PreviewPane|CompactWorkorderPreview|PreviewFullscreen|WorkorderPreview|BrowserPrintDocument|PrintModal/);
+  assert.doesNotMatch(createShell, /PreviewToggle|onTogglePreview|previewActive|previewVisible/);
 });
 
 test("phone Create select and shared date fields have 44px controls", () => {
@@ -85,7 +82,7 @@ test("phone keyboard hides Create dock while the active form remains scrollable"
   assert.match(createPage, /mobileScrollRef=\{mobileScrollRef\}/);
   assert.match(createPage, /margin:\s*12/);
   assert.match(createPage, /window\.scrollTo\(\{ top: 0, left: 0, behavior: "auto" \}\)/);
-  assert.match(createPage, /dismissKeyboard\(\);[\s\S]*setActiveSection\(errorSection\);[\s\S]*resetMobileScroll\(errorSection\);/);
+  assert.match(createPage, /dismissKeyboard\(\);[\s\S]*setActiveSection\(errorSection\);[\s\S]*resetMobileScroll\(\);/);
 });
 
 test("Create fields provide keyboard intent without changing textarea behavior", () => {
@@ -94,40 +91,21 @@ test("Create fields provide keyboard intent without changing textarea behavior",
   assert.doesNotMatch(createUnit, /<textarea[^>]*enterKeyHint=/);
 });
 
-test("phone Create renders one form page and a contained compact Preview", () => {
+test("phone Create keeps one form page and opens Documents from its contextual estimate action", () => {
   assert.match(createHost, /sections\.map/);
   assert.match(createUnit, /<ProgressiveWorkorderSection[\s\S]*displayMode="panel"[\s\S]*keepMounted/);
   assert.doesNotMatch(createForm, /<FormCard/);
-  assert.match(createPage, /<CreateWorkorderShell[\s\S]*previewOpen=\{previewPolicy\.canRead && showEmbeddedPreview\}/);
-  assert.match(
-    createCss,
-    /\.create-workorder-page\.create-section-preview\s+\.create-workorder-form\s*\{[^}]*display:\s*none;/s,
-  );
-  assert.match(
-    createCss,
-    /\.create-workorder-page\.create-section-preview\s+\.workorder-compact-preview\s+\.preview-panel\s*\{[^}]*display:\s*grid;/s,
-  );
-  assert.match(
-    createCss,
-    /\.workorder-compact-preview\s+\.preview-pane-content\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s,
-  );
-  assert.match(
-    createPage,
-    /activeSection === "preview" && previewPolicy\.canRead[\s\S]*<CompactWorkorderPreview[\s\S]*<WorkorderPreview label=\{t\("preview\.firstPage"\)\}/,
-  );
-  assert.match(
-    createCss,
-    /\.workorder-compact-preview\s+\.preview-page-card,[\s\S]*\.workorder-preview-shell\s*\{[^}]*min-width:\s*0;[^}]*width:\s*100%;/s,
-  );
+  assert.match(createShell, /\{customerDocumentAction \? <div className="create-workorder-mobile-action">/);
+  assert.match(createPage, /const estimateActionLabel = customerRevisionId \? "View estimate" : "Review estimate"/);
+  assert.match(createPage, /async function previewCustomerEstimate\(\{ open = true \} = \{\}\) \{\s*if \(open\) setCustomerPreviewOpen\(true\)/);
+  assert.doesNotMatch(createPage, /activeSection === "preview"/);
+  assert.doesNotMatch(createSections, /WORKORDER_MODULE_IDS\.PREVIEW,[\s\S]*\];/);
 });
 
-test("Create keeps text entry responsive by deferring only live preview work", () => {
-  assert.match(createPage, /const deferredPreviewSource = useDeferredValue\(form\);/);
-  assert.match(
-    createPage,
-    /createWorkorderPreviewForm\(deferredPreviewSource, assignment\)/,
-  );
-  assert.doesNotMatch(createPage, /useDeferredValue\(form\)[\s\S]*?<CreateWorkorderForm[\s\S]*?form=\{deferredPreviewSource\}/);
+test("Create mounts review, loading, and error states inside Documents rather than below the form", () => {
+  assert.match(createPage, /<DocumentsPanel[\s\S]*customerDocumentBusy && !customerProjection[\s\S]*customerDocumentError[\s\S]*<CustomerDocumentReview/);
+  assert.match(createPage, /<CreateWorkorderForm[\s\S]*customerDocumentError && !customerPreviewOpen/);
+  assert.doesNotMatch(createPage, /customerPreviewOpen && customerProjection \? <CustomerDocumentReview/);
 });
 
 test("Create shell uses one-page mode for office while retaining the mechanic panel navigation", () => {

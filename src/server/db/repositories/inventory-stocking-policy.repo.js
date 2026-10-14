@@ -20,7 +20,8 @@ export async function saveInventoryStockingPolicy({ companyIds, locationIds, isA
     await client.query("begin");
     const scope = await client.query(
       `select part.company_id from parts_catalog part join locations location on location.company_id=part.company_id and location.id=$2
-       where part.id=$1 and part.company_id=any($3::uuid[]) and ($5::boolean or location.id=any($4::uuid[])) for share`,
+       where part.id=$1 and part.tracking_mode in ('quantity','serialized','measured_bulk')
+         and part.company_id=any($3::uuid[]) and ($5::boolean or location.id=any($4::uuid[])) for share`,
       [catalogPartId, locationId, companyIds, locationIds, isAdmin],
     );
     if (!scope.rows[0]) { await client.query("rollback"); return { kind: "not_found" }; }

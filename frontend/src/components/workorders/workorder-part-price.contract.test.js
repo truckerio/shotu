@@ -17,4 +17,8 @@ test("workorder price column is limited to office/admin and offers exact batch o
   assert.match(cell, /function allocationMoney/);
   assert.match(cell, /Unknown cost/);
   assert.match(cell, /allocationMoney\(lineTotal, allocation\.currency\)/);
+  assert.match(cell, /className="detail-inline-price-control"/);
+  assert.match(cell, /aria-label="Part unit price" readOnly placeholder="Price" value=\{compactPriceValue\(current\)\}/);
+  assert.match(cell, /function compactPriceValue\(price\)[\s\S]*?price\?\.selection[\s\S]*?Number\.isFinite\(numeric\) \? numeric\.toFixed\(2\) : ""/);
+  assert.match(cell, /className=\{compact \? "detail-price-source-menu" : undefined\}/);
 });

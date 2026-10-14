@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { permissionsForRole } from "../../auth/permissions.js";
 
 import {
   authorizeWorkorderOdooModule,
@@ -15,7 +16,13 @@ const COMPANY_ID = "22222222-2222-4222-8222-222222222222";
 const LOCATION_ID = "33333333-3333-4333-8333-333333333333";
 
 function context(role, id = `${role}-user`) {
-  return { actor: { id, role } };
+  return {
+    actor: { id, role },
+    companyIds: new Set([COMPANY_ID]),
+    companyRoles: new Map([[COMPANY_ID, role]]),
+    locationIds: new Set([LOCATION_ID]),
+    permissions: permissionsForRole(role),
+  };
 }
 
 function dependencies({ status = "closed", policy = null, ...overrides } = {}) {

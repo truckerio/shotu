@@ -190,6 +190,23 @@ test("catalog search rejects a create-workorder location outside the actor scope
   assert.equal(searched, false);
 });
 
+test("catalog location access uses the resolved company's effective role", async () => {
+  const adminCompany = "11111111-1111-4111-8111-111111111111";
+  const mechanicCompany = "33333333-3333-4333-8333-333333333333";
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  let searched = false;
+  await assert.rejects(searchPartCatalog({ locationId, q: "oil" }, {
+    actor: { id: "actor", role: "admin" },
+    companyIds: new Set([adminCompany, mechanicCompany]),
+    companyRoles: new Map([[adminCompany, "admin"], [mechanicCompany, "mechanic"]]),
+    locationIds: new Set(),
+  }, {
+    getLocationById: async () => ({ id: locationId, company_id: mechanicCompany }),
+    searchCatalogParts: async () => { searched = true; return { items: [] }; },
+  }), (error) => error.statusCode === 403);
+  assert.equal(searched, false);
+});
+
 test("catalog search stops before repository lookup when workorder access fails", async () => {
   const denied = Object.assign(new Error("Workorder not found."), { statusCode: 404 });
   let searched = false;
@@ -289,7 +306,11 @@ test("Create assignment searches the authorized company catalog without requirin
 test("master-match catalog search requires inventory count apply permission", async () => {
   const calls = [];
   const catalogItems = [{ id: "odoo-only", source: "odoo", inventory: null }];
-  const context = { actor: { id: "admin-1", role: "admin" } };
+  const context = {
+    actor: { id: "admin-1", role: "admin" },
+    companyIds: new Set(["company-1"]),
+    companyRoles: new Map([["company-1", "admin"]]),
+  };
   const result = await searchPartCatalog({
     workorderId: "11111111-1111-4111-8111-111111111111",
     purpose: "master_match",
@@ -303,7 +324,8 @@ test("master-match catalog search requires inventory count apply permission", as
     },
   });
 
-  assert.equal(calls[0].receivedContext, context);
+  assert.equal(calls[0].receivedContext.actor.role, "admin");
+  assert.deepEqual([...calls[0].receivedContext.companyIds], ["company-1"]);
   assert.equal(calls[0].permission, "inventory:count-apply");
   assert.deepEqual(calls[1], {
     companyId: "company-1",
@@ -318,7 +340,7 @@ test("master-match permission denial stops before catalog lookup", async () => {
     workorderId: "11111111-1111-4111-8111-111111111111",
     purpose: "master_match",
     q: "filter",
-  }, { actor: { id: "mechanic-1", role: "mechanic" } }, {
+  }, { actor: { id: "mechanic-1", role: "mechanic" }, companyIds: new Set(["company-1"]), companyRoles: new Map([["company-1", "mechanic"]]) }, {
     requireWorkorderAccess: async () => ({ companyId: "company-1", locationId: "location-1" }),
     requirePermission: () => {
       throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
@@ -327,6 +349,25 @@ test("master-match permission denial stops before catalog lookup", async () => {
       searched = true;
       return { catalogAvailable: true, items: [] };
     },
+  }), (error) => error.statusCode === 403);
+  assert.equal(searched, false);
+});
+
+test("master-match cannot borrow count authority from an admin role in another company", async () => {
+  let searched = false;
+  const mixed = {
+    actor: { id: "actor", role: "admin" },
+    companyIds: new Set(["admin-company", "mechanic-company"]),
+    companyRoles: new Map([["admin-company", "admin"], ["mechanic-company", "mechanic"]]),
+    permissions: new Set(["inventory:count-apply"]),
+  };
+  await assert.rejects(searchPartCatalog({
+    workorderId: "11111111-1111-4111-8111-111111111111",
+    purpose: "master_match",
+    q: "filter",
+  }, mixed, {
+    requireWorkorderAccess: async () => ({ companyId: "mechanic-company", locationId: "location-1" }),
+    searchCatalogParts: async () => { searched = true; return { items: [] }; },
   }), (error) => error.statusCode === 403);
   assert.equal(searched, false);
 });
@@ -520,6 +561,40 @@ test("repair suggestions stop before history lookup when workorder access fails"
     }),
     (error) => error === denied,
   );
+  assert.equal(searched, false);
+});
+
+test("draft repair suggestions use the resolved company's effective location access", async () => {
+  const adminCompany = "11111111-1111-4111-8111-111111111111";
+  const mechanicCompany = "33333333-3333-4333-8333-333333333333";
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  let searched = false;
+  await assert.rejects(getPartRepairSuggestions({ locationId, partNumber: "46305" }, {
+    actor: { id: "actor", role: "admin" },
+    companyIds: new Set([adminCompany, mechanicCompany]),
+    companyRoles: new Map([[adminCompany, "admin"], [mechanicCompany, "mechanic"]]),
+    locationIds: new Set(),
+    permissions: new Set(["workorder:office"]),
+  }, {
+    getLocationById: async () => ({ id: locationId, company_id: mechanicCompany }),
+    suggestCompanyPartRepairs: async () => { searched = true; return []; },
+  }), (error) => error.statusCode === 403);
+  assert.equal(searched, false);
+});
+
+test("draft repair suggestions cannot borrow Office permission from another company", async () => {
+  const locationId = "22222222-2222-4222-8222-222222222222";
+  let searched = false;
+  await assert.rejects(getPartRepairSuggestions({ locationId, partNumber: "46305" }, {
+    actor: { id: "actor", role: "admin" },
+    companyIds: new Set(["admin-company", "mechanic-company"]),
+    companyRoles: new Map([["admin-company", "admin"], ["mechanic-company", "mechanic"]]),
+    locationIds: new Set([locationId]),
+    permissions: new Set(["workorder:office"]),
+  }, {
+    getLocationById: async () => ({ id: locationId, company_id: "mechanic-company" }),
+    suggestCompanyPartRepairs: async () => { searched = true; return []; },
+  }), (error) => error.statusCode === 403);
   assert.equal(searched, false);
 });
 

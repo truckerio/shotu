@@ -9,13 +9,33 @@ import {
 } from "./invoice-global-learning.service.js";
 
 const COMPANY = "11111111-1111-4111-8111-111111111111";
-const context = { actor: { id: "22222222-2222-4222-8222-222222222222", role: "admin" }, companyIds: new Set([COMPANY]) };
+const LOWER_ROLE_COMPANY = "33333333-3333-4333-8333-333333333333";
+const context = {
+  actor: { id: "22222222-2222-4222-8222-222222222222", role: "admin" },
+  companyIds: new Set([COMPANY]),
+  companyRoles: new Map([[COMPANY, "admin"]]),
+  sessionMode: "standard",
+};
 
 test("company policy is default-off and restricted to an in-scope admin", async () => {
   assert.equal((await readGlobalLayoutPolicy(COMPANY, context, { getConsent: async () => null })).state, "disabled");
-  await assert.rejects(() => readGlobalLayoutPolicy(COMPANY, { ...context, actor: { ...context.actor, role: "office" } }, {
-    getConsent: async () => { throw new Error("must not query"); },
+  let queried = false;
+  const mixed = {
+    ...context,
+    companyIds: new Set([COMPANY, LOWER_ROLE_COMPANY]),
+    companyRoles: new Map([[COMPANY, "admin"], [LOWER_ROLE_COMPANY, "office"]]),
+  };
+  await assert.rejects(() => readGlobalLayoutPolicy(LOWER_ROLE_COMPANY, mixed, {
+    getConsent: async () => { queried = true; return null; },
   }), /not available/);
+  assert.equal(queried, false);
+  let transactionStarted = false;
+  await assert.rejects(() => changeGlobalLayoutPolicy(LOWER_ROLE_COMPANY, {
+    enabled: true, expectedVersion: 0, policyVersion: "global-v1", idempotencyKey: "denied-policy",
+  }, mixed, {
+    transaction: async () => { transactionStarted = true; },
+  }), /not available/);
+  assert.equal(transactionStarted, false);
 });
 
 test("withdrawal delegates synchronous tombstone/quarantine in the policy transaction", async () => {

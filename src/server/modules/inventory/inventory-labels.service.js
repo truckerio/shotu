@@ -10,13 +10,14 @@ import { getSerializedInventoryUnit } from "../../db/repositories/inventory-rece
 import { inventoryLabelItemsQuerySchema } from "./inventory.schemas.js";
 import { inventoryNotFound } from "./inventory.errors.js";
 import { createInventoryQrToken, inventoryScanUrl } from "./inventory-qr.js";
+import { resolveInventoryReadLocationScope, resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
-function actorScope(requestContext) {
-  return {
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: ["admin", "office"].includes(requestContext.actor.role),
-  };
+async function actorScope(requestContext, resourceType, resourceId, dependencies) {
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(requestContext, resourceType, resourceId, {
+    allowedRoles: ["admin", "office", "mechanic"],
+    companyWideRoles: ["admin", "office"],
+  });
+  return { companyIds: scope.companyIds, locationIds: scope.locationIds, isAdmin: ["admin", "office"].includes(scope.effectiveRole) };
 }
 
 function conditionLabel(value) {
@@ -70,7 +71,7 @@ function escapeHtml(value) {
 }
 
 async function authorizedBatch(batchId, requestContext, dependencies) {
-  const scope = actorScope(requestContext);
+  const scope = await actorScope(requestContext, "labelBatch", batchId, dependencies);
   const batch = await (dependencies.getBatch || getInventoryLabelBatch)({ batchId, ...scope });
   if (!batch || batch.status !== "ready") throw inventoryNotFound();
   return { batch, scope };
@@ -103,7 +104,8 @@ export async function renderInventoryLabelBatchPrint(batchId, requestContext, de
 }
 
 export async function renderInventoryUnitLabel(unitId, requestContext, dependencies = {}) {
-  const unit = await (dependencies.getUnit || getSerializedInventoryUnit)({ unitId, ...actorScope(requestContext) });
+  const scope = await actorScope(requestContext, "serializedUnit", unitId, dependencies);
+  const unit = await (dependencies.getUnit || getSerializedInventoryUnit)({ unitId, ...scope });
   if (!unit || unit.status === "void") throw inventoryNotFound();
   const labels = await labelMarkup([{
     unitId: unit.id,
@@ -120,10 +122,13 @@ export async function renderInventoryUnitLabel(unitId, requestContext, dependenc
 export async function renderPartLocationLabels(catalogPartId, locationId, requestContext, dependencies = {}) {
   const partId = z.string().uuid().parse(catalogPartId);
   const shopId = z.string().uuid().parse(locationId);
+  const readScope = await (dependencies.resolveReadLocationScope || resolveInventoryReadLocationScope)(requestContext, shopId, {
+    allowedRoles: ["admin", "office", "mechanic"], loadLocation: dependencies.loadLocation,
+  });
   const data = await (dependencies.readPart || getPartLocationSerialization)({
     catalogPartId: partId,
     locationId: shopId,
-    companyIds: [...(requestContext.companyIds || [])],
+    companyIds: readScope.companyIds,
   });
   if (!data) throw inventoryNotFound();
   const units = data.units.filter((unit) => unit.status === "in_stock");

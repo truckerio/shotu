@@ -13,6 +13,8 @@ const nestedCss = readFileSync(new URL("../../../components/workorders/part-requ
 const childPicker = readFileSync(new URL("../../../components/workorders/part-requests/SerializedUnitChildPicker.jsx", import.meta.url), "utf8");
 const sharedParts = readFileSync(new URL("../../../components/workorders/WorkorderPartsTable.jsx", import.meta.url), "utf8");
 const sharedPartsCss = readFileSync(new URL("../../../components/workorders/workorder-parts-table.css", import.meta.url), "utf8");
+const pricingFooter = readFileSync(new URL("../../../components/workorders/WorkorderPricingFooter.jsx", import.meta.url), "utf8");
+const pricingFooterCss = readFileSync(new URL("../../../components/workorders/workorder-pricing-footer.css", import.meta.url), "utf8");
 
 test("compact Create Parts hides untouched placeholders behind one editor", () => {
   assert.match(source, /COMPACT_PARTS_QUERY = "\(max-width: 700px\)"/);
@@ -71,7 +73,7 @@ test("compact Parts keeps touch geometry and one-column phone editing", () => {
 
 test("desktop retains the existing create Parts grid", () => {
   assert.match(source, /<LegacyCreatePartsEditor/);
-  assert.match(source, /<WorkorderPartsTable id="create-known-parts-editor"/);
+  assert.match(source, /<WorkorderPartsEntryTable[\s\S]*?id="create-known-parts-editor"/);
   assert.match(source, /<WorkorderPartsRow key=\{index\}>/);
   assert.match(source, /<WorkorderPartsActions className="create-parts-actions">/);
   assert.match(sharedParts, /"operational-part-row", "has-quantity-unit"/);
@@ -87,7 +89,7 @@ test("serialized parent selection opens one shared nested dropdown and derives q
   assert.doesNotMatch(css, /create-serial-selection/);
   assert.match(source, /<CreateSerializedUnitPicker[\s\S]*open=\{active\}/);
   assert.match(source, /quantityReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
-  assert.match(source, /unitReadOnly=\{createPartRequiresSerializedUnits\(part\)\}/);
+  assert.match(source, /unitReadOnly=\{createPartRequiresSerializedUnits\(part\) \|\| part\.trackingMode === "no_stock"\}/);
   assert.match(serializedPicker, /serializedSelectionPatch\(units, selectedIdsRef\.current\)/);
   assert.match(serializedPicker, /setSelectedIds\(new Set\(nextIds\)\)/);
   assert.match(serializedPicker, /setUnits\(\[\]\);[\s\S]*setLoading\(true\)/);
@@ -143,9 +145,9 @@ test("request and scan actions align with the visible Parts heading", () => {
 });
 
 test("Add line remains below numbered rows and pricing totals remain at the section bottom", () => {
-  const tableEnd = source.indexOf("</WorkorderPartsTable>");
+  const tableEnd = source.indexOf("</WorkorderPartsEntryTable>");
   const addLine = source.indexOf('t("create.parts.add")', tableEnd);
-  const pricingFooter = source.lastIndexOf('className="create-pricing-footer"');
+  const pricingFooter = source.lastIndexOf("<WorkorderPricingFooter");
   assert.ok(tableEnd >= 0 && addLine > tableEnd);
   assert.ok(pricingFooter > addLine);
   assert.doesNotMatch(source, /<WorkorderPartsActions className="create-parts-actions">\s*\{requestPartButton\}/s);
@@ -167,6 +169,8 @@ test("office and admin Create Parts expose controlled server-preview pricing in 
   assert.match(source, /<CreatePartPriceCell/);
   assert.match(source, /selection=\{part\.priceSelection\}/);
   assert.match(source, /eligible=\{partHasExactInventorySource\(part\)\}/);
+  assert.match(source, /part\.trackingMode === "no_stock"/);
+  assert.match(source, /if \(part\.trackingMode === "no_stock"\) return null/);
   assert.match(source, /purchaseRequested:true,[^}]*priceSelection:""/);
   assert.match(source, /onChange=\{\(selection\) => onChange\(index, \{ priceSelection: selection, customUnitPrice: "" \}\)\}/);
   assert.match(source, /onCustomUnitPriceChange=\{\(customUnitPrice\) => onChange\(index, \{ customUnitPrice \}\)\}/);
@@ -177,8 +181,10 @@ test("office and admin Create Parts expose controlled server-preview pricing in 
   assert.match(priceCell, /placement="bottom end"/);
   assert.match(priceCell, /popoverClassName="create-price-source-popover"/);
   assert.doesNotMatch(priceCell, /Change price/);
-  assert.match(source, /<CreatePricingTotal pricing=\{pricing\}/);
-  assert.match(source, /summary\?\.status === "complete"[\s\S]*formatWorkorderMoney\(summary\.grandTotal, summary\.currency\)/);
+  assert.match(source, /<WorkorderPricingFooter[\s\S]*pricing=\{pricing\?\.preview\?\.summary\}[\s\S]*projection=\{customerEstimateProjection\}[\s\S]*discountControl=\{discountControl\}/);
+  assert.match(pricingFooter, /label="Parts & labor"[\s\S]*\{discountControl \|\| <PricingRow label="Discount"[\s\S]*label="Tax"[\s\S]*label="Total"/);
+  assert.match(source, /pricing\.status === "error" \? <p className="create-pricing-error" role="alert">\{pricing\.message\}<\/p>/);
+  assert.doesNotMatch(source, /Preview required/);
   assert.match(css, /\.create-inline-price-control\s*\{[^}]*min-height:\s*40px/s);
   assert.match(css, /\.create-inline-price-control\s*\{[^}]*position:\s*relative/s);
   assert.match(css, /\.create-price-source-menu\s*\{[^}]*grid-column:\s*3[^}]*grid-row:\s*1[^}]*min-width:\s*36px[^}]*position:\s*relative[^}]*width:\s*36px/s);
@@ -188,4 +194,10 @@ test("office and admin Create Parts expose controlled server-preview pricing in 
   assert.match(css, /\.create-price-source-menu \.dropdown-select-chevron\s*\{[^}]*width:\s*36px/s);
   assert.match(css, /\.dropdown-select-popover\.create-price-source-popover\s*\{[^}]*min-width:\s*min\(240px, calc\(100vw - 32px\)\)[^}]*width:\s*min\(240px, calc\(100vw - 32px\)\)/s);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.create-inline-price-control\s*\{[^}]*min-height:\s*44px/s);
+});
+test("pricing footer separates the grand total and leaves space below Add line", () => {
+  assert.match(pricingFooter, /label="Total" value=\{view\.total\} placeholder=\{view\.total === "—"\} total/);
+  assert.match(pricingFooterCss, /\.workorder-pricing-footer-row strong\.is-placeholder\s*\{\s*font-weight: 400;/);
+  assert.match(css, /\.create-parts-actions\s*\{[^}]*padding-bottom: 16px;/s);
+  assert.match(pricingFooterCss, /\.workorder-pricing-footer-row\.is-total\s*\{[^}]*border-top: 1px solid var\(--border-subtle, #e4e7ec\);[^}]*font-size: 18px;[^}]*margin-top: 12px;[^}]*padding-top: 12px;/s);
 });

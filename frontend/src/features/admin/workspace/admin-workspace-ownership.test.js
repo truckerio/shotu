@@ -64,7 +64,9 @@ test("Operations and Inventory share the operational collection page composition
   assert.match(inventory, /<OperationalCollectionPage/);
   assert.match(inventory, /presentation=\{presentation\}/);
   assert.match(inventory, /<OperationalCollectionTabs/);
-  assert.match(inventory, /<OperationalCollectionTable/);
+  assert.match(inventory, /<CheckpointCollection/);
+  const checkpointCollection = readFileSync(new URL("../../../components/ui/CheckpointCollection.jsx", import.meta.url), "utf8");
+  assert.match(checkpointCollection, /<OperationalCollectionTable/);
   assert.match(collectionPage, /headingLevel=\{embedded \? 2 : 1\}/);
   assert.match(shell, /activeSection=\{inventorySection\} onSectionChange=\{onInventorySectionChange\} onSectionTitleChange=\{onInventorySectionTitleChange\} showSectionNavigation=\{false\} showSectionNavigationOnPhone/);
   assert.match(shell, /view === "inventory"[\s\S]*?`inventory-\$\{inventorySection\}`/);
@@ -97,6 +99,11 @@ test("admin Operations opens the inspection returned by create", () => {
   assert.match(operationsPage, /const \[createdInspectionId, setCreatedInspectionId\] = useState\(""\)/);
   assert.match(operationsPage, /onCreated=\{\(result\) => \{ setCreatingInspection\(false\); setCreatedInspectionId\(result\?\.inspection\?\.id \|\| ""\); \}\}/);
   assert.match(operationsPage, /initialInspectionId=\{createdInspectionId \|\| initialInspectionId\}/);
+});
+
+test("admin queue tabs and filters retain their height above scrolling results", () => {
+  assert.match(operationsStyles, /\.operations-workspace > :is\(\.operational-collection-tabs-wrap, \.operations-toolbar, \.mobile-queue-toolbar\)\s*\{\s*flex: 0 0 auto;/);
+  assert.match(operationsStyles, /\.admin-operations-content \.workorder-drafts-results,[\s\S]*?overflow: auto;/);
 });
 
 test("page owners retain their meaningful domain behavior", () => {

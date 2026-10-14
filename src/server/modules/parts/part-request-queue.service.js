@@ -1,4 +1,5 @@
 import { requireActor } from "../../auth/authorize.js";
+import { companyRoleScope } from "../../auth/company-role.js";
 import { permissionDenied } from "../../auth/errors.js";
 import { listUnresolvedPartRequestQueue } from "../../db/repositories/part-request-queue.repo.js";
 import { partRequestQueueQuerySchema } from "./part-request-queue.schemas.js";
@@ -11,20 +12,18 @@ function requestState(row) {
 
 export async function loadUnresolvedPartRequestQueue(rawInput, context, dependencies = {}) {
   const input = partRequestQueueQuerySchema.parse(rawInput);
-  const actor = requireActor(context);
-  if (!["office", "admin"].includes(actor.role)) throw permissionDenied();
-  const companyIds = [...(context.companyIds || [])];
-  const locationIds = [...(context.locationIds || [])];
-  const isAdmin = actor.role === "admin";
+  requireActor(context);
+  const { companyIds, locationIds, adminCompanyIds } = companyRoleScope(context, ["office", "admin"]);
+  if (context.companyIds?.size && !companyIds.length) throw permissionDenied();
 
-  if (!companyIds.length || (!isAdmin && (!locationIds.length || (input.location && !locationIds.includes(input.location))))) {
+  if (!companyIds.length || (!adminCompanyIds.length && (!locationIds.length || (input.location && !locationIds.includes(input.location))))) {
     return { items: [], total: 0, page: input.page, pageSize: input.pageSize, pageCount: 1 };
   }
 
   const queue = await (dependencies.listQueue || listUnresolvedPartRequestQueue)({
     companyIds,
     locationIds,
-    isAdmin,
+    adminCompanyIds,
     page: input.page,
     pageSize: input.pageSize,
     locationId: input.location || null,

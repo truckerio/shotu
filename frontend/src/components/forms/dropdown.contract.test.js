@@ -20,7 +20,7 @@ test("shared dropdown supplies accessible selection, chevron, and motion", async
   assert.match(component, /textValue=\{option\.textValue\}/);
   assert.match(component, /ChevronDown className="dropdown-select-chevron"/);
   assert.match(component, /Check className="dropdown-select-check"/);
-  assert.match(component, /className=\{joinClassNames\("dropdown-select", className\)\}/);
+  assert.match(component, /className=\{joinClassNames\("dropdown-select", TriggerIcon && "dropdown-select-icon-only", className\)\}/);
   assert.match(component, /placement = "bottom start"/);
   assert.match(component, /className=\{joinClassNames\("dropdown-select-popover", popoverClassName\)\}/);
   assert.match(component, /placement=\{placement\}/);

@@ -6,6 +6,7 @@ import {
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { z } from "zod";
 import { hasQuantityPrecision, validateQuantityUnit } from "../parts/quantity-uom.js";
+import { resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
 const reserveSchema = z.object({
   catalogPartId: z.string().uuid(),
@@ -25,15 +26,6 @@ const lifecycleSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
 }).strict();
 
-function scope(context) {
-  return {
-    companyIds: [...context.companyIds],
-    locationIds: [...context.locationIds],
-    isAdmin: context.actor.role === "admin",
-    actorId: context.actor.id,
-  };
-}
-
 function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -45,6 +37,9 @@ function fail(code, message, statusCode = 409) {
 export async function reserveMeasuredUsageForWorkorder(workorderId, input, context, dependencies = {}) {
   const { operation: _operation, ...payload } = input;
   input = reserveSchema.parse(payload);
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(context, "workorder", workorderId, {
+    allowedRoles: ["mechanic", "office", "admin"],
+  });
   const command = {
     workorderId,
     catalogPartId: input.catalogPartId,
@@ -53,7 +48,10 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
     uomCode: input.uomCode,
     repairOrder: input.repairOrder || "",
     idempotencyKey: input.idempotencyKey,
-    ...scope(context),
+    companyIds: scope.companyIds,
+    locationIds: scope.locationIds,
+    isAdmin: scope.isAdmin,
+    actorId: context.actor.id,
   };
   const result = await (dependencies.reserveAggregateUsage || reserveAggregateWorkorderUsage)({
     ...command,
@@ -72,7 +70,10 @@ export async function reserveMeasuredUsageForWorkorder(workorderId, input, conte
 export async function releaseOrReverseMeasuredUsageForWorkorder(workorderId, input, context, dependencies = {}) {
   const { operation: _operation, ...payload } = input;
   input = lifecycleSchema.parse(payload);
-  if (["reverse", "adjust"].includes(input.action) && !["office", "admin"].includes(context.actor.role)) {
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(context, "aggregateUsage", input.usageId, {
+    allowedRoles: ["mechanic", "office", "admin"],
+  });
+  if (["reverse", "adjust"].includes(input.action) && !["office", "admin"].includes(scope.effectiveRole)) {
     fail("AGGREGATE_USAGE_REVERSAL_FORBIDDEN", "Only Office or Admin may adjust approved measured usage.", 403);
   }
   if (input.action === "adjust" && input.targetQuantity === undefined) {
@@ -85,7 +86,10 @@ export async function releaseOrReverseMeasuredUsageForWorkorder(workorderId, inp
     targetQuantity: input.targetQuantity,
     reason: input.reason,
     idempotencyKey: input.idempotencyKey,
-    ...scope(context),
+    companyIds: scope.companyIds,
+    locationIds: scope.locationIds,
+    isAdmin: scope.isAdmin,
+    actorId: context.actor.id,
   };
   const result = await (dependencies.releaseAggregateUsage || releaseOrReverseAggregateWorkorderUsage)({
     ...command,

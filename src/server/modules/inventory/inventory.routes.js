@@ -14,7 +14,7 @@ import { ZodError } from "zod";
 import { getPurchasing,savePurchase,getPurchaseCommand,getPurchaseApprovalSettings,savePurchaseApprovalSettings,receivePurchaseOrder } from "./inventory-purchasing.service.js";
 import { getPurchaseRequests,postPurchaseRequest } from "./inventory-purchase-requests.service.js";
 import { decideDirectReceiptApproval, receiveDirectInventory, readDirectReceiptApproval, readDirectReceiptOutcome, readPartStockMovements } from "./direct-inventory-receipt.service.js";
-import { catalogUomConflictError, InventoryError } from "./inventory.errors.js";
+import { catalogUomConflictError, InventoryError, noStockMutationError } from "./inventory.errors.js";
 import {
   readInventoryReceiptLabels,
   receiveReviewedInvoice,
@@ -87,7 +87,7 @@ function pathId(pathname, pattern) {
 }
 
 function sendError(helpers, res, error) {
-  error = catalogUomConflictError(error) || error;
+  error = noStockMutationError(error) || catalogUomConflictError(error) || error;
   if (error instanceof ZodError) {
     helpers.sendJson(res, 400, { error: "Invalid inventory request.", code: "validation_error", issues: error.issues });
     return;

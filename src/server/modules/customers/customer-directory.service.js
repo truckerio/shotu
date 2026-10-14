@@ -1,5 +1,6 @@
 import { AuthError, permissionDenied, resourceNotFound } from "../../auth/errors.js";
 import { requireCompanyAccess } from "../../auth/authorize.js";
+import { requireCompanyRole } from "../../auth/company-role.js";
 import * as repository from "../../db/repositories/customer-directory.repo.js";
 import {
   customerDirectoryQuerySchema, createCustomerSchema, updateCustomerSchema,
@@ -7,7 +8,7 @@ import {
 } from "./customer-directory.schemas.js";
 
 function scope(context, companyId) {
-  if (!["office", "admin"].includes(context?.actor?.role)) throw permissionDenied();
+  requireCompanyRole(context, companyId, ["office", "admin"]);
   requireCompanyAccess(context, companyId);
   return context.actor.id;
 }

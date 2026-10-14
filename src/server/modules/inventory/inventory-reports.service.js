@@ -6,13 +6,14 @@ import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 const schema = z.object({
   locationId: z.string().uuid(),
   page: z.coerce.number().int().positive().max(100000).default(1),
+  section: z.enum(["stock", "reconciliation"]).optional(),
 }).strict();
 
 const CUSTODY_LIMIT = 100;
 const REPORT_LIMIT = 100;
 
 export async function getInventoryReports(params, context, dependencies = {}) {
-  const { locationId, page } = schema.parse(Object.fromEntries(params));
+  const { locationId, page, section } = schema.parse(Object.fromEntries(params));
   const client = await (dependencies.pool || getPool()).connect();
   try {
     await client.query("begin isolation level repeatable read read only");
@@ -27,6 +28,63 @@ export async function getInventoryReports(params, context, dependencies = {}) {
       code: "INVENTORY_REPORTS_FORBIDDEN",
       message: "Reports require Office or Admin access.",
     });
+
+    if (section === "stock") {
+      const result = await client.query(`with filtered as (
+        select i.id as inventory_item_id,p.id,p.part_number,p.description,i.uom_code,i.quantity_on_hand,i.quantity_reserved,i.company_id,i.location_id,i.catalog_part_id
+        from inventory_items i join parts_catalog p on p.company_id=i.company_id and p.id=i.catalog_part_id
+        where i.company_id=$1 and i.location_id=$2 and i.source_provider='local'
+      ), page_rows as (
+        select * from filtered order by part_number,id,inventory_item_id limit $3 offset $4
+      ), totals as (
+        select count(*)::integer total from filtered
+      )
+      select page_rows.id,page_rows.inventory_item_id,page_rows.part_number,page_rows.description,page_rows.uom_code,
+        page_rows.quantity_on_hand as usable_on_hand,page_rows.quantity_reserved,
+        greatest(page_rows.quantity_on_hand-page_rows.quantity_reserved,0) as available,
+        coalesce(held.quantity,0) as held_quantity,page_rows.quantity_on_hand+coalesce(held.quantity,0) as physical_on_hand,
+        coalesce(used.quantity,0) as used_last_30_days,totals.total
+      from totals left join page_rows on true
+      left join lateral(select sum(quantity) as quantity from inventory_stock_tasks t where t.company_id=page_rows.company_id and t.location_id=page_rows.location_id and t.catalog_part_id=page_rows.catalog_part_id and t.kind='damage' and t.status in ('inspection','repair')) held on page_rows.inventory_item_id is not null
+      left join lateral(select -sum(quantity_delta) as quantity from inventory_stock_movements m where m.company_id=page_rows.company_id and m.location_id=page_rows.location_id and m.catalog_part_id=page_rows.catalog_part_id and m.movement_type='issue' and m.created_at>=now()-interval '30 days') used on page_rows.inventory_item_id is not null
+      order by page_rows.part_number nulls last,page_rows.id,page_rows.inventory_item_id`, [location.company_id, locationId, REPORT_LIMIT, (page - 1) * REPORT_LIMIT]);
+      const total = Number(result.rows[0]?.total || 0);
+      await client.query("commit");
+      return { items: result.rows.filter((row) => row.inventory_item_id).map(({ total: _total, ...row }) => row), total, page, pageCount: Math.ceil(total / REPORT_LIMIT), pageSize: REPORT_LIMIT };
+    }
+
+    if (section === "reconciliation") {
+      const result = await client.query(`with filtered as (
+        select i.id as inventory_item_id,i.catalog_part_id,p.part_number,p.description,i.uom_code,
+          i.quantity_on_hand as item_quantity_on_hand,i.quantity_reserved as item_quantity_reserved,i.company_id,i.location_id
+        from inventory_items i join parts_catalog p on p.company_id=i.company_id and p.id=i.catalog_part_id
+        where i.company_id=$1 and i.location_id=$2 and i.source_provider='local'
+      ), page_rows as (
+        select * from filtered order by part_number,catalog_part_id,inventory_item_id limit $3 offset $4
+      ), totals as (
+        select count(*)::integer total from filtered
+      )
+      select page_rows.inventory_item_id,page_rows.catalog_part_id,page_rows.part_number,page_rows.description,page_rows.uom_code,
+        page_rows.item_quantity_on_hand,page_rows.item_quantity_reserved,
+        position.quantity as position_quantity,position.quantity_reserved as position_quantity_reserved,
+        position.position_count,position.active_position_count,
+        (page_rows.item_quantity_on_hand-position.quantity) as quantity_delta,
+        (page_rows.item_quantity_reserved-position.quantity_reserved) as reserved_delta,totals.total
+      from totals left join page_rows on true
+      left join lateral (
+        select sum(b.quantity) filter(where b.uom_code=page_rows.uom_code) as quantity,
+          sum(b.quantity_reserved) filter(where b.uom_code=page_rows.uom_code) as quantity_reserved,
+          count(*) filter(where b.uom_code=page_rows.uom_code)::integer as position_count,
+          count(*) filter(where b.uom_code=page_rows.uom_code and pos.is_active)::integer as active_position_count
+        from inventory_position_balances b
+        join inventory_positions pos on pos.company_id=b.company_id and pos.location_id=b.location_id and pos.id=b.position_id
+        where b.company_id=page_rows.company_id and b.location_id=page_rows.location_id and b.inventory_item_id=page_rows.inventory_item_id
+      ) position on page_rows.inventory_item_id is not null
+      order by page_rows.part_number nulls last,page_rows.catalog_part_id,page_rows.inventory_item_id`, [location.company_id, locationId, REPORT_LIMIT, (page - 1) * REPORT_LIMIT]);
+      const total = Number(result.rows[0]?.total || 0);
+      await client.query("commit");
+      return { items: result.rows.filter((row) => row.inventory_item_id).map(({ total: _total, ...row }) => row), total, page, pageCount: Math.ceil(total / REPORT_LIMIT), pageSize: REPORT_LIMIT };
+    }
 
     const stock = await client.query(`select p.id,p.part_number,p.description,i.uom_code,i.quantity_on_hand as usable_on_hand,i.quantity_reserved,greatest(i.quantity_on_hand-i.quantity_reserved,0) as available,coalesce(held.quantity,0) as held_quantity,i.quantity_on_hand+coalesce(held.quantity,0) as physical_on_hand,coalesce(used.quantity,0) as used_last_30_days
       from inventory_items i join parts_catalog p on p.company_id=i.company_id and p.id=i.catalog_part_id

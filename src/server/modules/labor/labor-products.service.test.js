@@ -69,7 +69,31 @@ test("cross-tenant location is hidden before catalog access", async () => {
   }, context(), {
     findLocation: async () => ({ id: LOCATION_ID, company_id: OTHER_COMPANY_ID }),
     findProduct: async () => assert.fail("product must not run"),
+  }), (error) => error.statusCode === 404);
+});
+
+test("mixed roles use the location company role for commercial data and mutations", async () => {
+  const mixed = {
+    actor: { id: "actor-1", role: "admin" },
+    companyIds: new Set([COMPANY_ID, OTHER_COMPANY_ID]),
+    companyRoles: new Map([[COMPANY_ID, "admin"], [OTHER_COMPANY_ID, "mechanic"]]),
+    locationIds: new Set([LOCATION_ID]),
+  };
+  const otherLocation = { id: LOCATION_ID, company_id: OTHER_COMPANY_ID };
+  const priced = { id: PRODUCT_ID, name: "Diagnostics", source: { provider: "odoo" }, odooPricing: { selling: { amount: "120" } } };
+  const result = await readLaborProducts(new URLSearchParams({ locationId: LOCATION_ID }), mixed, {
+    findLocation: async () => otherLocation,
+    listProducts: async () => [priced],
+  });
+  assert.equal(result.canCreate, false);
+  assert.equal(result.canPin, false);
+  assert.equal(result.items[0].odooPricing, undefined);
+  let created = false;
+  await assert.rejects(addLaborProduct({ locationId: LOCATION_ID, name: "Diagnostics" }, mixed, {
+    findLocation: async () => otherLocation,
+    createProduct: async () => { created = true; },
   }), (error) => error.statusCode === 403);
+  assert.equal(created, false);
 });
 
 test("create rejects normalized duplicate input", async () => {

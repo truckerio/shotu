@@ -6,8 +6,14 @@ import { NarrativeField } from "../forms/NarrativeField.jsx";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
 import {
+  availableUsedPartDraftCount,
+  canAddUsedPartDraft,
+  emptyUsedPart,
+  initialUsedPartRows,
+  noStockUsedPartDraft,
   readonlyUsedParts,
   reusableReturnedUsageIds,
+  savableNoStockUsedPart,
   serializedUsageTableState,
 } from "./used-parts-model.js";
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
@@ -30,12 +36,14 @@ import {
   WorkorderPartsRow,
   WorkorderPartsTable,
 } from "./WorkorderPartsTable.jsx";
+import { WorkorderPartsEntryTable } from "./WorkorderPartsEntryTable.jsx";
 import { WorkorderPartPriceCell } from "./WorkorderPartPriceCell.jsx";
 import { LaborPriceCell } from "./LaborPriceCell.jsx";
 import { WorkorderPricingSummary } from "./WorkorderPricingSummary.jsx";
 
 export function UsedPartsEditor({
   actorId,
+  financialFooter = null,
   role = "read",
   detail,
   parts,
@@ -48,12 +56,15 @@ export function UsedPartsEditor({
   onLaborHoursChange = () => {},
   onLaborProductChange,
   onLaborRepairOrderChange = () => {},
+  onChange = () => {},
+  onSave = null,
   onChanged = () => {},
   onRegisterSerializedRepairFlush = () => {},
   serializedParts = null,
   disabled = false,
   partsEditable = !disabled,
   laborEditable = !disabled,
+  headerAction = null,
   suggestionsEnabled = true,
   locale = "en",
   readonlyMessage = "Used parts are read-only for your role.",
@@ -66,6 +77,10 @@ export function UsedPartsEditor({
   const [message, setMessage] = useState("");
   const [serializedDialogPart, setSerializedDialogPart] = useState(null);
   const [measuredDialogPart, setMeasuredDialogPart] = useState(null);
+  const [noStockDraft, setNoStockDraft] = useState(null);
+  const [savingNoStock, setSavingNoStock] = useState(false);
+  const [draftRows, setDraftRows] = useState(() => initialUsedPartRows([]));
+  const [activeDraftIndex, setActiveDraftIndex] = useState(-1);
   const [serializedHistoryOpen, setSerializedHistoryOpen] = useState(false);
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
   const [savingSerializedUsageId, setSavingSerializedUsageId] = useState("");
@@ -151,7 +166,11 @@ export function UsedPartsEditor({
   const reusableReturnedIds = reusableReturnedUsageIds(serializedParts?.usages);
   const returnedUsageKey = [...reusableReturnedIds].join(":");
   const aggregatePartUsages = detail?.modules?.parts?.data?.aggregatePartUsages || detail?.aggregatePartUsages || [];
+  const noStockPartPrices = detail?.modules?.parts?.data?.noStockPartPrices || [];
+  const noStockPriceByLineId = new Map(noStockPartPrices.map((entry) => [entry.noStockLineId, entry.price]));
   const recordedManualParts = readonlyUsedParts(parts);
+  const recordedPartCount = activeSerializedParts.length + recordedManualParts.length + aggregatePartUsages.length;
+  const visibleDraftRows = draftRows.slice(0, availableUsedPartDraftCount(recordedPartCount, draftRows.length));
   const hasTablePartRows = activeSerializedParts.length > 0 || recordedManualParts.length > 0 || aggregatePartUsages.length > 0;
   const onePage = presentation === "one-page";
   const canViewPrices = ["office", "admin"].includes(role);
@@ -188,7 +207,7 @@ export function UsedPartsEditor({
     if (returnedUsageKey) setSerializedHistoryOpen(true);
   }, [returnedUsageKey]);
 
-  function renderSerializedPartRow(part, index, ordinal = index + 2) {
+  function renderSerializedPartRow(part, index, ordinal = index + 2, compact = false) {
     const usage = part.usage;
     const actions = usage && serializedParts ? serializedParts.actionsFor(usage) : {};
     const installed = ["installed_pending_approval", "installed"].includes(part.status);
@@ -241,8 +260,8 @@ export function UsedPartsEditor({
               </PartRepairOrderField>
             ) : <span className="used-part-pending-repair">{t("parts.repairAfterInstalled")}</span>}
           </div>
-          <span className="used-part-pickup-empty" aria-hidden="true"></span>
-          {canViewPrices ? <WorkorderPartPriceCell workorderId={detail.workorder.id} usageKind="serialized" usageId={part.usageId} price={part.price} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} /> : null}
+          {!compact ? <span className="used-part-pickup-empty" aria-hidden="true"></span> : null}
+          {canViewPrices ? <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="serialized" usageId={part.usageId} price={part.price} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} /> : null}
           <div className="used-part-serialized-actions">
             <span className="used-part-cell-label used-part-status-label">{t("parts.statusAction")}</span>
             <span className="used-part-serialized-status">
@@ -263,7 +282,7 @@ export function UsedPartsEditor({
     );
   }
 
-  function renderRecordedPartRow(part, index, ordinal) {
+  function renderRecordedPartRow(part, index, ordinal, compact = false) {
     const partNumber = part.partNo || t("parts.partNumberNotRecorded");
     const quantity = formatQuantityUnit(part.qty, part.uomCode);
     return (
@@ -276,9 +295,13 @@ export function UsedPartsEditor({
         <div className="used-part-field used-part-recorded-identity"><span className="used-part-cell-label">{t("parts.part")}</span><strong>{partNumber}</strong></div>
         <div className="used-part-field used-part-recorded-value"><span className="used-part-cell-label">{t("parts.quantityUnit")}</span><strong>{quantity}</strong></div>
         <div className="used-part-field used-part-recorded-repair"><span className="used-part-cell-label">{t("parts.repairOrder")}</span>{part.repairOrder || <span aria-hidden="true">—</span>}</div>
-        <span className="used-part-pickup-empty" aria-hidden="true"></span>
-        {canViewPrices ? <span className="used-part-price-unavailable">Price unavailable · not linked to inventory</span> : null}
-        <span className="used-part-recorded-status" aria-hidden="true"></span>
+        {!compact ? <span className="used-part-pickup-empty" aria-hidden="true"></span> : null}
+        {canViewPrices ? part.trackingMode === "no_stock" && part.noStockLineId
+          ? <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="no_stock" noStockLineId={part.noStockLineId} price={noStockPriceByLineId.get(part.noStockLineId) || null} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} />
+          : <span className="used-part-price-unavailable">Price unavailable · not linked to inventory</span> : null}
+        {partsEditable && part.trackingMode === "no_stock" && part.noStockLineId
+          ? <Button type="button" onClick={() => removeNoStockPart(part)} disabled={savingNoStock}>Remove</Button>
+          : <span className="used-part-recorded-status" aria-hidden="true"></span>}
       </WorkorderPartsRow>
     );
   }
@@ -296,6 +319,8 @@ export function UsedPartsEditor({
   }
 
   const serializedToolbar = serializedParts?.scanControl || null;
+  const onePageToolbar = serializedParts?.scanControl || null;
+  const laborControlsDisabled = !laborEditable || laborRepairOrderDisabled;
 
   const serializedFeedback = serializedParts?.message ? (
     <p
@@ -329,8 +354,13 @@ export function UsedPartsEditor({
     setSerializedDialogPart(null);
     if (serializedReservationCompletedRef.current) {
       serializedReservationCompletedRef.current = false;
-      setCatalogQuery("");
-      setIntakeOpen(false);
+      if (activeDraftIndex >= 0) {
+        resetDraftRow(activeDraftIndex);
+        setActiveDraftIndex(-1);
+      } else {
+        setCatalogQuery("");
+        setIntakeOpen(false);
+      }
     }
   }
 
@@ -343,7 +373,29 @@ export function UsedPartsEditor({
     setCatalogQuery("");
     setSerializedDialogPart(null);
     setMeasuredDialogPart(null);
+    setNoStockDraft(null);
     setMessage("");
+  }
+
+  function updateDraftRow(index, changes) {
+    setDraftRows((current) => current.map((row, rowIndex) => (
+      rowIndex === index ? { ...row, ...changes } : row
+    )));
+  }
+
+  function resetDraftRow(index) {
+    if (index < 0) return;
+    setDraftRows((current) => current.map((row, rowIndex) => (
+      rowIndex === index ? emptyUsedPart() : row
+    )));
+  }
+
+  function addDraftRow() {
+    setDraftRows((current) => canAddUsedPartDraft(recordedPartCount, current.length) ? [...current, emptyUsedPart()] : current);
+    window.requestAnimationFrame(() => {
+      const inputs = document.querySelectorAll(".used-parts-draft-row .part-catalog-field input");
+      inputs.item(inputs.length - 1)?.focus();
+    });
   }
 
   function focusIntakeRow() {
@@ -376,10 +428,59 @@ export function UsedPartsEditor({
     window.requestAnimationFrame(() => document.getElementById("workorder-add-approved-part")?.focus());
   }
 
-  function renderPartsColumnHead() {
+  async function addNoStockPart(draft = noStockDraft, draftIndex = -1) {
+    if (draftIndex >= 0 && availableUsedPartDraftCount(recordedPartCount, 1) === 0) {
+      setMessage("This Workorder already has the maximum number of recorded parts.");
+      return;
+    }
+    if (!onSave) {
+      setMessage("This Workorder cannot save no-stock items right now.");
+      return;
+    }
+    const part = savableNoStockUsedPart(draft);
+    if (!part) {
+      setMessage(t("parts.validation.quantity"));
+      return;
+    }
+    setMessage("");
+    setSavingNoStock(true);
+    const nextParts = [...recordedManualParts, part];
+    try {
+      const saved = await onSave(nextParts);
+      onChange(saved?.parts || nextParts);
+      if (draftIndex >= 0) {
+        resetDraftRow(draftIndex);
+        setActiveDraftIndex(-1);
+        setNoStockDraft(null);
+      } else closeIntakeRow();
+      await onChanged();
+    } catch (error) {
+      setMessage(error?.message || "No-stock item could not be added.");
+    } finally {
+      setSavingNoStock(false);
+    }
+  }
+
+  async function removeNoStockPart(part) {
+    if (!onSave || !part?.noStockLineId) return;
+    setMessage("");
+    setSavingNoStock(true);
+    const nextParts = recordedManualParts.filter((candidate) => candidate.noStockLineId !== part.noStockLineId);
+    try {
+      const saved = await onSave(nextParts);
+      onChange(saved?.parts || nextParts);
+      await onChanged();
+    } catch (error) {
+      setMessage(error?.message || "No-stock item could not be removed.");
+    } finally {
+      setSavingNoStock(false);
+    }
+  }
+
+  function renderPartsColumnHead(columns = partColumns) {
     return <WorkorderPartsColumnHead
       className="used-parts-column-head"
-      columns={partColumns}
+      columns={columns}
       labels={{
         [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("parts.part"),
         [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
@@ -389,6 +490,100 @@ export function UsedPartsEditor({
         [WORKORDER_PARTS_COLUMNS.STATUS_ACTION]: t("parts.statusAction"),
       }}
     />;
+  }
+
+  function selectCatalogPart(catalogPart, draftIndex = -1) {
+    if (draftIndex >= availableUsedPartDraftCount(recordedPartCount, draftRows.length)) {
+      setMessage("This Workorder already has the maximum number of recorded parts.");
+      return;
+    }
+    const category = getUnitDefinition(catalogPart.uomCode)?.category;
+    serializedReservationCompletedRef.current = false;
+    setActiveDraftIndex(draftIndex);
+    if (draftIndex >= 0) updateDraftRow(draftIndex, { ...emptyUsedPart(), partNo: catalogPart.partNumber });
+    else setCatalogQuery(catalogPart.partNumber);
+    setNoStockDraft(null);
+    setSerializedDialogPart(null);
+    setMeasuredDialogPart(null);
+    setMessage("");
+    if (catalogPart.trackingMode === "no_stock") {
+      const draft = noStockUsedPartDraft(catalogPart);
+      setNoStockDraft(draft);
+      if (draftIndex >= 0) updateDraftRow(draftIndex, draft);
+    } else if (["quantity", "measured_bulk"].includes(partStockTracking(catalogPart))) setMeasuredDialogPart(catalogPart);
+    else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
+    else if (partStockTracking(catalogPart) === "serialized") setSerializedDialogPart(catalogPart);
+    else setMessage("Review this part’s tracking settings in Inventory before adding stock.");
+  }
+
+  function renderDraftPartRow(draft, index, ordinal) {
+    const rowNoStockDraft = draft.trackingMode === "no_stock" ? draft : null;
+    return <WorkorderPartsRow className="used-part-intake-row used-parts-draft-row" key={`draft-${index}`}>
+      <strong>{ordinal}</strong>
+      <div className="create-part-identity-field used-parts-manual-picker">
+        <PartCatalogCombobox
+          workorderId={detail.workorder.id}
+          locationId={effectiveLocationId}
+          purpose="workorder_assignment"
+          value={draft.partNo}
+          onChange={(value) => {
+            updateDraftRow(index, { ...emptyUsedPart(), partNo: value });
+            if (activeDraftIndex === index) {
+              setSerializedDialogPart(null);
+              setMeasuredDialogPart(null);
+              setNoStockDraft(null);
+            }
+          }}
+          onSelect={(catalogPart) => selectCatalogPart(catalogPart, index)}
+          label=""
+          inputAriaLabel={`${t("parts.numberOrDescription")} ${index + 1}`}
+          inputPolicy="identifier"
+          placeholder={t("parts.numberOrDescription")}
+          allowManualEntry={false}
+          locale={locale}
+        />
+        {activeDraftIndex === index ? serializedDialog : null}
+      </div>
+      <QuantityUnitInput
+        id={`workorder-part-draft-quantity-${index}`}
+        quantity={rowNoStockDraft?.qty || ""}
+        uomCode={rowNoStockDraft?.uomCode || "pc"}
+        onQuantityChange={(qty) => updateDraftRow(index, { qty })}
+        quantityLabel={`${t("parts.quantity")} ${index + 1}`}
+        unitLabel={`${t("parts.unit")} ${index + 1}`}
+        disabled={!rowNoStockDraft || savingNoStock}
+        unitReadOnly
+        compact
+      />
+      {rowNoStockDraft ? <PartRepairOrderField
+        workorderId={detail.workorder.id}
+        locationId={effectiveLocationId}
+        catalogPartId={rowNoStockDraft.catalogPartId}
+        partNumber={rowNoStockDraft.partNo}
+        assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+        currentRepairOrder={rowNoStockDraft.repairOrder}
+        onApply={(repairOrder) => updateDraftRow(index, { repairOrder })}
+        disabled={savingNoStock}
+        locale={locale}
+        className="used-part-repair"
+      >
+        <NarrativeField
+          locale={locale}
+          singleLine
+          value={rowNoStockDraft.repairOrder}
+          onChange={(event) => updateDraftRow(index, { repairOrder: event.target.value })}
+          aria-label={`${t("parts.repairOrder")} ${index + 1}`}
+          placeholder={t("parts.repairOrder")}
+          disabled={savingNoStock}
+        />
+      </PartRepairOrderField> : <input {...textEntryProps("identifier")} aria-label={`${t("parts.repairOrder")} ${index + 1}`} placeholder={t("parts.repairOrder")} readOnly />}
+      {canViewPrices ? <input aria-label={`Price ${index + 1}`} className="create-price-empty-field" disabled placeholder="Price" value="" /> : null}
+      <div className="used-part-intake-actions">
+        {rowNoStockDraft ? <Button type="button" variant="primary" onClick={() => addNoStockPart(rowNoStockDraft, index)} disabled={savingNoStock}>
+          {savingNoStock ? t("progress.saving") : t("parts.save")}
+        </Button> : null}
+      </div>
+    </WorkorderPartsRow>;
   }
 
   const serializedDialog = serializedDialogPart ? <WorkorderSerializedPartDialog
@@ -418,13 +613,18 @@ export function UsedPartsEditor({
     suggestionsEnabled={suggestionsEnabled}
     locale={locale}
     onClose={closeMeasuredDialog} onReserved={async () => {
-      setCatalogQuery("");
-      setIntakeOpen(false);
+      if (activeDraftIndex >= 0) {
+        resetDraftRow(activeDraftIndex);
+        setActiveDraftIndex(-1);
+      } else {
+        setCatalogQuery("");
+        setIntakeOpen(false);
+      }
       await onChanged();
     }}
   /> : null;
 
-  if (!partsEditable && !laborEditable) {
+  if (!partsEditable && !laborEditable && !onePage) {
     const savedParts = recordedManualParts;
     const hasLabor = canViewPrices || Boolean(laborHours || laborRepairOrder);
     return (
@@ -451,7 +651,55 @@ export function UsedPartsEditor({
           {!activeSerializedParts.length && !savedParts.length && !aggregatePartUsages.length ? <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p> : null}
           {serializedHistory}
         </section>
-        {canViewPrices ? <WorkorderPricingSummary pricing={pricingForDisplay} /> : null}
+        {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
+        {measuredDialog}
+      </div>
+    );
+  }
+
+  if (presentation === "one-page") {
+    return (
+      <div className="used-parts-editor workorder-parts-surface is-one-page" aria-label={t("parts.usedTitle")}>
+        {!partsEditable ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
+        <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
+          <div className="used-parts-section-heading">
+            <h3 id={partsSectionTitleId}>Parts</h3>
+            <div className="used-parts-heading-actions">{onePageToolbar}{headerAction}</div>
+          </div>
+          {serializedFeedback}
+          <WorkorderPartsEntryTable
+            className="detail-operational-parts-editor used-parts-items-table used-parts-one-page-table"
+            showPrice={canViewPrices}
+            labels={{
+              [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("parts.part"),
+              [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
+              [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("parts.repairOrder"),
+              [WORKORDER_PARTS_COLUMNS.PRICE]: "Price",
+            }}
+            laborAriaLabel={laborQuantityLabel}
+            laborProduct={<div className="used-part-field operational-part-labor-name">
+                <span className="used-part-label">{t("parts.labor")}</span>
+                <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange || (() => {})} disabled={!laborEditable} locale={locale} />
+              </div>}
+            laborQuantity={<QuantityUnitInput id="workorder-labor-hours" quantity={laborHours} uomCode={laborUomCode} onValueChange={({ quantity }) => onLaborHoursChange(quantity)} quantityLabel={laborQuantityLabel} unitLabel={t("parts.unit")} disabled={laborControlsDisabled} unitReadOnly compact max={9999} />}
+            laborRepair={<div className="used-part-field used-part-repair"><NarrativeField locale={locale} singleLine value={laborRepairOrder} onChange={(event) => onLaborRepairOrderChange(event.target.value)} aria-label={t("parts.repairOrderWorkPerformed")} placeholder={t("parts.repairOrderWorkPerformed")} disabled={laborControlsDisabled} /></div>}
+            laborPrice={canViewPrices ? <LaborPriceCell compact workorderId={detail.workorder.id} locationId={effectiveLocationId} productId={laborProduct?.productId} hours={laborHours} uomCode={laborUomCode} price={laborPrice} currentRates={ratesForProduct} onChanged={onChanged} disabled={!laborEditable} /> : null}
+            laborAction={<span className="used-part-recorded-status" aria-hidden="true"></span>}
+          >
+            {activeSerializedParts.map((part, index) => renderSerializedPartRow(part, index, index + 2, true))}
+            {recordedManualParts.map((part, index) => renderRecordedPartRow(part, index, index + activeSerializedParts.length + 2, true))}
+            <AggregatePartUsageRows compact actorId={actorId} workorderId={detail.workorder.id} usages={aggregatePartUsages} role={role} editable={partsEditable} showPrice={canViewPrices} locale={locale} onChanged={onChanged} startOrdinal={activeSerializedParts.length + recordedManualParts.length + 2} />
+            {partsEditable ? visibleDraftRows.map((draft, index) => renderDraftPartRow(draft, index, recordedPartCount + index + 2)) : null}
+          </WorkorderPartsEntryTable>
+          {partsEditable ? <WorkorderPartsActions className="used-parts-actions">
+            <Button id="workorder-add-approved-part" type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={addDraftRow} disabled={!canAddUsedPartDraft(recordedPartCount, draftRows.length)}>
+              {t("create.parts.add")}
+            </Button>
+          </WorkorderPartsActions> : null}
+          {serializedHistory}
+          <div className="used-parts-feedback" aria-live="polite">{message ? <span>{message}</span> : <span></span>}</div>
+        </section>
+        {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
         {measuredDialog}
       </div>
     );
@@ -523,13 +771,18 @@ export function UsedPartsEditor({
                 onChange={(value) => {
                   setCatalogQuery(value);
                   setSerializedDialogPart(null);
+                  setNoStockDraft(null);
                 }}
                 onSelect={(catalogPart) => {
                   const category = getUnitDefinition(catalogPart.uomCode)?.category;
                   serializedReservationCompletedRef.current = false;
                   setCatalogQuery(catalogPart.partNumber);
+                  setNoStockDraft(null);
+                  setSerializedDialogPart(null);
+                  setMeasuredDialogPart(null);
                   setMessage("");
-                  if (["quantity", "measured_bulk"].includes(partStockTracking(catalogPart))) setMeasuredDialogPart(catalogPart);
+                  if (catalogPart.trackingMode === "no_stock") setNoStockDraft(noStockUsedPartDraft(catalogPart));
+                  else if (["quantity", "measured_bulk"].includes(partStockTracking(catalogPart))) setMeasuredDialogPart(catalogPart);
                   else if (category === "time") setMessage(t("parts.timeInventoryUnsupported"));
                   else if (partStockTracking(catalogPart) === "serialized") setSerializedDialogPart(catalogPart);
                   else setMessage("Review this part’s tracking settings in Inventory before adding stock.");
@@ -543,11 +796,47 @@ export function UsedPartsEditor({
               />
               {serializedDialog}
             </div>
-            <QuantityUnitInput id="workorder-part-intake-quantity" quantity="" uomCode="pc" quantityLabel={t("parts.quantity")} unitLabel={t("parts.unit")} disabled unitReadOnly compact />
-            <input {...textEntryProps("identifier")} aria-label={t("parts.repairOrder")} placeholder={t("parts.repairOrder")} readOnly />
+            <QuantityUnitInput
+              id="workorder-part-intake-quantity"
+              quantity={noStockDraft?.qty || ""}
+              uomCode={noStockDraft?.uomCode || "pc"}
+              onQuantityChange={(qty) => setNoStockDraft((current) => current ? { ...current, qty } : current)}
+              quantityLabel={t("parts.quantity")}
+              unitLabel={t("parts.unit")}
+              disabled={!noStockDraft || savingNoStock}
+              unitReadOnly
+              compact
+            />
+            {noStockDraft ? <PartRepairOrderField
+              workorderId={detail.workorder.id}
+              locationId={effectiveLocationId}
+              catalogPartId={noStockDraft.catalogPartId}
+              partNumber={noStockDraft.partNo}
+              assetId={detail.workorder.asset?.id || detail.workorder.assetId}
+              currentRepairOrder={noStockDraft.repairOrder}
+              onApply={(repairOrder) => setNoStockDraft((current) => current ? { ...current, repairOrder } : current)}
+              disabled={savingNoStock}
+              locale={locale}
+              className="used-part-repair"
+            >
+              <NarrativeField
+                locale={locale}
+                singleLine
+                value={noStockDraft.repairOrder}
+                onChange={(event) => setNoStockDraft((current) => current ? { ...current, repairOrder: event.target.value } : current)}
+                aria-label={t("parts.repairOrder")}
+                placeholder={t("parts.repairOrder")}
+                disabled={savingNoStock}
+              />
+            </PartRepairOrderField> : <input {...textEntryProps("identifier")} aria-label={t("parts.repairOrder")} placeholder={t("parts.repairOrder")} readOnly />}
             <span className="used-part-pickup-empty" aria-hidden="true"></span>
             {canViewPrices ? <span aria-hidden="true"></span> : null}
-            <button type="button" onClick={closeIntakeRow}>{t("parts.cancel")}</button>
+            <div className="used-part-intake-actions">
+              {noStockDraft ? <Button type="button" variant="primary" onClick={addNoStockPart} disabled={savingNoStock}>
+                {savingNoStock ? t("progress.saving") : t("parts.save")}
+              </Button> : null}
+              <Button type="button" onClick={closeIntakeRow} disabled={savingNoStock}>{t("parts.cancel")}</Button>
+            </div>
           </WorkorderPartsRow> : null}
         </WorkorderPartsTable> : null}
         {!activeSerializedParts.length && !recordedManualParts.length && !aggregatePartUsages.length && !intakeOpen ? <p className="used-parts-empty">{t("parts.noUsedPartsRecorded")}</p> : null}
@@ -561,7 +850,7 @@ export function UsedPartsEditor({
           {message ? <span>{message}</span> : <span></span>}
         </div>
       </section>
-      {canViewPrices ? <WorkorderPricingSummary pricing={pricingForDisplay} /> : null}
+      {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
       {measuredDialog}
     </div>
   );

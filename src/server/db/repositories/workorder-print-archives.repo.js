@@ -138,9 +138,9 @@ export async function findScopedWorkorderPrintArchive(input, dependencies = {}) 
   const result = await run(
     `select * from workorder_print_archives
      where id = $1 and company_id = any($2::uuid[])
-       and ($3::boolean or location_id = any($4::uuid[]))
+       and (company_id = any($3::uuid[]) or location_id = any($4::uuid[]))
      limit 1`,
-    [input.archiveId, input.companyIds, input.isAdmin, input.locationIds],
+    [input.archiveId, input.companyIds, input.adminCompanyIds ?? (input.isAdmin ? input.companyIds : []), input.locationIds],
   );
   return archiveRow(result.rows[0], { internal: true });
 }
@@ -150,9 +150,9 @@ export async function listScopedWorkorderPrintArchives(input, dependencies = {})
   const result = await run(
     `select * from workorder_print_archives
      where company_id = any($1::uuid[])
-       and ($2::boolean or location_id = any($3::uuid[]))
+       and (company_id = any($2::uuid[]) or location_id = any($3::uuid[]))
      order by created_at desc, id desc limit $4`,
-    [input.companyIds, input.isAdmin, input.locationIds, Math.min(Math.max(input.limit || 50, 1), 100)],
+    [input.companyIds, input.adminCompanyIds ?? (input.isAdmin ? input.companyIds : []), input.locationIds, Math.min(Math.max(input.limit || 50, 1), 100)],
   );
   return result.rows.map((row) => archiveRow(row));
 }
@@ -163,9 +163,9 @@ export async function findLatestScopedWorkorderPrintArchive(input, dependencies 
     `select * from workorder_print_archives
      where workorder_id = $1 and artifact_kind = $2 and status = 'ready'
        and company_id = any($3::uuid[])
-       and ($4::boolean or location_id = any($5::uuid[]))
+       and (company_id = any($4::uuid[]) or location_id = any($5::uuid[]))
      order by revision_number desc, created_at desc, id desc limit 1`,
-    [input.workorderId, input.artifactKind, input.companyIds, input.isAdmin, input.locationIds],
+    [input.workorderId, input.artifactKind, input.companyIds, input.adminCompanyIds ?? (input.isAdmin ? input.companyIds : []), input.locationIds],
   );
   return archiveRow(result.rows[0]);
 }

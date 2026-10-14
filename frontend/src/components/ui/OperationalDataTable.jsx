@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { Cell, Column, Row, Table, TableBody, TableHeader, TableStateContext } from "react-aria-components";
 import "./operational-data-table.css";
 
-export function OperationalDataTable({ ariaLabel, columns, children, className = "" }) {
+export function OperationalDataTable({ ariaLabel, columns, children, className = "", checkpointSpacing }) {
   return <div className={`operational-data-table-frame ${className}`.trim()}>
     <Table aria-label={ariaLabel} className="operational-data-table">
       <TableHeader>
@@ -10,7 +10,11 @@ export function OperationalDataTable({ ariaLabel, columns, children, className =
           {column.label}
         </Column>)}
       </TableHeader>
-      <TableBody>{children}</TableBody>
+      <TableBody>
+        {checkpointSpacing?.before > 0 ? <Row id="checkpoint-spacer-before" data-checkpoint-spacer="before" aria-hidden="true" isDisabled disabledBehavior="all" className="checkpoint-data-spacer"><Cell colSpan={columns.length}><div style={{ height: checkpointSpacing.before }} /></Cell></Row> : null}
+        {children}
+        {checkpointSpacing?.after > 0 ? <Row id="checkpoint-spacer-after" data-checkpoint-spacer="after" aria-hidden="true" isDisabled disabledBehavior="all" className="checkpoint-data-spacer"><Cell colSpan={columns.length}><div style={{ height: checkpointSpacing.after }} /></Cell></Row> : null}
+      </TableBody>
     </Table>
   </div>;
 }

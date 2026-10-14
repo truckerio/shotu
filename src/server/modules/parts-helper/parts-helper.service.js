@@ -18,6 +18,7 @@ import { normalizePartNumber } from "../parts/part.constants.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import { requireActor, requireCompanyAccess, requireLocationAccess, requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
 import { resourceNotFound } from "../../auth/errors.js";
 
 const normalizedUrl = (value) => {
@@ -79,11 +80,14 @@ export async function searchPartCatalog(input, requestContext, dependencies = {}
     const location = await getLocation(parsed.locationId, [...(requestContext.companyIds || [])]);
     if (!location) throw resourceNotFound("Location");
     requireCompanyAccess(requestContext, location.company_id);
-    requireLocationAccess(requestContext, location.id);
+    requireLocationAccess(requestContext, location.id, location.company_id);
     scope = { companyId: location.company_id, locationId: location.id };
   }
   if (parsed.purpose === "master_match") {
-    (dependencies.requirePermission || requirePermission)(requestContext, PERMISSION.INVENTORY_COUNT_APPLY);
+    (dependencies.requirePermission || requirePermission)(
+      effectiveCompanyContext(requestContext, scope.companyId),
+      PERMISSION.INVENTORY_COUNT_APPLY,
+    );
   }
   const result = await searchCatalog(scope.companyId, {
     text: parsed.q,
@@ -141,12 +145,12 @@ export async function getPartRepairSuggestions(input, requestContext, dependenci
     scope = { companyId: workorder.companyId, assetId: workorder.assetId || workorder.asset?.id || null };
   } else {
     requireActor(requestContext);
-    requirePermission(requestContext, PERMISSION.WORKORDER_OFFICE);
     const getLocation = dependencies.getLocationById || getLocationById;
     const location = await getLocation(parsed.locationId, [...(requestContext.companyIds || [])]);
     if (!location) throw resourceNotFound("Location");
     requireCompanyAccess(requestContext, location.company_id);
-    requireLocationAccess(requestContext, location.id);
+    requireLocationAccess(requestContext, location.id, location.company_id);
+    requirePermission(effectiveCompanyContext(requestContext, location.company_id), PERMISSION.WORKORDER_OFFICE);
     // A draft has no trusted workorder/asset yet. Never accept client tenant or asset scope.
     scope = { companyId: location.company_id, assetId: null };
   }

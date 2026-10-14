@@ -11,6 +11,63 @@ const draftId = "55555555-5555-4555-8555-555555555555";
 const profileId = "66666666-6666-4666-8666-666666666666";
 const actorId = "77777777-7777-4777-8777-777777777777";
 
+function officeContext() {
+  return {
+    actor: { id: actorId, role: "office" },
+    companyIds: new Set([companyId]), locationIds: new Set([locationId]),
+    permissions: permissionsForRole("office"),
+  };
+}
+
+function commercialDraft(adjustments) {
+  return {
+    id: draftId, companyId, locationId, status: "active", version: 1,
+    payload: {
+      concern: "Inspect brakes",
+      pricing: { parts: [{ partIndex: 0, selection: "selling_price" }] },
+      formData: {
+        customerCompanyName: "Acme Fleet", unitNo: "Truck 9",
+        parts: [{ catalogPartId: customerId, partNo: "BRAKE", qty: "2", uomCode: "ea", repairOrder: "Replace brakes" }],
+        customerDocumentAdjustments: adjustments,
+      },
+    },
+  };
+}
+
+function commercialProfile(overrides = {}) {
+  return {
+    id: profileId, informationalOnly: false, defaultCurrency: "USD",
+    taxProfileVersionId: contactId,
+    taxComponents: [{ name: "Sales tax", rate: "10", compound: false }],
+    lineTaxPolicy: { labor: "exclusive", part: "exclusive", shop_supply: "exclusive", fee: "exclusive", core_charge: "exclusive", credit: "out_of_scope" },
+    discountPolicy: { maxOfficePercentage: "15", reasonRequired: true },
+    shopIdentity: { legalName: "Repair Shop" },
+    documentTerms: { estimate: "Estimate terms", warranty: "Warranty", footer: "Footer" },
+    authorizationText: "Information only.",
+    ...overrides,
+  };
+}
+
+function commercialPricing(overrides = {}) {
+  return {
+    fingerprint: "a".repeat(64),
+    parts: [{ partIndex: 0, status: "known", price: {
+      selection: "selling_price", unitPrice: "100.0000", totalPrice: "200.0000", currency: "USD",
+      sellingPolicyVersionId: profileId,
+    } }],
+    labor: { status: "empty" },
+    ...overrides,
+  };
+}
+
+function customerClient() {
+  return { async query(sql) {
+    if (sql.includes("customer_directory_customers")) return { rows: [] };
+    if (sql.includes("customer_directory_contacts")) return { rows: [] };
+    throw new Error(`Unexpected query: ${sql}`);
+  } };
+}
+
 test("default Estimate snapshots selected tenant customer/contact and permits scope-only pricing", async () => {
   const context = {
     actor: { id: actorId, role: "office" },
@@ -90,4 +147,83 @@ test("default submission reuses a current manually issued Estimate instead of cr
     });
   assert.equal(result.replayed, true);
   assert.equal(result.revision.id, current.id);
+});
+
+test("direct submission carries a saved discount through the authoritative financial calculator", async () => {
+  const adjustments = {
+    lineDiscounts: [],
+    documentDiscount: { kind: "percentage", value: "10", reason: "Courtesy adjustment" },
+    overrideReasons: [],
+  };
+  const draft = commercialDraft(adjustments);
+  let issued;
+  await issueInformationalDraftEstimate(officeContext(), draft,
+    { companyId, locationId, concern: draft.payload.concern, pricing: draft.payload.pricing, formData: draft.payload.formData }, customerClient(), {
+      ensureInformationalProfile: async () => commercialProfile(),
+      readCreatePricing: async () => commercialPricing(),
+      readCurrentEstimateForUpdate: async () => null,
+      issueRevision: async (command) => { issued = command; return { revision: { id: contactId } }; },
+    });
+  assert.equal(issued.snapshot.totals.subtotal, "200.00");
+  assert.equal(issued.snapshot.totals.discountTotal, "20.00");
+  assert.equal(issued.snapshot.totals.tax, "18.00");
+  assert.equal(issued.snapshot.totals.total, "198.00");
+  assert.deepEqual(issued.snapshot.discountEvidence.documentDiscount, adjustments.documentDiscount);
+});
+
+test("direct submission rejects saved discounts when commercial pricing or policy validation fails", async () => {
+  const adjustments = {
+    lineDiscounts: [],
+    documentDiscount: { kind: "percentage", value: "10", reason: "Courtesy adjustment" },
+    overrideReasons: [],
+  };
+  const draft = commercialDraft(adjustments);
+  const prepared = { companyId, locationId, concern: draft.payload.concern, pricing: draft.payload.pricing, formData: draft.payload.formData };
+  const dependencies = {
+    ensureInformationalProfile: async () => commercialProfile(),
+    readCurrentEstimateForUpdate: async () => null,
+    issueRevision: async () => assert.fail("a discounted submission must not fall back to a scope-only Estimate"),
+  };
+  await assert.rejects(
+    issueInformationalDraftEstimate(officeContext(), draft, prepared, customerClient(), {
+      ...dependencies,
+      readCreatePricing: async () => commercialPricing({ parts: [{ partIndex: 0, status: "known", price: { selection: "batch_cost", unitPrice: "100", currency: "USD" } }] }),
+    }),
+    (error) => error.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED",
+  );
+  await assert.rejects(
+    issueInformationalDraftEstimate(officeContext(), draft, prepared, customerClient(), {
+      ...dependencies,
+      readCreatePricing: async () => commercialPricing(),
+      ensureInformationalProfile: async () => commercialProfile({ discountPolicy: { maxOfficePercentage: "5", reasonRequired: true } }),
+    }),
+    (error) => error.code === "CUSTOMER_DOCUMENT_DISCOUNT_POLICY_DENIED",
+  );
+});
+
+test("direct submission rejects a saved discount when only an informational profile is available", async () => {
+  const draft = commercialDraft({
+    lineDiscounts: [],
+    documentDiscount: { kind: "fixed", value: "5", reason: "Courtesy adjustment" },
+    overrideReasons: [],
+  });
+  await assert.rejects(
+    issueInformationalDraftEstimate(officeContext(), draft,
+      { companyId, locationId, concern: draft.payload.concern, pricing: draft.payload.pricing, formData: draft.payload.formData }, customerClient(), {
+        ensureInformationalProfile: async () => commercialProfile({ informationalOnly: true }),
+        issueRevision: async () => assert.fail("a saved discount requires a commercial profile"),
+      }),
+    (error) => error.code === "CUSTOMER_DOCUMENT_DISCOUNT_PROFILE_REQUIRED",
+  );
+});
+
+test("direct submission reports malformed saved discount intent as a bad request", async () => {
+  const draft = commercialDraft({ lineDiscounts: [], documentDiscount: { kind: "fixed", value: "5", reason: "x" }, overrideReasons: [] });
+  await assert.rejects(
+    issueInformationalDraftEstimate(officeContext(), draft,
+      { companyId, locationId, concern: draft.payload.concern, pricing: draft.payload.pricing, formData: draft.payload.formData }, customerClient(), {
+        ensureInformationalProfile: async () => commercialProfile(),
+      }),
+    (error) => error.statusCode === 400 && /documentDiscount\.reason/i.test(error.message),
+  );
 });

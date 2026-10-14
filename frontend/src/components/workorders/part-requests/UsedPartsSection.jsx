@@ -2,6 +2,7 @@ import { UsedPartsEditor } from "../UsedPartsEditor.jsx";
 
 export function UsedPartsSection({
   actorId,
+  financialFooter = null,
   role,
   detail,
   parts,
@@ -21,6 +22,7 @@ export function UsedPartsSection({
   serializedParts,
   editable,
   laborEditable,
+  headerAction = null,
   readonlyMessage,
   suggestionsEnabled,
   locale,
@@ -32,6 +34,7 @@ export function UsedPartsSection({
     <div id={id} hidden={hidden}>
       <UsedPartsEditor
         actorId={actorId}
+        financialFooter={financialFooter}
         role={role}
         detail={detail}
         parts={parts}
@@ -52,6 +55,7 @@ export function UsedPartsSection({
         disabled={!editable}
         partsEditable={editable}
         laborEditable={laborEditable}
+        headerAction={headerAction}
         readonlyMessage={readonlyMessage}
         suggestionsEnabled={suggestionsEnabled}
         locale={locale}

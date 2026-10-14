@@ -17,11 +17,14 @@ import {
   replayGlobalLayoutEvidence,
   scanGlobalLayoutPayload,
 } from "./invoice-global-layout.js";
+import { requireCompanyRole } from "../../auth/company-role.js";
 
 const POLICY_VERSION_PATTERN = /^[a-z0-9._-]{1,40}$/;
 
 function assertCompanyAdmin(requestContext, companyId) {
-  if (requestContext?.actor?.role !== "admin" || !requestContext?.companyIds?.has(companyId)) {
+  try {
+    requireCompanyRole(requestContext, companyId, ["admin"]);
+  } catch {
     const error = new Error("Global invoice layout policy is not available.");
     error.code = "invoice_global_layout_not_found";
     error.statusCode = 404;

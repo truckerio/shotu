@@ -183,10 +183,18 @@ export async function listInbound({ companyIds, locationIds, view, q, page }) {
       order by updated_at desc nulls last,id limit 101 offset $4`,
     [companyIds, locationIds, search, (page - 1) * 100]);
     const counts = countsResult.rows[0];
+    const total = Number({
+      my_work: counts.my_work,
+      expected: counts.expected,
+      attention: counts.attention,
+      complete: counts.complete,
+    }[view] || 0);
     return {
       items: result.rows.slice(0, 100).map(mapInboundRow),
       page,
-      hasMore: result.rows.length > 100,
+      total,
+      pageCount: Math.ceil(total / 100),
+      hasMore: page * 100 < total,
       counts: {
         myWork: counts.my_work,
         expected: counts.expected,

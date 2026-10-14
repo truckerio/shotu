@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveRequestContext } from "./context.js";
 import { PERMISSION } from "./permissions.js";
+import { effectiveCompanyContext } from "./company-role.js";
 
 const request = { headers: { cookie: "workorder.session_token=test" } };
 
@@ -119,4 +120,21 @@ test("inactive operational users cannot become actors", async () => {
   });
   assert.equal(context.actor, null);
   assert.ok(context.session);
+});
+
+test("route admission retains secondary roles without giving them primary-role privilege", async () => {
+  const context = await resolveRequestContext(request, {
+    headers: new Headers(),
+    getSession: async () => ({ user: { id: "auth-user" }, session: { id: "session" } }),
+    getKioskSession: async () => null,
+    getActor: async () => ({ id: "user", role: "office", active: true, companyIds: ["A", "B"], locationIds: ["B-shop"],
+      companyMemberships: [{ companyId: "A", role: "office" }, { companyId: "B", role: "mechanic" }] }),
+  });
+  assert.equal(context.actor.role, "office");
+  assert.equal(context.permissions.has(PERMISSION.WORKORDER_OFFICE), true);
+  assert.equal(context.permissions.has(PERMISSION.WORKORDER_MECHANIC), true);
+  const mechanic = effectiveCompanyContext(context, "B");
+  assert.equal(mechanic.permissions.has(PERMISSION.WORKORDER_MECHANIC), true);
+  assert.equal(mechanic.permissions.has(PERMISSION.CUSTOMER_DOCUMENT_WRITE), false);
+  assert.equal(mechanic.permissions.has(PERMISSION.ADMIN_MANAGE), false);
 });

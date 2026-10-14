@@ -7,5 +7,6 @@ export function mainWorkorderSections(sections = []) {
 
 export function requestedWorkorderTool(section) {
   if (section === "photos") return "chat";
+  if (section === "preview") return null;
   return SUPPORTING_MODULES.has(section) ? section : null;
 }

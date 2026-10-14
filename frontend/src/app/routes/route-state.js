@@ -31,6 +31,15 @@ export function inspectionWorkspaceSearch(role, inspectionId, anchor = "summary"
   return workspaceSearchForRole(role, { inspectionReturn: { from: "inspection", inspectionId, anchor } });
 }
 
+export function inspectionQueueRequested(value = currentRouteParams()) {
+  return value.get("inspectionView") === "list";
+}
+
+export function inspectionQueueSearch(role) {
+  const search = workspaceSearchForRole(role);
+  return `${search}${search ? "&" : "?"}inspectionView=list`;
+}
+
 export function workorderDetailSearch(workorderId, section = "", { partRequestId = "", inspectionReturn = null } = {}) {
   const encodedId = encodeURIComponent(workorderId);
   const sectionQuery = section && section !== "work"

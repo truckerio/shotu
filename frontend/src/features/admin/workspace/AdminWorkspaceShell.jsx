@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Briefcase02, CheckCircle, DotsVertical, MarkerPin01, Package, Settings01, Shield03, Tool02 } from "@untitledui/icons";
+import { BarChart03, Briefcase02, CheckSquare, ClipboardCheck, Container, DotsVertical, LayersThree01, MarkerPin01, Package, PackagePlus, Settings01, ShoppingCart01, Tool02, Truck01 } from "@untitledui/icons";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { ProfileMenu } from "../../../components/account/ProfileMenu.jsx";
 import { RoleNavigationRail } from "../../../components/layout/RoleNavigationRail.jsx";
@@ -11,6 +11,7 @@ import { LocationDetailPage, LocationsPage } from "./LocationsPage.jsx";
 import { OperationsPage } from "./OperationsPage.jsx";
 import { InventoryWorkspace } from "../../inventory/InventoryWorkspace.jsx";
 import { UnitsWorkspace } from "../../units/UnitsWorkspace.jsx";
+import { unitsDirectorySection, unitsDirectorySectionFromSearch } from "../../units/units-directory-model.js";
 
 export function AdminWorkspaceShell({
   actor,
@@ -36,6 +37,7 @@ export function AdminWorkspaceShell({
   onInventorySectionTitleChange,
 }) {
   const [operationsProduct, setOperationsProduct] = useState("");
+  const [unitsSection, setUnitsSection] = useState(() => unitsDirectorySectionFromSearch(window.location.search));
   const phonePrimaryDestinations = ADMIN_MOBILE_DESTINATIONS.slice(0, 4);
   const phoneOverflowDestinations = ADMIN_MOBILE_DESTINATIONS.slice(4);
   const phoneOverflowActive = phoneOverflowDestinations.some((destination) => adminMobileDestinationState({ view, tab: locationDetailProps.tab, selectedId }, destination));
@@ -43,11 +45,14 @@ export function AdminWorkspaceShell({
     ? `operations-${operationsProduct}`
     : view === "inventory"
       ? `inventory-${inventorySection}`
+      : view === "units"
+        ? `units-${unitsSection.key}`
       : view;
   const groups = [
-    { id: "operations", label: "Operations", items: [{ id: "operations-workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "operations-inspections", label: "Inspections", icon: CheckCircle, visible: inspectionAccess.canRead }] },
-    { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-inbound", label: "Inbound", icon: Package }, { id: "inventory-purchases", label: "Purchasing", icon: Package }, { id: "inventory-tasks", label: "Tasks", icon: Package }, { id: "inventory-reports", label: "Reports", icon: Package }] },
-    { id: "administration", label: "Administration", items: [{ id: "locations", label: "Locations", icon: MarkerPin01 }, { id: "modules", label: "Modules", icon: Shield03 }, { id: "settings", label: "Settings", icon: Settings01 }] },
+    { id: "operations", label: "Operations", items: [{ id: "operations-workorders", label: "Workorders", icon: Briefcase02, visible: workorderAccess.canRead }, { id: "operations-inspections", label: "Inspections", icon: ClipboardCheck, visible: inspectionAccess.canRead }] },
+    { id: "inventory", label: "Inventory", items: [{ id: "inventory-stock", label: "Stock", icon: Package }, { id: "inventory-inbound", label: "Inbound", icon: PackagePlus }, { id: "inventory-purchases", label: "Purchasing", icon: ShoppingCart01 }, { id: "inventory-tasks", label: "Tasks", icon: CheckSquare }, { id: "inventory-reports", label: "Reports", icon: BarChart03 }] },
+    { id: "administration", label: "Administration", items: [{ id: "locations", label: "Locations", icon: MarkerPin01 }, { id: "modules", label: "Modules", icon: LayersThree01 }, { id: "settings", label: "Settings", icon: Settings01 }] },
+    { id: "units", label: "Units", items: [{ id: "units-trucks", label: "Trucks", icon: Truck01 }, { id: "units-trailers", label: "Trailers", icon: Container }, { id: "units-other", label: "Other equipment", icon: Tool02 }] },
   ];
 
   function navigate(id) {
@@ -60,25 +65,43 @@ export function AdminWorkspaceShell({
       onInventoryDestination(id.replace("inventory-", ""));
       return;
     }
+    if (id.startsWith("units-")) {
+      const nextSection = unitsDirectorySection(id.replace("units-", ""));
+      setUnitsSection(nextSection);
+      changeView("units");
+      const url = new URL(window.location.href);
+      url.searchParams.set("unitType", nextSection.type);
+      window.history.replaceState(window.history.state, "", url);
+      return;
+    }
     changeView(id);
   }
 
   function navigatePhone(destination) {
     if (destination.view === "inventory") onInventoryDestination(inventorySection);
-    else changeView(destination.view);
+    else {
+      changeView(destination.view);
+      if (destination.view === "units") {
+        const nextSection = unitsDirectorySection("trucks");
+        setUnitsSection(nextSection);
+        const url = new URL(window.location.href);
+        url.searchParams.set("unitType", nextSection.type);
+        window.history.replaceState(window.history.state, "", url);
+      }
+    }
   }
 
   return (
     <main className={`admin-shell${view === "operations" ? " is-operations" : ""}`}>
       <style>{workorderTemplateStyles}</style>
       <div className="admin-shell-layout">
-        <RoleNavigationRail actor={actor} ariaLabel="Admin workspace" groups={groups} items={[{ id: "units", label: "Units", variant: "parent" }]} activeId={activeId} onNavigate={navigate} />
+        <RoleNavigationRail actor={actor} ariaLabel="Admin workspace" groups={groups} activeId={activeId} onNavigate={navigate} />
         <div className="admin-shell-content">
           {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
           {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
           {view === "operations" ? <OperationsPage actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} requestedProduct={operationsProduct} onProductChange={setOperationsProduct} /> : null}
           {view === "inventory" ? <InventoryWorkspace key={inventoryWorkspaceKey} actorId={actor?.id} canApplyInventoryCount={actor?.role === "admin"} canReconcileAuthority={actor?.role === "admin"} presentation="page" activeSection={inventorySection} onSectionChange={onInventorySectionChange} onSectionTitleChange={onInventorySectionTitleChange} showSectionNavigation={false} showSectionNavigationOnPhone /> : null}
-          {view === "units" ? <UnitsWorkspace actorId={actor?.id} /> : null}
+          {view === "units" ? <UnitsWorkspace key={unitsSection.key} actorId={actor?.id} section={unitsSection.key} /> : null}
           {view === "settings" ? <AdminSettingsWorkspace actor={actor} locations={locations} /> : null}
           {view === "modules" ? <ModulesPage {...modulePageProps} /> : null}
           {view === "locations" && selectedId && detail ? <LocationDetailPage {...locationDetailProps} /> : null}
@@ -87,7 +110,7 @@ export function AdminWorkspaceShell({
       </div>
       <nav className="admin-mobile-nav" aria-label="Admin workspace">
         {phonePrimaryDestinations.map((destination) => {
-          const Icon = destination.key === "locations" ? MarkerPin01 : destination.key === "inventory" ? Package : destination.key === "modules" ? Shield03 : destination.key === "settings" ? Settings01 : Tool02;
+          const Icon = destination.key === "locations" ? MarkerPin01 : destination.key === "inventory" ? Package : destination.key === "modules" ? LayersThree01 : destination.key === "settings" ? Settings01 : Tool02;
           const active = adminMobileDestinationState({ view, tab: locationDetailProps.tab, selectedId }, destination);
           return <button className={`${active ? "active" : ""}${destination.secondary ? " secondary" : ""}`} key={destination.key} type="button" onClick={() => navigatePhone(destination)}><Icon /><span>{destination.label}</span></button>;
         })}
@@ -96,7 +119,7 @@ export function AdminWorkspaceShell({
           <Popover className="admin-mobile-more-popover" placement="top end">
             <Menu className="admin-mobile-more-menu" aria-label="More admin destinations">
               {phoneOverflowDestinations.map((destination) => {
-                const Icon = destination.key === "locations" ? MarkerPin01 : destination.key === "inventory" ? Package : destination.key === "modules" ? Shield03 : destination.key === "settings" ? Settings01 : Tool02;
+                const Icon = destination.key === "locations" ? MarkerPin01 : destination.key === "inventory" ? Package : destination.key === "modules" ? LayersThree01 : destination.key === "settings" ? Settings01 : Tool02;
                 const active = adminMobileDestinationState({ view, tab: locationDetailProps.tab, selectedId }, destination);
                 return <MenuItem className={active ? "active" : ""} id={destination.key} key={destination.key} textValue={destination.label} onAction={() => navigatePhone(destination)}><Icon aria-hidden="true" /><span>{destination.label}</span></MenuItem>;
               })}

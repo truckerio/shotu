@@ -9,38 +9,47 @@ import {
   Users01,
 } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
+import { OperationalCollectionPage } from "../../../components/operations/OperationalCollectionPage.jsx";
 import { OperationsWorkspace } from "../../../components/operations/OperationsWorkspace.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { CheckpointCollection } from "../../../components/ui/CheckpointCollection.jsx";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
-import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
+import { useClientCheckpointPages } from "../../../components/ui/useClientCheckpointPages.js";
 import { KioskSettingsPanel } from "../KioskSettingsPanel.jsx";
 import { locationHasTemplate } from "../adminLocationStatus.js";
 import { TemplatePage, WorkorderRulesPage } from "./TemplatePage.jsx";
 import { UsersPage } from "./UsersPage.jsx";
 
 export function LocationsPage({ locations, loading, onCreate, onOpen }) {
-  const pagination = usePagination(locations, { pageSize: 15 });
+  const queue = useClientCheckpointPages(locations, { pageSize: 15 });
   return (
-    <section className="admin-content">
-      <PageHeader
-        title="Locations"
-        actions={<Button variant="primary" icon={Plus} onClick={onCreate}>New location</Button>}
+    <OperationalCollectionPage
+      className="admin-content admin-locations-content"
+      surface
+      title="Locations"
+      actions={<Button variant="primary" icon={Plus} onClick={onCreate}>New location</Button>}
+    >
+      <CheckpointCollection
+        ariaLabel="Locations"
+        label="locations"
+        pageSize={15}
+        queue={{ ...queue, loading }}
+        storageKey="admin-locations"
+        renderItems={(entries) => <div className="admin-location-table">
+          <div className="admin-table-head"><span>Location</span><span>Assigned active</span><span>Open work</span><span>Template</span><span></span></div>
+          {loading ? <div className="admin-empty">Loading locations</div> : entries.map(({ item: location, key, rowProps }) => (
+            <button {...rowProps} className="admin-location-row" type="button" key={key} onClick={() => onOpen(location.id)}>
+              <span className="admin-location-name"><span className="admin-location-icon"><MarkerPin01 /></span><span><strong>{location.name}</strong><small>{location.address || location.type}</small></span></span>
+              <span className="admin-location-stat"><small>Assigned active</small><strong>{location.assigned_active_user_count ?? location.user_count ?? 0}</strong></span>
+              <span className="admin-location-stat"><small>Open work</small><strong>{location.open_workorder_count}</strong></span>
+              <span className={`admin-location-stat ${locationHasTemplate(location) ? "admin-ready" : "admin-muted"}`}><small>Template</small><strong>{locationHasTemplate(location) ? "Ready" : "Missing"}</strong></span>
+              <span className="admin-location-arrow" aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>}
       />
-      <div className="admin-location-table">
-        <div className="admin-table-head"><span>Location</span><span>Assigned active</span><span>Open work</span><span>Template</span><span></span></div>
-        {loading ? <div className="admin-empty">Loading locations</div> : pagination.pageItems.map((location) => (
-          <button className="admin-location-row" type="button" key={location.id} onClick={() => onOpen(location.id)}>
-            <span className="admin-location-name"><span className="admin-location-icon"><MarkerPin01 /></span><span><strong>{location.name}</strong><small>{location.address || location.type}</small></span></span>
-            <span className="admin-location-stat"><small>Assigned active</small><strong>{location.assigned_active_user_count ?? location.user_count ?? 0}</strong></span>
-            <span className="admin-location-stat"><small>Open work</small><strong>{location.open_workorder_count}</strong></span>
-            <span className={`admin-location-stat ${locationHasTemplate(location) ? "admin-ready" : "admin-muted"}`}><small>Template</small><strong>{locationHasTemplate(location) ? "Ready" : "Missing"}</strong></span>
-            <span className="admin-location-arrow" aria-hidden="true">›</span>
-          </button>
-        ))}
-      </div>
-      {!loading ? <Pagination {...pagination} label="locations" /> : null}
-    </section>
+    </OperationalCollectionPage>
   );
 }
 

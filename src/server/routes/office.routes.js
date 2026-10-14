@@ -18,7 +18,11 @@ import {
   updateOfficeWorkorderSchema,
 } from "../modules/workorders/workorder.schemas.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
-import { requireLocationAccess } from "../auth/authorize.js";
+import { companyRoleScope, effectiveCompanyContext, requireCompanyRole } from "../auth/company-role.js";
+import { getLocationById } from "../db/repositories/locations.repo.js";
+import { resourceNotFound } from "../auth/errors.js";
+import { requireLocationAccess, requirePermission } from "../auth/authorize.js";
+import { PERMISSION } from "../auth/permissions.js";
 import { loadOfficeLocationTemplates } from "../modules/office/office-template-scope.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
 import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
@@ -132,9 +136,12 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
 
   const mechanicsLocationId = locationMechanicsPath(url.pathname);
   if (req.method === "GET" && mechanicsLocationId) {
-    requireLocationAccess(requestContext, mechanicsLocationId);
+    const location = await (dependencies.getLocation || getLocationById)(mechanicsLocationId, companyRoleScope(requestContext, ["office", "admin"]).companyIds);
+    if (!location) throw resourceNotFound("Location");
+    requireCompanyRole(requestContext, location.company_id, ["office", "admin"]);
+    requireLocationAccess(requestContext, mechanicsLocationId, location.company_id);
     sendJson(res, 200, {
-      mechanics: await officeLocationMechanics(mechanicsLocationId, officeUserId),
+      mechanics: await (dependencies.listLocationMechanics || officeLocationMechanics)(mechanicsLocationId, officeUserId, effectiveCompanyContext(requestContext, location.company_id)),
     });
     return true;
   }
@@ -149,10 +156,17 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   const detailId = workorderIdFrom(url.pathname);
   if (req.method === "GET" && detailId) {
     const { decisions } = await resolveModules(requestContext, detailId);
+    const detail = await loadDetail(detailId, officeUserId, requestContext);
+    requireCompanyRole(requestContext, detail.workorder.companyId, ["office", "admin"]);
+    const targetContext = effectiveCompanyContext(requestContext, detail.workorder.companyId);
     sendJson(res, 200, await projectLoadedProtectedWorkorderDetail(
-      await loadDetail(detailId, officeUserId),
+      detail,
       decisions,
-      { viewerRole: requestContext.actor.role },
+      {
+        viewerRole: targetContext.actor.role,
+        canReadCustomerFinancials: targetContext.permissions?.has(PERMISSION.CUSTOMER_DOCUMENT_READ) === true,
+        canWriteCustomerFinancials: targetContext.permissions?.has(PERMISSION.CUSTOMER_DOCUMENT_WRITE) === true,
+      },
       dependencies,
     ));
     return true;
@@ -160,8 +174,9 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
 
   const openedId = workorderIdFrom(url.pathname, "/opened");
   if (req.method === "POST" && openedId) {
-    await requireWorkorderAccess(requestContext, openedId);
-    await recordWorkorderOpen(openedId, requestContext.actor);
+    const workorder = await requireWorkorderAccess(requestContext, openedId);
+    requireCompanyRole(requestContext, workorder.companyId, ["office", "admin"]);
+    await recordWorkorderOpen(openedId, effectiveCompanyContext(requestContext, workorder.companyId).actor);
     sendJson(res, 200, { recorded: true });
     return true;
   }
@@ -169,13 +184,27 @@ export async function handleOfficeApi(req, res, url, helpers, dependencies = {})
   if (req.method === "PATCH" && detailId) {
     const rawInput = await readBody(req);
     const input = updateOfficeWorkorderSchema.parse(rawInput);
+    const adjustsCustomerDocument = [
+      "customerDocumentAdjustments",
+      "customerDocumentAdjustmentBaseRevisionId",
+    ].some((key) => Object.hasOwn(rawInput.formData || {}, key));
+    if (adjustsCustomerDocument) {
+      const workorder = await (dependencies.requireAccess || requireWorkorderAccess)(requestContext, detailId);
+      requirePermission(effectiveCompanyContext(requestContext, workorder.companyId), PERMISSION.CUSTOMER_DOCUMENT_WRITE);
+    }
     const moduleKeys = [
       ["unit", ["assetId", "customerCompanyName", "companyName", "unitNo", "unitType", "licenseNo", "mileage", "model", "vinNo"]],
       ["location", ["locationId"]],
       ["schedule", ["workStartDate", "workEndDate", "startTime", "endTime"]],
       ["assignment", ["mechanicName", "customerSignature", "authorizedBy"]],
-      ["concern", ["concern", "officeNotes", "mechanicConcern"]],
-      ["diagnosisRepair", ["laborProduct"]],
+      ["concern", [
+        "concern",
+        "officeNotes",
+        "mechanicConcern",
+        "customerDocumentAdjustments",
+        "customerDocumentAdjustmentBaseRevisionId",
+      ]],
+      ["diagnosisRepair", ["laborProduct", "laborHours"]],
     ].filter(([, keys]) => keys.some((key) => Object.hasOwn(rawInput, key) || Object.hasOwn(rawInput.formData || {}, key)));
     sendJson(res, 200, { workorder: await patchModules(
       requestContext, detailId, moduleKeys.map(([moduleKey]) => moduleKey), input,

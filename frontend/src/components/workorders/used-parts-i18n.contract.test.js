@@ -23,7 +23,7 @@ test("mechanic used-parts interface text is owned by the selected locale", () =>
   assert.equal(interfaceText("en", "create.parts.add"), "Add line");
 });
 
-test("installed serialized summaries keep identity locked, edit only repair wording, and feed every preview", () => {
+test("installed serialized summaries keep identity locked, edit only repair wording, and feed archived print data", () => {
   assert.match(editor, /installedParts\.map/);
   assert.match(editor, /<WorkorderPartsRow[\s\S]*?className="used-part-serialized-row"/);
   assert.match(editor, /<strong>\{part\.partNo\}<\/strong>/);
@@ -41,8 +41,7 @@ test("installed serialized summaries keep identity locked, edit only repair word
   assert.match(roleRouterModel, /parts: workorderPreviewParts\(form\.parts, installedSerializedUsedParts\(detail\), aggregateParts\.filter\(\(usage\) => \["consumed", "installed_pending_approval"\]\.includes\(usage\.status\)\)\.map/);
   assert.match(roleRouterModel, /aggregatePartUsages/);
   assert.match(roleRouter, /useWorkorderPrintController\([\s\S]*form: previewForm/);
-  assert.equal((detailPage.match(/form=\{renderedPreviewForm\}/g) || []).length, 6);
-  assert.doesNotMatch(detailPage, /<WorkorderPreview[^>]*form=\{form\}/);
+  assert.doesNotMatch(detailPage, /<WorkorderPreview|<CompactWorkorderPreview|<PreviewFullscreen/);
 });
 
 test("locale reaches the mechanic editor without changing office defaults", () => {

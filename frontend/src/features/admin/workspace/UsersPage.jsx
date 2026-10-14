@@ -16,8 +16,10 @@ import {
   MenuTrigger,
   Popover,
 } from "react-aria-components";
+import { Fragment } from "react";
 import { Button } from "../../../components/ui/Button.jsx";
-import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
+import { CheckpointCollection } from "../../../components/ui/CheckpointCollection.jsx";
+import { useClientCheckpointPages } from "../../../components/ui/useClientCheckpointPages.js";
 import { locationUserGroups } from "./admin-workspace-model.js";
 
 function formatInviteExpiry(value) {
@@ -72,13 +74,13 @@ function UserActionsMenu({ active, onManage, self, user }) {
   );
 }
 
-function AdminUserRow({ actor, onManage, user }) {
+function AdminUserRow({ actor, onManage, rowProps, user }) {
   const active = Boolean(user.active && user.membership_active);
   const self = user.id === actor.id;
   const passwordAction = user.role === "mechanic" ? "password" : "password-reset-email";
   const passwordLabel = user.role === "mechanic" ? "Set password" : "Send password reset";
   return (
-    <div className="admin-user-row">
+    <div {...rowProps} className="admin-user-row">
       <span>
         <strong>{user.name}{self ? " (you)" : ""}</strong>
         <small>{user.username ? `@${user.username}` : user.email}</small>
@@ -119,55 +121,83 @@ function AdminUserRow({ actor, onManage, user }) {
   );
 }
 
-function AdminUserGroup({ actor, description, onManage, title, users }) {
-  if (!users.length) return null;
+function AdminUserGroup({ actor, description, entries, onManage, title }) {
+  if (!entries.length) return null;
   return (
-    <section className="admin-user-group" aria-label={`${title}, ${users.length}`}>
+    <section className="admin-user-group" aria-label={`${title}, ${entries.length}`}>
       <header className="admin-user-group-header">
         <span><strong>{title}</strong><small>{description}</small></span>
-        <span className="admin-user-group-count">{users.length}</span>
+        <span className="admin-user-group-count">{entries.length}</span>
       </header>
-      {users.map((user) => <AdminUserRow actor={actor} key={user.id} onManage={onManage} user={user} />)}
+      {entries.map(({ item: user, key, rowProps }) => <AdminUserRow actor={actor} key={key} onManage={onManage} rowProps={rowProps} user={user} />)}
     </section>
   );
 }
 
+function groupUserEntries(entries) {
+  const groups = locationUserGroups(entries.map(({ item }) => item));
+  const byId = new Map(entries.map((entry) => [entry.item.id, entry]));
+  return Object.fromEntries(Object.entries(groups).map(([name, users]) => (
+    [name, users.map((user) => byId.get(user.id))]
+  )));
+}
+
 export function UsersPage({ actor, detail, onInvite, onManage, onResend, resendingId }) {
   const pendingInvitations = detail.invitations.filter((invite) => invite.status === "pending");
-  const userPagination = usePagination(detail.users, { pageSize: 20 });
-  const invitationPagination = usePagination(pendingInvitations, { pageSize: 10 });
-  const groups = locationUserGroups(userPagination.pageItems);
+  const resetKey = detail.location.id;
+  const userQueue = useClientCheckpointPages(detail.users, { pageSize: 20, resetKey });
+  const invitationQueue = useClientCheckpointPages(pendingInvitations, { pageSize: 10, resetKey });
   return (
     <section className="admin-panel">
       <header className="admin-panel-header"><h2>Users</h2><Button variant="primary" icon={Mail01} onClick={onInvite}>Invite user</Button></header>
-      <div className="admin-users-table">
-        <div className="admin-users-head"><span>User</span><span>Role</span><span>Account</span><span>Kiosk PIN</span><span>Actions</span></div>
-        {detail.users.length ? (
-          <>
-            <AdminUserGroup actor={actor} description="Access every location in this company" onManage={onManage} title="Company-wide admins" users={groups.companyAdmins} />
-            <AdminUserGroup actor={actor} description="Active users explicitly assigned to this location" onManage={onManage} title="Assigned active" users={groups.assignedActive} />
-            <AdminUserGroup actor={actor} description="Inactive account or location assignment" onManage={onManage} title="Inactive" users={groups.inactive} />
-          </>
-        ) : <div className="admin-empty">No users assigned.</div>}
-      </div>
-      <Pagination {...userPagination} label="users" />
+      <CheckpointCollection
+        ariaLabel="Users"
+        label="users"
+        pageSize={20}
+        queue={userQueue}
+        storageKey={`admin-location:${detail.location.id}:users`}
+        renderItems={(entries) => {
+          const pages = [...new Set(entries.map((entry) => entry.page))];
+          return <div className="admin-users-table">
+          <div className="admin-users-head"><span>User</span><span>Role</span><span>Account</span><span>Kiosk PIN</span><span>Actions</span></div>
+          {detail.users.length ? (
+            <>
+              {pages.map((page) => {
+                const groups = groupUserEntries(entries.filter((entry) => entry.page === page));
+                return <Fragment key={page}>
+                  <AdminUserGroup actor={actor} description="Access every location in this company" entries={groups.companyAdmins} onManage={onManage} title="Company-wide admins" />
+                  <AdminUserGroup actor={actor} description="Active users explicitly assigned to this location" entries={groups.assignedActive} onManage={onManage} title="Assigned active" />
+                  <AdminUserGroup actor={actor} description="Inactive account or location assignment" entries={groups.inactive} onManage={onManage} title="Inactive" />
+                </Fragment>;
+              })}
+            </>
+          ) : <div className="admin-empty">No users assigned.</div>}
+          </div>;
+        }}
+      />
       {pendingInvitations.length ? (
         <div className="admin-pending">
           <strong>Pending invitations</strong>
-          <div className="admin-pending-list">
-            {invitationPagination.pageItems.map((invite) => (
-              <div className="admin-pending-row" key={invite.id}>
-                <span>
-                  <strong>{invite.email}</strong>
-                  <small>{invite.role} · {invite.expired ? "Expired" : `Expires ${formatInviteExpiry(invite.expiresAt)}`}</small>
-                </span>
-                <Button icon={Mail01} onClick={() => onResend(invite)} disabled={Boolean(resendingId)}>
-                  {resendingId === invite.id ? "Resending" : "Resend link"}
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Pagination {...invitationPagination} label="invitations" />
+          <CheckpointCollection
+            ariaLabel="Pending invitations"
+            label="invitations"
+            pageSize={10}
+            queue={invitationQueue}
+            storageKey={`admin-location:${detail.location.id}:invitations`}
+            renderItems={(entries) => <div className="admin-pending-list">
+              {entries.map(({ item: invite, key, rowProps }) => (
+                <div {...rowProps} className="admin-pending-row" key={key}>
+                  <span>
+                    <strong>{invite.email}</strong>
+                    <small>{invite.role} · {invite.expired ? "Expired" : `Expires ${formatInviteExpiry(invite.expiresAt)}`}</small>
+                  </span>
+                  <Button icon={Mail01} onClick={() => onResend(invite)} disabled={Boolean(resendingId)}>
+                    {resendingId === invite.id ? "Resending" : "Resend link"}
+                  </Button>
+                </div>
+              ))}
+            </div>}
+          />
         </div>
       ) : null}
     </section>

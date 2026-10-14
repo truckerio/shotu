@@ -1,3 +1,5 @@
+import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
+
 export const MAX_REFERENCE_NUMBERS = 20;
 
 export function hasRefreshedPartIdentityVersion(item, pending) {
@@ -38,15 +40,27 @@ function normalizedIdentity(value) {
   return text(value).toLocaleUpperCase("en-US").replace(/[^A-Z0-9]/g, "");
 }
 
+export function trackingModeForUom(uomCode, trackingMode = "") {
+  return getUnitDefinition(uomCode)?.category === "time" ? "no_stock" : String(trackingMode || "");
+}
+
+export function trackingModeLockedForUom(uomCode) {
+  return getUnitDefinition(uomCode)?.category === "time";
+}
+
 export function createPartIdentityDraft(part = {}) {
+  const uomCode = String(part.uomCode || "ea");
+  const persistedTrackingMode = String(part.trackingMode || "");
   return {
     description: String(part.description || ""),
     partNumber: String(part.partNumber || ""),
     manufacturer: String(part.manufacturer || ""),
     category: String(part.category || ""),
     barcode: String(part.barcode || ""),
-    uomCode: String(part.uomCode || "ea"),
-    trackingMode: String(part.trackingMode || ""),
+    uomCode,
+    trackingMode: part.catalogPartId && persistedTrackingMode
+      ? persistedTrackingMode
+      : trackingModeForUom(uomCode, persistedTrackingMode),
     referenceNumbers: (part.referenceNumbers || []).map((value) => ({
       id: crypto.randomUUID(),
       value: String(value || ""),
@@ -63,7 +77,7 @@ export function validatePartIdentityDraft(draft) {
 
   if (!description) errors.description = "Enter a part name.";
   if (!partNumber) errors.partNumber = "Enter a primary part number.";
-  if (!["quantity", "serialized", "measured_bulk"].includes(draft.trackingMode)) errors.trackingMode = "Choose how this part is tracked.";
+  if (!["quantity", "serialized", "measured_bulk", "no_stock"].includes(draft.trackingMode)) errors.trackingMode = "Choose how this part is tracked.";
   references.forEach((reference, index) => {
     const value = text(reference.value);
     if (!value) return;

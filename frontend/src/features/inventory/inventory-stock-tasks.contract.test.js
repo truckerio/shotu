@@ -36,3 +36,14 @@ test("transfer workflow keeps dispatch and exceptions progressive",async()=>{
  assert.match(source,/!reason\.trim\(\)\|\|!holder\.trim\(\)/);
  assert.match(source,/transferStatus\(t\)\.label/);
 });
+
+test("stock tasks use bounded checkpoint loading without coupling an open task to visible pages",async()=>{
+ const source=await readFile(new URL("./InventoryStockTasks.jsx",import.meta.url),"utf8");
+ assert.match(source,/useCheckpointPages/);
+ assert.match(source,/CheckpointCollection/);
+ assert.match(source,/total:result\.total,pageCount:result\.pageCount/);
+ assert.match(source,/entries\.map\(\(\{item:t,key:rowKey,rowProps\}\)=>/);
+ assert.match(source,/<OperationalDataRow \{\.\.\.rowProps\}/);
+ assert.match(source,/const \[error,setError\].*\[selected,setSelected\]/);
+ assert.doesNotMatch(source,/>Previous<|>Next</);
+});

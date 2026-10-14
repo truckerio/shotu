@@ -7,18 +7,23 @@ import { Button } from "../../components/ui/Button.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
 import { ModalFrame } from "../../components/ui/ModalFrame.jsx";
 import { api } from "../../lib/api.js";
+import { trackingModeForUom, trackingModeLockedForUom } from "./part-identity-editor-model.js";
 import "./create-inventory-part-dialog.css";
 
 export function ReviewInventoryCountPartDialog({ part, quantity, onClose, onSaved }) {
   const titleId = useId();
   const descriptionId = useId();
   const [uomCode, setUomCode] = useState(part.uomCode || "ea");
-  const [trackingMode, setTrackingMode] = useState(part.trackingMode || "");
+  const [trackingMode, setTrackingMode] = useState(() => trackingModeForUom(part.uomCode || "ea", part.trackingMode));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(event) {
     event.preventDefault();
+    if (trackingMode === "no_stock") {
+      setError("No-stock items cannot be matched to a physical count. Edit the part outside this count instead.");
+      return;
+    }
     if (!trackingMode) {
       setError("Choose how this part is tracked.");
       return;
@@ -57,10 +62,10 @@ export function ReviewInventoryCountPartDialog({ part, quantity, onClose, onSave
           {error ? <p className="create-inventory-part-error" role="alert" aria-live="assertive">{error}</p> : null}
           <div className="create-inventory-part-fields">
             <div><strong>{part.partNumber}</strong><br /><span>{part.description || "No part name"}</span></div>
-            <div className="create-inventory-part-unit"><span>Unit for the counted quantity</span><UnitOfMeasurePicker uomCode={uomCode} onChange={(value) => { setUomCode(value); setError(""); }} disabled={busy} /><small>The count will add {quantity} {uomCode} at this location.</small></div>
-            <label><span>How do you track this part?</span><Dropdown autoFocus value={trackingMode} onChange={(event) => { setTrackingMode(event.target.value); setError(""); }} disabled={busy} required><option value="">Choose tracking</option><option value="quantity">Quantity — small interchangeable parts</option><option value="serialized">Serialized — one identity per physical unit</option><option value="measured_bulk">Measured or bulk — fluids and divisible material</option></Dropdown><small>This applies to this master part at every location.</small></label>
+            <div className="create-inventory-part-unit"><span>Unit for the counted quantity</span><UnitOfMeasurePicker uomCode={uomCode} onChange={(value) => { setUomCode(value); setTrackingMode((current) => trackingModeForUom(value, current)); setError(""); }} disabled={busy} /><small>The count will add {quantity} {uomCode} at this location.</small></div>
+            <label><span>How do you track this part?</span><Dropdown autoFocus value={trackingMode} onChange={(event) => { setTrackingMode(event.target.value); setError(""); }} disabled={busy || trackingModeLockedForUom(uomCode)} required><option value="">Choose tracking</option><option value="quantity">Quantity — small interchangeable parts</option><option value="serialized">Serialized — one identity per physical unit</option><option value="measured_bulk">Measured or bulk — fluids and divisible material</option></Dropdown><small>No-stock items cannot be matched to a physical count.</small></label>
           </div>
-          <footer><Button type="button" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" variant="primary" disabled={busy}>{busy ? "Saving…" : "Save and match"}</Button></footer>
+          <footer><Button type="button" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" variant="primary" disabled={busy || trackingMode === "no_stock"}>{busy ? "Saving…" : "Save and match"}</Button></footer>
         </form>
   </ModalFrame>;
 }

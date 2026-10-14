@@ -78,11 +78,11 @@ test("custody guidance uses collapsed shared help while operational errors stay 
   assert.doesNotMatch(workspace, /subtitle="Find a truck or trailer/);
 });
 
-test("embedded Units uses the parent page heading and the shared elevated work surface", () => {
+test("embedded Units uses the parent page heading while category pages use their specific title", () => {
   const workspace = readFileSync(new URL("./UnitsWorkspace.jsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("./units-workspace.css", import.meta.url), "utf8");
 
-  assert.match(workspace, /title=\{presentation === "page" \? "Units" : ""\}/);
+  assert.match(workspace, /title=\{presentation === "page" \? directorySection\.label : ""\}/);
   assert.match(workspace, /presentation=\{presentation\} surface className=/);
   assert.match(css, /\.units-workspace \.operational-collection-table\s*\{[\s\S]*?border:\s*1px solid #d0d5dd;[\s\S]*?border-radius:\s*8px;/);
 });

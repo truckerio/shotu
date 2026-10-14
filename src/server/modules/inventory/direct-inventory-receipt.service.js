@@ -112,6 +112,7 @@ export async function receiveDirectInventory(input, context, dependencies = {}, 
   }
   const part = parsed.catalogPartId ? await (dependencies.findPart || findDirectReceiptPart)({ ...authorized, catalogPartId: parsed.catalogPartId }) : await findDirectReceiptPurchaseLine({...authorized,purchaseLineId:parsed.purchaseLineId,locationId:parsed.locationId});
   if (!part) throw inventoryNotFound();
+  if (part.tracking_mode === "no_stock") throw failure("INVENTORY_NO_STOCK_MUTATION", "This catalog entry does not represent physical inventory and cannot be received.");
   if (!part.tracking_mode) throw failure("INVENTORY_TRACKING_REQUIRED", "Review this part's tracking before receiving stock.");
   if (part.uom_code !== parsed.uomCode || part.tracking_mode !== parsed.trackingMode || (parsed.catalogPartId && Number(part.version) !== parsed.expectedPartVersion)) throw failure("INVENTORY_CATALOG_PART_CHANGED", "Part details changed. Refresh the part before receiving.");
   const serialized = parsed.trackingMode === "serialized";

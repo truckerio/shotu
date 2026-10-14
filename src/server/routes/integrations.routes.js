@@ -1,5 +1,5 @@
 import { runAutomaticSamsaraSync } from "../integrations/samsara/samsara.auto-sync.js";
-import { requireCompanyAccess } from "../auth/authorize.js";
+import { companyRoleScope, requireCompanyRole } from "../auth/company-role.js";
 import "../integrations/samsara/samsara.adapter.js";
 import { getIntegrationProvider } from "../integrations/core/integration-provider.registry.js";
 import {
@@ -56,10 +56,13 @@ function validated(schema, value) {
 }
 
 function selectedCompanyId(url, requestContext) {
-  const companyId = url.searchParams.get("companyId") || [...(requestContext.companyIds || [])][0];
-  requireCompanyAccess(requestContext, companyId);
+  const adminCompanyIds = companyRoleScope(requestContext, ["admin"]).companyIds;
+  const companyId = url.searchParams.get("companyId") || adminCompanyIds[0];
+  requireCompanyRole(requestContext, companyId, ["admin"]);
   return companyId;
 }
+
+export const integrationRouteInternals = { selectedCompanyId };
 
 export async function handleIntegrationsApi(req, res, url, helpers) {
   const { sendJson, requestContext } = helpers;

@@ -20,6 +20,10 @@ test("admin integration access shows the raw client token once and supports revo
   assert.match(clientCard, /The raw token is shown once/);
   assert.match(clientCard, /It cannot be shown again/);
   assert.match(clientCard, />\s*Revoke\s*</);
+  assert.match(clientCard, /useClientCheckpointPages\(clients, \{ pageSize: 10 \}\)/);
+  assert.match(clientCard, /<CheckpointCollection[\s\S]*queue=\{queue\}[\s\S]*className="integration-client-list"/);
+  assert.match(clientCard, /<article \{\.\.\.rowProps\} key=\{key\}>/);
+  assert.doesNotMatch(clientCard, /<Pagination/);
 });
 
 test("integration settings cards remain contained and actionable on phone widths", async () => {

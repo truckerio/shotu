@@ -157,3 +157,28 @@ test("dictionary route never accepts a client-selected owner", async () => {
   assert.equal(received.requestContext.actor.id, "route-dictionary-user");
   assert.deepEqual(received.input, { scope: "personal", term: "FleetTerm" });
 });
+
+test("cached dictionary content never outlives current company authorization", async () => {
+  const companyId = "10000000-0000-0000-0000-000000000001";
+  const requestContext = {
+    ...context("route-cache-auth-user"),
+    companyRoles: new Map([[companyId, "mechanic"]]),
+    sessionMode: "standard",
+  };
+  let reads = 0;
+  const dependencies = {
+    listDictionary: async () => { reads += 1; return [{ term: "Bendix" }]; },
+  };
+  const helpers = { requestContext, sendJson: () => {}, readBody: async () => ({}) };
+  await handleProofreadingApi(
+    request("GET"), {}, new URL(`http://localhost/api/proofreading/dictionary?companyId=${companyId}`), helpers, dependencies,
+  );
+  requestContext.companyRoles.delete(companyId);
+  await assert.rejects(
+    handleProofreadingApi(
+      request("GET"), {}, new URL(`http://localhost/api/proofreading/dictionary?companyId=${companyId}`), helpers, dependencies,
+    ),
+    (error) => error.statusCode === 404,
+  );
+  assert.equal(reads, 1);
+});

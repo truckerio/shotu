@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
+import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import { saveWorkorderPartPriceSnapshot } from "../../db/repositories/workorder-part-pricing.repo.js";
 import { InventoryError, inventoryNotFound } from "../inventory/inventory.errors.js";
 
@@ -7,13 +9,24 @@ function fail(code, message, statusCode = 409) {
 }
 
 export async function selectWorkorderPartPrice(workorderId, input, context, dependencies = {}) {
+  const workorder = dependencies.authorizedWorkorder
+    || await (dependencies.requireAccess || requireWorkorderAccess)(context, workorderId);
+  context = effectiveCompanyContext(context, workorder.companyId);
   if (!["office", "admin"].includes(context.actor.role)) {
     fail("WORKORDER_PART_PRICE_FORBIDDEN", "Only Office or Admin may select part prices.", 403);
+  }
+  const noStock = input.usageKind === "no_stock";
+  if ((noStock && (!input.noStockLineId || input.usageId))
+    || (!noStock && (!input.usageId || input.noStockLineId))) {
+    fail("WORKORDER_PART_PRICE_IDENTITY_INVALID", "Choose one canonical Workorder part line to price.", 422);
+  }
+  if (noStock && input.selection !== "selling_price") {
+    fail("WORKORDER_BATCH_COST_UNAVAILABLE", "No-stock items have no receipt batch cost. Use the configured selling price.", 422);
   }
   const command = {
     workorderId,
     usageKind: input.usageKind,
-    usageId: input.usageId,
+    ...(noStock ? { noStockLineId: input.noStockLineId } : { usageId: input.usageId }),
     selection: input.selection,
     reason: input.reason,
   };

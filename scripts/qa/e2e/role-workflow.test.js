@@ -68,6 +68,8 @@ test("workorder payload and lifecycle assertions preserve workflow truth", () =>
   });
   assert.equal(payload.companyId, "company-id");
   assert.equal(payload.locationId, "location-id");
+  assert.equal(payload.authorizationClassification, "internal_fleet");
+  assert.match(payload.authorizationExceptionReason, /Isolated QA.*no external customer/);
   assert.equal(payload.mechanicUserIds.length, 0);
   assert.equal(payload.formData.parts.length, 0);
   assert.doesNotThrow(() => assertLifecycle({ lifecycle: "closed" }, "closed", "close"));

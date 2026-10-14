@@ -1,5 +1,45 @@
 export const INSPECTION_RESPONSES = ["pass", "issue", "na"];
 
+export function inspectionTemplateFromApi(record) {
+  return {
+    id: record.version.id,
+    definitionId: record.id,
+    versionId: record.version.id,
+    optimisticVersion: record.version.optimisticVersion,
+    name: record.name,
+    unitType: record.applicabilityKey,
+    sourcePreset: record.presetKey,
+    status: record.version.state,
+    sections: (record.version.definition.sections || []).map((section) => ({
+      id: section.key, title: section.title,
+      checks: (section.items || []).map((item) => ({
+        id: item.key, label: item.label,
+        required: item.required ?? true,
+        allowNa: item.allowNa ?? true,
+        requireNaReason: item.requireNaReason ?? false,
+        allowedResponses: item.allowNa === false ? ["pass", "issue"] : [...INSPECTION_RESPONSES],
+      })),
+    })),
+  };
+}
+
+export function inspectionTemplateDefinition(template) {
+  return {
+    familyKey: "inspection", presetKey: template.sourcePreset || "custom",
+    label: template.name, assetType: template.unitType,
+    schemaVersion: 1, rendererVersion: "inspection-slip-v1",
+    sections: template.sections.map((section) => ({
+      key: section.id, title: section.title,
+      items: section.checks.map((check) => ({
+        key: check.id, label: check.label,
+        required: check.required ?? true,
+        allowNa: check.allowNa ?? true,
+        requireNaReason: check.requireNaReason ?? false,
+      })),
+    })),
+  };
+}
+
 const WEEKLY_TRUCK_SECTIONS = [
   ["Outside", ["Lights and reflectors", "Tires and tire condition/pressure", "Wheels, rims, hubs, and lug nuts", "Mirrors, windshield, and wipers"]],
   ["Mechanical", ["Brakes and visible air or hydraulic leaks", "Steering", "Suspension", "Engine fluids and visible leaks", "Belts and hoses"]],
@@ -60,7 +100,7 @@ export function validateInspectionTemplate(template) {
     if (!section.checks?.length) errors.push(`Add a check to ${section.title || `section ${sectionIndex + 1}`}.`);
     (section.checks || []).forEach((check, checkIndex) => {
       if (!check.label?.trim()) errors.push(`Name check ${checkIndex + 1} in ${section.title || `section ${sectionIndex + 1}`}.`);
-      if (!(check.allowedResponses || []).includes("pass") || !(check.allowedResponses || []).includes("issue") || !(check.allowedResponses || []).includes("na")) errors.push("Each check must allow Pass, Issue, and N/A.");
+      if (!(check.allowedResponses || []).includes("pass") || !(check.allowedResponses || []).includes("issue") || (check.allowNa !== false && !(check.allowedResponses || []).includes("na"))) errors.push("Each check must allow Pass, Issue, and N/A unless N/A is disabled.");
     });
   });
   return errors;

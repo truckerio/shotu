@@ -3,9 +3,16 @@ import test from "node:test";
 
 import { handleWorkorderModulesApi } from "./workorder-modules.routes.js";
 import { runWorkorderModuleAction } from "../modules/workorders/workorder-module-runtime.service.js";
+import { permissionsForRole } from "../auth/permissions.js";
 
 const WORKORDER_ID = "11111111-1111-4111-8111-111111111111";
-const requestContext = { actor: { id: "admin-one", role: "admin" } };
+const requestContext = {
+  actor: { id: "admin-one", role: "admin" },
+  companyIds: new Set([WORKORDER_ID]),
+  companyRoles: new Map([[WORKORDER_ID, "admin"]]),
+  locationIds: new Set([WORKORDER_ID]),
+  permissions: permissionsForRole("admin"),
+};
 
 function harness({ method, path, body = {} }) {
   const responses = [];
@@ -313,7 +320,8 @@ test("canonical Parts action validates and forwards serialized repair wording", 
   const calls = [];
   const dependencies = {
     runAction: (...args) => runWorkorderModuleAction(...args, {
-      authorize: async () => ({ companyId: WORKORDER_ID, locationId: WORKORDER_ID }),
+      authorize: async () => ({ companyId: WORKORDER_ID, locationId: WORKORDER_ID,
+        workorder: { id: WORKORDER_ID, companyId: WORKORDER_ID, locationId: WORKORDER_ID } }),
       updateRepairOrder: async (input) => {
         calls.push(input);
         return { kind: "updated", usage: { id: input.usageId, repairOrder: input.repairOrder } };

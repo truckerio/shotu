@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isApplicationOwnedInventoryProvider } from "../../../../shared/inventory-provider.js";
 import { requireLocationAccess } from "../../auth/authorize.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
 import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
 import {
   finalizeSerializedUnitUsage,
@@ -39,11 +40,13 @@ function hash(value) {
 }
 
 function repositoryScope(context, authorization) {
-  requireLocationAccess(context, authorization.locationId);
+  requireLocationAccess(context, authorization.locationId, authorization.companyId);
+  const actorRole = effectiveCompanyRole(context, authorization.companyId);
+  if (!actorRole) throw inventoryNotFound();
   return {
     companyId: authorization.companyId,
     locationId: authorization.locationId,
-    actorRole: context.actor.role,
+    actorRole,
   };
 }
 
@@ -156,7 +159,7 @@ export async function readAvailableSerializedUnitsForWorkorder(workorderId, rawI
     part: result.part,
     location: result.location,
     canCreateSerializedUnits: result.canCreateSerializedUnits
-      && ["admin", "office"].includes(context.actor.role),
+      && ["admin", "office"].includes(scope.actorRole),
     units: result.units,
     nextCursor: result.nextCursor,
   };
@@ -167,7 +170,7 @@ export async function readAvailableSerializedUnitsForCreate(rawInput, context, d
   const loadLocation = dependencies.getLocation || getLocationById;
   const location = await loadLocation(input.locationId, [...(context.companyIds || [])]);
   if (!location) throw inventoryNotFound();
-  requireLocationAccess(context, input.locationId);
+  requireLocationAccess(context, input.locationId, location.company_id);
   const authorizeCreate = dependencies.authorizeCreate || authorizeWorkorderCreate;
   await authorizeCreate(context, {
     companyId: location.company_id,
@@ -190,10 +193,10 @@ export async function readAvailableSerializedUnitsForCreate(rawInput, context, d
 export async function createSerializedUnitsForWorkorder(workorderId, rawInput, context, dependencies = {}) {
   workorderId = inventoryWorkorderEntityIdSchema.parse(workorderId);
   const input = createWorkorderInventoryUnitsSchema.parse(rawInput);
-  if (!["admin", "office"].includes(context.actor.role)) {
+  const { authorization, scope } = await authorizeScanning(workorderId, context, dependencies, "write");
+  if (!["admin", "office"].includes(scope.actorRole)) {
     throw failure("INVENTORY_CREATE_FORBIDDEN", "Only Office or Admin can add physical inventory.", 403);
   }
-  const { authorization } = await authorizeScanning(workorderId, context, dependencies, "write");
   if (!["open", "accepted", "in_progress"].includes(authorization.workorder.status)) {
     throw failure("WORKORDER_INVENTORY_NOT_ACTIVE", "Physical units can only be added while this workorder is open or active.");
   }
@@ -235,7 +238,7 @@ export async function readSerializedUnitUsagesForWorkorder(workorderId, context,
     ...scope,
     limit: 100,
   });
-  const canReadFinancials = ["admin", "office"].includes(context.actor.role)
+  const canReadFinancials = ["admin", "office"].includes(scope.actorRole)
     && context.sessionMode !== "kiosk";
   return {
     usages: canReadFinancials
@@ -252,13 +255,13 @@ export async function updateSerializedUsageRepairOrderForWorkorder(workorderId, 
     moduleKey: "parts", capability: "write", action: "record",
   });
   const scope = repositoryScope(context, authorization);
-  if (context.actor.role === "mechanic") {
+  if (scope.actorRole === "mechanic") {
     const policy = await (dependencies.getMechanicPartsPolicy || getWorkorderMechanicPartsPolicy)(workorderId);
     if (!policy?.mechanicCanRecordParts) {
       throw failure("MECHANIC_PARTS_ENTRY_DISABLED", "Mechanics cannot record used parts at this location. Send a part request to the office instead.", 403);
     }
   }
-  const allowedWorkorderStatuses = context.actor.role === "mechanic"
+  const allowedWorkorderStatuses = scope.actorRole === "mechanic"
     ? [...MECHANIC_PARTS_EDIT_STATUSES]
     : [...OFFICE_PARTS_EDIT_STATUSES];
   const result = await (dependencies.updateRepairOrder || updateSerializedUsageRepairOrder)({

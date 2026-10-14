@@ -82,15 +82,71 @@ export async function readCreatePricing(input, transactionClient = null) {
     const depleted = new Map();
     const layerCache = new Map();
     const selections = new Map((input.pricing?.parts || []).map((row) => [row.partIndex, row]));
+    const catalogPartIds = [...new Set((input.formData.parts || []).map((row) => row?.catalogPartId).filter(Boolean))];
+    const catalogRows = catalogPartIds.length ? (await client.query(
+      `select id,tracking_mode,uom_code from parts_catalog
+       where company_id=$1 and id=any($2::uuid[])`,
+      [input.companyId, catalogPartIds],
+    )).rows : [];
+    const catalogById = new Map(catalogRows.map((row) => [row.id, row]));
     for (const [partIndex, sourcePart] of (input.formData.parts || []).entries()) {
       if (!sourcePart.catalogPartId || sourcePart.purchaseRequested) continue;
       const selected = selections.get(partIndex);
       const selection = selected || { partIndex, selection: "batch_cost" };
       const part = input.formData.parts[partIndex];
+      const catalog = catalogById.get(part.catalogPartId);
       const scope = [input.companyId, input.locationId, part.catalogPartId, part.uomCode || "ea"];
       const policy = (await client.query(`select * from inventory_part_selling_policy_versions
         where company_id=$1 and catalog_part_id=$3 and (location_id is null or location_id=$2)
         order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
+      if (catalog?.tracking_mode === "no_stock") {
+        const reason = catalog.uom_code !== (part.uomCode || "ea")
+          ? "No-stock unit changed."
+          : policy?.method !== "fixed" || policy.value === null || !policy.currency
+            ? "Configure a fixed selling price for this no-stock item."
+            : null;
+        let sellingPrice = null;
+        if (!reason) {
+          try {
+            const unitPrice = fixed(scaled(policy.value, 4));
+            const totalPrice = fixed(divide(scaled(unitPrice, 4) * scaled(part.qty, 3), 1000n));
+            sellingPrice = {
+              selection: "selling_price",
+              quantity: String(part.qty),
+              uomCode: catalog.uom_code,
+              unitPrice,
+              totalPrice,
+              currency: policy.currency,
+              sellingPolicyVersionId: policy.id,
+              allocations: [],
+            };
+          } catch {
+            sellingPrice = null;
+          }
+        }
+        const options = {
+          batch_cost: { status: "incomplete", price: null, reason: "No-stock items have no receipt batch cost." },
+          selling_price: sellingPrice
+            ? { status: "known", price: sellingPrice }
+            : { status: "incomplete", price: null, reason: reason || "Enter a valid no-stock quantity." },
+        };
+        const selectedOption = selected ? options[selection.selection] : null;
+        if (!selected) parts.push({ partIndex, status: "unselected", price: null, options });
+        else if (selectedOption?.status === "known") parts.push({
+          partIndex,
+          status: "known",
+          price: applyCreatePriceOverride(selectedOption.price, selection.customUnitPrice),
+          options,
+        });
+        else parts.push({
+          partIndex,
+          status: "incomplete",
+          price: null,
+          reason: selectedOption?.reason || "Price unavailable.",
+          options,
+        });
+        continue;
+      }
       const units = input.inventoryUnitSelections.find((row) => row.partIndex === partIndex);
       const position = input.inventoryPositionSelections.find((row) => row.partIndex === partIndex);
       let allocations = [];

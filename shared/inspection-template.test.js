@@ -19,7 +19,7 @@ test("V1 exposes only weekly truck and trailer presets with three sections and t
   assert.deepEqual(INSPECTION_TEMPLATE_FAMILY.supportedAssetTypes, ["Truck", "Trailer"]);
 });
 
-test("inspection slip escapes data and renders explicit tri-state boxes", () => {
+test("inspection slip escapes data and distinguishes answered and pending checks", () => {
   const html = renderInspectionSlip({
     status: "in_progress", inspectionNumber: "INS-1<script>", templateLabel: "Weekly Truck Inspection",
     unit: { unitNo: "T&1" }, templateSnapshot: weeklyInspectionPreset("Truck"),
@@ -29,7 +29,27 @@ test("inspection slip escapes data and renders explicit tri-state boxes", () => 
   assert.match(html, /INS-1&lt;script&gt;/);
   assert.match(html, /T&amp;1/);
   assert.match(html, /IN PROGRESS/);
-  assert.match(html, /Pass.*Issue.*N\/A/);
+  assert.equal((html.match(/class="check"/g) || []).length, 12);
+  assert.equal((html.match(/class="outcome">Pass</g) || []).length, 1);
+  assert.equal((html.match(/class="outcome">Pending</g) || []).length, 11);
+  assert.doesNotMatch(html, /class="notes"|<strong>VIN:|<strong>Plate:/);
+});
+
+test("concise trailer slip retains checks, issues, N/A reasons, notes, and signature", () => {
+  const template = weeklyInspectionPreset("Trailer");
+  const html = renderInspectionSlip({ status: "completed", templateSnapshot: template, unit: { vin: "VIN1" },
+    responses: [{ id: "r1", itemKey: "outside-1", response: "issue" }, { itemKey: "outside-2", response: "na", naReason: "Not fitted <unsafe>" }],
+    findings: [{ responseId: "r1", severity: "minor", note: "Replace lamp & bracket" }], finalNotes: "Follow up\nTomorrow", result: "issues_found" });
+  assert.equal((html.match(/class="check"/g) || []).length, 12);
+  for (const item of template.sections.flatMap(section => section.items)) assert.ok(html.includes(item.label));
+  assert.match(html, /class="outcome">Issue</);
+  assert.match(html, /class="outcome">N\/A</);
+  assert.match(html, /minor - Replace lamp &amp; bracket/);
+  assert.match(html, /Not fitted &lt;unsafe&gt;/);
+  assert.match(html, /Notes:<\/strong> Follow up\nTomorrow/);
+  assert.match(html, /Result:<\/strong> Issues found/);
+  assert.match(html, /VIN1/);
+  assert.match(html, /Mechanic signature:/);
 });
 
 test("correction slip visibly identifies revision lineage without workorder identity", () => {

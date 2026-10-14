@@ -26,6 +26,10 @@ function client({ priceQuantity = "2.000", uomCode = "hr", snapshotUom = uomCode
         unit_price: "5.0000", price_quantity: priceQuantity, total_price: "10.0000", currency: "USD",
         selling_policy_version_id: "77777777-7777-4777-8777-777777777777",
       }] };
+      if (call === 4) {
+        assert.match(sql, /no_stock_line_id is not null/);
+        return { rows: [] };
+      }
       assert.match(sql, /workorder_labor_price_snapshots/);
       return { rows: [{
         id: "88888888-8888-4888-8888-888888888888", labor_product_id: "99999999-9999-4999-8999-999999999999",
@@ -61,4 +65,31 @@ test("transaction reader rejects a price snapshot whose quantity is stale for it
     readLockedWorkorderFinancialSource({ companyId: ids.company, locationId: ids.location, workorderId: ids.workorder }, client({ priceQuantity: "1.000" })),
     (error) => error.code === "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED",
   );
+});
+
+test("removed no-stock lines retain audit snapshots without reappearing in customer documents", async () => {
+  let call = 0;
+  const historicalClient = {
+    async query() {
+      call += 1;
+      if (call === 1) return { rows: [{
+        id: ids.workorder, company_id: ids.company, location_id: ids.location,
+        status: "mechanic_done", progress_version: 8, concern: "Service", work_performed: "Complete",
+        form_data: { customerCompanyName: "Customer", laborHours: "", parts: [] }, unit_no: "T-1",
+      }] };
+      if (call === 2 || call === 3 || call === 5) return { rows: [] };
+      return { rows: [{
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        no_stock_line_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        catalog_part_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        uom_code: "hr", quantity: "1.5", selection: "selling_price",
+        unit_price: "100.0000", total_price: "150.0000", currency: "USD",
+        part_number: "REMOVED-SERVICE", description: "Removed service",
+      }] };
+    },
+  };
+  const source = await readLockedWorkorderFinancialSource({
+    companyId: ids.company, locationId: ids.location, workorderId: ids.workorder,
+  }, historicalClient);
+  assert.deepEqual(source.parts, []);
 });

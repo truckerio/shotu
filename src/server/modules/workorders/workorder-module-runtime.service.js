@@ -40,6 +40,8 @@ import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.r
 import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
 import { assertWorkorderLaborQuantity } from "../../db/repositories/workorder-labor-quantity.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { companyRoleScope, effectiveCompanyContext } from "../../auth/company-role.js";
+import { PERMISSION } from "../../auth/permissions.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import {
   authorizeWorkorderModule,
@@ -63,6 +65,7 @@ import {
 } from "../inventory/inventory-aggregate-workorder.service.js";
 import { listAggregateWorkorderUsages } from "../../db/repositories/inventory-aggregate-workorder-usage.repo.js";
 import { selectWorkorderPartPrice } from "./workorder-part-pricing.service.js";
+import { listWorkorderNoStockPartPrices } from "../../db/repositories/workorder-part-pricing.repo.js";
 import {
   reviseWorkorderLaborRate,
   selectWorkorderLaborPrice,
@@ -77,9 +80,20 @@ import { createPartRequest as createCanonicalPartRequest } from "../../db/reposi
 import { listWorkorderInstalledSerializedPartSummaries } from "../../db/repositories/inventory-unit-workorder-usage.repo.js";
 
 function resourceOptions(context) {
-  return context.actor.role === "mechanic"
+  return [...(context.companyIds || [])].some((companyId) => context.companyRoles?.get(companyId) === "mechanic")
+    || (!(context.companyRoles instanceof Map) && context.companyIds?.size === 1 && context.actor.role === "mechanic")
     ? { allowAvailable: true, allowActiveAtLocation: true }
     : {};
+}
+
+function canReadCustomerFinancials(context) {
+  return ["office", "admin"].includes(context.actor.role)
+    && context.permissions?.has(PERMISSION.CUSTOMER_DOCUMENT_READ) === true;
+}
+
+function canWriteCustomerFinancials(context) {
+  return ["office", "admin"].includes(context.actor.role)
+    && context.permissions?.has(PERMISSION.CUSTOMER_DOCUMENT_WRITE) === true;
 }
 
 async function withInstalledSerializedParts(detail, decisions, dependencies) {
@@ -90,7 +104,10 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
   const formData = detail.workorder.formData || {};
   const hasManualEvidence = Array.isArray(formData.parts)
     && formData.parts.some((part) => part?.evidenceId);
-  const [installedRows, aggregateRows, manualPartEvidence] = await Promise.all([
+  const hasNoStockParts = Array.isArray(formData.parts)
+    && formData.parts.some((part) => part?.noStockLineId);
+  const listNoStockPrices = dependencies.listNoStockPartPrices || listWorkorderNoStockPartPrices;
+  const [installedRows, aggregateRows, manualPartEvidence, noStockPartPrices] = await Promise.all([
     listInstalledParts({
       workorderId: detail.workorder.id,
       companyId: detail.workorder.companyId,
@@ -109,6 +126,11 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
       locationId: detail.workorder.locationId,
       limit: 100,
     }) : [],
+    hasNoStockParts ? listNoStockPrices({
+      workorderId: detail.workorder.id,
+      companyId: detail.workorder.companyId,
+      locationId: detail.workorder.locationId,
+    }) : [],
   ]);
   const pricingRowsTruncated = installedRows.length > 2000 || aggregateRows.length > 200;
   const installedSerializedParts = installedRows.slice(0, 2000);
@@ -124,6 +146,7 @@ async function withInstalledSerializedParts(detail, decisions, dependencies) {
     },
     installedSerializedParts,
     aggregatePartUsages,
+    noStockPartPrices,
     pricingRowsTruncated,
   };
 }
@@ -162,9 +185,10 @@ export async function projectLoadedProtectedWorkorderDetail(
 export async function protectedWorkorderDetail(context, workorderId, dependencies = {}) {
   const resolveModules = dependencies.resolveModules || resolveWorkorderModuleDecisions;
   const loadDetail = dependencies.loadDetail || loadWorkorderDetail;
-  const { decisions } = await resolveModules(context, workorderId, {
+  const { decisions, workorder } = await resolveModules(context, workorderId, {
     resourceAccess: resourceOptions(context),
   });
+  context = effectiveCompanyContext(context, workorder.companyId);
   const loadedDetail = await loadDetail(workorderId, {
     viewerUserId: context.actor.id,
     participantChatOnly: context.actor.role === "mechanic",
@@ -172,7 +196,11 @@ export async function protectedWorkorderDetail(context, workorderId, dependencie
   return projectLoadedProtectedWorkorderDetail(
     loadedDetail,
     decisions,
-    { viewerRole: context.actor.role },
+    {
+      viewerRole: context.actor.role,
+      canReadCustomerFinancials: canReadCustomerFinancials(context),
+      canWriteCustomerFinancials: canWriteCustomerFinancials(context),
+    },
     dependencies,
   );
 }
@@ -185,6 +213,7 @@ export async function protectedWorkorderModule(context, workorderId, moduleKey, 
     capability: "read",
     resourceAccess: resourceOptions(context),
   });
+  context = effectiveCompanyContext(context, authorization.workorder.companyId);
   const loadedDetail = await loadDetail(workorderId, {
     viewerUserId: context.actor.id,
     participantChatOnly: context.actor.role === "mechanic",
@@ -193,13 +222,40 @@ export async function protectedWorkorderModule(context, workorderId, moduleKey, 
   return projectLoadedProtectedWorkorderDetail(
     loadedDetail,
     decisions,
-    { viewerRole: context.actor.role },
+    {
+      viewerRole: context.actor.role,
+      canReadCustomerFinancials: canReadCustomerFinancials(context),
+      canWriteCustomerFinancials: canWriteCustomerFinancials(context),
+    },
     dependencies,
   );
 }
 
 function hasLaborProductPatch(input) {
   return Object.prototype.hasOwnProperty.call(input?.formData || {}, "laborProduct");
+}
+
+function hasLaborHoursPatch(input) {
+  return Object.prototype.hasOwnProperty.call(input || {}, "laborHours")
+    || Object.prototype.hasOwnProperty.call(input?.formData || {}, "laborHours");
+}
+
+const CUSTOMER_DOCUMENT_FORM_FIELDS = Object.freeze([
+  "customerDocumentAdjustments",
+  "customerDocumentAdjustmentBaseRevisionId",
+]);
+
+function preserveUntouchedCustomerDocumentForm(input, workorder) {
+  if (!Object.prototype.hasOwnProperty.call(input || {}, "formData")) return input;
+  const savedForm = workorder?.formData || {};
+  const formData = { ...(input.formData || {}) };
+  for (const key of CUSTOMER_DOCUMENT_FORM_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(formData, key)
+      && Object.prototype.hasOwnProperty.call(savedForm, key)) {
+      formData[key] = savedForm[key];
+    }
+  }
+  return { ...input, formData };
 }
 
 function laborProductPatchChanged(input, workorder) {
@@ -236,9 +292,11 @@ async function canonicalizeLaborProductPatch(context, input, workorder, dependen
 export async function patchWorkorderModule(context, workorderId, moduleKey, input, dependencies = {}) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
   const authorization = await authorize(context, workorderId, { moduleKey, capability: "write", action: "update" });
+  context = effectiveCompanyContext(context, authorization.workorder.companyId);
   if (["unit", "location", "schedule", "assignment", "concern"].includes(moduleKey)) {
     const update = dependencies.updateOffice || updateOfficeWorkorder;
-    return update(workorderId, { ...input, officeUserId: context.actor.id });
+    const preservedInput = preserveUntouchedCustomerDocumentForm(input, authorization?.workorder);
+    return update(workorderId, { ...preservedInput, officeUserId: context.actor.id, authContext: context });
   }
   if (moduleKey === "diagnosisRepair") {
     if (hasLaborProductPatch(input) && !["office", "admin"].includes(context.actor.role)) {
@@ -249,10 +307,11 @@ export async function patchWorkorderModule(context, workorderId, moduleKey, inpu
     );
     if (["office", "admin"].includes(context.actor.role)) {
       const update = dependencies.updateOffice || updateOfficeWorkorder;
-      return update(workorderId, { ...normalizedInput, officeUserId: context.actor.id });
+      const preservedInput = preserveUntouchedCustomerDocumentForm(normalizedInput, authorization?.workorder);
+      return update(workorderId, { ...preservedInput, officeUserId: context.actor.id, authContext: context });
     }
     const update = dependencies.updateMechanic || saveMechanicWorkorderProgress;
-    return update(workorderId, context.actor.id, normalizedInput);
+    return update(workorderId, context.actor.id, normalizedInput, context);
   }
   throw permissionDenied();
 }
@@ -261,6 +320,7 @@ export async function patchWorkorderModules(context, workorderId, moduleKeys, in
   if (!moduleKeys.length) throw invalidRequest("No writable module fields were provided.");
   const loadWorkorder = dependencies.loadWorkorder || requireWorkorderAccess;
   const submittedLaborProduct = hasLaborProductPatch(input);
+  const submittedLaborHours = hasLaborHoursPatch(input);
   const loadedWorkorder = submittedLaborProduct
     ? await loadWorkorder(context, workorderId)
     : null;
@@ -268,7 +328,7 @@ export async function patchWorkorderModules(context, workorderId, moduleKeys, in
     && laborProductPatchChanged(input, loadedWorkorder);
   const effectiveModuleKeys = laborProductChanged
     ? [...new Set([...moduleKeys, "diagnosisRepair"])]
-    : moduleKeys.filter((moduleKey) => moduleKey !== "diagnosisRepair");
+    : moduleKeys.filter((moduleKey) => moduleKey !== "diagnosisRepair" || submittedLaborHours);
   if (!effectiveModuleKeys.length) return loadedWorkorder;
   const authorizeMany = dependencies.authorizeMany || authorizeWorkorderModuleActions;
   const authorization = await authorizeMany(context, workorderId, effectiveModuleKeys.map((moduleKey) => ({
@@ -276,13 +336,18 @@ export async function patchWorkorderModules(context, workorderId, moduleKeys, in
     capability: "write",
     action: "update",
   })));
+  context = effectiveCompanyContext(context, authorization.workorder.companyId);
   const normalizedInput = laborProductChanged
     ? await canonicalizeLaborProductPatch(
       context, input, authorization?.workorder || loadedWorkorder, dependencies,
     )
     : input;
+  const preservedInput = preserveUntouchedCustomerDocumentForm(
+    normalizedInput,
+    authorization?.workorder || loadedWorkorder,
+  );
   const update = dependencies.updateOffice || updateOfficeWorkorder;
-  return update(workorderId, { ...normalizedInput, officeUserId: context.actor.id });
+  return update(workorderId, { ...preservedInput, officeUserId: context.actor.id, authContext: context });
 }
 
 export async function runWorkorderModuleAction(
@@ -295,12 +360,19 @@ export async function runWorkorderModuleAction(
 ) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
   const isPartRequest = moduleKey === "parts" && action === "request";
+  const requestWorkorder = isPartRequest
+    ? await (dependencies.loadWorkorder || requireWorkorderAccess)(context, workorderId, resourceOptions(context))
+    : null;
+  if (requestWorkorder) context = effectiveCompanyContext(context, requestWorkorder.companyId);
   const authorization = await authorize(context, workorderId, {
     moduleKey,
     capability: isPartRequest && context.actor.role === "mechanic" ? "read" : "write",
     action,
-    resourceAccess: action === "accept" ? resourceOptions(context) : {},
+    resourceAccess: requestWorkorder
+      ? { getWorkorder: async () => requestWorkorder }
+      : action === "accept" ? resourceOptions(context) : {},
   });
+  context = effectiveCompanyContext(context, authorization.workorder.companyId);
   if (moduleKey === "parts"
     && action === "record"
     && input.operation === "usedParts"
@@ -321,7 +393,7 @@ export async function runWorkorderModuleAction(
     }
     if (input.operation === "laborPriceSelection") {
       return (dependencies.selectLaborPrice || selectWorkorderLaborPrice)(
-        workorderId, input, context, dependencies,
+        workorderId, input, context, { ...dependencies, authorizedWorkorder: authorization.workorder },
       );
     }
   }
@@ -329,27 +401,28 @@ export async function runWorkorderModuleAction(
   if (moduleKey === "assignment") {
     if (action === "accept") {
       if (context.actor.role !== "mechanic") throw permissionDenied();
-      return (dependencies.accept || acceptMechanicWorkorder)(workorderId, actorId);
+      return (dependencies.accept || acceptMechanicWorkorder)(workorderId, actorId, context);
     }
-    if (action === "release") return (dependencies.release || releaseMechanicWorkorder)(workorderId, actorId, input.reason);
-    if (action === "assign") return (dependencies.assign || assignOfficeWorkorderMechanics)(workorderId, { ...input, officeUserId: actorId });
-    if (action === "reassign") return (dependencies.reassign || reassignOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });
+    if (action === "release") return (dependencies.release || releaseMechanicWorkorder)(workorderId, actorId, input.reason, context);
+    if (action === "assign") return (dependencies.assign || assignOfficeWorkorderMechanics)(workorderId, { ...input, officeUserId: actorId, authContext: context });
+    if (action === "reassign") return (dependencies.reassign || reassignOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId, authContext: context });
   }
 
   if (moduleKey === "parts") {
     if (action === "request") {
-      if (dependencies.requestPart) return dependencies.requestPart(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role});
+      if (dependencies.requestPart) return dependencies.requestPart(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role,authContext:context});
       return context.actor.role === "mechanic"
-        ? requestMechanicPart(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role})
+        ? requestMechanicPart(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role,authContext:context})
         : createCanonicalPartRequest(workorderId,{...input,mechanicUserId:actorId,actorRole:context.actor.role});
     }
     if (action === "record" && input.operation === "usedParts") {
       return context.actor.role === "mechanic"
-        ? (dependencies.saveMechanicParts || saveMechanicUsedParts)(workorderId, actorId, input.parts, input.laborHours)
+        ? (dependencies.saveMechanicParts || saveMechanicUsedParts)(workorderId, actorId, input.parts, input.laborHours, context)
         : (dependencies.saveOfficeParts || saveOfficeUsedParts)(workorderId, {
           parts: input.parts,
           laborHours: input.laborHours,
           officeUserId: actorId,
+          authContext: context,
         });
     }
     if (action === "record" && input.operation === "legacyManualPartAmendment") {
@@ -363,16 +436,17 @@ export async function runWorkorderModuleAction(
         officeUserId: actorId,
         companyId: authorization.companyId,
         locationId: authorization.locationId,
+        authContext: context,
       });
     }
     if (action === "record" && input.operation === "usage" && context.actor.role === "mechanic") {
-      return (dependencies.updateUsage || updateMechanicPartUsage)(workorderId, input.requestId, { ...input, mechanicUserId: actorId });
+      return (dependencies.updateUsage || updateMechanicPartUsage)(workorderId, input.requestId, { ...input, mechanicUserId: actorId, authContext: context });
     }
     if (action === "record" && input.operation === "officePart" && ["office", "admin"].includes(context.actor.role)) {
-      return (dependencies.addOfficePart || addOfficePart)(workorderId, { ...input, officeUserId: actorId });
+      return (dependencies.addOfficePart || addOfficePart)(workorderId, { ...input, officeUserId: actorId, authContext: context });
     }
     if (action === "record" && input.operation === "officePartPlan" && ["office", "admin"].includes(context.actor.role)) {
-      return (dependencies.planOfficePart || planOfficePart)(workorderId, { ...input, officeUserId: actorId });
+      return (dependencies.planOfficePart || planOfficePart)(workorderId, { ...input, officeUserId: actorId, authContext: context });
     }
     if (action === "record" && input.operation === "serializedUsageRepairOrder") {
       return (dependencies.updateSerializedRepairOrderForWorkorder || updateSerializedUsageRepairOrderForWorkorder)(
@@ -393,16 +467,18 @@ export async function runWorkorderModuleAction(
       return (dependencies.releaseMeasuredUsage || releaseOrReverseMeasuredUsageForWorkorder)(workorderId, input, context, dependencies);
     }
     if (action === "record" && input.operation === "partPriceSelection") {
-      return (dependencies.selectPartPrice || selectWorkorderPartPrice)(workorderId, input, context, dependencies);
+      return (dependencies.selectPartPrice || selectWorkorderPartPrice)(
+        workorderId, input, context, { ...dependencies, authorizedWorkorder: authorization.workorder },
+      );
     }
     if (["approve", "decline"].includes(action)) {
       const decision = action === "approve" ? "approved" : (input.decision === "needs_info" ? "needs_info" : "rejected");
       return (dependencies.reviewPart || reviewOfficePartRequest)(workorderId, input.requestId, {
-        ...input, decision, officeUserId: actorId,
+        ...input, decision, officeUserId: actorId, authContext: context,
       });
     }
     if (action === "allocate") return (dependencies.allocatePart || changeOfficePartAllocation)(
-      workorderId, input.requestId, input.allocationId, { ...input, officeUserId: actorId },
+      workorderId, input.requestId, input.allocationId, { ...input, officeUserId: actorId, authContext: context },
     );
   }
 
@@ -414,22 +490,22 @@ export async function runWorkorderModuleAction(
     const send = context.actor.role === "mechanic"
       ? (dependencies.sendMechanic || sendMechanicMessage)
       : (dependencies.sendOffice || sendOfficeMessage);
-    return send(workorderId, { ...input, senderUserId: actorId, senderRole: context.actor.role });
+    return send(workorderId, { ...input, senderUserId: actorId, senderRole: context.actor.role, authContext: context });
   }
 
   if (moduleKey === "completion") {
     if (action === "markWorkDone") {
       if (context.actor.role === "mechanic") {
-        return (dependencies.markDone || markMechanicDone)(workorderId, actorId, input);
+        return (dependencies.markDone || markMechanicDone)(workorderId, actorId, input, context);
       }
       if (["office", "admin"].includes(context.actor.role)) {
-        return (dependencies.markOfficeDone || markOfficeWorkorderDone)(workorderId, { ...input, officeUserId: actorId });
+        return (dependencies.markOfficeDone || markOfficeWorkorderDone)(workorderId, { ...input, officeUserId: actorId, authContext: context });
       }
       throw permissionDenied();
     }
-    if (action === "close") return (dependencies.close || closeOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });
-    if (action === "cancel") return (dependencies.cancel || cancelOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });
-    if (action === "requestChanges") return (dependencies.requestChanges || returnOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId });
+    if (action === "close") return (dependencies.close || closeOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId, authContext: context });
+    if (action === "cancel") return (dependencies.cancel || cancelOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId, authContext: context });
+    if (action === "requestChanges") return (dependencies.requestChanges || returnOfficeWorkorder)(workorderId, { ...input, officeUserId: actorId, authContext: context });
   }
 
   if (moduleKey === "odoo") {
@@ -452,6 +528,7 @@ export async function readWorkorderUnitHistory(context, workorderId, input = {},
 }
 
 export async function createWorkorderRuntime(context, input, rawInput = input, dependencies = {}) {
+  context = effectiveCompanyContext(context, input.companyId);
   const mechanic = context.actor.role === "mechanic";
   const customerIdentity = String(input.formData?.customerCompanyName || rawInput?.formData?.customerCompanyName || "").trim();
   if (mechanic && customerIdentity) {
@@ -523,6 +600,7 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
 }
 
 export async function previewCreateWorkorderPricing(context, input, dependencies = {}) {
+  context = effectiveCompanyContext(context, input.companyId);
   if (!["office", "admin"].includes(context.actor.role)) throw permissionDenied();
   requireCompanyAccess(context, input.companyId);
   requireLocationAccess(context, input.locationId);
@@ -546,10 +624,13 @@ export async function workorderCreateContext(context, dependencies = {}) {
   const resolveModules = dependencies.resolveModules || resolveWorkorderModuleDecisions;
   const listMechanics = dependencies.listMechanics || listUsersByLocation;
   const loadLaborProduct = dependencies.loadLaborProduct || getConfiguredLaborProduct;
-  const rows = await loadTemplates({
-    companyIds: [...(context.companyIds || [])],
-    locationIds: context.actor.role === "admin" ? null : [...(context.locationIds || [])],
-  });
+  const adminCompanyIds = companyRoleScope(context, ["admin"]).companyIds;
+  const assignedCompanyIds = companyRoleScope(context, ["office", "mechanic"]).companyIds;
+  const groups = await Promise.all([
+    adminCompanyIds.length ? loadTemplates({ companyIds: adminCompanyIds, locationIds: null }) : [],
+    assignedCompanyIds.length ? loadTemplates({ companyIds: assignedCompanyIds, locationIds: [...(context.locationIds || [])] }) : [],
+  ]);
+  const rows = groups.flat();
   const locations = [];
   const laborProducts = new Map();
   for (const row of rows) {

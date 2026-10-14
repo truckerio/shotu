@@ -1,14 +1,36 @@
-import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { USER_ROLES } from "../src/server/auth/roles.js";
 import { closePool, getPool } from "../src/server/db/pool.js";
+import { migrationChecksumMatches } from "../src/server/db/migrate.js";
 
 const migrationDirectory = new URL("../src/server/db/migrations/", import.meta.url);
 
+export function compareMigrationLedger(repositoryMigrations, appliedMigrations) {
+  const repository = new Map(repositoryMigrations.map(({ name, checksum }) => [name, checksum]));
+  const applied = new Map(appliedMigrations.map(({ name, checksum }) => [name, checksum]));
+  return {
+    unknownApplied: appliedMigrations.filter(({ name }) => !repository.has(name)),
+    missingApplied: repositoryMigrations.filter(({ name }) => !applied.has(name)),
+    checksumMismatch: appliedMigrations.filter(({ name, checksum }) =>
+      repository.has(name) && !migrationChecksumMatches(name, checksum, repository.get(name)))
+      .map(({ name, checksum }) => ({ name, appliedChecksum: checksum, repositoryChecksum: repository.get(name) })),
+  };
+}
+
 async function checkDatabase() {
-  const migrationFiles = (await readdir(migrationDirectory))
-    .filter((name) => /^\d{3}_[a-z0-9_]+\.sql$/.test(name))
-    .sort();
+  const migrationFiles = (await readdir(migrationDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
   const pool = getPool();
+  const repositoryMigrations = await Promise.all(migrationFiles.map(async (name) => ({
+    name,
+    checksum: createHash("sha256").update(await readFile(new URL(name, migrationDirectory))).digest("hex"),
+  })));
+  const appliedMigrations = (await pool.query("select name, checksum from schema_migrations order by name")).rows;
+  const migrationLedger = compareMigrationLedger(repositoryMigrations, appliedMigrations);
   const result = await pool.query(`
     select
       current_setting('server_version') as postgres_version,
@@ -82,12 +104,25 @@ async function checkDatabase() {
         from user_profiles profile
         where profile.active
           and profile.deleted_at is null
+          and profile.auth_user_id is not null
           and not exists (
             select 1
             from user_company_memberships membership
             where membership.user_id = profile.id and membership.active
           )
       ) as active_profiles_without_company,
+      (
+        select count(*)::int
+        from user_profiles profile
+        where profile.active
+          and profile.deleted_at is null
+          and profile.auth_user_id is null
+          and not exists (
+            select 1
+            from user_company_memberships membership
+            where membership.user_id = profile.id and membership.active
+          )
+      ) as historical_profiles_without_company,
       (
         select count(*)::int
         from information_schema.columns
@@ -132,10 +167,13 @@ async function checkDatabase() {
   const report = {
     nodeVersion: process.version,
     expectedMigrations: migrationFiles.length,
+    migrationLedger,
     ...result.rows[0],
   };
   const failures = [];
-  if (report.applied_migrations !== report.expectedMigrations) failures.push("migration count does not match the repository");
+  if (migrationLedger.unknownApplied.length) failures.push("applied migrations are absent from the repository");
+  if (migrationLedger.missingApplied.length) failures.push("repository migrations have not been applied");
+  if (migrationLedger.checksumMismatch.length) failures.push("applied migration checksums differ from the repository");
   if (report.workorders !== report.operations_view) failures.push("operations view does not cover every workorder");
   if (report.active_units_of_measure < 30) failures.push("canonical units of measure are missing");
   if (report.decimal_quantity_columns !== 4) failures.push("part and inventory quantity columns are not numeric(14,3)");
@@ -158,9 +196,11 @@ async function checkDatabase() {
   if (failures.length) process.exitCode = 1;
 }
 
-checkDatabase()
-  .catch((error) => {
-    console.error(JSON.stringify({ healthy: false, error: error.message }));
-    process.exitCode = 1;
-  })
-  .finally(closePool);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  checkDatabase()
+    .catch((error) => {
+      console.error(JSON.stringify({ healthy: false, error: error.message }));
+      process.exitCode = 1;
+    })
+    .finally(closePool);
+}

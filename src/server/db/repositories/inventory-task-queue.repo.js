@@ -271,7 +271,7 @@ export async function listInventoryTaskQueue(input) {
         and reuse.company_id=any($1::uuid[]) and reuse.location_id=any($2::uuid[])`,[input.companyIds,input.locationIds])).rows;
     const assignedModuleKeys=[];
     for(const scope of assignedScopes)if(await canAccessInventoryReuseModule(client,{companyId:scope.company_id,locationId:scope.location_id,actorId:scope.user_id},scope.role,true))assignedModuleKeys.push(`${scope.user_id}:${scope.location_id}`);
-    const result = await client.query(`select queue.*,actor_membership.role actor_role,permission.reuse_capabilities actor_reuse_capabilities,
+    const listSql = `select queue.*,actor_membership.role actor_role,permission.reuse_capabilities actor_reuse_capabilities,count(*) over() total_count,
         case when queue.source_type='no_po_approval' then queue.company_id=any($9::uuid[])
           when queue.source_type in ('removed_part_custody') then permission.can_reuse
           else permission.can_work end actor_can_act
@@ -337,11 +337,14 @@ export async function listInventoryTaskQueue(input) {
                   select 1 from user_location_memberships membership where membership.user_id=assigned_profile.id and membership.company_id=queue.company_id and membership.location_id=queue.location_id and membership.active
                  )))
               )))))
-      order by queue.created_at,queue.source_type,queue.source_id limit $7 offset $8`,
-    [input.companyIds, input.locationIds, input.sourceType || null, input.search || null, input.view === 'my_work', input.actorId, PAGE_SIZE + 1, offset, approvalCompanyIds,reuseModuleLocationIds,assignedModuleKeys]);
+      order by queue.created_at,queue.source_type,queue.source_id limit $7 offset $8`;
+    const params=[input.companyIds, input.locationIds, input.sourceType || null, input.search || null, input.view === 'my_work', input.actorId, PAGE_SIZE + 1, offset, approvalCompanyIds,reuseModuleLocationIds,assignedModuleKeys];
+    const result = await client.query(listSql,params);
+    const totalResult=result.rows.length||input.page===1?result:await client.query(listSql,[...params.slice(0,7),0,...params.slice(8)]);
+    const total=Number(totalResult.rows[0]?.total_count||0);
     const response = {
       items: result.rows.slice(0, PAGE_SIZE).map((row) => mapTask(row, { id: input.actorId, role: row.actor_role, canAct: row.actor_can_act, capabilityOptions: row.actor_reuse_capabilities })),
-      page: input.page,pageSize: PAGE_SIZE,hasMore: result.rows.length > PAGE_SIZE,
+      page: input.page,pageSize: PAGE_SIZE,total,pageCount:Math.max(1,Math.ceil(total/PAGE_SIZE)),hasMore: result.rows.length > PAGE_SIZE,
       capabilities: { canClaim: true, canAssign: true, canUnassign: true },
     };
     await client.query('commit');return response;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPartIdentityDraft, hasRefreshedPartIdentityVersion, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, validatePartIdentityDraft } from "./part-identity-editor-model.js";
+import { createPartIdentityDraft, hasRefreshedPartIdentityVersion, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, trackingModeForUom, trackingModeLockedForUom, validatePartIdentityDraft } from "./part-identity-editor-model.js";
 
 const draft = (overrides = {}) => ({ description: "Oil filter", partNumber: "LF-1", manufacturer: "Fleet", category: "Filters", barcode: "123", uomCode: "ea", trackingMode: "quantity", referenceNumbers: [], ...overrides });
 
@@ -44,4 +44,29 @@ test("part identity refresh gate only releases when the selected catalog part ha
   assert.equal(hasRefreshedPartIdentityVersion({ catalogPartId: "part-1", version: 2 }, pending), false);
   assert.equal(hasRefreshedPartIdentityVersion({ catalogPartId: "part-2", version: 3 }, pending), false);
   assert.equal(hasRefreshedPartIdentityVersion({ catalogPartId: "part-1", version: 3 }, pending), true);
+});
+
+test("part identity accepts no-stock tracking and forces it for time units", () => {
+  assert.deepEqual(validatePartIdentityDraft(draft({ trackingMode: "no_stock" })), {});
+  assert.equal(trackingModeForUom("hr", "quantity"), "no_stock");
+  assert.equal(trackingModeLockedForUom("hr"), true);
+  assert.equal(trackingModeForUom("ea", "quantity"), "quantity");
+  assert.equal(trackingModeLockedForUom("ea"), false);
+  assert.equal(createPartIdentityDraft({ uomCode: "hr", trackingMode: "" }).trackingMode, "no_stock");
+});
+
+test("part identity preserves grandfathered physical tracking when a persisted time part opens", () => {
+  const part = {
+    catalogPartId: "legacy-time-part",
+    version: 7,
+    description: "Legacy shop time",
+    partNumber: "LEGACY-HR",
+    uomCode: "hr",
+    trackingMode: "measured_bulk",
+  };
+  const persisted = createPartIdentityDraft(part);
+
+  assert.equal(persisted.trackingMode, "measured_bulk");
+  assert.equal(partIdentityPayload(persisted, part.version).trackingMode, part.trackingMode);
+  assert.equal(trackingModeForUom("hr", persisted.trackingMode), "no_stock");
 });

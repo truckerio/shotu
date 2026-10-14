@@ -20,16 +20,29 @@ function allocationMoney(value, currency) {
   return value === null || value === undefined || !currency ? "Unknown cost" : money(value, currency);
 }
 
+function compactPriceValue(price) {
+  if (!price?.selection) return "";
+  const numeric = Number(price.unitPrice);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : "";
+}
+
+function currencyPrefix(price) {
+  if (!price?.currency || price.currency === "USD") return "$";
+  return price.currency;
+}
+
 export function WorkorderPartPriceCell({
   workorderId,
   usageKind,
   usageId,
+  noStockLineId,
   price,
   quantity,
   onChanged,
   disabled = false,
   batchCostAvailable = true,
   costAllocations = [],
+  compact = false,
 }) {
   const [current, setCurrent] = useState(price || null);
   const [busy, setBusy] = useState(false);
@@ -40,7 +53,7 @@ export function WorkorderPartPriceCell({
   const hasKnownAllocationCosts = visibleAllocations.length > 0
     && visibleAllocations.every((allocation) => (allocation.unitPrice ?? allocation.unitCost) !== null && allocation.currency)
     && allocationCurrencies.size === 1;
-  const canUseBatchCost = usageKind === "serialized"
+  const canUseBatchCost = usageKind === "no_stock" ? false : usageKind === "serialized"
     ? batchCostAvailable
     : batchCostAvailable && hasKnownAllocationCosts;
   const allocationTotal = hasKnownAllocationCosts
@@ -67,7 +80,7 @@ export function WorkorderPartPriceCell({
           body: JSON.stringify({
             operation: "partPriceSelection",
             usageKind,
-            usageId,
+            ...(usageKind === "no_stock" ? { noStockLineId } : { usageId }),
             selection,
             reason: selection === "batch_cost"
               ? "Use exact receipt batch cost"
@@ -85,39 +98,55 @@ export function WorkorderPartPriceCell({
     }
   }
 
+  const selector = <Dropdown
+    aria-label="Price source"
+    className={compact ? "detail-price-source-menu" : undefined}
+    placement={compact ? "bottom end" : undefined}
+    value={current?.selection || ""}
+    onChange={select}
+    disabled={busy || disabled}
+  >
+    <option value="">Select price</option>
+    <option value="batch_cost" disabled={!canUseBatchCost}>
+      Batch cost{canUseBatchCost ? "" : " — cost unavailable"}
+    </option>
+    <option value="selling_price">Selling price</option>
+  </Dropdown>;
+  const allocationHistory = visibleAllocations.length ? <details className="workorder-part-price-layers">
+    <summary>FCFS · {visibleAllocations.length} {visibleAllocations.length === 1 ? "batch" : "batches"}{allocationTotal === null ? "" : ` · ${money(allocationTotal, allocationCurrency)} total`}</summary>
+    <ul>{visibleAllocations.map((allocation) => {
+      const amount = allocation.unitPrice ?? allocation.unitCost;
+      const recordedTotal = allocation.totalCost ?? allocation.totalPrice;
+      const lineTotal = recordedTotal ?? (amount === null || amount === undefined
+        ? null
+        : Number(allocation.quantity) * Number(amount));
+      return <li key={allocation.costLayerId}>
+        <span><strong>{allocation.quantity} × {allocationMoney(amount, allocation.currency)}</strong><strong>{allocationMoney(lineTotal, allocation.currency)}</strong></span>
+        <small>{allocation.receiptReference || (allocation.sourceKind === "receipt" ? "Receipt batch" : "Legacy cost unavailable")}</small>
+      </li>;
+    })}</ul>
+  </details> : null;
+
+  if (compact) return <div className="used-part-field workorder-part-price is-compact">
+    <span className="used-part-cell-label">Price</span>
+    <div className="detail-inline-price-control">
+      <span aria-hidden="true">{currencyPrefix(current)}</span>
+      <input aria-label="Part unit price" readOnly placeholder="Price" value={compactPriceValue(current)} />
+      {selector}
+    </div>
+    {allocationHistory}
+    {message ? <small role="alert">{message}</small> : null}
+  </div>;
+
   return (
     <div className="used-part-field workorder-part-price">
       <span className="used-part-cell-label">Price</span>
-      <Dropdown
-        aria-label="Price source"
-        value={current?.selection || ""}
-        onChange={select}
-        disabled={busy || disabled}
-      >
-        <option value="">Select price</option>
-        <option value="batch_cost" disabled={!canUseBatchCost}>
-          Batch cost{canUseBatchCost ? "" : " — cost unavailable"}
-        </option>
-        <option value="selling_price">Selling price</option>
-      </Dropdown>
+      {selector}
       <div className="workorder-price-values">
         <span>Unit price <strong>{current?.selection ? formatWorkorderMoney(current.unitPrice, current.currency) || "Unknown" : "Not selected"}</strong></span>
         <span>Line total <strong>{workorderLineTotal(current, quantity) || "Incomplete"}</strong></span>
       </div>
-      {visibleAllocations.length ? <details className="workorder-part-price-layers">
-        <summary>FCFS · {visibleAllocations.length} {visibleAllocations.length === 1 ? "batch" : "batches"}{allocationTotal === null ? "" : ` · ${money(allocationTotal, allocationCurrency)} total`}</summary>
-        <ul>{visibleAllocations.map((allocation) => {
-          const amount = allocation.unitPrice ?? allocation.unitCost;
-          const recordedTotal = allocation.totalCost ?? allocation.totalPrice;
-          const lineTotal = recordedTotal ?? (amount === null || amount === undefined
-            ? null
-            : Number(allocation.quantity) * Number(amount));
-          return <li key={allocation.costLayerId}>
-            <span><strong>{allocation.quantity} × {allocationMoney(amount, allocation.currency)}</strong><strong>{allocationMoney(lineTotal, allocation.currency)}</strong></span>
-            <small>{allocation.receiptReference || (allocation.sourceKind === "receipt" ? "Receipt batch" : "Legacy cost unavailable")}</small>
-          </li>;
-        })}</ul>
-      </details> : null}
+      {allocationHistory}
       {message ? <small role="alert">{message}</small> : null}
     </div>
   );

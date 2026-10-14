@@ -3,25 +3,29 @@ import { findAuthorizedInventoryLocation } from "../../db/repositories/inventory
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { createInventoryPartSchema, updateInventoryPartSchema } from "./inventory.schemas.js";
 import { z } from "zod";
-import { inventoryCompanyManageScope } from "./inventory-effective-scope.js";
+import { effectiveInventoryScope, inventoryCompanyManageScope } from "./inventory-effective-scope.js";
+import { companyRoleScope } from "../../auth/company-role.js";
 
 export async function createInventoryPart(input, requestContext, dependencies = {}) {
-  if (!["office", "admin"].includes(requestContext.actor.role)) {
+  const roleScope = companyRoleScope(requestContext, ["office", "admin"]);
+  if (!roleScope.companyIds.length) {
     throw new InventoryError("Parts can only be created by Office or Admin.", { code: "INVENTORY_PART_FORBIDDEN", statusCode: 403 });
   }
   const parsed = createInventoryPartSchema.parse(input);
   const location = await (dependencies.findLocation || findAuthorizedInventoryLocation)({
     locationId: parsed.locationId,
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: requestContext.actor.role === "admin",
+    companyIds: roleScope.companyIds,
+    locationIds: roleScope.locationIds,
+    isAdmin: roleScope.adminCompanyIds.length > 0,
   });
   if (!location) throw inventoryNotFound();
+  effectiveInventoryScope(requestContext, { companyId: location.company_id, locationId: location.id || parsed.locationId });
   const result = await (dependencies.createPart || createCompanyCatalogPart)({
     ...parsed, companyId: location.company_id, actorId: requestContext.actor.id,
   });
   if (result.kind === "identity_conflict") throw new InventoryError("That part, barcode, or reference number is already used.", { code: "INVENTORY_PART_IDENTITY_CONFLICT", statusCode: 409 });
   if (result.kind === "uom_invalid") throw new InventoryError("Choose an active inventory unit.", { code: "INVENTORY_PART_UOM_INVALID", statusCode: 422 });
+  if (result.kind === "tracking_uom_conflict") throw new InventoryError("Time-based catalog entries must use No stock tracking.", { code: "INVENTORY_PART_TRACKING_UOM_CONFLICT", statusCode: 422 });
   return result.part;
 }
 
@@ -43,5 +47,6 @@ export async function updateInventoryPart(catalogPartId, input, requestContext, 
   if (result.kind === "uom_incompatible") throw new InventoryError("Choose a unit with the same quantity value as the current inventory unit.", { code: "INVENTORY_PART_UOM_INCOMPATIBLE", statusCode: 422 });
   if (result.kind === "tracking_locked") throw new InventoryError("Tracking cannot be changed after inventory activity. Start a reviewed conversion instead.", { code: "INVENTORY_PART_TRACKING_LOCKED", statusCode: 422 });
   if (result.kind === "tracking_history_conflict") throw new InventoryError("This part already has serialized history. Keep it Serialized or start a reviewed conversion.", { code: "INVENTORY_PART_TRACKING_HISTORY_CONFLICT", statusCode: 422 });
+  if (result.kind === "tracking_uom_conflict") throw new InventoryError("Time-based catalog entries must use No stock tracking.", { code: "INVENTORY_PART_TRACKING_UOM_CONFLICT", statusCode: 422 });
   return result.part;
 }

@@ -76,6 +76,58 @@ test("labor belongs to diagnosis and repair while actual rows belong to Parts", 
   ]);
 });
 
+test("customer-document adjustment intent is projected only to permitted Office and Admin viewers", () => {
+  const customerDocumentAdjustments = {
+    lineDiscounts: [],
+    documentDiscount: { kind: "percentage", value: "5", reason: "Fleet discount" },
+    overrideReasons: [],
+  };
+  const detail = {
+    workorder: {
+      id: "wo-financial",
+      companyId: "company-1",
+      formData: {
+        mechanicConcern: "Inspect brakes",
+        customerDocumentAdjustments,
+        customerDocumentAdjustmentBaseRevisionId: "22222222-2222-4222-8222-222222222222",
+      },
+    },
+  };
+  const decisions = { concern: { access: "read", source: "default" } };
+
+  for (const viewerRole of ["office", "admin"]) {
+    const projected = projectProtectedWorkorderDetail(detail, decisions, {
+      viewerRole,
+      canReadCustomerFinancials: true,
+      canWriteCustomerFinancials: viewerRole === "admin",
+    });
+    assert.deepEqual(projected.workorder.formData.customerDocumentAdjustments, customerDocumentAdjustments);
+    assert.equal(
+      projected.workorder.formData.customerDocumentAdjustmentBaseRevisionId,
+      "22222222-2222-4222-8222-222222222222",
+    );
+    assert.deepEqual(projected.customerDocumentAccess, {
+      canRead: true,
+      canWrite: viewerRole === "admin",
+    });
+  }
+
+  for (const options of [
+    { viewerRole: "office", canReadCustomerFinancials: false },
+    { viewerRole: "mechanic", canReadCustomerFinancials: true },
+    { viewerRole: "surveillance", canReadCustomerFinancials: true },
+  ]) {
+    const projected = projectProtectedWorkorderDetail(detail, decisions, options);
+    assert.equal(Object.hasOwn(projected.workorder.formData, "customerDocumentAdjustments"), false);
+    assert.equal(Object.hasOwn(projected.workorder.formData, "customerDocumentAdjustmentBaseRevisionId"), false);
+    if (["office", "admin"].includes(options.viewerRole)) {
+      assert.deepEqual(projected.customerDocumentAccess, { canRead: false, canWrite: false });
+    } else {
+      assert.equal(Object.hasOwn(projected, "customerDocumentAccess"), false);
+    }
+  }
+});
+
 test("parts planning action follows the same Parts module visibility boundary", () => {
   const detail = {
     workorder: { id: "wo-1", companyId: "company-1", formData: {} },

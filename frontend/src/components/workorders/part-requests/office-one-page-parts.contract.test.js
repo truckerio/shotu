@@ -37,9 +37,16 @@ test("office Detail passes the shared labor control through the shared parts tab
 test("one-page Detail Parts stays on the shared table lifecycle surface", () => {
   assert.match(editor, /const onePage = presentation === "one-page"/);
   assert.match(editor, /<WorkorderPartsTable className="detail-operational-parts-editor used-parts-items-table"[^>]*>/);
+  assert.match(editor, /<WorkorderPartsEntryTable[\s\S]*?className="detail-operational-parts-editor used-parts-items-table used-parts-one-page-table"/);
+  assert.match(editor, /showPrice=\{canViewPrices\}/);
   assert.match(editor, /activeSerializedParts\.map\(\(part, index\) => renderSerializedPartRow/);
   assert.match(editor, /recordedManualParts\.map\(\(part, index\) => renderRecordedPartRow/);
-  assert.doesNotMatch(editor, /CompactWorkorderParts|if \(onePage\)/);
+  assert.match(editor, /initialUsedPartRows\(\[\]\)/);
+  assert.match(editor, /visibleDraftRows\.map\(\(draft, index\) => renderDraftPartRow/);
+  assert.match(editor, /draftRows\.slice\(0, availableUsedPartDraftCount\(recordedPartCount, draftRows\.length\)\)/);
+  assert.match(editor, /onClick=\{addDraftRow\}/);
+  assert.match(editor, /disabled=\{!canAddUsedPartDraft\(recordedPartCount, draftRows\.length\)\}/);
+  assert.doesNotMatch(editor, /CompactWorkorderParts/);
   assert.doesNotMatch(editorCss, /\.compact-workorder-parts/);
 });
 
@@ -51,14 +58,19 @@ test("one-page catalog selection stays in the existing inventory lifecycle", () 
   assert.match(editor, /anchorToPartField=\{onePage\}/);
 });
 
-test("office request actions remain rendered after the one-page table", () => {
+test("office request actions move into a shared modal opened by the Parts More menu", () => {
   assert.match(office, /<OfficePartComposer detail=\{detail\} onChanged=\{onChanged\} \/>/);
   assert.match(office, /requests\.map\(\(request\) => \(/);
-  assert.match(office, /presentation === "one-page" \? " is-one-page" : ""/);
+  assert.match(office, /<MenuItem[^>]*textValue="Parts & supply"/);
+  assert.match(office, /<ModalFrame/);
+  assert.match(office, /setSupplyDialogOpen\(true\)/);
+  assert.match(office, /const \[supplyDialogOpen, setSupplyDialogOpen\] = useState\(Boolean\(focusedRequestId\)\)/);
 });
 
 test("pricing controls pin displayed labor rates and respect read-only Workorders", () => {
   assert.match(laborPrice, /expectedRateVersionId/);
+  assert.match(laborPrice, /if \(compact\)/);
+  assert.match(laborPrice, /<ModalFrame[^>]*overlayClassName="workorder-rate-overlay"/);
   assert.match(editor, /usageKind="serialized"[^\n]*disabled=\{!partsEditable\}/);
   assert.match(editor, /<LaborPriceCell[^\n]*disabled=\{!laborEditable\}/);
   assert.match(measuredUsage, /usageKind="aggregate"[^\n]*disabled=\{!editable\}/);

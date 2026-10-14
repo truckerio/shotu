@@ -27,6 +27,16 @@ test("admin phone shell reserves a shared profile destination outside route stat
   assert.match(source, /<ProfileMenu actor=\{actor\} mobileNav \/>/);
 });
 
+test("desktop Units is an icon-free group with specific equipment pages", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./workspace/AdminWorkspaceShell.jsx", import.meta.url),
+    "utf8",
+  ));
+  assert.match(source, /\{ id: "units", label: "Units", items: \[\{ id: "units-trucks", label: "Trucks", icon: Truck01 \}, \{ id: "units-trailers", label: "Trailers", icon: Container \}, \{ id: "units-other", label: "Other equipment", icon: Tool02 \}\] \}/);
+  assert.match(source, /<RoleNavigationRail[^>]*groups=\{groups\} activeId=\{activeId\}/);
+  assert.doesNotMatch(source, /items=\{\[\{ id: "units"/);
+});
+
 test("admin phone navigation keeps Ops visible and only setup destinations in the kebab menu", async () => {
   const styles = await import("node:fs/promises").then(({ readFile }) => readFile(
     new URL("./admin.css", import.meta.url),

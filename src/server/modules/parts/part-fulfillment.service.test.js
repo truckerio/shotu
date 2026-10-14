@@ -78,3 +78,39 @@ test("rejects approval after the workorder becomes terminal", async () => {
     (error) => error.code === "PART_FULFILLMENT_WORKORDER_INACTIVE" && error.statusCode === 409,
   );
 });
+
+test("mixed roles authorize and filter fulfillment from the target company context", async () => {
+  const adminCompany = "77777777-7777-4777-8777-777777777777";
+  const mixed = {
+    actor: { ...context.actor, role: "admin" },
+    companyIds: new Set([adminCompany, ids.company]),
+    companyRoles: new Map([[adminCompany, "admin"], [ids.company, "mechanic"]]),
+    locationIds: new Set([ids.destination]),
+  };
+  let authorizedRole;
+  let created;
+  await recommendPartFulfillment(input, mixed, {
+    ...dependencies([{ id: "hidden", locationId: ids.source, quantityAvailable: 10, uomCode: "ea" }]),
+    authorizeModule: async (effective) => { authorizedRole = effective.actor.role; },
+    createFulfillment: async (value) => { created = value; return { kind: "created", fulfillment: { id: "f1", legs: value.legs } }; },
+  });
+  assert.equal(authorizedRole, "mechanic");
+  assert.equal(created.legs[0].state, "backordered");
+  assert.deepEqual(created.adminCompanyIds, []);
+});
+
+test("mixed-role approval lookup receives only admin companies for unrestricted access", async () => {
+  const adminCompany = "77777777-7777-4777-8777-777777777777";
+  const mixed = {
+    actor: { ...context.actor, role: "admin" },
+    companyIds: new Set([adminCompany, ids.company]),
+    companyRoles: new Map([[adminCompany, "admin"], [ids.company, "mechanic"]]),
+    locationIds: new Set(),
+  };
+  let lookup;
+  await assert.rejects(approveRecommendedFulfillment("f1", { recommendationVersion: 1, idempotencyKey: "approve-key-mixed" }, mixed, {
+    getFulfillment: async (value) => { lookup = value; return null; },
+  }), /not found/i);
+  assert.deepEqual(lookup.adminCompanyIds, [adminCompany]);
+  assert.deepEqual(lookup.companyIds, [adminCompany, ids.company]);
+});

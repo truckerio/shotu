@@ -11,6 +11,7 @@ export function WorkorderPartsModule({
   actorRole,
   detailSection,
   filledPartCount,
+  financialFooter = null,
   form,
   isMechanicDetail,
   isOfficeDetail,
@@ -39,6 +40,7 @@ export function WorkorderPartsModule({
       <PartRequestsPanel
         key={activeWorkorder.workorder.id}
         actorId={actorId}
+        financialFooter={financialFooter}
         presentation={presentation}
         role={isOfficeDetail ? "office" : isMechanicDetail ? "mechanic" : actorRole === "admin" ? "admin" : "read"}
         detail={activeWorkorder}

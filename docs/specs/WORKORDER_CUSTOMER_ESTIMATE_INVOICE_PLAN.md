@@ -1247,6 +1247,23 @@ The full feature is complete only when:
 
 ## 30. Change Log
 
+### CDEI-20261007-01 — Minimal operational Documents replacement
+
+- **Scope:** User-authorized replacement of the legacy operational paper Preview with existing customer Estimate/Invoice review; supersedes the earlier Preview-preservation non-goal for operational UI only.
+- **UI:** Create uses one Review/View estimate action and a responsive supporting Documents panel. Office/Admin detail opens Documents through its contextual action; invoice preparation on opening requires the existing server eligibility. Revised-estimate controls are progressively disclosed. Mechanic/Surveillance financial permissions remain unchanged.
+- **Preserved:** Canonical calculator, immutable revisions, exact version/fingerprint/reconciliation validation, grants, draft autosave, chat, Activity, inspection return paths, and historical print/archive access.
+- **Non-goals:** Receipts, payments, policy/schema changes, automatic issuance/delivery, commits, deployment. Local browser checks do not constitute production or live invoice-issuance proof.
+- **Evidence:** Final local verification and independent review are recorded in the external orchestrator task; the broader lifecycle plan remains distinct from this UI slice.
+
+### CDEI-20261005-01 — Create discount intent and current financial preview
+
+- **Status:** Local implementation in verification; not a deployment or complete lifecycle claim.
+- **Canonical owners:** Create draft form snapshots retain editable `customerDocumentAdjustments`; the existing customer-document source builder and financial calculator validate and calculate preview and direct-create informational Estimate amounts.
+- **Compatibility:** Legacy drafts default to no adjustments. Incomplete editor intent may autosave, but financial commands validate it through the canonical adjustment schema. A nonempty saved adjustment cannot silently become an unpriced scope-only Estimate.
+- **UI contract:** Parts & labor is a subtotal, followed by Discount, Tax, and Total. Final amounts require a current server projection; source changes invalidate stale amounts. Approval-not-required previews explain automatic informational Estimate creation instead of presenting a disabled manual-issuance action as a validation failure.
+- **Boundary:** No new invoice eligibility policy, customer approval bypass, calculator, migration, or delivery action. Informational Estimates do not become accepted Estimates merely because they preserve a discount.
+- **Verification:** Focused regressions, rollback-only PostgreSQL preview/create equivalence, fresh-build browser autosave/reload and error checks; final outcomes recorded in the external orchestrator task.
+
 ### CDEI-20260928-01 — Initial consolidated plan
 
 - **Status:** PLANNED

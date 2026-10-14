@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  customerDocumentAdjustmentsSchema,
   customerDocumentPreviewSchema,
   customerDocumentProfileQuerySchema,
   issueCustomerDocumentSchema,
@@ -9,6 +10,22 @@ import {
 
 const id = (digit) => `${digit.repeat(8)}-${digit.repeat(4)}-4${digit.repeat(3)}-8${digit.repeat(3)}-${digit.repeat(12)}`;
 const base = { companyId: id("1"), locationId: id("2") };
+
+test("saved customer-document adjustments share the Estimate command validation contract", () => {
+  assert.deepEqual(customerDocumentAdjustmentsSchema.parse(undefined), {
+    lineDiscounts: [], documentDiscount: null, overrideReasons: [],
+  });
+  assert.equal(customerDocumentAdjustmentsSchema.safeParse({
+    lineDiscounts: [],
+    documentDiscount: { kind: "percentage", value: "10", reason: "Courtesy adjustment" },
+    overrideReasons: [],
+  }).success, true);
+  assert.equal(customerDocumentAdjustmentsSchema.safeParse({
+    lineDiscounts: [],
+    documentDiscount: { kind: "fixed", value: "5", reason: "x" },
+    overrideReasons: [],
+  }).success, false);
+});
 
 test("Workorder previews require an exact expected version and Invoice previews require a Workorder", () => {
   assert.equal(customerDocumentPreviewSchema.safeParse({

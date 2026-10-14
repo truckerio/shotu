@@ -1,0 +1,395 @@
+.checkpoint-rail {
+  /* Shared collection navigation; marker sizing is independent of hitboxes. */
+  align-self: center;
+  box-sizing: border-box;
+  flex: 0 0 25px;
+  height: min(100%, 280px);
+  min-height: 0;
+  padding-inline: 0.5px;
+  position: relative;
+  width: 25px;
+}
+
+.checkpoint-rail-track {
+  display: grid;
+  grid-auto-rows: minmax(10px, 1fr);
+  height: 100%;
+  overflow: visible;
+  width: 24px;
+}
+
+.checkpoint-rail-tick {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  height: 100%;
+  justify-content: flex-start;
+  margin: 0;
+  min-height: 10px;
+  padding: 0 0 0 6px;
+  position: relative;
+  width: 24px;
+}
+
+.checkpoint-rail-mark {
+  background: #8492a6;
+  border-radius: 50%;
+  display: block;
+  height: 2px;
+  opacity: 1;
+  transition: background-color 200ms ease, border-radius 200ms ease, height 200ms ease, width 200ms cubic-bezier(.2, .8, .2, 1);
+  width: 2px;
+}
+
+.checkpoint-rail-tick:hover .checkpoint-rail-mark,
+.checkpoint-rail-tick:focus-visible .checkpoint-rail-mark {
+  background: #344054;
+  border-radius: 999px;
+  opacity: 1;
+  height: 2px;
+  width: 6px;
+}
+
+.checkpoint-rail-tick[aria-current="page"] .checkpoint-rail-mark {
+  background: #1570ef;
+  border-radius: 999px;
+  height: 2.5px;
+  width: 9px;
+}
+
+.checkpoint-rail-tick:focus-visible {
+  outline: 2px solid #1570ef;
+  outline-offset: -2px;
+}
+
+.checkpoint-rail-tick:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+.checkpoint-rail-preview {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgb(16 24 40 / 16%);
+  box-sizing: border-box;
+  color: #182230;
+  display: grid;
+  font-size: 12px;
+  font-weight: 400;
+  gap: 2px;
+  line-height: 1.4;
+  max-height: min(180px, calc(100dvh - 16px));
+  overflow: hidden;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: fixed;
+  text-align: left;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 260px;
+  z-index: 30;
+}
+
+.checkpoint-rail-preview strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.checkpoint-rail-preview-range {
+  color: #667085;
+}
+
+.checkpoint-rail-preview-records {
+  border-top: 1px solid #e4e7ec;
+  color: #667085;
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 5px;
+}
+
+.checkpoint-rail-compact {
+  bottom: 0;
+  display: none;
+  height: 28px;
+  position: absolute;
+  width: 28px;
+}
+
+.checkpoint-rail-dropdown.dropdown-select {
+  height: 28px;
+  width: 28px;
+}
+
+.checkpoint-rail-dropdown .dropdown-select-trigger {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  gap: 0;
+  height: 28px;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0;
+  width: 28px;
+}
+
+.checkpoint-rail-dropdown .dropdown-select-value {
+  display: none;
+}
+
+.checkpoint-rail-dropdown .dropdown-select-chevron {
+  color: #667085;
+  height: 14px;
+  width: 14px;
+}
+
+.checkpoint-rail-dropdown-popover {
+  min-width: 220px;
+  width: 220px;
+}
+
+.checkpoint-rail-exact-jump {
+  height: 28px;
+  position: relative;
+  width: 28px;
+}
+
+.checkpoint-rail-exact-jump > summary {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #667085;
+  cursor: pointer;
+  display: flex;
+  font-size: 0;
+  height: 28px;
+  justify-content: center;
+  list-style: none;
+  min-height: 28px;
+  padding: 0;
+  width: 28px;
+}
+
+.checkpoint-rail-exact-jump > summary::after {
+  content: "…";
+  font-size: 14px;
+  line-height: 1;
+}
+
+.checkpoint-rail-exact-jump > summary::-webkit-details-marker {
+  display: none;
+}
+
+.checkpoint-rail-exact-jump > summary:focus-visible {
+  outline: 2px solid #1570ef;
+  outline-offset: -2px;
+}
+
+.checkpoint-rail-exact-jump > form {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  bottom: 0;
+  box-shadow: 0 12px 28px rgb(16 24 40 / 16%);
+  display: grid;
+  gap: 6px;
+  left: calc(100% + 6px);
+  min-width: 210px;
+  padding: 10px;
+  position: absolute;
+  z-index: 40;
+}
+
+.checkpoint-rail-exact-jump label {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.checkpoint-rail-exact-jump form > div {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.checkpoint-rail-exact-jump input,
+.checkpoint-rail-exact-jump button {
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 40px;
+}
+
+.checkpoint-rail-exact-jump input {
+  min-width: 0;
+  padding: 7px 8px;
+  width: 100%;
+}
+
+.checkpoint-rail-exact-jump button {
+  background: #344054;
+  color: #fff;
+  cursor: pointer;
+  padding: 7px 12px;
+}
+
+.checkpoint-rail-empty {
+  visibility: hidden;
+}
+
+@media (max-width: 960px) {
+  .checkpoint-rail {
+    align-self: auto;
+    flex: 0 0 auto;
+    height: auto;
+    padding-inline: 0;
+    width: auto;
+  }
+
+  .checkpoint-rail-track {
+    display: none;
+  }
+
+  .checkpoint-rail-compact {
+    bottom: auto;
+    display: block;
+    height: auto;
+    position: static;
+    width: min(190px, 100%);
+  }
+
+  .checkpoint-rail-dropdown.dropdown-select {
+    height: auto;
+    width: 100%;
+  }
+
+  .checkpoint-rail-dropdown .dropdown-select-trigger {
+    border: 1px solid #d0d5dd;
+    gap: 10px;
+    height: auto;
+    justify-content: space-between;
+    min-height: 40px;
+    padding: 8px 10px 8px 12px;
+    width: 100%;
+  }
+
+  .checkpoint-rail-dropdown .dropdown-select-value {
+    display: block;
+  }
+
+  .checkpoint-rail-dropdown-popover {
+    min-width: var(--trigger-width);
+    width: var(--trigger-width);
+  }
+
+  .checkpoint-rail-exact-jump {
+    height: auto;
+    position: relative;
+    width: auto;
+  }
+
+  .checkpoint-rail-exact-jump > summary {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    box-sizing: border-box;
+    color: #344054;
+    cursor: pointer;
+    display: flex;
+    font-size: 13px;
+    height: auto;
+    justify-content: flex-start;
+    list-style: none;
+    min-height: 40px;
+    padding: 8px 12px;
+    width: auto;
+  }
+
+  .checkpoint-rail-exact-jump > summary::after {
+    display: none;
+  }
+
+  .checkpoint-rail-exact-jump > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .checkpoint-rail-exact-jump > summary[aria-disabled="true"] {
+    background: #f9fafb;
+    color: #98a2b3;
+    cursor: default;
+  }
+
+  .checkpoint-rail-exact-jump > form {
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgb(16 24 40 / 16%);
+    display: grid;
+    gap: 6px;
+    left: 0;
+    min-width: 210px;
+    padding: 10px;
+    position: absolute;
+    top: calc(100% + 4px);
+    bottom: auto;
+    z-index: 40;
+  }
+
+  .checkpoint-rail-exact-jump label {
+    color: #475467;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .checkpoint-rail-exact-jump form > div {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .checkpoint-rail-exact-jump input,
+  .checkpoint-rail-exact-jump button {
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font: inherit;
+    min-height: 40px;
+  }
+
+  .checkpoint-rail-exact-jump input {
+    min-width: 0;
+    padding: 7px 8px;
+    width: 100%;
+  }
+
+  .checkpoint-rail-exact-jump button {
+    background: #344054;
+    color: #fff;
+    cursor: pointer;
+    padding: 7px 12px;
+  }
+}
+
+@media (max-width: 700px) {
+  .checkpoint-rail-dropdown .dropdown-select-trigger,
+  .checkpoint-rail-exact-jump > summary,
+  .checkpoint-rail-exact-jump input,
+  .checkpoint-rail-exact-jump button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkpoint-rail-mark {
+    transition: none;
+  }
+}

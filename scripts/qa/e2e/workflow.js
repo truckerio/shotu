@@ -61,6 +61,8 @@ export function buildWorkorderInput({ location, concern, mechanicUserIds = [] })
     companyId: location.company_id,
     locationId: location.id,
     concern,
+    authorizationClassification: "internal_fleet",
+    authorizationExceptionReason: "Isolated QA role workflow fixture; no external customer work.",
     officeNotes: "Created by the deterministic QA role workflow.",
     mechanicUserIds,
     formData: {

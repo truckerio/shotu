@@ -107,6 +107,18 @@ test("receiving rejects role, location, unknown tracking and stale catalog befor
   await assert.rejects(receiveDirectInventory(input(), context, dependencies({ findPart: async () => ({ tracking_mode: null }) })), { code: "INVENTORY_TRACKING_REQUIRED" });
   await assert.rejects(receiveDirectInventory({ ...input(), expectedPartVersion: 2 }, context, dependencies()), { code: "INVENTORY_CATALOG_PART_CHANGED" });
 });
+test("receiving rejects catalog-only no-stock entries before approval or posting", async () => {
+  let approvalCalls = 0;
+  let postCalls = 0;
+  await assert.rejects(receiveDirectInventory(input(), context, dependencies({
+    findPart: async () => ({ id: catalogPartId, version: 1, tracking_mode: "no_stock", uom_code: "ea" }),
+    createApprovalRequest: async () => { approvalCalls += 1; },
+    postReceipt: async () => { postCalls += 1; },
+  })), { code: "INVENTORY_NO_STOCK_MUTATION", statusCode: 409 });
+  assert.equal(approvalCalls, 0);
+  assert.equal(postCalls, 0);
+  assert.equal(directReceiptSchema.safeParse({ ...input(), trackingMode: "no_stock" }).success, false);
+});
 test("receiving uses the target-company role instead of a higher primary role", async () => {
   const mixed={...context,actor:{...context.actor,role:'admin'},companyRoles:new Map([[companyId,'mechanic']])};
   await assert.rejects(receiveDirectInventory(input(),mixed,dependencies()),{code:'INVENTORY_RECEIVE_FORBIDDEN'});

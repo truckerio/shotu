@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addUsedPart,
+  availableUsedPartDraftCount,
+  canAddUsedPartDraft,
   canEditUsedParts,
   defaultUsedPartQuantity,
   initialUsedPartRows,
@@ -9,8 +11,10 @@ import {
   serializedUsageTableState,
   reusableReturnedUsageIds,
   normalizeUsedParts,
+  noStockUsedPartDraft,
   readonlyUsedParts,
   removeUsedPart,
+  savableNoStockUsedPart,
   usedPartQuantityAfterPartNumberChange,
   usedPartsAccessState,
   workorderPreviewParts,
@@ -31,6 +35,40 @@ test("an editable used-parts surface opens with three blank rows by default", ()
   assert.equal(initialUsedPartRows([{ partNo: "FILTER", qty: "1" }]).length, 3);
   assert.equal(addUsedPart(rows, rows.length).length, 4);
   assert.equal(removeUsedPart(rows, 1, rows.length - 1).length, 2);
+});
+
+test("default detail intake rows are independent UI drafts and are omitted from saved parts", () => {
+  const rows = initialUsedPartRows([]);
+  rows[0].partNo = "FILTER";
+  rows[0].qty = "1";
+
+  assert.equal(rows[1].partNo, "");
+  assert.equal(rows[2].partNo, "");
+  assert.deepEqual(readonlyUsedParts(initialUsedPartRows([])), []);
+  assert.deepEqual(readonlyUsedParts(rows), [
+    { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "" },
+  ]);
+});
+
+test("default detail intake rows retain all recorded parts before filling to three", () => {
+  const recorded = [
+    { partNo: "FILTER", qty: "1", uomCode: "pc", repairOrder: "Replace" },
+    { partNo: "OIL", qty: "2.5", uomCode: "gal", repairOrder: "Refill" },
+    { partNo: "BELT", qty: "1", uomCode: "pc", repairOrder: "Install" },
+    { partNo: "CLAMP", qty: "2", uomCode: "pc", repairOrder: "Secure" },
+  ];
+
+  assert.deepEqual(initialUsedPartRows(recorded), recorded);
+});
+
+test("Add line counts recorded lifecycle rows while preserving the three initial UI drafts", () => {
+  assert.equal(initialUsedPartRows([]).length, 3);
+  assert.equal(availableUsedPartDraftCount(0, 3), 3);
+  assert.equal(availableUsedPartDraftCount(17, 3), 1);
+  assert.equal(availableUsedPartDraftCount(18, 3), 0);
+  assert.equal(canAddUsedPartDraft(14, 3), true);
+  assert.equal(canAddUsedPartDraft(15, 3), false);
+  assert.equal(canAddUsedPartDraft(18, 3), false);
 });
 
 test("selected used parts default an empty quantity to one", () => {
@@ -58,6 +96,61 @@ test("readonly used parts omit blank rows and retain saved values", () => {
     { partNo: "ABC-123", qty: 2, repairOrder: "Installed" },
     { partNo: "", qty: "", repairOrder: "" },
   ]), [{ partNo: "ABC-123", qty: "2", uomCode: "pc", repairOrder: "Installed" }]);
+});
+
+test("no-stock Workorder line identity survives detail editing", () => {
+  const row = normalizeUsedParts([{
+    noStockLineId: "11111111-1111-4111-8111-111111111111",
+    catalogPartId: "22222222-2222-4222-8222-222222222222",
+    trackingMode: "no_stock",
+    partNo: "SHOP-SUPPLY",
+    qty: "1.5",
+    uomCode: "hr",
+    repairOrder: "Diagnostic time",
+  }])[0];
+  assert.equal(row.noStockLineId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(row.catalogPartId, "22222222-2222-4222-8222-222222222222");
+  assert.equal(row.trackingMode, "no_stock");
+});
+
+test("no-stock catalog selection becomes a draft and preserves decimal time quantity on save", () => {
+  const draft = noStockUsedPartDraft({
+    id: "22222222-2222-4222-8222-222222222222",
+    trackingMode: "no_stock",
+    partNumber: "DIAG-TIME",
+    canonicalUomCode: "hr",
+  });
+  assert.deepEqual(draft, {
+    catalogPartId: "22222222-2222-4222-8222-222222222222",
+    trackingMode: "no_stock",
+    partNo: "DIAG-TIME",
+    qty: "1",
+    uomCode: "hr",
+    repairOrder: "",
+  });
+  assert.deepEqual(savableNoStockUsedPart({
+    ...draft,
+    qty: "1.50",
+    repairOrder: "  Diagnose intermittent fault  ",
+  }), {
+    catalogPartId: "22222222-2222-4222-8222-222222222222",
+    trackingMode: "no_stock",
+    partNo: "DIAG-TIME",
+    qty: "1.5",
+    uomCode: "hr",
+    repairOrder: "Diagnose intermittent fault",
+  });
+});
+
+test("no-stock draft rejects physical catalog policy and invalid quantity", () => {
+  assert.equal(noStockUsedPartDraft({ id: "part-1", trackingMode: "quantity", partNumber: "FILTER", uomCode: "ea" }), null);
+  assert.equal(savableNoStockUsedPart({
+    catalogPartId: "part-1",
+    trackingMode: "no_stock",
+    partNo: "SHOP-SUPPLY",
+    qty: "0",
+    uomCode: "ea",
+  }), null);
 });
 
 test("Add part access follows server permission for every editing role", () => {

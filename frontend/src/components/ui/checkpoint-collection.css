@@ -1,0 +1,63 @@
+.checkpoint-collection-viewport,
+.checkpoint-collection > .operational-collection-table:not(.operations-table) {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  max-height: var(--checkpoint-viewport-height, calc(100dvh - 240px));
+}
+.checkpoint-collection .operational-collection-table-head { position: sticky; top: 0; z-index: 2; }
+.checkpoint-collection-viewport [data-checkpoint-header] { position: sticky; top: 0; z-index: 2; }
+.checkpoint-collection-viewport > .operational-data-table-frame { overflow: visible; }
+.checkpoint-collection-viewport thead { position: sticky; top: 0; z-index: 2; }
+.checkpoint-collection-viewport.is-collection-table-frame {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+}
+.checkpoint-collection-viewport.is-data-table-frame {
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+}
+.checkpoint-collection-viewport.is-collection-table-frame > .operational-collection-table,
+.checkpoint-collection-viewport.is-data-table-frame > .operational-data-table-frame {
+  border: 0;
+  border-radius: 0;
+}
+@media (min-width: 701px) {
+  .checkpoint-collection :is(.operational-collection-table-head, [data-checkpoint-header])::after {
+    background: linear-gradient(to bottom, rgb(249 250 251 / 70%), rgb(249 250 251 / 25%) 40%, rgb(249 250 251 / 0%));
+    content: "";
+    height: 16px;
+    inset: 100% 0 auto;
+    pointer-events: none;
+    position: absolute;
+  }
+  .checkpoint-collection-viewport thead [role="columnheader"] {
+    position: relative;
+  }
+  .checkpoint-collection-viewport thead [role="columnheader"]::after {
+    background: linear-gradient(to bottom, rgb(249 250 251 / 70%), rgb(249 250 251 / 25%) 40%, rgb(249 250 251 / 0%));
+    content: "";
+    height: 16px;
+    inset: 100% 0 auto;
+    pointer-events: none;
+    position: absolute;
+  }
+}
+@media (max-width: 700px) {
+  .checkpoint-collection-viewport,
+  .checkpoint-collection > .operational-collection-table:not(.operations-table) { max-height: none; overflow: visible; }
+  .checkpoint-collection .operational-collection-table-head,
+  .checkpoint-collection-viewport [data-checkpoint-header],
+  .checkpoint-collection-viewport thead { position: static; }
+  .checkpoint-collection-viewport:is(.is-collection-table-frame, .is-data-table-frame) {
+    border: 0;
+    border-radius: 0;
+  }
+}
+.checkpoint-data-spacer > td { padding: 0 !important; border: 0 !important; }
+.checkpoint-data-spacer { pointer-events: none; }
+.checkpoint-collection .checkpoint-collection-viewport > .operational-collection-table {
+  max-height: none;
+  overflow: visible;
+}

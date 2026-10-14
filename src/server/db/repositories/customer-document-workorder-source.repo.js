@@ -71,6 +71,17 @@ export async function readLockedWorkorderFinancialSource(input, client) {
     [input.companyId, input.workorderId],
   )).rows;
 
+  const noStockSnapshots = (await client.query(
+    `select snapshot.*,catalog.part_number,catalog.description
+       from workorder_part_price_snapshots snapshot
+       join parts_catalog catalog
+         on catalog.company_id=snapshot.company_id and catalog.id=snapshot.catalog_part_id
+      where snapshot.company_id=$1 and snapshot.workorder_id=$2
+        and snapshot.no_stock_line_id is not null
+      order by snapshot.no_stock_line_id,snapshot.created_at desc,snapshot.id desc`,
+    [input.companyId, input.workorderId],
+  )).rows;
+
   const labor = (await client.query(
     `select snapshot.*,product.name product_name,product.description product_description,product.uom_code product_uom_code
        from workorder_labor_price_snapshots snapshot
@@ -83,6 +94,35 @@ export async function readLockedWorkorderFinancialSource(input, client) {
   )).rows[0] || null;
 
   const formData = workorder.form_data || {};
+  const currentNoStockParts = new Map((Array.isArray(formData.parts) ? formData.parts : [])
+    .filter((part) => part?.noStockLineId)
+    .map((part) => [part.noStockLineId, part]));
+  const seenNoStockLines = new Set();
+  const noStock = [];
+  for (const snapshot of noStockSnapshots) {
+    const part = currentNoStockParts.get(snapshot.no_stock_line_id);
+    if (!part) continue;
+    if (seenNoStockLines.has(snapshot.no_stock_line_id)) continue;
+    seenNoStockLines.add(snapshot.no_stock_line_id);
+    if (part.catalogPartId !== snapshot.catalog_part_id
+      || (part.uomCode || "ea") !== snapshot.uom_code
+      || Number(part.qty) !== Number(snapshot.quantity)) {
+      sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+    }
+    noStock.push({
+      ...snapshot,
+      id: snapshot.no_stock_line_id,
+      status: "recorded",
+      repair_order: part.repairOrder || "",
+      quantity: asText(part.qty),
+      price_snapshot_id: snapshot.id,
+      price_quantity: snapshot.quantity,
+      sourceKind: "no_stock_line",
+    });
+  }
+  if (currentNoStockParts.size !== noStock.length) {
+    sourceError("CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED");
+  }
   const expectedLaborHours = Number(formData.laborHours || 0);
   if (expectedLaborHours > 0 && (!labor || Number(labor.hours) !== expectedLaborHours
     || (formData.laborProduct?.productId && labor.labor_product_id !== formData.laborProduct.productId)
@@ -92,6 +132,7 @@ export async function readLockedWorkorderFinancialSource(input, client) {
   const partRows = [
     ...serialized.map((row) => ({ ...row, quantity: "1", sourceKind: "serialized_usage" })),
     ...aggregate.map((row) => ({ ...row, quantity: asText(row.effective_quantity), sourceKind: "aggregate_usage" })),
+    ...noStock,
   ];
   for (const row of partRows) {
     if (!row.price_snapshot_id || row.selection !== "selling_price"

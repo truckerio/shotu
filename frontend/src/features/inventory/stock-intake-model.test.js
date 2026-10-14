@@ -11,6 +11,7 @@ test("saved tracking selects quantity, measured or exact-unit workflow", () => {
   assert.equal(partStockTracking({ uomCode: "pc", inventory: { serializationRequired: true } }), "serialized");
   assert.equal(partStockTracking({ uomCode: "gal" }), "measured_bulk");
   assert.equal(partStockTracking({ uomCode: "hr" }), "unsupported");
+  assert.equal(partStockTracking({ trackingMode: "no_stock", uomCode: "ea", inventory: { serializationRequired: true } }), "unsupported");
 });
 
 test("whole counts and canonical bulk precision reject fractional or invalid intake", () => {

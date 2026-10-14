@@ -1,5 +1,6 @@
 import { requireActor, requireCompanyAccess } from "../../auth/authorize.js";
-import { invalidRequest, permissionDenied, resourceNotFound } from "../../auth/errors.js";
+import { requireCompanyRole } from "../../auth/company-role.js";
+import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import {
   listActiveProofreadingDictionaryTerms,
   removeProofreadingDictionaryTerm,
@@ -36,12 +37,6 @@ function selectedCompanyId(context, requestedCompanyId) {
   if (!companyId) throw invalidRequest("Select a company.");
   requireCompanyAccess(context, companyId);
   return companyId;
-}
-
-function requireCompanyAdmin(context) {
-  const actor = requireActor(context);
-  if (actor.role !== "admin") throw permissionDenied();
-  return actor;
 }
 
 function present(row) {
@@ -98,8 +93,9 @@ export async function removePersonalProofreadingTerm(context, input, dependencie
 }
 
 export async function addCompanyProofreadingTerm(context, input, dependencies = {}) {
-  const actor = requireCompanyAdmin(context);
   const companyId = selectedCompanyId(context, input?.companyId);
+  requireCompanyRole(context, companyId, ["admin"]);
+  const actor = requireActor(context);
   const term = normalizeProofreadingDictionaryTerm(input?.term);
   const saveTerm = dependencies.saveTerm || saveProofreadingDictionaryTerm;
   return present(await saveTerm({
@@ -111,8 +107,9 @@ export async function addCompanyProofreadingTerm(context, input, dependencies = 
 }
 
 export async function removeCompanyProofreadingTerm(context, input, dependencies = {}) {
-  const actor = requireCompanyAdmin(context);
   const companyId = selectedCompanyId(context, input?.companyId);
+  requireCompanyRole(context, companyId, ["admin"]);
+  const actor = requireActor(context);
   const { normalizedTerm } = normalizeProofreadingDictionaryTerm(input?.term);
   const removeTerm = dependencies.removeTerm || removeProofreadingDictionaryTerm;
   const removed = await removeTerm({

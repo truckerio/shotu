@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Monitor01, RefreshCw01, Trash01 } from "@untitledui/icons";
 import { Button } from "../../components/ui/Button.jsx";
-import { Pagination, usePagination } from "../../components/ui/Pagination.jsx";
+import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
+import { useClientCheckpointPages } from "../../components/ui/useClientCheckpointPages.js";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { api } from "../../lib/api.js";
 import "./kiosk-settings.css";
@@ -23,7 +24,7 @@ export function KioskSettingsPanel({ locationId }) {
     loading: true,
     message: "",
   });
-  const pagination = usePagination(devices, { pageSize: 10, resetKey: locationId });
+  const queue = useClientCheckpointPages(devices, { pageSize: 10, resetKey: locationId });
 
   async function loadDevices() {
     const result = await api(`/api/admin/locations/${encodeURIComponent(locationId)}/kiosk-devices`);
@@ -127,38 +128,44 @@ export function KioskSettingsPanel({ locationId }) {
           </Button>
         </form>
 
-        <div className="admin-kiosk-device-list" aria-live="polite">
-          {state.loading ? (
-            <div className="admin-kiosk-empty">Loading shop computers</div>
-          ) : devices.length ? pagination.pageItems.map((device) => (
-            <article className="admin-kiosk-device" key={device.id}>
-              <span className="admin-kiosk-device-icon" aria-hidden="true"><Monitor01 /></span>
-              <div>
-                <strong>{device.name}</strong>
-                <small>
-                  {device.active ? "Active" : "Revoked"}
-                  {" · "}
-                  Last used {formatDeviceDate(device.lastSeenAt)}
-                </small>
-                <small>Registered {formatDeviceDate(device.createdAt)}</small>
-              </div>
-              {device.active ? (
-                <Button
-                  className="admin-kiosk-revoke"
-                  variant="danger"
-                  icon={Trash01}
-                  onClick={() => revokeDevice(device)}
-                  disabled={Boolean(state.busy)}
-                >
-                  {state.busy === device.id ? "Revoking" : "Revoke"}
-                </Button>
-              ) : null}
-            </article>
-          )) : (
-            <div className="admin-kiosk-empty">No shop computers registered.</div>
-          )}
-        </div>
-        {!state.loading ? <Pagination {...pagination} label="computers" /> : null}
+        <CheckpointCollection
+          ariaLabel="Shop computers"
+          label="computers"
+          pageSize={10}
+          queue={{ ...queue, loading: state.loading }}
+          storageKey={`admin-location:${locationId}:kiosk-computers`}
+          renderItems={(entries) => <div className="admin-kiosk-device-list" aria-live="polite">
+            {state.loading ? (
+              <div className="admin-kiosk-empty">Loading shop computers</div>
+            ) : devices.length ? entries.map(({ item: device, key, rowProps }) => (
+              <article {...rowProps} className="admin-kiosk-device" key={key}>
+                <span className="admin-kiosk-device-icon" aria-hidden="true"><Monitor01 /></span>
+                <div>
+                  <strong>{device.name}</strong>
+                  <small>
+                    {device.active ? "Active" : "Revoked"}
+                    {" · "}
+                    Last used {formatDeviceDate(device.lastSeenAt)}
+                  </small>
+                  <small>Registered {formatDeviceDate(device.createdAt)}</small>
+                </div>
+                {device.active ? (
+                  <Button
+                    className="admin-kiosk-revoke"
+                    variant="danger"
+                    icon={Trash01}
+                    onClick={() => revokeDevice(device)}
+                    disabled={Boolean(state.busy)}
+                  >
+                    {state.busy === device.id ? "Revoking" : "Revoke"}
+                  </Button>
+                ) : null}
+              </article>
+            )) : (
+              <div className="admin-kiosk-empty">No shop computers registered.</div>
+            )}
+          </div>}
+        />
       </section>
     </section>
   );

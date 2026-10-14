@@ -22,7 +22,7 @@ export function usePagination(items, { pageSize = 20, resetKey = "" } = {}) {
     [currentPage, items, pageSize],
   );
 
-  return { currentPage, pageCount, pageItems, setPage, total, loading: false };
+  return { currentPage, pageCount, pageItems, pageSize, setPage, total, loading: false };
 }
 
 export function Pagination({ currentPage, pageCount, setPage, total, label = "items", loading = false }) {

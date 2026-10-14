@@ -3,13 +3,13 @@ import { requireActor, requireCompanyAccess, requireLocationAccess } from "../..
 import { authorizeProductModule } from "../access/product-module-access.service.js";
 import { configureInventoryReuse, mutateInventoryReuse, readInventoryReuse } from "../../db/repositories/inventory-reuse.repo.js";
 import { InventoryError } from "./inventory.errors.js";
-import { reuseConfigReadSchema, reuseGrantSchema, reuseId, reusePolicySchema, reuseReceiveSchema, reuseReturnSchema, reuseRemoveSchema, reuseReviewSchema, reuseRouteSchema, reuseRepairStartSchema, reuseRepairCompleteSchema, reuseDispositionSchema, reuseQuarantineSchema, reuseCorrectionSchema, reuseLegacyTrackSchema, reuseReadSchema, reuseScopeSchema } from "./inventory-reuse.schemas.js";
+import { reuseConfigReadSchema, reuseDetailReadSchema, reuseGrantSchema, reuseId, reusePolicySchema, reuseReceiveSchema, reuseReturnSchema, reuseRemoveSchema, reuseReviewSchema, reuseRouteSchema, reuseRepairStartSchema, reuseRepairCompleteSchema, reuseDispositionSchema, reuseQuarantineSchema, reuseCorrectionSchema, reuseLegacyTrackSchema, reuseReadSchema, reuseScopeSchema } from "./inventory-reuse.schemas.js";
 
 const commandSchemas = { remove: reuseRemoveSchema, legacy_track: reuseLegacyTrackSchema, receive: reuseReceiveSchema, return: reuseReturnSchema, release: reuseReviewSchema, route: reuseRouteSchema, repair_start: reuseRepairStartSchema, repair_complete: reuseRepairCompleteSchema, core_return: reuseDispositionSchema, scrap: reuseDispositionSchema, quarantine_resolve: reuseQuarantineSchema, correct_location: reuseCorrectionSchema };
 const capabilities = { remove: "remove", legacy_track: "remove", receive: "receive", return: "receive", release: "release", route: "route", repair_start: "repair", repair_complete: "repair", core_return: "disposition", scrap: "disposition", quarantine_resolve: "quarantine", correct_location: "route" };
 
 async function authorization(input, context, dependencies, write = false) {
-  requireActor(context); requireCompanyAccess(context, input.companyId); requireLocationAccess(context, input.locationId);
+  requireActor(context); requireCompanyAccess(context, input.companyId); requireLocationAccess(context, input.locationId, input.companyId);
   await (dependencies.authorizeProduct || authorizeProductModule)(context, { companyId: input.companyId, locationId: input.locationId, moduleKey: "workorders" }, write ? "write" : "read");
 }
 function repositoryInput(input, context) { return { ...input, actorId: context.actor.id }; }
@@ -27,8 +27,10 @@ export async function commandInventoryReuse(action, caseId, rawInput, context, d
 export async function getInventoryReuse(view, rawInput, entityId, context, dependencies = {}) {
   const schema = view === "config"
     ? reuseConfigReadSchema
-    : view === "queue" || view === "stock" || view === "units" || view === "unit" || view === "scan"
+    : view === "queue" || view === "stock" || view === "units"
       ? reuseReadSchema
+      : view === "unit" || view === "scan"
+        ? reuseDetailReadSchema
       : reuseScopeSchema;
   const input = { ...schema.parse(rawInput), view };
   if (view === "asset") input.assetId = reuseId.parse(entityId);

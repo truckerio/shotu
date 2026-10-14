@@ -415,23 +415,44 @@ export async function readInventoryReuse(input) {
       } else if (input.view === "units" && input.unitState) {
         values.push(input.unitState); where.push(`u.status=$${values.length}`);
       }
-      if (input.q) { values.push(`%${input.q}%`); where.push(`(u.serial_number ilike $${values.length} or l.part_number ilike $${values.length} or l.description ilike $${values.length})`); }
-      if (input.cursor) { values.push(input.cursor); where.push(`${input.view === "units" ? "u.id" : "l.catalog_part_id"} > $${values.length}`); }
-      values.push(input.limit + 1);
+      if (input.q) {
+        values.push(`%${input.q}%`);
+        const identity = input.view === "units" ? "l" : "p";
+        where.push(`(u.serial_number ilike $${values.length} or ${identity}.part_number ilike $${values.length} or ${identity}.description ilike $${values.length})`);
+      }
+      const exactPage = input.page;
+      const filteredWhere = where.join(" and ");
+      const stockCatalogJoin = input.view === "units" ? "" : " join parts_catalog p on p.company_id=u.company_id and p.id=l.catalog_part_id";
+      let total = null;
+      if (exactPage !== undefined) {
+        const count = await client.query(`select count(${input.view === "units" ? "*" : "distinct p.id"})::int as total
+          from inventory_serialized_units u join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id${stockCatalogJoin} where ${filteredWhere}`, values);
+        total = count.rows[0]?.total || 0;
+      } else if (input.cursor) {
+        values.push(input.cursor); where.push(`${input.view === "units" ? "u.id" : "p.id"} > $${values.length}`);
+      }
+      const pageValues = [...values];
+      pageValues.push(exactPage !== undefined ? input.limit : input.limit + 1);
+      if (exactPage !== undefined) pageValues.push((exactPage - 1) * input.limit);
+      const pageSuffix = `limit $${pageValues.length - (exactPage !== undefined ? 1 : 0)}${exactPage !== undefined ? ` offset $${pageValues.length}` : ""}`;
       if (input.view === "units") {
         const rows = await client.query(`select u.id,u.serial_number,u.status,u.condition_code,u.custody_holder_type,u.custody_location_id,u.custody_bin_location,u.custody_version,u.custody_legacy_available,
           case when u.custody_holder_type='asset' then concat('Unit ',coalesce((select a.unit_no from assets a where a.company_id=u.company_id and a.id=u.custody_asset_id),'unknown')) else concat(coalesce((select location.name from locations location where location.company_id=u.company_id and location.id=u.custody_location_id),replace(u.custody_holder_type,'_',' ')),case when coalesce(u.custody_bin_location,'')='' then '' else concat(' · ',u.custody_bin_location) end) end as custody_holder_label,l.catalog_part_id,l.part_number,l.description
-          from inventory_serialized_units u join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id where ${where.join(" and ")} order by u.id limit $${values.length}`, values);
+          from inventory_serialized_units u join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id where ${where.join(" and ")} order by u.id ${pageSuffix}`, pageValues);
         const counts=await client.query(`select count(*) filter(where u.status='in_stock' and u.custody_holder_type='inventory_location' and u.condition_code='new')::int as new,count(*) filter(where u.status='in_stock' and u.custody_holder_type='inventory_location' and u.condition_code='serviceable_used')::int as reusable,count(*) filter(where u.status='in_stock' and u.custody_holder_type='inventory_location' and u.condition_code='refurbished')::int as refurbished from inventory_serialized_units u join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id where u.company_id=$1 and u.location_id=$2 and l.catalog_part_id=$3`,[input.companyId,input.locationId,input.catalogPartId]);
-        const items = rows.rows.slice(0,input.limit).map(publicReuseCase); return { items, conditionCounts:counts.rows[0], nextCursor: rows.rows.length > input.limit ? items.at(-1)?.id : null, capabilities: access.capabilities };
+        const items = rows.rows.slice(0,input.limit).map(publicReuseCase);
+        return { items, conditionCounts:counts.rows[0], nextCursor: exactPage === undefined && rows.rows.length > input.limit ? items.at(-1)?.id : null, capabilities: access.capabilities,
+          ...(exactPage !== undefined ? { total, page: exactPage, pageCount: Math.ceil(total / input.limit) } : {}) };
       }
-      const rows = await client.query(`select l.catalog_part_id,l.part_number,l.description,
+      const rows = await client.query(`select p.id as catalog_part_id,p.part_number,p.description,
         count(*) filter (where u.status='in_stock' and u.custody_holder_type='inventory_location' and u.condition_code in ('new','serviceable_used','refurbished'))::int as ready,
         count(*) filter (where u.status='reserved')::int as reserved,count(*) filter (where u.status in ('installed','installed_pending_approval'))::int as installed,
         count(*) filter (where u.status not in ('in_stock','reserved','installed','installed_pending_approval') or u.condition_code in ('needs_repair','unserviceable','unknown'))::int as action_needed
-        from inventory_serialized_units u join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id where ${where.join(" and ")}
-        group by l.catalog_part_id,l.part_number,l.description order by l.catalog_part_id limit $${values.length}`, values);
-      const items=rows.rows.slice(0,input.limit).map(publicReuseCase); return {items,nextCursor:rows.rows.length>input.limit ? items.at(-1)?.catalogPartId : null,capabilities:access.capabilities};
+        from inventory_serialized_units u join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id
+        join parts_catalog p on p.company_id=u.company_id and p.id=l.catalog_part_id where ${where.join(" and ")}
+        group by p.id order by p.id ${pageSuffix}`, pageValues);
+      const items=rows.rows.slice(0,input.limit).map(publicReuseCase); return {items,nextCursor:exactPage === undefined && rows.rows.length>input.limit ? items.at(-1)?.catalogPartId : null,capabilities:access.capabilities,
+        ...(exactPage !== undefined ? { total, page: exactPage, pageCount: Math.ceil(total / input.limit) } : {})};
     }
     // Mechanics may see only placements/cases on assets tied to their active assigned work.
     if (access.role === "mechanic") {
@@ -443,16 +464,30 @@ export async function readInventoryReuse(input) {
     }
     if (!input.assetId) {
       const queueStatus = input.status === "needs_inspection" ? ["received_pending_review","hold","repair_complete_pending_review"] : input.status === "repair_refurbish" ? ["repair"] : input.status === "core_returns" ? ["core_pending_return"] : input.status === "scrap_approval" ? ["scrap_pending_approval"] : input.status === "completed" ? ["released","core_returned","scrapped"] : input.status ? [input.status] : null;
+      const queueValues=[input.companyId,input.locationId,queueStatus,input.route || null,input.q || ""];
+      let total=null;
+      if (input.page !== undefined) {
+        const count=await client.query(`select count(*)::int as total from inventory_reuse_cases c
+          join inventory_serialized_units u on u.company_id=c.company_id and u.id=c.unit_id
+          join inventory_receipt_lines l on l.company_id=u.company_id and l.id=u.receipt_line_id
+          join operational_workorders w on w.company_id=c.company_id and w.id=c.original_workorder_id
+          where c.company_id=$1 and c.location_id=$2 and ($3::text[] is null or c.status=any($3))
+          and ($4::text is null or c.intended_route=$4 or c.final_route=$4)
+          and ($5::text='' or u.serial_number ilike '%'||$5||'%' or l.part_number ilike '%'||$5||'%' or l.description ilike '%'||$5||'%')`,queueValues);
+        total=count.rows[0]?.total || 0;
+      }
       const cases = await client.query(`${CASE_SELECT} where c.company_id=$1 and c.location_id=$2
         and ($3::text[] is null or c.status=any($3)) and ($4::text is null or c.intended_route=$4 or c.final_route=$4)
         and ($5::text='' or u.serial_number ilike '%'||$5||'%' or l.part_number ilike '%'||$5||'%' or l.description ilike '%'||$5||'%')
-        and ($6::uuid is null or c.id>$6) order by c.id limit $7`,[input.companyId,input.locationId,queueStatus,input.route || null,input.q || "",input.cursor || null,(input.limit || 50)+1]);
+        ${input.page === undefined ? "and ($6::uuid is null or c.id>$6) order by c.id limit $7" : "order by c.id limit $6 offset $7"}`,
+        input.page === undefined ? [...queueValues,input.cursor || null,(input.limit || 50)+1] : [...queueValues,input.limit || 50,(input.page-1)*(input.limit || 50)]);
       const rows=cases.rows.slice(0,input.limit || 50).map(publicReuseCase);
       const aggregate=await client.query(`select status,count(*)::int n from inventory_reuse_cases where company_id=$1 and location_id=$2 group by status`,[input.companyId,input.locationId]);
       const by=Object.fromEntries(aggregate.rows.map(r=>[r.status,r.n]));
       const sum=(xs)=>xs.reduce((n,x)=>n+(by[x]||0),0);
       const counts={awaiting_handoff:sum(['awaiting_handoff']),needs_inspection:sum(['received_pending_review','hold','repair_complete_pending_review']),repair_refurbish:sum(['repair']),core_returns:sum(['core_pending_return']),scrap_approval:sum(['scrap_pending_approval']),quarantine:sum(['quarantine']),completed:sum(['released','core_returned','scrapped'])};
-      return {items:rows,cases:rows,counts,capabilities:access.capabilities,nextCursor:cases.rows.length>(input.limit || 50) ? rows.at(-1)?.id : null};
+      return {items:rows,cases:rows,counts,capabilities:access.capabilities,nextCursor:input.page === undefined && cases.rows.length>(input.limit || 50) ? rows.at(-1)?.id : null,
+        ...(input.page !== undefined ? {total,page:input.page,pageCount:Math.ceil(total/(input.limit || 50))} : {})};
     }
     const installed = await client.query(`select s.id as usage_id,s.unit_id,u.serial_number,u.custody_version,s.catalog_part_id,l.part_number,l.description,
       s.workorder_id,w.serial as workorder_serial,s.status,s.asset_id,s.location_id,

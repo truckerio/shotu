@@ -19,6 +19,18 @@ test("users table exposes per-user module access from the user action menu", asy
   assert.match(usersPage, /textValue="Module access"/);
 });
 
+test("users and invitations keep independent checkpoint collections", async () => {
+  const usersPage = await read(usersPageUrl);
+  assert.match(usersPage, /const userQueue = useClientCheckpointPages\(detail\.users, \{ pageSize: 20, resetKey \}\)/);
+  assert.match(usersPage, /const invitationQueue = useClientCheckpointPages\(pendingInvitations, \{ pageSize: 10, resetKey \}\)/);
+  assert.match(usersPage, /<CheckpointCollection[\s\S]*queue=\{userQueue\}[\s\S]*className="admin-users-table"/);
+  assert.match(usersPage, /<CheckpointCollection[\s\S]*queue=\{invitationQueue\}[\s\S]*className="admin-pending-list"/);
+  assert.match(usersPage, /pages\.map\(\(page\)[\s\S]*entries\.filter\(\(entry\) => entry\.page === page\)/);
+  assert.match(usersPage, /<div \{\.\.\.rowProps\} className="admin-user-row">/);
+  assert.match(usersPage, /<div \{\.\.\.rowProps\} className="admin-pending-row"/);
+  assert.doesNotMatch(usersPage, /<Pagination/);
+});
+
 test("user module action is an intentional shortcut to the single Modules page", async () => {
   const dialog = await read(dialogUrl);
   const workspace = await read(workspaceUrl);

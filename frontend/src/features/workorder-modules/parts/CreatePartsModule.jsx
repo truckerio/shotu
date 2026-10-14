@@ -7,7 +7,7 @@ import { repairOrderAfterCatalogSelection } from "../../../components/workorders
 import { PartCatalogCombobox } from "../../../components/workorders/part-requests/PartCatalogCombobox.jsx";
 import { PartRepairOrderField } from "../../../components/workorders/part-requests/PartRepairOrderField.jsx";
 import { LaborProductSelector } from "../../../components/workorders/LaborProductSelector.jsx";
-import { formatWorkorderMoney } from "../../../components/workorders/workorder-pricing-model.js";
+import { WorkorderPricingFooter } from "../../../components/workorders/WorkorderPricingFooter.jsx";
 import {
   defaultUsedPartQuantity,
   usedPartQuantityAfterPartNumberChange,
@@ -15,13 +15,11 @@ import {
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
 import {
-  DEFAULT_WORKORDER_PARTS_COLUMNS,
   WORKORDER_PARTS_COLUMNS,
   WorkorderPartsActions,
-  WorkorderPartsColumnHead,
   WorkorderPartsRow,
-  WorkorderPartsTable,
 } from "../../../components/workorders/WorkorderPartsTable.jsx";
+import { WorkorderPartsEntryTable } from "../../../components/workorders/WorkorderPartsEntryTable.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { IconButton } from "../../../components/ui/IconButton.jsx";
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
@@ -58,20 +56,10 @@ function serializedPartSummary(part, locale = "en") {
 
 function partHasExactInventorySource(part) {
   if (!part?.catalogPartId || part.purchaseRequested === true) return false;
+  if (part.trackingMode === "no_stock") return true;
   if (createPartRequiresSerializedUnits(part)) return Array.isArray(part.serializedUnitIds) && part.serializedUnitIds.length > 0;
   if (catalogPartRequiresSourcePosition(part)) return Boolean(part.sourcePositionId);
   return false;
-}
-
-function CreatePricingTotal({ pricing }) {
-  const summary = pricing?.preview?.summary;
-  const total = summary?.status === "complete"
-    ? formatWorkorderMoney(summary.grandTotal, summary.currency)
-    : null;
-  return <div className="create-pricing-total-row">
-    <span>Total</span>
-    <strong>{total || "—"}</strong>
-  </div>;
 }
 
 function catalogPartSelection(part, catalogPart) {
@@ -94,6 +82,7 @@ function catalogPartSelection(part, catalogPart) {
 }
 
 function SerializedSelectionDropdown({ active, excludedUnitIds, index, locationId, locale, maxSelected, onCommit, onPartChange, onClose, part }) {
+  if (part.trackingMode === "no_stock") return null;
   if (!createPartRequiresSerializedUnits(part)) return active && part.catalogPartId
     ? <CreateStockDropdown locationId={locationId} part={part} onChange={(patch) => onPartChange(index, patch)} onClose={onClose} /> : null;
   return (
@@ -140,31 +129,25 @@ function LegacyCreatePartsEditor({
   t,
 }) {
   const canViewPrices = pricing?.enabled === true;
-  const columns = canViewPrices
-    ? [...DEFAULT_WORKORDER_PARTS_COLUMNS, WORKORDER_PARTS_COLUMNS.PRICE]
-    : DEFAULT_WORKORDER_PARTS_COLUMNS;
   const previewByPartIndex = new Map((pricing?.preview?.parts || []).map((entry) => [entry.partIndex, entry]));
   const laborUomCode = laborProduct?.uomCode === "ea" ? "ea" : "hr";
   return (
     <div className="create-known-parts-content workorder-parts-surface">
       {errors?.parts ? <p className="operational-form-field-error" role="alert">{errors.parts}</p> : null}
-      <WorkorderPartsTable id="create-known-parts-editor" tabIndex={-1} columns={columns}>
-        <WorkorderPartsColumnHead
-          className="create-parts-column-head"
-          columns={columns}
-          labels={{
-            [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("create.parts.part"),
-            [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
-            [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("create.parts.repairOrder"),
-            [WORKORDER_PARTS_COLUMNS.PRICE]: "Price",
-          }}
-        />
-        <WorkorderPartsRow className="operational-part-labor-row">
-          <strong>1</strong>
-          <div className="operational-part-labor-name">{onLaborProductChange
+      <WorkorderPartsEntryTable
+        id="create-known-parts-editor"
+        tabIndex={-1}
+        showPrice={canViewPrices}
+        labels={{
+          [WORKORDER_PARTS_COLUMNS.PRODUCT]: t("create.parts.part"),
+          [WORKORDER_PARTS_COLUMNS.QUANTITY_UOM]: t("parts.quantityUnit"),
+          [WORKORDER_PARTS_COLUMNS.REPAIR_ORDER]: t("create.parts.repairOrder"),
+          [WORKORDER_PARTS_COLUMNS.PRICE]: "Price",
+        }}
+        laborProduct={<div className="operational-part-labor-name">{onLaborProductChange
             ? <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange} locale={locale} />
-            : <strong>{laborLabel}</strong>}</div>
-          <QuantityUnitInput
+            : <strong>{laborLabel}</strong>}</div>}
+        laborQuantity={<QuantityUnitInput
             id="create-workorder-labor-hours"
             quantity={laborHours}
             uomCode={laborUomCode}
@@ -175,16 +158,16 @@ function LegacyCreatePartsEditor({
             unitReadOnly
             compact
             max={9999}
-          />
-          <input
+          />}
+        laborRepair={<input
             {...textEntryProps("narrative")}
             className="operational-part-labor-repair"
             value={laborRepairOrder}
             onChange={(event) => onLaborRepairOrderChange(event.target.value)}
             aria-label={t("create.parts.repairWork")}
             placeholder={t("create.parts.repairWork")}
-          />
-          {canViewPrices ? <CreateLaborPriceCell
+          />}
+        laborPrice={canViewPrices ? <CreateLaborPriceCell
             uomCode={laborUomCode}
             selection={laborPriceSelection}
             customUnitPrice={laborCustomUnitPrice}
@@ -193,8 +176,7 @@ function LegacyCreatePartsEditor({
             onChange={onLaborPriceSelectionChange}
             onCustomUnitPriceChange={onLaborCustomUnitPriceChange}
           /> : null}
-          <span aria-hidden="true"></span>
-        </WorkorderPartsRow>
+      >
         {parts.map((part, index) => (
           <WorkorderPartsRow key={index}>
             <strong>{index + 2}</strong>
@@ -239,7 +221,7 @@ function LegacyCreatePartsEditor({
               onClose={() => onOpenSerialPicker(-1)}
               part={part}
             /></div>
-            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part)} compact />
+            <QuantityUnitInput id={`known-part-quantity-${index}`} quantity={part.qty} uomCode={part.uomCode} onQuantityChange={(value) => onChange(index, { qty: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })} onUomCodeChange={(value) => onChange(index, { uomCode: value, serializedUnitIds: [], serializedSerialNumbers: [], sourcePositionId: null, sourcePositionPath: "", priceSelection: "", customUnitPrice: "" })} quantityLabel={`${t("create.parts.quantity")} ${index + 1}`} unitLabel={`${t("create.parts.unit")} ${index + 1}`} locale={locale} quantityReadOnly={createPartRequiresSerializedUnits(part)} unitReadOnly={createPartRequiresSerializedUnits(part) || part.trackingMode === "no_stock"} compact />
             <PartRepairOrderField
               historyEnabled={historyEnabled}
               locationId={locationId}
@@ -263,7 +245,7 @@ function LegacyCreatePartsEditor({
             <IconButton className="create-part-remove-icon" icon={Trash01} tone="danger" onClick={() => onRemove(index)} disabled={parts.length <= 1} label={`${t("create.parts.remove")} ${t("create.parts.partNumber")} ${index + 1}`} title={t("create.parts.remove")} />
           </WorkorderPartsRow>
         ))}
-      </WorkorderPartsTable>
+      </WorkorderPartsEntryTable>
       <WorkorderPartsActions className="create-parts-actions">
         <Button type="button" className="create-parts-compact-action" variant="secondary" icon={Plus} onClick={() => onAdd()} disabled={parts.length >= 18}>
           {t("create.parts.add")}
@@ -276,6 +258,7 @@ function LegacyCreatePartsEditor({
 export function CreatePartsModule({
   actorId,
   actorRole,
+  customerEstimateProjection = null,
   discountControl = null,
   historyEnabled = false,
   access,
@@ -537,7 +520,7 @@ export function CreatePartsModule({
             unitLabel={t("create.parts.unit")}
             locale={locale}
             quantityReadOnly={createPartRequiresSerializedUnits(part)}
-            unitReadOnly={createPartRequiresSerializedUnits(part)}
+            unitReadOnly={createPartRequiresSerializedUnits(part) || part.trackingMode === "no_stock"}
           />
           <div className="create-part-repair-field">
             <span>{t("create.parts.repairOrder")}</span>
@@ -728,11 +711,14 @@ export function CreatePartsModule({
           t={t}
         />
       )}
-      {canViewPrices ? <div className="create-pricing-footer">
-        {pricing.status === "error" ? <p role="alert">{pricing.message}</p> : null}
-        <CreatePricingTotal pricing={pricing} />
-        {discountControl}
-        {pricing.hasPriceableRows && pricing.status !== "ready" && pricing.status !== "error" ? <p role="status">Updating prices…</p> : null}
+      {canViewPrices ? <div className="create-pricing-footer-shell">
+        {pricing.status === "error" ? <p className="create-pricing-error" role="alert">{pricing.message}</p> : null}
+        <WorkorderPricingFooter
+          pricing={pricing?.preview?.summary}
+          projection={customerEstimateProjection}
+          discountControl={discountControl}
+          message={pricing.hasPriceableRows && pricing.status !== "ready" && pricing.status !== "error" ? "Updating prices…" : ""}
+        />
       </div> : null}
       {requestMessage?<p role="status">{requestMessage}</p>:null}
       {requestPartButton&&!locationId?<p>Choose a location to request a part.</p>:null}

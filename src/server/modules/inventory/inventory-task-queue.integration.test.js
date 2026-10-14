@@ -88,6 +88,7 @@ test('unified task queue derives every source without stock mutation and assignm
  try{
   const stockBefore=await query('select (select count(*) from inventory_items where company_id=$1)::int items,(select count(*) from inventory_stock_movements where company_id=$1)::int movements',[ids.company]);
   const result=await listInventoryTaskQueue({companyIds:[ids.company],locationIds:[ids.location],actorId:ids.actor,actorRole:'office',page:1,view:'my_work'});
+  assert.equal(result.total,result.items.length);assert.equal(result.pageCount,1);
   const kinds=new Set(result.items.map((item)=>item.sourceType));
   for(const kind of ['damage_inspection','receipt_exception','missing_invoice','invoice_po_decision','no_po_approval','transfer_receipt','position_recount','removed_part_custody']) assert.equal(kinds.has(kind),true,`missing ${kind}`);
   const taskLink=(kind)=>new URL(result.items.find((item)=>item.sourceType===kind).deepLink,'http://inventory.test').searchParams;

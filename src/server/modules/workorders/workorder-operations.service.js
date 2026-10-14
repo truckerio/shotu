@@ -1,4 +1,5 @@
 import { requireActor } from "../../auth/authorize.js";
+import { companyRoleScope, effectiveCompanyRole } from "../../auth/company-role.js";
 import { resourceNotFound } from "../../auth/errors.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import {
@@ -14,33 +15,40 @@ const DENIED_SCOPE_ID = "00000000-0000-0000-0000-000000000000";
 
 function actorScope(context, input, location, productScope = null) {
   const actor = requireActor(context);
-  const companyIds = [...(context.companyIds || [])];
+  const companyIds = productScope?.companyIds?.length
+    ? productScope.companyIds
+    : (productScope ? [DENIED_SCOPE_ID] : companyRoleScope(context).companyIds);
   const assignedLocationIds = [...(context.locationIds || [])];
-
-  if (!companyIds.length) companyIds.push("__no_authorized_company__");
+  if (!companyIds.length) companyIds.push(DENIED_SCOPE_ID);
 
   let locationIds;
   if (input.locationId) {
     const companyAllowed = companyIds.includes(location.company_id);
-    const locationAllowed = actor.role === "admin"
+    const locationAllowed = effectiveCompanyRole(context, location.company_id) === "admin"
       ? companyAllowed
       : assignedLocationIds.includes(location.id) && companyAllowed;
     if (!locationAllowed) throw resourceNotFound("Location");
     locationIds = [location.id];
   } else {
-    locationIds = productScope?.locationIds || (actor.role === "admin" ? [] : assignedLocationIds);
-    if (actor.role !== "admin" && !locationIds.length) locationIds = ["00000000-0000-0000-0000-000000000000"];
+    locationIds = productScope?.locationIds || assignedLocationIds;
+    if (!locationIds.length) locationIds = [DENIED_SCOPE_ID];
   }
+
+  const scopedCompanyIds = new Set(companyIds);
+  const mechanicCompanyIds = companyRoleScope(context, ["mechanic"]).companyIds.filter((id) => scopedCompanyIds.has(id));
+  const surveillanceCompanyIds = companyRoleScope(context, ["surveillance"]).companyIds.filter((id) => scopedCompanyIds.has(id));
 
   return {
     ...input,
     actorUserId: actor.id,
     viewerUserId: actor.id,
-    companyIds: productScope?.companyIds?.length ? productScope.companyIds : (productScope ? [DENIED_SCOPE_ID] : companyIds),
+    companyIds,
     locationIds,
-    visibility: actor.role === "mechanic"
+    mechanicCompanyIds,
+    surveillanceCompanyIds,
+    visibility: mechanicCompanyIds.length === companyIds.length
       ? "mechanic"
-      : actor.role === "surveillance" ? "surveillance" : "operations",
+      : surveillanceCompanyIds.length === companyIds.length ? "surveillance" : "operations",
   };
 }
 

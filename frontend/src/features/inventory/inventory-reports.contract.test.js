@@ -6,7 +6,14 @@ const source = readFileSync(new URL("./InventoryReports.jsx", import.meta.url), 
 
 test("inventory reports cover reconciliation, receipt cost evidence, open work, and No-PO compliance", () => {
   for (const label of ["Reconciliation", "Latest receipts and costs", "Open tasks and exceptions", "No-PO compliance", "Latest receipt cost evidence", "No-PO compliance trend"]) assert.match(source, new RegExp(label));
-  for (const field of ["data?.reconciliation?.rows", "data?.openPurchaseOrders?.items", "data?.receiptBatches?.items", "data?.tasks?.items", "data?.noPo?.items"]) assert.match(source, new RegExp(field.replace(/[.?]/g, "\\$&")));
+  for (const field of ["data?.openPurchaseOrders?.items", "data?.receiptBatches?.items", "data?.tasks?.items", "data?.noPo?.items"]) assert.match(source, new RegExp(field.replace(/[.?]/g, "\\$&")));
+  assert.match(source, /section: "stock"/);
+  assert.match(source, /section: "reconciliation"/);
+  assert.match(source, /<CheckpointCollection queue=\{stockQueue\}/);
+  assert.match(source, /<CheckpointCollection queue=\{reconciliationQueue\}/);
+  assert.match(source, /<OperationalDataRow \{\.\.\.rowProps\} id=\{stock\.inventory_item_id\} key=\{key\}>/);
+  assert.match(source, /<OperationalDataRow \{\.\.\.rowProps\} id=\{item\.inventory_item_id\} key=\{key\}>/);
+  assert.doesNotMatch(source, />Previous<|>Next</);
   assert.match(source, /OperationalDataTable ariaLabel="Reconciliation status"/);
   assert.match(source, /OperationalDataTable ariaLabel="Open inventory tasks and exceptions"/);
   assert.match(source, /OperationalDataTable ariaLabel="No-PO receipt evidence"/);
@@ -17,11 +24,15 @@ test("inventory reports preserve unknown values and emit one formula-safe bounde
   assert.match(source, /function known\(value\)/);
   assert.match(source, /function count\(value\)/);
   assert.match(source, /replace\(\/\^\[=\+@-\]\//);
-  assert.match(source, /csvRows\(data, locationId\)/);
+  assert.match(source, /csvRows\(data, locationId, stockItems, reconciliation\)/);
+  assert.match(source, /Stock \(loaded window\)/);
+  assert.match(source, /Reconciliation \(loaded window\)/);
   assert.match(source, /entry\.currency/);
   assert.match(source, /item\.amount === null \|\| !item\.currency/);
   assert.match(source, /period\.amount === null \|\| !period\.currency/);
-  assert.match(source, /inventory-report-page-\$\{page\}\.csv/);
+  assert.match(source, /inventory-report-loaded-window\.csv/);
+  assert.match(source, /disabled=\{!data \|\| stockQueue\.loading \|\| stockQueue\.loadingMore \|\| reconciliationQueue\.loading \|\| reconciliationQueue\.loadingMore\}/);
+  assert.match(source, />Export loaded report window<\/Button>/);
   assert.doesNotMatch(source, /stock-report-page/);
 });
 

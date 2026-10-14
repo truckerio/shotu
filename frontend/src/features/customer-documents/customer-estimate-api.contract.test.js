@@ -6,6 +6,15 @@ const source = readFileSync(new URL("./customer-estimate-api.js", import.meta.ur
 const page = readFileSync(new URL("../create-workorder/CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const review = readFileSync(new URL("./CustomerDocumentReview.jsx", import.meta.url), "utf8");
 
+test("estimate loading keeps a compact stable label instead of an adjacent saving sentence", () => {
+  assert.doesNotMatch(page, /Saving changes before the Estimate|Loading Estimate…|previewSaveMessage/);
+  assert.match(page, /aria-busy=\{estimateActionPending\}/);
+  assert.match(page, /<span>\{estimateActionLabel\}<\/span>/);
+  const css = readFileSync(new URL("../workorder-detail/workorder-detail-toolbar.css", import.meta.url), "utf8");
+  assert.match(css, /estimate-preview-pulse 1\.4s ease-in-out infinite/);
+  assert.match(css, /prefers-reduced-motion: reduce[\s\S]*customer-estimate-preview-action\.is-loading > span \{ animation: none; \}/);
+});
+
 test("Estimate commands use the saved draft source and no client-authoritative financial values", () => {
   assert.match(source, /source: \{ kind: "draft", id: draftId, expectedVersion \}/);
   assert.match(source, /expectedFinancialFingerprint: projection\.financialFingerprint/);
@@ -51,7 +60,7 @@ test("saved draft recovery restores the current Estimate before preview or issue
   assert.match(page, /setGrantRecoveryRequired\(true\)/);
 });
 
-test("an already recovered Estimate can be reopened from the create page", () => {
-  assert.match(page, /if \(customerRevisionId\) \{\s*setCustomerPreviewOpen\(true\);\s*return;\s*\}/);
+test("an already recovered Estimate opens only when the caller requests the review", () => {
+  assert.match(page, /if \(customerRevisionId\) \{\s*if \(open\) setCustomerPreviewOpen\(true\);\s*return;\s*\}/);
   assert.doesNotMatch(page, /if \(customerRevisionId \|\| await recoverCurrentDraftEstimate/);
 });

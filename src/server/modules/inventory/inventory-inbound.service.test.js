@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { inboundIdSchema, inboundQuerySchema } from "./inventory-inbound.schemas.js";
 import { getInbound, getInboundDetail } from "./inventory-inbound.service.js";
 import { InventoryError } from "./inventory.errors.js";
@@ -14,6 +15,7 @@ const ACTOR = "00000000-0000-4000-8000-000000000031";
 const officeContext = (overrides = {}) => ({
   actor: { id: ACTOR, role: "office" },
   companyIds: new Set([COMPANY, OTHER_COMPANY]),
+  companyRoles: new Map([[COMPANY, "office"], [OTHER_COMPANY, "office"]]),
   locationIds: new Set([LOCATION]),
   ...overrides,
 });
@@ -30,6 +32,13 @@ test("inbound query and id schemas bound views, paging, search, and identifiers"
   assert.equal(inboundIdSchema.safeParse("not-an-id").success, false);
 });
 
+test("inbound list exposes an exact filtered total with deterministic page order", async () => {
+  const source = await readFile(new URL("../../db/repositories/inventory-inbound.repo.js", import.meta.url), "utf8");
+  assert.match(source, /const total = Number\(\{/);
+  assert.match(source, /pageCount: Math\.ceil\(total \/ 100\)/);
+  assert.match(source, /order by updated_at desc nulls last,id limit 101 offset \$4/);
+});
+
 test("list uses active locations and preserves the scoped company/location projection", async () => {
   let listed;
   const result = await getInbound(new URLSearchParams("view=expected&page=2&q=filter"), officeContext(), {
@@ -37,9 +46,9 @@ test("list uses active locations and preserves the scoped company/location proje
       { id: LOCATION, company_id: COMPANY },
       { id: OTHER_LOCATION, company_id: OTHER_COMPANY },
     ] }),
-    listInbound: async (input) => { listed = input; return { items: [], page: input.page, hasMore: false, counts: {} }; },
+    listInbound: async (input) => { listed = input; return { items: [], page: input.page, total: 0, pageCount: 0, hasMore: false, counts: {} }; },
   });
-  assert.deepEqual(result, { items: [], page: 2, hasMore: false, counts: {} });
+  assert.deepEqual(result, { items: [], page: 2, total: 0, pageCount: 0, hasMore: false, counts: {} });
   assert.deepEqual(listed, {
     companyIds: [COMPANY], locationIds: [LOCATION],
     view: "expected", page: 2, q: "filter",
@@ -65,7 +74,7 @@ test("explicit location scope delegates to authorization and preserves the compa
 test("unauthorized role is rejected before any repository query", async () => {
   let queried = false;
   await assert.rejects(
-    () => getInbound(new URLSearchParams(), officeContext({ actor: { id: ACTOR, role: "mechanic" } }), {
+    () => getInbound(new URLSearchParams(), officeContext({ actor: { id: ACTOR, role: "mechanic" }, companyRoles: new Map([[COMPANY, "mechanic"], [OTHER_COMPANY, "mechanic"]]) }), {
       query: async () => { queried = true; return { rows: [] }; },
     }),
     (error) => error instanceof InventoryError && error.statusCode === 403 && error.code === "INVENTORY_INBOUND_FORBIDDEN",

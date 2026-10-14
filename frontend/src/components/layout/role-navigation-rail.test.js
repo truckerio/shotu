@@ -23,11 +23,18 @@ test("RoleNavigationRail is profile-first, permission-filtered, and accessible",
 });
 
 test("RoleNavigationRail keeps a flush workspace rail and phone-safe targets", () => {
-  assert.match(styles, /border-right:\s*1px solid #e4e7ec/);
+  assert.match(styles, /border:\s*0/);
   assert.doesNotMatch(styles, /box-shadow/);
   assert.match(styles, /min-height:\s*44px/);
   assert.match(styles, /@media \(max-width:700px\)/);
   assert.match(styles, /@media \(max-width:700px\) \{ \.role-navigation-rail \{ display:none; \} \}/);
+});
+
+test("Admin profile divider aligns with the page card without dividing the full rail", () => {
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail\s*\{[^}]*position:\s*relative;/s);
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-right:\s*1px solid #e4e7ec;[^}]*border-top:\s*1px solid #e4e7ec;[^}]*border-top-right-radius:\s*6px;[^}]*height:\s*6px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*68px;/s);
+  assert.doesNotMatch(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*inset:/s);
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-divider\s*\{[^}]*background:\s*transparent;/s);
 });
 
 test("RoleNavigationRail supports an icon-free top-level parent destination", () => {
@@ -49,8 +56,9 @@ test("RoleNavigationRail stays expanded without a collapse control", () => {
   assert.match(styles, /\.role-navigation-account \.profile-menu-trigger > svg\s*\{[^}]*flex:0 0 auto;[^}]*margin-left:auto;/s);
 });
 
-test("shared desktop role shells use the compact 220px rail", () => {
-  for (const shellStyles of [officeStyles, adminStyles, mechanicStyles, surveillanceStyles]) {
+test("desktop role shells use compact role-appropriate rail widths", () => {
+  assert.match(adminStyles, /grid-template-columns:\s*200px minmax\(0, 1fr\);/);
+  for (const shellStyles of [officeStyles, mechanicStyles, surveillanceStyles]) {
     assert.match(shellStyles, /grid-template-columns:\s*220px minmax\(0, 1fr\);/);
     assert.doesNotMatch(shellStyles, /grid-template-columns:\s*244px minmax\(0, 1fr\);/);
   }

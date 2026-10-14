@@ -12,6 +12,7 @@ import {
 const context = {
   actor: { id: "user-1", role: "office" },
   companyIds: new Set(["company-1"]),
+  companyRoles: new Map([["company-1", "office"]]),
 };
 
 const workorder = {
@@ -105,7 +106,7 @@ test("module actions require their declared capability and Parts requests remain
     (error) => error.statusCode === 403,
   );
 
-  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" } };
+  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" }, companyRoles: new Map([["company-1", "mechanic"]]) };
   const request = await authorizeWorkorderModule(mechanicContext, workorder.id, {
     moduleKey: "parts",
     capability: "read",
@@ -140,7 +141,7 @@ test("part scanning defaults to Office and supports a narrow named-Mechanic gran
     moduleKey: "partsScanning", capability: "write", action: "issue",
   }, dependencies)).access, "write");
 
-  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" } };
+  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" }, companyRoles: new Map([["company-1", "mechanic"]]) };
   await assert.rejects(authorizeWorkorderModule(mechanicContext, workorder.id, {
     moduleKey: "partsScanning", capability: "write", action: "issue",
   }, dependencies), (error) => error.statusCode === 403);
@@ -160,7 +161,7 @@ test("part scanning defaults to Office and supports a narrow named-Mechanic gran
 
 test("explicit policy grants are not blocked by legacy role ownership hints", async () => {
   const result = await authorizeWorkorderModule(
-    { ...context, actor: { id: "user-1", role: "surveillance" } }, workorder.id, {
+    { ...context, actor: { id: "user-1", role: "surveillance" }, companyRoles: new Map([["company-1", "surveillance"]]) }, workorder.id, {
       moduleKey: "unit",
       capability: "write",
       action: "update",
@@ -264,4 +265,33 @@ test("product-level workorder access is enforced before module policy", async ()
     getEffectivePolicy: async () => { policyLoads += 1; return {}; },
   }), (error) => error.statusCode === 403);
   assert.equal(policyLoads, 0);
+});
+
+test("module decisions and create permissions use the target company role", async () => {
+  const mixed = {
+    actor: { id: "user-1", role: "admin" },
+    companyIds: new Set(["admin-company", "company-1"]),
+    companyRoles: new Map([["admin-company", "admin"], ["company-1", "mechanic"]]),
+    locationIds: new Set(["location-1"]),
+  };
+  const seenRoles = [];
+  const dependencies = {
+    requireAccess: async () => workorder,
+    authorizeProduct: async (effective) => { seenRoles.push(effective.actor.role); },
+    getEffectivePolicy: async () => ({ companyPolicy: null, locationPolicy: null }),
+  };
+  const resolved = await resolveWorkorderModuleDecisions(mixed, workorder.id, {}, dependencies);
+  assert.equal(resolved.decisions.partsScanning.access, "hidden");
+  const mechanicRequest = await authorizeWorkorderModule(mixed, workorder.id, {
+    moduleKey: "parts", capability: "read", action: "request",
+  }, dependencies);
+  assert.equal(mechanicRequest.access, "write");
+  await assert.rejects(authorizeWorkorderModule(mixed, workorder.id, {
+    moduleKey: "partsScanning", capability: "write", action: "issue",
+  }, dependencies), (error) => error.statusCode === 403);
+  await authorizeWorkorderCreate(mixed, {
+    companyId: "company-1", locationId: "location-1", moduleKeys: ["concern"],
+  }, dependencies);
+  assert.deepEqual(seenRoles, ["mechanic", "mechanic", "mechanic", "mechanic"]);
+  assert.equal(mixed.actor.role, "admin");
 });

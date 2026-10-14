@@ -23,6 +23,27 @@ test("part tracking policy is explicit, constrained, and legacy compatible", asy
   assert.match(source, /tracking_locked/);
 });
 
+test("no-stock tracking is additive, time-safe and guarded from physical inventory", async () => {
+  const sql = await readFile(new URL("../../db/migrations/196_no_stock_tracking.sql", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../db/repositories/parts-catalog-edit.repo.js", import.meta.url), "utf8");
+  assert.match(sql, /tracking_mode in \('quantity', 'serialized', 'measured_bulk', 'no_stock'\)/i);
+  assert.match(sql, /parts_catalog_time_requires_no_stock/i);
+  assert.match(sql, /old\.uom_code is distinct from new\.uom_code[\s\S]*old\.tracking_mode is distinct from new\.tracking_mode/i);
+  assert.match(sql, /parts_catalog_no_stock_physical_history/i);
+  assert.match(sql, /not inventory_no_stock_has_physical_history\(catalog\.company_id,catalog\.id\)/i);
+  assert.doesNotMatch(sql, /delete\s+from\s+(?:inventory_|local_inventory_)/i);
+  for (const table of [
+    "inventory_items", "local_inventory_receipt_lines", "inventory_receipt_lines", "inventory_stock_movements",
+    "inventory_serialization_batches", "inventory_manual_intake_batches", "inventory_count_import_lines",
+    "inventory_position_balances", "inventory_position_movements", "inventory_position_count_lines",
+    "inventory_stocking_policies", "inventory_stock_tasks", "inventory_purchase_lines", "inventory_aggregate_cost_layers",
+    "odoo_inventory_balances", "part_fulfillment_requests",
+  ]) assert.match(sql, new RegExp(`${table}_no_stock_guard`));
+  assert.match(source, /inventory_position_balances[\s\S]*inventory_stocking_policies/);
+  assert.match(source, /if \(history\.rows\[0\]\?\.has_activity\)/);
+  assert.doesNotMatch(source, /if \(current\.tracking_mode && history\.rows\[0\]\?\.has_activity\)/);
+});
+
 test("approved workorder requests preserve curated nonblank catalog identity", async () => {
   const source = await readFile(new URL("../../db/repositories/part-requests.repo.js", import.meta.url), "utf8");
   assert.match(source, /part_number = case when btrim\(parts_catalog\.part_number\) = '' then excluded\.part_number else parts_catalog\.part_number end/i);

@@ -1,7 +1,23 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { effectiveInventoryScope, inventoryCompanyManageScope, inventoryCompanyReadScope, listInventoryBrowseLocations, resolveInventoryLocationScope, resolveInventoryReadLocationScope } from './inventory-effective-scope.js';
+import { effectiveInventoryScope, inventoryCompanyManageScope, inventoryCompanyReadScope, listInventoryBrowseLocations, resolveInventoryLocationScope, resolveInventoryReadLocationScope, resolveInventoryResourceScope } from './inventory-effective-scope.js';
+
+test('admin A and office or mechanic B keep company-wide writes in A only', async () => {
+  const a=randomUUID(),b=randomUUID(),bLocation=randomUUID();
+  const base={actor:{id:randomUUID(),role:'admin'},companyIds:new Set([a,b]),locationIds:new Set([bLocation])};
+  for(const bRole of ['office','mechanic']) {
+    const mixed={...base,companyRoles:new Map([[a,'admin'],[b,bRole]])};
+    assert.deepEqual(inventoryCompanyManageScope(mixed).companyIds,[a]);
+    if(bRole==='office') assert.deepEqual(inventoryCompanyReadScope(mixed).companyIds,[a,b]);
+    else assert.deepEqual(inventoryCompanyReadScope(mixed).companyIds,[a]);
+    const target=()=>resolveInventoryResourceScope(mixed,'aggregateCostLayer',randomUUID(),{
+      query:async()=>({rows:[{company_id:b,location_id:bLocation}]}),
+    });
+    if(bRole==='mechanic') await assert.rejects(target(),{code:'INVENTORY_FORBIDDEN'});
+    else assert.equal((await target()).isAdmin,false);
+  }
+});
 
 test('target-company role controls inventory authority instead of the primary role', async () => {
   const companyId=randomUUID(),locationId=randomUUID(),actorId=randomUUID();

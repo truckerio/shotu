@@ -7,22 +7,18 @@ import {
   isCreateErrorSectionReady,
 } from "./create-workorder-sections.js";
 
-test("create workorder phone sections follow the shared detail navigation shape", () => {
+test("Create navigation contains editable work sections without a legacy Preview destination", () => {
   assert.deepEqual(
     buildCreateWorkorderSections().map(({ id }) => id),
-    ["unit", "concern", "schedule", "parts", "location", "assignment", "preview"],
+    ["unit", "concern", "schedule", "parts", "location", "assignment"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ canAssign: false }).map(({ id }) => id),
-    ["unit", "concern", "schedule", "parts", "location", "preview"],
+    ["unit", "concern", "schedule", "parts", "location"],
   );
   assert.deepEqual(
     buildCreateWorkorderSections({ canAssign: false }).map(({ label }) => label),
-    ["Unit", "Concern", "Schedule", "Parts", "Location", "Preview"],
-  );
-  assert.deepEqual(
-    buildCreateWorkorderSections({ includePreview: false }).map(({ id }) => id),
-    ["unit", "concern", "schedule", "parts", "location", "assignment"],
+    ["Unit", "Concern", "Schedule", "Parts", "Location"],
   );
 });
 
@@ -37,7 +33,6 @@ test("every Create role keeps four task steps primary and defers supporting dest
       ["schedule", true, false],
       ["parts", true, false],
       ["location", false, true],
-      ["preview", false, true],
     ],
   );
   assert.equal(defaultCreateWorkorderSection("mechanic"), "unit");
@@ -65,20 +60,9 @@ test("create workorder navigation uses the same core and optional placement for 
   assert.deepEqual(sections.filter(({ overflow }) => overflow).map(({ id }) => id), ["location", "assignment"]);
 });
 
-test("compact Preview remains a supporting create destination", () => {
-  const sections = buildCreateWorkorderSections({ includePreview: true });
-  const preview = sections.find(({ id }) => id === "preview");
-
-  assert.deepEqual(
-    { alwaysPrimary: preview.alwaysPrimary, overflow: preview.overflow, priority: preview.priority },
-    { alwaysPrimary: false, overflow: true, priority: 1 },
-  );
-});
-
 test("create workorder sections respect location module policy", () => {
   const sections = buildCreateWorkorderSections({
     canAssign: true,
-    includePreview: true,
     policyOverrides: {
       moduleAccess: {
         office: {
@@ -166,6 +150,5 @@ test("read-only create modules never become editable form sections", () => {
     role: "office",
   });
 
-  assert.deepEqual(sections.map(({ id }) => id), ["preview"]);
-  assert.equal(sections[0].modulePolicy.canWrite, false);
+  assert.deepEqual(sections, []);
 });

@@ -6,11 +6,24 @@ import {
   draftsSearch,
   inspectionReturnContext,
   inspectionWorkspaceSearch,
+  inspectionQueueRequested,
+  inspectionQueueSearch,
   readInitialWorkspace,
   routeStartsLoading,
   workspaceSearchForRole,
   workorderDetailSearch,
 } from "./route-state.js";
+
+test("inspection queue routes retain the list view without any detail return context", () => {
+  for (const role of ["admin", "office", "mechanic", "surveillance"]) {
+    const params = new URLSearchParams(inspectionQueueSearch(role));
+    assert.equal(inspectionQueueRequested(params), true);
+    assert.equal(inspectionReturnContext(params), null);
+    for (const key of ["inspection", "inspectionId", "from", "anchor"]) assert.equal(params.has(key), false);
+    assert.equal(params.get("adminView"), role === "admin" ? "operations" : null);
+  }
+  assert.equal(inspectionQueueRequested(new URLSearchParams("inspectionView=other")), false);
+});
 
 test("route search builders preserve detail and draft URL contracts", () => {
   assert.equal(workorderDetailSearch("wo 1"), "?workorder=wo%201");

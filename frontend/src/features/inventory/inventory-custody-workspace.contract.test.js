@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-test("custody inventory reads server-derived stock and every queue through scoped cursors", async () => {
+test("custody inventory reads server-derived stock and every queue through exact checkpoint pages", async () => {
   const source = await readFile(new URL("./InventoryCustodyWorkspace.jsx", import.meta.url), "utf8");
   assert.match(source, /\/api\/inventory-reuse\/stock/);
   assert.match(source, /\/api\/inventory-reuse\/queue/);
   assert.match(source, /\/stock\/\$\{encodeURIComponent\(selectedPart\.catalogPartId\)\}\/units/);
   assert.match(source, /companyId, locationId/);
-  assert.match(source, /nextCursor/);
+  assert.match(source, /useCheckpointPages/);
+  assert.match(source, /CheckpointCollection/);
+  assert.match(source, /limit: PAGE_SIZE, page/);
+  assert.match(source, /getItemKey: \(item\) => item\.catalogPartId/);
+  assert.match(source, /<OperationalCollectionRow\s+\{\.\.\.rowProps\}/);
+  assert.match(source, /<li \{\.\.\.rowProps\}/);
   assert.match(source, /Awaiting handoff/);
   assert.match(source, /Needs inspection/);
   assert.match(source, /Repair\/refurbish/);

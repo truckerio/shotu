@@ -1,7 +1,21 @@
-import { DEFAULT_UOM_CODE, normalizeUomCode } from "../../../../shared/units-of-measure.js";
+import { DEFAULT_UOM_CODE, normalizeQuantity, normalizeUomCode } from "../../../../shared/units-of-measure.js";
 import { DEFAULT_PART_ENTRY_ROWS } from "../../../../shared/workorder-template.js";
 
 export const MAX_USED_PARTS = 18;
+
+export function canAddUsedPartDraft(recordedCount, draftCount, maximum = MAX_USED_PARTS) {
+  const recorded = Math.max(0, Number(recordedCount) || 0);
+  const drafts = Math.max(0, Number(draftCount) || 0);
+  const limit = Math.max(0, Number(maximum) || 0);
+  return recorded + drafts < limit;
+}
+
+export function availableUsedPartDraftCount(recordedCount, desiredDraftCount, maximum = MAX_USED_PARTS) {
+  const recorded = Math.max(0, Number(recordedCount) || 0);
+  const desired = Math.max(0, Number(desiredDraftCount) || 0);
+  const limit = Math.max(0, Number(maximum) || 0);
+  return Math.min(desired, Math.max(0, limit - recorded));
+}
 
 export function canEditUsedParts(role, allowedActions = {}) {
   if (allowedActions.recordUsedParts === true) return true;
@@ -16,6 +30,33 @@ export function usedPartsAccessState(role, allowedActions = {}) {
 
 export function emptyUsedPart() {
   return { partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" };
+}
+
+export function noStockUsedPartDraft(catalogPart) {
+  if (catalogPart?.trackingMode !== "no_stock" || !catalogPart?.id || !catalogPart?.partNumber) return null;
+  return {
+    catalogPartId: String(catalogPart.id),
+    trackingMode: "no_stock",
+    partNo: String(catalogPart.partNumber),
+    qty: "1",
+    uomCode: normalizeUomCode(catalogPart.canonicalUomCode || catalogPart.uomCode),
+    repairOrder: "",
+  };
+}
+
+export function savableNoStockUsedPart(draft) {
+  if (draft?.trackingMode !== "no_stock" || !draft?.catalogPartId || !draft?.partNo) return null;
+  const uomCode = normalizeUomCode(draft.uomCode);
+  const qty = normalizeQuantity(draft.qty, uomCode);
+  if (!qty) return null;
+  return {
+    catalogPartId: String(draft.catalogPartId),
+    trackingMode: "no_stock",
+    partNo: String(draft.partNo),
+    qty,
+    uomCode,
+    repairOrder: String(draft.repairOrder || "").trim(),
+  };
 }
 
 export function defaultUsedPartQuantity(quantity) {
@@ -41,6 +82,9 @@ export function normalizeUsedParts(parts, minimumRows = 0) {
     repairOrder: String(part?.repairOrder || ""),
     ...(part?.requestId ? { requestId: part.requestId } : {}),
     ...(part?.evidenceId ? { evidenceId: String(part.evidenceId) } : {}),
+    ...(part?.noStockLineId ? { noStockLineId: String(part.noStockLineId) } : {}),
+    ...(part?.catalogPartId ? { catalogPartId: String(part.catalogPartId) } : {}),
+    ...(part?.trackingMode ? { trackingMode: String(part.trackingMode) } : {}),
   })) : [];
   const minimum = Math.max(0, Math.min(MAX_USED_PARTS, Number(minimumRows) || 0));
   while (rows.length > minimum && !usedPartHasValue(rows.at(-1))) rows.pop();

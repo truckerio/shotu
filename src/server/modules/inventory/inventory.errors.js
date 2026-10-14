@@ -22,6 +22,14 @@ export function catalogUomConflictError(error) {
   });
 }
 
+export function noStockMutationError(error) {
+  if (error?.constraint !== "inventory_no_stock_physical_mutation") return null;
+  return new InventoryError("This catalog entry does not represent physical inventory.", {
+    code: "INVENTORY_NO_STOCK_MUTATION",
+    statusCode: 409,
+  });
+}
+
 export function inventoryNotFound() {
   return new InventoryError("Inventory identity was not found.", {
     code: "inventory_not_found",

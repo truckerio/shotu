@@ -6,9 +6,10 @@ import { InspectionDetail } from "./InspectionDetail.jsx";
 import { InspectionQueue } from "./InspectionQueue.jsx";
 import { inspectionFromApi, inspectionRefreshMode, loadInspectionRefreshWindow, MAX_LIVE_INSPECTION_ROWS, mergeFastInspectionPage, responsePayload } from "./inspection-api-model.js";
 import { renderAndPrintInspectionSlip } from "./inspection-print.js";
+import { loadInspectionPrintableArchive } from "./inspection-print-loader.js";
 import { readInspectionSession, writeInspectionSession } from "./inspection-session-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
-import { inspectionReturnContext, inspectionWorkspaceSearch, replaceRouteSearch } from "../../app/routes/route-state.js";
+import { inspectionQueueSearch, inspectionReturnContext, inspectionWorkspaceSearch, replaceRouteSearch } from "../../app/routes/route-state.js";
 import { createLatestRequestGuard, LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import "./inspections.css";
 
@@ -107,7 +108,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   }, { enabled: !active, intervalMs: LIVE_QUEUE_REFRESH_INTERVAL_MS });
   useEffect(() => { activeRef.current = active; }, [active]);
   useEffect(() => { const id = initialInspectionId || initialSession.activeId; if (id) open({ id }); }, [initialInspectionId]);
-  useEffect(() => () => writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current }), [projection, search, status]);
+  useEffect(() => { writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current }); }, [projection, search, status]);
   useEffect(() => { if (initialSession.scrollY) window.requestAnimationFrame(() => window.scrollTo({ top: initialSession.scrollY })); }, []);
   useEffect(() => {
     const warnBeforeUnload = (event) => {
@@ -125,6 +126,24 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     return () => controller.abort();
   }, [active?.locationId, fullProjection]);
 
+  useEffect(() => {
+    setEligibleWorkorders([]);
+    if (!active || !["in_progress", "completed"].includes(active.status)) return undefined;
+    const inspectionAccess = productModuleCapabilities(actor, "inspections", active.locationId);
+    const workorderAccess = productModuleCapabilities(actor, "workorders", active.locationId);
+    if (!(fullProjection || projection === "mechanic") || !inspectionAccess.canWrite || !workorderAccess.canWrite) return undefined;
+    const controller = new AbortController();
+    setEligibleWorkorders(null);
+    api(`/api/inspections/${encodeURIComponent(active.id)}/workorders?limit=20`, { signal: controller.signal })
+      .then((workorders) => { if (!controller.signal.aborted) setEligibleWorkorders(workorders.items || []); })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setEligibleWorkorders(false);
+        setState((current) => ({ ...current, error: error.message }));
+      });
+    return () => controller.abort();
+  }, [active?.id, active?.status, active?.locationId, actor, fullProjection, projection]);
+
   async function open(record) {
     setState((current) => ({ ...current, error: "" }));
     setEligibleWorkorders(null);
@@ -132,20 +151,10 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
     try {
       const result = await api(`/api/inspections/${encodeURIComponent(record.id)}`);
-      const recordInspectionAccess = productModuleCapabilities(actor, "inspections", result.inspection.locationId);
       const next = inspectionFromApi(result.inspection);
       activeRef.current = next; setActive(next);
       const routeContext = inspectionReturnContext();
       replaceRouteSearch(inspectionWorkspaceSearch(actor.role, next.id, routeContext?.inspectionId === next.id ? routeContext.anchor : "summary"));
-      const recordWorkorderAccess = productModuleCapabilities(actor, "workorders", result.inspection.locationId);
-      if (fullProjection && result.inspection.status === "completed" && recordInspectionAccess.canWrite && recordWorkorderAccess.canWrite) {
-        api(`/api/inspections/${encodeURIComponent(record.id)}/workorders?limit=20`)
-          .then((workorders) => setEligibleWorkorders(workorders.items || []))
-          .catch((error) => {
-            setEligibleWorkorders(false);
-            setState((current) => ({ ...current, error: error.message }));
-          });
-      } else setEligibleWorkorders([]);
     } catch (error) { setState((current) => ({ ...current, error: error.message })); }
   }
 
@@ -258,14 +267,11 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
 
   async function loadPrintableArchive() {
     const current = activeRef.current;
-    if (productModuleCapabilities(actor, "inspections", current.locationId).canWrite) {
-      const archived = await api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives`, { method: "POST", body: JSON.stringify({ idempotencyKey: `inspection-print-${current.id}-v${current.version}` }) });
-      return api(`/api/inspections/${encodeURIComponent(current.id)}/print-archives/${encodeURIComponent(archived.archive.id)}`);
-    }
-    return api(`/api/inspections/${encodeURIComponent(current.id)}/print`);
+    return loadInspectionPrintableArchive({ inspection: current, canWrite: productModuleCapabilities(actor, "inspections", current.locationId).canWrite, request: api });
   }
 
   async function print() {
+    setState((value) => ({ ...value, error: "" }));
     const popup = window.open("", "_blank");
     try {
       if (!popup) throw new Error("Allow pop-ups to print the inspection slip.");
@@ -277,6 +283,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   }
 
   async function downloadPrintPdf() {
+    setState((value) => ({ ...value, error: "" }));
     const popup = window.open("", "_blank");
     try {
       if (!popup) throw new Error("Allow pop-ups to download the inspection slip.");
@@ -376,7 +383,9 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
 
   async function returnToQueue() {
     if (!await flushResponseSaves()) return;
+    activeRef.current = null;
     setActive(null);
+    replaceRouteSearch(inspectionQueueSearch(actor.role));
     writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
     load().finally(() => window.requestAnimationFrame(() => {
       window.scrollTo({ top: queueScrollY.current });

@@ -3,7 +3,57 @@ import test from "node:test";
 import { patchCanonicalModuleAccess, readCanonicalUserModuleAccess } from "./module-access.service.js";
 
 const companyId = "11111111-1111-4111-8111-111111111111";
-const context = { actor: { id: "admin-1", role: "admin" }, companyIds: new Set([companyId]), locationIds: new Set() };
+const lowerRoleCompanyId = "33333333-3333-4333-8333-333333333333";
+const context = {
+  actor: { id: "admin-1", role: "admin" },
+  companyIds: new Set([companyId]),
+  companyRoles: new Map([[companyId, "admin"]]),
+  locationIds: new Set(),
+  sessionMode: "standard",
+};
+
+test("canonical module access rejects a lower-role company before policy read or write", async () => {
+  let policyReads = 0;
+  let policyWrites = 0;
+  const mixed = {
+    ...context,
+    companyIds: new Set([companyId, lowerRoleCompanyId]),
+    companyRoles: new Map([[companyId, "admin"], [lowerRoleCompanyId, "mechanic"]]),
+  };
+  await assert.rejects(
+    patchCanonicalModuleAccess(mixed, "role", "office", {
+      companyId: lowerRoleCompanyId,
+      surface: "detail",
+      moduleKey: "odoo",
+      access: "read",
+      required: false,
+    }, {
+      getPolicy: async () => { policyReads += 1; return null; },
+      savePolicy: async () => { policyWrites += 1; return null; },
+    }),
+    (error) => error.statusCode === 403,
+  );
+  assert.equal(policyReads, 0);
+  assert.equal(policyWrites, 0);
+});
+
+test("location module access verifies the location belongs to the effective Admin company", async () => {
+  let policyReads = 0;
+  await assert.rejects(
+    readCanonicalUserModuleAccess(context, "22222222-2222-4222-8222-222222222222", {
+      companyId,
+      locationId: "44444444-4444-4444-8444-444444444444",
+    }, {
+      getLocation: async () => ({
+        id: "44444444-4444-4444-8444-444444444444",
+        company_id: lowerRoleCompanyId,
+      }),
+      getPolicy: async () => { policyReads += 1; return null; },
+    }),
+    (error) => error.statusCode === 404,
+  );
+  assert.equal(policyReads, 0);
+});
 
 test("canonical role patch writes one normalized sparse decision with optimistic version", async () => {
   let saved;

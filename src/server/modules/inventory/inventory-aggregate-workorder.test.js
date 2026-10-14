@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 import {
   releaseOrReverseMeasuredUsageForWorkorder,
   reserveMeasuredUsageForWorkorder,
@@ -17,6 +18,7 @@ const POSITION_ID = "00000000-0000-4000-8000-000000000007";
 function context(role = "mechanic") {
   return { actor: { id: ACTOR_ID, role }, companyIds: new Set([COMPANY_ID]), locationIds: new Set([LOCATION_ID]) };
 }
+const scopeDeps = { resolveResourceScope: (requestContext, _type, _id, options) => effectiveInventoryScope(requestContext, { companyId: COMPANY_ID, locationId: LOCATION_ID, ...options }) };
 
 test("aggregate migration uses repository auth owners and non-null actor idempotency", async () => {
   const sql = await readFile(new URL("../../db/migrations/093_workorder_aggregate_inventory_usage.sql", import.meta.url), "utf8");
@@ -32,7 +34,7 @@ test("reserve validates precision strictly and forwards tenant, location, and wo
     operation: "aggregateUsageReserve",
     catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1.125", uomCode: "gal", repairOrder: "Top off coolant",
     idempotencyKey: "aggregate-reserve-1",
-  }, context(), { reserveAggregateUsage: async (input) => { command = input; return { kind: "reserved", usage: { id: USAGE_ID } }; } });
+  }, context(), { ...scopeDeps, reserveAggregateUsage: async (input) => { command = input; return { kind: "reserved", usage: { id: USAGE_ID } }; } });
   assert.equal(result.replayed, false);
   assert.equal(command.workorderId, WORKORDER_ID);
   assert.equal(command.sourcePositionId, POSITION_ID);
@@ -41,7 +43,7 @@ test("reserve validates precision strictly and forwards tenant, location, and wo
   await reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
     catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1.005", uomCode: "gal", repairOrder: "Tolerance check",
     idempotencyKey: "aggregate-reserve-1005",
-  }, context(), { reserveAggregateUsage: async () => ({ kind: "reserved", usage: { id: USAGE_ID } }) });
+  }, context(), { ...scopeDeps, reserveAggregateUsage: async () => ({ kind: "reserved", usage: { id: USAGE_ID } }) });
   await assert.rejects(
     reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
       catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1.0009", uomCode: "gal", unexpected: true,
@@ -55,7 +57,7 @@ test("reserve explains when the selected pickup position has unresolved batch li
     reserveMeasuredUsageForWorkorder(WORKORDER_ID, {
       catalogPartId: PART_ID, sourcePositionId: POSITION_ID, quantity: "1", uomCode: "ea", repairOrder: "Install part",
       idempotencyKey: "aggregate-batch-placement-gap",
-    }, context(), { reserveAggregateUsage: async () => ({ kind: "batch_reconciliation_required" }) }),
+    }, context(), { ...scopeDeps, reserveAggregateUsage: async () => ({ kind: "batch_reconciliation_required" }) }),
     (error) => error.code === "INVENTORY_BATCH_PLACEMENT_RECONCILIATION_REQUIRED" && error.statusCode === 409,
   );
 });
@@ -66,7 +68,7 @@ test("mechanic cannot disguise an approved reversal as release", async () => {
     releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
       usageId: USAGE_ID, action: "reverse", reason: "Incorrect approved amount",
       idempotencyKey: "aggregate-reverse-1",
-    }, context("mechanic"), { releaseAggregateUsage: async () => { called = true; } }),
+    }, context("mechanic"), { ...scopeDeps, releaseAggregateUsage: async () => { called = true; } }),
     (error) => error.code === "AGGREGATE_USAGE_REVERSAL_FORBIDDEN" && error.statusCode === 403,
   );
   assert.equal(called, false);
@@ -78,7 +80,7 @@ test("lifecycle command binds exact workorder and adjustment target", async () =
     operation: "aggregateUsageLifecycle",
     usageId: USAGE_ID, action: "adjust", targetQuantity: "0.875", reason: "Verified actual amount",
     idempotencyKey: "aggregate-adjust-1",
-  }, context("office"), { releaseAggregateUsage: async (input) => { command = input; return { kind: "adjusted" }; } });
+  }, context("office"), { ...scopeDeps, releaseAggregateUsage: async (input) => { command = input; return { kind: "adjusted" }; } });
   assert.equal(command.workorderId, WORKORDER_ID);
   assert.equal(command.targetQuantity, 0.875);
 });
@@ -94,7 +96,7 @@ test("adjustment rejects zero target and maps negative-stock protection to 409",
     releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
       usageId: USAGE_ID, action: "adjust", targetQuantity: 99, reason: "Corrected quantity",
       idempotencyKey: "aggregate-adjust-stock",
-    }, context("office"), { releaseAggregateUsage: async () => ({ kind: "insufficient_stock" }) }),
+    }, context("office"), { ...scopeDeps, releaseAggregateUsage: async () => ({ kind: "insufficient_stock" }) }),
     (error) => error.code === "AGGREGATE_USAGE_INSUFFICIENT_STOCK" && error.statusCode === 409,
   );
 });
@@ -127,7 +129,7 @@ test("quantity aggregate persistence stores policy and enforces whole-number adj
     releaseOrReverseMeasuredUsageForWorkorder(WORKORDER_ID, {
       usageId: USAGE_ID, action: "adjust", targetQuantity: 1.5, reason: "Count correction",
       idempotencyKey: "aggregate-count-adjust",
-    }, context("office"), { releaseAggregateUsage: async () => ({ kind: "unsupported_uom" }) }),
+    }, context("office"), { ...scopeDeps, releaseAggregateUsage: async () => ({ kind: "unsupported_uom" }) }),
     (error) => error.code === "AGGREGATE_USAGE_UOM_UNSUPPORTED",
   );
 });

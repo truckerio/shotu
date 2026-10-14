@@ -11,18 +11,28 @@ test("shared part request queue uses the Office endpoint and request-level ident
   assert.match(source, /api\(`\/api\/office\/part-requests\/queue\?\$\{params\}`/);
   assert.match(source, /buildPartRequestsQuery\(filters, page\)/);
   for (const filter of ["search", "status", "supply", "sort", "page"]) assert.match(source, new RegExp(filter));
-  assert.match(source, /key=\{request\.id\}/);
+  assert.match(source, /items: Array\.isArray\(next\.items\) \? next\.items : \[\]/);
+  assert.match(source, /total: Number\(next\.total\) \|\| 0/);
+  assert.match(source, /pageCount: Math\.max\(1, Number\(next\.pageCount\)/);
+  assert.match(source, /page,/);
   assert.match(source, /onOpenWorkorder\(row\.workorderId, \{ partRequestId: request\.id \}\)/);
   assert.match(source, /OperationalCollectionToolbar/);
-  assert.match(source, /OperationalCollectionTable/);
+  assert.match(source, /useCheckpointPages\(\{/);
+  assert.match(source, /queryKey,/);
+  assert.match(source, /refreshKey,/);
+  assert.match(source, /getItemKey: \(request\) => request\.id/);
+  assert.match(source, /readCheckpointPosition\(storageKey\)\?\.page \|\| 1/);
+  assert.match(source, /saveCheckpointPosition\(partRequestStorageKey\(\{ \.\.\.filters, \[key\]: value \}, fixedLocationId\), \{ page: 1 \}\)/);
+  assert.match(source, /<CheckpointCollection/);
+  assert.match(source, /queue=\{requestQueue\}/);
+  assert.match(source, /columns=\{PART_REQUEST_COLUMNS\}/);
+  assert.match(source, /renderItem=\{\(request\) => <PartRequestRow/);
+  assert.match(source, /storageKey=\{storageKey\}/);
   assert.match(source, /OperationalCollectionRow/);
   assert.match(source, /OperationalCollectionCell/);
   assert.match(source, /className="part-request-queue-open"/);
   assert.match(source, /aria-label=\{`Open \$\{partIdentity\} request/);
-  assert.match(source, /busy=\{result\.loading\}/);
-  assert.match(source, /role="alert"/);
-  assert.match(source, /clampPartRequestPage\(page, resolved\.pageCount\)/);
-  assert.match(source, /setPage\(validPage\)/);
+  assert.doesNotMatch(source, /CollectionPagination|clampPartRequestPage|setPage\(validPage\)/);
 });
 
 test("part requests share collection geometry and preserve compact cards", async () => {

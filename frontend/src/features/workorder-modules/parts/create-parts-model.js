@@ -9,6 +9,7 @@ function text(value) {
 }
 
 export function catalogPartRequiresSerializedUnits(part = {}) {
+  if (part.trackingMode === "no_stock") return false;
   if (part.trackingMode === "quantity" || part.trackingMode === "measured_bulk") return false;
   const unit = getUnitDefinition(part.uomCode);
   return ["count", "packaging"].includes(unit?.category)
@@ -16,6 +17,7 @@ export function catalogPartRequiresSerializedUnits(part = {}) {
 }
 
 export function catalogPartRequiresSourcePosition(part = {}) {
+  if (part.trackingMode === "no_stock") return false;
   return Boolean(text(part.catalogPartId))
     && ["quantity", "measured_bulk"].includes(text(part.trackingMode));
 }
@@ -48,6 +50,7 @@ export function invalidCreatePartIndex(parts = []) {
 }
 
 export function createPartRequiresSerializedUnits(part = {}) {
+  if (part.trackingMode === "no_stock") return false;
   if (!text(part.catalogPartId) || part.serializationRequired !== true) return false;
   const definition = getUnitDefinition(text(part.uomCode || DEFAULT_UOM_CODE).toLowerCase());
   return ["count", "packaging"].includes(definition?.category)

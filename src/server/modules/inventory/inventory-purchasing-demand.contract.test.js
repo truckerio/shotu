@@ -22,6 +22,9 @@ test('automatic demand reads approved active Workorders and locks before linked 
   assert.match(source,/pg_advisory_xact_lock[\s\S]*purchase-demand:/);
   assert.match(source,/INVENTORY_PURCHASE_DEMAND_STALE/);
   assert.match(source,/purchaseDefaults:\{currency:approvalPolicy\?\.currency\|\|'USD',approvalConfigured:Boolean\(approvalPolicy\)\}/);
+  assert.match(source,/with filtered as \([\s\S]*page_rows as \([\s\S]*totals as \([\s\S]*count\(\*\)::int total_count from filtered/);
+  assert.match(source,/pageCount:Math\.ceil\(total\/25\)/);
+  assert.match(source,/order by created_at desc,id desc limit 26 offset \$3/);
 });
 
 test('standalone purchase-request writes are retired while legacy reads remain available',async()=>{

@@ -10,6 +10,7 @@ import {
   listScopedWorkorderPrintArchives,
 } from "../db/repositories/workorder-print-archives.repo.js";
 import { withLockedWorkorderPrintSnapshot } from "../db/repositories/workorder-print-snapshot.repo.js";
+import { companyRoleScope, requireCompanyRole } from "../auth/company-role.js";
 
 const PRINT_LEASE_SECONDS = 120;
 
@@ -63,11 +64,12 @@ export async function createArchivedWorkorderPrint(input, context, dependencies)
   const parsed = parseRequest(input);
   const source = await (dependencies.withSnapshotLock || withLockedWorkorderPrintSnapshot)({
     workorderId: input.workorderId,
-    companyIds: [...(context.companyIds || [])],
+    companyIds: companyRoleScope(context, ["office", "admin"]).companyIds,
   }, async () => {
     const workorder = await dependencies.requireWorkorderAccess(context, input.workorderId, {
       requireLocationMembership: true,
     });
+    requireCompanyRole(context, workorder.companyId, ["office", "admin"]);
     if (!workorder.locationId) throw invalidRequest("The workorder must have a location before printing.");
     return { workorder, form: await dependencies.buildPrintForm(workorder) };
   });
@@ -136,11 +138,10 @@ export async function createArchivedWorkorderPrint(input, context, dependencies)
 export async function readArchivedPdf(archiveId, context, dependencies) {
   const archive = await (dependencies.findArchive || findScopedWorkorderPrintArchive)({
     archiveId,
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
-    isAdmin: context.actor.role === "admin",
+    ...companyRoleScope(context, ["office", "admin"]),
   });
   if (!archive) throw resourceNotFound("Print job");
+  requireCompanyRole(context, archive.companyId, ["office", "admin"]);
   await dependencies.requireWorkorderAccess(context, archive.workorderId, { requireLocationMembership: true });
   if (archive.status !== "ready") throw new AuthError(409, "PRINT_ARCHIVE_INTEGRITY_FAILURE", "The archived PDF is unavailable or failed integrity verification.");
   const filePath = containedStoragePath(dependencies.outputDir, archive.storageKey);
@@ -159,13 +160,12 @@ export async function readArchivedPdf(archiveId, context, dependencies) {
 
 export async function findArchivedPrintForWorkorder(workorderId, artifactKind, context, dependencies) {
   if (!['original', 'revised'].includes(artifactKind)) throw invalidRequest("artifactKind must be original or revised.");
-  await dependencies.requireWorkorderAccess(context, workorderId, { requireLocationMembership: true });
+  const workorder = await dependencies.requireWorkorderAccess(context, workorderId, { requireLocationMembership: true });
+  requireCompanyRole(context, workorder.companyId, ["office", "admin"]);
   const archive = await (dependencies.findLatestArchive || findLatestScopedWorkorderPrintArchive)({
     workorderId,
     artifactKind,
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
-    isAdmin: context.actor.role === "admin",
+    ...companyRoleScope(context, ["office", "admin"]),
   });
   if (!archive) return null;
   const { snapshot: _snapshot, ...summary } = archive;
@@ -178,10 +178,10 @@ export async function findArchivedPrintForWorkorder(workorderId, artifactKind, c
 }
 
 export async function listArchivedPrints(context, dependencies = {}) {
+  const scope = companyRoleScope(context, ["office", "admin"]);
+  if (!scope.companyIds.length) return [];
   const rows = await (dependencies.listArchives || listScopedWorkorderPrintArchives)({
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
-    isAdmin: context.actor.role === "admin",
+    ...scope,
     limit: dependencies.limit || 50,
   });
   return rows.map((archive) => {

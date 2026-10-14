@@ -4,6 +4,7 @@ import { handleLaborProductsApi } from "./labor-products.routes.js";
 
 const LOCATION_ID = "33333333-3333-4333-8333-333333333333";
 const PRODUCT_ID = "44444444-4444-4444-8444-444444444444";
+const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 
 function harness(method, path, body = {}) {
   const responses = [];
@@ -11,7 +12,13 @@ function harness(method, path, body = {}) {
   return {
     req: { method, requestId: "request-1" }, res: {}, url: new URL(path, "http://localhost"), responses, events,
     helpers: {
-      requestContext: { actor: { id: "admin-1", role: "admin" }, companyIds: new Set(), locationIds: new Set() },
+      requestContext: {
+        actor: { id: "admin-1", role: "admin" },
+        companyIds: new Set([COMPANY_ID]),
+        companyRoles: new Map([[COMPANY_ID, "admin"]]),
+        locationIds: new Set(),
+        sessionMode: "standard",
+      },
       readBody: async () => body,
       sendJson: (_res, status, payload) => responses.push({ status, payload }),
       emitAdministrativeAuditEvent: async (event) => events.push(event),
@@ -23,14 +30,14 @@ test("labor routes keep the agreed list, create, and pin envelopes", async () =>
   const item = { id: PRODUCT_ID, name: "Diagnostics", code: "DIAG", uomCode: "hr", pinned: false };
   const list = harness("GET", `/api/labor-products?locationId=${LOCATION_ID}`);
   await handleLaborProductsApi(list.req, list.res, list.url, list.helpers, {
-    findLocation: async () => ({ id: LOCATION_ID, company_id: "company-1" }),
+    findLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
     listProducts: async () => [item],
   });
   assert.deepEqual(list.responses, [{ status: 200, payload: { items: [item], canCreate: true, canPin: true } }]);
 
   const create = harness("POST", "/api/labor-products", { locationId: LOCATION_ID, name: "Diagnostics" });
   await handleLaborProductsApi(create.req, create.res, create.url, create.helpers, {
-    findLocation: async () => ({ id: LOCATION_ID, company_id: "company-1" }),
+    findLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
     createProduct: async () => ({ kind: "created", product: item }),
   });
   assert.deepEqual(create.responses, [{ status: 201, payload: { item } }]);
@@ -44,7 +51,7 @@ test("labor routes keep the agreed list, create, and pin envelopes", async () =>
 
   const pin = harness("PATCH", `/api/labor-products/${PRODUCT_ID}`, { locationId: LOCATION_ID, pinned: true });
   await handleLaborProductsApi(pin.req, pin.res, pin.url, pin.helpers, {
-    findLocation: async () => ({ id: LOCATION_ID, company_id: "company-1" }),
+    findLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
     setPinned: async () => ({ ...item, pinned: true }),
   });
   assert.deepEqual(pin.responses, [{ status: 200, payload: { item: { ...item, pinned: true } } }]);

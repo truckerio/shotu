@@ -14,23 +14,26 @@ test("Admin kiosk panel uses approved device API contracts", async () => {
 });
 
 test("Admin users own temporary mechanic PIN management and status", async () => {
-  const source = await readFile(new URL("./AdminWorkspace.jsx", import.meta.url), "utf8");
+  const users = await readFile(new URL("./workspace/UsersPage.jsx", import.meta.url), "utf8");
+  const dialog = await readFile(new URL("./workspace/AdminUserActionDialog.jsx", import.meta.url), "utf8");
+  const workspace = await readFile(new URL("./AdminWorkspace.jsx", import.meta.url), "utf8");
+  const model = await readFile(new URL("./workspace/admin-workspace-model.js", import.meta.url), "utf8");
 
-  assert.match(source, /user\.role === "mechanic"/);
-  assert.match(source, /user\.kiosk_pin_set/);
-  assert.match(source, /user\.kiosk_pin_requires_change/);
-  assert.match(source, /onManage\("kiosk-pin", user\)/);
-  assert.match(source, /user\.role === "mechanic" \? <Lock01 \/> : <Mail01 \/>/);
-  assert.match(source, /textValue=\{user\.kiosk_pin_set \? "Reset kiosk PIN" : "Set kiosk PIN"\}[\s\S]*?<Passcode \/>/);
-  assert.match(source, /await api\(`\$\{base\}\/kiosk-pin`/);
-  assert.match(source, /JSON\.stringify\(\{ pin: kioskPinDraft\.pin \}\)/);
-  assert.match(source, /DEFAULT_TEMPORARY_KIOSK_PIN = "0000"/);
-  assert.match(source, /useState\(blankKioskPin\)/);
-  assert.match(source, /minLength="4"/);
-  assert.match(source, /pattern="\[0-9\]\{4,\}"/);
-  assert.match(source, /admin-kiosk-pin-error/);
-  assert.doesNotMatch(source, /ValidationRequirements/);
-  assert.match(source, /setKioskPinError\(""\)/);
+  assert.match(users, /user\.role === "mechanic"/);
+  assert.match(users, /user\.kiosk_pin_set/);
+  assert.match(users, /user\.kiosk_pin_requires_change/);
+  assert.match(users, /onManage\("kiosk-pin", user\)/);
+  assert.match(users, /user\.role === "mechanic" \? <Lock01 \/> : <Mail01 \/>/);
+  assert.match(users, /textValue=\{user\.kiosk_pin_set \? "Reset kiosk PIN" : "Set kiosk PIN"\}[\s\S]*?<Passcode \/>/);
+  assert.match(workspace, /await api\(`\$\{base\}\/kiosk-pin`/);
+  assert.match(workspace, /JSON\.stringify\(\{ pin: kioskPinDraft\.pin \}\)/);
+  assert.match(model, /DEFAULT_TEMPORARY_KIOSK_PIN = "0000"/);
+  assert.match(workspace, /useState\(BLANK_KIOSK_PIN\)/);
+  assert.match(dialog, /minLength="4"/);
+  assert.match(dialog, /pattern="\[0-9\]\{4,\}"/);
+  assert.match(dialog, /admin-kiosk-pin-error/);
+  assert.doesNotMatch(dialog, /ValidationRequirements/);
+  assert.match(dialog, /setKioskPinError\(""\)/);
 });
 
 test("Admin kiosk panel manages devices only", async () => {
@@ -39,15 +42,19 @@ test("Admin kiosk panel manages devices only", async () => {
   assert.doesNotMatch(source, /kiosk-pin/);
   assert.doesNotMatch(source, /Mechanic kiosk PIN/);
   assert.doesNotMatch(source, /users\s*=/);
+  assert.match(source, /useClientCheckpointPages\(devices, \{ pageSize: 10, resetKey: locationId \}\)/);
+  assert.match(source, /<CheckpointCollection[\s\S]*queue=\{\{ \.\.\.queue, loading: state\.loading \}\}[\s\S]*className="admin-kiosk-device-list"/);
+  assert.match(source, /<article \{\.\.\.rowProps\} className="admin-kiosk-device"/);
+  assert.doesNotMatch(source, /<Pagination/);
 });
 
 test("Admin location detail owns kiosk setup without adding global navigation", async () => {
-  const workspace = await readFile(new URL("./AdminWorkspace.jsx", import.meta.url), "utf8");
+  const locations = await readFile(new URL("./workspace/LocationsPage.jsx", import.meta.url), "utf8");
   const navigation = await readFile(new URL("./adminNavigation.js", import.meta.url), "utf8");
   const css = await readFile(new URL("./kiosk-settings.css", import.meta.url), "utf8");
 
-  assert.match(workspace, /tab === "kiosk"/);
-  assert.match(workspace, /<KioskSettingsPanel locationId=\{detail\.location\.id\} \/>/);
+  assert.match(locations, /tab === "kiosk"/);
+  assert.match(locations, /<KioskSettingsPanel locationId=\{detail\.location\.id\} \/>/);
   assert.doesNotMatch(navigation, /view:\s*"kiosk"/);
   assert.match(css, /@media \(max-width:\s*640px\)/);
   assert.match(css, /\.admin-kiosk-register\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);

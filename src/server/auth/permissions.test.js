@@ -39,7 +39,8 @@ test("location authorization allows memberships and admin override", () => {
   const mechanic = { actor: { role: "mechanic" }, locationIds: new Set(["location-a"]) };
   assert.equal(requireLocationAccess(mechanic, "location-a").role, "mechanic");
   assert.throws(() => requireLocationAccess(mechanic, "location-b"), (error) => error.statusCode === 403);
-  assert.equal(requireLocationAccess({ actor: { role: "admin" }, locationIds: new Set() }, "location-b").role, "admin");
+  const admin = { actor: { role: "admin" }, companyIds: new Set(["company-a"]), companyRoles: new Map([["company-a", "admin"]]), locationIds: new Set() };
+  assert.equal(requireLocationAccess(admin, "location-b", "company-a").role, "admin");
 });
 
 test("company authorization requires membership for every role", () => {

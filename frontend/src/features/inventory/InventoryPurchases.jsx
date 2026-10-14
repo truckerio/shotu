@@ -8,8 +8,10 @@ import { RefreshCw01, FilterLines, XClose } from '@untitledui/icons';
 import { InventoryNeedsOrdering } from './InventoryNeedsOrdering.jsx';
 import { sendInventoryCommand,inventoryCommandCanBeEdited } from './inventory-command.js';
 import { PurchaseOrderBills } from './PurchaseOrderBills.jsx';
-import { useEffect,useState,useRef,useMemo } from 'react';
+import { useCallback,useEffect,useState,useRef,useMemo } from 'react';
 import { api } from '../../lib/api.js';
+import { useCheckpointPages } from '../../components/operations/useCheckpointPages.js';
+import { CheckpointCollection } from '../../components/ui/CheckpointCollection.jsx';
 import { Button } from '../../components/ui/Button.jsx';
 import { IconButton } from '../../components/ui/IconButton.jsx';
 import { ModalFrame } from '../../components/ui/ModalFrame.jsx';
@@ -63,7 +65,7 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
  const [orderStatus,setOrderStatus]=useState('all'),[supplierFilter,setSupplierFilter]=useState(''),[searchFilter,setSearchFilter]=useState(initialPurchaseOrderNumber);
  const showOrders=true;
  const [locationId,setLocationId]=useState(()=>locations.some(location=>location.id===initialLocationId)?initialLocationId:locations[0]?.id||'');
- const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0),[page,setPage]=useState(1);
+ const [error,setError]=useState(''),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0);
  const [selected,setSelected]=useState(null),[creating,setCreating]=useState(initialDraftLines.length>0);
  const [supplierOpen,setSupplierOpen]=useState(false),[supplierName,setSupplierName]=useState(''),[contact,setContact]=useState('');
  const [draft,setDraft]=useState({supplierId:'',currency:'USD',lines:initialDraftLines,notes:'',expectedDeliveryDate:''}),[query,setQuery]=useState(''),[part,setPart]=useState(null),[amount,setAmount]=useState('1'),[price,setPrice]=useState(''),[reason,setReason]=useState('');
@@ -82,8 +84,18 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
  useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(draftStorageKey));setDraft(saved||{supplierId:'',currency:'USD',lines:initialDraftLines,notes:'',expectedDeliveryDate:''});}catch{setDraft({supplierId:'',currency:'USD',lines:initialDraftLines,notes:'',expectedDeliveryDate:''});}if(initialDraftLines.length)setCreating(true);setDraftReady(draftStorageKey);},[draftStorageKey]);
  useEffect(()=>{if(draftReady===draftStorageKey)try{localStorage.setItem(draftStorageKey,JSON.stringify(draft));}catch{setError('Draft storage is unavailable.');}},[draft,draftReady,draftStorageKey]);
  useEffect(()=>{if(!locationId&&locations.length)setLocationId(locations.some(location=>location.id===initialLocationId)?initialLocationId:locations[0].id);},[locations,locationId,initialLocationId]);
- useEffect(()=>{setPage(1);setSelected(null);try{setPending(JSON.parse(localStorage.getItem(storageKey)));}catch{setPending(null);}},[storageKey]);
- useEffect(()=>{setData(null);},[locationId,page,view,orderStatus,supplierFilter,searchFilter]);
+ useEffect(()=>{setSelected(null);try{setPending(JSON.parse(localStorage.getItem(storageKey)));}catch{setPending(null);}},[storageKey]);
+ const purchasingQueryKey=useMemo(()=>JSON.stringify({locationId,view,orderStatus,supplierFilter,searchFilter}),[locationId,view,orderStatus,supplierFilter,searchFilter]);
+ const fetchPurchasingPage=useCallback(async(page,{signal})=>{
+   const value=await api(`/api/office/inventory/purchasing?${new URLSearchParams({locationId,page:String(page),view,status:view==='receiving'?'all':orderStatus,supplierId:supplierFilter,query:searchFilter})}`,{signal});
+   return {items:value.items||[],page:value.page,total:value.total,pageCount:value.pageCount,meta:{suppliers:value.suppliers||[],demand:value.demand||[],receipts:value.receipts||[],purchaseDefaults:value.purchaseDefaults||null,canApprove:!!value.canApprove}};
+ },[locationId,view,orderStatus,supplierFilter,searchFilter]);
+ const purchaseQueue=useCheckpointPages({queryKey:purchasingQueryKey,fetchPage:fetchPurchasingPage,enabled:!!locationId,refreshKey:refresh,getItemKey:(item)=>item.id});
+ const data=useMemo(()=>{
+   if(!purchaseQueue.pages.length)return null;
+   const meta=purchaseQueue.pages[0]?.meta||{};
+   return {...meta,items:purchaseQueue.pages.flatMap(batch=>batch.items)};
+ },[purchaseQueue.pages]);
  const receiptPositionIdentity=receiptOrder&&locationId?`${receiptOrder.id}:${receiptOrder.version}:${locationId}`:'';
  useEffect(()=>{setReceiptLines([]);setReceiptReady(false);setReceiptPositions([]);setReceiptPositionsError('');},[receiptPositionIdentity]);
  useEffect(()=>{
@@ -92,12 +104,6 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
    api(`/api/office/inventory/locations/${encodeURIComponent(locationId)}/positions`).then(result=>{if(active)setReceiptPositions(result.positions||result.items||[]);}).catch(next=>{if(active)setReceiptPositionsError(next.message||'Storage destinations could not be loaded.');}).finally(()=>{if(active)setReceiptPositionsLoading(false);});
    return()=>{active=false;};
  },[receiptPositionIdentity,receiptPositionsReload]);
- useEffect(()=>{
-   if(!locationId)return;
-   let active=true;setError('');
-   api(`/api/office/inventory/purchasing?${new URLSearchParams({locationId,page:String(page),view,status:view==='receiving'?'all':orderStatus,supplierId:supplierFilter,query:searchFilter})}`).then(value=>{if(active){setData(value);setSelected(current=>current?value.items.find(order=>order.id===current.id)||null:null);}}).catch(e=>{if(active)setError(e.message);});
-   return()=>{active=false;};
- },[locationId,page,view,orderStatus,supplierFilter,searchFilter,refresh]);
  useEffect(()=>{if(demandBacked&&!purchaseCurrencyAppliedRef.current&&data?.purchaseDefaults?.currency){purchaseCurrencyAppliedRef.current=true;setDraft(current=>({...current,currency:data.purchaseDefaults.currency}));}},[data?.purchaseDefaults?.currency,demandBacked]);
  useEffect(()=>{
    const refreshPurchases=()=>{if(document.visibilityState==='visible')setRefresh(x=>x+1);};
@@ -113,7 +119,7 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
      const result=await sendInventoryCommand({request,recover:!!pending,url:'/api/office/inventory/purchasing'});
      localStorage.removeItem(storageKey);setPending(null);setRefresh(x=>x+1);
      if(result.supplier){setDraft(d=>({...d,supplierId:result.supplier.id}));setSupplierOpen(false);setSupplierName('');setContact('');}
-     if(result.order){setOrderStatus('all');setSupplierFilter('');setSearchFilter('');setPage(1);setSelected(request.action==='receive'?null:result.order);setCreating(false);if(['create','revise'].includes(request.action)){localStorage.removeItem(draftStorageKey);setDraft({supplierId:'',currency:'USD',lines:[],notes:'',expectedDeliveryDate:''});if(demandBacked)onDemandOrderFinished?.();}}
+     if(result.order){setOrderStatus('all');setSupplierFilter('');setSearchFilter('');void purchaseQueue.jumpTo(1);setSelected(request.action==='receive'?null:result.order);setCreating(false);if(['create','revise'].includes(request.action)){localStorage.removeItem(draftStorageKey);setDraft({supplierId:'',currency:'USD',lines:[],notes:'',expectedDeliveryDate:''});if(demandBacked)onDemandOrderFinished?.();}}
    }catch(e){setFeedback({title:'Could not save purchase order',issues:[{field:'',message:e.message}]});if(inventoryCommandCanBeEdited(e)){localStorage.removeItem(storageKey);setPending(null);}}finally{setBusy(false);}
  }
  async function postPurchaseReceipt(){
@@ -190,13 +196,11 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
    </form></ModalFrame>
    {showOrders?<><div className="purchase-table-heading"><h3>{title}</h3><Button icon={FilterLines} aria-expanded={filtersOpen} aria-controls="purchase-order-filters" onClick={()=>setFiltersOpen(open=>!open)}>Filters{orderStatus!=='all'||supplierFilter||searchFilter?' (active)':''}</Button></div>
    {filtersOpen?<div id="purchase-order-filters" className="purchase-filter-bar">
-     <label>Search<input type="search" placeholder="PO or supplier" value={searchFilter} onChange={e=>{setSearchFilter(e.target.value);setPage(1);}}/></label>
-     <label>Status<Dropdown value={orderStatus} onChange={e=>{setOrderStatus(e.target.value);setPage(1);}}><option value="all">All statuses</option>{['draft','awaiting_approval','ordered','partially_received','received','closed_with_discrepancy','cancelled'].map(status=><option key={status} value={status}>{orderStatusLabel(status)}</option>)}</Dropdown></label>
-     <label>Supplier<Dropdown value={supplierFilter} onChange={e=>{setSupplierFilter(e.target.value);setPage(1);}}><option value="">All suppliers</option>{data?.suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Dropdown></label>
-     <Button onClick={()=>{setOrderStatus('all');setSupplierFilter('');setSearchFilter('');setPage(1);}}>Clear</Button>
-   </div>:null}{!data?<p role="status">Loading purchases…</p>:data.items.length===0?<p>No {view==='receiving'?'expected deliveries':'purchase orders'} at this location.</p>:<OperationalDataTable ariaLabel={view==='receiving'?'Expected deliveries':'Purchase orders'} columns={purchaseOrderColumns} className="purchase-orders-table inventory-data-table">{data.items.map(order=><OperationalDataRow id={order.id} key={order.id}><OperationalDataCell label="PO"><button type="button" className="purchase-order-link" onClick={()=>{setSelected(order);setReason('');}}>{order.number}</button></OperationalDataCell><OperationalDataCell label="Supplier">{order.supplier_name}</OperationalDataCell><OperationalDataCell label="Total">{priceLabel(order.total,order.currency)}</OperationalDataCell><OperationalDataCell label="Expected">{order.expected_delivery_date||'Not set'}</OperationalDataCell><OperationalDataCell label="Status"><span className={`purchase-status is-${order.status}`}>{orderStatusLabel(order.status)}</span></OperationalDataCell><OperationalDataCell label="Inventory">{order.lines.some(line=>Number(line.quantity)>Number(line.received_quantity)+Number(line.cancelled_quantity))?<button type="button" className="purchase-order-link" onClick={()=>openReceipt(order)}>Receive items</button>:<span className="purchase-inventory-added">All quantities received</span>}</OperationalDataCell><OperationalDataCell label="Bill">{order.status==='received'?<button type="button" className="purchase-order-link" onClick={()=>{setBillUploadRequested(true);setSelected(order);setReason('');}}>Upload bill</button>:'-'}</OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>}
-
-   {page>1||data?.hasMore?<div className="inventory-request-actions"><Button disabled={page===1} onClick={()=>setPage(p=>p-1)}>Previous</Button> Page {page} <Button disabled={!data?.hasMore} onClick={()=>setPage(p=>p+1)}>Next</Button></div>:null}
+     <label>Search<input type="search" placeholder="PO or supplier" value={searchFilter} onChange={e=>setSearchFilter(e.target.value)}/></label>
+     <label>Status<Dropdown value={orderStatus} onChange={e=>setOrderStatus(e.target.value)}><option value="all">All statuses</option>{['draft','awaiting_approval','ordered','partially_received','received','closed_with_discrepancy','cancelled'].map(status=><option key={status} value={status}>{orderStatusLabel(status)}</option>)}</Dropdown></label>
+     <label>Supplier<Dropdown value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)}><option value="">All suppliers</option>{data?.suppliers?.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Dropdown></label>
+     <Button onClick={()=>{setOrderStatus('all');setSupplierFilter('');setSearchFilter('');}}>Clear</Button>
+   </div>:null}<CheckpointCollection queue={purchaseQueue} label={view==='receiving'?'expected deliveries':'purchase orders'} pageSize={25} storageKey={`inventory-purchases:${purchasingQueryKey}`} ariaLabel={view==='receiving'?'Expected deliveries':'Purchase orders'} renderItems={(entries)=>entries.length?<OperationalDataTable ariaLabel={view==='receiving'?'Expected deliveries':'Purchase orders'} columns={purchaseOrderColumns} className="purchase-orders-table inventory-data-table">{entries.map(({item:order,key,rowProps})=><OperationalDataRow {...rowProps} id={order.id} key={key}><OperationalDataCell label="PO"><button type="button" className="purchase-order-link" onClick={()=>{setSelected(order);setReason('');}}>{order.number}</button></OperationalDataCell><OperationalDataCell label="Supplier">{order.supplier_name}</OperationalDataCell><OperationalDataCell label="Total">{priceLabel(order.total,order.currency)}</OperationalDataCell><OperationalDataCell label="Expected">{order.expected_delivery_date||'Not set'}</OperationalDataCell><OperationalDataCell label="Status"><span className={`purchase-status is-${order.status}`}>{orderStatusLabel(order.status)}</span></OperationalDataCell><OperationalDataCell label="Inventory">{order.lines.some(line=>Number(line.quantity)>Number(line.received_quantity)+Number(line.cancelled_quantity))?<button type="button" className="purchase-order-link" onClick={()=>openReceipt(order)}>Receive items</button>:<span className="purchase-inventory-added">All quantities received</span>}</OperationalDataCell><OperationalDataCell label="Bill">{order.status==='received'?<button type="button" className="purchase-order-link" onClick={()=>{setBillUploadRequested(true);setSelected(order);setReason('');}}>Upload bill</button>:'-'}</OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>:null}><p>No {view==='receiving'?'expected deliveries':'purchase orders'} at this location.</p></CheckpointCollection>
    </>:null}
    {view==='receiving'?<><h3>Recent receipts</h3>{data?.receipts.length?<ul>{data.receipts.map((r,index)=><li key={`${r.id}:${index}`}>{r.part_number} · {r.quantity} {r.uom_code} · {new Date(r.posted_at).toLocaleString()} · {r.source_reference||r.source_type}</li>)}</ul>:<p>No receipts recorded.</p>}</>:null}
 

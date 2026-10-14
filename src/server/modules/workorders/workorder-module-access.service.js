@@ -1,5 +1,6 @@
 import { invalidRequest, permissionDenied } from "../../auth/errors.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
 import { getEffectiveWorkorderModulePolicy } from "../../db/repositories/workorder-policies.repo.js";
 import { authorizeProductModule } from "../access/product-module-access.service.js";
 import {
@@ -64,6 +65,10 @@ export async function authorizeWorkorderModuleActions(
   dependencies = {},
 ) {
   if (!Array.isArray(requests) || requests.length === 0) throw permissionDenied();
+  const requireAccess = dependencies.requireAccess || requireWorkorderAccess;
+  const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
+  const workorder = await requireAccess(context, workorderId, resourceAccess);
+  const effectiveContext = effectiveCompanyContext(context, workorder.companyId);
   const registered = requests.map((request) => ({
     ...request,
     capability: request.capability || "read",
@@ -72,15 +77,11 @@ export async function authorizeWorkorderModuleActions(
       ...request,
       capability: request.capability || "read",
       surface: request.surface || WORKORDER_SURFACES.DETAIL,
-      role: context.actor.role,
+      role: effectiveContext.actor.role,
     }),
   }));
-
-  const requireAccess = dependencies.requireAccess || requireWorkorderAccess;
-  const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
-  const workorder = await requireAccess(context, workorderId, resourceAccess);
   const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
-  await authorizeProduct(context, {
+  await authorizeProduct(effectiveContext, {
     companyId: workorder.companyId,
     locationId: workorder.locationId || null,
     moduleKey: "workorders",
@@ -91,7 +92,7 @@ export async function authorizeWorkorderModuleActions(
   });
   const authorizations = registered.map((request) => {
     const decision = resolveEffectiveWorkorderModuleAccess({
-      role: context.actor.role,
+      role: effectiveContext.actor.role,
       surface: request.surface,
       moduleKey: request.moduleKey,
       companyPolicy: policies?.companyPolicy,
@@ -119,15 +120,16 @@ export async function authorizeWorkorderCreate(
   { companyId, locationId, moduleKeys = ["concern"], enforceRequired = true },
   dependencies = {},
 ) {
+  const effectiveContext = effectiveCompanyContext(context, companyId);
   const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
-  await authorizeProduct(context, { companyId, locationId: locationId || null, moduleKey: "workorders" }, "write");
+  await authorizeProduct(effectiveContext, { companyId, locationId: locationId || null, moduleKey: "workorders" }, "write");
   const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
   const policies = await getEffectivePolicy({ companyId, locationId: locationId || null });
   const requested = new Set(moduleKeys);
   const decisions = WORKORDER_MODULES.filter((module) => module.surfaces.includes(WORKORDER_SURFACES.CREATE)).map((module) => {
     const moduleKey = module.key;
     const decision = resolveEffectiveWorkorderModuleAccess({
-      role: context.actor.role,
+      role: effectiveContext.actor.role,
       surface: WORKORDER_SURFACES.CREATE,
       moduleKey,
       companyPolicy: policies?.companyPolicy,
@@ -143,7 +145,7 @@ export async function authorizeWorkorderCreate(
       capability: "write",
       action: null,
       surface: WORKORDER_SURFACES.CREATE,
-      role: context.actor.role,
+      role: effectiveContext.actor.role,
     });
     if (!ACCESS_CAPABILITIES[decision.access]?.has("write")) throw permissionDenied();
     return { moduleKey, ...decision };
@@ -160,8 +162,9 @@ export async function resolveWorkorderModuleDecisions(
   const requireAccess = dependencies.requireAccess || requireWorkorderAccess;
   const getEffectivePolicy = dependencies.getEffectivePolicy || getEffectiveWorkorderModulePolicy;
   const workorder = await requireAccess(context, workorderId, resourceAccess);
+  const effectiveContext = effectiveCompanyContext(context, workorder.companyId);
   const authorizeProduct = dependencies.authorizeProduct || authorizeProductModule;
-  await authorizeProduct(context, {
+  await authorizeProduct(effectiveContext, {
     companyId: workorder.companyId,
     locationId: workorder.locationId || null,
     moduleKey: "workorders",
@@ -173,7 +176,7 @@ export async function resolveWorkorderModuleDecisions(
   const decisions = Object.fromEntries(WORKORDER_MODULES
     .filter((module) => module.surfaces.includes(surface))
     .map((module) => [module.key, resolveEffectiveWorkorderModuleAccess({
-      role: context.actor.role,
+      role: effectiveContext.actor.role,
       surface,
       moduleKey: module.key,
       companyPolicy: policies?.companyPolicy,

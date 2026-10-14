@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { companyRoleScope, effectiveCompanyContext } from "../../auth/company-role.js";
 import { InventoryError, inventoryNotFound } from "../inventory/inventory.errors.js";
 import { createPartFulfillmentSchema, approvePartFulfillmentSchema } from "./part-fulfillment.schemas.js";
 import { createPartFulfillment, approvePartFulfillment, getPartFulfillment, findFulfillmentAvailability, findFulfillmentCatalogPart } from "../../db/repositories/part-fulfillment.repo.js";
@@ -9,7 +10,10 @@ import { authorizeWorkorderModule } from "../workorders/workorder-module-access.
 
 function failure(code, message, statusCode = 422) { return new InventoryError(message, { code, statusCode }); }
 function hash(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
-function scope(context) { return { companyIds: [...(context.companyIds || [])], locationIds: [...(context.locationIds || [])], isAdmin: context.actor.role === "admin" }; }
+function scope(context) {
+  const { companyIds, locationIds, adminCompanyIds } = companyRoleScope(context, ["mechanic", "office", "admin"]);
+  return { companyIds, locationIds, adminCompanyIds };
+}
 
 function assertUsableQuantity(input) {
   const unit = getUnitDefinition(input.uomCode);
@@ -40,14 +44,14 @@ function recommendation(input, availability) {
 
 export async function recommendPartFulfillment(rawInput, context, dependencies = {}) {
   const input = createPartFulfillmentSchema.parse(rawInput); assertUsableQuantity(input);
-  requireLocationAccess(context, input.destinationLocationId);
   const workorder = await (dependencies.loadWorkorder || getOperationalWorkorderById)(input.workorderId);
   if (!workorder || !context.companyIds?.has(workorder.companyId)) throw inventoryNotFound();
+  const effectiveContext = effectiveCompanyContext(context, workorder.companyId);
   assertActiveWorkorder(workorder);
-  requireCompanyAccess(context, workorder.companyId);
+  requireCompanyAccess(effectiveContext, workorder.companyId);
   if (workorder.locationId !== input.destinationLocationId) throw failure("PART_FULFILLMENT_DESTINATION_MISMATCH", "Destination must match the workorder location.", 409);
-  requireLocationAccess(context, workorder.locationId);
-  await (dependencies.authorizeModule || authorizeWorkorderModule)(context, input.workorderId, {
+  requireLocationAccess(effectiveContext, workorder.locationId, workorder.companyId);
+  await (dependencies.authorizeModule || authorizeWorkorderModule)(effectiveContext, input.workorderId, {
     moduleKey: "parts",
     capability: "write",
     action: "allocate",
@@ -55,12 +59,12 @@ export async function recommendPartFulfillment(rawInput, context, dependencies =
   const catalog = await (dependencies.loadCatalogPart || findFulfillmentCatalogPart)({ companyId: workorder.companyId, catalogPartId: input.catalogPartId });
   if (!catalog || catalog.uomCode !== input.uomCode) throw failure("PART_FULFILLMENT_PART_INVALID", "Part identity or unit is unavailable for this company.", 409);
   const availability = await (dependencies.findAvailability || findFulfillmentAvailability)({ companyId: workorder.companyId, catalogPartId: input.catalogPartId, uomCode: input.uomCode, limit: 20 });
-  const visibleAvailability = context.actor.role === "admin"
+  const visibleAvailability = effectiveContext.actor.role === "admin"
     ? availability
-    : availability.filter((row) => context.locationIds?.has(row.locationId));
+    : availability.filter((row) => effectiveContext.locationIds?.has(row.locationId));
   const legs = recommendation(input, visibleAvailability);
   const requestShape = { workorderId: input.workorderId, catalogPartId: input.catalogPartId, destinationLocationId: input.destinationLocationId, quantity: input.quantity, uomCode: input.uomCode, neededBy: input.neededBy, legs };
-  const result = await (dependencies.createFulfillment || createPartFulfillment)({ ...input, companyId: workorder.companyId, actorId: context.actor.id, requestHash: hash(requestShape), legs, ...scope(context) });
+  const result = await (dependencies.createFulfillment || createPartFulfillment)({ ...input, companyId: workorder.companyId, actorId: context.actor.id, requestHash: hash(requestShape), legs, ...scope(effectiveContext) });
   if (result.kind === "inactive") throw failure("PART_FULFILLMENT_WORKORDER_INACTIVE", "This workorder can no longer create or approve a parts recommendation.", 409);
   if (result.kind === "conflict") throw failure("PART_FULFILLMENT_REPLAY_CONFLICT", "This request key was already used with different part, quantity, or destination.", 409);
   return { fulfillment: result.fulfillment, replayed: result.kind === "replay" };
@@ -70,8 +74,9 @@ export async function approveRecommendedFulfillment(fulfillmentId, rawInput, con
   const input = approvePartFulfillmentSchema.parse(rawInput);
   const existing = await (dependencies.getFulfillment || getPartFulfillment)({ fulfillmentId, ...scope(context) });
   if (!existing) throw inventoryNotFound();
-  requireCompanyAccess(context, existing.companyId); requireLocationAccess(context, existing.destinationLocationId);
-  await (dependencies.authorizeModule || authorizeWorkorderModule)(context, existing.workorderId, {
+  const effectiveContext = effectiveCompanyContext(context, existing.companyId);
+  requireCompanyAccess(effectiveContext, existing.companyId); requireLocationAccess(effectiveContext, existing.destinationLocationId, existing.companyId);
+  await (dependencies.authorizeModule || authorizeWorkorderModule)(effectiveContext, existing.workorderId, {
     moduleKey: "parts",
     capability: "write",
     action: "allocate",

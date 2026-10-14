@@ -54,13 +54,20 @@ export async function resolveRequestContext(req, dependencies = {}) {
     };
   }
 
+  const companyIds = new Set(actor.companyIds || []);
+  const companyRoles = new Map((actor.companyMemberships || [])
+    .filter((membership) => companyIds.has(membership.companyId))
+    .map((membership) => [membership.companyId, membership.role]));
+  // Route permissions are an admission gate only. Target-company policy remains
+  // authoritative at each resource/list boundary; do not drop secondary roles.
+  const permissions = new Set([...companyRoles.values()].flatMap((role) => [...permissionsForRole(role)]));
   return {
     session,
     actor,
-    permissions: permissionsForRole(actor.role),
+    permissions,
     locationIds: new Set(actor.locationIds || []),
-    companyIds: new Set(actor.companyIds || []),
-    companyRoles: new Map((actor.companyMemberships || []).map((membership) => [membership.companyId, membership.role])),
+    companyIds,
+    companyRoles,
     sessionMode: "standard",
     kiosk: null,
   };

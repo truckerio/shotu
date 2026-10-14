@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { AuthError, permissionDenied, resourceNotFound } from "../../auth/errors.js";
+import { AuthError, invalidRequest, permissionDenied, resourceNotFound } from "../../auth/errors.js";
 import { requireCompanyAccess, requireLocationAccess, requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
+import { companyRoleScope, effectiveCompanyContext, effectiveCompanyRole, requireCompanyRole } from "../../auth/company-role.js";
 import { getPool } from "../../db/pool.js";
 import { readCreatePricing } from "../../db/repositories/workorder-create-pricing.repo.js";
 import * as repository from "../../db/repositories/customer-documents.repo.js";
@@ -13,6 +14,7 @@ import { prepareUserWorkorderDraftSubmission } from "../workorders/workorder-dra
 import { WORKORDER_ACTIVATION_POLICY } from "../../../../shared/customer-document-contract.js";
 import { canonicalFinancialHash, canonicalJson } from "./customer-financial-calculator.js";
 import {
+  customerDocumentAdjustmentsSchema,
   customerDocumentGrantRevokeSchema,
   customerDocumentGrantSchema,
   customerDocumentIdSchema,
@@ -25,9 +27,22 @@ import {
   customerDocumentActivationSchema,
   customerDocumentDraftQuerySchema,
   customerDocumentWorkorderQuerySchema,
+  hasCustomerDocumentFinancialAdjustments,
 } from "./customer-documents.schemas.js";
 
 const digest = (value) => createHash("sha256").update(canonicalJson(value)).digest("hex");
+
+function savedDraftCustomerDocumentAdjustments(draft) {
+  const parsed = customerDocumentAdjustmentsSchema.safeParse(
+    draft.payload?.formData?.customerDocumentAdjustments,
+  );
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const path = issue?.path?.join(".");
+    throw invalidRequest(`Saved customer document adjustment${path ? ` ${path}` : ""} is invalid: ${issue?.message || "Enter valid discount details."}`);
+  }
+  return parsed.data;
+}
 
 function mapDomainError(error) {
   if (error instanceof AuthError) throw error;
@@ -74,9 +89,9 @@ function mapDomainError(error) {
 }
 
 function staffScope(context, companyId, locationId, permission = PERMISSION.CUSTOMER_DOCUMENT_WRITE) {
-  requirePermission(context, permission);
   requireCompanyAccess(context, companyId);
-  requireLocationAccess(context, locationId);
+  requirePermission(effectiveCompanyContext(context, companyId), permission);
+  requireLocationAccess(context, locationId, companyId);
   return { companyId, locationId, actorId: context.actor.id };
 }
 
@@ -300,9 +315,7 @@ export async function previewCustomerDocument(context, rawInput, dependencies = 
 
 export async function readCustomerDocumentProfile(context, rawInput, dependencies = {}) {
   const input = customerDocumentProfileQuerySchema.parse(rawInput);
-  requirePermission(context, PERMISSION.CUSTOMER_DOCUMENT_READ);
-  requireCompanyAccess(context, input.companyId);
-  if (input.locationId) requireLocationAccess(context, input.locationId);
+  staffScope(context, input.companyId, input.locationId, PERMISSION.CUSTOMER_DOCUMENT_READ);
   const load = dependencies.getProfile || repository.getCustomerDocumentProfileForScope;
   const profile = await load(input);
   if (!profile) throw resourceNotFound("Customer document profile");
@@ -311,9 +324,9 @@ export async function readCustomerDocumentProfile(context, rawInput, dependencie
 
 export async function publishCustomerDocumentProfile(context, rawInput, dependencies = {}) {
   const input = publishCustomerDocumentProfileSchema.parse(rawInput);
-  if (context?.actor?.role !== "admin") throw permissionDenied();
+  requireCompanyRole(context, input.companyId, ["admin"]);
   requireCompanyAccess(context, input.companyId);
-  if (input.locationId) requireLocationAccess(context, input.locationId);
+  if (input.locationId) requireLocationAccess(context, input.locationId, input.companyId);
   const command = { ...input, actorId: context.actor.id };
   try {
     const publish = dependencies.publishProfile || repository.publishCustomerDocumentProfile;
@@ -428,19 +441,25 @@ export async function issueInformationalDraftEstimate(context, draft, preparedIn
   const profile = await (dependencies.ensureInformationalProfile || repository.ensureInformationalCustomerDocumentProfile)(
     { companyId: draft.companyId, locationId: draft.locationId, actorId: context.actor.id }, client,
   );
+  const adjustments = savedDraftCustomerDocumentAdjustments(draft);
+  const hasAdjustments = hasCustomerDocumentFinancialAdjustments(adjustments);
   let sourceInput;
   let pricingStatus = "priced";
   if (!profile.informationalOnly) {
     try {
       sourceInput = await (dependencies.buildSource || buildCustomerDocumentSource)(
-        context, source, { lineDiscounts: [], documentDiscount: null, overrideReasons: [] }, profile, sourceDependencies,
+        context, source, adjustments, profile, sourceDependencies,
       );
     } catch (error) {
+      if (hasAdjustments) throw error;
       if (!["CUSTOMER_DOCUMENT_EMPTY_ESTIMATE", "CUSTOMER_DOCUMENT_SELLING_PRICE_REQUIRED",
         "CUSTOMER_DOCUMENT_TAX_NOT_CONFIGURED", "CUSTOMER_DOCUMENT_CURRENCY_MISMATCH"].includes(error?.code)) throw error;
     }
   }
   if (!sourceInput) {
+    if (hasAdjustments) {
+      throw new AuthError(409, "CUSTOMER_DOCUMENT_DISCOUNT_PROFILE_REQUIRED", "A configured commercial profile and selling prices are required before a saved discount can be issued.");
+    }
     const pricing = await (dependencies.readCreatePricing || readCreatePricing)(preparedInput, client);
     const formData = draft.payload?.formData || {};
     pricingStatus = "pending";
@@ -523,9 +542,7 @@ export async function readStaffCustomerDocumentRevision(context, rawRevisionId, 
   const read = dependencies.readRevision || repository.getStaffCustomerDocumentRevision;
   const revision = await read({
     revisionId,
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
-    isAdmin: context.actor.role === "admin",
+    ...companyRoleScope(context, ["office", "admin"]),
   });
   if (!revision) throw resourceNotFound("Customer document revision");
   return revision;
@@ -657,9 +674,9 @@ export async function activateApprovedCustomerEstimate(context, rawRevisionId, r
       }
       const result = await (dependencies.submitDraftInTransaction || submitWorkorderDraftInTransaction)({
         id: draftId,
-        companyIds: [...(context.companyIds || [])],
+        companyIds: [input.companyId],
         locationIds: [...(context.locationIds || [])],
-        role: context.actor.role,
+        role: effectiveCompanyRole(context, input.companyId),
         userId: context.actor.id,
         version: draftVersion,
         activationPolicy: WORKORDER_ACTIVATION_POLICY.ACCEPTED_CUSTOMER_ESTIMATE,

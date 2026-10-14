@@ -40,7 +40,7 @@ async function detail(client,companyId,id,input={}){
 export async function listStockTasks(input){
  const client=await getPool().connect();try{
   const loc=await shop(client,input);
-  const ids=await client.query(`select * from (
+  const listSql=`select entries.*,count(*) over() total_count from (
     select id,'task' as source,created_at,(status in ('released','scrapped','received','approved','cancelled')) as closed
     from inventory_stock_tasks where company_id=$1 and (location_id=$2 or destination_id=$2) and ($3::text is null or kind=$3)
     union all
@@ -48,7 +48,11 @@ export async function listStockTasks(input){
     from inventory_purchase_orders o where o.company_id=$1 and o.location_id=$2 and $3='damage'
       and o.status='received' and o.delivery_condition='damaged'
       and exists(select 1 from inventory_purchase_lines l where l.company_id=o.company_id and l.order_id=o.id and l.received_quantity+l.cancelled_quantity<l.quantity)
-    ) entries order by closed,created_at desc,id desc limit 26 offset $4`,[loc.company_id,loc.id,input.kind||null,(input.page-1)*25]);
+    ) entries order by closed,created_at desc,id desc limit 26 offset $4`;
+  const params=[loc.company_id,loc.id,input.kind||null,(input.page-1)*25];
+  const ids=await client.query(listSql,params);
+  const totalResult=ids.rows.length||input.page===1?ids:await client.query(listSql,[...params.slice(0,3),0]);
+  const total=Number(totalResult.rows[0]?.total_count||0);
   const items=[];for(const r of ids.rows.slice(0,25)){
     if(r.source==='task')items.push(await detail(client,loc.company_id,r.id,input));
     else {
@@ -60,7 +64,7 @@ export async function listStockTasks(input){
       if(report.rows[0])items.push({...report.rows[0],quantity:null,uom_code:'',units:[],events:[]});
     }
   }
-  return {items,page:input.page,hasMore:ids.rows.length>25,canApprove:input.isAdmin};
+  return {items,page:input.page,pageSize:25,total,pageCount:Math.max(1,Math.ceil(total/25)),hasMore:ids.rows.length>25,canApprove:input.isAdmin};
  }finally{client.release();}
 }
 export async function readStockTask(input){
@@ -167,7 +171,7 @@ async function placeReleasedTaskStock(client,input,task,part,locationId,inventor
 }
 function validateAmount(part,quantity){
  const unit=getUnitDefinition(part.uom_code);
- if(!unit||unit.category==='time'||!part.tracking_mode)fail('Review physical tracking and stocking units first.');
+ if(!unit||unit.category==='time'||!["quantity","serialized","measured_bulk"].includes(part.tracking_mode))fail('Review physical tracking and stocking units first.');
  if(!Number.isFinite(quantity)||quantity<0||Math.round(quantity*10**unit.decimalScale)/10**unit.decimalScale!==quantity)fail('Quantity does not match the stocking unit precision.');
  if(part.tracking_mode==='serialized'&&!Number.isInteger(quantity))fail('Serialized quantities must be whole units.');
 }

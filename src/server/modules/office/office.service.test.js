@@ -29,9 +29,11 @@ test("office dashboard includes assigned mechanics without workorders", async ()
     { id: "mechanic-1", name: "Mechanic One", locationIds: [...locationIds] },
     { id: "mechanic-2", name: "Mechanic Two", locationIds: [...locationIds] },
   ];
+  const companyId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
   const dashboard = await officeDashboard(
-    { locationIds },
+    { actor: { id: "office-1", role: "office" }, companyIds: new Set([companyId]),
+      companyRoles: new Map([[companyId, "office"]]), locationIds },
     {
       queryWorkorders: async (_context, input) => {
         queries.push(input);
@@ -41,6 +43,7 @@ test("office dashboard includes assigned mechanics without workorders", async ()
         assert.deepEqual(authorizedLocationIds, [...locationIds]);
         return mechanics;
       },
+      listLocations: async ({ locationIds: ids }) => ids.map((locationId) => ({ locationId })),
     },
   );
 
@@ -54,4 +57,25 @@ test("office dashboard includes assigned mechanics without workorders", async ()
   });
   assert.deepEqual(queries.map(({ category }) => category), ["unassigned", "all", "parts", "ready_review", "all"]);
   assert.deepEqual(queries[1].lifecycle, ["accepted", "in_progress"]);
+});
+
+test("office dashboard excludes mechanic-only company workorders and locations", async () => {
+  const companyA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const companyB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const locationA = "11111111-1111-4111-8111-111111111111";
+  const locationB = "22222222-2222-4222-8222-222222222222";
+  const scopes = [];
+  let mechanicLocations;
+  await officeDashboard({
+    actor: { id: "actor-1", role: "admin" },
+    companyIds: new Set([companyA, companyB]),
+    companyRoles: new Map([[companyA, "office"], [companyB, "mechanic"]]),
+    locationIds: new Set([locationA, locationB]),
+  }, {
+    queryWorkorders: async (context) => { scopes.push([...context.companyIds]); return { items: [], total: 0 }; },
+    listLocations: async ({ companyIds }) => companyIds.includes(companyA) ? [{ locationId: locationA }] : [],
+    listMechanics: async (ids) => { mechanicLocations = ids; return []; },
+  });
+  assert.deepEqual(scopes, Array(5).fill([companyA]));
+  assert.deepEqual(mechanicLocations, [locationA]);
 });

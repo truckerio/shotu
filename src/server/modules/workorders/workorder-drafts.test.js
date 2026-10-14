@@ -31,6 +31,7 @@ function context(role = "office") {
   return {
     actor: { id: actorId, role },
     companyIds: new Set([companyId]),
+    companyRoles: new Map([[companyId, role]]),
     locationIds: new Set([locationId]),
   };
 }
@@ -164,7 +165,7 @@ test("mechanics cannot use the server-owned workorder draft lifecycle", async ()
   );
 });
 
-test("draft updates cannot move between companies and map version conflicts to HTTP 409", async () => {
+test("draft updates cannot move into an inaccessible company and map version conflicts to HTTP 409", async () => {
   await assert.rejects(
     updateUserWorkorderDraft(context(), draftId, {
       version: 2,
@@ -173,7 +174,7 @@ test("draft updates cannot move between companies and map version conflicts to H
       getOwnership: async () => ({ companyId, locationId, status: "active" }),
       getLocation: async () => ({ id: locationId, company_id: "66666666-6666-4666-8666-666666666666" }),
     }),
-    (error) => error.statusCode === 400 && /another company/i.test(error.message),
+    (error) => error.statusCode === 404 && error.code === "RESOURCE_NOT_FOUND",
   );
 
   await assert.rejects(
@@ -236,6 +237,47 @@ test("office lists assigned-location drafts while admin receives all authorized-
     { role: "office", locationIds: [locationId] },
     { role: "admin", locationIds: [locationId] },
   ]);
+});
+
+test("mixed memberships partition draft visibility and exception authority by company", async () => {
+  const companyB = "66666666-6666-4666-8666-666666666666";
+  const locationB = "77777777-7777-4777-8777-777777777777";
+  const mixed = {
+    actor: { id: actorId, role: "admin" },
+    companyIds: new Set([companyId, companyB]),
+    companyRoles: new Map([[companyId, "admin"], [companyB, "office"]]),
+    locationIds: new Set([locationB]),
+  };
+  let listed;
+  const { listUserWorkorderDrafts } = await import("./workorder-drafts.service.js");
+  await listUserWorkorderDrafts(mixed, {}, { listDrafts: async (scope) => { listed = scope; return []; } });
+  assert.deepEqual(listed.companyIds, [companyId, companyB]);
+  assert.deepEqual(listed.adminCompanyIds, [companyId]);
+  assert.deepEqual(listed.locationIds, [locationB]);
+  await assert.rejects(() => createUserWorkorderDraft(mixed, {
+    type: "workorder", locationId: locationB, payload: {}, authorizationClassification: "internal_fleet",
+  }, { getLocation: async () => ({ id: locationB, company_id: companyB }), createDraft: async () => { throw new Error("must not create"); } }),
+  { code: "PERMISSION_DENIED" });
+  let takeoverScope;
+  await takeoverUserWorkorderDraft(mixed, draftId, { version: 2 }, {
+    takeover: async (scope) => { takeoverScope = scope; return { id: draftId }; },
+  });
+  assert.deepEqual(takeoverScope.companyIds, [companyId]);
+  assert.deepEqual(takeoverScope.adminCompanyIds, [companyId]);
+});
+
+test("draft repository locks submissions with row-specific admin company scope", async () => {
+  const companyB = "66666666-6666-4666-8666-666666666666";
+  let captured;
+  const client = { query: async (sql, values) => { captured = { sql, values }; return { rows: [] }; } };
+  const result = await submitWorkorderDraftInTransaction({
+    id: draftId, companyIds: [companyId, companyB], adminCompanyIds: [companyId],
+    locationIds: [locationId], userId: actorId,
+  }, client);
+  assert.equal(result, null);
+  assert.match(captured.sql, /d\.company_id = any\(\$3::uuid\[\]\)/);
+  assert.match(captured.sql, /d\.location_id = any\(\$4::uuid\[\]\)/);
+  assert.deepEqual(captured.values, [draftId, [companyId, companyB], [companyId], [locationId], actorId]);
 });
 
 test("takeover is atomic at the service boundary and mechanics remain forbidden", async () => {
@@ -421,6 +463,7 @@ test("draft submission accepts the canonical database company UUID", async () =>
   await submitUserWorkorderDraft({
     ...context(),
     companyIds: new Set([canonicalCompanyId]),
+    companyRoles: new Map([[canonicalCompanyId, "office"]]),
   }, draftId, { version: 2 }, {
     getLocation: async () => ({ id: locationId, company_id: canonicalCompanyId }),
     submitDraft: async (input) => {

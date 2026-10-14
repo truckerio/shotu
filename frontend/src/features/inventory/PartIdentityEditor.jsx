@@ -7,7 +7,7 @@ import { Button } from "../../components/ui/Button.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
 import { api } from "../../lib/api.js";
 import { getUnitDefinition, UNITS_OF_MEASURE } from "../../../../shared/units-of-measure.js";
-import { createPartIdentityDraft, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, validatePartIdentityDraft } from "./part-identity-editor-model.js";
+import { createPartIdentityDraft, MAX_REFERENCE_NUMBERS, partIdentityConflict, partIdentityPayload, trackingModeForUom, trackingModeLockedForUom, validatePartIdentityDraft } from "./part-identity-editor-model.js";
 
 function fieldIsEditable(part, field) {
   return (part.editableFields || []).includes(field);
@@ -24,6 +24,7 @@ export function PartIdentityEditor({ part, readOnly = false, onEditStateChange, 
   const uomEditable = fieldIsEditable(part, "uomCode");
   const canonicalUomCode = part.canonicalUomCode || part.uomCode;
   const restrictedToEquivalentUnit = Boolean(part.uomLocked);
+  const trackingModeLocked = trackingModeLockedForUom(draft.uomCode);
   const allowedUomCodes = useMemo(() => {
     if (!restrictedToEquivalentUnit) return null;
     const canonical = getUnitDefinition(canonicalUomCode);
@@ -35,7 +36,10 @@ export function PartIdentityEditor({ part, readOnly = false, onEditStateChange, 
       && unit.decimalScale === canonical.decimalScale
     )).map((unit) => unit.code);
   }, [canonicalUomCode, restrictedToEquivalentUnit]);
-  const savedPayload = partIdentityPayload(createPartIdentityDraft(part), part.version);
+  const savedPayload = partIdentityPayload({
+    ...createPartIdentityDraft(part),
+    trackingMode: String(part.trackingMode || ""),
+  }, part.version);
   const draftPayload = partIdentityPayload(draft, part.version);
   const dirty = JSON.stringify(draftPayload) !== JSON.stringify(savedPayload);
 
@@ -58,8 +62,12 @@ export function PartIdentityEditor({ part, readOnly = false, onEditStateChange, 
   }), [conflict, errors]);
 
   function update(field, value) {
-    setDraft((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: undefined }));
+    setDraft((current) => field === "uomCode"
+      ? { ...current, uomCode: value, trackingMode: trackingModeForUom(value, current.trackingMode) }
+      : { ...current, [field]: value });
+    setErrors((current) => field === "uomCode"
+      ? { ...current, uomCode: undefined, trackingMode: undefined }
+      : { ...current, [field]: undefined });
     setConflict(false);
   }
 
@@ -155,11 +163,12 @@ export function PartIdentityEditor({ part, readOnly = false, onEditStateChange, 
           <UnitOfMeasurePicker uomCode={draft.uomCode} allowedUomCodes={allowedUomCodes} onChange={(value) => update("uomCode", value)} disabled={busy} readOnly={readOnly || !uomEditable} />
         </FormField>
         <FormField id="inventory-tracking-mode" label="Tracking" error={errors.trackingMode} required>
-          <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={readOnly || busy || !fieldIsEditable(part, "trackingMode")}>
+          <Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={readOnly || busy || trackingModeLocked || !fieldIsEditable(part, "trackingMode")}>
             <option value="">Choose tracking</option>
             <option value="quantity">Quantity</option>
             <option value="serialized">Serialized</option>
             <option value="measured_bulk">Measured or bulk</option>
+            <option value="no_stock">No stock — service or non-inventory item</option>
           </Dropdown>
         </FormField>
       </div>

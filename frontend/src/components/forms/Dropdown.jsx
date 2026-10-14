@@ -55,6 +55,7 @@ export function Dropdown({
   className = "",
   disabled = false,
   id,
+  icon: TriggerIcon,
   name,
   onBlur,
   onChange,
@@ -63,6 +64,7 @@ export function Dropdown({
   popoverClassName = "",
   required = false,
   style,
+  title,
   value = "",
 }) {
   const options = collectOptions(children);
@@ -79,7 +81,7 @@ export function Dropdown({
     <Select
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
-      className={joinClassNames("dropdown-select", className)}
+      className={joinClassNames("dropdown-select", TriggerIcon && "dropdown-select-icon-only", className)}
       isDisabled={disabled}
       isInvalid={Boolean(ariaInvalid)}
       isRequired={required || Boolean(ariaRequired)}
@@ -99,10 +101,11 @@ export function Dropdown({
         id={id}
         style={style}
       >
-        <SelectValue className="dropdown-select-value">
+        {TriggerIcon ? <span className="dropdown-select-trigger-icon" title={title}><TriggerIcon aria-hidden="true" /></span> : null}
+        <SelectValue className={TriggerIcon ? "dropdown-select-icon-value" : "dropdown-select-value"}>
           {({ selectedText }) => selectedText}
         </SelectValue>
-        <ChevronDown className="dropdown-select-chevron" aria-hidden="true" />
+        {TriggerIcon ? null : <ChevronDown className="dropdown-select-chevron" aria-hidden="true" />}
       </Button>
       <Popover className={joinClassNames("dropdown-select-popover", popoverClassName)} placement={placement}>
         <ListBox className="dropdown-select-listbox" items={options}>

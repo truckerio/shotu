@@ -448,11 +448,18 @@ function canonicalJson(value) {
   return value;
 }
 
-function preserveMechanicOwnedFormData(beforeFormData, proposedFormData) {
+function preserveMechanicOwnedFormData(beforeFormData, proposedFormData, { preserveLaborHours = false } = {}) {
   const preserved = { ...(proposedFormData || {}) };
   for (const key of MECHANIC_OWNED_FORM_KEYS) {
     if (Object.prototype.hasOwnProperty.call(beforeFormData || {}, key)) preserved[key] = beforeFormData[key];
     else delete preserved[key];
+  }
+  if (preserveLaborHours) {
+    if (Object.prototype.hasOwnProperty.call(beforeFormData || {}, "laborHours")) {
+      preserved.laborHours = beforeFormData.laborHours;
+    } else {
+      delete preserved.laborHours;
+    }
   }
   return preserved;
 }
@@ -670,20 +677,34 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     )
     : { rows: [] };
   const serializedCatalogPartIds = new Set(serializedCatalogResult.rows.map((row) => row.catalog_part_id));
-  const aggregateCatalogResult = catalogPartIds.length
+  const catalogPolicyResult = catalogPartIds.length
     ? await client.query(
-      `select id,tracking_mode from parts_catalog
-       where company_id=$1 and id=any($2::uuid[]) and tracking_mode in ('quantity','measured_bulk')`,
+      `select id,tracking_mode,uom_code from parts_catalog
+       where company_id=$1 and id=any($2::uuid[])`,
       [companyId, catalogPartIds],
     )
     : { rows: [] };
-  const aggregateTrackingByPartId = new Map(aggregateCatalogResult.rows.map((row) => [row.id, row.tracking_mode]));
+  const catalogPolicyByPartId = new Map(catalogPolicyResult.rows.map((row) => [row.id, row]));
+  const catalogTrackingByPartId = new Map(catalogPolicyResult.rows.map((row) => [row.id, row.tracking_mode]));
+  const aggregateTrackingByPartId = new Map(catalogPolicyResult.rows
+    .filter((row) => ["quantity", "measured_bulk"].includes(row.tracking_mode))
+    .map((row) => [row.id, row.tracking_mode]));
+  const noStockPartIndexes = new Set();
   for (const [partIndex, part] of sourceParts.entries()) {
     if (part?.purchaseRequested === true) continue;
     const selection = selectionsByPartIndex.get(partIndex);
     const positionSelection = positionSelectionsByPartIndex.get(partIndex);
     const serialized = serializedCatalogPartIds.has(part?.catalogPartId);
     const aggregate = aggregateTrackingByPartId.has(part?.catalogPartId);
+    const catalogPolicy = catalogPolicyByPartId.get(part?.catalogPartId);
+    const noStock = catalogPolicy?.tracking_mode === "no_stock";
+    if (noStock && (part.uomCode || DEFAULT_UOM_CODE) !== catalogPolicy.uom_code) {
+      throw new WorkorderLifecycleConflictError(
+        "WORKORDER_NO_STOCK_UOM_MISMATCH",
+        "The no-stock item unit changed. Refresh the part and try again.",
+      );
+    }
+    if (noStock) noStockPartIndexes.add(partIndex);
     if (serialized && !selection) {
       throw new WorkorderLifecycleConflictError(
         "WORKORDER_SERIALIZED_SELECTION_REQUIRED",
@@ -719,6 +740,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     const requiredPartIndexes = new Set([
       ...selections.map(({ partIndex }) => partIndex),
       ...positionSelections.map(({ partIndex }) => partIndex),
+      ...noStockPartIndexes,
     ]);
     const pricedPartIndexes = new Set((input.pricing?.parts || []).map(({ partIndex }) => partIndex));
     const laborPricingRequired = Number(sourceFormData.laborHours) > 0;
@@ -731,6 +753,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       );
     }
   }
+  const noStockLineIds = new Map([...noStockPartIndexes].map((partIndex) => [partIndex, randomUUID()]));
   const selectedPartIndexes = new Set([
     ...selections.map(({ partIndex }) => partIndex),
     ...positionSelections.map(({ partIndex }) => partIndex),
@@ -739,9 +762,12 @@ export async function createOperationalWorkorderInTransaction(input, client) {
   const formData = normalizeWorkorderFormData({
     ...sourceFormData,
     parts: Array.isArray(sourceFormData.parts)
-      ? sourceFormData.parts.filter((_, index) => !selectedPartIndexes.has(index)).map((part) => {
+      ? sourceFormData.parts.flatMap((part, originalIndex) => {
+        if (selectedPartIndexes.has(originalIndex)) return [];
         const { serializedUnitIds: _unitIds, serializedSerialNumbers: _serialNumbers, ...savedPart } = part || {};
-        return savedPart;
+        return [noStockLineIds.has(originalIndex)
+          ? { ...savedPart, trackingMode: "no_stock", noStockLineId: noStockLineIds.get(originalIndex) }
+          : savedPart];
       })
       : sourceFormData.parts,
   }, {
@@ -895,6 +921,17 @@ export async function createOperationalWorkorderInTransaction(input, client) {
     }
     pricingUsages.set(selection.partIndex, { usageId: aggregateResult.usage.id, usageKind: "aggregate" });
   }
+  for (const partIndex of noStockPartIndexes) {
+    const part = sourceParts[partIndex];
+    pricingUsages.set(partIndex, {
+      usageKind: "no_stock",
+      usageId: null,
+      noStockLineId: noStockLineIds.get(partIndex),
+      catalogPartId: part.catalogPartId,
+      quantity: part.qty,
+      uomCode: part.uomCode || DEFAULT_UOM_CODE,
+    });
+  }
   if (input.pricing) {
     if (!["office", "admin"].includes(input.createdByRole)) throw new WorkorderLifecycleConflictError("WORKORDER_PRICING_FORBIDDEN", "Only Office or Admin may select prices.");
     const pricingScope = { workorderId: result.rows[0].id, actorId: input.pricingActorId || input.createdByUserId,
@@ -1042,7 +1079,11 @@ export async function updateOperationalWorkorder(workorderId, input) {
       ? input
       : {
         ...input,
-        formData: normalizeWorkorderFormData(preserveMechanicOwnedFormData(before.form_data, requestedFormData), {
+        formData: normalizeWorkorderFormData(preserveMechanicOwnedFormData(
+          before.form_data,
+          requestedFormData,
+          { preserveLaborHours: !laborHoursIncluded },
+        ), {
           assetOwnerName: assetOwnerResult.rows[0]?.owner_name,
         }),
       };
@@ -1332,12 +1373,18 @@ function buildOperationsWhere(input, { includeCategory = true } = {}) {
       or coalesce(location->>'name', '') ilike '%' || $${values.length + 1} || '%'
     )`, input.search);
   }
-  if (input.visibility === "mechanic") {
-    if (input.mechanicPool) {
-      clauses.push("lifecycle in ('accepted', 'in_progress')");
-    } else {
-      add("(?::uuid = any(mechanic_ids) or (lifecycle = 'open' and cardinality(mechanic_ids) = 0))", input.actorUserId);
+  if (Array.isArray(input.mechanicCompanyIds) && Array.isArray(input.surveillanceCompanyIds)) {
+    if (input.mechanicCompanyIds.length) {
+      add(`(company_id <> all(?::uuid[]) or ${input.mechanicPool
+        ? "lifecycle in ('accepted', 'in_progress')"
+        : `($1::uuid = any(mechanic_ids) or (lifecycle = 'open' and cardinality(mechanic_ids) = 0))`})`, input.mechanicCompanyIds);
     }
+    if (input.surveillanceCompanyIds.length) {
+      add("(company_id <> all(?::uuid[]) or lifecycle in ('accepted', 'in_progress', 'mechanic_done', 'closed', 'odoo_entered'))", input.surveillanceCompanyIds);
+    }
+  } else if (input.visibility === "mechanic") {
+    if (input.mechanicPool) clauses.push("lifecycle in ('accepted', 'in_progress')");
+    else add("(?::uuid = any(mechanic_ids) or (lifecycle = 'open' and cardinality(mechanic_ids) = 0))", input.actorUserId);
   } else if (input.visibility === "surveillance") {
     clauses.push("lifecycle in ('accepted', 'in_progress', 'mechanic_done', 'closed', 'odoo_entered')");
   }
@@ -1936,6 +1983,21 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
       })
       : [];
     const effectivePriorParts = applyManualPartEvidence(priorParts, manualEvidence);
+    const catalogIds = [...new Set([...effectivePriorParts, ...parts]
+      .map((part) => part?.catalogPartId)
+      .filter(Boolean))];
+    const catalogs = catalogIds.length ? await client.query(
+      `select id,part_number,uom_code,tracking_mode
+       from parts_catalog
+       where company_id=$1 and id=any($2::uuid[])
+       for key share`,
+      [before.company_id, catalogIds],
+    ) : { rows: [] };
+    const catalogById = new Map(catalogs.rows.map((row) => [row.id, row]));
+    const priorNoStockByLineId = new Map(effectivePriorParts
+      .filter((part) => part?.noStockLineId)
+      .map((part) => [part.noStockLineId, part]));
+    const submittedNoStockLineIds = new Set();
     const uomCodes = [...new Set([...effectivePriorParts, ...parts].map((part) => part?.uomCode).filter(Boolean))];
     const uoms = uomCodes.length ? await client.query(
       `select code, category from units_of_measure where code=any($1::text[])`,
@@ -1953,10 +2015,41 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
       || String(part?.qty ?? "").trim()
       || String(part?.repairOrder || "").trim(),
     );
-    const remainingPrior = effectivePriorParts.map((part) => ({ part, signature: signature(part), used: false }));
+    const remainingPrior = effectivePriorParts
+      .filter((part) => !part?.noStockLineId)
+      .map((part) => ({ part, signature: signature(part), used: false }));
     const evidencePrior = new Map(effectivePriorParts.filter((part) => part?.evidenceId).map((part) => [part.evidenceId, part]));
     const validatedParts = parts.map((part) => {
       if (!hasPartValue(part)) return part;
+      const priorNoStock = part.noStockLineId ? priorNoStockByLineId.get(part.noStockLineId) : null;
+      const requestedCatalogId = priorNoStock?.catalogPartId || part.catalogPartId;
+      const catalog = requestedCatalogId ? catalogById.get(requestedCatalogId) : null;
+      if (priorNoStock || catalog?.tracking_mode === "no_stock") {
+        if (part.noStockLineId && (!priorNoStock || submittedNoStockLineIds.has(part.noStockLineId))) {
+          throw lifecycleConflict("WORKORDER_NO_STOCK_IDENTITY_INVALID", "No-stock Workorder line identity changed. Refresh and try again.");
+        }
+        if (priorNoStock && part.catalogPartId && part.catalogPartId !== priorNoStock.catalogPartId) {
+          throw lifecycleConflict("WORKORDER_NO_STOCK_IDENTITY_INVALID", "A no-stock Workorder line cannot be changed to another catalog item.");
+        }
+        if (!catalog || catalog.tracking_mode !== "no_stock") {
+          throw lifecycleConflict("WORKORDER_NO_STOCK_CATALOG_INVALID", "This catalog item is no longer configured for no-stock use.");
+        }
+        if (part.uomCode !== catalog.uom_code) {
+          throw lifecycleConflict("WORKORDER_NO_STOCK_UOM_MISMATCH", "Use the catalog unit for this no-stock Workorder item.");
+        }
+        const noStockLineId = priorNoStock?.noStockLineId || randomUUID();
+        submittedNoStockLineIds.add(noStockLineId);
+        return {
+          ...(priorNoStock || {}),
+          noStockLineId,
+          catalogPartId: catalog.id,
+          trackingMode: "no_stock",
+          partNo: catalog.part_number,
+          qty: String(part.qty),
+          uomCode: catalog.uom_code,
+          repairOrder: String(part.repairOrder || "").trim(),
+        };
+      }
       const category = categoryByCode.get(part.uomCode);
       if (String(part.qty ?? "").trim() && category === "time") {
         throw lifecycleConflict("WORKORDER_PART_UOM_INVALID", "Time belongs in labor, not used parts.");
@@ -1977,13 +2070,19 @@ async function updateOperationalUsedParts(workorderId, changedByUserId, parts, l
       match.used = true;
       return { ...part, evidenceId: match.part.evidenceId || randomUUID() };
     });
+    // No-stock lines are catalog charges, not physical usage evidence. An authorized
+    // used-parts edit may omit one to correct the Workorder; historical price
+    // snapshots remain immutable audit records and are ignored once the line is gone.
     if (remainingPrior.some((entry) => !entry.used && hasPartValue(entry.part))) {
       throw lifecycleConflict(
         "WORKORDER_LEGACY_PART_EVIDENCE_IMMUTABLE",
         "Historical manual part evidence cannot be edited or removed.",
       );
     }
-    const persistedParts = manualEvidence.length ? priorParts : validatedParts;
+    const persistedParts = manualEvidence.length ? validatedParts.map((part) => {
+      if (!part?.evidenceId) return part;
+      return priorParts.find((prior) => prior?.evidenceId === part.evidenceId) || part;
+    }) : validatedParts;
     const nextFormData = {
       ...formData,
       parts: persistedParts,

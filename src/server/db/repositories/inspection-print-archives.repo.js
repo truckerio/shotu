@@ -84,7 +84,7 @@ export async function findInspectionPrintArchive(input, dependencies = {}) {
 export async function findLatestInspectionPrintArchive(input, dependencies = {}) {
   const run = dependencies.query || query;
   const result = await run(`select * from inspection_print_archives
-    where inspection_id=$1 and company_id=$2 and status='ready'
+    where inspection_id=$1 and company_id=$2 and status in ('ready','pending')
     order by revision_number desc,created_at desc limit 1`, [input.inspectionId, input.companyId]);
   return archiveRow(result.rows[0]);
 }

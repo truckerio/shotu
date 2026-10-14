@@ -7,7 +7,7 @@ const source = await readFile(new URL("./part-request-queue.repo.js", import.met
 
 test("unresolved request queue keeps its tenant, location, lifecycle, supply, and total contracts in one query", () => {
   assert.match(source, /wo\.company_id = any\(\$1::uuid\[\]\)/);
-  assert.match(source, /\(\$3::boolean or wo\.location_id = any\(\$2::uuid\[\]\)\)/);
+  assert.match(source, /\(wo\.company_id = any\(\$3::uuid\[\]\) or wo\.location_id = any\(\$2::uuid\[\]\)\)/);
   assert.match(source, /wo\.status <> 'cancelled'/);
   assert.match(source, /pr\.approval_status in \('submitted', 'needs_info'\)/);
   assert.match(source, /pr\.approval_status = 'approved'/);

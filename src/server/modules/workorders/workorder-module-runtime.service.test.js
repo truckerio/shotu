@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PERMISSION } from "../../auth/permissions.js";
 import {
   createWorkorderRuntime,
   patchWorkorderModule,
@@ -11,7 +12,43 @@ import {
   workorderCreateContext,
 } from "./workorder-module-runtime.service.js";
 
-const context = { actor: { id: "actor-1", role: "office" } };
+const authorizedWorkorder = { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} };
+function scopedContext(role = "office", id = "actor-1", companyId = "company-1") {
+  return {
+    actor: { id, role },
+    companyIds: new Set([companyId]),
+    companyRoles: new Map([[companyId, role === "kiosk" ? "mechanic" : role]]),
+    locationIds: new Set([companyId === "company-1" ? "location-1" : "location-server"]),
+    permissions: new Set([PERMISSION.CUSTOMER_DOCUMENT_READ, PERMISSION.CUSTOMER_DOCUMENT_WRITE]),
+  };
+}
+const context = scopedContext();
+
+test("protected detail and module reads project customer-document capabilities from permissions", async () => {
+  const readOnlyContext = {
+    ...scopedContext("office", "office-readonly"),
+    permissions: new Set([PERMISSION.CUSTOMER_DOCUMENT_READ]),
+  };
+  const detail = {
+    workorder: {
+      id: "wo-1",
+      companyId: "company-1",
+      locationId: "location-1",
+      formData: { customerDocumentAdjustments: null },
+    },
+  };
+  const dependencies = {
+    resolveModules: async () => ({ workorder: detail.workorder, decisions: { concern: { access: "read", source: "default" } } }),
+    authorize: async () => ({ workorder: detail.workorder, access: "read", source: "default" }),
+    loadDetail: async () => detail,
+  };
+
+  const protectedDetail = await protectedWorkorderDetail(readOnlyContext, "wo-1", dependencies);
+  const protectedModule = await protectedWorkorderModule(readOnlyContext, "wo-1", "concern", dependencies);
+  assert.deepEqual(protectedDetail.customerDocumentAccess, { canRead: true, canWrite: false });
+  assert.deepEqual(protectedModule.customerDocumentAccess, { canRead: true, canWrite: false });
+  assert.equal(Object.hasOwn(protectedDetail.workorder.formData, "customerDocumentAdjustments"), true);
+});
 
 test("protected module read never loads data before authorization", async () => {
   const calls = [];
@@ -24,10 +61,8 @@ test("protected module read never loads data before authorization", async () => 
 
 test("generic mechanic and kiosk detail reads apply the restricted parts projection", async () => {
   for (const role of ["mechanic", "kiosk"]) {
-    const result = await protectedWorkorderDetail({
-      actor: { id: `${role}-1`, role },
-    }, "wo-1", {
-      resolveModules: async () => ({ decisions: { parts: { access: "write", source: "default" } } }),
+    const result = await protectedWorkorderDetail(scopedContext(role, `${role}-1`), "wo-1", {
+      resolveModules: async () => ({ workorder: authorizedWorkorder, decisions: { parts: { access: "write", source: "default" } } }),
       loadDetail: async () => ({
         workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} },
         partRequests: [{
@@ -56,10 +91,8 @@ test("generic mechanic and kiosk detail reads apply the restricted parts project
 
 test("generic mechanic and kiosk Parts module reads cannot bypass response redaction", async () => {
   for (const role of ["mechanic", "kiosk"]) {
-    const result = await protectedWorkorderModule({
-      actor: { id: `${role}-1`, role },
-    }, "wo-1", "parts", {
-      authorize: async () => ({ access: "write", source: "default" }),
+    const result = await protectedWorkorderModule(scopedContext(role, `${role}-1`), "wo-1", "parts", {
+      authorize: async () => ({ workorder: authorizedWorkorder, access: "write", source: "default" }),
       loadDetail: async () => ({
         workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: {} },
         partRequests: [{
@@ -85,7 +118,7 @@ test("generic mechanic and kiosk Parts module reads cannot bypass response redac
 test("hidden Parts access does not query or expose installed serialized summaries", async () => {
   let queried = false;
   const result = await protectedWorkorderDetail(context, "wo-1", {
-    resolveModules: async () => ({ decisions: {
+    resolveModules: async () => ({ workorder: authorizedWorkorder, decisions: {
       parts: { access: "hidden", source: "user" },
       preview: { access: "read", source: "default" },
     } }),
@@ -102,7 +135,7 @@ test("hidden Parts access does not query or expose installed serialized summarie
 test("Office pricing fails closed when the bounded aggregate usage view is truncated", async () => {
   let requestedLimit = 0;
   const result = await protectedWorkorderDetail(context, "wo-1", {
-    resolveModules: async () => ({ decisions: {
+    resolveModules: async () => ({ workorder: authorizedWorkorder, decisions: {
       diagnosisRepair: { access: "write", source: "default" },
       parts: { access: "write", source: "default" },
     } }),
@@ -151,7 +184,7 @@ test("Unit history runtime forwards query input through the dedicated reader", a
 test("generic patch authorizes the exact module and passes authenticated actor", async () => {
   const calls = [];
   const result = await patchWorkorderModule(context, "wo-1", "concern", { officeNotes: "note" }, {
-    authorize: async (...args) => calls.push(args),
+    authorize: async (...args) => { calls.push(args); return { workorder: authorizedWorkorder }; },
     updateOffice: async (...args) => args,
   });
   assert.equal(calls[0][2].moduleKey, "concern");
@@ -163,12 +196,12 @@ test("office and admin diagnosis edits use office persistence instead of mechani
   for (const role of ["office", "admin"]) {
     const calls = [];
     const result = await patchWorkorderModule(
-      { actor: { id: `${role}-actor`, role } },
+      scopedContext(role, `${role}-actor`),
       "wo-1",
       "diagnosisRepair",
       { diagnosis: "Found leak", workPerformed: "Replaced seal" },
       {
-        authorize: async () => {},
+        authorize: async () => ({ workorder: authorizedWorkorder }),
         updateOffice: async (...args) => { calls.push(args); return args; },
         updateMechanic: async () => assert.fail("office/admin must not use mechanic persistence"),
       },
@@ -181,7 +214,7 @@ test("office and admin diagnosis edits use office persistence instead of mechani
 test("compatibility batch patch authorizes every touched module and persists once", async () => {
   const calls = [];
   const result = await patchWorkorderModules(context, "wo-1", ["unit", "schedule"], { formData: { unitNo: "17" } }, {
-    authorizeMany: async (...args) => calls.push(args),
+    authorizeMany: async (...args) => { calls.push(args); return { workorder: authorizedWorkorder }; },
     updateOffice: async (...args) => args,
   });
   assert.deepEqual(calls[0][2].map(({ moduleKey, action }) => [moduleKey, action]), [
@@ -189,6 +222,73 @@ test("compatibility batch patch authorizes every touched module and persists onc
     ["schedule", "update"],
   ]);
   assert.equal(result[1].officeUserId, "actor-1");
+});
+
+test("compatibility batch patch retains Diagnosis authorization for changed labor hours", async () => {
+  const authorizations = [];
+  const result = await patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+    formData: { laborHours: "3.5" },
+  }, {
+    authorizeMany: async (_context, _workorderId, requests) => {
+      authorizations.push(...requests);
+      return { workorder: { id: "wo-1", companyId: "company-1", locationId: "location-1", formData: { laborHours: "2" } } };
+    },
+    updateOffice: async (...args) => args,
+  });
+
+  assert.deepEqual(authorizations.map(({ moduleKey }) => moduleKey), ["diagnosisRepair"]);
+  assert.equal(result[1].formData.laborHours, "3.5");
+});
+
+test("compatibility batch patch preserves omitted customer-document fields from server state", async () => {
+  const adjustments = {
+    lineDiscounts: [],
+    documentDiscount: { kind: "fixed", value: "25", reason: "Service recovery" },
+    overrideReasons: [],
+  };
+  const current = {
+    id: "wo-1",
+    companyId: "company-1",
+    locationId: "location-1",
+    formData: {
+      customerDocumentAdjustments: adjustments,
+      customerDocumentAdjustmentBaseRevisionId: "22222222-2222-4222-8222-222222222222",
+    },
+  };
+  const result = await patchWorkorderModules(context, "wo-1", ["schedule"], {
+    formData: { workStartDate: "2026-08-03" },
+  }, {
+    authorizeMany: async () => ({ workorder: current }),
+    updateOffice: async (...args) => args,
+  });
+
+  assert.deepEqual(result[1].formData.customerDocumentAdjustments, adjustments);
+  assert.equal(
+    result[1].formData.customerDocumentAdjustmentBaseRevisionId,
+    "22222222-2222-4222-8222-222222222222",
+  );
+  assert.equal(result[1].formData.workStartDate, "2026-08-03");
+});
+
+test("compatibility batch patch keeps explicit customer-document removal authoritative", async () => {
+  const current = {
+    id: "wo-1",
+    companyId: "company-1",
+    locationId: "location-1",
+    formData: {
+      customerDocumentAdjustments: { documentDiscount: { kind: "fixed", value: "25", reason: "Recovery" } },
+      customerDocumentAdjustmentBaseRevisionId: "22222222-2222-4222-8222-222222222222",
+    },
+  };
+  const result = await patchWorkorderModules(context, "wo-1", ["concern"], {
+    formData: { customerDocumentAdjustments: null, customerDocumentAdjustmentBaseRevisionId: "" },
+  }, {
+    authorizeMany: async () => ({ workorder: current }),
+    updateOffice: async (...args) => args,
+  });
+
+  assert.equal(result[1].formData.customerDocumentAdjustments, null);
+  assert.equal(result[1].formData.customerDocumentAdjustmentBaseRevisionId, "");
 });
 
 test("compatibility patch canonicalizes a changed labor product using server-owned workorder scope", async () => {
@@ -202,7 +302,7 @@ test("compatibility patch canonicalizes a changed labor product using server-own
   };
   const authorizations = [];
   let resolvedScope;
-  const result = await patchWorkorderModules(context, "wo-1", ["unit", "diagnosisRepair"], {
+  const result = await patchWorkorderModules(scopedContext("office", "actor-1", "company-server"), "wo-1", ["unit", "diagnosisRepair"], {
     formData: {
       unitNo: "17",
       laborProduct: { productId: newProductId, externalId: "forged", code: "BAD", name: "Forged", uomCode: "hr" },
@@ -240,7 +340,7 @@ test("compatibility autosave preserves an unchanged legacy labor snapshot withou
     formData: { laborProduct: legacyLabor },
   };
   const authorizations = [];
-  const result = await patchWorkorderModules(context, "wo-1", ["unit", "diagnosisRepair"], {
+  const result = await patchWorkorderModules(scopedContext("office", "actor-1", "company-server"), "wo-1", ["unit", "diagnosisRepair"], {
     formData: { unitNo: "17", laborProduct: { ...legacyLabor } },
   }, {
     loadWorkorder: async () => current,
@@ -300,7 +400,7 @@ test("compatibility patch allows an authorized office user to clear the saved la
 test("generic Diagnosis patch rejects mechanic labor-product mutation after module authorization", async () => {
   const current = { companyId: "company-1", locationId: "location-1", formData: {} };
   await assert.rejects(patchWorkorderModule(
-    { actor: { id: "mechanic-1", role: "mechanic" } },
+    scopedContext("mechanic", "mechanic-1"),
     "wo-1",
     "diagnosisRepair",
     {
@@ -329,7 +429,7 @@ test("changed labor selection propagates trusted resolver rejection and never pe
   const productId = "44444444-4444-4444-8444-444444444444";
   const current = { companyId: "company-server", locationId: "location-server", formData: {} };
   let scope;
-  await assert.rejects(patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+  await assert.rejects(patchWorkorderModules(scopedContext("office", "actor-1", "company-server"), "wo-1", ["diagnosisRepair"], {
     formData: { laborProduct: { productId, externalId: "", code: "BAD", name: "Cross tenant", uomCode: "hr" } },
   }, {
     loadWorkorder: async () => current,
@@ -347,7 +447,7 @@ test("changed labor selection propagates trusted resolver rejection and never pe
 
 test("changed non-local labor snapshots are rejected instead of trusting client fields", async () => {
   const current = { companyId: "company-server", locationId: "location-server", formData: {} };
-  await assert.rejects(patchWorkorderModules(context, "wo-1", ["diagnosisRepair"], {
+  await assert.rejects(patchWorkorderModules(scopedContext("office", "actor-1", "company-server"), "wo-1", ["diagnosisRepair"], {
     formData: { laborProduct: { externalId: "91", code: "FORGED", name: "Forged", uomCode: "hr" } },
   }, {
     loadWorkorder: async () => current,
@@ -362,7 +462,7 @@ test("generic action routes assignment through authenticated actor after module 
   const result = await runWorkorderModuleAction(context, "wo-1", "assignment", "assign", {
     mechanicUserIds: [], reason: "Schedule change",
   }, {
-    authorize: async (...args) => calls.push(args),
+    authorize: async (...args) => { calls.push(args); return { workorder: authorizedWorkorder }; },
     assign: async (...args) => args,
   });
   assert.equal(calls[0][2].action, "assign");
@@ -372,13 +472,14 @@ test("generic action routes assignment through authenticated actor after module 
 test("mechanic part requests use Parts read access without granting actual-part writes", async () => {
   const authorizations = [];
   const result = await runWorkorderModuleAction(
-    { actor: { id: "mechanic-1", role: "mechanic" } },
+    scopedContext("mechanic", "mechanic-1"),
     "wo-1",
     "parts",
     "request",
     { description: "Oil filter", quantity: 1, uomCode: "ea" },
     {
-      authorize: async (_context, _workorderId, request) => { authorizations.push(request); },
+      loadWorkorder: async () => authorizedWorkorder,
+      authorize: async (_context, _workorderId, request) => { authorizations.push(request); return { workorder: authorizedWorkorder }; },
       requestPart: async (...args) => args,
     },
   );
@@ -388,12 +489,38 @@ test("mechanic part requests use Parts read access without granting actual-part 
 
   const officeAuthorizations=[];
   const officeResult=await runWorkorderModuleAction(context,"wo-1","parts","request",{description:"Oil filter",quantity:1,uomCode:"ea"},{
-    authorize:async (_context,_workorderId,request)=>officeAuthorizations.push(request),
+    loadWorkorder:async()=>authorizedWorkorder,
+    authorize:async (_context,_workorderId,request)=>{officeAuthorizations.push(request);return{workorder:authorizedWorkorder};},
     requestPart:async (...args)=>args,
   });
   assert.equal(officeAuthorizations[0].capability,"write");
   assert.equal(officeResult[1].actorRole,"office");
   assert.equal(officeResult[1].mechanicUserId,"actor-1");
+});
+
+test("a primary Admin uses mechanic request authority in its mechanic company", async () => {
+  const target = { ...authorizedWorkorder, companyId: "mechanic-company" };
+  const mixed = {
+    actor: { id: "actor-1", role: "admin" },
+    companyIds: new Set(["admin-company", "mechanic-company"]),
+    companyRoles: new Map([["admin-company", "admin"], ["mechanic-company", "mechanic"]]),
+    locationIds: new Set(["location-1"]),
+  };
+  let requestedCapability;
+  const result = await runWorkorderModuleAction(mixed, "wo-1", "parts", "request", {
+    description: "Oil filter", quantity: 1, uomCode: "ea",
+  }, {
+    loadWorkorder: async () => target,
+    authorize: async (effective, _id, request) => {
+      assert.equal(effective.actor.role, "mechanic");
+      requestedCapability = request.capability;
+      return { workorder: target };
+    },
+    requestPart: async (_id, command) => command,
+  });
+  assert.equal(requestedCapability, "read");
+  assert.equal(result.actorRole, "mechanic");
+  assert.equal(mixed.actor.role, "admin");
 });
 
 test("parts action persists labor hours with goods through the authenticated role", async () => {
@@ -403,7 +530,7 @@ test("parts action persists labor hours with goods through the authenticated rol
     laborHours: "2.5",
     parts: [{ partNo: "46305", qty: "1", uomCode: "ea", repairOrder: "Replace seal" }],
   }, {
-    authorize: async (...args) => authorizations.push(args[2]),
+    authorize: async (...args) => { authorizations.push(args[2]); return { workorder: authorizedWorkorder }; },
     saveOfficeParts: async (...args) => args,
   });
 
@@ -426,7 +553,7 @@ test("legacy manual amendments are Office-owned and carry server-derived scope",
     idempotencyKey: "manual-evidence-void-1",
   };
   const result = await runWorkorderModuleAction(context, "wo-1", "parts", "record", input, {
-    authorize: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    authorize: async () => ({ companyId: "company-1", locationId: "location-1", workorder: authorizedWorkorder }),
     amendManualPartEvidence: async (...args) => { command = args; return { amended: true }; },
   });
   assert.deepEqual(result, { amended: true });
@@ -436,13 +563,13 @@ test("legacy manual amendments are Office-owned and carry server-derived scope",
   assert.equal(command[1].locationId, "location-1");
 
   await assert.rejects(runWorkorderModuleAction(
-    { actor: { id: "mechanic-1", role: "mechanic" } },
+    scopedContext("mechanic", "mechanic-1"),
     "wo-1",
     "parts",
     "record",
     input,
     {
-      authorize: async () => ({ companyId: "company-1", locationId: "location-1" }),
+      authorize: async () => ({ companyId: "company-1", locationId: "location-1", workorder: authorizedWorkorder }),
       amendManualPartEvidence: async () => assert.fail("mechanic reached amendment owner"),
     },
   ), (error) => error.statusCode === 403);
@@ -457,6 +584,7 @@ test("Parts write alone cannot mutate labor through the combined compatibility a
   }, {
     authorize: async (_context, _workorderId, request) => {
       if (request.moduleKey === "diagnosisRepair") throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+      return { workorder: authorizedWorkorder };
     },
     saveOfficeParts: async () => { saved = true; },
   }), (error) => error.statusCode === 403);
@@ -473,7 +601,7 @@ test("office part planning uses the authenticated Office actor without recording
     uomCode: "ea",
     allocations: [],
   }, {
-    authorize: async (...args) => calls.push(["authorize", ...args]),
+    authorize: async (...args) => { calls.push(["authorize", ...args]); return { workorder: authorizedWorkorder }; },
     planOfficePart: async (...args) => { calls.push(["plan", ...args]); return { planned: true }; },
     addOfficePart: async () => assert.fail("planning must not use the legacy used-part operation"),
   });
@@ -487,7 +615,7 @@ test("office part planning uses the authenticated Office actor without recording
 
 test("mechanics cannot plan office parts even when the Parts record guard is reached", async () => {
   await assert.rejects(
-    runWorkorderModuleAction({ actor: { id: "mechanic-1", role: "mechanic" } }, "wo-1", "parts", "record", {
+    runWorkorderModuleAction(scopedContext("mechanic", "mechanic-1"), "wo-1", "parts", "record", {
       operation: "officePartPlan",
       query: "Oil filter",
       partNumber: "LF9009",
@@ -495,7 +623,7 @@ test("mechanics cannot plan office parts even when the Parts record guard is rea
       uomCode: "ea",
       allocations: [],
     }, {
-      authorize: async () => {},
+      authorize: async () => ({ workorder: authorizedWorkorder }),
       planOfficePart: async () => assert.fail("mechanics must not reach the planning service"),
     }),
     /permission denied/i,
@@ -509,7 +637,7 @@ test("parts record routes serialized repair wording through the scoped inventory
     usageId: "usage-1",
     repairOrder: "Install and test",
   }, {
-    authorize: async () => ({ companyId: "company-1", locationId: "location-1" }),
+    authorize: async () => ({ companyId: "company-1", locationId: "location-1", workorder: authorizedWorkorder }),
     updateSerializedRepairOrderForWorkorder: async (...args) => {
       assert.equal(args[0], "wo-1");
       assert.equal(args[1].usageId, "usage-1");
@@ -528,7 +656,7 @@ test("office Work done uses the shared completion transition with the authentica
     diagnosis: "Found an oil leak",
     workPerformed: "Replaced the oil filter",
   }, {
-    authorize: async (...args) => calls.push(args),
+    authorize: async (...args) => { calls.push(args); return { workorder: authorizedWorkorder }; },
     markOfficeDone: async (...args) => args,
     markDone: async () => assert.fail("office must not use the mechanic completion path"),
   });

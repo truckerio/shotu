@@ -8,15 +8,17 @@ import { IconButton } from "../../components/ui/IconButton.jsx";
 import { ModalFrame } from "../../components/ui/ModalFrame.jsx";
 import { api } from "../../lib/api.js";
 import { getUnitDefinition, normalizeUomCode } from "../../../../shared/units-of-measure.js";
+import { trackingModeForUom, trackingModeLockedForUom } from "./part-identity-editor-model.js";
 import "./create-inventory-part-dialog.css";
 
 function initialDraft(defaults) {
   const proposedUnit = normalizeUomCode(defaults.uomCode || "ea");
+  const uomCode = getUnitDefinition(proposedUnit) ? proposedUnit : "ea";
   return {
     partNumber: String(defaults.partNumber || "").trim(),
     description: String(defaults.description || "").trim(),
-    uomCode: getUnitDefinition(proposedUnit) ? proposedUnit : "ea",
-    trackingMode: "",
+    uomCode,
+    trackingMode: trackingModeForUom(uomCode),
     manufacturer: "",
     category: "",
     referenceNumber: "",
@@ -38,7 +40,9 @@ export function CreateInventoryPartDialog({ locationId = "", locations = [], def
   const [error, setError] = useState("");
 
   function update(field, value) {
-    setDraft((current) => ({ ...current, [field]: value }));
+    setDraft((current) => field === "uomCode"
+      ? { ...current, uomCode: value, trackingMode: trackingModeForUom(value, current.trackingMode) }
+      : { ...current, [field]: value });
     setError("");
   }
 
@@ -86,7 +90,7 @@ export function CreateInventoryPartDialog({ locationId = "", locations = [], def
             <label htmlFor={partNumberId}><span>Part number</span><input id={partNumberId} autoFocus autoComplete="off" required maxLength={200} value={draft.partNumber} onChange={(event) => update("partNumber", event.target.value)} disabled={busy} /></label>
             <label htmlFor={partNameId}><span>Part name</span><input id={partNameId} autoComplete="off" required maxLength={1000} value={draft.description} onChange={(event) => update("description", event.target.value)} disabled={busy} /></label>
             <div className="create-inventory-part-unit"><span>Unit</span><UnitOfMeasurePicker uomCode={draft.uomCode} onChange={(value) => update("uomCode", value)} disabled={busy} /></div>
-            <label><span>How do you track this part?</span><Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy} required><option value="">Choose tracking</option><option value="quantity">Quantity — small interchangeable parts</option><option value="serialized">Serialized — one identity per physical unit</option><option value="measured_bulk">Measured or bulk — fluids and divisible material</option></Dropdown><small>This applies at every location.</small></label>
+            <label><span>How do you track this part?</span><Dropdown value={draft.trackingMode} onChange={(event) => update("trackingMode", event.target.value)} disabled={busy || trackingModeLockedForUom(draft.uomCode)} required><option value="">Choose tracking</option><option value="quantity">Quantity — small interchangeable parts</option><option value="serialized">Serialized — one identity per physical unit</option><option value="measured_bulk">Measured or bulk — fluids and divisible material</option><option value="no_stock">No stock — service or non-inventory item</option></Dropdown><small>This applies at every location.</small></label>
           </div>
           <details>
             <summary>Optional details</summary>

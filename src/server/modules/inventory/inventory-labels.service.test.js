@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 import {
   readInventoryLabelBatchItems,
   renderInventoryLabelBatchPrint,
@@ -12,6 +13,7 @@ const LOCATION_ID = "00000000-0000-4000-8000-000000000202";
 const BATCH_ID = "00000000-0000-4000-8000-000000000203";
 const UNIT_ID = "00000000-0000-4000-8000-000000000204";
 const SIGNING_KEY = Buffer.alloc(32, 31).toString("base64");
+const resolveResourceScope = (requestContext, _type, _id, options) => effectiveInventoryScope(requestContext, { companyId: COMPANY_ID, locationId: options.companyWideRoles?.includes(requestContext.actor.role) ? null : LOCATION_ID, ...options });
 
 function context(locationIds = [LOCATION_ID]) {
   return {
@@ -51,6 +53,7 @@ function item() {
 test("label manifest is bounded, paginated, and scoped", async () => {
   let received;
   const result = await readInventoryLabelBatchItems(BATCH_ID, new URLSearchParams({ after: "0", limit: "1" }), context(), {
+    resolveResourceScope,
     getBatch: async (scope) => { received = scope; return batch(); },
     listItems: async () => [item()],
   });
@@ -62,6 +65,7 @@ test("label manifest is bounded, paginated, and scoped", async () => {
 
 test("print output preserves immutable identity and escapes label snapshots", async () => {
   const html = await renderInventoryLabelBatchPrint(BATCH_ID, context(), {
+    resolveResourceScope,
     getBatch: async () => batch(),
     listAllItems: async () => [item()],
     qrOptions: { signingKey: SIGNING_KEY, origin: "https://inventory.example.test" },
@@ -77,6 +81,7 @@ test("print output preserves immutable identity and escapes label snapshots", as
 test("cross-location label batch is hidden", async () => {
   await assert.rejects(
     readInventoryLabelBatchItems(BATCH_ID, new URLSearchParams(), context([]), {
+      resolveResourceScope,
       getBatch: async () => null,
     }),
     (error) => error.code === "inventory_not_found" && error.statusCode === 404,
@@ -86,6 +91,7 @@ test("cross-location label batch is hidden", async () => {
 test("Office can print serialized unit and part-location labels across its company", async () => {
   const unassignedContext = context([]);
   const unitHtml = await renderInventoryUnitLabel(UNIT_ID, unassignedContext, {
+    resolveResourceScope,
     getUnit: async (scope) => {
       assert.equal(scope.isAdmin, true);
       assert.deepEqual(scope.companyIds, [COMPANY_ID]);
@@ -105,6 +111,7 @@ test("Office can print serialized unit and part-location labels across its compa
   assert.match(unitHtml, /Refurbished · In stock/);
 
   const locationHtml = await renderPartLocationLabels(UNIT_ID, LOCATION_ID, unassignedContext, {
+    loadLocation: async () => ({ id: LOCATION_ID, company_id: COMPANY_ID }),
     readPart: async (scope) => {
       assert.deepEqual(scope.companyIds, [COMPANY_ID]);
       return {

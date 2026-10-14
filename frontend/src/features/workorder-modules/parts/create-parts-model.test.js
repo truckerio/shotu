@@ -33,6 +33,22 @@ test("quantity and measured catalog parts require a physical pickup position", (
   assert.equal(catalogPartRequiresSourcePosition({ ...part, trackingMode: "serialized" }), false);
 });
 
+test("no-stock catalog items require neither source stock nor serialized units", () => {
+  const service = {
+    catalogPartId: "service-1",
+    partNo: "ALIGNMENT",
+    qty: "1",
+    uomCode: "ea",
+    trackingMode: "no_stock",
+    serializationRequired: true,
+    inventory: { serializationRequired: true },
+  };
+  assert.equal(catalogPartRequiresSourcePosition(service), false);
+  assert.equal(catalogPartRequiresSerializedUnits(service), false);
+  assert.equal(createPartRequiresSerializedUnits(service), false);
+  assert.equal(invalidCreatePartIndex([service]), -1);
+});
+
 test("create Parts presentation hides untouched placeholder rows", () => {
   const parts = [blank(), blank(), blank()];
 

@@ -51,6 +51,14 @@ test("reads/configuration carry current actor and explicit scope; repository aut
   await assert.rejects(saveInventoryReuseConfiguration("grant",{...scope,userId:actorId,capabilities:["release"],reason:"Grant"},context,{...auth,configure:async()=>{throw new InventoryError("No explicit admin scope",{code:"INVENTORY_REUSE_FORBIDDEN",statusCode:403});}}),{code:"INVENTORY_REUSE_FORBIDDEN"});
 });
 
+test("exact-page custody reads preserve page metadata input and reject mixed cursor mode", async () => {
+  const page = await getInventoryReuse("stock", { companyId, locationId, limit: "25", page: "3", q: "filter" }, "", context, { ...auth, read: async (input) => input });
+  assert.equal(page.page, 3);
+  assert.equal(page.limit, 25);
+  assert.equal(page.q, "filter");
+  await assert.rejects(getInventoryReuse("queue", { companyId, locationId, page: "2", cursor: randomUUID() }, "", context, { ...auth, read: async () => { throw new Error("must not read"); } }), { name: "ZodError" });
+});
+
 test("exact custody case reads reject malformed ids and unauthorized tenant or shop scope before persistence",async()=>{
   const deps={...auth,read:async()=>{throw new Error("Unauthorized scope reached the repository");}};
   await assert.rejects(getInventoryReuse("case",{companyId,locationId},"not-a-case",context,deps),{name:"ZodError"});

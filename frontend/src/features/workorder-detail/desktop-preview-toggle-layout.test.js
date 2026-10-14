@@ -28,13 +28,11 @@ test("desktop workorder tools tooltip stays beside the header control", () => {
   );
 });
 
-test("desktop preview remains a supporting view and never replaces the main detail section", () => {
-  assert.match(previewController, /detailSection !== "preview"/);
-  assert.match(previewController, /setDetailSection\(defaultDetailSection\(actorRole, detailStatus, false\)\)/);
-  assert.doesNotMatch(previewController, /section === "preview" && !isCompact[\s\S]{0,220}setDetailSection\("preview"\)/);
+test("operational detail retires paper Preview while Create retains its controller", () => {
+  assert.match(previewController, /jumpToPreview/);
   assert.match(detailPage, /if \(isCompact && !isOfficeDetail\) return buildCompactPhoneDetailSections/);
-  assert.match(detailPage, /\{!isOfficeDetail && isCompact && renderedDetailSection === "preview" && previewPolicy\.canRead \? \(/);
-  assert.match(detailPage, /supportingPane=\{isOfficeDetail \? <WorkorderToolsPanel/);
+  assert.doesNotMatch(detailPage, /<WorkorderPreview|<CompactWorkorderPreview|<PreviewFullscreen/);
+  assert.match(detailPage, /supportingPane=\{isOfficeDetail/);
   assert.match(detailPage, /mainWorkorderSections\(visibleDetailSections\)/);
-  assert.match(detailPage, /: !isCompact && supportingPaneVisible \? \([\s\S]*?<PreviewPane/);
+  assert.match(detailPage, /!isCompact && supportingPaneVisible[\s\S]*?<WorkorderToolsPanel/);
 });

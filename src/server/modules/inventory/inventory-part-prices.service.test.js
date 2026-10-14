@@ -12,7 +12,7 @@ const adminContext = { ...context, actor: { ...context.actor, role: "admin" }, p
 
 test("commercial read sends tenant and effective location scope and exposes capabilities", async () => {
   let received;
-  const result = await readInventoryPartCommercial(partId, new URLSearchParams("limit=25"), context, { read: async (input) => { received = input; return { purchaseCost: {}, prices: {} }; } });
+  const result = await readInventoryPartCommercial(partId, new URLSearchParams("limit=25"), context, { read: async (input) => { received = input; return { part: { companyId }, purchaseCost: {}, prices: {} }; } });
   assert.deepEqual(received, { catalogPartId: partId, companyIds: [companyId], locationIds: [], isAdmin: true, locationId: null, historyLimit: 25 });
   assert.deepEqual(result.capabilities, { canReadCost: true, canEditPrices: false, canManageTaxProfiles: false });
 });

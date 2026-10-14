@@ -12,6 +12,7 @@ function context(role, { companyIds = [], locationIds = [] } = {}) {
   return {
     actor: { id: `${role}-1`, role },
     companyIds: new Set(companyIds),
+    companyRoles: new Map(companyIds.map((id) => [id, role])),
     locationIds: new Set(locationIds),
   };
 }
@@ -32,6 +33,21 @@ test("admin template scope expands to every active location in authorized compan
 
   assert.deepEqual(receivedScope, { companyIds: [COMPANY_A], locationIds: null });
   assert.deepEqual(rows, [{ location_id: LOCATION_A }]);
+});
+
+test("mixed admin and office template memberships use separate company queries", async () => {
+  const mixed = {
+    ...context("admin", { companyIds: [COMPANY_A, COMPANY_B], locationIds: [LOCATION_B] }),
+    companyRoles: new Map([[COMPANY_A, "admin"], [COMPANY_B, "office"]]),
+  };
+  const scopes = [];
+  await loadOfficeLocationTemplates(mixed, {
+    listTemplates: async (scope) => { scopes.push(scope); return []; },
+  });
+  assert.deepEqual(scopes, [
+    { companyIds: [COMPANY_A], locationIds: null },
+    { companyIds: [COMPANY_B], locationIds: [LOCATION_B] },
+  ]);
 });
 
 test("office template scope remains restricted to explicit location memberships", async () => {

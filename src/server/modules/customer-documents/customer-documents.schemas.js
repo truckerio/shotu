@@ -13,7 +13,7 @@ const optionalUuid = uuid.nullable().optional().default(null);
 const idempotencyKey = z.string().trim().min(8).max(120);
 const boundedText = (minimum, maximum) => z.string().trim().min(minimum).max(maximum);
 
-const estimateAdjustmentsSchema = z.object({
+export const customerDocumentAdjustmentsSchema = z.object({
   lineDiscounts: z.array(z.object({
     lineId: boundedText(1, 200),
     discount: customerFinancialDiscountSchema,
@@ -29,9 +29,9 @@ const estimateAdjustmentsSchema = z.object({
     (entries) => new Set(entries.map((entry) => entry.lineId)).size === entries.length,
     "Each override can have only one reason.",
   ),
-}).strict().default({});
+}).strict().default({ lineDiscounts: [], documentDiscount: null, overrideReasons: [] });
 
-function hasFinancialAdjustments(adjustments) {
+export function hasCustomerDocumentFinancialAdjustments(adjustments) {
   return adjustments.lineDiscounts.length > 0
     || adjustments.documentDiscount !== null
     || adjustments.overrideReasons.length > 0;
@@ -47,12 +47,12 @@ export const customerDocumentPreviewSchema = z.object({
   locationId: uuid,
   documentType: z.enum(CUSTOMER_DOCUMENT_TYPES).default("estimate"),
   source: customerDocumentSourceSchema,
-  adjustments: estimateAdjustmentsSchema,
+  adjustments: customerDocumentAdjustmentsSchema,
 }).strict().superRefine((input, context) => {
   if (input.documentType === "invoice" && input.source.kind !== "workorder") {
     context.addIssue({ code: "custom", path: ["source"], message: "Invoices require a Workorder source." });
   }
-  if (input.documentType === "invoice" && hasFinancialAdjustments(input.adjustments)) {
+  if (input.documentType === "invoice" && hasCustomerDocumentFinancialAdjustments(input.adjustments)) {
     context.addIssue({ code: "custom", path: ["adjustments"], message: "Invoices reuse the accepted Estimate financial terms." });
   }
 });
@@ -68,7 +68,7 @@ export const issueCustomerDocumentSchema = z.object({
   source: customerDocumentSourceSchema,
   expectedFinancialFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
   expectedReconciliationHash: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional().default(null),
-  adjustments: estimateAdjustmentsSchema,
+  adjustments: customerDocumentAdjustmentsSchema,
   recipient: z.object({
     name: boundedText(1, 300).nullable().optional().default(null),
     company: boundedText(1, 300).nullable().optional().default(null),
@@ -97,7 +97,7 @@ export const issueCustomerDocumentSchema = z.object({
   if (input.documentType === "invoice" && !input.expectedReconciliationHash) {
     context.addIssue({ code: "custom", path: ["expectedReconciliationHash"], message: "Invoice reconciliation evidence is required." });
   }
-  if (input.documentType === "invoice" && hasFinancialAdjustments(input.adjustments)) {
+  if (input.documentType === "invoice" && hasCustomerDocumentFinancialAdjustments(input.adjustments)) {
     context.addIssue({ code: "custom", path: ["adjustments"], message: "Invoices reuse the accepted Estimate financial terms." });
   }
   if (input.documentType === "estimate" && input.expectedReconciliationHash) {

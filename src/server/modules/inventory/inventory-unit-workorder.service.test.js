@@ -369,7 +369,7 @@ test("serialized usage refresh redacts financial fields from mechanics and kiosk
   };
   for (const requestContext of [
     context("mechanic"),
-    { ...context("mechanic"), sessionMode: "kiosk" },
+    { ...context("mechanic"), sessionMode: "kiosk", companyRoles: new Map([[COMPANY_ID, "mechanic"]]) },
   ]) {
     const result = await readSerializedUnitUsagesForWorkorder(WORKORDER_ID, requestContext, dependencies({
       listUsages: async () => [pricedUsage],

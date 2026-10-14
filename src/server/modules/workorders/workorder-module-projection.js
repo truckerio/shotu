@@ -9,6 +9,11 @@ const FORM_KEYS = Object.freeze({
   parts: Object.freeze(["parts"]),
 });
 
+const CUSTOMER_DOCUMENT_FORM_KEYS = Object.freeze([
+  "customerDocumentAdjustments",
+  "customerDocumentAdjustmentBaseRevisionId",
+]);
+
 const BASE_WORKORDER_KEYS = Object.freeze([
   "id", "companyId", "serial", "status", "progressVersion", "createdAt", "updatedAt",
 ]);
@@ -93,7 +98,7 @@ function mechanicPartRequest(request, workorderLocationId) {
   };
 }
 
-function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
+function moduleData(detail, moduleKey, { viewerRole = null, canReadCustomerFinancials = false } = {}) {
   const { workorder = {} } = detail;
   switch (moduleKey) {
     case "unit": return { ...pick(workorder, ["assetId", "asset"]), formData: formSlice(workorder, moduleKey) };
@@ -105,7 +110,15 @@ function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
       participants: detail.participants || [],
       assignableMechanics: detail.assignableMechanics || [],
     };
-    case "concern": return { ...pick(workorder, ["concern", "officeNotes"]), formData: formSlice(workorder, moduleKey) };
+    case "concern": return {
+      ...pick(workorder, ["concern", "officeNotes"]),
+      formData: {
+        ...formSlice(workorder, moduleKey),
+        ...(["office", "admin"].includes(viewerRole) && canReadCustomerFinancials
+          ? pick(workorder.formData, CUSTOMER_DOCUMENT_FORM_KEYS)
+          : {}),
+      },
+    };
     case "diagnosisRepair": return {
       ...pick(workorder, ["diagnosis", "workPerformed"]),
       formData: formSlice(workorder, moduleKey),
@@ -132,6 +145,7 @@ function moduleData(detail, moduleKey, { viewerRole = null } = {}) {
         formData: formSlice(workorder, moduleKey),
         installedSerializedParts: (detail.installedSerializedParts || []).map(withoutPrice),
         aggregatePartUsages: (detail.aggregatePartUsages || []).map(withoutPrice),
+        noStockPartPrices: canReadFinancials ? (detail.noStockPartPrices || []) : [],
         partRequests: ["mechanic", "kiosk"].includes(viewerRole)
           ? (detail.partRequests || []).map((request) => mechanicPartRequest(
             request,
@@ -166,16 +180,25 @@ function mergeCompatibility(output, moduleKey, data) {
 
 export function projectProtectedWorkorderDetail(detail, moduleDecisions, options = {}) {
   const viewerRole = options.viewerRole || detail.user?.role || null;
+  const isCustomerDocumentRole = ["office", "admin"].includes(viewerRole);
+  const canReadCustomerFinancials = isCustomerDocumentRole && options.canReadCustomerFinancials === true;
+  const canWriteCustomerFinancials = isCustomerDocumentRole && options.canWriteCustomerFinancials === true;
   const output = {
     workorder: { ...pick(detail.workorder || {}, BASE_WORKORDER_KEYS), formData: {} },
     moduleAccess: {},
     modules: {},
   };
+  if (isCustomerDocumentRole) {
+    output.customerDocumentAccess = {
+      canRead: canReadCustomerFinancials,
+      canWrite: canWriteCustomerFinancials,
+    };
+  }
   for (const [moduleKey, decision] of Object.entries(moduleDecisions || {})) {
     const access = decision?.access || WORKORDER_ACCESS_MODES.HIDDEN;
     output.moduleAccess[moduleKey] = { access, source: decision?.source || "default" };
     if (access === WORKORDER_ACCESS_MODES.HIDDEN) continue;
-    const data = moduleData(detail, moduleKey, { viewerRole });
+    const data = moduleData(detail, moduleKey, { viewerRole, canReadCustomerFinancials });
     output.modules[moduleKey] = { access, data };
     mergeCompatibility(output, moduleKey, data);
   }

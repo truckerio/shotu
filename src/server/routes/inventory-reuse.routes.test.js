@@ -53,6 +53,17 @@ test("exact-unit state filters cross the route contract and reject unknown futur
   assert.equal(readInput.unitState,"available");
   assert.equal((await request(`/api/inventory-reuse/stock/${partId}/units?companyId=${companyId}&locationId=${locationId}&unitState=transferred`,"GET",null,deps)).status,400);
 });
+test("stock, queue and unit routes forward exact page mode while rejecting mixed pagination", async () => {
+  const reads=[];
+  const deps={read:async(input)=>{reads.push(input);return {items:[],total:0,page:input.page,pageCount:0};}};
+  const partId=randomUUID();
+  const search=`?companyId=${companyId}&locationId=${locationId}&limit=25&page=2`;
+  for (const endpoint of ["/stock", "/queue", `/stock/${partId}/units`]) assert.equal((await request(`/api/inventory-reuse${endpoint}${search}`,"GET",null,deps)).status,200);
+  assert.deepEqual(reads.map(({view,page,limit})=>({view,page,limit})),[{view:"stock",page:2,limit:25},{view:"queue",page:2,limit:25},{view:"units",page:2,limit:25}]);
+  assert.equal((await request(`/api/inventory-reuse/stock${search}&cursor=${randomUUID()}`,"GET",null,deps)).status,400);
+  assert.equal((await request(`/api/inventory-reuse/queue?companyId=${companyId}&locationId=${locationId}&page=0`,"GET",null,deps)).status,400);
+  assert.equal((await request(`/api/inventory-reuse/queue?companyId=${companyId}&locationId=${locationId}&page=not-a-page`,"GET",null,deps)).status,400);
+});
 test("asset custody accepts the canonical legacy company UUID without relaxing entity IDs",async()=>{
   const legacyScope={companyId:DEFAULT_COMPANY_ID,locationId};
   const legacyContext={...context,companyIds:new Set([DEFAULT_COMPANY_ID])};

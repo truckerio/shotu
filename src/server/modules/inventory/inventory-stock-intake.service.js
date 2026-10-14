@@ -2,6 +2,7 @@ import { createAggregateStockIntakeSchema } from "./inventory.schemas.js";
 import { postAggregateStockIntake } from "../../db/repositories/inventory-stock-intake.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { z } from "zod";
+import { resolveInventoryLocationScope } from "./inventory-effective-scope.js";
 
 const fail = (code, message, statusCode = 409) => { throw new InventoryError(message, { code, statusCode }); };
 const idSchema = z.string().uuid();
@@ -10,10 +11,12 @@ export async function createAggregateStockIntake(catalogPartId, locationId, rawI
   catalogPartId = idSchema.parse(catalogPartId);
   locationId = idSchema.parse(locationId);
   const input = createAggregateStockIntakeSchema.parse(rawInput);
-  if (!["office", "admin"].includes(context.actor.role)) fail("INVENTORY_CREATE_FORBIDDEN", "Only Office or Admin can add physical inventory.", 403);
-  if (context.actor.role !== "admin" && !context.locationIds?.has(locationId)) throw inventoryNotFound();
+  const scope = await (dependencies.resolveLocationScope || resolveInventoryLocationScope)(context, locationId, {
+    code: "INVENTORY_CREATE_FORBIDDEN",
+    message: "Only Office or Admin can add physical inventory.",
+  });
   const result = await (dependencies.postIntake || postAggregateStockIntake)({ ...input, catalogPartId, locationId,
-    actorId: context.actor.id, companyIds: [...context.companyIds], locationIds: [...context.locationIds], isAdmin: context.actor.role === "admin" });
+    actorId: context.actor.id, companyIds: scope.companyIds, locationIds: scope.locationIds, isAdmin: scope.isAdmin });
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "idempotency_conflict") fail("INVENTORY_INTAKE_REPLAY_CONFLICT", "This intake request key was already used with different details.");
   if (result.kind === "tracking_policy") fail("INVENTORY_INTAKE_TRACKING_POLICY", "The saved tracking method changed. Refresh this part before adding stock.");

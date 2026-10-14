@@ -23,7 +23,6 @@ const DEFAULT_DETAIL_SECTION_SEQUENCE = Object.freeze([
   WORKORDER_MODULE_IDS.PHOTOS,
   WORKORDER_MODULE_IDS.LOCATION,
   WORKORDER_MODULE_IDS.ACTIVITY,
-  WORKORDER_MODULE_IDS.PREVIEW,
 ]);
 const CORE_DETAIL_SECTIONS = new Set(DEFAULT_DETAIL_SECTION_SEQUENCE.slice(0, 4));
 
@@ -57,8 +56,7 @@ export function defaultDetailSection(role, status, compact = false) {
 }
 
 export function defaultSupportingView(role, status) {
-  if (role === "mechanic" || ATTENTION_STATUSES.has(status)) return "chat";
-  return "preview";
+  return "chat";
 }
 
 export function firstAllowedDetailSection(sections = [], fallback = "work") {
@@ -133,9 +131,9 @@ export function buildWorkorderDetailSections({
     },
     [WORKORDER_MODULE_IDS.LOCATION]: { label: isMechanicDetail ? mechanicLabel("detail.location") : undefined },
     [WORKORDER_MODULE_IDS.SCHEDULE]: { label: isMechanicDetail ? mechanicLabel("detail.schedule") : undefined },
-    [WORKORDER_MODULE_IDS.PREVIEW]: { label: isMechanicDetail ? mechanicLabel("detail.preview") : undefined },
   };
   const sections = workorderModuleDescriptors(WORKORDER_SURFACES.DETAIL)
+    .filter((descriptor) => descriptor.id !== WORKORDER_MODULE_IDS.PREVIEW)
     .map((descriptor) => {
       const sectionMetadata = metadata[descriptor.id] || {};
       return {
@@ -173,25 +171,9 @@ export function buildWorkorderDetailSections({
 }
 
 export function buildCompactPhoneDetailSections(sections, role, { locale = "en", policyOverrides = [], userId = "" } = {}) {
-  const previewPolicy = resolveWorkorderModulePolicy({
-    moduleId: WORKORDER_MODULE_IDS.PREVIEW,
-    overrides: policyOverrides,
-    role,
-    surface: WORKORDER_SURFACES.DETAIL,
-    userId,
-  });
-  const candidates = sections.some(({ id }) => id === WORKORDER_MODULE_IDS.PREVIEW)
-    ? sections
-    : previewPolicy.visible
-      ? [...sections, {
-        id: WORKORDER_MODULE_IDS.PREVIEW,
-        label: role === "mechanic" ? interfaceText(locale, "detail.preview") : workorderModuleLabel(WORKORDER_MODULE_IDS.PREVIEW),
-        access: previewPolicy.access,
-        modulePolicy: previewPolicy,
-      }]
-      : sections;
   const normalizedRole = role === "manager" ? "office" : role;
-  const compactModules = candidates
+  const compactModules = sections
+    .filter((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW)
     .filter((section) => section.modulePolicy?.descriptor?.compactPlacement?.[normalizedRole]
       || resolveWorkorderModulePolicy({
         moduleId: section.id,
@@ -259,11 +241,4 @@ export function buildSurveillanceWorkorderDetailSections({
 
 export function workorderNeedsChatAttention(status) {
   return ATTENTION_STATUSES.has(status);
-}
-
-export function workorderPreviewState(activeWorkorder, form, error = "") {
-  if (error) return { status: "error", message: error };
-  if (!activeWorkorder) return { status: "loading", message: "Loading workorder preview…" };
-  if (!form) return { status: "empty", message: "Workorder preview is unavailable." };
-  return { status: "ready", message: "" };
 }

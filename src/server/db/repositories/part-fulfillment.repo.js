@@ -98,12 +98,12 @@ export async function createPartFulfillment(input) {
   } catch (error) { await client.query("rollback").catch(() => {}); throw error; } finally { client.release(); }
 }
 
-export async function getPartFulfillment({ fulfillmentId, companyIds, locationIds = [], isAdmin = false }) {
+export async function getPartFulfillment({ fulfillmentId, companyIds, locationIds = [], adminCompanyIds = [] }) {
   const result = await query(
     `select request.company_id, request.id from part_fulfillment_requests request
       where request.id = $1 and request.company_id = any($2::uuid[])
-        and ($4::boolean or request.destination_location_id = any($3::uuid[])) limit 1`,
-    [fulfillmentId, companyIds, locationIds, isAdmin],
+        and (request.company_id = any($4::uuid[]) or request.destination_location_id = any($3::uuid[])) limit 1`,
+    [fulfillmentId, companyIds, locationIds, adminCompanyIds],
   );
   if (!result.rows[0]) return null;
   const pool = getPool(); const client = await pool.connect(); try { return await load(client, result.rows[0].company_id, fulfillmentId); } finally { client.release(); }

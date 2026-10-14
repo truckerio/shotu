@@ -6,13 +6,14 @@ import {
   listInventoryAuthorityExceptions,
 } from "../../db/repositories/inventory-authority.repo.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
+import { companyRoleScope } from "../../auth/company-role.js";
 import {
   acknowledgeInventoryAuthorityExceptionSchema,
   inventoryAuthorityExceptionListSchema,
 } from "./inventory.schemas.js";
 
 function requireAdmin(context) {
-  if (context.actor.role !== "admin") {
+  if (!companyRoleScope(context, ["admin"]).companyIds.length) {
     throw new InventoryError("Administrator access is required.", {
       code: "INVENTORY_AUTHORITY_ADMIN_REQUIRED", statusCode: 403,
     });
@@ -20,9 +21,10 @@ function requireAdmin(context) {
 }
 
 function scope(context) {
+  const roleScope = companyRoleScope(context, ["admin"]);
   return {
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
+    companyIds: roleScope.companyIds,
+    locationIds: roleScope.locationIds,
     isAdmin: true,
   };
 }

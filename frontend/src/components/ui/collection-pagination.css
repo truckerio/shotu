@@ -1,0 +1,42 @@
+.collection-pagination {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.collection-pagination.has-rail { padding-left: 25px; }
+.collection-pagination-rail {
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 25px;
+}
+.collection-pagination-rail > .checkpoint-rail {
+  height: min(100%, 280px);
+  position: sticky;
+  top: max(16px, calc((100dvh - 280px) / 2));
+}
+.collection-pagination-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.collection-pagination-status {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+@media (max-width: 960px) {
+  .collection-pagination { flex-direction: column; gap: 8px; }
+  .collection-pagination.has-rail { padding-left: 0; }
+  .collection-pagination-rail { position: static; width: auto; }
+  .collection-pagination-rail > .checkpoint-rail { height: auto; position: static; }
+}

@@ -26,10 +26,13 @@ import {
   saveMechanicWorkorderProgress as persistMechanicWorkorderProgress,
 } from "../../db/repositories/workorder-progress.repo.js";
 import { AuthError, resourceNotFound } from "../../auth/errors.js";
+import { companyRoleScope, requireCompanyRole } from "../../auth/company-role.js";
 
-async function requireMechanic(userId) {
+async function requireMechanic(userId, context = null) {
   const user = await getUserById(userId);
-  if (!user || !user.active || user.role !== "mechanic") {
+  if (!user || !user.active || (context
+    ? context.actor?.id !== userId || !companyRoleScope(context, ["mechanic"]).companyIds.length
+    : user.role !== "mechanic")) {
     throw new Error("Active Mechanic workorder user not found.");
   }
   return user;
@@ -70,15 +73,22 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
 }
 
 export async function mechanicDashboard(mechanicUserId, context) {
-  const mechanic = mechanicUserId ? await requireMechanic(mechanicUserId) : await defaultMechanicUser();
+  const mechanic = mechanicUserId ? await requireMechanic(mechanicUserId, context) : await defaultMechanicUser();
   if (!mechanic) throw new Error("No mechanic user exists.");
+  const mechanicCompanyIds = companyRoleScope(context, ["mechanic"]).companyIds;
+  const mechanicContext = {
+    ...context,
+    actor: { ...context.actor, role: "mechanic", companyIds: mechanicCompanyIds },
+    companyIds: new Set(mechanicCompanyIds),
+    companyRoles: new Map(mechanicCompanyIds.map((id) => [id, "mechanic"])),
+  };
 
   const [openWork, myWork, partsWaiting, officeWaiting, done] = await Promise.all([
-    queryAuthorizedWorkorders(context, { category: "unassigned", pageSize: 50 }),
-    queryAuthorizedWorkorders(context, { category: "active", mechanicPool: true, pageSize: 100 }),
-    queryAuthorizedWorkorders(context, { attentionReason: "parts", pageSize: 50 }),
-    queryAuthorizedWorkorders(context, { attentionReason: "office_help", pageSize: 50 }),
-    queryAuthorizedWorkorders(context, { lifecycle: [...MECHANIC_HISTORY_LIFECYCLES], pageSize: 50 }),
+    queryAuthorizedWorkorders(mechanicContext, { category: "unassigned", pageSize: 50 }),
+    queryAuthorizedWorkorders(mechanicContext, { category: "active", mechanicPool: true, pageSize: 100 }),
+    queryAuthorizedWorkorders(mechanicContext, { attentionReason: "parts", pageSize: 50 }),
+    queryAuthorizedWorkorders(mechanicContext, { attentionReason: "office_help", pageSize: 50 }),
+    queryAuthorizedWorkorders(mechanicContext, { lifecycle: [...MECHANIC_HISTORY_LIFECYCLES], pageSize: 50 }),
   ]);
   const assignedActiveItems = myWork.items.filter((item) => item.mechanicIds?.includes(mechanic.id));
   const waitingById = new Map([
@@ -125,13 +135,14 @@ export function mechanicAllowedActions(workorder, mechanicId, policy = {}) {
   };
 }
 
-export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
-  const mechanic = mechanicUserId ? await requireMechanic(mechanicUserId) : await defaultMechanicUser();
+export async function mechanicWorkorderDetail(workorderId, mechanicUserId, context = null) {
+  const mechanic = mechanicUserId ? await requireMechanic(mechanicUserId, context) : await defaultMechanicUser();
   if (!mechanic) throw new Error("No mechanic user exists.");
   const detail = await loadWorkorderDetail(workorderId, {
     viewerUserId: mechanic.id,
     participantChatOnly: true,
   });
+  if (context) requireCompanyRole(context, detail.workorder.companyId, ["mechanic"]);
   await markWorkorderRead({
     workorderId,
     userId: mechanic.id,
@@ -150,12 +161,12 @@ export async function mechanicWorkorderDetail(workorderId, mechanicUserId) {
 }
 
 export async function requestMechanicPart(workorderId, input) {
-  await requireMechanic(input.mechanicUserId);
+  await requireMechanic(input.mechanicUserId, input.authContext);
   return createPartRequest(workorderId, input);
 }
 
 export async function updateMechanicPartUsage(workorderId, requestId, input) {
-  await requireMechanic(input.mechanicUserId);
+  await requireMechanic(input.mechanicUserId, input.authContext);
   // Keep the service guard explicit as legacy routes still dispatch this operation.
   // Allocation lifecycle is Office-owned and mechanics are read-only observers.
   void workorderId;
@@ -167,8 +178,8 @@ export async function updateMechanicPartUsage(workorderId, requestId, input) {
   );
 }
 
-export async function acceptMechanicWorkorder(workorderId, mechanicUserId) {
-  await requireMechanic(mechanicUserId);
+export async function acceptMechanicWorkorder(workorderId, mechanicUserId, context = null) {
+  await requireMechanic(mechanicUserId, context);
   try {
     return await acceptOperationalWorkorder(workorderId, mechanicUserId);
   } catch (error) {
@@ -189,13 +200,13 @@ export async function createMechanicWorkorder(input) {
   });
 }
 
-export async function releaseMechanicWorkorder(workorderId, mechanicUserId, reason) {
-  await requireMechanic(mechanicUserId);
+export async function releaseMechanicWorkorder(workorderId, mechanicUserId, reason, context = null) {
+  await requireMechanic(mechanicUserId, context);
   return releaseOperationalWorkorder(workorderId, mechanicUserId, reason);
 }
 
-export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId, input) {
-  await requireMechanic(mechanicUserId);
+export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId, input, context = null) {
+  await requireMechanic(mechanicUserId, context);
   try {
     const progress = await persistMechanicWorkorderProgress({
       workorderId,
@@ -215,8 +226,8 @@ export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId,
   }
 }
 
-export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours) {
-  await requireMechanic(mechanicUserId);
+export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts, laborHours, context = null) {
+  await requireMechanic(mechanicUserId, context);
   const policy = await getWorkorderMechanicPartsPolicy(workorderId);
   if (!policy?.mechanicCanRecordParts) {
     throw new AuthError(
@@ -235,8 +246,8 @@ export async function saveMechanicUsedParts(workorderId, mechanicUserId, parts, 
   }
 }
 
-export async function markMechanicDone(workorderId, mechanicUserId, input) {
-  await requireMechanic(mechanicUserId);
+export async function markMechanicDone(workorderId, mechanicUserId, input, context = null) {
+  await requireMechanic(mechanicUserId, context);
   try {
     return await markOperationalWorkorderDone(workorderId, mechanicUserId, input, {
       requireRepairDetails: false,
@@ -250,6 +261,6 @@ export async function markMechanicDone(workorderId, mechanicUserId, input) {
 }
 
 export async function sendMechanicMessage(workorderId, input) {
-  await requireMechanic(input.senderUserId);
+  await requireMechanic(input.senderUserId, input.authContext);
   return processMechanicChatMessage(workorderId, input);
 }

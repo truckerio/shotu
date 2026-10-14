@@ -13,3 +13,34 @@ test("activity service adds only the authenticated actor presentation", async ()
     workorderId: "wo-1", workorderSerial: "WO-1",
   });
 });
+
+test("activity presentation uses the effective role for each company", async () => {
+  const context = {
+    actor: { id: "actor-1", name: "Alex Rivera", role: "admin" },
+    companyIds: new Set(["company-a", "company-b"]),
+    companyRoles: new Map([["company-a", "admin"], ["company-b", "mechanic"]]),
+  };
+  const result = await getUserActivity(context, {}, { listActivity: async () => ({
+    items: [{ id: "event-1", company_id: "company-b" }], page: 1, pageSize: 50, total: 1, hasMore: false,
+  }) });
+  assert.equal(result.items[0].actorRole, "mechanic");
+});
+
+test("downgraded company activity omits pricing events and their amount metadata", async () => {
+  const context = {
+    actor: { id: "actor-1", name: "Alex Rivera", role: "admin" },
+    companyIds: new Set(["company-a", "company-b", "company-c"]),
+    companyRoles: new Map([["company-a", "admin"], ["company-b", "mechanic"], ["company-c", "surveillance"]]),
+  };
+  const result = await getUserActivity(context, {}, { listActivity: async () => ({
+    items: [
+      { id: "safe", company_id: "company-b", source: "workorder_status", action: "in_progress", description: "Started" },
+      { id: "price", company_id: "company-b", source: "workorder_field", action: "pricing.customerTotal", description: "changed from 10.00 to 999.00", metadata: { oldAmount: "10.00", newAmount: "999.00" } },
+      { id: "surveillance-price", company_id: "company-c", source: "workorder_field", action: "pricing.internalCost", description: "changed from 1.00 to 777.00", metadata: { newAmount: "777.00" } },
+      { id: "admin-price", company_id: "company-a", source: "workorder_field", action: "pricing.customerTotal", description: "changed from 10.00 to 20.00" },
+    ], page: 1, pageSize: 50, total: 3, hasMore: false,
+  }) });
+  assert.deepEqual(result.items.map((item) => item.id), ["safe", "admin-price"]);
+  assert.equal(JSON.stringify(result.items).includes("999.00"), false);
+  assert.equal(JSON.stringify(result.items).includes("777.00"), false);
+});

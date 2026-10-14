@@ -146,7 +146,7 @@ export function MeasuredPartUsageDialog({
   </ModalOverlay>;
 }
 
-export function AggregatePartUsageRows({ actorId, workorderId, usages, role, editable, showPrice = false, locale = "en", onChanged, startOrdinal = 1 }) {
+export function AggregatePartUsageRows({ actorId, workorderId, usages, role, editable, showPrice = false, compact = false, locale = "en", onChanged, startOrdinal = 1 }) {
   const t = (key) => interfaceText(locale, key);
   const [editing, setEditing] = useState(null);
   const [reason, setReason] = useState("");
@@ -190,8 +190,8 @@ export function AggregatePartUsageRows({ actorId, workorderId, usages, role, edi
         <div className="used-part-field used-part-aggregate-identity"><span className="used-part-cell-label">{t("parts.part")}</span><strong>{usage.partNumber}</strong><small>{t("parts.evidenceRecorded")} · {usage.evidenceId}</small></div>
         <div className="used-part-field used-part-aggregate-value"><span className="used-part-cell-label">{t("parts.quantityUnit")}</span><strong>{formatQuantityUnit(usage.effectiveQuantity, usage.uomCode)}</strong></div>
         <div className="used-part-field used-part-aggregate-repair"><span className="used-part-cell-label">{t("parts.repairOrder")}</span>{usage.repairOrder || <span aria-hidden="true">—</span>}</div>
-        {pickupPath ? <div className="used-part-field used-part-aggregate-pickup"><span className="used-part-cell-label">Pickup</span><strong>{pickupPath}</strong></div> : <span className="used-part-pickup-empty" aria-hidden="true"></span>}
-        {showPrice ? <WorkorderPartPriceCell workorderId={workorderId} usageKind="aggregate" usageId={usage.id} price={usage.price} quantity={usage.effectiveQuantity} costAllocations={usage.costAllocations} onChanged={onChanged} disabled={!editable} /> : null}
+        {!compact ? (pickupPath ? <div className="used-part-field used-part-aggregate-pickup"><span className="used-part-cell-label">Pickup</span><strong>{pickupPath}</strong></div> : <span className="used-part-pickup-empty" aria-hidden="true"></span>) : null}
+        {showPrice ? <WorkorderPartPriceCell compact={compact} workorderId={workorderId} usageKind="aggregate" usageId={usage.id} price={usage.price} quantity={usage.effectiveQuantity} costAllocations={usage.costAllocations} onChanged={onChanged} disabled={!editable} /> : null}
         <div className="aggregate-part-actions"><span className="used-part-cell-label used-part-status-label">{t("parts.statusAction")}</span><span className="used-part-aggregate-status">{status}</span>
           {releasable ? <Button type="button" onClick={() => openLifecycle(usage, "release")}>{t("parts.releaseMeasured")}</Button> : null}
           {correctable ? <><Button type="button" onClick={() => openLifecycle(usage, "reverse")}>{t("parts.reverseMeasured")}</Button><Button type="button" onClick={() => openLifecycle(usage, "adjust")}>{t("parts.adjustMeasured")}</Button></> : null}

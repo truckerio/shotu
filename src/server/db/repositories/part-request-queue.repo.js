@@ -64,7 +64,7 @@ export function queueResultFromQueryRows(rows) {
 }
 
 export async function listUnresolvedPartRequestQueue({
-  companyIds, locationIds, isAdmin, page, pageSize, locationId, search, status, supply, sort,
+  companyIds, locationIds, adminCompanyIds = [], page, pageSize, locationId, search, status, supply, sort,
 }) {
   const offset = (page - 1) * pageSize;
   const result = await query(
@@ -107,7 +107,7 @@ export async function listUnresolvedPartRequestQueue({
            )
        ) availability on true
        where wo.company_id = any($1::uuid[])
-         and ($3::boolean or wo.location_id = any($2::uuid[]))
+         and (wo.company_id = any($3::uuid[]) or wo.location_id = any($2::uuid[]))
          and wo.status <> 'cancelled'
          and (
            pr.approval_status in ('submitted', 'needs_info')
@@ -167,7 +167,7 @@ export async function listUnresolvedPartRequestQueue({
            id
        ), '[]'::jsonb) as items
      from paged_requests`,
-    [companyIds, locationIds, isAdmin, pageSize, offset, locationId, search, status, supply, sort],
+    [companyIds, locationIds, adminCompanyIds, pageSize, offset, locationId, search, status, supply, sort],
   );
   return queueResultFromQueryRows(result.rows);
 }

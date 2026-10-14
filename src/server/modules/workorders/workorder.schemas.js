@@ -48,6 +48,7 @@ export const workorderFormDataSchema = z.object({
   companyName: customerCompanyNameSchema.optional(),
   laborProduct: laborProductSchema.nullable().optional(),
   workPerformed: z.string().trim().max(5000, "Repair order must be 5000 characters or less.").optional(),
+  customerDocumentAdjustmentBaseRevisionId: z.union([z.string().uuid(), z.literal("")]).optional(),
 }).catchall(z.unknown()).superRefine((formData, context) => {
   const quantity = String(formData.laborHours ?? "").trim();
   if (quantity && (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(quantity)
@@ -240,6 +241,9 @@ export const updateMechanicUsedPartsSchema = z.object({
   ]).optional().transform((value) => value === undefined || value === "" ? value : String(Number(value))),
   parts: z.array(z.object({
     evidenceId: z.string().uuid().optional(),
+    noStockLineId: z.string().uuid().optional(),
+    catalogPartId: z.string().uuid().optional(),
+    trackingMode: z.enum(["quantity", "serialized", "measured_bulk", "no_stock"]).optional(),
     partNo: z.string().trim().max(200).default(""),
     qty: usedPartQuantitySchema.default(""),
     uomCode: uomCodeSchema,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { companyRoleScope } from "../../auth/company-role.js";
 import { searchCompanyCatalogParts } from "../../db/repositories/parts-catalog.repo.js";
 import {
   applyInventoryCountImport,
@@ -21,6 +22,7 @@ import {
   parseInventoryCountWorkbook,
 } from "./inventory-count-file.js";
 import { assertInventoryQrConfigured } from "./inventory-qr.js";
+import { effectiveInventoryScope, resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 import {
   applyInventoryCountImportSchema,
   createInventoryCountImportSchema,
@@ -30,11 +32,11 @@ import {
 } from "./inventory.schemas.js";
 
 function scopeFor(requestContext) {
-  return {
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: requestContext.actor.role === "admin",
-  };
+  return companyRoleScope(requestContext, ["office", "admin"]);
+}
+
+async function importScope(importId, requestContext, dependencies, options = {}) {
+  return (dependencies.resolveResourceScope || resolveInventoryResourceScope)(requestContext, "countImport", importId, options);
 }
 
 function inputError(code, message, statusCode = 422) {
@@ -87,7 +89,7 @@ function sourceRetentionUntil(now = Date.now()) {
 
 export async function uploadInventoryCount(input, requestContext, dependencies = {}) {
   const parsed = createInventoryCountImportSchema.parse(input);
-  const scope = scopeFor(requestContext);
+  const browseScope = scopeFor(requestContext);
   const sourceFileBytes = decodeInventoryCountBase64(parsed.sourceFileBase64);
   if (sourceFileBytes.length !== parsed.sourceSizeBytes) {
     throw inputError("INVENTORY_COUNT_FILE_SIZE_MISMATCH", "Uploaded inventory file is incomplete.", 400);
@@ -101,9 +103,12 @@ export async function uploadInventoryCount(input, requestContext, dependencies =
   const rows = prepareRows(workbookRows);
   const location = await (dependencies.findLocation || findAuthorizedInventoryLocation)({
     locationId: parsed.locationId,
-    ...scope,
+    companyIds: browseScope.companyIds,
+    locationIds: browseScope.locationIds,
+    isAdmin: browseScope.adminCompanyIds.length > 0,
   });
   if (!location) throw inventoryNotFound();
+  const scope = effectiveInventoryScope(requestContext, { companyId: location.company_id, locationId: location.id || parsed.locationId });
   const importId = randomUUID();
   const encryptedSource = (dependencies.encryptFile || encryptInventoryCountFile)(sourceFileBytes, {
     companyId: location.company_id,
@@ -133,10 +138,11 @@ export async function uploadInventoryCount(input, requestContext, dependencies =
 }
 
 export async function downloadInventoryCountFile(importId, requestContext, dependencies = {}) {
+  const scope = await importScope(importId, requestContext, dependencies);
   const source = await (dependencies.getImportFile || getInventoryCountImportFile)({
     importId,
     actorId: requestContext.actor.id,
-    ...scopeFor(requestContext),
+    ...scope,
   });
   if (!source) throw inventoryNotFound();
   const bytes = (dependencies.decryptFile || decryptInventoryCountFile)(source, dependencies.encryptionOptions);
@@ -154,9 +160,10 @@ export async function downloadInventoryCountFile(importId, requestContext, depen
 }
 
 export async function readInventoryCount(importId, requestContext, dependencies = {}) {
+  const scope = await importScope(importId, requestContext, dependencies);
   const value = await (dependencies.getImport || getInventoryCountImport)({
     importId,
-    ...scopeFor(requestContext),
+    ...scope,
   });
   if (!value) throw inventoryNotFound();
   return { import: value };
@@ -181,11 +188,12 @@ export async function readInventoryCounts(searchParams, requestContext, dependen
 
 export async function resolveInventoryCountLine(importId, lineId, input, requestContext, dependencies = {}) {
   const parsed = resolveInventoryCountLineSchema.parse(input);
+  const scope = await importScope(importId, requestContext, dependencies);
   const result = await (dependencies.resolveLine || resolveInventoryCountImportLine)({
     importId,
     lineId,
     actorId: requestContext.actor.id,
-    ...scopeFor(requestContext),
+    ...scope,
     ...parsed,
   });
   if (result.kind === "not_found" || result.kind === "catalog_not_found") throw inventoryNotFound();
@@ -207,13 +215,13 @@ export async function resolveInventoryCountLine(importId, lineId, input, request
 
 export async function confirmInventoryCount(importId, input, requestContext, dependencies = {}) {
   const parsed = applyInventoryCountImportSchema.parse(input);
-  if (requestContext.actor.role !== "admin") {
-    throw inputError("INVENTORY_COUNT_APPLY_FORBIDDEN", "Only administrators can apply opening inventory counts.", 403);
-  }
+  const scope = await importScope(importId, requestContext, dependencies, {
+    allowedRoles: ["admin"], code: "INVENTORY_COUNT_APPLY_FORBIDDEN", message: "Only administrators can apply opening inventory counts.",
+  });
   assertInventoryQrConfigured(dependencies.qrOptions);
   const result = await (dependencies.applyImport || applyInventoryCountImport)({
     importId,
-    ...scopeFor(requestContext),
+    ...scope,
     actorId: requestContext.actor.id,
     expectedVersion: parsed.expectedVersion,
   });
@@ -258,12 +266,15 @@ export async function confirmInventoryCount(importId, input, requestContext, dep
 
 export async function searchInventoryMasterParts(searchParams, requestContext, dependencies = {}) {
   const parsed = inventoryCatalogSearchSchema.parse(Object.fromEntries(searchParams));
-  const scope = scopeFor(requestContext);
+  const browseScope = scopeFor(requestContext);
   const location = await (dependencies.findLocation || findAuthorizedInventoryLocation)({
     locationId: parsed.locationId,
-    ...scope,
+    companyIds: browseScope.companyIds,
+    locationIds: browseScope.locationIds,
+    isAdmin: browseScope.adminCompanyIds.length > 0,
   });
   if (!location) throw inventoryNotFound();
+  effectiveInventoryScope(requestContext, { companyId: location.company_id, locationId: location.id || parsed.locationId });
   return (dependencies.searchCatalog || searchCompanyCatalogParts)(location.company_id, {
     text: parsed.q,
     locationId: parsed.locationId,

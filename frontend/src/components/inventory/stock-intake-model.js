@@ -4,6 +4,7 @@ const measuredCategories = new Set(["liquid_volume", "mass", "gas_volume", "leng
 
 export function partStockTracking(part = {}) {
   const category = getUnitDefinition(part.canonicalUomCode || part.uomCode)?.category;
+  if (part.trackingMode === "no_stock") return "unsupported";
   if (category === "time") return "unsupported";
   if (part.trackingMode === "quantity") return ["count", "packaging"].includes(category) ? "quantity" : "unsupported";
   if (part.trackingMode === "measured_bulk") return measuredCategories.has(category) ? "measured_bulk" : "unsupported";

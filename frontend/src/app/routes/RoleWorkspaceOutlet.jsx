@@ -2,15 +2,21 @@ import { lazy, Suspense } from "react";
 import { RefreshCw01 } from "@untitledui/icons";
 
 import { AppLoadingFallback } from "../AppErrorBoundary.jsx";
-import { CreateWorkorderPage } from "../../features/create-workorder/CreateWorkorderPage.jsx";
-import { MechanicWorkspace } from "../../features/mechanic/MechanicWorkspace.jsx";
-import { OfficeWorkspace } from "../../features/office/OfficeWorkspace.jsx";
-import { SurveillanceWorkspace } from "../../features/surveillance/SurveillanceWorkspace.jsx";
-import { WorkorderDetailPage } from "../../features/workorder-detail/WorkorderDetailPage.jsx";
-import { InventoryScanWorkspace } from "../../features/inventory/InventoryScanWorkspace.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { productModuleCapabilities } from "./product-module-access.js";
 
+const CreateWorkorderPage = lazy(() => import("../../features/create-workorder/CreateWorkorderPage.jsx")
+  .then((module) => ({ default: module.CreateWorkorderPage })));
+const MechanicWorkspace = lazy(() => import("../../features/mechanic/MechanicWorkspace.jsx")
+  .then((module) => ({ default: module.MechanicWorkspace })));
+const OfficeWorkspace = lazy(() => import("../../features/office/OfficeWorkspace.jsx")
+  .then((module) => ({ default: module.OfficeWorkspace })));
+const SurveillanceWorkspace = lazy(() => import("../../features/surveillance/SurveillanceWorkspace.jsx")
+  .then((module) => ({ default: module.SurveillanceWorkspace })));
+const WorkorderDetailPage = lazy(() => import("../../features/workorder-detail/WorkorderDetailPage.jsx")
+  .then((module) => ({ default: module.WorkorderDetailPage })));
+const InventoryScanWorkspace = lazy(() => import("../../features/inventory/InventoryScanWorkspace.jsx")
+  .then((module) => ({ default: module.InventoryScanWorkspace })));
 const AdminWorkspace = lazy(() => import("../../features/admin/AdminWorkspace.jsx")
   .then((module) => ({ default: module.AdminWorkspace })));
 
@@ -30,7 +36,7 @@ export function RoleWorkspaceOutlet({
   const inspectionAccess = productModuleCapabilities(actor, "inspections");
   const workorderAccess = productModuleCapabilities(actor, "workorders");
   if (new URLSearchParams(window.location.search).has("inventoryScan")) {
-    return <InventoryScanWorkspace actor={actor} />;
+    return <Suspense fallback={<AppLoadingFallback />}><InventoryScanWorkspace actor={actor} /></Suspense>;
   }
   if (routeLoading) {
     return (
@@ -45,17 +51,19 @@ export function RoleWorkspaceOutlet({
 
   if (workspace === "mechanic") {
     return (
-      <MechanicWorkspace
-        actor={actor}
-        locale={interfacePreferences.locale}
-        localeError={interfacePreferences.error}
-        localeReady={interfacePreferences.ready}
-        onLocaleChange={interfacePreferences.onLocaleChange}
-        onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
-        onOpenWorkorder={navigation.openOperationalWorkorder}
-        inspectionAccess={inspectionAccess}
-        workorderAccess={workorderAccess}
-      />
+      <Suspense fallback={<AppLoadingFallback />}>
+        <MechanicWorkspace
+          actor={actor}
+          locale={interfacePreferences.locale}
+          localeError={interfacePreferences.error}
+          localeReady={interfacePreferences.ready}
+          onLocaleChange={interfacePreferences.onLocaleChange}
+          onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
+          onOpenWorkorder={navigation.openOperationalWorkorder}
+          inspectionAccess={inspectionAccess}
+          workorderAccess={workorderAccess}
+        />
+      </Suspense>
     );
   }
 
@@ -76,23 +84,25 @@ export function RoleWorkspaceOutlet({
 
   if (workspace === "office") {
     return (
-      <OfficeWorkspace
-        actor={actor}
-        {...draftWorkspaceProps}
-        onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
-        onOpenWorkorder={navigation.openOfficeWorkorder}
-        inspectionAccess={inspectionAccess}
-        workorderAccess={workorderAccess}
-      />
+      <Suspense fallback={<AppLoadingFallback />}>
+        <OfficeWorkspace
+          actor={actor}
+          {...draftWorkspaceProps}
+          onCreateWorkorder={navigation.canOpenCreateWorkspace ? navigation.openCreateWorkspace : null}
+          onOpenWorkorder={navigation.openOfficeWorkorder}
+          inspectionAccess={inspectionAccess}
+          workorderAccess={workorderAccess}
+        />
+      </Suspense>
     );
   }
 
   if (workspace === "surveillance") {
-    return <SurveillanceWorkspace actor={actor} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} />;
+    return <Suspense fallback={<AppLoadingFallback />}><SurveillanceWorkspace actor={actor} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} /></Suspense>;
   }
 
   if (activeWorkorder) {
-    return <WorkorderDetailPage {...detailPageProps} />;
+    return <Suspense fallback={<AppLoadingFallback />}><WorkorderDetailPage {...detailPageProps} /></Suspense>;
   }
 
   if (!navigation.canOpenCreateWorkspace) {
@@ -106,5 +116,5 @@ export function RoleWorkspaceOutlet({
     );
   }
 
-  return <CreateWorkorderPage {...createPageProps} />;
+  return <Suspense fallback={<AppLoadingFallback />}><CreateWorkorderPage {...createPageProps} /></Suspense>;
 }

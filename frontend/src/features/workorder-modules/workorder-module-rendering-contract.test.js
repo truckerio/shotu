@@ -6,10 +6,12 @@ const detailPage = readFileSync(new URL("../workorder-detail/WorkorderDetailPage
 const createPage = readFileSync(new URL("../create-workorder/CreateWorkorderPage.jsx", import.meta.url), "utf8");
 const diagnosisRepairModule = readFileSync(new URL("./diagnosis-repair/WorkorderDiagnosisRepairModule.jsx", import.meta.url), "utf8");
 
-test("hidden Preview does not mount printable or fullscreen detail data", () => {
-  assert.match(detailPage, /previewPolicy\.canRead \? <BrowserPrintDocument/);
-  assert.match(detailPage, /previewPolicy\.canRead \? <PreviewFullscreen/);
-  assert.match(detailPage, /renderedDetailSection === "preview" && previewPolicy\.canRead/);
+test("operational detail no longer mounts the legacy paper preview", () => {
+  assert.doesNotMatch(detailPage, /<WorkorderPreview|<CompactWorkorderPreview|<PreviewFullscreen/);
+  assert.doesNotMatch(detailPage, /renderedDetailSection === "preview"/);
+  assert.match(detailPage, /id: "customer-documents"/);
+  assert.match(detailPage, /detailStatus === "mechanic_done" \? "Review invoice" : "View estimate"/);
+  assert.match(detailPage, /id: "archive"/);
 });
 
 test("read-only Chat has no composer and visible Photos enable chat attachments", () => {
@@ -25,8 +27,7 @@ test("office lifecycle controls require module write and Work done trusts the fi
   assert.match(diagnosisRepairModule, /writable\(access\) && Boolean\(allowedActions\.saveNotes\)/);
 });
 
-test("hidden Create Preview does not mount print or fullscreen data", () => {
-  assert.match(createPage, /previewPolicy\.canRead \? <BrowserPrintDocument/);
-  assert.match(createPage, /previewPolicy\.canRead \? <PreviewFullscreen/);
-  assert.match(createPage, /!isPhone && previewPolicy\.canRead \? <PreviewPane/);
+test("Create no longer mounts the legacy printable or fullscreen Preview surfaces", () => {
+  assert.doesNotMatch(createPage, /BrowserPrintDocument|PreviewFullscreen|PreviewPane|CompactWorkorderPreview|WorkorderPreview|PrintModal/);
+  assert.match(createPage, /<DocumentsPanel/);
 });

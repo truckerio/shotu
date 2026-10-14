@@ -10,6 +10,7 @@ import {
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { assertInventoryQrConfigured } from "./inventory-qr.js";
 import { createPartSerializedUnitsSchema } from "./inventory.schemas.js";
+import { resolveInventoryLocationScope, resolveInventoryReadLocationScope, resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
 const idSchema = z.string().uuid();
 
@@ -17,33 +18,24 @@ function publicError(code, message, statusCode = 422) {
   return new InventoryError(message, { code, statusCode });
 }
 
-function companyReadScope(requestContext) {
-  return { companyIds: [...(requestContext.companyIds || [])] };
-}
-
-function locationWriteScope(requestContext) {
-  return {
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: requestContext.actor.role === "admin",
-  };
-}
-
 export async function readPartLocationSerialization(catalogPartId, locationId, requestContext, dependencies = {}) {
   const partId = idSchema.parse(catalogPartId);
   const shopId = idSchema.parse(locationId);
+  const readScope = await (dependencies.resolveReadLocationScope || resolveInventoryReadLocationScope)(requestContext, shopId, {
+    allowedRoles: ["admin", "office", "mechanic"], loadLocation: dependencies.loadLocation,
+  });
   const result = await (dependencies.read || getPartLocationSerialization)({
     catalogPartId: partId,
     locationId: shopId,
-    ...companyReadScope(requestContext),
+    companyIds: readScope.companyIds,
   });
   if (!result) throw inventoryNotFound();
-  const canWriteLocation = requestContext.actor.role === "admin" || requestContext.locationIds?.has(shopId) === true;
-  const canManageInventory = ["admin", "office"].includes(requestContext.actor.role);
+  const canWriteLocation = readScope.canManageLocation;
+  const canManageInventory = ["admin", "office"].includes(readScope.effectiveRole);
   return {
     ...result,
     part: { ...result.part, canonicalUomCode: result.part.canonicalUomCode || result.part.uomCode },
-    canCreateAtLocation: canWriteLocation,
+    canCreateAtLocation: canManageInventory && canWriteLocation,
     canReceiveStock: canManageInventory && canWriteLocation
       && ["quantity", "measured_bulk"].includes(result.part.trackingMode),
   };
@@ -51,11 +43,15 @@ export async function readPartLocationSerialization(catalogPartId, locationId, r
 
 export async function readSerializedInventoryUnit(unitId, requestContext, dependencies = {}) {
   const id = idSchema.parse(unitId);
+  const resolved = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(requestContext, "serializedUnit", id, {
+    allowedRoles: ["admin", "office", "mechanic"],
+    companyWideRoles: ["admin", "office"],
+  });
   const scope = {
     unitId: id,
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: ["admin", "office"].includes(requestContext.actor.role),
+    companyIds: resolved.companyIds,
+    locationIds: resolved.locationIds,
+    isAdmin: ["admin", "office"].includes(resolved.effectiveRole),
   };
   const result = await (dependencies.readUnit || getSerializedInventoryUnit)(scope);
   if (!result) throw inventoryNotFound();
@@ -71,13 +67,18 @@ export async function createSerializedUnitsForPart(catalogPartId, locationId, in
   const shopId = idSchema.parse(locationId);
   const parsed = createPartSerializedUnitsSchema.parse(input);
   assertInventoryQrConfigured(dependencies.qrOptions);
+  const scope = await (dependencies.resolveLocationScope || resolveInventoryLocationScope)(requestContext, shopId, {
+    allowedRoles: ["admin", "office"], loadLocation: dependencies.loadLocation,
+  });
   const result = await (dependencies.create || createPartSerializedUnits)({
     catalogPartId: partId,
     locationId: shopId,
     ...parsed,
     workorderId: dependencies.workorderId || null,
     actorId: requestContext.actor.id,
-    ...locationWriteScope(requestContext),
+    companyIds: scope.companyIds,
+    locationIds: scope.locationIds,
+    isAdmin: scope.isAdmin,
   });
   if (result.kind === "not_found") throw inventoryNotFound();
   if (result.kind === "replay_conflict") {

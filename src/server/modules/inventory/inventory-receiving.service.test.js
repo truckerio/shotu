@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { receiveReviewedInvoice, resolveInventoryCode } from "./inventory-receiving.service.js";
 import { createInventoryQrToken } from "./inventory-qr.js";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 
 const COMPANY_ID = "00000000-0000-4000-8000-000000000001";
 const LOCATION_ID = "00000000-0000-4000-8000-000000000002";
@@ -214,6 +215,7 @@ test("scan resolution requires a valid token and location scope", async () => {
   let receivedScope;
   const unit = { id: unitId, serialNumber: "WG-QA", status: "in_stock" };
   const result = await resolveInventoryCode({ code: `https://workorders.example.test/?inventoryScan=${token}` }, context("mechanic"), {
+    resolveResourceScope: (requestContext, _type, _id, options) => effectiveInventoryScope(requestContext, { companyId: COMPANY_ID, locationId: LOCATION_ID, ...options }),
     qrOptions: { signingKey: SIGNING_KEY },
     getUnit: async (scope) => { receivedScope = scope; return unit; },
   });

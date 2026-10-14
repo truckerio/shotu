@@ -122,7 +122,7 @@ export function useWorkorderDraftLifecycle({
     setDetailSource(null);
     setMode("admin");
     setWorkspace("generator");
-    setCreateState({ busy: false, message: "Draft restored." });
+    setCreateState({ busy: false, message: "" });
     replaceRouteSearch(createWorkorderSearch(savedDraft.id));
   }, [
     draft,

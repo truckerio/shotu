@@ -2,12 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { handleInventoryApi } from "./inventory.routes.js";
 import { permissionsForRole } from "../../auth/permissions.js";
+import { resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const partId = "22222222-2222-4222-8222-222222222222";
 const locationId = "33333333-3333-4333-8333-333333333333";
 const actorId = "44444444-4444-4444-8444-444444444444";
-const context = (role = "office") => ({ actor: { id: actorId, role }, companyIds: new Set([companyId]), locationIds: new Set([locationId]), permissions: permissionsForRole(role) });
+const context = (role = "office") => ({ actor: { id: actorId, role }, companyIds: new Set([companyId]), companyRoles: new Map([[companyId, role]]), locationIds: new Set([locationId]), permissions: permissionsForRole(role) });
+const costLayerScope = (requestContext, type, id, options) => resolveInventoryResourceScope(requestContext, type, id, {
+  ...options,
+  query: async (sql, [resourceId, companyIds]) => {
+    assert.match(sql, /inventory_aggregate_cost_layers/);
+    assert.equal(resourceId, partId);
+    assert.deepEqual(companyIds, [companyId]);
+    return { rows: [{ company_id: companyId, location_id: locationId }] };
+  },
+});
 async function request(method, path, body, dependencies, ctx = context()) {
   const res = {};
   const handled = await handleInventoryApi({ method }, res, new URL(path, "http://localhost"), {
@@ -27,7 +37,7 @@ const priceBody = { expectedVersion: 0, amount: "0", currency: "USD", reason: "O
 test("commercial route preserves scoped reads and missing costs", async () => {
   const result = await request("GET", commercial, null, { read: async (input) => {
     assert.deepEqual(input.companyIds, [companyId]); assert.deepEqual(input.locationIds, []); assert.equal(input.isAdmin, true);
-    return { purchaseCost: { status: "unknown", latest: null }, prices: {} };
+    return { part: { companyId }, purchaseCost: { status: "unknown", latest: null }, prices: {} };
   } });
   assert.equal(result.status, 200); assert.equal(result.payload.purchaseCost.latest, null);
 });
@@ -74,7 +84,7 @@ test("selling policy route reads and writes one location-scoped versioned policy
 test("batch cost route saves an audited correction and preserves permission checks", async () => {
   const audit = [];
   const body = { expectedVersion: 0, unitCost: "11.2500", currency: "USD", reason: "Opening legacy cost", idempotencyKey: "batch-cost-route-1" };
-  const saved = await request("PUT", batchCostPath, body, { emitAdministrativeAuditEvent: async (event) => audit.push(event), append: async (input) => {
+  const saved = await request("PUT", batchCostPath, body, { resolveResourceScope: costLayerScope, emitAdministrativeAuditEvent: async (event) => audit.push(event), append: async (input) => {
     assert.equal(input.costLayerId, partId);
     assert.equal(input.actorId, actorId);
     return { kind: "saved", revision: { id: locationId, version: 1, unitCost: input.unitCost, currency: input.currency }, replayed: false };
@@ -130,15 +140,21 @@ test("location routes validate hierarchy requests and scope before persistence",
   }, { ...context(), locationIds: new Set() });
   assert.equal(readOnly.status, 200);
   assert.equal(readOnly.payload.positions[0].name, "Receiving");
-  const invalid = await request("POST", path, { name: "Bad parent", parentId: "invalid" }, { insertPosition: () => assert.fail("Invalid hierarchy reached database") });
+  const invalid = await request("POST", path, { name: "Bad parent", parentId: "invalid" }, { loadLocation: async () => ({ id: locationId, company_id: companyId }), insertPosition: () => assert.fail("Invalid hierarchy reached database") });
   assert.equal(invalid.status, 400);
 });
 
 test("movement and count routes preserve error and permission contracts", async () => {
   const movePath = `/api/office/inventory/parts/${partId}/locations/${locationId}/positions/moves`;
-  const denied = await request("POST", movePath, {}, { moveStock: () => assert.fail("Unauthorized move reached database") }, context("mechanic"));
+  const denied = await request("POST", movePath, {}, { loadLocation: async () => ({ id: locationId, company_id: companyId }), moveStock: () => assert.fail("Unauthorized move reached database") }, context("mechanic"));
   assert.equal(denied.status, 403);
   const countPath = `/api/office/inventory/position-counts/${partId}/apply`;
-  const countDenied = await request("POST", countPath, {}, { applyCount: () => assert.fail("Office applied count") });
+  const countDenied = await request("POST", countPath, { expectedVersion: 1, idempotencyKey: "count-denied-route" }, {
+    resolveResourceScope: (requestContext, type, id, options) => resolveInventoryResourceScope(requestContext, type, id, {
+      ...options,
+      query: async (sql) => { assert.match(sql, /inventory_position_count_sessions/); return { rows: [{ company_id: companyId, location_id: locationId }] }; },
+    }),
+    applyCount: () => assert.fail("Office applied count"),
+  });
   assert.equal(countDenied.status, 403);
 });

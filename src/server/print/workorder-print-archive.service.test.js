@@ -121,7 +121,7 @@ test("archive containment rejects sibling-prefix and traversal paths", () => {
 
 test("authorized missing and tampered artifacts fail integrity checks", async () => {
   const archive = {
-    id: "archive-1", workorderId: workorder.id, status: "ready", storageKey: "company/archive.pdf",
+    id: "archive-1", companyId: workorder.companyId, workorderId: workorder.id, status: "ready", storageKey: "company/archive.pdf",
     pdfByteSize: 9, pdfSha256: sha256(Buffer.from("pdf bytes")), workorderSerial: workorder.serial,
     artifactKind: "original", revisionNumber: 1,
   };
@@ -203,4 +203,20 @@ test("print snapshot access explicitly requires location membership", async () =
     (error) => error.statusCode === 404,
   );
   assert.equal(accessOptions.requireLocationMembership, true);
+});
+
+test("mixed company archive lists scope the admin bypass and exclude mechanic companies", async () => {
+  const mixed = { actor: { id: "actor", role: "admin" }, sessionMode: "standard", companyIds: new Set(["A", "B", "C"]),
+    companyRoles: new Map([["A", "admin"], ["B", "office"], ["C", "mechanic"]]), locationIds: new Set(["B-assigned", "C-assigned"]) };
+  let scope;
+  await listArchivedPrints(mixed, { listArchives: async (input) => { scope = input; return []; } });
+  assert.deepEqual(scope.companyIds, ["A", "B"]);
+  assert.deepEqual(scope.adminCompanyIds, ["A"]);
+  assert.equal(scope.isAdmin, false);
+  let readBytes = false;
+  await assert.rejects(readArchivedPdf("archive-C", mixed, baseDependencies({
+    findArchive: async () => ({ companyId: "C", workorderId: "C-workorder", status: "ready" }),
+    readFile: async () => { readBytes = true; },
+  })), (error) => error.statusCode === 403);
+  assert.equal(readBytes, false);
 });

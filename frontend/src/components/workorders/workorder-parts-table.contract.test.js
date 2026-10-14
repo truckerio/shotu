@@ -7,6 +7,7 @@ function source(name) {
 }
 
 const table = source("./WorkorderPartsTable.jsx");
+const entryTable = source("./WorkorderPartsEntryTable.jsx");
 const tableCss = source("./workorder-parts-table.css");
 const usedParts = source("./UsedPartsEditor.jsx");
 const usedPartsCss = source("./used-parts-editor.css");
@@ -41,11 +42,13 @@ test("shared header renders only the declared visible columns", () => {
   assert.match(tableCss, /\.workorder-parts-grid > \.operational-part-row\s*\{[^}]*grid-template-columns:\s*var\(--workorder-parts-grid-template\);/s);
 });
 
-test("Create and detail consume the shared contract without changing row children", () => {
+test("Create and one-page detail consume the shared entry contract while lifecycle rows remain caller-owned", () => {
   assert.match(createParts, /const canViewPrices = pricing\?\.enabled === true;/);
-  assert.match(createParts, /const columns = canViewPrices[\s\S]*?\.\.\.DEFAULT_WORKORDER_PARTS_COLUMNS, WORKORDER_PARTS_COLUMNS\.PRICE[\s\S]*?: DEFAULT_WORKORDER_PARTS_COLUMNS;/);
-  assert.match(createParts, /<WorkorderPartsTable[\s\S]*?columns=\{columns\}/);
-  assert.match(createParts, /<WorkorderPartsColumnHead[\s\S]*?className="create-parts-column-head"[\s\S]*?columns=\{columns\}/);
+  assert.match(entryTable, /showPrice[\s\S]*?\.\.\.DEFAULT_WORKORDER_PARTS_COLUMNS, WORKORDER_PARTS_COLUMNS\.PRICE[\s\S]*?: DEFAULT_WORKORDER_PARTS_COLUMNS;/);
+  assert.match(entryTable, /<WorkorderPartsTable[\s\S]*?columns=\{columns\}/);
+  assert.match(entryTable, /<WorkorderPartsColumnHead className="create-parts-column-head" columns=\{columns\}/);
+  assert.match(createParts, /<WorkorderPartsEntryTable/);
+  assert.match(usedParts, /<WorkorderPartsEntryTable/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.PRODUCT]: t\("create\.parts\.part"\)/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.QUANTITY_UOM]: t\("parts\.quantityUnit"\)/);
   assert.match(createParts, /WORKORDER_PARTS_COLUMNS\.REPAIR_ORDER]: t\("create\.parts\.repairOrder"\)/);

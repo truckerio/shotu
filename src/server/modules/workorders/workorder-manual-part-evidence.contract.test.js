@@ -73,8 +73,9 @@ test("standard Parts save validates the effective projection and persists immuta
   const source = await readFile(new URL("../../db/repositories/operational-workorders.repo.js", import.meta.url), "utf8");
   assert.match(source, /listLockedWorkorderManualPartEvidence\(client,/);
   assert.match(source, /effectivePriorParts = applyManualPartEvidence\(priorParts, manualEvidence\)/);
-  assert.match(source, /remainingPrior = effectivePriorParts\.map/);
-  assert.match(source, /persistedParts = manualEvidence\.length \? priorParts : validatedParts/);
+  assert.match(source, /remainingPrior = effectivePriorParts[\s\S]*\.filter\(\(part\) => !part\?\.noStockLineId\)[\s\S]*\.map/);
+  assert.match(source, /persistedParts = manualEvidence\.length \? validatedParts\.map/);
+  assert.match(source, /priorParts\.find\(\(prior\) => prior\?\.evidenceId === part\.evidenceId\)/);
 });
 
 test("latest manual amendments replace or void legacy rows without mutating original evidence", () => {

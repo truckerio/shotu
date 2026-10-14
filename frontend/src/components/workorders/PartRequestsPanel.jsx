@@ -6,6 +6,7 @@ import "./part-requests-panel.css";
 
 export function PartRequestsPanel({
   actorId,
+  financialFooter = null,
   role,
   detail,
   parts,
@@ -29,6 +30,7 @@ export function PartRequestsPanel({
   const laborEditable = detail.allowedActions?.saveNotes === true;
   const installedParts = installedSerializedUsedParts(detail);
   const commonProps = {
+    financialFooter,
     actorId,
     role,
     detail,

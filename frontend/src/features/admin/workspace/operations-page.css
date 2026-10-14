@@ -68,6 +68,10 @@
   border-bottom: 0;
 }
 
+.admin-operations-content .operations-workspace > :is(.operational-collection-tabs-wrap, .operations-toolbar, .mobile-queue-toolbar) {
+  flex: 0 0 auto;
+}
+
 .admin-operations-content .operations-results-scroll,
 .admin-operations-content .workorder-drafts-queue,
 .admin-operations-content .part-request-queue,
@@ -83,10 +87,25 @@
   overscroll-behavior: contain;
 }
 
-.admin-operations-content :is(.workorder-drafts-table-head, .operational-collection-table-head) {
+.admin-operations-content .workorder-drafts-table-head {
   position: sticky;
   top: 0;
   z-index: 2;
+}
+
+@media (min-width: 701px) {
+  .admin-operations-content :is(.operations-table, .part-request-queue-table, .workorder-drafts-results) {
+    border-radius: var(--workspace-card-radius);
+  }
+
+  .admin-operations-content .workorder-drafts-table-head::after {
+    background: linear-gradient(to bottom, rgb(249 250 251 / 70%), rgb(249 250 251 / 25%) 40%, rgb(249 250 251 / 0%));
+    content: "";
+    height: 16px;
+    inset: 100% 0 auto;
+    pointer-events: none;
+    position: absolute;
+  }
 }
 
 @media (max-width: 700px) {
@@ -133,7 +152,7 @@
     overflow: visible;
   }
 
-  .admin-operations-content :is(.workorder-drafts-table-head, .operational-collection-table-head) {
+  .admin-operations-content .workorder-drafts-table-head {
     position: static;
   }
 }

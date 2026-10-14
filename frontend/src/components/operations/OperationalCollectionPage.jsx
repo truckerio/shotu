@@ -76,20 +76,24 @@ export function OperationalCollectionResultHeader({ children, className = "", ..
   return <div {...props} className={joinClasses("operational-collection-result-header", className)}>{children}</div>;
 }
 
-export function OperationalCollectionTable({ columns, children, ariaLabel, busy = false, className = "" }) {
+export function OperationalCollectionTable({ columns, children, ariaLabel, busy = false, className = "", tableRef, onScroll, checkpointSpacing }) {
   return (
     <div
       className={joinClasses("operational-collection-table", className)}
       role="table"
       aria-label={ariaLabel}
       aria-busy={busy}
+      ref={tableRef}
+      onScroll={onScroll}
     >
       <div className="operational-collection-table-head" role="row">
         {columns.map((column) => (
           <span className={column.className || undefined} role="columnheader" key={column.id}>{column.label}</span>
         ))}
       </div>
+      {checkpointSpacing?.before > 0 ? <div className="checkpoint-queue-spacer" aria-hidden="true" style={{ height: checkpointSpacing.before }} /> : null}
       {children}
+      {checkpointSpacing?.after > 0 ? <div className="checkpoint-queue-spacer" aria-hidden="true" style={{ height: checkpointSpacing.after }} /> : null}
     </div>
   );
 }

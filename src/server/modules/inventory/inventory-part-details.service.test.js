@@ -32,6 +32,34 @@ test("part edit rejects unknown unit codes before repository access", async () =
   assert.equal(called, false);
 });
 
+test("catalog tracking accepts no-stock entries and requires it for time units", async () => {
+  let createInput;
+  const dependencies = {
+    findLocation: async () => ({ company_id: "22222222-2222-4222-8222-222222222222" }),
+    createPart: async (value) => { createInput = value; return { kind: "created", part: { id: "part-1" } }; },
+  };
+  const createContext = { ...officeContext, locationIds: new Set(["44444444-4444-4444-8444-444444444444"]) };
+  await createInventoryPart({
+    locationId: "44444444-4444-4444-8444-444444444444", description: "Diagnostic labor", partNumber: "LABOR-1",
+    uomCode: "hr", trackingMode: "no_stock",
+  }, createContext, dependencies);
+  assert.equal(createInput.trackingMode, "no_stock");
+  await assert.rejects(() => createInventoryPart({
+    locationId: "44444444-4444-4444-8444-444444444444", description: "Invalid labor", partNumber: "LABOR-2",
+    uomCode: "hr", trackingMode: "quantity",
+  }, createContext, { ...dependencies, createPart: async () => assert.fail("invalid time tracking reached repository") }));
+  await assert.rejects(() => updateInventoryPart("33333333-3333-4333-8333-333333333333", {
+    ...input, uomCode: "hr", trackingMode: "serialized",
+  }, context, { updatePart: async () => assert.fail("invalid time tracking reached repository") }));
+});
+
+test("catalog tracking maps database time-policy conflicts", async () => {
+  await assert.rejects(
+    () => updateInventoryPart("33333333-3333-4333-8333-333333333333", { ...input, trackingMode: "no_stock" }, context, { updatePart: async () => ({ kind: "tracking_uom_conflict" }) }),
+    (error) => error.code === "INVENTORY_PART_TRACKING_UOM_CONFLICT" && error.statusCode === 422,
+  );
+});
+
 test("part edit is Admin-only because catalog changes affect every location", async () => {
   let called = false;
   await assert.rejects(
@@ -61,7 +89,7 @@ test("part create hides unauthorized locations and maps identity conflicts", asy
   const createInput = { locationId: "44444444-4444-4444-8444-444444444444", description: "Air valve", partNumber: "A-1", uomCode: "ea" };
   await assert.rejects(() => createInventoryPart(createInput, officeContext, { findLocation: async () => null }), (error) => error.code === "inventory_not_found" && error.statusCode === 404);
   await assert.rejects(
-    () => createInventoryPart(createInput, officeContext, { findLocation: async () => ({ company_id: "22222222-2222-4222-8222-222222222222" }), createPart: async () => ({ kind: "identity_conflict" }) }),
+    () => createInventoryPart(createInput, { ...officeContext, locationIds: new Set([createInput.locationId]) }, { findLocation: async () => ({ company_id: "22222222-2222-4222-8222-222222222222" }), createPart: async () => ({ kind: "identity_conflict" }) }),
     (error) => error.code === "INVENTORY_PART_IDENTITY_CONFLICT" && error.statusCode === 409,
   );
 });

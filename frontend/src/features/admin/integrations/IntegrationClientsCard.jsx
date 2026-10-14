@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../../components/ui/Button.jsx";
-import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
+import { CheckpointCollection } from "../../../components/ui/CheckpointCollection.jsx";
+import { useClientCheckpointPages } from "../../../components/ui/useClientCheckpointPages.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
 
 function dateLabel(value) {
@@ -21,7 +22,7 @@ export function IntegrationClientsCard({
 }) {
   const [name, setName] = useState("Odoo production");
   const [copied, setCopied] = useState(false);
-  const pagination = usePagination(clients, { pageSize: 10 });
+  const queue = useClientCheckpointPages(clients, { pageSize: 10 });
 
   async function create(event) {
     event.preventDefault();
@@ -76,25 +77,31 @@ export function IntegrationClientsCard({
         </form>
       )}
 
-      <div className="integration-client-list">
-        {clients.length ? pagination.pageItems.map((client) => (
-          <article key={client.id}>
-            <div>
-              <strong>{client.name}</strong>
-              <span>Prefix {client.token_prefix} · Last used {dateLabel(client.last_used_at)}</span>
-            </div>
-            <span className={`integration-status ${client.active ? "connected" : "disconnected"}`}>
-              {client.active ? "Active" : "Revoked"}
-            </span>
-            {client.active ? (
-              <Button type="button" variant="danger" disabled={busy} onClick={() => onRevoke(client.id)}>
-                Revoke
-              </Button>
-            ) : null}
-          </article>
-        )) : <p className="integration-empty">No machine clients created.</p>}
-      </div>
-      <Pagination {...pagination} label="clients" />
+      <CheckpointCollection
+        ariaLabel="Machine clients"
+        label="clients"
+        pageSize={10}
+        queue={queue}
+        storageKey="admin-integration-clients"
+        renderItems={(entries) => <div className="integration-client-list">
+          {clients.length ? entries.map(({ item: client, key, rowProps }) => (
+            <article {...rowProps} key={key}>
+              <div>
+                <strong>{client.name}</strong>
+                <span>Prefix {client.token_prefix} · Last used {dateLabel(client.last_used_at)}</span>
+              </div>
+              <span className={`integration-status ${client.active ? "connected" : "disconnected"}`}>
+                {client.active ? "Active" : "Revoked"}
+              </span>
+              {client.active ? (
+                <Button type="button" variant="danger" disabled={busy} onClick={() => onRevoke(client.id)}>
+                  Revoke
+                </Button>
+              ) : null}
+            </article>
+          )) : <p className="integration-empty">No machine clients created.</p>}
+        </div>}
+      />
     </article>
   );
 }

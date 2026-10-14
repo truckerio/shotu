@@ -792,7 +792,7 @@ export const inventoryCountImportInternals = {
   validCatalogQuantity,
 };
 
-export async function listInventoryCountImports({ companyIds, locationIds = [], isAdmin = false, limit = 20, offset = 0 }) {
+export async function listInventoryCountImports({ companyIds, adminCompanyIds = [], locationIds = [], limit = 20, offset = 0 }) {
   const [result, count] = await Promise.all([
     query(
     `select ${IMPORT_METADATA_COLUMNS}, location.name as location_name
@@ -800,17 +800,17 @@ export async function listInventoryCountImports({ companyIds, locationIds = [], 
      join locations location
        on location.company_id = stocktake.company_id and location.id = stocktake.location_id
      where stocktake.company_id = any($1::uuid[])
-       and ($3::boolean or stocktake.location_id = any($2::uuid[]))
+       and (stocktake.company_id = any($3::uuid[]) or stocktake.location_id = any($2::uuid[]))
      order by stocktake.updated_at desc, stocktake.id
      limit $4 offset $5`,
-    [companyIds, locationIds, isAdmin, limit, offset],
+    [companyIds, locationIds, adminCompanyIds, limit, offset],
     ),
     query(
       `select count(*)::integer as total
        from inventory_count_imports stocktake
        where stocktake.company_id = any($1::uuid[])
-         and ($3::boolean or stocktake.location_id = any($2::uuid[]))`,
-      [companyIds, locationIds, isAdmin],
+         and (stocktake.company_id = any($3::uuid[]) or stocktake.location_id = any($2::uuid[]))`,
+      [companyIds, locationIds, adminCompanyIds],
     ),
   ]);
   return { imports: result.rows.map((row) => publicImport(row)), total: Number(count.rows[0]?.total || 0) };

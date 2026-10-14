@@ -59,6 +59,13 @@
   min-width: 0;
 }
 
+.used-parts-heading-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .used-parts-section-heading .mechanic-scan-trigger.is-table-action {
   flex: 0 0 auto;
   justify-content: center;
@@ -66,13 +73,34 @@
   min-height: 44px;
 }
 
-.used-parts-editor.is-one-page {
-  gap: 10px;
+:is(.used-parts-editor.is-one-page, .control-panel[data-workorder-presentation="one-page"] .used-parts-editor) {
+  gap: 12px;
+}
+
+:is(.used-parts-editor.is-one-page, .control-panel[data-workorder-presentation="one-page"] .used-parts-editor) .used-parts-section {
+  gap: 12px;
+}
+
+:is(.used-parts-editor.is-one-page, .control-panel[data-workorder-presentation="one-page"] .used-parts-editor) :is(.used-parts-section > h3, .used-parts-section-heading > h3) {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+:is(.used-parts-editor.is-one-page, .control-panel[data-workorder-presentation="one-page"] .used-parts-editor) :is(
+  .quantity-unit-number input,
+  .quantity-unit-trigger,
+  .used-part-repair .narrative-field-control,
+  .used-parts-manual-picker .part-catalog-field > input
+) {
+  min-height: 40px;
+}
+
+:is(.used-parts-editor.is-one-page, .control-panel[data-workorder-presentation="one-page"] .used-parts-editor) .used-parts-actions {
+  padding-bottom: 16px;
 }
 
 .used-parts-one-page-table {
   --workorder-parts-quantity-track: 158px;
-  --workorder-parts-grid-template: 24px minmax(0, 1.1fr) var(--workorder-parts-quantity-track) minmax(0, 1fr) minmax(140px, 0.55fr);
   gap: 0;
 }
 
@@ -82,6 +110,10 @@
   border-top: 1px solid var(--border-subtle, #e4e7ec);
   border-radius: 0;
   padding: 10px 8px;
+}
+
+.used-parts-one-page-table > .used-parts-draft-row {
+  background: transparent;
 }
 
 .used-parts-one-page-table .quantity-unit-input {
@@ -167,6 +199,128 @@
 .used-parts-manual-picker {
   min-width: 0;
   position: relative;
+}
+
+.used-part-intake-actions {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.used-part-intake-actions .button {
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.detail-inline-price-control {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 36px;
+  min-height: 40px;
+  overflow: hidden;
+  padding-left: 10px;
+}
+
+.detail-inline-price-control > input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  min-height: 38px;
+  min-width: 0;
+  outline: 0;
+  padding: 8px 4px;
+  width: 100%;
+}
+
+.detail-inline-price-control .detail-price-source-menu,
+.detail-inline-price-control .dropdown-select-trigger {
+  height: 100%;
+  min-height: 38px;
+}
+
+.detail-inline-price-control .detail-price-source-menu {
+  min-width: 36px;
+  width: 36px;
+}
+
+.detail-inline-price-control .dropdown-select-trigger {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid #eaecf0;
+  border-radius: 0;
+  padding: 0 9px;
+}
+
+.detail-inline-price-control .dropdown-select-value {
+  display: none;
+}
+
+.workorder-part-price.is-compact {
+  display: grid;
+  gap: 4px;
+}
+
+.workorder-set-rates-trigger {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #175cd3;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  justify-self: start;
+  padding: 0;
+}
+
+.workorder-rate-overlay {
+  align-items: center;
+  background: rgba(16, 24, 40, 0.55);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 1200;
+}
+
+.workorder-rate-modal {
+  max-height: min(720px, calc(100vh - 40px));
+  max-width: 520px;
+  width: 100%;
+}
+
+.workorder-rate-dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgba(16, 24, 40, 0.25);
+  display: grid;
+  gap: 16px;
+  max-height: inherit;
+  overflow: auto;
+  padding: 20px;
+}
+
+.workorder-rate-dialog > header,
+.workorder-rate-dialog form > footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.workorder-rate-dialog h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.workorder-rate-dialog form,
+.workorder-rate-dialog form > label {
+  display: grid;
+  gap: 8px;
 }
 
 .used-parts-manual-picker .part-catalog-field > label {
@@ -489,6 +643,57 @@
 }
 
 @container (max-width: 520px) {
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row {
+    align-items: stretch;
+    grid-template-columns: 24px minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row > strong {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row > .operational-part-labor-name {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row > .quantity-unit-input {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row > .used-part-repair {
+    grid-column: 2 / -1;
+    grid-row: 3;
+    width: 100%;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row > .workorder-labor-price {
+    grid-column: 2 / -1;
+    grid-row: 4;
+    width: 100%;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row > .used-part-recorded-status {
+    display: none;
+  }
+
+  .used-parts-editor .used-parts-one-page-table > .used-part-labor-row :is(
+    .labor-product-control,
+    .quantity-unit-number input,
+    .quantity-unit-trigger,
+    .used-part-repair .narrative-field-control,
+    .detail-inline-price-control,
+    .detail-inline-price-control > input,
+    .detail-inline-price-control .dropdown-select-trigger,
+    .workorder-set-rates-trigger
+  ) {
+    min-height: 44px;
+  }
+
   .used-parts-editor .used-parts-items-table > .operational-part-row,
   .used-parts-editor .used-parts-items-table > .used-part-serialized-group > .operational-part-row {
     grid-template-columns: 24px minmax(0, 1fr);

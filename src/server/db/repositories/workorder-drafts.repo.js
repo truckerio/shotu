@@ -84,9 +84,24 @@ function draftSelect() {
   left join user_profiles editor on editor.id = d.last_edited_by_user_id`;
 }
 
-function visibleScope({ companyIds, locationIds = [], userId, role }, start = 1, alias = "d") {
+function visibleScope({ companyIds, adminCompanyIds, locationIds = [], userId, role }, start = 1, alias = "d") {
   const values = [companyIds?.length ? companyIds : []];
   const company = `${alias}.company_id = any($${start}::uuid[])`;
+  if (adminCompanyIds !== undefined) {
+    values.push(adminCompanyIds, locationIds, userId);
+    return {
+      sql: `${company} and (
+        ${alias}.company_id = any($${start + 1}::uuid[])
+        or ${alias}.location_id = any($${start + 2}::uuid[])
+        or (${alias}.location_id is null and (
+          ${alias}.created_by_user_id = $${start + 3}
+          or ${alias}.owner_user_id = $${start + 3}
+          or ${alias}.last_edited_by_user_id = $${start + 3}
+        ))
+      )`,
+      values,
+    };
+  }
   if (role === "admin") return { sql: company, values };
   if (role === undefined && locationIds.length === 0) {
     values.push(userId);
@@ -113,8 +128,11 @@ function visibleScope({ companyIds, locationIds = [], userId, role }, start = 1,
   };
 }
 
-function editableScope({ companyIds, locationIds = [], userId, role }, start = 1, alias = "d") {
-  const visible = visibleScope({ companyIds, locationIds, userId, role }, start, alias);
+function editableScope({ companyIds, adminCompanyIds, locationIds = [], userId, role }, start = 1, alias = "d") {
+  const visible = visibleScope({ companyIds, adminCompanyIds, locationIds, userId, role }, start, alias);
+  if (adminCompanyIds !== undefined) {
+    return { sql: `${visible.sql} and ${alias}.owner_user_id = $${start + 3}`, values: visible.values };
+  }
   if (role === undefined && locationIds.length === 0) return visible;
   if (role === "admin") {
     visible.values.push(userId);
@@ -129,7 +147,14 @@ function editableScope({ companyIds, locationIds = [], userId, role }, start = 1
   };
 }
 
-function discardableScope({ companyIds, locationIds = [], userId, role }, start = 1, alias = "d") {
+function discardableScope({ companyIds, adminCompanyIds, locationIds = [], userId, role }, start = 1, alias = "d") {
+  if (adminCompanyIds !== undefined) {
+    const visible = visibleScope({ companyIds, adminCompanyIds, locationIds, userId, role }, start, alias);
+    return {
+      sql: `${visible.sql} and (${alias}.company_id = any($${start + 1}::uuid[]) or ${alias}.owner_user_id = $${start + 3})`,
+      values: visible.values,
+    };
+  }
   if (role === "admin") return visibleScope({ companyIds, locationIds, userId, role }, start, alias);
   return editableScope({ companyIds, locationIds, userId, role }, start, alias);
 }
@@ -193,8 +218,8 @@ export async function createWorkorderDraft({
   return publicWorkorderDraftRow(draft);
 }
 
-export async function listActiveWorkorderDrafts({ companyIds, locationIds, userId, role, type = "workorder" }) {
-  const scope = visibleScope({ companyIds, locationIds, userId, role });
+export async function listActiveWorkorderDrafts({ companyIds, adminCompanyIds, locationIds, userId, role, type = "workorder" }) {
+  const scope = visibleScope({ companyIds, adminCompanyIds, locationIds, userId, role });
   const typeParam = scope.values.length + 1;
   const result = await query(
     `${draftSelect()}
@@ -207,8 +232,8 @@ export async function listActiveWorkorderDrafts({ companyIds, locationIds, userI
   return result.rows.map(publicWorkorderDraftRow);
 }
 
-export async function getWorkorderDraftById({ id, companyIds, locationIds, userId, role }) {
-  const scope = visibleScope({ companyIds, locationIds, userId, role }, 2);
+export async function getWorkorderDraftById({ id, companyIds, adminCompanyIds, locationIds, userId, role }) {
+  const scope = visibleScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const result = await query(
     `${draftSelect()}
       where d.id = $1 and ${scope.sql}
@@ -218,8 +243,8 @@ export async function getWorkorderDraftById({ id, companyIds, locationIds, userI
   return publicWorkorderDraftRow(result.rows[0]);
 }
 
-export async function getWorkorderDraftOwnership({ id, companyIds, locationIds, userId, role }) {
-  const scope = editableScope({ companyIds, locationIds, userId, role }, 2);
+export async function getWorkorderDraftOwnership({ id, companyIds, adminCompanyIds, locationIds, userId, role }) {
+  const scope = editableScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const result = await query(
     `select company_id, location_id, status
        from workorder_drafts d
@@ -238,6 +263,7 @@ export async function getWorkorderDraftOwnership({ id, companyIds, locationIds, 
 export async function updateWorkorderDraft({
   id,
   companyIds,
+  adminCompanyIds,
   locationIds,
   role,
   userId,
@@ -247,7 +273,7 @@ export async function updateWorkorderDraft({
   authorizationClassification,
   authorizationExceptionReason,
 }) {
-  const scope = editableScope({ companyIds, locationIds, userId, role }, 2);
+  const scope = editableScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const hasLocation = locationId !== undefined;
   const hasPayload = payload !== undefined;
   const versionParam = scope.values.length + 2;
@@ -304,7 +330,7 @@ export async function updateWorkorderDraft({
     return publicWorkorderDraftRow(result.rows[0]);
   }
 
-  const existing = await getWorkorderDraftById({ id, companyIds, locationIds, userId, role });
+  const existing = await getWorkorderDraftById({ id, companyIds, adminCompanyIds, locationIds, userId, role });
   if (!existing) return null;
   if (existing.status !== "active") {
     throw new WorkorderDraftConflictError("DRAFT_NOT_ACTIVE", "This draft is no longer active.");
@@ -315,8 +341,8 @@ export async function updateWorkorderDraft({
   );
 }
 
-export async function discardWorkorderDraft({ id, companyIds, locationIds, userId, role }) {
-  const scope = discardableScope({ companyIds, locationIds, userId, role }, 2);
+export async function discardWorkorderDraft({ id, companyIds, adminCompanyIds, locationIds, userId, role }) {
+  const scope = discardableScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const result = await query(
     `update workorder_drafts as d
         set status = 'discarded',
@@ -330,7 +356,7 @@ export async function discardWorkorderDraft({ id, companyIds, locationIds, userI
     [id, ...scope.values],
   );
   if (result.rows[0]) {
-    const draft = await getWorkorderDraftById({ id, companyIds, locationIds, userId, role });
+    const draft = await getWorkorderDraftById({ id, companyIds, adminCompanyIds, locationIds, userId, role });
     await recordDraftEvent({
       draftId: id,
       companyId: draft.companyId,
@@ -341,7 +367,7 @@ export async function discardWorkorderDraft({ id, companyIds, locationIds, userI
     return true;
   }
 
-  const existing = await getWorkorderDraftById({ id, companyIds, locationIds, userId, role });
+  const existing = await getWorkorderDraftById({ id, companyIds, adminCompanyIds, locationIds, userId, role });
   if (!existing) return null;
   if (existing.status === "discarded") return true;
   throw new WorkorderDraftConflictError(
@@ -353,6 +379,7 @@ export async function discardWorkorderDraft({ id, companyIds, locationIds, userI
 export async function submitWorkorderDraftInTransaction({
   id,
   companyIds,
+  adminCompanyIds,
   locationIds,
   role,
   userId,
@@ -365,7 +392,7 @@ export async function submitWorkorderDraftInTransaction({
   bindInformationalEstimate = null,
 }, client, dependencies = {}) {
   const createWorkorder = dependencies.createWorkorder || createOperationalWorkorderInTransaction;
-  const scope = editableScope({ companyIds, locationIds, userId, role }, 2);
+  const scope = editableScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const locked = await client.query(
     `select *
        from workorder_drafts d
@@ -511,9 +538,9 @@ export async function submitWorkorderDraft(input) {
   };
 }
 
-export async function takeoverWorkorderDraft({ id, companyIds, locationIds, userId, role, version }) {
-  if (role !== "admin") throw new WorkorderDraftPermissionError();
-  const scope = visibleScope({ companyIds, locationIds, userId, role }, 2);
+export async function takeoverWorkorderDraft({ id, companyIds, adminCompanyIds, locationIds, userId, role, version }) {
+  if (adminCompanyIds !== undefined ? !adminCompanyIds.length : role !== "admin") throw new WorkorderDraftPermissionError();
+  const scope = visibleScope({ companyIds, adminCompanyIds, locationIds, userId, role }, 2);
   const client = await getPool().connect();
   try {
     await client.query("begin");

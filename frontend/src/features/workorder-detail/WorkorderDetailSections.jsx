@@ -15,7 +15,7 @@ export function WorkorderDetailSections({
   supportingOnly = false,
   detailStatus,
   filledPartCount,
-  form,
+  form, financialFooter = null,
   isCompact,
   isMechanicDetail,
   isOfficeDetail,
@@ -116,7 +116,7 @@ export function WorkorderDetailSections({
       allowedActions: activeWorkorder.allowedActions,
       concern: form.mechanicConcern,
       busy: officeDetailState.busy,
-      message: officeDetailState.error ? "" : officeDetailState.message,
+      message: officeDetailState.error || isOfficeDetail ? "" : officeDetailState.message,
       missingInfoAttention: Boolean(missingInfoAttention),
       missingInfoNote: missingInfoAttention?.details?.note || missingInfoAttention?.note || activeWorkorder.workorder.missingInfoNote || (isMechanicDetail ? t("detail.moreInfoRequested") : "Surveillance requested more information."),
       locale: isMechanicDetail ? locale : "en",
@@ -162,8 +162,8 @@ export function WorkorderDetailSections({
       },
       onSelect: setDetailSection,
     },
-    parts: {
-      activeWorkorder,
+      parts: {
+      financialFooter, activeWorkorder,
       actorId,
       actorRole,
       detailSection,

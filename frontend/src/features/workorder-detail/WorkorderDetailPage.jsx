@@ -2,11 +2,10 @@ import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 
 import { AlertCircle, CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
 import { Button } from "../../components/ui/Button.jsx";
-import { PreviewPane, PreviewToggle } from "../../components/preview/PreviewPane.jsx";
+import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { ChatComposer } from "../../components/workorders/ChatComposer.jsx";
 import { localizedMechanicHelpActions } from "../../components/workorders/mechanic-help-prompts.js";
 import { ChatThread } from "../../components/workorders/ChatThread.jsx";
-import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
 import { WorkorderToolsPanel } from "../../components/workorders/WorkorderToolsPanel.jsx";
 import { WorkorderDetailSurface } from "../../components/workorders/WorkorderDetailSurface.jsx";
 import { WorkorderStatusPill } from "../../components/workorders/WorkorderStatusPill.jsx";
@@ -15,8 +14,7 @@ import { ApproveButton } from "../../components/workorders/ApproveButton.jsx";
 import { useChatReceipts } from "../../components/workorders/chat/useChatReceipts.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
-import { BrowserPrintDocument, Field, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
-import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
+import { BrowserPrintDocument, Field, PrintModal } from "../generator/GeneratorUi.jsx";
 import { WorkorderDetailSections } from "./WorkorderDetailSections.jsx";
 import { mainWorkorderSections, requestedWorkorderTool } from "./workorder-tools-model.js";
 import { NarrativeField } from "../../components/forms/NarrativeField.jsx";
@@ -27,13 +25,15 @@ import {
   buildCompactPhoneDetailSections,
   coerceAllowedDetailSection,
   workorderNeedsChatAttention,
-  workorderPreviewState,
 } from "./workorder-detail-sections.js";
 import { RETURN_CATEGORIES } from "./workorder-handoff.js";
 import { useWorkorderOdooModule } from "../workorder-modules/odoo/useWorkorderOdooModule.js";
 import { isWorkorderOdooEligible } from "../workorder-modules/odoo/workorder-odoo-model.js";
 import { useUnitServiceHistory } from "../workorder-modules/unit/useUnitServiceHistory.js";
 import { WorkorderCustomerDocumentsPanel } from "../customer-documents/WorkorderCustomerDocumentsPanel.jsx";
+import { useWorkorderCustomerDocuments } from "../customer-documents/useWorkorderCustomerDocuments.js";
+import { CustomerDocumentDiscountEditor } from "../customer-documents/CustomerDocumentDiscountEditor.jsx";
+import { detailFinancialSourceDirty } from "../customer-documents/detail-financial-state.js";
 import { isPlainPrimaryActivation } from "../../components/ui/context-navigation.js";
 import { inspectionReturnContext, inspectionWorkspaceSearch, workspaceSearchForRole } from "../../app/routes/route-state.js";
 import {
@@ -94,14 +94,9 @@ export function WorkorderDetailPage({
   detailSection,
   detailSections,
   detailStatus,
-  effectiveCopies,
   filledPartCount,
-  firstSerial,
   form,
-  previewForm,
   formRef,
-  fullscreenPageIndex,
-  fullscreenZoom,
   isCompact,
   isMechanicDetail,
   isOfficeDetail,
@@ -109,8 +104,6 @@ export function WorkorderDetailPage({
   locale = "en",
   localeError = "",
   localeReady = true,
-  lastPhysicalPageIndex,
-  lastSerial,
   mapsConfig,
   mechanicAction,
   mechanicAsset,
@@ -130,28 +123,18 @@ export function WorkorderDetailPage({
   officeLocations,
   pendingPartCount,
   policyOverrides,
-  previewFullscreen,
-  previewGridRef,
-  previewPanelOpen,
-  previewRef,
-  previewSerials,
-  printMenuOpen,
   printState,
   primaryActionLabel,
   range,
   selectedVehicle,
   showEmbeddedPreview,
-  supportingView,
   vehicleLookup,
   visibleTimeline,
-  workorderCountLabel,
   applyVehicle,
   acceptOpenedMechanicWorkorder,
   closeOfficeWorkorder,
   markOfficeWorkorderDone,
   cancelOfficeWorkorder,
-  jumpToPreview,
-  openFullscreenPreview,
   printWorkorders,
   printRevisedCopy,
   openOfficeCancel,
@@ -165,8 +148,6 @@ export function WorkorderDetailPage({
   selectOfficeLocation,
   sendWorkorderChat,
   setDetailSection,
-  setFullscreenPageIndex,
-  setFullscreenZoom,
   setMechanicFinish,
   setOfficeAssignment,
   setOfficeCloseNote,
@@ -174,10 +155,7 @@ export function WorkorderDetailPage({
   setOfficeReturn,
   setOfficeCancel,
   setOfficeDetailState,
-  setPreviewFullscreen,
-  setPrintMenuOpen,
   setPrintState,
-  setSupportingView,
   submitMechanicFinish,
   returnOfficeWorkorder,
   toggleWorkorderTools,
@@ -211,7 +189,6 @@ export function WorkorderDetailPage({
     serializedRepairFlushRef.current = typeof flush === "function" ? flush : async () => true;
   }, []);
   const t = (key) => interfaceText(locale, key);
-  const renderedPreviewForm = previewForm || form;
   const modulePolicies = useMemo(() => Object.fromEntries([
     WORKORDER_MODULE_IDS.UNIT,
     WORKORDER_MODULE_IDS.LOCATION,
@@ -223,7 +200,6 @@ export function WorkorderDetailPage({
     WORKORDER_MODULE_IDS.PARTS,
     WORKORDER_MODULE_IDS.CHAT,
     WORKORDER_MODULE_IDS.ACTIVITY,
-    WORKORDER_MODULE_IDS.PREVIEW,
     WORKORDER_MODULE_IDS.COMPLETION,
     WORKORDER_MODULE_IDS.ODOO,
   ].map((moduleId) => [moduleId, resolveWorkorderModulePolicy({
@@ -241,10 +217,48 @@ export function WorkorderDetailPage({
   const diagnosisRepairPolicy = modulePolicies[WORKORDER_MODULE_IDS.DIAGNOSIS_REPAIR];
   const photosPolicy = modulePolicies[WORKORDER_MODULE_IDS.PHOTOS];
   const chatPolicy = modulePolicies[WORKORDER_MODULE_IDS.CHAT];
-  const previewPolicy = modulePolicies[WORKORDER_MODULE_IDS.PREVIEW];
   const completionPolicy = modulePolicies[WORKORDER_MODULE_IDS.COMPLETION];
-  const supportingPaneVisible = previewPolicy.canRead || chatPolicy.canRead;
-  const effectiveSupportingView = !previewPolicy.canRead ? "chat" : !chatPolicy.canRead ? "preview" : supportingView;
+  const supportingPaneVisible = chatPolicy.canRead;
+  const canReadCustomerDocuments = isOfficeDetail && activeWorkorder.customerDocumentAccess?.canRead === true;
+  const financialSourceDirty = detailFinancialSourceDirty(form, {
+    ...activeWorkorder.workorder.formData,
+    locationId: activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || "",
+    unitNo: activeWorkorder.workorder.formData?.unitNo || activeWorkorder.workorder.asset?.unitNo || activeWorkorder.workorder.asset?.name || "",
+    customerCompanyName: activeWorkorder.workorder.formData?.customerCompanyName || activeWorkorder.workorder.formData?.companyName || activeWorkorder.workorder.asset?.ownerName || activeWorkorder.workorder.asset?.owner_name || "",
+    mechanicConcern: activeWorkorder.workorder.formData?.mechanicConcern || activeWorkorder.workorder.concern || "",
+    workPerformed: activeWorkorder.workorder.workPerformed ?? activeWorkorder.workorder.formData?.workPerformed ?? "",
+  });
+  const documentController = useWorkorderCustomerDocuments({
+    companyId: activeWorkorder.workorder.companyId || "",
+    locationId: activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || "",
+    workorderId: activeWorkorder.workorder.id,
+    workorderVersion: activeWorkorder.workorder.progressVersion || 1,
+    workorderStatus: detailStatus,
+    active: canReadCustomerDocuments,
+    autoReview: officeToolsOpen && officeToolView === "customer-documents",
+    currentFinancials: true,
+    canAdjustDiscount: concernPolicy.canWrite && activeWorkorder.allowedActions?.update === true && activeWorkorder.customerDocumentAccess?.canWrite === true,
+    formData: form,
+    sourceDirty: financialSourceDirty,
+    sourceKey: JSON.stringify([activeWorkorder.workorderPricing, activeWorkorder.laborPrice,
+      activeWorkorder.modules?.parts?.data, activeWorkorder.modules?.diagnosisRepair?.data]),
+    onAdjustmentsChange: (adjustments, baseRevisionId) => {
+      updateField("customerDocumentAdjustments", adjustments);
+      updateField("customerDocumentAdjustmentBaseRevisionId", baseRevisionId);
+    },
+  });
+  const financialFooter = canReadCustomerDocuments ? {
+    projection: documentController.currentFinancialProjection,
+    discountControl: <CustomerDocumentDiscountEditor inline
+      adjustments={documentController.adjustments}
+      projection={documentController.currentFinancialProjection}
+      onChange={documentController.updateAdjustments}
+      maximumOfficePercentage={actor.role === "office" ? documentController.maximumOfficePercentage : null}
+      disabled={!documentController.canAdjustDiscount || Boolean(documentController.invoice) || documentController.busy} />,
+    message: financialSourceDirty ? "Save changes to update totals."
+      : documentController.financialError || documentController.error
+        || (documentController.financialBusy || documentController.busy ? "Updating totals…" : ""),
+  } : isOfficeDetail ? { hidden: true } : null;
   const visibleConversationMessages = useMemo(() => photosPolicy.canRead
     ? conversationMessages
     : conversationMessages.map((message) => ({ ...message, attachment: null, attachments: [] })),
@@ -284,7 +298,6 @@ export function WorkorderDetailPage({
     ? markOfficeWorkorderDone
     : () => setMechanicFinish({ open: true, name: "", message: "" }));
   const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
-  const compactPreviewState = workorderPreviewState(activeWorkorder, renderedPreviewForm);
   const parent = detailParent(actor.role, isOfficeDetail, isMechanicDetail ? locale : "en");
 
   async function followDetailParent(event) {
@@ -305,7 +318,7 @@ export function WorkorderDetailPage({
     selectDetailSection(renderedDetailSection);
   }, [detailSection, renderedDetailSection, selectDetailSection, visibleDetailSections.length]);
   useChatReceipts({
-    active: chatPolicy.canRead && (isOfficeDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && effectiveSupportingView === "chat")),
+    active: chatPolicy.canRead && (isOfficeDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && showEmbeddedPreview)),
     currentUserId: actor.id,
     messages: visibleConversationMessages,
     role: isOfficeDetail ? "office" : "mechanic",
@@ -354,6 +367,7 @@ export function WorkorderDetailPage({
 
 
   const detailModules = (<WorkorderDetailSections
+            financialFooter={financialFooter}
             activeWorkorder={activeWorkorder}
             actorId={actor.id}
             actorRole={actor.role}
@@ -423,19 +437,13 @@ export function WorkorderDetailPage({
           />);
   const officeToolViews = [
     ...(chatPolicy.canRead || earlierNotes ? [{ id: "chat", label: chatPolicy.canRead ? "Chat" : "Notes", content: <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
-    ...(previewPolicy.canRead ? [{
-      id: "preview", label: "Preview", content: <div className="workorder-tools-preview">
-        <div className="workorder-tools-preview-actions">
-          <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); openFullscreenPreview(); }}>Open full preview</Button>
-          {canPrint ? <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); printWorkorders(); }}>{primaryActionLabel}</Button> : null}
-        </div>
-        <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
-      </div>,
-    }] : []),
-    ...(["office", "admin"].includes(actor.role) ? [{
+    ...(canReadCustomerDocuments ? [{
       id: "customer-documents",
-      label: "Customer documents",
+      label: "Documents",
       content: <WorkorderCustomerDocumentsPanel
+        controller={documentController}
+        active={officeToolsOpen && officeToolView === "customer-documents"}
+        autoReview
         companyId={activeWorkorder.workorder.companyId || ""}
         locationId={activeWorkorder.workorder.locationId || activeWorkorder.workorder.location?.id || ""}
         workorderId={activeWorkorder.workorder.id}
@@ -443,11 +451,19 @@ export function WorkorderDetailPage({
         workorderStatus={detailStatus}
       />,
     }] : []),
+    ...(canPrint ? [{
+      id: "archive",
+      label: "Archived workorder",
+      content: <div className="workorder-tools-preview-actions">
+        <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); printWorkorders(); }}>{primaryActionLabel}</Button>
+      </div>,
+    }] : []),
     ...["activity", "completion", "odoo"].flatMap((id) => {
       const section = visibleDetailSections.find((entry) => entry.id === id);
       return section ? [{ id, label: id === "activity" ? "Activity" : id === "completion" ? "Review" : "Integration", content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
     }),
   ];
+  const documentActionLabel = detailStatus === "mechanic_done" ? "Review invoice" : "View estimate";
 
   return (
     <main
@@ -459,8 +475,7 @@ export function WorkorderDetailPage({
         "--workorder-visual-viewport-offset-top": `${viewport.viewportOffsetTop}px`,
       }}
     >
-      <style>{workorderTemplateStyles}</style>
-      {previewPolicy.canRead ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
+      {canPrint ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
       <WorkorderDetailSurface
         locale={isMechanicDetail ? locale : "en"}
         previewOpen={isOfficeDetail ? officeToolsOpen : !isPhone && supportingPaneVisible && showEmbeddedPreview}
@@ -479,6 +494,9 @@ export function WorkorderDetailPage({
               {isMechanicDetail ? (
                 <LocaleSelector locale={locale} onChange={onLocaleChange} error={localeError} disabled={!localeReady} compact />
               ) : null}
+              {canReadCustomerDocuments ? (
+                <Button variant="secondary" type="button" onClick={() => openOfficeTool("customer-documents")}>{documentActionLabel}</Button>
+              ) : null}
               {isOfficeDetail && concernPolicy.canWrite && activeWorkorder.allowedActions?.update ? (
                 <button
                   className="detail-save-button"
@@ -486,10 +504,13 @@ export function WorkorderDetailPage({
                   onClick={saveOfficeWorkorder}
                   disabled={officeDetailState.busy}
                   aria-label={officeDetailState.busy ? "Saving workorder" : "Save workorder"}
-                  title={officeDetailState.busy ? "Saving workorder" : "Save workorder"}
+                  title={officeDetailState.busy ? "Saving workorder" : officeDetailState.message || "Save workorder"}
                 >
                   <Save01 />
                 </button>
+              ) : null}
+              {isOfficeDetail && !officeDetailState.error && officeDetailState.message ? (
+                <span className="sr-only" role="status">{officeDetailState.message}</span>
               ) : null}
               {isOfficeDetail && completionPolicy.canWrite && activeWorkorder.allowedActions?.approve ? (
                 <ApproveButton
@@ -518,7 +539,7 @@ export function WorkorderDetailPage({
               {isOfficeDetail && officeToolViews.length > 0 ? <PreviewToggle open={officeToolsOpen} onToggle={() => setOfficeToolsOpen((open) => !open)} controls="workorder-preview-panel" openLabel="Open workorder tools" closeLabel="Close workorder tools" /> : null}
               {!isOfficeDetail && !isPhone && supportingPaneVisible ? (
                 <PreviewToggle
-                  open={showEmbeddedPreview || previewFullscreen}
+                  open={showEmbeddedPreview}
                   onToggle={toggleWorkorderTools}
                   controls="workorder-preview-panel"
                   openLabel={t("preview.openWorkorderTools")}
@@ -584,40 +605,22 @@ export function WorkorderDetailPage({
           onSelect: selectDetailSection,
           preferenceKey: `workorder.sectionOrder.v1:${actor.id}:${actor.role}:detail`,
         }}
-        supportingPane={isOfficeDetail ? <WorkorderToolsPanel key={activeWorkorder.workorder.id} open={officeToolsOpen} onClose={() => setOfficeToolsOpen(false)} activeView={officeToolView} onViewChange={setOfficeToolView} views={officeToolViews} /> : !isCompact && supportingPaneVisible ? (
-          <PreviewPane
-            id="workorder-preview-panel"
-            open={showEmbeddedPreview}
-            variant="dock"
-            panelRef={previewRef}
-            status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
-            countLabel={workorderCountLabel}
-            range={range}
-            printMenuOpen={printMenuOpen}
-            onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-            onPrint={canPrint ? () => {
-              setPrintMenuOpen(false);
-              printWorkorders();
-            } : undefined}
-            primaryActionLabel={primaryActionLabel}
-            onFullscreen={openFullscreenPreview}
-            onOpenPreview={openFullscreenPreview}
-            supportingContent={!isMechanicDetail && chatPolicy.canRead ? workorderChatContent : undefined}
-            supportingLabel={isOfficeDetail ? "Chat with mechanic" : t("detail.helpFromOffice")}
-            supportingCount={chatPolicy.canRead ? visibleConversationMessages.length || undefined : undefined}
-            supportingAttention={workorderNeedsChatAttention(detailStatus)}
-            activeView={effectiveSupportingView}
-            onViewChange={setSupportingView}
-            locale={isMechanicDetail ? locale : "en"}
-          >
-            {previewPolicy.canRead ? <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-              <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
-              {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={renderedPreviewForm} pageIndex={lastPhysicalPageIndex} />
-                : null}
-            </div> : null}
-          </PreviewPane>
-        ) : null}
+        supportingPane={isOfficeDetail
+          ? <WorkorderToolsPanel key={activeWorkorder.workorder.id} open={officeToolsOpen} onClose={() => setOfficeToolsOpen(false)} activeView={officeToolView} onViewChange={setOfficeToolView} views={officeToolViews} />
+          : !isCompact && supportingPaneVisible
+            ? <WorkorderToolsPanel
+                key={activeWorkorder.workorder.id}
+                open={showEmbeddedPreview}
+                onClose={toggleWorkorderTools}
+                activeView="chat"
+                views={[{
+                  id: "chat",
+                  label: isMechanicDetail ? t("detail.helpFromOffice") : "Chat",
+                  content: workorderChatContent,
+                  attention: workorderNeedsChatAttention(detailStatus),
+                }]}
+              />
+            : null}
       >
           {!visibleDetailSections.length ? (
             <div className="mechanic-empty-state" role="status">
@@ -642,52 +645,9 @@ export function WorkorderDetailPage({
           {isOfficeDetail ? cloneElement(detailModules, {
             detailSections: mainWorkorderSections(visibleDetailSections),
           }) : detailModules}
-          {!isOfficeDetail && isCompact && renderedDetailSection === "preview" && previewPolicy.canRead ? (
-            <CompactWorkorderPreview
-              panelRef={previewRef}
-              status={<WorkorderStatusPill status={detailStatus} label={currentStatusLabel} />}
-              countLabel={workorderCountLabel}
-              range={range}
-              printMenuOpen={printMenuOpen}
-              onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-              onPrint={canPrint ? () => {
-                setPrintMenuOpen(false);
-                printWorkorders();
-              } : undefined}
-              primaryActionLabel={primaryActionLabel}
-              onFullscreen={openFullscreenPreview}
-              previewState={compactPreviewState}
-              locale={locale}
-            >
-              <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""} mechanic-preview-grid`}>
-                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={renderedPreviewForm} />
-                {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={renderedPreviewForm} pageIndex={lastPhysicalPageIndex} />
-                  : null}
-              </div>
-            </CompactWorkorderPreview>
-          ) : null}
       </WorkorderDetailSurface>
 
-      {previewPolicy.canRead ? <PreviewFullscreen
-        open={previewFullscreen}
-        form={renderedPreviewForm}
-        serials={previewSerials}
-        pageIndex={fullscreenPageIndex}
-        zoom={fullscreenZoom}
-        range={range}
-        countLabel={workorderCountLabel}
-        actionLabel={primaryActionLabel}
-        onClose={() => setPreviewFullscreen(false)}
-        onPageChange={setFullscreenPageIndex}
-        onZoomChange={setFullscreenZoom}
-        onPrint={canPrint ? () => {
-          setPreviewFullscreen(false);
-          printWorkorders();
-        } : undefined}
-        locale={isMechanicDetail ? locale : "en"}
-      /> : null}
-      {previewPolicy.canRead ? <PrintModal state={printState} range={range} locale={isMechanicDetail ? locale : "en"} onCreateRevision={printRevisedCopy} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
+      {canPrint ? <PrintModal state={printState} range={range} locale={isMechanicDetail ? locale : "en"} onCreateRevision={printRevisedCopy} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
 
       {completionPolicy.canWrite && mechanicFinish.open ? (
         <div

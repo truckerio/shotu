@@ -1,12 +1,9 @@
 import { ArrowLeft, ArrowRight } from "@untitledui/icons";
 import { useEffect } from "react";
-import { PreviewPane, PreviewToggle } from "../../../components/preview/PreviewPane.jsx";
 import { WorkorderDetailSurface } from "../../../components/workorders/WorkorderDetailSurface.jsx";
-import { CompactWorkorderPreview } from "../../../components/workorders/CompactWorkorderPreview.jsx";
 import { ChatThread } from "../../../components/workorders/ChatThread.jsx";
 import { timelineEventCount } from "../../../components/workorders/workorder-timeline-model.js";
 import { WorkorderStatusPill } from "../../../components/workorders/WorkorderStatusPill.jsx";
-import { PreviewFullscreen, WorkorderPreview } from "../../generator/GeneratorUi.jsx";
 import {
   buildCompactPhoneDetailSections,
   buildSurveillanceWorkorderDetailSections,
@@ -20,8 +17,6 @@ import {
 import {
   normalizeWorkorderFormData,
   workDateRangeLabel,
-  workorderPhysicalPageCount,
-  workorderTemplateStyles,
 } from "../../../../../shared/workorder-template.js";
 import { surveillanceMissingInfoHandoff } from "../surveillanceQueue.js";
 import { WorkorderDetailModuleHost } from "../../workorder-modules/WorkorderDetailModuleHost.jsx";
@@ -44,17 +39,8 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     closeDetail,
     detail,
     detailSection,
-    fullscreenPageIndex,
-    fullscreenZoom,
     openRelative,
-    previewFullscreen,
-    previewOpen,
-    previewRef,
     setDetailSection,
-    setFullscreenPageIndex,
-    setFullscreenZoom,
-    setPreviewFullscreen,
-    togglePreview,
   } = controller;
   const workorder = detail.workorder;
   const formData = workorder.formData || {};
@@ -83,7 +69,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
       policyOverrides: detail.policy || workorder.policy || workorder.location?.policy,
       userId: actor?.id || "",
     })
-    : baseDetailSections.filter(({ id }) => id !== "preview");
+    : baseDetailSections;
   const selectedSection = coerceAllowedDetailSection(detailSection, detailSections);
   const odooSection = detailSections.find((section) => section.id === "odoo");
   const unitSection = detailSections.find((section) => section.id === "unit");
@@ -101,7 +87,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
   });
   const customerName = workorder.customerCompanyName || formData.customerCompanyName || formData.companyName;
   const assetLabel = workorder.asset?.unitNo || workorder.asset?.name;
-  const previewForm = normalizeWorkorderFormData({
+  const detailForm = normalizeWorkorderFormData({
     ...formData,
     ...canonicalDetailPreviewTemplate(workorder),
     mechanicConcern: formData.mechanicConcern || workorder.concern || "",
@@ -121,12 +107,6 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     workEndDate: formData.workEndDate || workorder.workEndDate || formData.workStartDate || formData.workDate || localDate(workorder.createdAt),
     parts: Array.isArray(formData.parts) ? formData.parts : [],
   }, { assetOwnerName: customerName || "" });
-  const pageCount = workorderPhysicalPageCount(previewForm);
-  const openFullscreenPreview = () => {
-    setFullscreenPageIndex(0);
-    setFullscreenZoom(1);
-    setPreviewFullscreen(true);
-  };
   const vehicleLabel = [
     formData.model || workorder.asset?.model,
     formData.mileage ? `${formData.mileage} mi` : "",
@@ -145,14 +125,6 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     }));
   }
 
-  const previewGrid = (
-    <div className="preview-grid single mechanic-preview-grid">
-      <WorkorderPreview label="First page" serial={workorder.serial} form={previewForm} />
-      {pageCount > 1
-        ? <WorkorderPreview label="Last page" serial={workorder.serial} form={previewForm} pageIndex={pageCount - 1} />
-        : null}
-    </div>
-  );
   const sectionAccess = (moduleId) => baseDetailSections.find((section) => section.id === moduleId)?.access || null;
   const canRead = (moduleId) => Boolean(sectionAccess(moduleId));
   const moduleProps = {
@@ -230,7 +202,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
       actorId: actor?.id || "",
       detailSection: selectedSection,
       filledPartCount: usedParts.length,
-      form: { ...previewForm, parts: formData.parts || [] },
+      form: { ...detailForm, parts: formData.parts || [] },
       isMechanicDetail: false,
       isOfficeDetail: false,
       pendingPartCount: 0,
@@ -240,16 +212,16 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
     schedule: {
       activeSection: selectedSection,
       allowedActions: detail.allowedActions || {},
-      endDate: previewForm.workEndDate,
+      endDate: detailForm.workEndDate,
       onSelect: setDetailSection,
-      startDate: previewForm.workStartDate,
+      startDate: detailForm.workStartDate,
       workorder,
     },
     unit: {
       activeWorkorder: detail,
       actorRole: actor?.role || "surveillance",
       detailSection: selectedSection,
-      form: previewForm,
+      form: detailForm,
       historyController: unitHistoryController,
       onSelect: setDetailSection,
       vehicleLookup: { loading: false, results: [] },
@@ -260,9 +232,7 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
 
   return (
     <main className="prototype workorder-detail-page surveillance-detail-page">
-      <style>{workorderTemplateStyles}</style>
       <WorkorderDetailSurface
-        previewOpen={!isPhone && canRead("preview") && previewOpen}
         context={{
           parent: { label: "Surveillance", href: surveillanceQueueHref(), onClick: followSurveillanceParent },
           current: workorder.serial || "Workorder",
@@ -276,13 +246,6 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
                 <span>{currentIndex >= 0 ? `${currentIndex + 1} of ${rows.length}` : ""}</span>
                 <button type="button" onClick={() => openRelative(1)} disabled={currentIndex < 0 || currentIndex >= rows.length - 1} aria-label="Next workorder"><ArrowRight /></button>
               </nav>
-              {!isPhone && canRead("preview") ? (
-                <PreviewToggle
-                  open={previewOpen || previewFullscreen}
-                  onToggle={togglePreview}
-                  controls="workorder-preview-panel"
-                />
-              ) : null}
             </>
           ),
         }}
@@ -312,21 +275,6 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
           onSelect: setDetailSection,
           preferenceKey: `workorder.sectionOrder.v1:${actor?.id || "anonymous"}:${actor?.role || "surveillance"}:detail`,
         }}
-        supportingPane={!isPhone && canRead("preview") ? (
-          <PreviewPane
-            id="workorder-preview-panel"
-            open={previewOpen}
-            variant="dock"
-            panelRef={previewRef}
-            status={<WorkorderStatusPill status={workorder.status} />}
-            countLabel="1 workorder"
-            range={workorder.serial}
-            onFullscreen={openFullscreenPreview}
-            onOpenPreview={openFullscreenPreview}
-          >
-            {previewGrid}
-          </PreviewPane>
-        ) : null}
       >
         {!detailSections.length ? (
           <div className="mechanic-empty-state" role="status">
@@ -336,33 +284,9 @@ export function SurveillanceDetailPage({ actor, controller, error, isPhone, rows
         ) : (
         <div className="surveillance-detail-sections">
           <WorkorderDetailModuleHost sections={detailSections} moduleProps={moduleProps} />
-          {isPhone && selectedSection === "preview" && canRead("preview") ? (
-            <CompactWorkorderPreview
-              panelRef={previewRef}
-              status={<WorkorderStatusPill status={workorder.status} />}
-              countLabel="1 workorder"
-              range={workorder.serial}
-              onFullscreen={openFullscreenPreview}
-            >
-              {previewGrid}
-            </CompactWorkorderPreview>
-          ) : null}
         </div>
         )}
       </WorkorderDetailSurface>
-      {canRead("preview") ? <PreviewFullscreen
-        open={previewFullscreen}
-        form={previewForm}
-        serials={[workorder.serial]}
-        pageIndex={fullscreenPageIndex}
-        zoom={fullscreenZoom}
-        range={workorder.serial}
-        countLabel="1 workorder"
-        actionLabel="Preview workorder"
-        onClose={() => setPreviewFullscreen(false)}
-        onPageChange={setFullscreenPageIndex}
-        onZoomChange={setFullscreenZoom}
-      /> : null}
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import {
   completeInvoiceExtractionRun,
@@ -48,10 +49,23 @@ import { contributeGlobalInvoiceLayout, findGovernedActiveGlobalLayouts } from "
 async function authorizedLocation(input, requestContext, dependencies) {
   const companyIds = [...(requestContext.companyIds || [])];
   const location = await (dependencies.getLocationById || getLocationById)(input.locationId, companyIds);
-  if (!location || (requestContext.actor.role !== "admin" && !requestContext.locationIds?.has(location.id))) {
+  if (!location || !invoiceLocationAccessible(requestContext, location.company_id, location.id)) {
     throw new InvoiceExtractionError("Location is not available.", { code: "location_not_found", statusCode: 404 });
   }
   return location;
+}
+
+function invoiceLocationAccessible(context, companyId, locationId) {
+  const role = effectiveCompanyRole(context, companyId);
+  return ["admin", "office"].includes(role) && (role === "admin" || context.locationIds?.has(locationId) === true);
+}
+
+function invoiceSourceScope(context, companyId) {
+  return {
+    companyIds: [companyId],
+    locationIds: [...(context.locationIds || [])],
+    isAdmin: effectiveCompanyRole(context, companyId) === "admin",
+  };
 }
 
 export function guardPaidBalanceAsInvoiceTotal(draft, tolerance = 0.02) {
@@ -391,14 +405,14 @@ export async function extractInvoice(input, requestContext, dependencies = {}) {
 }
 
 export async function readInvoiceSource(runId, requestContext, dependencies = {}) {
+  const row = await (dependencies.getRun || getInvoiceExtractionRun)({ runId, companyIds: [...requestContext.companyIds] });
+  if (!row || !invoiceLocationAccessible(requestContext, row.company_id, row.location_id)) throw invoiceNotFound();
   const source = await (dependencies.getSource || getInvoiceSourceDocument)({
     runId,
-    companyIds: [...requestContext.companyIds],
-    locationIds: [...requestContext.locationIds],
-    isAdmin: requestContext.actor.role === "admin",
+    ...invoiceSourceScope(requestContext, row.company_id),
   });
   if (!source) throw invoiceNotFound();
-  if (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(source.location_id)) throw invoiceNotFound();
+  if (!invoiceLocationAccessible(requestContext, source.company_id, source.location_id)) throw invoiceNotFound();
   const bytes = (dependencies.decryptDocument || decryptInvoiceDocument)(source);
   await (dependencies.recordSourceAccess || recordInvoiceSourceAccess)({
     source,
@@ -414,7 +428,7 @@ export async function readInvoiceExtraction(runId, requestContext, dependencies 
     companyIds: [...requestContext.companyIds],
   });
   if (!row) throw invoiceNotFound();
-  if (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(row.location_id)) throw invoiceNotFound();
+  if (!invoiceLocationAccessible(requestContext, row.company_id, row.location_id)) throw invoiceNotFound();
   return { run: publicInvoiceExtractionRun(row) };
 }
 
@@ -424,7 +438,7 @@ export async function reextractInvoice(runId, input, requestContext, dependencie
     runId,
     companyIds: [...requestContext.companyIds],
   });
-  if (!row || (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(row.location_id))) throw invoiceNotFound();
+  if (!row || !invoiceLocationAccessible(requestContext, row.company_id, row.location_id)) throw invoiceNotFound();
   if (row.status === "processing") {
     throw new InvoiceExtractionError("This invoice is still extracting.", {
       code: "invoice_extraction_in_progress",
@@ -440,9 +454,7 @@ export async function reextractInvoice(runId, input, requestContext, dependencie
   }
   const source = await (dependencies.getSource || getInvoiceSourceDocument)({
     runId,
-    companyIds: [...requestContext.companyIds],
-    locationIds: [...requestContext.locationIds],
-    isAdmin: requestContext.actor.role === "admin",
+    ...invoiceSourceScope(requestContext, row.company_id),
   });
   if (!source) {
     throw new InvoiceExtractionError("The original invoice file is no longer available for re-extraction.", {
@@ -470,7 +482,7 @@ export async function reextractInvoice(runId, input, requestContext, dependencie
 export async function reviewInvoice(runId, input, requestContext, dependencies = {}) {
   const parsed = reviewInvoiceInputSchema.parse(input);
   const row = await (dependencies.getRun || getInvoiceExtractionRun)({ runId, companyIds: [...requestContext.companyIds] });
-  if (!row || (requestContext.actor.role !== "admin" && !requestContext.locationIds.has(row.location_id))) throw invoiceNotFound();
+  if (!row || !invoiceLocationAccessible(requestContext, row.company_id, row.location_id)) throw invoiceNotFound();
   if (!row.extracted_draft) throw new InvoiceExtractionError("This extraction has no draft to review.", { code: "invoice_draft_unavailable", statusCode: 409 });
   const corrections = correctionEvents(row.extracted_draft, parsed.reviewedDraft);
   let candidates = semanticCandidatesFromCorrections(row.extracted_draft, parsed.reviewedDraft, corrections);
@@ -493,9 +505,7 @@ export async function reviewInvoice(runId, input, requestContext, dependencies =
     try {
       const source = await (dependencies.getLearningSource || getInvoiceSourceDocument)({
         runId,
-        companyIds: [...requestContext.companyIds],
-        locationIds: [...requestContext.locationIds],
-        isAdmin: requestContext.actor.role === "admin",
+        ...invoiceSourceScope(requestContext, row.company_id),
       });
       if (!source) throw new InvoiceExtractionError("The source document is unavailable for layout learning.", { code: "invoice_source_unavailable", statusCode: 409 });
       const bytes = (dependencies.decryptDocument || decryptInvoiceDocument)(source);

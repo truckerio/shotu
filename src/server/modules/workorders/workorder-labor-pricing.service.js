@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
+import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import { InventoryError } from "../inventory/inventory.errors.js";
 import { validLaborQuantity } from "../../../../shared/labor-product.js";
 import {
@@ -21,6 +23,7 @@ function digest(command) {
 }
 
 export async function reviseWorkorderLaborRate(workorderId, input, context, authorization, dependencies = {}) {
+  context = effectiveCompanyContext(context, authorization.companyId);
   financialActor(context);
   if (["closed", "odoo_entered", "cancelled"].includes(authorization.workorder?.status)) {
     fail("WORKORDER_LABOR_PRICE_LOCKED", "Labor pricing cannot change after this workorder is closed.");
@@ -58,6 +61,9 @@ export async function reviseWorkorderLaborRate(workorderId, input, context, auth
 }
 
 export async function selectWorkorderLaborPrice(workorderId, input, context, dependencies = {}) {
+  const workorder = dependencies.authorizedWorkorder
+    || await (dependencies.requireAccess || requireWorkorderAccess)(context, workorderId);
+  context = effectiveCompanyContext(context, workorder.companyId);
   financialActor(context);
   const command = {
     workorderId,
@@ -103,11 +109,17 @@ export function workorderPricingSummary({
   workorder,
   installedSerializedParts = [],
   aggregatePartUsages = [],
+  noStockPartPrices = [],
   laborPrice = null,
   pricingRowsTruncated = false,
 }) {
   const form = workorder?.formData || {};
-  const manual = (Array.isArray(form.parts) ? form.parts : []).filter((part) => Number(part?.qty) > 0);
+  const noStockPricesByLine = new Map(noStockPartPrices.map((row) => [row.noStockLineId, row]));
+  const noStock = (Array.isArray(form.parts) ? form.parts : [])
+    .filter((part) => part?.noStockLineId && Number(part?.qty) > 0)
+    .map((part) => ({ part, snapshot: noStockPricesByLine.get(part.noStockLineId) }));
+  const manual = (Array.isArray(form.parts) ? form.parts : [])
+    .filter((part) => !part?.noStockLineId && Number(part?.qty) > 0);
   const aggregate = aggregatePartUsages.filter((usage) => !["released", "reversed"].includes(usage.status));
   const laborExpected = Number(form.laborHours) > 0;
   const laborQuantityValid = validLaborQuantity(form.laborHours, form.laborProduct?.uomCode || "hr");
@@ -119,6 +131,13 @@ export function workorderPricingSummary({
   const rows = [
     ...installedSerializedParts.map((part) => ({ kind: "part", price: part.price, quantity: 1, requiresQuantity: false })),
     ...aggregate.map((part) => ({ kind: "part", price: part.price, quantity: part.effectiveQuantity, requiresQuantity: true })),
+    ...noStock.map(({ part, snapshot }) => ({
+      kind: "part",
+      price: snapshot?.catalogPartId === part.catalogPartId && snapshot?.uomCode === (part.uomCode || "ea")
+        ? snapshot.price : null,
+      quantity: part.qty,
+      requiresQuantity: true,
+    })),
   ];
   if (laborExpected) rows.push({ kind: "labor", price: laborCurrent ? laborPrice : null, quantity: form.laborHours });
   let missingCount = manual.length + (pricingRowsTruncated ? 1 : 0);

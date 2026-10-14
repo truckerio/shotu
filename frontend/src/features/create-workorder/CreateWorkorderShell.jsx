@@ -1,7 +1,6 @@
 import { Plus } from "@untitledui/icons";
 import { DraftSaveStatus } from "../../components/drafts/index.js";
 import { KeyboardAwareDock } from "../../components/layout/KeyboardAwareDock.jsx";
-import { PreviewToggle } from "../../components/preview/PreviewPane.jsx";
 import { WorkorderPanelShell } from "../../components/workorders/WorkorderPanelShell.jsx";
 import { WorkorderSectionNav } from "../../components/workorders/WorkorderObjectPage.jsx";
 import { formatUiDateRange } from "../../lib/workorder-presentation.js";
@@ -31,9 +30,6 @@ export function CreateWorkorderShell({
   officeCreateState,
   onBack,
   onSelectSection,
-  onTogglePreview,
-  previewActive,
-  previewVisible = true,
   sectionPreferenceKey = "",
   sections,
   workorderDraft,
@@ -85,15 +81,6 @@ export function CreateWorkorderShell({
             </button>
           ) : null}
           {!isPhone ? customerDocumentAction : null}
-          {!isPhone && previewVisible ? (
-            <PreviewToggle
-              open={previewActive}
-              onToggle={onTogglePreview}
-              controls="workorder-preview-panel"
-              openLabel={t("create.openPreview")}
-              closeLabel={t("create.closePreview")}
-            />
-          ) : null}
           </>
         ),
       }}

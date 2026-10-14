@@ -33,7 +33,8 @@ import {
   setManagedUserActive,
 } from "../../db/repositories/users.repo.js";
 import { queryAuthorizedWorkorders, summarizeAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
-import { requireCompanyAccess } from "../../auth/authorize.js";
+import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { companyRoleScope, requireCompanyRole } from "../../auth/company-role.js";
 import { AuthError, invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import { sendInvitationEmail } from "../../email/invitation.js";
 import { buildInvitationUrl } from "./invitation-link.js";
@@ -67,15 +68,26 @@ function invitationView(invitation) {
 }
 
 function authorizedCompanyIds(context) {
-  const companyIds = [...(context.companyIds || [])];
+  const companyIds = companyRoleScope(context, ["admin"]).companyIds;
   if (!companyIds.length) throw resourceNotFound("Company");
   return companyIds;
+}
+
+function authorizedAdminContext(context) {
+  const companyIds = authorizedCompanyIds(context);
+  return {
+    ...context,
+    actor: { ...context.actor, role: "admin" },
+    companyIds: new Set(companyIds),
+    companyRoles: new Map(companyIds.map((companyId) => [companyId, "admin"])),
+  };
 }
 
 async function authorizedLocation(context, locationId) {
   const location = await getLocationById(locationId, authorizedCompanyIds(context));
   if (!location) throw resourceNotFound("Location");
-  requireCompanyAccess(context, location.company_id);
+  requireCompanyRole(context, location.company_id, ["admin"]);
+  requireLocationAccess(context, location.id, location.company_id);
   return location;
 }
 
@@ -88,7 +100,7 @@ async function authorizedManagedUser(context, locationId, userId) {
   const target = await getManagedUser(locationId, userId, authorizedCompanyIds(context));
   if (!target) throw resourceNotFound("User");
   for (const companyId of managedCompanyIds(target)) {
-    requireCompanyAccess(context, companyId);
+    requireCompanyRole(context, companyId, ["admin"]);
   }
   return { location, target };
 }
@@ -99,8 +111,8 @@ function requireLogin(target) {
   }
 }
 
-export async function adminLocations(context) {
-  return listLocationsWithAdminCounts(authorizedCompanyIds(context));
+export async function adminLocations(context, dependencies = {}) {
+  return (dependencies.listLocations || listLocationsWithAdminCounts)(authorizedCompanyIds(context));
 }
 
 export function adminWorkorderModuleCatalog() {
@@ -109,6 +121,7 @@ export function adminWorkorderModuleCatalog() {
 
 export async function adminCompanyWorkorderModulePolicy(context, companyId, dependencies = {}) {
   requireCompanyAccess(context, companyId);
+  requireCompanyRole(context, companyId, ["admin"]);
   const getPolicy = dependencies.getPolicy || getCompanyWorkorderModulePolicy;
   return await getPolicy(companyId) || {
     companyId,
@@ -128,6 +141,7 @@ export async function saveAdminCompanyWorkorderModulePolicy(
   dependencies = {},
 ) {
   requireCompanyAccess(context, companyId);
+  requireCompanyRole(context, companyId, ["admin"]);
   const getPolicy = dependencies.getPolicy || getCompanyWorkorderModulePolicy;
   const savePolicy = dependencies.savePolicy || saveCompanyWorkorderModulePolicy;
   const beforePolicy = typeof dependencies.emitAuditEvent === "function"
@@ -158,18 +172,18 @@ export async function saveAdminCompanyWorkorderModulePolicy(
   return savedPolicy;
 }
 
-export async function adminOperations(context, input) {
-  return queryAuthorizedWorkorders(context, input);
+export async function adminOperations(context, input, dependencies = {}) {
+  return queryAuthorizedWorkorders(authorizedAdminContext(context), input, dependencies);
 }
 
-export async function adminOperationsSummary(context, input) {
-  return summarizeAuthorizedWorkorders(context, input);
+export async function adminOperationsSummary(context, input, dependencies = {}) {
+  return summarizeAuthorizedWorkorders(authorizedAdminContext(context), input, dependencies);
 }
 
 export async function addAdminLocation(input, actor, context) {
   const companyIds = authorizedCompanyIds(context);
   const companyId = input.companyId || companyIds[0];
-  requireCompanyAccess(context, companyId);
+  requireCompanyRole(context, companyId, ["admin"]);
   return createLocationWithTemplate({
     ...input,
     companyId,
@@ -329,7 +343,7 @@ export async function requestAdminUserPasswordReset(
   const targets = await getTargets(userId, authorizedCompanyIds(context));
   const target = targets.find(({ company_id: companyId }) => companyId === input.companyId);
   if (!target) throw resourceNotFound("User");
-  requireCompanyAccess(context, target.company_id);
+  requireCompanyRole(context, target.company_id, ["admin"]);
   requireLogin(target);
   if (!target.active || !target.company_membership_active) {
     throw invalidRequest("Activate this user before sending a password reset email.");
@@ -444,7 +458,7 @@ export async function updateAdminUserLocations(context, actor, userId, input) {
     ? targets.find(({ company_id: companyId }) => companyId === input.companyId)
     : targets.length === 1 ? targets[0] : null;
   if (!target) throw invalidRequest("Select an authorized company for this user.");
-  requireCompanyAccess(context, target.company_id);
+  requireCompanyRole(context, target.company_id, ["admin"]);
   if (target.role === "admin") {
     throw invalidRequest("Admins automatically have access to every company location.");
   }

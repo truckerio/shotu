@@ -3,6 +3,7 @@ import { AuthError, resourceNotFound } from "../../auth/errors.js";
 import { requireActor, requireCompanyAccess, requireLocationAccess, requirePermission } from "../../auth/authorize.js";
 import { requireWorkorderAccess } from "../../auth/resource-access.js";
 import { PERMISSION } from "../../auth/permissions.js";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
 import * as repository from "../../db/repositories/customer-document-chat.repo.js";
 import {
   customerDocumentCustomerChatMessageSchema,
@@ -32,8 +33,9 @@ function mapPortalError(error) {
 
 async function staffScope(context, input, dependencies) {
   requireActor(context);
+  context = effectiveCompanyContext(context, input.companyId);
   requireCompanyAccess(context, input.companyId);
-  requireLocationAccess(context, input.locationId);
+  requireLocationAccess(context, input.locationId, input.companyId);
   if (context.actor.role === "mechanic") {
     requirePermission(context, PERMISSION.WORKORDER_MECHANIC);
   } else {
@@ -89,7 +91,7 @@ export async function sendStaffCustomerDocumentChat(context, workorderId, rawInp
   const command = await staffScope(context, input, dependencies);
   // Customer-visible messages are Office/Admin-owned until an explicit company
   // messaging policy is published. Mechanic Workorder access remains read-only.
-  requirePermission(context, PERMISSION.CUSTOMER_DOCUMENT_WRITE);
+  requirePermission(effectiveCompanyContext(context, command.companyId), PERMISSION.CUSTOMER_DOCUMENT_WRITE);
   const append = dependencies.append || repository.appendStaffCustomerDocumentMessage;
   try {
     return await append({

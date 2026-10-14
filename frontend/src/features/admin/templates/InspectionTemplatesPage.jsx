@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../lib/api.js";
 import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { InspectionTemplatesWorkspace } from "./InspectionTemplatesWorkspace.jsx";
+import { inspectionTemplateFromApi as fromApi, inspectionTemplateDefinition as definition } from "./inspection-template-model.js";
 
 // Backend integration contract: POST revisions clones an immutable published version into a new draft.
 // POST publish atomically persists the supplied draft definition, publishes it, and assigns it.
@@ -9,33 +10,6 @@ export const INSPECTION_TEMPLATE_API_CONTRACT = Object.freeze({
   createRevision: "POST /api/admin/inspection-templates/:versionId/revisions { companyId, expectedVersion }",
   publishAtomically: "POST /api/admin/inspection-templates/:versionId/publish { companyId, expectedVersion, definition, assignment }",
 });
-
-function fromApi(record) {
-  const definition = record.version.definition;
-  return {
-    id: record.version.id,
-    definitionId: record.id,
-    versionId: record.version.id,
-    optimisticVersion: record.version.optimisticVersion,
-    name: record.name,
-    unitType: record.applicabilityKey,
-    sourcePreset: record.presetKey,
-    status: record.version.state,
-    sections: (definition.sections || []).map((section) => ({ id: section.key, title: section.title, checks: (section.items || []).map((item) => ({ id: item.key, label: item.label, allowedResponses: ["pass", "issue", "na"] })) })),
-  };
-}
-
-function definition(template) {
-  return {
-    familyKey: "inspection",
-    presetKey: template.sourcePreset || "custom",
-    label: template.name,
-    assetType: template.unitType,
-    schemaVersion: 1,
-    rendererVersion: "inspection-slip-v1",
-    sections: template.sections.map((section) => ({ key: section.id, title: section.title, items: section.checks.map((check) => ({ key: check.id, label: check.label, required: true, allowNa: true, requireNaReason: false })) })),
-  };
-}
 
 export function InspectionTemplatesPage({ actor, locations = [] }) {
   const companies = useMemo(() => [...new Map((locations || []).map((location) => [location.company_id || location.companyId, { id: location.company_id || location.companyId, name: location.company_name || location.companyName || "Company" }]).filter(([id]) => id)).values()], [locations]);

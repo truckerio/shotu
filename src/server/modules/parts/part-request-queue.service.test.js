@@ -19,7 +19,7 @@ test("derives the queue scope from the authenticated office context and maps nex
       ] };
     },
   });
-  assert.deepEqual(received, { companyIds: [companyId], locationIds: [locationId], isAdmin: false, page: 2, pageSize: 25, locationId: null, search: "filter", status: "approved", supply: "partial", sort: "activity:asc" });
+  assert.deepEqual(received, { companyIds: [companyId], locationIds: [locationId], adminCompanyIds: [], page: 2, pageSize: 25, locationId: null, search: "filter", status: "approved", supply: "partial", sort: "activity:asc" });
   assert.equal(response.total, 3);
   assert.equal(response.pageCount, 1);
   assert.deepEqual(response.items.map(({ state, nextAction }) => ({ state, nextAction })), [
@@ -54,6 +54,21 @@ test("allows an admin's authorized companies without inventing a location filter
   await loadUnresolvedPartRequestQueue({}, { actor: { id: baseContext.actor.id, role: "admin" }, companyIds: new Set([companyId]), locationIds: new Set([otherLocationId]) }, {
     listQueue: async (input) => { received = input; return { total: 0, items: [] }; },
   });
-  assert.equal(received.isAdmin, true);
+  assert.deepEqual(received.adminCompanyIds, [companyId]);
   assert.deepEqual(received.companyIds, [companyId]);
+});
+
+test("mixed roles include only office/admin companies and partition admin bypass", async () => {
+  const officeCompany = "55555555-5555-4555-8555-555555555555";
+  const mechanicCompany = "66666666-6666-4666-8666-666666666666";
+  let received;
+  await loadUnresolvedPartRequestQueue({}, {
+    actor: { id: baseContext.actor.id, role: "admin" },
+    companyIds: new Set([companyId, officeCompany, mechanicCompany]),
+    companyRoles: new Map([[companyId, "admin"], [officeCompany, "office"], [mechanicCompany, "mechanic"]]),
+    locationIds: new Set([locationId]),
+  }, { listQueue: async (input) => { received = input; return { total: 0, items: [] }; } });
+  assert.deepEqual(received.companyIds, [companyId, officeCompany]);
+  assert.deepEqual(received.adminCompanyIds, [companyId]);
+  assert.deepEqual(received.locationIds, [locationId]);
 });

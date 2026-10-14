@@ -151,7 +151,8 @@ export async function searchCompanyCatalogParts(companyId, input, options = {}) 
         from parts_catalog pc
         join units_of_measure uom on uom.code = pc.uom_code and uom.active
         where pc.company_id = $1
-          and uom.category <> 'time'
+          and (uom.category <> 'time' or ($11::text='workorder_assignment' and pc.tracking_mode='no_stock'))
+          and (pc.tracking_mode is distinct from 'no_stock' or $11::text='workorder_assignment')
           and not exists (
             select 1 from odoo_product_mappings service_mapping
             join odoo_service_products service_product

@@ -12,5 +12,6 @@ test("photos deep link goes to chat without creating a separate photo view", () 
   assert.equal(requestedWorkorderTool("photos"), "chat");
   assert.equal(requestedWorkorderTool("completion"), "completion");
   assert.equal(requestedWorkorderTool("parts"), null);
+  assert.equal(requestedWorkorderTool("preview"), null);
   assert.equal(requestedWorkorderTool("unknown"), null);
 });

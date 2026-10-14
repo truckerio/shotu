@@ -1,0 +1,54 @@
+.workorder-pricing-footer {
+  border-top: 1px solid var(--border-subtle, #e4e7ec);
+  display: grid;
+  justify-items: end;
+  min-width: 0;
+  padding-top: 12px;
+}
+
+.workorder-pricing-footer-row {
+  align-items: center;
+  display: flex;
+  font-size: 14px;
+  gap: 24px;
+  justify-content: space-between;
+  min-width: min(100%, 260px);
+}
+
+.workorder-pricing-footer-row strong {
+  color: #101828;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.workorder-pricing-footer-row strong.is-placeholder {
+  font-weight: 400;
+}
+
+.workorder-pricing-footer-row.is-total {
+  border-top: 1px solid var(--border-subtle, #e4e7ec);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.workorder-pricing-footer-message {
+  color: #475467;
+  font-size: 13px;
+  margin: 8px 0 0;
+  max-width: min(100%, 520px);
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  .workorder-pricing-footer,
+  .workorder-pricing-footer-row {
+    justify-self: stretch;
+  }
+
+  .workorder-pricing-footer-message {
+    text-align: left;
+  }
+}

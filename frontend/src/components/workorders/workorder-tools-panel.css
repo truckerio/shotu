@@ -54,6 +54,9 @@
   scrollbar-width: thin;
 }
 
+.workorder-tools-panel-tabs[hidden] { display: none; }
+.workorder-tools-panel.is-single-document { grid-template-rows: auto minmax(0, 1fr); }
+
 .workorder-tools-panel-tabs button {
   background: transparent;
   border: 0;

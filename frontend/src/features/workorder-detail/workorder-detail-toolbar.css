@@ -9,6 +9,63 @@
   padding: 8px;
 }
 
+/* One surface for Create and role-specific workorder detail headers. */
+.workorder-detail-page .control-panel > .detail-context-bar {
+  background: var(--workspace-background, #f7f8fa);
+  border-bottom: 0;
+  box-shadow: 0 4px 12px rgb(16 24 40 / 6%);
+}
+
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar {
+  min-height: 56px;
+}
+
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar h1 {
+  font-size: 24px;
+  font-weight: var(--weight-medium, 500);
+  line-height: 30px;
+}
+
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .workorder-context-main > button,
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .detail-save-button,
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .preview-pane-toggle {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  width: 40px;
+}
+
+.workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .detail-context-actions > .button {
+  box-sizing: border-box;
+  font-size: 14px;
+  height: 40px;
+  line-height: 20px;
+  min-height: 40px;
+  padding-block: 0;
+}
+
+@supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
+  .workorder-detail-page .control-panel > .detail-context-bar {
+    background: rgb(247 248 250 / 78%);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+
+.prototype.create-workorder-page {
+  padding-top: 0;
+}
+
+.create-workorder-page .generator-layout .control-panel {
+  top: 0;
+}
+
+/* Keep positioned form controls below the sticky frosted header. */
+.create-workorder-page .control-panel > .create-workorder-form {
+  position: relative;
+  z-index: 0;
+}
+
 .detail-context-actions {
   align-items: center;
   display: inline-flex !important;
@@ -249,6 +306,19 @@
   padding: 0 12px;
 }
 
+.customer-estimate-preview-action.is-loading > span {
+  animation: estimate-preview-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes estimate-preview-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer-estimate-preview-action.is-loading > span { animation: none; }
+}
+
 .office-create-nav .draft-save-status.is-icon-only {
   flex: 0 0 24px;
   height: 24px;
@@ -265,7 +335,51 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 700px) {
+@media screen and (max-width: 700px) {
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: max-content;
+    overflow: visible;
+  }
+
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .detail-context-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .detail-context-actions > .button {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  /* Keep focus/popover scrolling inside the bounded Workorder panel. */
+  html:has(.prototype.workorder-detail-page),
+  body:has(.prototype.workorder-detail-page),
+  #root:has(.prototype.workorder-detail-page) {
+    height: 100%;
+    overflow: clip;
+  }
+
+  .prototype.workorder-detail-page {
+    inset: 0;
+    overflow: clip;
+    position: fixed;
+    width: 100%;
+  }
+
+  .prototype.workorder-detail-page > .split-layout {
+    overflow: clip;
+  }
+
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .workorder-context-main > button,
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .detail-save-button,
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .preview-pane-toggle,
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] > .detail-context-bar .detail-context-actions > .button {
+    height: 44px;
+    min-height: 44px;
+  }
+
   .office-create-nav .workorder-context-main > button,
   .office-create-nav .detail-context-actions > button {
     height: 44px;

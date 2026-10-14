@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AuthError } from "../../auth/errors.js";
 import { requireCompanyAccess, requireLocationAccess, requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
 import * as repository from "../../db/repositories/customer-documents.repo.js";
 
 const uuid = z.string().uuid();
@@ -28,9 +29,11 @@ function boundedRange(input, now = new Date()) {
 }
 
 function authorize(context, input) {
+  requireCompanyAccess(context, input.companyId);
+  context = effectiveCompanyContext(context, input.companyId);
   requirePermission(context, PERMISSION.CUSTOMER_DOCUMENT_READ);
   requireCompanyAccess(context, input.companyId);
-  requireLocationAccess(context, input.locationId);
+  requireLocationAccess(context, input.locationId, input.companyId);
 }
 
 function normalizeGroups(groups) {

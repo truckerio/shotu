@@ -43,7 +43,9 @@ test('exact stock-task read finds off-page work and enforces tenant, shop and ki
     (select count(*)::int from inventory_stock_movements) movements,
     (select count(*)::int from inventory_workflow_commands) commands`)).rows[0];
   const page=await getStockTasks(new URLSearchParams({locationId:ids.source,kind:'damage',page:'1'}),context);
-  assert.equal(page.items.length,25);assert.equal(page.hasMore,true);assert.equal(page.items.some((task)=>task.id===ids.target),false);
+  assert.equal(page.items.length,25);assert.equal(page.hasMore,true);assert.equal(page.total,27);assert.equal(page.pageCount,2);assert.equal(page.items.some((task)=>task.id===ids.target),false);
+  const secondPage=await getStockTasks(new URLSearchParams({locationId:ids.source,kind:'damage',page:'2'}),context);
+  assert.equal(secondPage.items.length,2);assert.equal(secondPage.total,27);assert.equal(secondPage.pageCount,2);assert.equal(secondPage.hasMore,false);
   const exact=await getStockTask(ids.target,new URLSearchParams({locationId:ids.source,kind:'damage'}),context);
   assert.equal(exact.task.id,ids.target);assert.equal(exact.task.kind,'damage');assert.equal(exact.task.status,'released');assert.deepEqual(exact.task.units,[]);assert.deepEqual(exact.task.events,[]);
   const transferAtSource=await getStockTask(ids.transfer,new URLSearchParams({locationId:ids.source,kind:'transfer'}),context);

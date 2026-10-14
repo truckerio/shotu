@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -12,7 +12,9 @@ import { Button } from "../../components/ui/Button.jsx";
 import { Checkbox } from "../../components/ui/Checkbox.jsx";
 import { IconButton } from "../../components/ui/IconButton.jsx";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { Pagination } from "../../components/ui/Pagination.jsx";
+import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
+import { useCheckpointPages } from "../../components/operations/useCheckpointPages.js";
+import { readCheckpointPosition } from "../../components/operations/checkpoint-position.js";
 import { api } from "../../lib/api.js";
 import { serializedUnitSourceView } from "./part-serialization-source-model.js";
 import { StockIntakeControl } from "../../components/inventory/StockIntakeControl.jsx";
@@ -157,14 +159,7 @@ export function PartSerializationPanel({
   const [unitError, setUnitError] = useState("");
   const [custodyCondition, setCustodyCondition] = useState("");
   const [custodyUnitState, setCustodyUnitState] = useState("");
-  const [custodyCursor, setCustodyCursor] = useState([""]);
   const [custodyRefreshVersion, setCustodyRefreshVersion] = useState(0);
-  const [custodyUnits, setCustodyUnits] = useState({
-    items: [],
-    nextCursor: null,
-    loading: false,
-    error: "",
-  });
   const [custodyDetail, setCustodyDetail] = useState(null);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionBin, setCorrectionBin] = useState("");
@@ -196,9 +191,6 @@ export function PartSerializationPanel({
   const filteredFallbackUnits = (data?.units || []).filter(
     (unit) => !custodyCondition || unit.conditionCode === custodyCondition,
   );
-  const visibleUnits = companyId && !custodyUnits.error
-    ? custodyUnits.items
-    : filteredFallbackUnits;
 
   const endpoint = `/api/office/inventory/parts/${encodeURIComponent(item.catalogPartId)}/locations/${encodeURIComponent(location.locationId)}/units`;
   const load = useCallback(async () => {
@@ -226,8 +218,6 @@ export function PartSerializationPanel({
     setUnitError("");
     setCustodyCondition("");
     setCustodyUnitState("");
-    setCustodyCursor([""]);
-    setCustodyUnits({ items: [], nextCursor: null, loading: false, error: "" });
     setCustodyDetail(null);
     setCorrectionOpen(false);
     setCorrectionBin("");
@@ -236,58 +226,13 @@ export function PartSerializationPanel({
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!data || ["quantity", "measured_bulk"].includes(data.part?.trackingMode)
-      || !companyId || !location?.locationId || !item?.catalogPartId)
-      return undefined;
-    let active = true;
-    setCustodyUnits((current) => ({ ...current, loading: true, error: "" }));
-    api(
-      reusePath(
-        `/api/inventory-reuse/stock/${encodeURIComponent(item.catalogPartId)}/units`,
-        {
-          companyId,
-          locationId: location.locationId,
-          condition: custodyCondition,
-          unitState: custodyUnitState,
-          limit: 25,
-          cursor: custodyCursor.at(-1),
-        },
-      ),
-    )
-      .then((result) => {
-        if (active)
-          setCustodyUnits({
-            items: result.items || [],
-            conditionCounts: result.conditionCounts || {},
-            nextCursor: result.nextCursor || null,
-            loading: false,
-            error: "",
-          });
-      })
-      .catch((nextError) => {
-        if (active)
-          setCustodyUnits((current) => ({
-            ...current,
-            loading: false,
-            error:
-              nextError.message || "Exact custody units could not be loaded.",
-          }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [
-    companyId,
-    custodyCondition,
-    custodyUnitState,
-    custodyCursor,
-    custodyRefreshVersion,
-    item?.catalogPartId,
-    location?.locationId,
-    data?.part?.trackingMode,
-    Boolean(data),
-  ]);
+  const custodyEnabled = Boolean(data && !["quantity", "measured_bulk"].includes(data.part?.trackingMode) && companyId && location?.locationId && item?.catalogPartId);
+  const custodyKey = `part-serialization-custody:${JSON.stringify([companyId, location?.locationId || "", item?.catalogPartId || "", custodyCondition, custodyUnitState])}`;
+  const fetchCustodyPage = useCallback((page, { signal }) => api(reusePath(`/api/inventory-reuse/stock/${encodeURIComponent(item.catalogPartId)}/units`, {
+    companyId, locationId: location.locationId, condition: custodyCondition, unitState: custodyUnitState, limit: 25, page,
+  }), { signal }), [companyId, custodyCondition, custodyUnitState, item?.catalogPartId, location?.locationId]);
+  const custodyInitialPage = useMemo(() => readCheckpointPosition(custodyKey)?.page || 1, [custodyKey]);
+  const custodyUnits = useCheckpointPages({ queryKey: custodyKey, fetchPage: fetchCustodyPage, enabled: custodyEnabled, refreshKey: custodyRefreshVersion, initialPage: custodyInitialPage, getItemKey: (unit) => unit.id });
 
   useEffect(() => {
     if (!selectedUnitId) return undefined;
@@ -905,10 +850,7 @@ export function PartSerializationPanel({
                     </span>
                     <Dropdown
                       value={custodyCondition}
-                      onChange={(event) => {
-                        setCustodyCondition(event.target.value);
-                        setCustodyCursor([""]);
-                      }}
+                      onChange={(event) => setCustodyCondition(event.target.value)}
                       aria-label="Filter exact units by condition"
                     >
                       <option value="">All conditions</option>
@@ -925,10 +867,7 @@ export function PartSerializationPanel({
                     </span>
                     <Dropdown
                       value={custodyUnitState}
-                      onChange={(event) => {
-                        setCustodyUnitState(event.target.value);
-                        setCustodyCursor([""]);
-                      }}
+                      onChange={(event) => setCustodyUnitState(event.target.value)}
                       aria-label="Filter exact units by state"
                     >
                       <option value="">All states</option>
@@ -941,27 +880,14 @@ export function PartSerializationPanel({
                   </label>
                 </div>
               </div>
-              {custodyUnits.error ? (
-                <p className="ops-error" role="alert">
-                  {custodyUnits.error}
-                </p>
-              ) : null}
             </section>
           ) : null}
 
-          {companyId && custodyUnits.loading ? (
-            <div className="inventory-serial-loading" role="status">
-              <RefreshCw01 className="loading-icon" />
-              Loading serialized units
-            </div>
-          ) : data.units.length && visibleUnits.length ? (
-            <>
-              <div
-                className="inventory-serial-list"
-                aria-label={`Serialized units at ${location.locationName}`}
-              >
-                {visibleUnits.map((unit) => (
-                  <article key={unit.id}>
+          {companyId ? (
+            <CheckpointCollection queue={custodyUnits} label="serialized units" pageSize={25} storageKey={custodyKey} ariaLabel={`Serialized units at ${location.locationName}`} getItemKey={(unit) => unit.id}
+              renderItems={(entries) => <div className="inventory-serial-list">
+                {entries.map(({ item: unit, key, rowProps }) => (
+                  <article {...rowProps} key={key}>
                     <button
                       type="button"
                       className="inventory-serial-unit-open"
@@ -1010,33 +936,18 @@ export function PartSerializationPanel({
                     </div>
                   </article>
                 ))}
-                {!companyId && data.truncated ? (
-                  <p>Showing the first 500 serialized units.</p>
-                ) : null}
-              </div>
-              {companyId ? (
-                <Pagination
-                  currentPage={custodyCursor.length}
-                  pageCount={
-                    custodyUnits.nextCursor
-                      ? custodyCursor.length + 1
-                      : custodyCursor.length
-                  }
-                  setPage={(next) => {
-                    if (next < custodyCursor.length)
-                      setCustodyCursor((current) => current.slice(0, next));
-                    else if (custodyUnits.nextCursor)
-                      setCustodyCursor((current) => [
-                        ...current,
-                        custodyUnits.nextCursor,
-                      ]);
-                  }}
-                  total={0}
-                  label="serialized units"
-                  loading={custodyUnits.loading}
-                />
-              ) : null}
-            </>
+              </div>}
+            ><div className="inventory-serial-empty"><QrCode01 /><strong>No serialized units match these filters</strong><p>Choose another condition or state to see exact units.</p><Button type="button" onClick={() => { setCustodyCondition(""); setCustodyUnitState(""); }}>Clear filters</Button></div></CheckpointCollection>
+          ) : filteredFallbackUnits.length ? (
+            <div className="inventory-serial-list" aria-label={`Serialized units at ${location.locationName}`}>
+              {filteredFallbackUnits.map((unit) => <article key={unit.id}>
+                <button type="button" className="inventory-serial-unit-open" data-unit-id={unit.id} onClick={() => setSelectedUnitId(unit.id)} aria-label={`View ${unit.serialNumber}`}>
+                  <span><span className="inventory-serial-identity"><code>{unit.serialNumber}</code><span className={`inventory-unit-condition is-${unit.conditionCode || "unknown"}`}>{CONDITION_LABELS[unit.conditionCode] || "Not classified"}</span></span><small>{[unitStatus(unit.status), custodyHolder(unit), isAvailableForUse(unit) ? "Available" : "Not available"].filter(Boolean).join(" · ")}</small></span><ChevronRight aria-hidden="true" />
+                </button>
+                <div className="inventory-unit-row-actions">{onMarkDamaged && canMarkDamaged(unit) ? <Button aria-label={`Block damaged unit ${unit.serialNumber}`} onClick={() => onMarkDamaged(unit)}>Block / damaged</Button> : null}<a href={unit.printUrl || `/api/office/inventory/units/${encodeURIComponent(unit.id)}/label`} target="_blank" rel="noreferrer" aria-label={`Print QR label for ${unit.serialNumber}`}><Printer /><span className="inventory-count-visually-hidden">Print QR</span></a></div>
+              </article>)}
+              {data.truncated ? <p>Showing the first 500 serialized units.</p> : null}
+            </div>
           ) : data.units.length ? (
             <div className="inventory-serial-empty">
               <QrCode01 />
@@ -1047,7 +958,6 @@ export function PartSerializationPanel({
                 onClick={() => {
                   setCustodyCondition("");
                   setCustodyUnitState("");
-                  setCustodyCursor([""]);
                 }}
               >
                 Clear filters

@@ -1,11 +1,13 @@
 import './inventory-tables.css';
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, FileCheck02, Package, SearchMd } from "@untitledui/icons";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
 import { Button } from "../../components/ui/Button.jsx";
 import { Checkbox } from "../../components/ui/Checkbox.jsx";
-import { Pagination } from "../../components/ui/Pagination.jsx";
+import { useCheckpointPages } from "../../components/operations/useCheckpointPages.js";
+import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
+import { useClientCheckpointPages } from "../../components/ui/useClientCheckpointPages.js";
 import { OperationalDataCell, OperationalDataRow, OperationalDataTable } from "../../components/ui/OperationalDataTable.jsx";
 import { UploadDialog, UploadDropzone } from "../../components/ui/UploadDialog.jsx";
 import { PartCatalogCombobox } from "../../components/workorders/part-requests/PartCatalogCombobox.jsx";
@@ -100,7 +102,7 @@ function statusText(status) {
   }[status] || status;
 }
 
-function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
+function InventoryCountExceptionRow({ line, stocktake, onUpdated, rowProps }) {
   const suggestedQuery = String(line.sourcePartNumber || line.sourcePartName || "").trim();
   const automaticSearchQuery = String(line.sourcePartName || line.sourceDescription || line.sourcePartNumber || "").trim();
   const [query, setQuery] = useState(suggestedQuery);
@@ -170,7 +172,7 @@ function InventoryCountExceptionRow({ line, stocktake, onUpdated }) {
   const canMatch = Boolean(selectedPart?.trackingMode && validQuantity && targetPositionId && !positionLoading && !positionError);
   const partLabel = line.sourcePartNumber || `row ${line.sourceRow}`;
 
-  return <OperationalDataRow id={line.id} className="inventory-count-table-row">
+  return <OperationalDataRow {...rowProps} id={line.id} className="inventory-count-table-row">
     <OperationalDataCell label="Issue" className="inventory-count-issue-cell">
       <span className={`inventory-state is-${line.matchStatus}`}>{statusText(line.matchStatus)}</span>
       <small>Row {line.sourceRow}</small>
@@ -218,10 +220,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
   const fileInput = useRef(null);
   const [locationId, setLocationId] = useState(() => locations[0]?.id || "");
   const [stocktake, setStocktake] = useState(null);
-  const [imports, setImports] = useState([]);
-  const [importPage, setImportPage] = useState(1);
-  const [importMeta, setImportMeta] = useState({ pageCount: 1, total: 0 });
-  const [listLoading, setListLoading] = useState(!initialImportId);
+  const [importRefreshKey, setImportRefreshKey] = useState(0);
   const [loading, setLoading] = useState(Boolean(initialImportId));
   const [uploading, setUploading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -229,8 +228,15 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
   const [error, setError] = useState("");
   const [exceptionQuery, setExceptionQuery] = useState("");
   const [exceptionFilter, setExceptionFilter] = useState("all");
-  const [exceptionPage, setExceptionPage] = useState(1);
   const returnFocusImportIdRef = useRef("");
+
+  const fetchImportPage = useCallback(async (page, { signal }) => {
+    const result = await api(`/api/office/inventory/count-imports?page=${page}&pageSize=10`, { signal });
+    return { items: Array.isArray(result.imports) ? result.imports : [], page: Number(result.page) || page, pageCount: Number(result.pageCount) || 1, total: Number(result.total) || 0 };
+  }, []);
+  const importQueue = useCheckpointPages({ queryKey: "inventory-count-imports", fetchPage: fetchImportPage, refreshKey: importRefreshKey, getItemKey: (item) => item.id });
+  const imports = useMemo(() => importQueue.pages.flatMap((batch) => batch.items), [importQueue.pages]);
+  const listLoading = importQueue.loading && !importQueue.pages.length;
 
   useEffect(() => {
     if (!locationId && locations[0]?.id) setLocationId(locations[0].id);
@@ -246,16 +252,6 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [initialImportId]);
-
-  useEffect(() => {
-    let active = true;
-    setListLoading(true);
-    api(`/api/office/inventory/count-imports?page=${importPage}&pageSize=10`)
-      .then((result) => { if (active) { setImports(Array.isArray(result.imports) ? result.imports : []); setImportMeta({ pageCount: Number(result.pageCount) || 1, total: Number(result.total) || 0 }); } })
-      .catch((nextError) => { if (active) setError(nextError.message); })
-      .finally(() => { if (active) setListLoading(false); });
-    return () => { active = false; };
-  }, [importPage]);
 
   useEffect(() => {
     setConfirmed(false);
@@ -285,11 +281,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     const needle = exceptionQuery.trim().toLocaleLowerCase();
     return matchesFilter && (!needle || [line.sourcePartNumber, line.sourcePartName, line.sourceDescription, line.binLocation, sourceQuantity, line.sourceRow].some((value) => String(value ?? "").toLocaleLowerCase().includes(needle)));
   }), [exceptionFilter, exceptionQuery, exceptions]);
-  const exceptionPageCount = Math.max(1, Math.ceil(filteredExceptions.length / 12));
-  const exceptionItems = filteredExceptions.slice((exceptionPage - 1) * 12, exceptionPage * 12);
-
-  useEffect(() => setExceptionPage(1), [stocktake?.id, exceptionFilter, exceptionQuery]);
-  useEffect(() => { if (exceptionPage > exceptionPageCount) setExceptionPage(exceptionPageCount); }, [exceptionPage, exceptionPageCount]);
+  const exceptionQueue = useClientCheckpointPages(filteredExceptions, { pageSize: 12, resetKey: `${stocktake?.id || "none"}:${exceptionFilter}:${exceptionQuery}` });
 
   async function upload(file) {
     if (!locationId) {
@@ -307,7 +299,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
       });
       setStocktake(result.import);
       onUploadOpenChange?.(false);
-      setImportPage(1);
+      setImportRefreshKey((value) => value + 1);
       window.history.replaceState({}, "", (() => {
         const url = new URL(window.location.href);
         url.searchParams.set("countImport", result.import.id);
@@ -334,6 +326,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
 
   function showFileList() {
     setStocktake(null); setError("");
+    setImportRefreshKey((value) => value + 1);
     onContextChange?.(null);
     const url = new URL(window.location.href); url.searchParams.delete("countImport"); window.history.replaceState({}, "", url);
   }
@@ -359,7 +352,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
   const uploadDialog = <UploadDialog title="Import count sheet" closeLabel="Close count-sheet upload" isOpen={uploadOpen} onOpenChange={(open) => !uploading && onUploadOpenChange?.(open)} isDismissable={!uploading} closeDisabled={uploading} error={error}><label className="shared-upload-field" htmlFor="inventory-count-location"><span>Location</span><Dropdown id="inventory-count-location" value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose location</option>{locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}</Dropdown></label><UploadDropzone inputId="inventory-count-file" inputRef={fileInput} accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={!locationId || uploading} onChange={(event) => upload(event.target.files?.[0])} onDrop={(event) => upload(event.dataTransfer.files?.[0])} text={uploading ? "Uploading…" : "Drop count sheet here or browse"} hint="XLSX · 2 MB maximum" /></UploadDialog>;
 
   if (loading) return <div className="inventory-empty"><Package /><strong>Loading inventory count</strong></div>;
-  if (!stocktake) return <>{uploadDialog}{error && !uploadOpen ? <p className="ops-error" role="alert">{error}</p> : null}{listLoading ? <div className="inventory-empty"><Package /><strong>Loading uploaded count sheets</strong></div> : imports.length ? <><OperationalDataTable ariaLabel="Uploaded count sheets" columns={FILE_COLUMNS} className="inventory-file-table inventory-data-table">{imports.map((entry) => <OperationalDataRow id={entry.id} key={entry.id}><OperationalDataCell label="Count sheet"><span className="inventory-file-name"><FileCheck02 /><span><strong>{entry.sourceFileName}</strong><small>{entry.rowCount} count rows</small></span></span></OperationalDataCell><OperationalDataCell label="Location">{entry.locationName}</OperationalDataCell><OperationalDataCell label="Uploaded">{new Date(entry.createdAt).toLocaleString()}</OperationalDataCell><OperationalDataCell label="Status"><span className={`inventory-state is-${entry.status}`}>{entry.status}</span></OperationalDataCell><OperationalDataCell label="Actions"><div className="inventory-file-actions">{entry.downloadUrl ? <a href={entry.downloadUrl}>Download</a> : null}<Button type="button" data-inventory-import={entry.id} onClick={() => openImport(entry.id)}>Review</Button></div></OperationalDataCell></OperationalDataRow>)}</OperationalDataTable><Pagination currentPage={importPage} pageCount={importMeta.pageCount} setPage={setImportPage} total={importMeta.total} label="count sheets" loading={listLoading} /></> : <div className="inventory-empty"><FileCheck02 /><strong>No count sheets uploaded</strong><p>Choose Import count sheet to upload the first XLSX file.</p></div>}</>;
+  if (!stocktake) return <>{uploadDialog}{error && !uploadOpen ? <p className="ops-error" role="alert">{error}</p> : null}{listLoading ? <div className="inventory-empty"><Package /><strong>Loading uploaded count sheets</strong></div> : <CheckpointCollection queue={importQueue} label="count sheets" pageSize={10} storageKey="inventory-count-imports" ariaLabel="Uploaded count sheets" getItemKey={(item) => item.id} renderItems={(entries) => <OperationalDataTable ariaLabel="Uploaded count sheets" columns={FILE_COLUMNS} className="inventory-file-table inventory-data-table">{entries.map(({ item: entry, key, rowProps }) => <OperationalDataRow {...rowProps} id={entry.id} key={key}><OperationalDataCell label="Count sheet"><span className="inventory-file-name"><FileCheck02 /><span><strong>{entry.sourceFileName}</strong><small>{entry.rowCount} count rows</small></span></span></OperationalDataCell><OperationalDataCell label="Location">{entry.locationName}</OperationalDataCell><OperationalDataCell label="Uploaded">{new Date(entry.createdAt).toLocaleString()}</OperationalDataCell><OperationalDataCell label="Status"><span className={`inventory-state is-${entry.status}`}>{entry.status}</span></OperationalDataCell><OperationalDataCell label="Actions"><div className="inventory-file-actions">{entry.downloadUrl ? <a href={entry.downloadUrl}>Download</a> : null}<Button type="button" data-inventory-import={entry.id} onClick={() => openImport(entry.id)}>Review</Button></div></OperationalDataCell></OperationalDataRow>)}</OperationalDataTable>}><div className="inventory-empty"><FileCheck02 /><strong>No count sheets uploaded</strong><p>Choose Import count sheet to upload the first XLSX file.</p></div></CheckpointCollection>}</>;
 
   return <>{uploadDialog}<section className="inventory-count-review">
     <header><div><FileCheck02 /><div><h3>{stocktake.sourceFileName}</h3><p>{stocktake.locationName} · Uploaded {new Date(stocktake.createdAt).toLocaleString()}</p></div></div><span className={`inventory-state is-${stocktake.status}`}>{stocktake.status}</span></header>
@@ -381,7 +374,7 @@ export function InventoryCountImportPanel({ locations, initialImportId = "", upl
     {exceptions.length ? <section className="inventory-count-exceptions">
       <div className="inventory-count-section-heading"><div><AlertCircle /><div><h3>{exceptions.length} need review</h3><p>Choose the catalog part and exact storage destination, correct the quantity, or ignore the row.</p></div></div></div>
       <div className="inventory-count-review-toolbar"><label><SearchMd /><input aria-label="Search inventory review rows" value={exceptionQuery} onChange={(event) => setExceptionQuery(event.target.value)} placeholder="Search part, description, source bin, or row" /></label><Dropdown aria-label="Filter inventory review rows" value={exceptionFilter} onChange={(event) => setExceptionFilter(event.target.value)}><option value="all">All issues ({exceptions.length})</option><option value="zero_or_blank">Zero or blank quantity</option><option value="invalid_quantity">Quantity issues</option><option value="unmatched">Unmatched parts</option><option value="duplicate">Duplicates</option><option value="position_required">Destination needed</option></Dropdown></div>
-      {filteredExceptions.length ? <><div className="inventory-count-filter-result"><strong>{filteredExceptions.length}</strong> matching rows</div><OperationalDataTable ariaLabel="Inventory count rows needing review" columns={EXCEPTION_COLUMNS} className="inventory-count-review-table inventory-data-frame">{exceptionItems.map((line) => <InventoryCountExceptionRow key={line.id} line={line} stocktake={stocktake} onUpdated={setStocktake} />)}</OperationalDataTable><Pagination currentPage={exceptionPage} pageCount={exceptionPageCount} setPage={setExceptionPage} total={filteredExceptions.length} label="rows" /></> : <div className="inventory-empty is-compact"><SearchMd /><strong>No matching review rows</strong><p>Change the search or issue filter.</p></div>}
+      {filteredExceptions.length ? <><div className="inventory-count-filter-result"><strong>{filteredExceptions.length}</strong> matching rows</div><CheckpointCollection queue={exceptionQueue} label="rows" pageSize={12} storageKey={`inventory-count-exceptions:${stocktake.id}:${exceptionFilter}:${exceptionQuery}`} ariaLabel="Inventory count rows needing review" getItemKey={(line) => line.id} renderItems={(entries) => <OperationalDataTable ariaLabel="Inventory count rows needing review" columns={EXCEPTION_COLUMNS} className="inventory-count-review-table inventory-data-frame">{entries.map(({ item: line, key, rowProps }) => <InventoryCountExceptionRow key={key} rowProps={rowProps} line={line} stocktake={stocktake} onUpdated={setStocktake} />)}</OperationalDataTable>} /></> : <div className="inventory-empty is-compact"><SearchMd /><strong>No matching review rows</strong><p>Change the search or issue filter.</p></div>}
     </section> : null}
     {error ? <p className="ops-error" role="alert" aria-live="assertive">{error}</p> : null}
   </section></>;

@@ -186,17 +186,16 @@ test("Admin and Surveillance reuse one policy-aware Odoo module owner", () => {
   assert.match(detailHost, /odoo: WorkorderOdooModule/);
 });
 
-test("preview and activity use the existing shared implementations", () => {
+test("legacy paper preview is absent while activity uses the existing shared implementation", () => {
   const detailPage = source("./WorkorderDetailPage.jsx");
   const detailSections = source("./WorkorderDetailSections.jsx");
   const activityModule = source("../workorder-modules/activity/WorkorderActivityModule.jsx");
   const surveillance = source("../surveillance/workspace/SurveillanceDetailPage.jsx");
   const surface = source("../../components/workorders/WorkorderDetailSurface.jsx");
 
-  assertUsesComponent(detailPage, "PreviewPane", "WorkorderDetailPage");
-  assertUsesComponent(detailPage, "CompactWorkorderPreview", "WorkorderDetailPage");
-  assertUsesComponent(surveillance, "PreviewPane", "SurveillanceDetailPage");
-  assertUsesComponent(surveillance, "CompactWorkorderPreview", "SurveillanceDetailPage");
+  for (const source of [detailPage, surveillance]) {
+    assert.doesNotMatch(source, /<WorkorderPreview|<CompactWorkorderPreview|<PreviewFullscreen/);
+  }
   const detailHost = source("../workorder-modules/WorkorderDetailModuleHost.jsx");
   assert.equal(importedComponentNames(detailHost).has("WorkorderActivityModule"), true);
   assert.match(detailHost, /activity: WorkorderActivityModule/);
@@ -238,4 +237,13 @@ test("detail section coordinator delegates module bodies to owned components", (
   }
   assert.ok(detailSections.split("\n").length <= 220, "WorkorderDetailSections must remain a thin coordinator");
   assert.doesNotMatch(detailSections, /<ProgressiveWorkorderSection|<PartRequestsPanel|<WorkorderTimelinePanel/);
+});
+test("workorder headers share a frosted surface with an opaque fallback and Create starts at the top", () => {
+  const toolbarCss = source("./workorder-detail-toolbar.css");
+  assert.match(toolbarCss, /\.workorder-detail-page \.control-panel > \.detail-context-bar\s*\{[^}]*background: var\(--workspace-background, #f7f8fa\);/s);
+  assert.match(toolbarCss, /\.workorder-detail-page \.control-panel > \.detail-context-bar\s*\{[^}]*border-bottom: 0;[^}]*box-shadow: 0 4px 12px rgb\(16 24 40 \/ 6%\);/s);
+  assert.match(toolbarCss, /@supports[\s\S]*\.workorder-detail-page \.control-panel > \.detail-context-bar\s*\{[^}]*background: rgb\(247 248 250 \/ 78%\);[^}]*-webkit-backdrop-filter: blur\(12px\);[^}]*backdrop-filter: blur\(12px\);/s);
+  assert.match(toolbarCss, /\.prototype\.create-workorder-page\s*\{[^}]*padding-top: 0;/s);
+  assert.match(toolbarCss, /\.create-workorder-page \.generator-layout \.control-panel\s*\{[^}]*top: 0;/s);
+  assert.match(toolbarCss, /\.create-workorder-page \.control-panel > \.create-workorder-form\s*\{[^}]*position: relative;[^}]*z-index: 0;/s);
 });

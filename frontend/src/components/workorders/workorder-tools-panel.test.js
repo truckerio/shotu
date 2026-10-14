@@ -6,9 +6,16 @@ import { getNextWorkorderToolView, getVisibleWorkorderToolViews } from "./workor
 const source = readFileSync(new URL("./WorkorderToolsPanel.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./workorder-tools-panel.css", import.meta.url), "utf8");
 
-test("only the modal tools header needs a close button; desktop uses the page toggle", () => {
-  assert.match(source, /!isDesktop && \([\s\S]*aria-label="Close work order tools"/);
+test("Documents always has a close button while desktop tools retains the page toggle", () => {
+  assert.match(source, /\(!isDesktop \|\| title\) && \(/);
+  assert.match(source, /title \? "Close documents" : "Close work order tools"/);
   assert.match(source, /<ToolsPanelHeader onClose=\{close\} isDesktop=\{isDesktop\}/);
+});
+
+test("a single Documents view has no duplicate tab and retains a bounded scroll track", () => {
+  assert.match(source, /hidden=\{singleDocument\}/);
+  assert.match(css, /\.workorder-tools-panel-tabs\[hidden\] \{ display: none; \}/);
+  assert.match(css, /\.workorder-tools-panel\.is-single-document \{ grid-template-rows: auto minmax\(0, 1fr\); \}/);
 });
 
 test("tool tabs support cyclic arrow navigation plus Home and End", () => {

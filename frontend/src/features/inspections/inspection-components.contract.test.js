@@ -6,6 +6,14 @@ const detail = readFileSync(new URL("./InspectionDetail.jsx", import.meta.url), 
 const queue = readFileSync(new URL("./InspectionQueue.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./inspections.css", import.meta.url), "utf8");
 
+test("inspection identity sits directly on the page and template label accompanies the back arrow", () => {
+  assert.match(detail, /className="inspection-back"[\s\S]*onClick=\{onBack\}>\{template.label\}<\/Button>/);
+  assert.doesNotMatch(detail, /onClick=\{onBack\}>Inspections<\/Button>|<span>\{template.label\}<\/span>/);
+  assert.match(detail, /Back to inspections:/);
+  assert.match(css, /\.inspection-detail-header \{\s*background: transparent;\s*border: 0;\s*border-radius: 0;/);
+  assert.match(css, /\.inspection-detail-meta \{ background: transparent; border: 0;/);
+});
+
 test("detail uses one radio group per checklist item and only expands issue details when selected", () => {
   assert.match(detail, /type="radio" name=\{item\.key\}/);
   assert.match(detail, /response === "issue" \? <div className="inspection-issue-fields">/);
@@ -43,7 +51,7 @@ test("inspection UI keeps one progressive checklist section open and a bounded d
   assert.match(detail, /workorderEligibilityLoading/);
   assert.match(detail, /Checking active workorders/);
   assert.match(detail, /Complete inspection/);
-  assert.match(css, /\.inspection-detail-layout\.has-supporting \{ grid-template-columns: minmax\(0, 1fr\) minmax\(360px, 420px\); \}/);
+  assert.match(css, /\.inspection-detail-layout\.has-supporting \{ grid-template-columns: minmax\(0, 1fr\) minmax\(280px, 320px\); \}/);
   assert.match(css, /@media \(max-width: 1099px\) and \(min-width: 701px\)[\s\S]*\.inspection-detail-layout\.has-supporting,[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.inspection-response-group label,[\s\S]*min-height: 44px/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.inspection-detail-layout\.has-supporting,[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);

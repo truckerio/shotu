@@ -43,3 +43,11 @@ test("mechanics and cross-location Office requests cannot create local units", a
   await assert.rejects(createLocalVehicle(context("office", []), input, dependencies), (error) => error.statusCode === 404);
   await assert.rejects(createLocalVehicle(context("office"), { ...input, companyId: "33333333-3333-4333-8333-333333333333" }, dependencies), (error) => error.statusCode === 404);
 });
+
+test("missing standard company role cannot fall back to primary admin during unit creation", async () => {
+  const stale = { ...context("admin"), sessionMode: "standard", companyRoles: new Map() };
+  await assert.rejects(createLocalVehicle(stale, input, {
+    readLocation: async () => assert.fail("stale role must fail before reading location"),
+    create: async () => assert.fail("stale role must not create asset"),
+  }), (error) => error.statusCode === 404);
+});

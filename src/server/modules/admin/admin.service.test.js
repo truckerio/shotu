@@ -2,13 +2,78 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
+  adminCompanyWorkorderModulePolicy,
+  adminLocations,
+  adminOperations,
   createInvitationAuthUser,
   requestAdminUserPasswordReset,
   requestAdminUserPasswordResetForLocation,
   resetAdminUserPassword,
+  saveAdminCompanyWorkorderModulePolicy,
 } from "./admin.service.js";
 
 const COMPANY_ID = "8f84d529-a70a-4ea4-9c93-70ff7336a756";
+const MECHANIC_COMPANY_ID = "7aa5c940-e731-45c7-ae85-fd1fd82567d0";
+
+function mixedCompanyContext() {
+  return {
+    actor: { id: "admin-1", role: "admin" },
+    companyIds: new Set([COMPANY_ID, MECHANIC_COMPANY_ID]),
+    companyRoles: new Map([[COMPANY_ID, "admin"], [MECHANIC_COMPANY_ID, "mechanic"]]),
+    locationIds: new Set(["mechanic-location"]),
+    sessionMode: "standard",
+  };
+}
+
+test("admin lists and operations include only companies with an effective Admin membership", async () => {
+  const context = mixedCompanyContext();
+  let listedCompanyIds;
+  await adminLocations(context, {
+    listLocations: async (companyIds) => { listedCompanyIds = companyIds; return []; },
+  });
+  assert.deepEqual(listedCompanyIds, [COMPANY_ID]);
+
+  let operationScope;
+  await adminOperations(context, { page: 1 }, {
+    resolveProductScope: async (received) => {
+      assert.deepEqual([...received.companyIds], [COMPANY_ID]);
+      assert.deepEqual([...received.companyRoles], [[COMPANY_ID, "admin"]]);
+      return { companyIds: [COMPANY_ID], locationIds: [] };
+    },
+    queryWorkorders: async (scope) => { operationScope = scope; return { items: [] }; },
+  });
+  assert.deepEqual(operationScope.companyIds, [COMPANY_ID]);
+  assert.equal(operationScope.visibility, "operations");
+});
+
+test("admin company policy denies a lower-role company before reading policy data", async () => {
+  let queried = false;
+  let saved = false;
+  await assert.rejects(
+    adminCompanyWorkorderModulePolicy(mixedCompanyContext(), MECHANIC_COMPANY_ID, {
+      getPolicy: async () => { queried = true; return null; },
+    }),
+    (error) => error.statusCode === 403,
+  );
+  assert.equal(queried, false);
+  await assert.rejects(
+    saveAdminCompanyWorkorderModulePolicy(
+      mixedCompanyContext(),
+      MECHANIC_COMPANY_ID,
+      { moduleAccess: {}, userModuleAccess: {}, expectedVersion: 0 },
+      "admin-1",
+      { savePolicy: async () => { saved = true; return null; } },
+    ),
+    (error) => error.statusCode === 403,
+  );
+  assert.equal(saved, false);
+  assert.equal(
+    (await adminCompanyWorkorderModulePolicy(mixedCompanyContext(), COMPANY_ID, {
+      getPolicy: async (companyId) => ({ companyId, version: 1 }),
+    })).companyId,
+    COMPANY_ID,
+  );
+});
 
 test("invitation acceptance creates credentials through Better Auth admin API", async () => {
   let payload;

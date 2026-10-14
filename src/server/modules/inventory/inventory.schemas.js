@@ -2,8 +2,19 @@ import { z } from "zod";
 import { DATABASE_UUID_PATTERN } from "../../db/company.js";
 import { uomCodeSchema, validateQuantityUnit } from "../parts/quantity-uom.js";
 import { isSupportedInventoryCurrency } from "./inventory-pricing.js";
+import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
 
-export const inventoryTrackingModeSchema = z.enum(["quantity", "serialized", "measured_bulk"]);
+export const inventoryTrackingModeSchema = z.enum(["quantity", "serialized", "measured_bulk", "no_stock"]);
+
+function validateTrackingUnit(value, context) {
+  if (getUnitDefinition(value.uomCode)?.category === "time" && value.trackingMode !== undefined && value.trackingMode !== "no_stock") {
+    context.addIssue({
+      code: "custom",
+      path: ["trackingMode"],
+      message: "Time-based catalog entries must use No stock tracking.",
+    });
+  }
+}
 
 export const inventoryPartCommercialQuerySchema = z.object({
   locationId: z.string().uuid().optional(),
@@ -203,6 +214,7 @@ export const updateInventoryPartSchema = z.object({
 }).strict().superRefine((value, context) => {
   const normalized = value.referenceNumbers.map((item) => item.toUpperCase().replace(/[^A-Z0-9]/g, ""));
   if (new Set(normalized).size !== normalized.length) context.addIssue({ code: "custom", path: ["referenceNumbers"], message: "Reference numbers must be unique." });
+  validateTrackingUnit(value, context);
 });
 
 export const createInventoryPartSchema = z.object({
@@ -218,6 +230,7 @@ export const createInventoryPartSchema = z.object({
 }).strict().superRefine((value, context) => {
   const identities = [value.partNumber, ...value.referenceNumbers].map((item) => item.toUpperCase().replace(/[^A-Z0-9]/g, ""));
   if (new Set(identities).size !== identities.length) context.addIssue({ code: "custom", path: ["referenceNumbers"], message: "Part and reference numbers must be unique." });
+  validateTrackingUnit(value, context);
 });
 
 export const inventoryLabelItemsQuerySchema = z.object({

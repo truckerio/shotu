@@ -1,9 +1,11 @@
 import { Dropdown } from "../forms/Dropdown.jsx";
-import { useEffect, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { SearchMd } from "@untitledui/icons";
 import { api } from "../../lib/api.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
-import { Pagination } from "../ui/Pagination.jsx";
+import { CheckpointCollection } from "../ui/CheckpointCollection.jsx";
+import { readCheckpointPosition, saveCheckpointPosition } from "./checkpoint-position.js";
+import { useCheckpointPages } from "./useCheckpointPages.js";
 import {
   PART_REQUEST_SORT_OPTIONS,
   PART_REQUEST_STATUS_OPTIONS,
@@ -12,11 +14,10 @@ import {
   formatActivity,
   formatDuration,
 } from "./operations-format.js";
-import { clampPartRequestPage, partRequestRowModel } from "./part-request-queue-model.js";
+import { partRequestRowModel } from "./part-request-queue-model.js";
 import {
   OperationalCollectionCell,
   OperationalCollectionRow,
-  OperationalCollectionTable,
   OperationalCollectionToolbar,
 } from "./OperationalCollectionPage.jsx";
 import "./operations.css";
@@ -30,6 +31,17 @@ const PART_REQUEST_COLUMNS = [
   { id: "status", label: "Status / next action" },
   { id: "activity", label: "Waiting / activity" },
 ];
+
+function partRequestStorageKey(filters, fixedLocationId) {
+  return `part-request-queue:${JSON.stringify([
+    fixedLocationId,
+    filters.locationId,
+    filters.search,
+    filters.status,
+    filters.supply,
+    filters.sort,
+  ])}`;
+}
 
 function PartRequestRow({ request, onOpenWorkorder }) {
   const row = partRequestRowModel(request);
@@ -74,10 +86,6 @@ function PartRequestRow({ request, onOpenWorkorder }) {
   );
 }
 
-function LoadingRows() {
-  return <div className="part-request-queue-loading" role="status" aria-label="Loading part requests">{Array.from({ length: 5 }, (_, index) => <span key={index} />)}</div>;
-}
-
 export function PartRequestQueue({
   filters,
   locations = [],
@@ -86,40 +94,36 @@ export function PartRequestQueue({
   onOpenWorkorder,
   refreshKey = 0,
 }) {
-  const [page, setPage] = useState(1);
-  const [retryKey, setRetryKey] = useState(0);
-  const [result, setResult] = useState({ items: [], total: 0, pageCount: 1, loading: true, error: "" });
-
-  useEffect(() => setPage(1), [filters.locationId, filters.search, filters.status, filters.supply, filters.sort]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setResult((current) => ({ ...current, loading: true, error: "" }));
+  const queryKey = useMemo(() => JSON.stringify([
+    fixedLocationId,
+    filters.locationId,
+    filters.search,
+    filters.status,
+    filters.supply,
+    filters.sort,
+  ]), [filters.locationId, filters.search, filters.sort, filters.status, filters.supply, fixedLocationId]);
+  const storageKey = partRequestStorageKey(filters, fixedLocationId);
+  const initialPage = readCheckpointPosition(storageKey)?.page || 1;
+  const fetchPage = useCallback(async (page, { signal }) => {
     const params = buildPartRequestsQuery(filters, page);
-    api(`/api/office/part-requests/queue?${params}`, { signal: controller.signal })
-      .then((next) => {
-        const resolved = {
-          items: Array.isArray(next.items) ? next.items : [],
-          total: Number(next.total) || 0,
-          pageCount: Math.max(1, Number(next.pageCount) || Math.ceil((Number(next.total) || 0) / (Number(next.pageSize) || 50))),
-          loading: false,
-          error: "",
-        };
-        const validPage = clampPartRequestPage(page, resolved.pageCount);
-        if (validPage !== page) {
-          setPage(validPage);
-          return;
-        }
-        setResult(resolved);
-      })
-      .catch((error) => {
-        if (error.name === "AbortError") return;
-        setResult((current) => ({ ...current, loading: false, error: error.message }));
-      });
-    return () => controller.abort();
-  }, [filters.locationId, filters.search, filters.status, filters.supply, filters.sort, page, refreshKey, retryKey]);
+    const next = await api(`/api/office/part-requests/queue?${params}`, { signal });
+    return {
+      items: Array.isArray(next.items) ? next.items : [],
+      total: Number(next.total) || 0,
+      pageCount: Math.max(1, Number(next.pageCount) || Math.ceil((Number(next.total) || 0) / (Number(next.pageSize) || 50))),
+      page,
+    };
+  }, [filters]);
+  const requestQueue = useCheckpointPages({
+    queryKey,
+    fetchPage,
+    initialPage,
+    refreshKey,
+    getItemKey: (request) => request.id,
+  });
 
   function updateFilter(key, value) {
+    saveCheckpointPosition(partRequestStorageKey({ ...filters, [key]: value }, fixedLocationId), { page: 1 });
     onFiltersChange(key, value);
   }
 
@@ -135,13 +139,19 @@ export function PartRequestQueue({
         <label><span className="operations-field-label">Supply</span><Dropdown value={filters.supply} onChange={(event) => updateFilter("supply", event.target.value)}>{PART_REQUEST_SUPPLY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Dropdown></label>
         <label><span className="operations-field-label">Sort</span><Dropdown value={filters.sort} onChange={(event) => updateFilter("sort", event.target.value)}>{PART_REQUEST_SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Dropdown></label>
       </OperationalCollectionToolbar>
-      <OperationalCollectionTable className="part-request-queue-table" columns={PART_REQUEST_COLUMNS} ariaLabel="Part requests" busy={result.loading}>
-        {result.loading ? <LoadingRows /> : null}
-        {!result.loading && result.error ? <div className="operations-state-message error" role="alert"><strong>Part requests could not be loaded.</strong><span>{result.error}</span><button type="button" onClick={() => setRetryKey((current) => current + 1)}>Try again</button></div> : null}
-        {!result.loading && !result.error && !result.items.length ? <div className="operations-state-message"><strong>No part requests match these filters.</strong></div> : null}
-        {!result.loading && !result.error ? result.items.map((request) => <PartRequestRow key={request.id} request={request} onOpenWorkorder={onOpenWorkorder} />) : null}
-      </OperationalCollectionTable>
-      <Pagination currentPage={page} pageCount={result.pageCount} setPage={setPage} total={result.total} label="part requests" loading={result.loading} />
+      <CheckpointCollection
+        queue={requestQueue}
+        columns={PART_REQUEST_COLUMNS}
+        renderItem={(request) => <PartRequestRow request={request} onOpenWorkorder={onOpenWorkorder} />}
+        className="part-request-queue-table"
+        ariaLabel="Part requests"
+        label="part requests"
+        pageSize={50}
+        storageKey={storageKey}
+        getItemKey={(request) => request.id}
+      >
+        <div className="operations-state-message"><strong>No part requests match these filters.</strong></div>
+      </CheckpointCollection>
     </div>
   );
 }

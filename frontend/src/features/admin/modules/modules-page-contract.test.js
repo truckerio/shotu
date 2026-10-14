@@ -30,7 +30,7 @@ test("Modules page uses the canonical catalog and progressive module management"
 
 test("admin shell exposes Modules as a first-class destination", () => {
   assert.match(shell, /<ModulesPage/);
-  assert.match(shell, /\{ id: "modules", label: "Modules", icon: Shield03 \}/);
+  assert.match(shell, /\{ id: "modules", label: "Modules", icon: LayersThree01 \}/);
   assert.match(shell, /<RoleNavigationRail[\s\S]*groups=\{groups\}/);
   assert.match(workspace, /adminView=modules/);
   assert.match(workspace, /modulePageProps/);
@@ -62,6 +62,13 @@ test("Modules page keeps shared keyboard dropdowns and responsive containment co
   assert.match(styles, /minmax\(0, 1fr\)/);
   assert.match(styles, /min-width: 0/);
   assert.doesNotMatch(styles, /overflow-x:\s*(scroll|auto)/);
+});
+
+test("Modules page places a checkpoint collection around the filtered cards", () => {
+  assert.match(page, /useClientCheckpointPages\(modules, \{ pageSize: 12, resetKey:/);
+  assert.match(page, /<CheckpointCollection[\s\S]*getItemKey=\{\(module\) => module\.key\}[\s\S]*queue=\{moduleQueue\}[\s\S]*className="admin-module-cards"/);
+  assert.match(page, /<article \{\.\.\.rowProps\} className="admin-module-card">/);
+  assert.doesNotMatch(page, /<Pagination/);
 });
 
 test("back navigation styling does not override the primary save action", () => {

@@ -20,27 +20,19 @@ import {
 import { validateCompleteInvoiceAllocationPlan, validateInvoicePostingRoute } from "./inventory-purchase-invoice-allocation.service.js";
 import { physicalInvoiceLineIndexes } from "../../../../shared/invoice-inventory-lines.js";
 import { inventoryCompanyReadScope } from "./inventory-effective-scope.js";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
+import { companyRoleScope } from "../../auth/company-role.js";
 
 function publicError(code, message, statusCode = 422, retryable = false) {
   return new InventoryError(message, { code, statusCode, retryable });
 }
 
 function actorScope(requestContext) {
-  return {
-    companyIds: [...(requestContext.companyIds || [])],
-    locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: requestContext.actor.role === "admin",
-  };
+  return companyRoleScope(requestContext, ["office", "admin"]);
 }
 
 function companyInventoryReadScope(requestContext) {
   return inventoryCompanyReadScope(requestContext);
-}
-
-function assertLocationAccess(locationId, requestContext) {
-  if (requestContext.actor.role !== "admin" && !requestContext.locationIds?.has(locationId)) {
-    throw inventoryNotFound();
-  }
 }
 
 function prepareLocalLines(draft) {
@@ -217,13 +209,13 @@ function requestHash(value) {
 
 export async function confirmReviewedInvoiceFullDelivery(runId, input, requestContext, dependencies = {}) {
   const parsed = confirmLocalReceiptSchema.parse(input);
-  const scope = actorScope(requestContext);
+  const browseScope = actorScope(requestContext);
   const source = await (dependencies.loadInvoice || loadReviewedInvoiceForReceipt)({
     runId,
-    companyIds: scope.companyIds,
+    companyIds: browseScope.companyIds,
   });
   if (!source) throw inventoryNotFound();
-  assertLocationAccess(source.location_id, requestContext);
+  const scope = effectiveInventoryScope(requestContext, { companyId: source.company_id, locationId: source.location_id });
   if (source.status !== "reviewed" || !source.reviewed_draft) {
     throw publicError("INVOICE_REVIEW_REQUIRED", "Review and approve the invoice before adding inventory.", 409);
   }

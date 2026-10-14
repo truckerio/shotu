@@ -61,7 +61,7 @@ test("legacy Mechanic detail does not query or expose summaries when Parts is hi
   await handleMechanicApi(
     { method: "GET" }, {}, new URL("http://example.test/api/mechanic/workorders/workorder-1"), helpers(responses), {
       resolveModules: async () => ({ decisions: { parts: { access: "hidden", source: "user" } } }),
-      loadDetail: async () => ({ workorder: { id: "workorder-1", companyId: "company-1", locationId: "location-1", formData: {} } }),
+      loadDetail: async () => ({ workorder: { id: "workorder-1", companyId: "22222222-2222-4222-8222-222222222222", locationId: "location-1", formData: {} } }),
       listInstalledParts: async () => { queried = true; return []; },
       listAggregateUsages: async () => [],
     },
@@ -69,6 +69,30 @@ test("legacy Mechanic detail does not query or expose summaries when Parts is hi
   assert.equal(queried, false);
   assert.equal("parts" in responses[0].value.modules, false);
   assert.equal("installedSerializedParts" in responses[0].value.workorder, false);
+});
+
+test("Mechanic detail accepts target mechanic membership and refuses office-only company", async () => {
+  const primaryCompany = "44444444-4444-4444-8444-444444444444";
+  const targetCompany = "22222222-2222-4222-8222-222222222222";
+  const mixed = {
+    ...context,
+    actor: { ...context.actor, role: "admin" },
+    companyIds: new Set([primaryCompany, targetCompany]),
+    companyRoles: new Map([[primaryCompany, "admin"], [targetCompany, "mechanic"]]),
+  };
+  const responses = [];
+  const dependencies = {
+    resolveModules: async () => ({ decisions: {} }),
+    loadDetail: async () => ({ workorder: { id: "workorder-1", companyId: targetCompany, formData: {} } }),
+  };
+  await handleMechanicApi({ method: "GET" }, {}, new URL("http://example.test/api/mechanic/workorders/workorder-1"),
+    { ...helpers(responses), requestContext: mixed }, dependencies);
+  assert.equal(responses[0].status, 200);
+  await assert.rejects(() => handleMechanicApi(
+    { method: "GET" }, {}, new URL("http://example.test/api/mechanic/workorders/workorder-1"),
+    { ...helpers([]), requestContext: { ...mixed, companyRoles: new Map([[primaryCompany, "admin"], [targetCompany, "office"]]) } },
+    dependencies,
+  ), { code: "PERMISSION_DENIED" });
 });
 
 test("legacy mechanic part-usage PATCH propagates the read-only lifecycle guard without a success response", async () => {

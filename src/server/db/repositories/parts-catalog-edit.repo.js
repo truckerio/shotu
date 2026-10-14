@@ -72,6 +72,7 @@ export async function createCompanyCatalogPart({ companyId, actorId, description
     } };
   } catch (error) {
     await client.query("rollback").catch(() => {});
+    if (error?.constraint === "parts_catalog_time_requires_no_stock") return { kind: "tracking_uom_conflict" };
     if (error?.code === "23505") return { kind: "identity_conflict" };
     throw error;
   } finally { client.release(); }
@@ -103,12 +104,20 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     if (current.tracking_mode !== nextTrackingMode) {
       const history = await client.query(
         `select
-           exists(select 1 from inventory_stock_movements movement where movement.company_id=$1 and movement.catalog_part_id=$2) as has_activity,
+           (exists(select 1 from inventory_items item where item.company_id=$1 and item.catalog_part_id=$2)
+            or exists(select 1 from local_inventory_receipt_lines line where line.company_id=$1 and line.catalog_part_id=$2)
+            or exists(select 1 from inventory_receipt_lines line where line.company_id=$1 and line.catalog_part_id=$2)
+            or exists(select 1 from inventory_stock_movements movement where movement.company_id=$1 and movement.catalog_part_id=$2)
+            or exists(select 1 from inventory_serialization_batches batch where batch.company_id=$1 and batch.catalog_part_id=$2)
+            or exists(select 1 from inventory_count_import_lines line where line.company_id=$1 and line.catalog_part_id=$2)
+            or exists(select 1 from inventory_position_balances balance where balance.company_id=$1 and balance.catalog_part_id=$2)
+            or exists(select 1 from inventory_position_movements movement where movement.company_id=$1 and movement.catalog_part_id=$2)
+            or exists(select 1 from inventory_stocking_policies policy where policy.company_id=$1 and policy.catalog_part_id=$2)) as has_activity,
            exists(select 1 from inventory_serialized_units unit join inventory_receipt_lines line on line.company_id=unit.company_id and line.id=unit.receipt_line_id where unit.company_id=$1 and line.catalog_part_id=$2) as has_serial_history`,
         [current.company_id, catalogPartId],
       );
-      if (current.tracking_mode && history.rows[0]?.has_activity) { await client.query("rollback"); return { kind: "tracking_locked" }; }
       if (nextTrackingMode !== "serialized" && history.rows[0]?.has_serial_history) { await client.query("rollback"); return { kind: "tracking_history_conflict" }; }
+      if (history.rows[0]?.has_activity) { await client.query("rollback"); return { kind: "tracking_locked" }; }
     }
     const displayOnlyUom = current.uom_locked_at !== null;
     let canonicalUomCode = uomCode;
@@ -185,6 +194,8 @@ export async function updateCompanyCatalogPart({ catalogPartId, companyIds, acto
     return { kind: "updated", part: { catalogPartId: row.id, partNumber: row.part_number, description: row.description, odooName: current.odoo_name || "", manufacturer: row.manufacturer, category: row.category, barcode: row.barcode, uomCode: preferredUom(row), canonicalUomCode: row.uom_code, trackingMode: row.tracking_mode, uomLocked: row.uom_locked_at !== null, version: Number(row.version), providerManaged: current.provider_managed === true, referenceNumbers, editableFields: editableFields(current.provider_managed, row.uom_locked_at !== null) } };
   } catch (error) {
     await client.query("rollback").catch(() => {});
+    if (error?.constraint === "parts_catalog_time_requires_no_stock") return { kind: "tracking_uom_conflict" };
+    if (error?.constraint === "parts_catalog_no_stock_physical_history") return { kind: "tracking_locked" };
     if (error?.constraint === "parts_catalog_uom_locked" || error?.constraint === "catalog_uom_activity_uom_mismatch") return { kind: "uom_locked" };
     if (error?.constraint === "inventory_display_uom_not_equivalent") return { kind: "uom_incompatible" };
     if (error?.code === "23505") return { kind: "identity_conflict" };

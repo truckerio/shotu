@@ -1,9 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { completeInspectionPrintArchive, createInspectionPrintArchive, ensureInspectionPrintArchiveInTransaction } from "./inspection-print-archives.repo.js";
+import { completeInspectionPrintArchive, createInspectionPrintArchive, ensureInspectionPrintArchiveInTransaction, findLatestInspectionPrintArchive } from "./inspection-print-archives.repo.js";
 import { inspectionPrintSnapshotDigest } from "../../modules/inspections/inspection-print-integrity.js";
 
 const pending={id:"archive-1",company_id:"company-1",inspection_id:"inspection-1",location_id:"location-1",inspection_number:"INS-1",artifact_kind:"original",revision_number:1,status:"pending",snapshot:{html:"<html>x</html>"},snapshot_sha256:"a".repeat(64),request_sha256:"b".repeat(64),lease_token:"old-lease",lease_expires_at:"2026-01-01T00:00:00.000Z"};
+
+test("print reads include pending frozen completion evidence without claiming a lease",async()=>{
+  let calls=0;
+  const result=await findLatestInspectionPrintArchive({inspectionId:"inspection-1",companyId:"company-1"},{query:async(sql,values)=>{
+    calls++;assert.match(sql,/status in \('ready','pending'\)/);assert.match(sql,/inspection_id=\$1 and company_id=\$2/);assert.match(sql,/order by revision_number desc,created_at desc/);assert.doesNotMatch(sql,/update |for update/);assert.deepEqual(values,["inspection-1","company-1"]);return {rows:[pending]};
+  }});
+  assert.equal(result.status,"pending");assert.equal(result.id,"archive-1");assert.equal(calls,1);assert.equal("leaseToken" in result,false);
+});
 
 test("completion snapshot inserts a pending archive without pretending HTML is PDF",async()=>{
   const snapshot={html:"<html>x</html>"};const calls=[];

@@ -1,4 +1,5 @@
 import { query } from "../pool.js";
+import { companyRoleScope } from "../../auth/company-role.js";
 
 const CATEGORIES = new Set(["workorders", "inventory", "parts", "inspections"]);
 
@@ -12,10 +13,9 @@ export function normalizeUserActivityQuery(input = {}) {
 export async function listUserActivity(requestContext, input = {}, dependencies = {}) {
   const runQuery = dependencies.query || query;
   const { page, pageSize, category } = normalizeUserActivityQuery(input);
-  const companyIds = [...(requestContext.companyIds || [])];
-  const locationIds = [...(requestContext.locationIds || [])];
+  const { companyIds, locationIds, adminCompanyIds } = companyRoleScope(requestContext);
+  const financialCompanyIds = companyRoleScope(requestContext, ["office", "admin"]).companyIds;
   const actorId = requestContext.actor.id;
-  const allLocations = requestContext.actor.role === "admin";
   const offset = (page - 1) * pageSize;
   const result = await runQuery(
     `with activity as (
@@ -111,12 +111,13 @@ export async function listUserActivity(requestContext, input = {}, dependencies 
       from activity
       left join locations location on location.company_id=activity.company_id and location.id=activity.location_id
       where activity.company_id=any($2::uuid[])
-        and (activity.location_id is null or $4::boolean or activity.location_id=any($3::uuid[]))
-        and ($5::text='' or activity.category=$5)
+        and (activity.location_id is null or activity.company_id=any($4::uuid[]) or activity.location_id=any($3::uuid[]))
+        and (activity.source <> 'workorder_field' or activity.action not like 'pricing.%' or activity.company_id=any($5::uuid[]))
+        and ($6::text='' or activity.category=$6)
     )
     select scoped.*, count(*) over()::integer total_count
-    from scoped order by created_at desc,id desc limit $6 offset $7`,
-    [actorId, companyIds, locationIds, allLocations, category, pageSize, offset],
+    from scoped order by created_at desc,id desc limit $7 offset $8`,
+    [actorId, companyIds, locationIds, adminCompanyIds, financialCompanyIds, category, pageSize, offset],
   );
   const total = Number(result.rows[0]?.total_count || 0);
   return { items: result.rows.map(({ total_count: _total, ...row }) => row), page, pageSize, total, hasMore: offset + result.rows.length < total };

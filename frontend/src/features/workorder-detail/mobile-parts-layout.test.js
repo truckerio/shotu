@@ -98,6 +98,11 @@ test("detail rows reuse the Create Workorder operational table geometry across l
 test("phone parts editor uses the same shared responsive row and action geometry", () => {
   assert.match(quantityCss, /@container \(max-width: 520px\)[\s\S]*?\.operational-part-row\.has-quantity-unit\s*\{[^}]*grid-template-columns:\s*24px minmax\(0, 1fr\) minmax\(120px, 0\.75fr\) 64px;/s);
   assert.match(sharedPartsCss, /@media \(max-width: 700px\)[\s\S]*?\.workorder-parts-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-parts-one-page-table > \.used-part-labor-row\s*\{[^}]*grid-template-columns:\s*24px minmax\(0, 1fr\);[^}]*row-gap:\s*8px;/s);
+  assert.match(css, /\.used-parts-one-page-table > \.used-part-labor-row > \.quantity-unit-input\s*\{[^}]*grid-row:\s*2;/s);
+  assert.match(css, /\.used-parts-one-page-table > \.used-part-labor-row > \.used-part-repair\s*\{[^}]*grid-row:\s*3;/s);
+  assert.match(css, /\.used-parts-one-page-table > \.used-part-labor-row > \.workorder-labor-price\s*\{[^}]*grid-row:\s*4;/s);
+  assert.match(css, /\.used-parts-one-page-table > \.used-part-labor-row :is\([\s\S]*?\.quantity-unit-number input,[\s\S]*?\.used-part-repair \.narrative-field-control,[\s\S]*?\)\s*\{[^}]*min-height:\s*44px;/s);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-part-repair\s*\{[^}]*grid-column:\s*2 \/ -1;/s);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-parts-items-table > \.used-part-recorded-row,[\s\S]*?grid-template-columns:\s*24px minmax\(0, 1fr\) minmax\(76px, auto\);/s);
   assert.match(css, /@container \(max-width: 520px\)[\s\S]*?\.used-parts-editor \.used-part-recorded-value,[\s\S]*?grid-column:\s*3;[^}]*justify-items:\s*end;/s);
@@ -122,7 +127,14 @@ test("used-parts intake and labor stay compact without hiding accessible names",
   assert.match(editor, /const \[intakeOpen, setIntakeOpen\] = useState\(false\)/);
   assert.match(editor, /function focusIntakeRow\(\)\s*\{\s*if \(!intakeOpen\) \{[\s\S]*?setIntakeOpen\(true\)/);
   assert.match(editor, /function closeIntakeRow\(\)[\s\S]*?setIntakeOpen\(false\)[\s\S]*?workorder-add-approved-part/);
-  assert.match(editor, /onClick=\{closeIntakeRow\}>\{t\("parts\.cancel"\)\}/);
+  assert.match(editor, /onClick=\{closeIntakeRow\}[^>]*>\{t\("parts\.cancel"\)\}/);
+  assert.match(editor, /if \(catalogPart\.trackingMode === "no_stock"\) setNoStockDraft\(noStockUsedPartDraft\(catalogPart\)\)/);
+  assert.match(editor, /quantity=\{noStockDraft\?\.qty \|\| ""\}/);
+  assert.match(editor, /currentRepairOrder=\{noStockDraft\.repairOrder\}/);
+  assert.match(editor, /const nextParts = \[\.\.\.recordedManualParts, part\]/);
+  assert.match(editor, /onClick=\{addNoStockPart\}/);
+  assert.match(editor, /function removeNoStockPart\(part\)[\s\S]*recordedManualParts\.filter\(\(candidate\) => candidate\.noStockLineId !== part\.noStockLineId\)/);
+  assert.match(editor, /part\.trackingMode === "no_stock" && part\.noStockLineId[\s\S]*onClick=\{\(\) => removeNoStockPart\(part\)\}/);
   assert.match(editor, /aria-expanded=\{intakeOpen\}/);
   assert.match(editor, /aria-controls="workorder-part-intake-row"/);
 });

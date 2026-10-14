@@ -4,6 +4,7 @@ import test from "node:test";
 
 const component = readFileSync(new URL("./WorkorderPhotosModule.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./workorder-photos.css", import.meta.url), "utf8");
+const english = readFileSync(new URL("../../../i18n/locales/en.js", import.meta.url), "utf8");
 
 test("photos use a bounded gallery instead of chat bubble attachment layout", () => {
   assert.match(component, /className="workorder-photo-grid"/);
@@ -15,8 +16,10 @@ test("photos use a bounded gallery instead of chat bubble attachment layout", ()
 
 test("photos replace a failed legacy image with an explicit unavailable state", () => {
   assert.match(component, /onError=\{\(\) => setUnavailable\(true\)\}/);
-  assert.match(component, /Image unavailable/);
-  assert.match(component, /Upload this photo again to restore it\./);
+  assert.match(component, /t\("photos\.unavailable"\)/);
+  assert.match(component, /t\("photos\.uploadAgain"\)/);
+  assert.match(english, /"photos\.unavailable": "Image unavailable"/);
+  assert.match(english, /"photos\.uploadAgain": "Upload this photo again to restore it\."/);
   assert.match(component, /role="img"/);
 });
 

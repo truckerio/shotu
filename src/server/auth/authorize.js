@@ -1,4 +1,5 @@
 import { authenticationRequired, permissionDenied } from "./errors.js";
+import { effectiveCompanyRole } from "./company-role.js";
 
 export function requireActor(context) {
   if (!context?.actor) throw authenticationRequired();
@@ -11,9 +12,10 @@ export function requirePermission(context, permission) {
   return actor;
 }
 
-export function requireLocationAccess(context, locationId) {
+export function requireLocationAccess(context, locationId, companyId = null) {
   const actor = requireActor(context);
-  if (!locationId || actor.role === "admin") return actor;
+  const targetCompanyId = companyId || (context.companyIds?.size === 1 ? [...context.companyIds][0] : null);
+  if (!locationId || effectiveCompanyRole(context, targetCompanyId) === "admin") return actor;
   if (!context.locationIds?.has(locationId)) throw permissionDenied();
   return actor;
 }

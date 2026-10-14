@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { defaultLocation } from "../../db/repositories/locations.repo.js";
+import { listProductAccessLocations } from "../../db/repositories/product-module-access.repo.js";
 import { addChatMessage, chatMessageDedupeKey } from "../../db/repositories/chat.repo.js";
 import { persistChatImageAttachment, removeStoredChatImage } from "../chat/chat-media.service.js";
 import { createApprovedOfficePart, createPlannedOfficePart, decidePartRequest, updatePartAllocation } from "../../db/repositories/part-requests.repo.js";
@@ -26,13 +27,16 @@ import { loadWorkorderDetail } from "../workorders/workorder-detail.service.js";
 import { queryAuthorizedWorkorders } from "../workorders/workorder-operations.service.js";
 import { listActiveWorkorderAttention, markWorkorderRead } from "../../db/repositories/workorder-attention.repo.js";
 import { DEFAULT_COMPANY_ID } from "../../db/company.js";
-import { AuthError } from "../../auth/errors.js";
+import { AuthError, permissionDenied } from "../../auth/errors.js";
 import { getLocationWorkorderPolicy } from "../../db/repositories/workorder-policies.repo.js";
 import { amendWorkorderManualPartEvidence } from "../../db/repositories/workorder-manual-part-evidence.repo.js";
+import { companyRoleScope, effectiveCompanyRole, requireCompanyRole } from "../../auth/company-role.js";
 
-async function requireOffice(userId) {
+async function requireOffice(userId, context = null) {
   const user = await getUserById(userId);
-  if (!user || !user.active || !["office", "admin"].includes(user.role)) {
+  if (!user || !user.active || (context
+    ? context.actor?.id !== userId || !companyRoleScope(context, ["office", "admin"]).companyIds.length
+    : !["office", "admin"].includes(user.role))) {
     throw new Error("Active Office workorder user not found.");
   }
   return user;
@@ -93,15 +97,28 @@ function dashboardOperation(item, compatibilityStatus = item.lifecycle) {
 }
 
 export async function officeDashboard(context, dependencies = {}) {
+  const officeCompanyIds = companyRoleScope(context, ["office", "admin"]).companyIds;
+  if (!officeCompanyIds.length) throw permissionDenied();
+  const officeContext = {
+    ...context,
+    companyIds: new Set(officeCompanyIds),
+    companyRoles: new Map(officeCompanyIds.map((id) => [id, effectiveCompanyRole(context, id)])),
+  };
   const queryWorkorders = dependencies.queryWorkorders || queryAuthorizedWorkorders;
   const listMechanics = dependencies.listMechanics || listMechanicsByLocations;
+  const locationIds = [...(context.locationIds || [])];
+  const officeLocationIds = locationIds.length
+    ? (await (dependencies.listLocations || listProductAccessLocations)({
+      companyIds: officeCompanyIds, locationIds,
+    })).map((location) => location.locationId)
+    : [];
   const [open, active, parts, done, closed, mechanics] = await Promise.all([
-    queryWorkorders(context, { category: "unassigned", pageSize: 100 }),
-    queryWorkorders(context, { category: "all", lifecycle: ["accepted", "in_progress"], pageSize: 100 }),
-    queryWorkorders(context, { category: "parts", pageSize: 100 }),
-    queryWorkorders(context, { category: "ready_review", pageSize: 100 }),
-    queryWorkorders(context, { category: "all", lifecycle: ["closed", "odoo_entered"], pageSize: 100 }),
-    listMechanics([...(context.locationIds || [])]),
+    queryWorkorders(officeContext, { category: "unassigned", pageSize: 100 }),
+    queryWorkorders(officeContext, { category: "all", lifecycle: ["accepted", "in_progress"], pageSize: 100 }),
+    queryWorkorders(officeContext, { category: "parts", pageSize: 100 }),
+    queryWorkorders(officeContext, { category: "ready_review", pageSize: 100 }),
+    queryWorkorders(officeContext, { category: "all", lifecycle: ["closed", "odoo_entered"], pageSize: 100 }),
+    listMechanics(officeLocationIds),
   ]);
   return {
     counts: {
@@ -121,7 +138,7 @@ export async function officeDashboard(context, dependencies = {}) {
 }
 
 export async function createOfficeWorkorder(input) {
-  const office = input.createdByUserId ? await requireOffice(input.createdByUserId) : await defaultOfficeUser();
+  const office = input.createdByUserId ? await requireOffice(input.createdByUserId, input.authContext) : await defaultOfficeUser();
   const location = input.locationId ? null : await defaultLocation(input.companyId || DEFAULT_COMPANY_ID);
   return createOperationalWorkorder({
     ...input,
@@ -131,7 +148,7 @@ export async function createOfficeWorkorder(input) {
 }
 
 export async function markOfficeWorkorderDone(workorderId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   try {
     return await markOperationalWorkorderDone(workorderId, office.id, input, {
@@ -147,9 +164,10 @@ export async function markOfficeWorkorderDone(workorderId, input) {
   }
 }
 
-export async function officeWorkorderDetail(workorderId, officeUserId) {
-  const user = await requireOffice(officeUserId);
+export async function officeWorkorderDetail(workorderId, officeUserId, context = null) {
+  const user = await requireOffice(officeUserId, context);
   const detail = await loadWorkorderDetail(workorderId, { viewerUserId: user.id });
+  if (context) requireCompanyRole(context, detail.workorder.companyId, ["office", "admin"]);
   const assignableMechanics = detail.workorder.location?.id
     ? (await listUsersByLocation(detail.workorder.location.id))
       .filter((candidate) => candidate.role === "mechanic" && candidate.active && candidate.membership_active)
@@ -181,8 +199,8 @@ function mapLifecycleConflict(error) {
   throw error;
 }
 
-export async function officeLocationMechanics(locationId, officeUserId) {
-  await requireOffice(officeUserId);
+export async function officeLocationMechanics(locationId, officeUserId, context = null) {
+  await requireOffice(officeUserId, context);
   const mechanics = await listUsersByLocation(locationId);
   return mechanics
     .filter((candidate) => candidate.role === "mechanic" && candidate.active && candidate.membership_active)
@@ -190,35 +208,37 @@ export async function officeLocationMechanics(locationId, officeUserId) {
 }
 
 export async function reviewOfficePartRequest(workorderId, requestId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   return decidePartRequest(workorderId, requestId, input, office.id);
 }
 
 export async function addOfficePart(workorderId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   return createApprovedOfficePart(workorderId, input, office.id);
 }
 
 export async function planOfficePart(workorderId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   return createPlannedOfficePart(workorderId, input, office.id);
 }
 
 export async function changeOfficePartAllocation(workorderId, requestId, allocationId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   return updatePartAllocation(workorderId, requestId, allocationId, input, office.id);
 }
 
 export async function updateOfficeWorkorder(workorderId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office && input.officeUserId) throw new Error("Office user not found.");
+  const changes = { ...input };
+  delete changes.authContext;
   try {
     return await updateOperationalWorkorder(workorderId, {
-      ...input,
+      ...changes,
       changedByUserId: office?.id || input.officeUserId || null,
     });
   } catch (error) {
@@ -227,7 +247,7 @@ export async function updateOfficeWorkorder(workorderId, input) {
 }
 
 export async function saveOfficeUsedParts(workorderId, input) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   try {
     return await updateOfficeUsedParts(workorderId, office.id, input.parts, input.laborHours);
@@ -237,7 +257,7 @@ export async function saveOfficeUsedParts(workorderId, input) {
 }
 
 export async function amendOfficeManualPartEvidence(workorderId, input, dependencies = {}) {
-  const office = input.officeUserId ? await requireOffice(input.officeUserId) : await defaultOfficeUser();
+  const office = input.officeUserId ? await requireOffice(input.officeUserId, input.authContext) : await defaultOfficeUser();
   if (!office) throw new Error("Office user not found.");
   const command = {
     workorderId,
@@ -249,7 +269,7 @@ export async function amendOfficeManualPartEvidence(workorderId, input, dependen
     actorId: office.id,
     companyIds: [input.companyId],
     locationIds: input.locationId ? [input.locationId] : [],
-    isAdmin: office.role === "admin",
+    isAdmin: input.authContext ? effectiveCompanyRole(input.authContext, input.companyId) === "admin" : office.role === "admin",
   };
   const result = await (dependencies.amendManualPartEvidence || amendWorkorderManualPartEvidence)({
     ...command,
@@ -273,7 +293,7 @@ export async function amendOfficeManualPartEvidence(workorderId, input, dependen
 }
 
 export async function sendOfficeMessage(workorderId, input) {
-  await requireOffice(input.senderUserId);
+  await requireOffice(input.senderUserId, input.authContext);
   const attachment = input.attachment ? await persistChatImageAttachment(input.attachment) : null;
   try {
     const message = await addChatMessage({
@@ -296,7 +316,7 @@ export async function sendOfficeMessage(workorderId, input) {
 }
 
 export async function closeOfficeWorkorder(workorderId, input) {
-  await requireOffice(input.officeUserId);
+  await requireOffice(input.officeUserId, input.authContext);
   try {
     return await closeOperationalWorkorder(workorderId, input.officeUserId, input.note);
   } catch (error) {
@@ -305,7 +325,7 @@ export async function closeOfficeWorkorder(workorderId, input) {
 }
 
 export async function returnOfficeWorkorder(workorderId, input) {
-  await requireOffice(input.officeUserId);
+  await requireOffice(input.officeUserId, input.authContext);
   try {
     return await returnOperationalWorkorder(workorderId, input.officeUserId, input);
   } catch (error) {
@@ -314,7 +334,7 @@ export async function returnOfficeWorkorder(workorderId, input) {
 }
 
 export async function cancelOfficeWorkorder(workorderId, input) {
-  await requireOffice(input.officeUserId);
+  await requireOffice(input.officeUserId, input.authContext);
   try {
     return await cancelOperationalWorkorder(workorderId, input.officeUserId, input.reason);
   } catch (error) {
@@ -323,7 +343,7 @@ export async function cancelOfficeWorkorder(workorderId, input) {
 }
 
 export async function reassignOfficeWorkorder(workorderId, input) {
-  await requireOffice(input.officeUserId);
+  await requireOffice(input.officeUserId, input.authContext);
   const detail = await loadWorkorderDetail(workorderId);
   if (!["open", "accepted", "in_progress"].includes(detail.workorder.status)) {
     throw new AuthError(409, "WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Only active workorders can be reassigned.");
@@ -350,7 +370,7 @@ export async function reassignOfficeWorkorder(workorderId, input) {
 }
 
 export async function assignOfficeWorkorderMechanics(workorderId, input) {
-  await requireOffice(input.officeUserId);
+  await requireOffice(input.officeUserId, input.authContext);
   const detail = await loadWorkorderDetail(workorderId);
   if (!["open", "accepted", "in_progress"].includes(detail.workorder.status)) {
     throw new AuthError(409, "WORKORDER_ASSIGNMENT_NOT_ALLOWED", "Only active workorders can have their mechanic team changed.");

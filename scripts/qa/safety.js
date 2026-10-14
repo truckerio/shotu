@@ -64,6 +64,13 @@ export function redactQaError(error, secrets = []) {
   for (const secret of secrets) {
     if (secret) message = message.replaceAll(String(secret), "[REDACTED]");
   }
+  // HTTP clients include request headers in timeout diagnostics. Session cookies
+  // and bearer/API credentials must not enter QA logs, even when not supplied in
+  // the caller's explicit secret list.
+  message = message.replace(/(["'])(cookie|set-cookie|authorization|proxy-authorization|x-api-key)\1\s*:\s*(["'])(?:\\.|(?!\3)[^\\])*\3/gi, '$1$2$1: "[REDACTED]"');
+  message = message.replace(/(^|\n)([^\n]*?\b(?:cookie|set-cookie|authorization|proxy-authorization|x-api-key)\s*:\s*)[^\r\n]*/gi, "$1$2[REDACTED]");
+  message = message.replace(/\bBearer\s+[^\s"']+/gi, "Bearer [REDACTED]");
+  message = message.replace(/\b((?:postgres(?:ql)?|https?):\/\/[^\s/@:]+):[^\s@]+@/gi, "$1:[REDACTED]@");
   return message;
 }
 export const QA_PRODUCTION_CONFIRMATION = Object.freeze({

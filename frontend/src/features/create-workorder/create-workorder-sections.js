@@ -22,7 +22,6 @@ const DEFAULT_CREATE_SECTION_SEQUENCE = Object.freeze([
   WORKORDER_MODULE_IDS.PARTS,
   WORKORDER_MODULE_IDS.LOCATION,
   WORKORDER_MODULE_IDS.ASSIGNMENT,
-  WORKORDER_MODULE_IDS.PREVIEW,
 ]);
 
 function orderBySequence(sections, sequence) {
@@ -43,7 +42,6 @@ export function defaultCreateWorkorderSection() {
 
 export function buildCreateWorkorderSections({
   canAssign = true,
-  includePreview = true,
   policyOverrides = [],
   role = canAssign ? "office" : "mechanic",
   userId = "",
@@ -52,7 +50,7 @@ export function buildCreateWorkorderSections({
   const priorityById = new Map(sequence.map((id, index) => [id, sequence.length - index]));
   const coreSections = new Set(DEFAULT_CREATE_SECTION_SEQUENCE.slice(0, 4));
   const modules = workorderModuleDescriptors(WORKORDER_SURFACES.CREATE)
-    .filter(({ id }) => includePreview || id !== WORKORDER_MODULE_IDS.PREVIEW)
+    .filter(({ id }) => id !== WORKORDER_MODULE_IDS.PREVIEW)
     .filter(({ id }) => canAssign || id !== WORKORDER_MODULE_IDS.ASSIGNMENT)
     .map((descriptor) => {
       const id = descriptor.routeBySurface.create;
@@ -70,7 +68,7 @@ export function buildCreateWorkorderSections({
     role,
     surface: WORKORDER_SURFACES.CREATE,
     userId,
-  }).filter((module) => module.id === WORKORDER_MODULE_IDS.PREVIEW || module.modulePolicy.canWrite);
+  }).filter((module) => module.modulePolicy.canWrite);
 
   return orderBySequence(visibleModules, DEFAULT_CREATE_SECTION_SEQUENCE);
 }

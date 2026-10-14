@@ -8,7 +8,8 @@ import { requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
 import { getUnitDefinition } from "../../../../shared/units-of-measure.js";
 import { calculateInventoryPricingPreview, isSupportedInventoryCurrency } from "./inventory-pricing.js";
-import { canManageInventoryCompanyScope, inventoryCompanyManageScope, inventoryCompanyReadScope, resolveInventoryLocationScope, resolveInventoryReadLocationScope } from "./inventory-effective-scope.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
+import { inventoryCompanyManageScope, inventoryCompanyReadScope, resolveInventoryLocationScope, resolveInventoryReadLocationScope } from "./inventory-effective-scope.js";
 
 const idSchema = z.string().uuid();
 const priceKindSchema = z.enum(["internal", "selling"]);
@@ -32,7 +33,7 @@ export async function readInventoryPartCommercial(catalogPartId, searchParams, c
   });
   if (!result) throw inventoryNotFound();
   const canWritePrices = context.permissions?.has(PERMISSION.INVENTORY_PRICE_WRITE) === true
-    && (query.locationId ? resolvedScope.canManageLocation !== false : canManageInventoryCompanyScope(context, resolvedScope.companyIds));
+    && (query.locationId ? resolvedScope.canManageLocation !== false : effectiveCompanyRole(context, result.part.companyId) === "admin");
   return { ...result, capabilities: { canReadCost: true, canEditPrices: canWritePrices, canManageTaxProfiles: canWritePrices } };
 }
 
@@ -104,12 +105,8 @@ export async function previewInventoryPartPrice(catalogPartId, rawInput, context
   locationId = locationId ? idSchema.parse(locationId) : null;
   const input = inventoryPricingPreviewSchema.parse(rawInput);
   const resolvedScope = locationId
-    ? await (dependencies.resolveLocationScope || resolveInventoryLocationScope)(context, locationId)
-    : {
-      companyIds: [...(context.companyIds || [])],
-      locationIds: [...(context.locationIds || [])],
-      isAdmin: context.actor.role === "admin",
-    };
+    ? await (dependencies.resolveReadLocationScope || resolveInventoryReadLocationScope)(context, locationId)
+    : inventoryCompanyReadScope(context);
   const sourceResult = await (dependencies.readPricingSource || getInventoryPartPricingSource)({
     catalogPartId,
     companyIds: resolvedScope.companyIds,

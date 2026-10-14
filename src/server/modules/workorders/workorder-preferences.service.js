@@ -1,4 +1,5 @@
 import { requireActor, requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
 import { resourceNotFound } from "../../auth/errors.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import {
@@ -27,9 +28,9 @@ export async function updateWorkorderPreferences(context, input) {
   if (input.defaultLocationId) {
     const location = await getLocationById(input.defaultLocationId);
     if (!location) throw resourceNotFound("Location");
-    if (actor.role === "admin" && !context.companyIds?.has(location.company_id)) throw resourceNotFound("Location");
+    if (!effectiveCompanyRole(context, location.company_id)) throw resourceNotFound("Location");
     requireCompanyAccess(context, location.company_id);
-    requireLocationAccess(context, location.id);
+    requireLocationAccess(context, location.id, location.company_id);
   }
   return presentWorkorderPreferences(await saveWorkorderPreferences(actor.id, input));
 }

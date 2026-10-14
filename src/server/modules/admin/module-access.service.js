@@ -1,10 +1,12 @@
-import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
+import { requireLocationAccess } from "../../auth/authorize.js";
+import { requireCompanyRole } from "../../auth/company-role.js";
 import {
   getNormalizedModulePolicy,
   saveNormalizedModulePolicy,
 } from "../../db/repositories/module-access-rules.repo.js";
+import { getLocationById } from "../../db/repositories/locations.repo.js";
 import { getWorkorderModule } from "../../../../shared/workorder-modules.js";
-import { invalidRequest } from "../../auth/errors.js";
+import { invalidRequest, resourceNotFound } from "../../auth/errors.js";
 import { emitModulePolicyAudit } from "./module-policy-audit.js";
 
 function setRule(policy, subjectType, subjectId, input) {
@@ -27,8 +29,15 @@ function validateRule(subjectType, subjectId, input) {
 }
 
 export async function readCanonicalModuleAccess(context, scope, dependencies = {}) {
-  requireCompanyAccess(context, scope.companyId);
-  if (scope.locationId) requireLocationAccess(context, scope.locationId);
+  requireCompanyRole(context, scope.companyId, ["admin"]);
+  if (scope.locationId) {
+    const getLocation = dependencies.getLocation || getLocationById;
+    const location = await getLocation(scope.locationId, [scope.companyId]);
+    if (!location || (location.company_id || location.companyId) !== scope.companyId) {
+      throw resourceNotFound("Location");
+    }
+    requireLocationAccess(context, scope.locationId, scope.companyId);
+  }
   const getPolicy = dependencies.getPolicy || getNormalizedModulePolicy;
   return (await getPolicy(scope)) || {
     scopeType: scope.locationId ? "location" : "company",
@@ -46,6 +55,7 @@ export async function patchCanonicalModuleAccess(
   input,
   dependencies = {},
 ) {
+  requireCompanyRole(context, input.companyId, ["admin"]);
   validateRule(subjectType, subjectId, input);
   const current = await readCanonicalModuleAccess(context, input, dependencies);
   const savePolicy = dependencies.savePolicy || saveNormalizedModulePolicy;

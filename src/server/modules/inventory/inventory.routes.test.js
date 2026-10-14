@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { handleInventoryApi, inventoryRouteInternals } from "./inventory.routes.js";
+import { handleInventoryApi as handleInventoryRoute, inventoryRouteInternals } from "./inventory.routes.js";
+import { resolveInventoryLocationScope, resolveInventoryReadLocationScope, resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
 const COMPANY_ID = "00000000-0000-4000-8000-000000000001";
 const LOCATION_ID = "00000000-0000-4000-8000-000000000002";
@@ -17,12 +18,41 @@ function context() {
   return {
     actor: { id: ACTOR_ID, role: "office" },
     companyIds: new Set([COMPANY_ID]),
+    companyRoles: new Map([[COMPANY_ID, "office"]]),
     locationIds: new Set([LOCATION_ID]),
   };
 }
 function adminContext() {
-  return { ...context(), actor: { id: ACTOR_ID, role: "admin" } };
+  return { ...context(), actor: { id: ACTOR_ID, role: "admin" }, companyRoles: new Map([[COMPANY_ID, "admin"]]) };
 }
+
+const trustedResources = new Map([
+  ["labelBatch", BATCH_ID],
+  ["serializedUnit", RUN_ID],
+  ["countImport", COUNT_ID],
+]);
+const trustedLocation = async (id, companyIds) =>
+  id === LOCATION_ID && companyIds.includes(COMPANY_ID)
+    ? { id: LOCATION_ID, company_id: COMPANY_ID }
+    : null;
+const trustedResourceScope = (requestContext, type, id, options) => resolveInventoryResourceScope(requestContext, type, id, {
+  ...options,
+  query: async (sql, [resourceId, companyIds]) => {
+    assert.match(sql, /company_id=any\(\$2::uuid\[\]\)/);
+    return { rows: trustedResources.get(type) === resourceId && companyIds.includes(COMPANY_ID)
+      ? [{ company_id: COMPANY_ID, location_id: LOCATION_ID }]
+      : [] };
+  },
+});
+const trustedLocationScope = (requestContext, id, options) => resolveInventoryLocationScope(requestContext, id, { ...options, loadLocation: trustedLocation });
+const trustedReadLocationScope = (requestContext, id, options) => resolveInventoryReadLocationScope(requestContext, id, { ...options, loadLocation: trustedLocation });
+const handleInventoryApi = (req, res, url, routeHelpers, dependencies = {}) => handleInventoryRoute(req, res, url, routeHelpers, {
+  resolveResourceScope: trustedResourceScope,
+  resolveLocationScope: trustedLocationScope,
+  resolveReadLocationScope: trustedReadLocationScope,
+  loadLocation: trustedLocation,
+  ...dependencies,
+});
 
 function helpers(body, requestContext = context()) {
   return {
@@ -277,7 +307,7 @@ test("Admin authority queue routes bounded reads and no-stock-change acknowledge
   assert.equal(denied.status, 403);
   assert.equal(denied.payload.code, "INVENTORY_AUTHORITY_ADMIN_REQUIRED");
 
-  const admin = { ...context(), actor: { id: ACTOR_ID, role: "admin" } };
+  const admin = adminContext();
   const listed = {};
   await handleInventoryApi(
     { method: "GET" }, listed,
@@ -633,10 +663,7 @@ test("opening-count apply route requires physical attestation and calls the scop
     response,
     new URL(`http://localhost/api/office/inventory/count-imports/${COUNT_ID}/apply`),
     {
-      ...helpers({ expectedVersion: 2, confirmation: "physically_counted" }, {
-        ...context(),
-        actor: { id: ACTOR_ID, role: "admin" },
-      }),
+      ...helpers({ expectedVersion: 2, confirmation: "physically_counted" }, adminContext()),
       emitAdministrativeAuditEvent: async (event) => { events.push(event); },
     },
     {
@@ -881,5 +908,22 @@ test("catalog UOM trigger conflicts return an actionable retryable response", as
     error: "The inventory unit changed. Refresh the part and try again.",
     code: "CATALOG_UOM_CHANGED",
     retryable: true,
+  });
+});
+
+test("database no-stock guards return a stable physical-mutation conflict", async () => {
+  const response = {};
+  const body = { locationId: LOCATION_ID, minimumAvailable: 1, targetQuantity: 2, alertEnabled: true };
+  const handled = await handleInventoryApi(
+    { method: "PATCH" }, response,
+    new URL(`http://localhost/api/office/inventory/parts/${CATALOG_PART_ID}/stock-rule`), helpers(body),
+    { save: async () => { throw Object.assign(new Error("database detail"), { constraint: "inventory_no_stock_physical_mutation" }); } },
+  );
+  assert.equal(handled, true);
+  assert.equal(response.status, 409);
+  assert.deepEqual(response.payload, {
+    error: "This catalog entry does not represent physical inventory.",
+    code: "INVENTORY_NO_STOCK_MUTATION",
+    retryable: false,
   });
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 import {
   confirmInventoryCount,
   readInventoryCounts,
@@ -21,6 +22,7 @@ function context(overrides = {}) {
     locationIds: new Set(overrides.locationIds || [LOCATION_ID]),
   };
 }
+const resolveResourceScope = (requestContext, _type, _id, options) => effectiveInventoryScope(requestContext, { companyId: COMPANY_ID, locationId: LOCATION_ID, ...options });
 
 test("inventory count parsing keeps nonnumeric package text as a visible exception", () => {
   const [row] = inventoryCountInternals.prepareRows([{
@@ -144,6 +146,7 @@ test("apply requires explicit physical count and reports existing-stock conflict
   );
   await assert.rejects(
     confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, context({ actor: { role: "admin" } }), {
+      resolveResourceScope,
       qrOptions: { secret: "test-secret-test-secret-test-secret", origin: "http://localhost:4173" },
       applyImport: async () => ({ kind: "stock_conflict", sourceRow: 37 }),
     }),
@@ -155,6 +158,7 @@ test("opening-count apply rejects office role before any repository write", asyn
   let wrote = false;
   await assert.rejects(
     confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, context(), {
+      resolveResourceScope,
       qrOptions: { signingKey: Buffer.alloc(32, 4).toString("base64") },
       applyImport: async () => { wrote = true; return { kind: "applied" }; },
     }),
@@ -168,6 +172,7 @@ test("opening-count apply exposes legacy reservation and identity reconciliation
   const qrOptions = { signingKey: Buffer.alloc(32, 4).toString("base64") };
   await assert.rejects(
     confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, admin, {
+      resolveResourceScope,
       qrOptions,
       applyImport: async () => ({ kind: "authority_conflict", sourceRow: 8 }),
     }),
@@ -175,6 +180,7 @@ test("opening-count apply exposes legacy reservation and identity reconciliation
   );
   await assert.rejects(
     confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, admin, {
+      resolveResourceScope,
       qrOptions,
       applyImport: async () => ({ kind: "authority_unmatched", sourceRow: 9 }),
     }),
@@ -191,12 +197,13 @@ test("count review and apply expose an explicit unreviewed-tracking error", asyn
       quantity: 3,
       binLocation: "A1",
       targetPositionId: "60000000-0000-4000-8000-000000000006",
-    }, context(), { resolveLine: async () => ({ kind: "tracking_required" }) }),
+    }, context(), { resolveResourceScope, resolveLine: async () => ({ kind: "tracking_required" }) }),
     (error) => error.code === "INVENTORY_COUNT_TRACKING_REQUIRED" && error.statusCode === 409,
   );
 
   await assert.rejects(
     confirmInventoryCount("draft-1", { expectedVersion: 1, confirmation: "physically_counted" }, context({ actor: { role: "admin" } }), {
+      resolveResourceScope,
       qrOptions: { signingKey: Buffer.alloc(32, 4).toString("base64") },
       applyImport: async () => ({ kind: "tracking_required", sourceRow: 12 }),
     }),

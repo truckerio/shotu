@@ -1130,9 +1130,9 @@ export async function getStaffCustomerDocumentRevision(input, dependencies = {})
           order by event.created_at desc,event.id desc limit 1
        ) response on true
       where revision.id=$1 and revision.company_id=any($2::uuid[])
-        and ($3::boolean or revision.location_id=any($4::uuid[]))
+        and (revision.company_id=any($3::uuid[]) or revision.location_id=any($4::uuid[]))
       limit 1`,
-    [input.revisionId, input.companyIds, input.isAdmin, input.locationIds],
+    [input.revisionId, input.companyIds, input.adminCompanyIds ?? (input.isAdmin ? input.companyIds : []), input.locationIds],
   );
   return revisionRow(result.rows[0]);
 }
@@ -1262,9 +1262,9 @@ export async function getStaffCustomerDocument(input, dependencies = {}) {
          order by candidate.revision_number desc limit 1
        ) revision on true
       where document.id=$1 and document.company_id=any($2::uuid[])
-        and ($3::boolean or document.location_id=any($4::uuid[]))
+        and (document.company_id=any($3::uuid[]) or document.location_id=any($4::uuid[]))
       limit 1`,
-    [input.documentId, input.companyIds, input.isAdmin, input.locationIds],
+    [input.documentId, input.companyIds, input.adminCompanyIds ?? (input.isAdmin ? input.companyIds : []), input.locationIds],
   );
   const row = result.rows[0];
   if (!row) return null;
@@ -1299,11 +1299,11 @@ export async function listStaffCustomerDocuments(input, dependencies = {}) {
          order by candidate.revision_number desc limit 1
        ) revision on true
       where document.company_id=any($1::uuid[])
-        and ($2::boolean or document.location_id=any($3::uuid[]))
+        and (document.company_id=any($2::uuid[]) or document.location_id=any($3::uuid[]))
         and ($4::uuid is null or document.workorder_id=$4)
         and ($5::uuid is null or document.draft_id=$5)
       order by document.created_at desc,document.id desc limit $6`,
-    [input.companyIds, input.isAdmin, input.locationIds, input.workorderId || null,
+    [input.companyIds, input.adminCompanyIds ?? (input.isAdmin ? input.companyIds : []), input.locationIds, input.workorderId || null,
       input.draftId || null, Math.min(Math.max(Number(input.limit) || 50, 1), 100)],
   );
   return result.rows.map((row) => ({

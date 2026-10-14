@@ -1,6 +1,7 @@
 import { listUserActivity } from "../../db/repositories/user-activity.repo.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
 
-function activityItem(row, actor) {
+function activityItem(row, actor, actorRole = actor.role) {
   return {
     id: row.id,
     source: row.source,
@@ -8,7 +9,7 @@ function activityItem(row, actor) {
     action: row.action,
     createdAt: row.created_at,
     actorName: actor.name,
-    actorRole: actor.role,
+    actorRole,
     recordId: row.record_id,
     recordLabel: row.record_label,
     partNumber: row.part_number,
@@ -25,5 +26,15 @@ function activityItem(row, actor) {
 export async function getUserActivity(requestContext, input, dependencies = {}) {
   const listActivity = dependencies.listActivity || listUserActivity;
   const result = await listActivity(requestContext, input);
-  return { ...result, items: result.items.map((row) => activityItem(row, requestContext.actor)) };
+  return {
+    ...result,
+    items: result.items.flatMap((row) => {
+      const role = row.company_id
+        ? effectiveCompanyRole(requestContext, row.company_id)
+        : requestContext.actor.role;
+      if (row.source === "workorder_field" && String(row.action || "").startsWith("pricing.")
+        && !["office", "admin"].includes(role)) return [];
+      return [activityItem(row, requestContext.actor, role)];
+    }),
+  };
 }

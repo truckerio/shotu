@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { updateInventoryStockRule } from "./inventory-stocking-policy.service.js";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 
 const PART = "00000000-0000-4000-8000-000000000701";
 const LOCATION = "00000000-0000-4000-8000-000000000702";
 const COMPANY = "00000000-0000-4000-8000-000000000703";
 const ACTOR = "00000000-0000-4000-8000-000000000704";
 const context = (role = "office") => ({ actor: { id: ACTOR, role }, companyIds: new Set([COMPANY]), locationIds: new Set([LOCATION]) });
+const resolveLocationScope = (requestContext, locationId) => effectiveInventoryScope(requestContext, { companyId: COMPANY, locationId });
 
 test("Office saves a scoped minimum and optional target without ordering inventory", async () => {
   let saved;
   const result = await updateInventoryStockRule(PART, { locationId: LOCATION, minimumAvailable: 5, targetQuantity: 12, alertEnabled: true }, context(), {
+    resolveLocationScope,
     save: async (input) => { saved = input; return { kind: "saved" }; },
   });
   assert.equal(result.kind, "saved");
@@ -23,8 +26,8 @@ test("Office saves a scoped minimum and optional target without ordering invento
 
 test("stock rules reject bad targets, stale versions, and mechanic access", async () => {
   await assert.rejects(updateInventoryStockRule(PART, { locationId: LOCATION, minimumAvailable: 5, targetQuantity: 4 }, context(), { save: async () => assert.fail() }));
-  await assert.rejects(updateInventoryStockRule(PART, { locationId: LOCATION, minimumAvailable: 5 }, context("mechanic"), { save: async () => assert.fail() }), (error) => error.statusCode === 403);
-  await assert.rejects(updateInventoryStockRule(PART, { locationId: LOCATION, minimumAvailable: 5 }, context(), { save: async () => ({ kind: "stale" }) }), (error) => error.statusCode === 409);
+  await assert.rejects(updateInventoryStockRule(PART, { locationId: LOCATION, minimumAvailable: 5 }, context("mechanic"), { resolveLocationScope, save: async () => assert.fail() }), (error) => error.statusCode === 403);
+  await assert.rejects(updateInventoryStockRule(PART, { locationId: LOCATION, minimumAvailable: 5 }, context(), { resolveLocationScope, save: async () => ({ kind: "stale" }) }), (error) => error.statusCode === 409);
 });
 
 test("stocking migration deduplicates open alerts and reevaluates every balance change", async () => {

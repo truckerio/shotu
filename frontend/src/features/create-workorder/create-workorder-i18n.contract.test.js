@@ -32,7 +32,8 @@ test("Create route and shell static states use the shared interface dictionary",
   assert.match(page, /create\.fixHighlightedFields/);
   assert.match(page, /create\.failed/);
   assert.match(shell, /create\.creating/);
-  assert.match(shell, /create\.openPreview/);
+  assert.match(page, /"Review estimate"/);
+  assert.doesNotMatch(shell, /create\.openPreview|create\.closePreview/);
   assert.doesNotMatch(shell, />Create workorder</);
   assert.doesNotMatch(outlet, />Opening workorder\.\.\.</);
 });

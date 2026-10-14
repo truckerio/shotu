@@ -5,6 +5,7 @@ import { requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
 import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { isSupportedInventoryCurrency } from "./inventory-pricing.js";
+import { resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
 const id = z.string().uuid();
 const inputSchema = z.object({
@@ -27,6 +28,7 @@ export async function correctInventoryBatchCost(costLayerId, raw, context, depen
   requirePermission(context, PERMISSION.INVENTORY_PRICE_WRITE);
   const parsedId = id.parse(costLayerId);
   const input = inputSchema.parse(raw);
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(context, "aggregateCostLayer", parsedId);
   const command = {
     costLayerId: parsedId,
     expectedVersion: input.expectedVersion,
@@ -36,9 +38,9 @@ export async function correctInventoryBatchCost(costLayerId, raw, context, depen
   };
   const result = await (dependencies.append || appendInventoryBatchCostRevision)({
     ...command,
-    companyIds: [...(context.companyIds || [])],
-    locationIds: [...(context.locationIds || [])],
-    isAdmin: context.actor.role === "admin",
+    companyIds: scope.companyIds,
+    locationIds: scope.locationIds,
+    isAdmin: scope.isAdmin,
     actorId: context.actor.id,
     idempotencyKey: input.idempotencyKey,
     requestHash: createHash("sha256").update(JSON.stringify(command)).digest("hex"),

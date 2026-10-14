@@ -1,6 +1,6 @@
 import { createManualVehicle, findVehicleById, findVehicles, refreshVehicleLocation } from "../services/vehicles.service.js";
 import { createManualVehicleSchema } from "../modules/vehicles/manual-vehicle.service.js";
-import { readUnitsDirectory } from "../modules/vehicles/units-directory.service.js";
+import { readUnitsDirectory, readUnitsDirectoryFacets } from "../modules/vehicles/units-directory.service.js";
 
 function parse(schema, value) {
   const result = schema.safeParse(value);
@@ -28,11 +28,19 @@ export async function handleVehiclesApi(req, res, url, helpers, dependencies = {
 
   if (req.method === "GET" && url.pathname === "/api/vehicles/directory") {
     const raw = {};
-    for (const key of ["q", "type", "limit", "cursor"]) {
+    for (const key of ["q", "type", "companyTag", "routeTag", "repair", "sort", "limit", "cursor", "page"]) {
       const value = url.searchParams.get(key);
       if (value !== null) raw[key] = value;
     }
     sendJson(res, 200, await (dependencies.directory || readUnitsDirectory)(requestContext, raw, dependencies.directoryDependencies));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/vehicles/directory/filters") {
+    const raw = {};
+    const type = url.searchParams.get("type");
+    if (type !== null) raw.type = type;
+    sendJson(res, 200, await (dependencies.directoryFacets || readUnitsDirectoryFacets)(requestContext, raw, dependencies.directoryDependencies));
     return true;
   }
 

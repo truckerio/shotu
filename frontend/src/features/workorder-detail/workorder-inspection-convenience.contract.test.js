@@ -22,5 +22,5 @@ test("reinspect navigation opens the selected inspection form before explicit st
   assert.match(experience, /initialReinspection=\{initialReinspection\}/);
   assert.match(detail, /initialReinspection/);
   assert.match(detail, /setLineageMode\(initialReinspection && inspection\.reinspectionEligible \? "reinspect" : ""\)/);
-  assert.match(detail, /Create reinspection/);
+  assert.match(detail, /Create re-inspection/);
 });

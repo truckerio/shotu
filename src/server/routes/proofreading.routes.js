@@ -12,6 +12,7 @@ import {
   removeCompanyProofreadingTerm,
   removePersonalProofreadingTerm,
 } from "../modules/proofreading/proofreading-dictionaries.service.js";
+import { requireCompanyRole } from "../auth/company-role.js";
 
 const DICTIONARY_CACHE_TTL_MS = 30_000;
 const DICTIONARY_CACHE_MAX_ENTRIES = 1_000;
@@ -37,6 +38,8 @@ function storeDictionary(key, terms) {
 }
 
 async function cachedDictionary(requestContext, companyId, listDictionary) {
+  const selected = selectedCompanyId(requestContext, companyId);
+  if (selected) requireCompanyRole(requestContext, selected, ["admin", "office", "mechanic", "surveillance"]);
   const key = dictionaryCacheKey(requestContext, companyId);
   const cached = dictionaryCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {

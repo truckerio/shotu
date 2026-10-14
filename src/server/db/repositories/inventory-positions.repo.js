@@ -525,6 +525,7 @@ export async function moveInventoryStock(input,dependencies={}) {
       on location.company_id=part.company_id and location.id=$2 join units_of_measure uom on uom.code=part.uom_code
       where part.id=$1 and part.company_id=any($3::uuid[]) and ($5::boolean or location.id=any($4::uuid[])) limit 1`,[input.partId,input.locationId,input.companyIds,input.locationIds,input.isAdmin]);
     const stock=part.rows[0];if(!stock){await client.query("rollback");return{kind:"not_found"};}
+    if(!["quantity","serialized","measured_bulk"].includes(stock.tracking_mode)){await client.query("rollback");return{kind:"tracking_mismatch"};}
     if("quantity" in input.move&&((stock.tracking_mode==="quantity"&&!Number.isInteger(input.move.quantity))
       ||(stock.tracking_mode==="measured_bulk"&&!validPrecision(input.move.quantity,Number(stock.decimal_scale))))){await client.query("rollback");return{kind:"unsupported_uom"};}
     const replay=await client.query(`select id,request_hash from inventory_position_operations where company_id=$1 and location_id=$2 and actor_id=$3 and idempotency_key=$4`,[stock.company_id,input.locationId,input.actorId,input.move.idempotencyKey]);
@@ -640,7 +641,7 @@ export async function createPositionCount(input){const client=await getPool().co
   await client.query(`insert into inventory_position_count_lines(company_id,session_id,inventory_item_id,catalog_part_id,uom_code,expected_quantity,balance_version)
     select balance.company_id,$1,balance.inventory_item_id,balance.catalog_part_id,balance.uom_code,balance.quantity,balance.version
     from inventory_position_balances balance join parts_catalog part on part.company_id=balance.company_id and part.id=balance.catalog_part_id
-    where balance.company_id=$2 and balance.position_id=$3 and part.tracking_mode<>'serialized'`,[countId,position.rows[0].company_id,input.positionId]);
+    where balance.company_id=$2 and balance.position_id=$3 and part.tracking_mode in ('quantity','measured_bulk')`,[countId,position.rows[0].company_id,input.positionId]);
   await client.query(`insert into inventory_position_count_unit_snapshots(company_id,session_id,unit_id,catalog_part_id,uom_code,serial_number_snapshot,status_snapshot,custody_version_snapshot,unit_updated_at_snapshot)
     select unit.company_id,$1,unit.id,line.catalog_part_id,line.uom_code,unit.serial_number,unit.status,unit.custody_version,unit.updated_at
     from inventory_serialized_units unit join inventory_receipt_lines line on line.company_id=unit.company_id and line.id=unit.receipt_line_id
@@ -683,6 +684,7 @@ export async function addPositionCountFoundPart(input){const client=await getPoo
   const partResult=await client.query(`select part.*,uom.decimal_scale from parts_catalog part join units_of_measure uom on uom.code=part.uom_code where part.company_id=$1 and part.id=$2 for share of part,uom`,[session.company_id,input.catalogPartId]);
   const part=partResult.rows[0];if(!part||Number(part.version)!==input.expectedPartVersion){await client.query("rollback");return{kind:"catalog_changed"};}
   if(part.tracking_mode==="serialized"){await client.query("rollback");return{kind:"serialized_review_required"};}
+  if(!["quantity","measured_bulk"].includes(part.tracking_mode)){await client.query("rollback");return{kind:"unsupported_uom"};}
   if((part.tracking_mode==="quantity"&&!Number.isInteger(input.observedQuantity))||!validPrecision(input.observedQuantity,Number(part.decimal_scale))){await client.query("rollback");return{kind:"unsupported_uom"};}
   const existingLine=await client.query(`select id from inventory_position_count_lines where company_id=$1 and session_id=$2 and catalog_part_id=$3 limit 1`,[session.company_id,session.id,part.id]);
   if(existingLine.rows[0]){await client.query("rollback");return{kind:"found_part_exists"};}

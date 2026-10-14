@@ -22,7 +22,7 @@ function useDesktopToolsPanel() {
   return isDesktop;
 }
 
-function ToolsPanelBody({ activeView, onViewChange, views }) {
+function ToolsPanelBody({ activeView, onViewChange, views, singleDocument = false }) {
   const panelId = useId();
   const tabRefs = useRef(new Map());
   const viewIds = views.map(({ id }) => id);
@@ -42,7 +42,7 @@ function ToolsPanelBody({ activeView, onViewChange, views }) {
 
   return (
     <>
-      <div className="workorder-tools-panel-tabs" role="tablist" aria-label="Work order tools" onKeyDown={handleTabKeyDown}>
+      <div className="workorder-tools-panel-tabs" role="tablist" aria-label="Work order tools" onKeyDown={handleTabKeyDown} hidden={singleDocument}>
         {views.map((view) => (
           <button
             key={view.id}
@@ -80,12 +80,12 @@ function ToolsPanelBody({ activeView, onViewChange, views }) {
   );
 }
 
-function ToolsPanelHeader({ onClose, isDesktop }) {
+function ToolsPanelHeader({ onClose, isDesktop, title }) {
   return (
     <header className="workorder-tools-panel-header">
-      <Heading slot="title">Tools</Heading>
-      {!isDesktop && (
-        <button type="button" onClick={onClose} aria-label="Close work order tools" title="Close work order tools">
+      <Heading slot="title">{title || "Tools"}</Heading>
+      {(!isDesktop || title) && (
+        <button type="button" onClick={onClose} aria-label={title ? "Close documents" : "Close work order tools"} title={title ? "Close documents" : "Close work order tools"}>
           <XClose aria-hidden="true" />
         </button>
       )}
@@ -104,6 +104,7 @@ export function WorkorderToolsPanel({
   onViewChange,
   views = [],
   id = "workorder-preview-panel",
+  title,
 }) {
   const isDesktop = useDesktopToolsPanel();
   const visibleViews = getVisibleWorkorderToolViews(views, activeView);
@@ -151,8 +152,8 @@ export function WorkorderToolsPanel({
       <dialog
         ref={panelRef}
         id={id}
-        className="workorder-tools-panel"
-        aria-label="Work order tools"
+        className={`workorder-tools-panel${title && visibleViews.length === 1 ? " is-single-document" : ""}`}
+        aria-label={title || "Work order tools"}
         onCancel={handleCancel}
         onKeyDown={handleKeyDown}
         onClick={(event) => {
@@ -162,8 +163,8 @@ export function WorkorderToolsPanel({
           }
         }}
       >
-        <ToolsPanelHeader onClose={close} isDesktop={isDesktop} />
-        <ToolsPanelBody activeView={activeView} onViewChange={onViewChange} views={visibleViews} />
+        <ToolsPanelHeader onClose={close} isDesktop={isDesktop} title={title} />
+        <ToolsPanelBody activeView={activeView} onViewChange={onViewChange} views={visibleViews} singleDocument={Boolean(title) && visibleViews.length === 1} />
       </dialog>
     </div>
   );

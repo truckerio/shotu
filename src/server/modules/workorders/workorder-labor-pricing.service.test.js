@@ -15,8 +15,9 @@ const locationId = "22222222-2222-4222-8222-222222222222";
 const productId = "33333333-3333-4333-8333-333333333333";
 const workorderId = "44444444-4444-4444-8444-444444444444";
 const actorId = "55555555-5555-4555-8555-555555555555";
-const office = { actor: { id: actorId, role: "office" }, companyIds: new Set([companyId]), locationIds: new Set([locationId]) };
-const authorization = { companyId, locationId, workorder: { status: "in_progress" } };
+const office = { actor: { id: actorId, role: "office" }, companyIds: new Set([companyId]), companyRoles: new Map([[companyId, "office"]]), locationIds: new Set([locationId]) };
+const authorization = { companyId, locationId, workorder: { companyId, status: "in_progress" } };
+const workorderAccess = { requireAccess: async () => ({ companyId, locationId }) };
 
 test("labor rate and Workorder snapshot actions validate their input", () => {
   const rate = moduleActionSchema("diagnosisRepair", "record").parse({
@@ -36,9 +37,9 @@ test("labor rate and Workorder snapshot actions validate their input", () => {
 });
 
 test("only Office/Admin can revise rates and select snapshots", async () => {
-  const mechanic = { ...office, actor: { ...office.actor, role: "mechanic" } };
+  const mechanic = { ...office, actor: { ...office.actor, role: "mechanic" }, companyRoles: new Map([[companyId, "mechanic"]]) };
   await assert.rejects(() => reviseWorkorderLaborRate(workorderId, {}, mechanic, authorization), { code: "WORKORDER_LABOR_PRICE_FORBIDDEN" });
-  await assert.rejects(() => selectWorkorderLaborPrice(workorderId, {}, mechanic), { code: "WORKORDER_LABOR_PRICE_FORBIDDEN" });
+  await assert.rejects(() => selectWorkorderLaborPrice(workorderId, {}, mechanic, workorderAccess), { code: "WORKORDER_LABOR_PRICE_FORBIDDEN" });
 });
 
 test("rate revisions use authenticated company and reject other locations or terminal Workorders", async () => {
@@ -56,7 +57,7 @@ test("rate revisions use authenticated company and reject other locations or ter
     appendLaborRate: async () => { throw new Error("Office must not create a company-wide rate."); },
   }), { code: "WORKORDER_LABOR_RATE_LOCATION_FORBIDDEN", statusCode: 403 });
   await assert.rejects(() => reviseWorkorderLaborRate(workorderId, { ...input, locationId: productId }, office, authorization), { code: "WORKORDER_LABOR_RATE_LOCATION_FORBIDDEN" });
-  const admin = { ...office, actor: { ...office.actor, role: "admin" } };
+  const admin = { ...office, actor: { ...office.actor, role: "admin" }, companyRoles: new Map([[companyId, "admin"]]) };
   const companyDefault = await reviseWorkorderLaborRate(workorderId, { ...input, locationId: null }, admin, authorization, {
     appendLaborRate: async (value) => ({ kind: "saved", rate: { locationId: value.locationId } }),
   });
@@ -68,8 +69,25 @@ test("rate revisions use authenticated company and reject other locations or ter
 test("labor snapshot maps missing or Unknown rates to a closed failure", async () => {
   const input = { selection: "selling_price", reason: "Use configured rate", idempotencyKey: "labor-price-1" };
   await assert.rejects(() => selectWorkorderLaborPrice(workorderId, input, office, {
+    ...workorderAccess,
     saveLaborPrice: async () => ({ kind: "rate_unavailable" }),
   }), { code: "WORKORDER_LABOR_RATE_UNAVAILABLE", statusCode: 422 });
+});
+
+test("primary admin cannot revise or select labor pricing for mechanic-only company", async () => {
+  const adminCompany = "66666666-6666-4666-8666-666666666666";
+  const mixed = {
+    ...office,
+    actor: { ...office.actor, role: "admin" },
+    companyIds: new Set([adminCompany, companyId]),
+    companyRoles: new Map([[adminCompany, "admin"], [companyId, "mechanic"]]),
+  };
+  await assert.rejects(() => reviseWorkorderLaborRate(workorderId, {}, mixed, authorization), {
+    code: "WORKORDER_LABOR_PRICE_FORBIDDEN",
+  });
+  await assert.rejects(() => selectWorkorderLaborPrice(workorderId, {}, mixed, workorderAccess), {
+    code: "WORKORDER_LABOR_PRICE_FORBIDDEN",
+  });
 });
 
 test("summary totals exact current snapshots and refuses missing, changed, mixed currency or basis", () => {
@@ -93,6 +111,25 @@ test("summary totals exact current snapshots and refuses missing, changed, mixed
   });
   assert.equal(legacyManual.status, "incomplete");
   assert.equal(legacyManual.missingCount, 1);
+  const noStock = workorderPricingSummary({
+    ...base,
+    workorder: { ...base.workorder, formData: { ...base.workorder.formData, parts: [{
+      catalogPartId: "66666666-6666-4666-8666-666666666666",
+      noStockLineId: "77777777-7777-4777-8777-777777777777",
+      partNo: "SHOP-SERVICE",
+      qty: "1.5",
+      uomCode: "hr",
+    }] } },
+    noStockPartPrices: [{
+      noStockLineId: "77777777-7777-4777-8777-777777777777",
+      catalogPartId: "66666666-6666-4666-8666-666666666666",
+      uomCode: "hr",
+      price: { selection: "selling_price", quantity: "1.500", totalPrice: "75.0000", currency: "USD" },
+    }],
+  });
+  assert.equal(noStock.status, "complete");
+  assert.equal(noStock.partsTotal, "125.0000");
+  assert.equal(noStock.rowCount, 4);
   const truncated = workorderPricingSummary({ ...base, pricingRowsTruncated: true });
   assert.equal(truncated.status, "incomplete");
   assert.equal(truncated.missingCount, 1);
@@ -118,13 +155,13 @@ test("diagnosis record routes selected labor pricing after Workorder authorizati
     office, workorderId, "diagnosisRepair", "record",
     { operation: "laborPriceSelection", selection: "selling_price" },
     {
-      authorize: async () => authorization,
+      authorize: async () => ({ ...authorization, workorder: { companyId, locationId, status: "in_progress" } }),
       selectLaborPrice: async (...args) => { selected = args; return { kind: "saved" }; },
     },
   );
   assert.equal(output.kind, "saved");
   assert.equal(selected[0], workorderId);
-  assert.equal(selected[2], office);
+  assert.equal(selected[2].actor.role, "office");
 });
 
 test("loaded Office detail includes current labor rates and a pricing total", async () => {

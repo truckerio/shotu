@@ -11,6 +11,7 @@ function initialFieldChanged(form, initialForm, field) {
 
 function partHasExactInventorySource(part) {
   if (!part?.catalogPartId || part.purchaseRequested === true) return false;
+  if (part.trackingMode === "no_stock") return true;
   if (part.serializationRequired === true || part.trackingMode === "serialized") {
     return Array.isArray(part.serializedUnitIds) && part.serializedUnitIds.length > 0;
   }
@@ -148,6 +149,9 @@ export function buildWorkorderDraftPayload({
         customerSignature: text(form.customerSignature),
         authorizedBy: text(form.authorizedBy),
       } : {}),
+      customerDocumentAdjustments: form.customerDocumentAdjustments || {
+        lineDiscounts: [], documentDiscount: null, overrideReasons: [],
+      },
       parts: printableParts,
     },
   };
@@ -182,6 +186,9 @@ export function isMeaningfulWorkorderDraft(payload, initialDates = {}) {
     || text(form.managerName)
     || text(form.customerSignature)
     || text(form.authorizedBy)
+    || Boolean(form.customerDocumentAdjustments?.documentDiscount)
+    || Boolean(form.customerDocumentAdjustments?.lineDiscounts?.length)
+    || Boolean(form.customerDocumentAdjustments?.overrideReasons?.length)
     || form.parts?.length
     || initialFieldChanged(form, initialForm, "headerTitle")
     || initialFieldChanged(form, initialForm, "brandTop")
@@ -231,6 +238,9 @@ export function formValuesFromWorkorderDraft(payload, currentForm) {
       ? payload.authorizationClassification || ""
       : currentForm.authorizationClassification || "approval_not_required",
     authorizationExceptionReason: payload?.authorizationExceptionReason || "",
+    customerDocumentAdjustments: saved.customerDocumentAdjustments || {
+      lineDiscounts: [], documentDiscount: null, overrideReasons: [],
+    },
     parts: savedParts.length ? savedParts : currentForm.parts,
   };
 }

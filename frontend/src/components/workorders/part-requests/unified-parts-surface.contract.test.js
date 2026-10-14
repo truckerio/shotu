@@ -56,7 +56,9 @@ test("mechanic requests preserve exceptions while collapsing only conservative t
 });
 
 test("office planning follows actual used parts and cannot use the used-part endpoint", () => {
-  assert.ok(officeSurface.indexOf("<UsedPartsSection") < officeSurface.indexOf("<OfficePartComposer"));
+  const actualUsedParts = officeSurface.indexOf("<UsedPartsSection");
+  const planningOutlet = officeSurface.indexOf("{partsSupplyContent}", actualUsedParts);
+  assert.ok(actualUsedParts >= 0 && planningOutlet > actualUsedParts);
   assert.match(officeSurface, /detail\.allowedActions\?\.planParts \? \(/);
   assert.match(officeSurface, /<OfficePartComposer detail=\{detail\} onChanged=\{onChanged\} \/>/);
   assert.match(officeComposer, /\/part-plans/);

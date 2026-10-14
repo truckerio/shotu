@@ -23,7 +23,8 @@ test("a saved issue immediately receives its durable finding identity", () => {
 });
 
 test("opening an assigned inspection leaves lifecycle start to the explicit detail action", () => {
-  assert.doesNotMatch(experience, /projection === "mechanic"[\s\S]*\/actions\/start/);
+  const openAction = experience.slice(experience.indexOf("async function open(record)"), experience.indexOf("async function reloadActive()"));
+  assert.doesNotMatch(openAction, /\/actions\/start/);
   assert.match(experience, /async function startInspection\(input\)/);
   assert.match(experience, /onStart=\{activeInspectionAccess\.canWrite/);
 });
@@ -63,7 +64,7 @@ test("inspection detail remains subordinate to the host page heading", () => {
 });
 
 test("printing and workorder findings cross their durable inspection APIs", () => {
-  assert.match(experience, /\/print-archives/);
+  assert.match(experience, /loadInspectionPrintableArchive\(\{ inspection: current/);
   assert.match(experience, /await renderAndPrintInspectionSlip\(popup, result\.html\)/);
   assert.match(experience, /result\.archive\?\.downloadUrl/);
   assert.match(experience, /popup\.location\.replace\(result\.archive\.downloadUrl\)/);
@@ -146,8 +147,8 @@ test("queue scroll is captured before detail and restored after Back without res
 });
 
 test("mixed-location access derives every inspection action from the record location", () => {
-  assert.match(experience, /productModuleCapabilities\(actor, "inspections", result\.inspection\.locationId\)/);
-  assert.match(experience, /productModuleCapabilities\(actor, "workorders", result\.inspection\.locationId\)/);
+  assert.match(experience, /productModuleCapabilities\(actor, "inspections", active\.locationId\)/);
+  assert.match(experience, /productModuleCapabilities\(actor, "workorders", active\.locationId\)/);
   assert.match(experience, /productModuleCapabilities\(actor, "inspections", inspection\.locationId\)/);
   assert.match(experience, /productModuleCapabilities\(actor, "inspections", active\?\.locationId\)/);
   assert.match(experience, /productModuleCapabilities\(actor, "workorders", active\?\.locationId\)/);

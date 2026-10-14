@@ -142,6 +142,20 @@ test("draft values restore into the controlled create form", () => {
   assert.equal(restored.mechanicConcern, "Brake inspection");
 });
 
+test("draft snapshots preserve incomplete customer discounts and restore legacy drafts empty", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: { locationId: "location-1", parts: [], customerDocumentAdjustments: { lineDiscounts: [], documentDiscount: { kind: "percentage", value: "", reason: "" }, overrideReasons: [] } },
+  });
+  assert.deepEqual(payload.formData.customerDocumentAdjustments, {
+    lineDiscounts: [], documentDiscount: { kind: "percentage", value: "", reason: "" }, overrideReasons: [],
+  });
+  assert.deepEqual(formValuesFromWorkorderDraft({ formData: {} }, { parts: [] }).customerDocumentAdjustments, {
+    lineDiscounts: [], documentDiscount: null, overrideReasons: [],
+  });
+  assert.equal(isMeaningfulWorkorderDraft(payload), true);
+});
+
 test("draft quantity serialization preserves units and defaults legacy parts to piece", () => {
   const payload = buildWorkorderDraftPayload({
     actor: { companyIds: ["company-1"], locationIds: ["location-1"] },
@@ -391,4 +405,25 @@ test("manual, requested, and inventory parts without exact source stay unpriced"
     },
   });
   assert.equal(Object.hasOwn(payload, "pricing"), false);
+});
+
+test("no-stock catalog parts carry selling-price selection without an inventory source", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { role: "office", companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: {
+      locationId: "location-1",
+      parts: [{
+        catalogPartId: "11111111-1111-4111-8111-111111111111",
+        partNo: "SHOP-SERVICE",
+        qty: "1.5",
+        uomCode: "hr",
+        trackingMode: "no_stock",
+        priceSelection: "selling_price",
+      }],
+    },
+  });
+  assert.deepEqual(payload.pricing.parts, [{ partIndex: 0, selection: "selling_price" }]);
+  assert.equal(payload.inventoryUnitSelections.length, 0);
+  assert.equal(payload.inventoryPositionSelections.length, 0);
+  assert.equal(payload.formData.parts[0].trackingMode, "no_stock");
 });

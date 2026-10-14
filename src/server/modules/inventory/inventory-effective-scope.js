@@ -1,9 +1,39 @@
 import { query } from '../../db/pool.js';
+import { effectiveCompanyRole } from '../../auth/company-role.js';
 import { InventoryError, inventoryNotFound } from './inventory.errors.js';
 
+const RESOURCE_SCOPES = Object.freeze({
+  aggregateCostLayer: 'select company_id,location_id from inventory_aggregate_cost_layers where id=$1 and company_id=any($2::uuid[]) limit 1',
+  aggregateUsage: 'select company_id,location_id from workorder_aggregate_part_usages where id=$1 and company_id=any($2::uuid[]) limit 1',
+  countImport: 'select company_id,location_id from inventory_count_imports where id=$1 and company_id=any($2::uuid[]) limit 1',
+  countSession: 'select company_id,location_id from inventory_position_count_sessions where id=$1 and company_id=any($2::uuid[]) limit 1',
+  inventoryPosition: 'select company_id,location_id from inventory_positions where id=$1 and company_id=any($2::uuid[]) limit 1',
+  inventoryReceipt: 'select company_id,location_id from inventory_receipts where id=$1 and company_id=any($2::uuid[]) limit 1',
+  labelBatch: 'select company_id,location_id from inventory_label_batches where id=$1 and company_id=any($2::uuid[]) limit 1',
+  part: 'select company_id,null::uuid as location_id from parts_catalog where id=$1 and company_id=any($2::uuid[]) limit 1',
+  serializedUnit: 'select company_id,location_id from inventory_serialized_units where id=$1 and company_id=any($2::uuid[]) limit 1',
+  workorder: 'select company_id,location_id from operational_workorders where id=$1 and company_id=any($2::uuid[]) limit 1',
+});
+
+export async function resolveInventoryResourceScope(context, resourceType, resourceId, options = {}) {
+  const sql = RESOURCE_SCOPES[resourceType];
+  if (!sql) throw new TypeError('Unknown inventory resource scope');
+  if (typeof resourceId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(resourceId)) throw inventoryNotFound();
+  const lookup = options.query || query;
+  const result = await lookup(sql, [resourceId, [...(context.companyIds || [])]]);
+  const row = result.rows[0];
+  if (!row) throw inventoryNotFound();
+  const role = effectiveCompanyRole(context, row.company_id);
+  const locationId = options.companyWideRoles?.includes(role) ? null : row.location_id;
+  return effectiveInventoryScope(context, {
+    companyId: row.company_id,
+    locationId,
+    ...options,
+  });
+}
+
 function roleForCompany(context, companyId) {
-  if (context.companyRoles instanceof Map) return context.companyRoles.get(companyId) || null;
-  return context.actor?.role || null;
+  return effectiveCompanyRole(context, companyId);
 }
 
 export function canManageInventoryCompanyScope(context, companyIds = [...(context?.companyIds || [])]) {
@@ -11,13 +41,12 @@ export function canManageInventoryCompanyScope(context, companyIds = [...(contex
 }
 
 export function inventoryCompanyManageScope(context, options = {}) {
-  const readScope = inventoryCompanyReadScope(context, options);
-  if (!canManageInventoryCompanyScope(context, readScope.companyIds)) {
-    throw new InventoryError(options.message || 'Company inventory settings require Admin access.', {
-      code: options.code || 'INVENTORY_COMPANY_WRITE_FORBIDDEN',
-      statusCode: 403,
-    });
-  }
+  const readScope = inventoryCompanyReadScope(context, {
+    code: 'INVENTORY_COMPANY_WRITE_FORBIDDEN',
+    message: 'Company inventory settings require Admin access.',
+    ...options,
+    allowedRoles: ['admin'],
+  });
   return { ...readScope, companyWideRead: false };
 }
 
@@ -50,6 +79,8 @@ export async function resolveInventoryReadLocationScope(context, locationId, opt
   const location = await loadLocation(locationId, companyScope.companyIds);
   if (!location) throw inventoryNotFound();
   const companyId = location.company_id || location.companyId;
+  const effectiveRole = roleForCompany(context, companyId);
+  if (!['admin', 'office'].includes(effectiveRole) && !context.locationIds?.has(location.id || locationId)) throw inventoryNotFound();
   return {
     actorId: context.actor.id,
     companyId,
@@ -58,8 +89,8 @@ export async function resolveInventoryReadLocationScope(context, locationId, opt
     locationIds: [location.id || locationId],
     isAdmin: false,
     companyWideRead: true,
-    canManageLocation: roleForCompany(context, companyId) === 'admin' || context.locationIds?.has(location.id || locationId) === true,
-    effectiveRole: roleForCompany(context, companyId),
+    canManageLocation: effectiveRole === 'admin' || context.locationIds?.has(location.id || locationId) === true,
+    effectiveRole,
   };
 }
 

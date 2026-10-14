@@ -11,6 +11,7 @@ function context(role, { locations = [], companies = ["default"], id = mechanicI
   return {
     actor: { id, role },
     companyIds: new Set(companies),
+    companyRoles: new Map(companies.map((companyId) => [companyId, role])),
     locationIds: new Set(locations),
   };
 }
@@ -104,6 +105,32 @@ test("a product module with no readable scope cannot leak workorders", async () 
   });
   assert.deepEqual(received.companyIds, ["00000000-0000-0000-0000-000000000000"]);
   assert.deepEqual(received.locationIds, ["00000000-0000-0000-0000-000000000000"]);
+});
+
+test("mixed-company operations carry row-scoped mechanic visibility", async () => {
+  const requestContext = {
+    actor: { id: mechanicId, role: "admin" },
+    companyIds: new Set(["admin-company", "mechanic-company"]),
+    companyRoles: new Map([["admin-company", "admin"], ["mechanic-company", "mechanic"]]),
+    locationIds: new Set([locationA]),
+  };
+  let received;
+  await queryAuthorizedWorkorders(requestContext, { category: "all" }, {
+    resolveProductScope: async () => ({
+      companyIds: ["admin-company", "mechanic-company"], locationIds: [locationA],
+    }),
+    queryWorkorders: async (input) => { received = input; return { items: [] }; },
+  });
+  assert.deepEqual(received.mechanicCompanyIds, ["mechanic-company"]);
+  assert.deepEqual(received.surveillanceCompanyIds, []);
+  assert.deepEqual(received.locationIds, [locationA]);
+  assert.equal(received.visibility, "operations");
+
+  await assert.rejects(queryAuthorizedWorkorders(requestContext, { locationId: locationB }, {
+    getLocation: async () => ({ id: locationB, company_id: "mechanic-company" }),
+    authorizeProduct: async () => ({ mode: "full" }),
+    queryWorkorders: async () => assert.fail("unassigned mechanic location must not query"),
+  }), (error) => error.statusCode === 404);
 });
 
 test("query parser validates pagination, filters, and sorting", () => {

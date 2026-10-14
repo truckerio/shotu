@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AuthError, resourceNotFound } from "../../auth/errors.js";
 import { requireCompanyAccess, requireLocationAccess, requirePermission } from "../../auth/authorize.js";
 import { PERMISSION } from "../../auth/permissions.js";
+import { effectiveCompanyContext } from "../../auth/company-role.js";
 import { resolveAuthConfig } from "../../auth/config.js";
 import { getPool } from "../../db/pool.js";
 import { createSmtpMailer } from "../../email/smtp.js";
@@ -17,9 +18,10 @@ const inputSchema = z.object({
 
 export async function emailCustomerDocumentLink(context, grantId, rawInput, dependencies = {}) {
   const input = inputSchema.parse(rawInput);
+  context = effectiveCompanyContext(context, input.companyId);
   requirePermission(context, PERMISSION.CUSTOMER_DOCUMENT_WRITE);
   requireCompanyAccess(context, input.companyId);
-  requireLocationAccess(context, input.locationId);
+  requireLocationAccess(context, input.locationId, input.companyId);
   const actorId = context.actor.id;
   const tokenHash = createHash("sha256").update(input.rawToken).digest("hex");
   const pool = dependencies.pool || getPool();

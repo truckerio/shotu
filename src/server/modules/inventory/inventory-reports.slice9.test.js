@@ -89,3 +89,89 @@ test("Slice 9 report location lookup denies a location outside the tenant before
   );
   assert.equal(projectionQueries, 0);
 });
+
+test("section mode validates its name and returns exact bounded stock pages without summary projections", async () => {
+  const companyId = randomUUID();
+  const locationId = randomUUID();
+  let connected = false;
+  await assert.rejects(
+    () => getInventoryReports(new URLSearchParams({ locationId, section: "all" }), context(companyId, locationId), { pool: { connect: async () => { connected = true; } } }),
+    (error) => error.name === "ZodError",
+  );
+  assert.equal(connected, false);
+
+  const queries = [];
+  const client = {
+    async query(sql, values = []) {
+      queries.push({ sql, values });
+      if (/^(begin|commit)/i.test(sql)) return { rows: [] };
+      if (/from locations/.test(sql)) return { rows: [{ company_id: companyId, name: "Shop" }] };
+      return { rows: [{ id: "part-1", inventory_item_id: "item-1", part_number: "A-1", total: 101 }] };
+    },
+    release() {},
+  };
+  const result = await getInventoryReports(new URLSearchParams({ locationId, section: "stock", page: "2" }), context(companyId, locationId), { pool: { connect: async () => client } });
+  assert.deepEqual(result, { items: [{ id: "part-1", inventory_item_id: "item-1", part_number: "A-1" }], total: 101, page: 2, pageCount: 2, pageSize: 100 });
+  const projection = queries.find(({ sql }) => /with filtered as/.test(sql));
+  assert.deepEqual(projection.values, [companyId, locationId, 100, 100]);
+  assert.match(projection.sql, /count\(\*\)::integer total from filtered/);
+  assert.match(projection.sql, /order by part_number,id,inventory_item_id/);
+  assert.equal(queries.some(({ sql }) => /priced_commitment|inventory_supplier_bills|inventory_reuse_cases/.test(sql)), false);
+});
+
+test("reconciliation section preserves scope, exact empty-page totals, and rollback on query errors", async () => {
+  const companyId = randomUUID();
+  const locationId = randomUUID();
+  const queries = [];
+  const client = {
+    async query(sql, values = []) {
+      queries.push({ sql, values });
+      if (/^(begin|commit)/i.test(sql)) return { rows: [] };
+      if (/from locations/.test(sql)) return { rows: [{ company_id: companyId, name: "Shop" }] };
+      return { rows: [{ inventory_item_id: null, total: 217 }] };
+    },
+    release() {},
+  };
+  const result = await getInventoryReports(new URLSearchParams({ locationId, section: "reconciliation", page: "4" }), context(companyId, locationId), { pool: { connect: async () => client } });
+  assert.deepEqual(result, { items: [], total: 217, page: 4, pageCount: 3, pageSize: 100 });
+  const projection = queries.find(({ sql }) => /with filtered as/.test(sql));
+  assert.deepEqual(projection.values, [companyId, locationId, 100, 300]);
+  assert.match(projection.sql, /b\.uom_code=page_rows\.uom_code/);
+  assert.match(projection.sql, /order by part_number,catalog_part_id,inventory_item_id/);
+
+  let rolledBack = false;
+  const failingClient = {
+    async query(sql) {
+      if (/^begin/i.test(sql)) return { rows: [] };
+      if (/^rollback/i.test(sql)) { rolledBack = true; return { rows: [] }; }
+      if (/from locations/.test(sql)) return { rows: [{ company_id: companyId, name: "Shop" }] };
+      throw new Error("section read failed");
+    },
+    release() {},
+  };
+  await assert.rejects(
+    () => getInventoryReports(new URLSearchParams({ locationId, section: "stock" }), context(companyId, locationId), { pool: { connect: async () => failingClient } }),
+    /section read failed/,
+  );
+  assert.equal(rolledBack, true);
+});
+
+test("section mode rejects an unauthorized effective role before its projection", async () => {
+  const companyId = randomUUID();
+  const locationId = randomUUID();
+  let projectionQueries = 0;
+  const client = {
+    async query(sql) {
+      if (/^(begin|rollback)/i.test(sql)) return { rows: [] };
+      if (/from locations/.test(sql)) return { rows: [{ company_id: companyId, name: "Shop" }] };
+      projectionQueries += 1;
+      return { rows: [] };
+    },
+    release() {},
+  };
+  await assert.rejects(
+    () => getInventoryReports(new URLSearchParams({ locationId, section: "stock" }), context(companyId, locationId, "mechanic"), { pool: { connect: async () => client } }),
+    (error) => error.statusCode === 403 && error.code === "INVENTORY_REPORTS_FORBIDDEN",
+  );
+  assert.equal(projectionQueries, 0);
+});

@@ -37,6 +37,9 @@ function publicSnapshot(row, allocations = []) {
     manualOverride: row.manual_override === true,
     receiptLineId: row.receipt_line_id || null,
     sellingPolicyVersionId: row.selling_policy_version_id || null,
+    noStockLineId: row.no_stock_line_id || null,
+    catalogPartId: row.catalog_part_id || null,
+    uomCode: row.uom_code || null,
     allocations,
     createdAt: row.created_at,
   };
@@ -75,6 +78,31 @@ async function snapshotAllocations(client, companyId, snapshotId) {
   }));
 }
 
+export async function listWorkorderNoStockPartPrices(input) {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `select distinct on(snapshot.no_stock_line_id) snapshot.*
+         from workorder_part_price_snapshots snapshot
+         join operational_workorders workorder
+           on workorder.company_id=snapshot.company_id and workorder.id=snapshot.workorder_id
+        where snapshot.company_id=$1 and snapshot.workorder_id=$2
+          and snapshot.no_stock_line_id is not null
+          and ($3::uuid is null or workorder.location_id=$3)
+        order by snapshot.no_stock_line_id,snapshot.created_at desc,snapshot.id desc`,
+      [input.companyId, input.workorderId, input.locationId || null],
+    );
+    return result.rows.map((row) => ({
+      noStockLineId: row.no_stock_line_id,
+      catalogPartId: row.catalog_part_id,
+      uomCode: row.uom_code,
+      price: publicSnapshot(row),
+    }));
+  } finally {
+    client.release();
+  }
+}
+
 export async function saveWorkorderPartPriceSnapshot(input, transactionClient = null) {
   const client = transactionClient || await getPool().connect();
   try {
@@ -96,6 +124,7 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
         : { kind: "idempotency_conflict" };
     }
 
+    const noStock = input.usageKind === "no_stock";
     const serialized = input.usageKind === "serialized";
     const usageTable = serialized
       ? "workorder_serialized_part_usages"
@@ -106,7 +135,37 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          join inventory_receipt_lines line
            on line.company_id=unit.company_id and line.id=unit.receipt_line_id`
       : "left join inventory_receipt_lines line on false";
-    const selected = await client.query(
+    const selected = noStock ? await client.query(
+      `select workorder.company_id,workorder.id workorder_id,workorder.location_id,
+              workorder.status workorder_status,workorder.form_data,
+              catalog.id catalog_part_id,catalog.uom_code,source.part source_part,
+              policy.id policy_id,policy.method,policy.value policy_value,policy.currency policy_currency
+       from operational_workorders workorder
+       join lateral (
+         select candidate part
+         from jsonb_array_elements(coalesce(workorder.form_data->'parts','[]'::jsonb)) candidate
+         where candidate->>'noStockLineId'=$2
+         limit 1
+       ) source on true
+       join parts_catalog catalog
+         on catalog.company_id=workorder.company_id
+        and catalog.id=(source.part->>'catalogPartId')::uuid
+        and catalog.tracking_mode='no_stock'
+       left join lateral (
+         select candidate.*
+         from inventory_part_selling_policy_versions candidate
+         where candidate.company_id=catalog.company_id
+           and candidate.catalog_part_id=catalog.id
+           and (candidate.location_id is null or candidate.location_id=workorder.location_id)
+         order by (candidate.location_id is not null) desc,candidate.version desc
+         limit 1
+       ) policy on true
+       where workorder.id=$1 and workorder.company_id=any($3::uuid[])
+         and ($5::boolean or workorder.location_id=any($4::uuid[]))
+       limit 1
+       for update of workorder,catalog`,
+      [input.workorderId, input.noStockLineId, input.companyIds, input.locationIds, input.isAdmin],
+    ) : await client.query(
       `select usage.id usage_id,usage.company_id,usage.workorder_id,usage.catalog_part_id,
               ${serialized ? "1" : "usage.quantity+usage.adjustment_total"} quantity,
               workorder.status workorder_status,
@@ -141,11 +200,21 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
       return { kind: "locked" };
     }
 
-    const costAllocations = serialized ? [] : await listAggregateUsageCostAllocations(client, {
+    if (noStock) {
+      const sourcePart = row.source_part;
+      if (!sourcePart || sourcePart.catalogPartId !== row.catalog_part_id
+        || (sourcePart.uomCode || "ea") !== row.uom_code) {
+        if (!transactionClient) await client.query("rollback");
+        return { kind: "not_found" };
+      }
+      row.quantity = sourcePart.qty;
+    }
+
+    const costAllocations = serialized || noStock ? [] : await listAggregateUsageCostAllocations(client, {
       companyId: row.company_id,
       usageId: row.usage_id,
     });
-    if (!serialized && !costAllocations.length) {
+    if (!serialized && !noStock && !costAllocations.length) {
       if (!transactionClient) await client.query("rollback");
       return { kind: "batch_cost_unavailable" };
     }
@@ -156,7 +225,16 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
     let receiptLineId = null;
     let policyId = null;
     let pricedAllocations = [];
-    if (serialized && input.selection === "batch_cost") {
+    if (noStock) {
+      if (input.selection !== "selling_price" || !row.policy_id
+        || row.method !== "fixed" || row.policy_value === null || !row.policy_currency) {
+        if (!transactionClient) await client.query("rollback");
+        return { kind: "selling_policy_unavailable" };
+      }
+      unitPrice = String(row.policy_value);
+      currency = row.policy_currency;
+      policyId = row.policy_id;
+    } else if (serialized && input.selection === "batch_cost") {
       if (!row.receipt_line_id || row.unit_cost === null || !row.batch_currency) {
         if (!transactionClient) await client.query("rollback");
         return { kind: "batch_cost_unavailable" };
@@ -241,17 +319,21 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
     }
     const saved = await client.query(
       `insert into workorder_part_price_snapshots(
-         company_id,workorder_id,serialized_usage_id,aggregate_usage_id,selection,
+         company_id,workorder_id,serialized_usage_id,aggregate_usage_id,
+         no_stock_line_id,catalog_part_id,uom_code,selection,
          unit_price,quantity,total_price,currency,receipt_line_id,selling_policy_version_id,
          base_unit_price,manual_override,
          created_by,reason,idempotency_key,request_hash
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        returning *`,
       [
         row.company_id,
         row.workorder_id,
-        serialized ? row.usage_id : null,
-        serialized ? null : row.usage_id,
+        !noStock && serialized ? row.usage_id : null,
+        !noStock && !serialized ? row.usage_id : null,
+        noStock ? input.noStockLineId : null,
+        noStock ? row.catalog_part_id : null,
+        noStock ? row.uom_code : null,
         input.selection,
         unitPrice,
         quantity,

@@ -8,7 +8,7 @@ const draftId = "33333333-3333-4333-8333-333333333333";
 const partId = "44444444-4444-4444-8444-444444444444";
 const productId = "55555555-5555-4555-8555-555555555555";
 
-const context = (role = "office") => ({ actor: { id: "actor", role } });
+const context = (role = "office") => ({ actor: { id: "actor", role }, companyIds: new Set([companyId]), companyRoles: new Map([[companyId, role]]), locationIds: new Set([locationId]) });
 const profile = {
   id: "66666666-6666-4666-8666-666666666666",
   defaultCurrency: "USD",
@@ -132,4 +132,16 @@ test("Workorder sources fail closed without a transaction-bound actuals reader",
     { lineDiscounts: [], documentDiscount: null, overrideReasons: [] }, profile,
     { getWorkorder: async () => assert.fail("unsafe Workorder read must not run") },
   ), (error) => error.code === "CUSTOMER_DOCUMENT_WORKORDER_SOURCE_UNAVAILABLE");
+});
+
+test("primary admin cannot approve manual customer overrides in an office company", async () => {
+  const mixed = { ...context("office"), sessionMode: "standard", actor: { id: "actor", role: "admin" },
+    companyIds: new Set([companyId, "admin-company"]), companyRoles: new Map([[companyId, "office"], ["admin-company", "admin"]]) };
+  await assert.rejects(buildCustomerDocumentSource(
+    mixed, { kind: "draft", id: draftId, expectedVersion: 3 },
+    { lineDiscounts: [], documentDiscount: null, overrideReasons: [{ lineId: "part:0", reason: "approved elsewhere" }] }, profile,
+    { getDraft: async () => draft(), readCreatePricing: async () => {
+      const value = pricing(); value.parts[0].price.manualOverride = true; return value;
+    } },
+  ), (error) => error.code === "CUSTOMER_DOCUMENT_PRICE_OVERRIDE_DENIED");
 });

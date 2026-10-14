@@ -3,10 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, SearchMd, Settings01, Shield03 } from "@untitledui/icons";
 import { PageHeader } from "../../../components/layout/PageHeader.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
+import { CheckpointCollection } from "../../../components/ui/CheckpointCollection.jsx";
 import { Checkbox } from "../../../components/ui/Checkbox.jsx";
 import { ContextBreadcrumbs } from "../../../components/ui/ContextBreadcrumbs.jsx";
 import { isPlainPrimaryActivation } from "../../../components/ui/context-navigation.js";
-import { Pagination, usePagination } from "../../../components/ui/Pagination.jsx";
+import { useClientCheckpointPages } from "../../../components/ui/useClientCheckpointPages.js";
 import { ProductModuleAccessPanel } from "./ProductModuleAccessPanel.jsx";
 import {
   WORKORDER_ACCESS_MODES,
@@ -59,12 +60,12 @@ function AccessSelect({ includeInherit = false, inheritLabel = "Use inherited se
   );
 }
 
-function ModuleCard({ companyPolicy, locationPolicy, module, onManage }) {
+function ModuleCard({ companyPolicy, locationPolicy, module, onManage, rowProps }) {
   const primarySurface = module.surfaces.includes(WORKORDER_SURFACES.DETAIL)
     ? WORKORDER_SURFACES.DETAIL
     : module.surfaces[0];
   return (
-    <article className="admin-module-card">
+    <article {...rowProps} className="admin-module-card">
       <header>
         <span className="admin-module-card-icon" aria-hidden="true"><Shield03 /></span>
         <span>
@@ -381,7 +382,7 @@ export function ModulesPage({
   const [activeModuleKey, setActiveModuleKey] = useState("");
   const catalogModules = catalog?.modules || WORKORDER_MODULES;
   const modules = useMemo(() => filterAdminModules(catalogModules, query), [catalogModules, query]);
-  const pagination = usePagination(modules, { pageSize: 12, resetKey: query });
+  const moduleQueue = useClientCheckpointPages(modules, { pageSize: 12, resetKey: `${scopeType}:${companyId || detail?.location?.id || ""}:${query}` });
   const activeModule = catalogModules.find((module) => module.key === activeModuleKey) || null;
   const scopePolicy = scopeType === "company" ? companyPolicy : policy;
   const setScopePolicy = scopeType === "company" ? setCompanyPolicy : setPolicy;
@@ -449,20 +450,28 @@ export function ModulesPage({
             </label>
             <p><strong>{catalogModules.length}</strong> modules · {scopeName}</p>
           </div>
-          {modules.length ? (<>
-            <div className="admin-module-cards">
-              {pagination.pageItems.map((module) => (
-                <ModuleCard
-                  companyPolicy={companyPolicy}
-                  key={module.key}
-                  locationPolicy={scopeType === "location" ? policy : null}
-                  module={module}
-                  onManage={setActiveModuleKey}
-                />
-              ))}
-            </div>
-            <Pagination {...pagination} label="modules" />
-          </>) : (
+          {modules.length ? (
+            <CheckpointCollection
+              ariaLabel="Modules"
+              getItemKey={(module) => module.key}
+              label="modules"
+              pageSize={12}
+              queue={moduleQueue}
+              storageKey={`admin-modules:${scopeValue}:${query}`}
+              renderItems={(entries) => <div className="admin-module-cards">
+                {entries.map(({ item: module, key, rowProps }) => (
+                  <ModuleCard
+                    companyPolicy={companyPolicy}
+                    key={key}
+                    locationPolicy={scopeType === "location" ? policy : null}
+                    module={module}
+                    onManage={setActiveModuleKey}
+                    rowProps={rowProps}
+                  />
+                ))}
+              </div>}
+            />
+          ) : (
             <div className="admin-modules-empty compact">
               <h2>No matching modules</h2>
               <button type="button" onClick={() => setQuery("")}>Clear search</button>

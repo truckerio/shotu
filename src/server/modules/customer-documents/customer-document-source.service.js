@@ -3,6 +3,7 @@ import { readCreatePricing } from "../../db/repositories/workorder-create-pricin
 import { getUserWorkorderDraft } from "../workorders/workorder-drafts.service.js";
 import { readLockedWorkorderFinancialSource } from "../../db/repositories/customer-document-workorder-source.repo.js";
 import { createWorkorderSchema } from "../workorders/workorder.schemas.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
 
 const TAXED = new Set(["exclusive", "inclusive"]);
 
@@ -35,13 +36,15 @@ function percentageWithinOfficePolicy(discount, policy) {
   return Number(discount.value) <= Number(policy.maxOfficePercentage || 0);
 }
 
-function applyAdjustments(lines, adjustments, context, profile) {
+function applyAdjustments(lines, adjustments, context, profile, companyId) {
+  const role = effectiveCompanyRole(context, companyId);
+  if (!role || !["office", "admin"].includes(role)) throw resourceNotFound("Customer document source");
   const { discounts, overrides } = adjustmentMaps(adjustments);
   const lineIds = new Set(lines.map((line) => line.id));
   for (const id of [...discounts.keys(), ...overrides.keys()]) {
     if (!lineIds.has(id)) throw invalidRequest(`Financial adjustment references unknown line ${id}.`);
   }
-  if (context.actor.role !== "admin") {
+  if (role !== "admin") {
     for (const discount of [...discounts.values(), adjustments.documentDiscount]) {
       if (!percentageWithinOfficePolicy(discount, profile.discountPolicy || {})) {
         throw new AuthError(403, "CUSTOMER_DOCUMENT_DISCOUNT_POLICY_DENIED", "This discount requires Admin approval.");
@@ -53,7 +56,7 @@ function applyAdjustments(lines, adjustments, context, profile) {
     if (line.manualOverride && !overrideReason) {
       throw invalidRequest(`A reason is required for the customer price override on ${line.description}.`);
     }
-    if (line.manualOverride && context.actor.role !== "admin") {
+    if (line.manualOverride && role !== "admin") {
       throw new AuthError(403, "CUSTOMER_DOCUMENT_PRICE_OVERRIDE_DENIED", "Customer price overrides require Admin approval.");
     }
     if (!line.manualOverride && overrideReason) throw invalidRequest(`Line ${line.id} is not a customer price override.`);
@@ -179,7 +182,7 @@ async function draftFinancialSource(context, source, adjustments, profile, depen
     });
   }
   if (!lines.length) conflict("CUSTOMER_DOCUMENT_EMPTY_ESTIMATE", "Add priced labor or parts before previewing an Estimate.");
-  const adjusted = applyAdjustments(lines, adjustments, context, profile);
+  const adjusted = applyAdjustments(lines, adjustments, context, profile, draft.companyId);
   return sourceProjection({
     source: { kind: "draft", id: draft.id, version: draft.version, assetId: input.assetId },
     formData: input.formData,
@@ -231,7 +234,7 @@ async function workorderFinancialSource(context, source, adjustments, profile, d
     });
   }
   if (!lines.length) conflict("CUSTOMER_DOCUMENT_EMPTY_ESTIMATE", "Add priced labor or parts before previewing an Estimate.");
-  const adjusted = applyAdjustments(lines, adjustments, context, profile);
+  const adjusted = applyAdjustments(lines, adjustments, context, profile, dependencies.companyId || workorder.companyId);
   const formData = workorder.formData || {};
   return sourceProjection({
     source: { kind: "workorder", id: workorder.id, version: workorder.progressVersion, assetId: workorder.assetId },

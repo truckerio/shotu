@@ -15,7 +15,7 @@ import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import { CreateInspectionPage, InspectionExperience, ProductModeSwitch } from "../inspections/index.js";
 import { inspectionFromApi } from "../inspections/inspection-api-model.js";
 import { inspectionMatchesSearch } from "../inspections/inspection-model.js";
-import { inspectionReturnContext } from "../../app/routes/route-state.js";
+import { inspectionQueueRequested, inspectionReturnContext } from "../../app/routes/route-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
 import {
   MECHANIC_QUEUE_TABS,
@@ -70,7 +70,7 @@ export function MechanicWorkspace({
   const [online, setOnline] = useState(() => navigator.onLine);
   const inspectionReturn = inspectionReturnContext();
   const initialInspectionId = inspectionAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
-  const [product, setProduct] = useState(() => initialInspectionId || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
+  const [product, setProduct] = useState(() => initialInspectionId || (inspectionAccess.canRead && inspectionQueueRequested()) || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");
   const combinedQueueEnabled = workorderAccess.canRead && inspectionAccess.canRead;

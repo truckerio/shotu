@@ -32,8 +32,9 @@ export async function findDirectReceiptPurchaseLine({purchaseLineId,companyIds,l
   return line?{...line,id:line.catalog_part_id,normalized_part_number:normalizePartNumber(line.part_number)}:null;
 }
 
-export async function listPartStockMovements({ catalogPartId, companyIds, locationIds, isAdmin, locationId = null, view = "audit", page = 1 }) {
-  const result = await query(`select movement.id,movement.movement_type,movement.quantity_delta,movement.uom_code,
+export async function listPartStockMovements({ catalogPartId, companyIds, locationIds, isAdmin, locationId = null, view = "audit", page = 1 }, dependencies = {}) {
+  const read = dependencies.query || query;
+  const result = await read(`select movement.id,movement.movement_type,movement.quantity_delta,movement.uom_code,
     movement.created_at,movement.receipt_id,movement.workorder_id,location.name as location_name,
     workorder.serial as workorder_serial,
     asset.unit_no as asset_unit_no,
@@ -62,7 +63,15 @@ export async function listPartStockMovements({ catalogPartId, companyIds, locati
       and ($6::text='audit' or movement.workorder_id is not null)
     order by movement.created_at desc,movement.id desc limit 26 offset $7`,
   [catalogPartId, companyIds, locationIds, isAdmin, locationId, view, (page - 1) * 25]);
-  return { page, hasMore: result.rows.length > 25, items: result.rows.slice(0, 25).map((row) => ({
+  const counts = await read(`select count(*)::integer as total from inventory_stock_movements movement
+    join locations location on location.company_id=movement.company_id and location.id=movement.location_id
+    where movement.catalog_part_id=$1 and movement.company_id=any($2::uuid[])
+      and ($4::boolean or movement.location_id=any($3::uuid[]))
+      and ($5::uuid is null or movement.location_id=$5)
+      and ($6::text='audit' or movement.workorder_id is not null)`,
+  [catalogPartId, companyIds, locationIds, isAdmin, locationId, view]);
+  const total = Number(counts.rows[0]?.total) || 0;
+  return { page, total, pageCount: Math.max(1, Math.ceil(total / 25)), pageSize: 25, hasMore: page * 25 < total, items: result.rows.slice(0, 25).map((row) => ({
     id: row.id, type: row.movement_type, quantity: Number(row.quantity_delta), uomCode: row.uom_code,
     occurredAt: row.created_at, receiptId: row.receipt_id, locationName: row.location_name,
     workorderId: row.workorder_id || null, workorderSerial: row.workorder_serial || "",
@@ -824,7 +833,7 @@ export async function postLocalInventoryReceipt({
   }
 }
 
-export async function listLocalInvoiceHistory({ companyIds, locationIds = [], isAdmin = false, queryText = "", status = "", limit = 50, offset = 0 }) {
+export async function listLocalInvoiceHistory({ companyIds, adminCompanyIds = [], locationIds = [], queryText = "", status = "", limit = 50, offset = 0 }) {
   const search = `%${String(queryText || "").trim().toLocaleLowerCase("en-US").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
   const result = await query(
     `with filtered as (
@@ -859,7 +868,7 @@ export async function listLocalInvoiceHistory({ companyIds, locationIds = [], is
      left join inventory_label_batches label_batch
        on label_batch.company_id = receipt.company_id and label_batch.receipt_id = receipt.id
      where run.company_id = any($1::uuid[])
-       and ($3::boolean or run.location_id = any($2::uuid[]))
+       and (run.company_id = any($3::uuid[]) or run.location_id = any($2::uuid[]))
        and ($4 = '' or case
               when receipt.status = 'posted' then 'added'
               when receipt.status = 'reversed' then 'reversed'
@@ -883,7 +892,7 @@ export async function listLocalInvoiceHistory({ companyIds, locationIds = [], is
               '[]'::json
             ) as items
      from paged`,
-    [companyIds, locationIds, isAdmin, status, search, limit, offset],
+    [companyIds, locationIds, adminCompanyIds, status, search, limit, offset],
   );
   const historyItems = result.rows[0]?.items || [];
   return {

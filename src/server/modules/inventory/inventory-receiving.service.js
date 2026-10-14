@@ -22,6 +22,7 @@ import {
   readInventoryQrToken,
 } from "./inventory-qr.js";
 import { receiveInvoiceSchema, resolveInventoryCodeSchema } from "./inventory.schemas.js";
+import { resolveInventoryResourceScope } from "./inventory-effective-scope.js";
 
 function publicError(code, message, statusCode = 422, retryable = false) {
   return new InventoryError(message, { code, statusCode, retryable });
@@ -31,13 +32,13 @@ function actorScope(requestContext) {
   return {
     companyIds: [...(requestContext.companyIds || [])],
     locationIds: [...(requestContext.locationIds || [])],
-    isAdmin: requestContext.actor.role === "admin",
+    isAdmin: false,
   };
 }
 
 function requireLocationScope(row, requestContext) {
   if (!row) throw inventoryNotFound();
-  if (requestContext.actor.role !== "admin" && !requestContext.locationIds?.has(row.location_id)) throw inventoryNotFound();
+  if (!requestContext.locationIds?.has(row.location_id)) throw inventoryNotFound();
   return row;
 }
 
@@ -267,14 +268,16 @@ export async function receiveReviewedInvoice(runId, input, requestContext, depen
 }
 
 export async function readInventoryReceiptLabels(receiptId, requestContext, dependencies = {}) {
-  const receipt = await (dependencies.getReceipt || getInventoryReceipt)({ receiptId, ...actorScope(requestContext) });
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(requestContext, "inventoryReceipt", receiptId, { allowedRoles: ["admin", "office", "mechanic"] });
+  const receipt = await (dependencies.getReceipt || getInventoryReceipt)({ receiptId, companyIds: scope.companyIds, locationIds: scope.locationIds, isAdmin: scope.isAdmin });
   if (!receipt) throw inventoryNotFound();
   if (receipt.status !== "confirmed") throw publicError("INVENTORY_RECEIPT_NOT_CONFIRMED", "Labels are available only after the receipt is confirmed.", 409);
   return { receipt: withInventoryLabels(receipt, dependencies.qrOptions) };
 }
 
 export async function renderInventoryUnitQr(unitId, requestContext, dependencies = {}) {
-  const unit = await (dependencies.getUnit || getSerializedInventoryUnit)({ unitId, ...actorScope(requestContext) });
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(requestContext, "serializedUnit", unitId, { allowedRoles: ["admin", "office", "mechanic"] });
+  const unit = await (dependencies.getUnit || getSerializedInventoryUnit)({ unitId, companyIds: scope.companyIds, locationIds: scope.locationIds, isAdmin: scope.isAdmin });
   if (!unit) throw inventoryNotFound();
   const token = createInventoryQrToken(unit.id, dependencies.qrOptions);
   const scanUrl = inventoryScanUrl(token, dependencies.qrOptions?.origin);
@@ -291,7 +294,8 @@ export async function resolveInventoryCode(input, requestContext, dependencies =
   const token = inventoryTokenFromCode(parsed.code);
   const unitId = readInventoryQrToken(token, dependencies.qrOptions);
   if (!unitId) throw inventoryNotFound();
-  const unit = await (dependencies.getUnit || getSerializedInventoryUnit)({ unitId, ...actorScope(requestContext) });
+  const scope = await (dependencies.resolveResourceScope || resolveInventoryResourceScope)(requestContext, "serializedUnit", unitId, { allowedRoles: ["admin", "office", "mechanic"] });
+  const unit = await (dependencies.getUnit || getSerializedInventoryUnit)({ unitId, companyIds: scope.companyIds, locationIds: scope.locationIds, isAdmin: scope.isAdmin });
   if (!unit) throw inventoryNotFound();
   return { unit };
 }

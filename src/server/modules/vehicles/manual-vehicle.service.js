@@ -4,6 +4,7 @@ import { requireActor } from "../../auth/authorize.js";
 import { createManualVehicle, findVehicleIdentityDuplicates } from "../../db/repositories/assets.repo.js";
 import { getLocationById } from "../../db/repositories/locations.repo.js";
 import { DATABASE_UUID_PATTERN } from "../../db/company.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
 
 const uuid = z.string().uuid();
 const companyId = z.string().regex(DATABASE_UUID_PATTERN, "Invalid company ID");
@@ -33,9 +34,9 @@ function duplicateConflict() {
 
 export async function createLocalVehicle(context, rawInput, dependencies = {}) {
   const input = createManualVehicleSchema.parse(rawInput);
-  const actor = requireActor(context);
-  const role = context.companyRoles?.get(input.companyId) || actor.role;
-  if (!context.companyIds?.has(input.companyId)) throw resourceNotFound("Location");
+  requireActor(context);
+  const role = effectiveCompanyRole(context, input.companyId);
+  if (!role) throw resourceNotFound("Location");
   if (!["office", "admin"].includes(role)) throw permissionDenied();
   if (role !== "admin" && !context.locationIds?.has(input.locationId)) throw resourceNotFound("Location");
 

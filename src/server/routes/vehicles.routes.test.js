@@ -3,7 +3,7 @@ import test from "node:test";
 import { handleVehiclesApi } from "./vehicles.routes.js";
 
 const input = { companyId: "11111111-1111-4111-8111-111111111111", locationId: "22222222-2222-4222-8222-222222222222", unitType: "Truck", unitNo: "LOCAL-1" };
-for (const query of ["limit=101", "type=Other", `q=${"x".repeat(121)}`]) {
+for (const query of ["limit=101", "page=0", "type=Forklift", "repair=broken", "sort=unsafe", `q=${"x".repeat(121)}`]) {
   test(`directory maps invalid query to HTTP 400: ${query.slice(0, 20)}`, async () => {
     const h = harness();
     await assert.rejects(
@@ -37,6 +37,36 @@ test("directory returns the stable identity page and passes validated query fiel
   assert.deepEqual(received.raw, { q: "TRK", type: "Truck", limit: "30", cursor: "next" });
   assert.equal(received.context.actor.role, "office");
   assert.deepEqual(h.sent[0], { status: 200, value: { items: [{ id: "asset-1", companyId: input.companyId, unitNo: "TRK-1", unitType: "Truck" }], nextCursor: "later" } });
+});
+
+test("directory forwards tag, repair, and sort filters as explicit query fields", async () => {
+  const h = harness();
+  let received;
+  await handleVehiclesApi({ method: "GET" }, {}, new URL("http://x/api/vehicles/directory?type=Truck&companyTag=SPG%20Transportation%20Inc&routeTag=Long%20Haul&repair=under_repair&sort=repair_first"), h.helpers, {
+    directory: async (_context, raw) => (received = raw, { items: [], total: 0, page: 1, pageCount: 0, nextCursor: null }),
+  });
+  assert.deepEqual(received, { type: "Truck", companyTag: "SPG Transportation Inc", routeTag: "Long Haul", repair: "under_repair", sort: "repair_first" });
+});
+
+test("directory filter facets use the dedicated scoped route", async () => {
+  const h = harness();
+  let received;
+  await handleVehiclesApi({ method: "GET" }, {}, new URL("http://x/api/vehicles/directory/filters?type=Trailer"), h.helpers, {
+    directoryFacets: async (context, raw) => (received = { context, raw }, { companyTags: [{ name: "Fleet Trailers", count: 10 }], routeTags: [] }),
+  });
+  assert.equal(received.context.actor.role, "office");
+  assert.deepEqual(received.raw, { type: "Trailer" });
+  assert.deepEqual(h.sent[0], { status: 200, value: { companyTags: [{ name: "Fleet Trailers", count: 10 }], routeTags: [] } });
+});
+
+test("directory forwards optional exact pages without changing the cursor response contract", async () => {
+  const h = harness();
+  let received;
+  await handleVehiclesApi({ method: "GET" }, {}, new URL("http://x/api/vehicles/directory?type=Trailer&limit=25&page=3"), h.helpers, {
+    directory: async (_context, raw) => (received = raw, { items: [], total: 75, page: 3, pageCount: 3, nextCursor: null }),
+  });
+  assert.deepEqual(received, { type: "Trailer", limit: "25", page: "3" });
+  assert.deepEqual(h.sent[0].value, { items: [], total: 75, page: 3, pageCount: 3, nextCursor: null });
 });
 
 test("directory does not fall through to the generic vehicle id route", async () => {

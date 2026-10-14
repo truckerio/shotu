@@ -117,36 +117,22 @@
   align-content: center;
 }
 
-.create-workorder-price-cell > small[role="alert"],
-.create-pricing-footer > p[role="alert"] {
+.create-workorder-price-cell > small[role="alert"] {
   color: #b42318;
 }
 
-.create-pricing-footer {
-  border-top: 1px solid #eaecf0;
+.create-pricing-footer-shell {
   display: grid;
-  padding-top: 12px;
 }
 
-.create-pricing-footer > p {
-  color: #475467;
+.create-pricing-error {
+  color: #b42318;
   font-size: 13px;
-  margin: 0;
+  margin: 0 0 8px;
 }
 
-.create-pricing-total-row {
-  align-items: center;
-  display: flex;
-  font-size: 14px;
-  gap: 24px;
-  justify-content: space-between;
-  justify-self: end;
-  min-width: min(100%, 260px);
-}
-
-.create-pricing-total-row strong {
-  color: #101828;
-  font-variant-numeric: tabular-nums;
+.create-parts-actions {
+  padding-bottom: 16px;
 }
 
 .create-parts-action-message {
@@ -547,10 +533,6 @@
 
   .create-price-source-menu .dropdown-select-chevron {
     height: 42px;
-  }
-
-  .create-pricing-total-row {
-    justify-self: stretch;
   }
 
   .create-labor-editor-fields > .create-part-repair-field,

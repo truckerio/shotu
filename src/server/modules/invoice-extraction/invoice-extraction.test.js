@@ -1009,6 +1009,7 @@ test("source read authorizes location, decrypts, and audits before returning byt
   const bytes = Buffer.from("safe-source");
   const calls = [];
   const result = await readInvoiceSource(RUN_ID, context(), {
+    getRun: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID }),
     getSource: async () => ({ id: "source-1", company_id: COMPANY_ID, run_id: RUN_ID, location_id: LOCATION_ID, mime_type: "image/png", byte_size: bytes.length }),
     decryptDocument: () => bytes,
     recordSourceAccess: async (input) => calls.push(input),
@@ -1016,8 +1017,40 @@ test("source read authorizes location, decrypts, and audits before returning byt
   assert.deepEqual(result.bytes, bytes);
   assert.equal(calls[0].action, "view");
   await assert.rejects(() => readInvoiceSource(RUN_ID, context({ locationIds: [] }), {
+    getRun: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID }),
     getSource: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID }),
   }), (error) => error.statusCode === 404);
+});
+
+test("invoice source uses the target company's role, not the primary role", async () => {
+  const otherCompany = "33333333-3333-4333-8333-333333333333";
+  const otherLocation = "44444444-4444-4444-8444-444444444444";
+  const mixed = {
+    ...context({ role: "admin", companyIds: [COMPANY_ID, otherCompany], locationIds: [] }),
+    companyRoles: new Map([[COMPANY_ID, "admin"], [otherCompany, "office"]]),
+  };
+  let sourceCalls = 0;
+  const options = {
+    getRun: async () => ({ company_id: otherCompany, location_id: otherLocation }),
+    getSource: async () => { sourceCalls += 1; return { company_id: otherCompany, location_id: otherLocation }; },
+  };
+  await assert.rejects(readInvoiceSource(RUN_ID, mixed, options), (error) => error.statusCode === 404);
+  assert.equal(sourceCalls, 0);
+  const assigned = { ...mixed, locationIds: new Set([otherLocation]) };
+  let scope;
+  const result = await readInvoiceSource(RUN_ID, assigned, {
+    ...options,
+    getSource: async (input) => (scope = input, { company_id: otherCompany, location_id: otherLocation, mime_type: "image/png", byte_size: 1 }),
+    decryptDocument: () => Buffer.from("x"),
+    recordSourceAccess: async () => {},
+  });
+  assert.equal(result.bytes.toString(), "x");
+  assert.deepEqual(scope.companyIds, [otherCompany]);
+  assert.equal(scope.isAdmin, false);
+  await assert.rejects(readInvoiceSource(RUN_ID, {
+    ...assigned,
+    companyRoles: new Map([[COMPANY_ID, "admin"], [otherCompany, "mechanic"]]),
+  }, options), (error) => error.statusCode === 404);
 });
 
 test("re-extraction creates a new queued run from the authorized retained source", async () => {
@@ -1108,6 +1141,7 @@ test("source route returns only no-store, no-sniff binary after authorization an
     new URL(`http://localhost/api/office/invoice-extractions/${RUN_ID}/source`),
     { requestContext: context(), sendJson: (res, status, body) => Object.assign(res, { status, body }) },
     {
+      getRun: async () => ({ company_id: COMPANY_ID, location_id: LOCATION_ID }),
       getSource: async () => ({ id: "source-1", company_id: COMPANY_ID, run_id: RUN_ID, location_id: LOCATION_ID, mime_type: "image/png", byte_size: bytes.length }),
       decryptDocument: () => bytes,
       recordSourceAccess: async () => {},

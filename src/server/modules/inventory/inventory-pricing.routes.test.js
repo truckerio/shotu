@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { handleInventoryApi } from "./inventory.routes.js";
 import { permissionsForRole } from "../../auth/permissions.js";
+import { resolveInventoryLocationScope, resolveInventoryReadLocationScope } from "./inventory-effective-scope.js";
 const companyId = "11111111-1111-4111-8111-111111111111";
 const profileId = "22222222-2222-4222-8222-222222222222";
 const actorId = "33333333-3333-4333-8333-333333333333";
 const locationId = "44444444-4444-4444-8444-444444444444";
-const context = (role = "office") => ({ actor: { id: actorId, role }, companyIds: new Set([companyId]), locationIds: new Set([locationId]), permissions: permissionsForRole(role) });
+const context = (role = "office") => ({ actor: { id: actorId, role }, companyIds: new Set([companyId]), companyRoles: new Map([[companyId, role]]), locationIds: new Set([locationId]), permissions: permissionsForRole(role) });
 const base = "/api/office/inventory/tax-profiles";
 const body = { companyId, name: "QA tax", currency: "USD", jurisdiction: "QA only", components: [{ name: "QA component", rate: "5", compound: false }], reason: "Configure QA profile", idempotencyKey: "pricing-route-create-001" };
 async function request(method, path, payload, dependencies, ctx = context()) {
@@ -66,14 +67,16 @@ test("pricing preview route calculates real tax and rejects invalid quantities o
 
 test("location pricing routes resolve authorized scope for preview and override writes", async () => {
   const partId = profileId;
-  const scope = { companyIds: [companyId], locationIds: [locationId], isAdmin: false };
-  const resolveLocationScope = async (_context, receivedLocationId) => {
+  const loadLocation = async (receivedLocationId, companyIds) => {
     assert.equal(receivedLocationId, locationId);
-    return scope;
+    assert.deepEqual(companyIds, [companyId]);
+    return { id: locationId, company_id: companyId };
   };
+  const resolveLocationScope = (ctx, id) => resolveInventoryLocationScope(ctx, id, { loadLocation });
+  const resolveReadLocationScope = (ctx, id) => resolveInventoryReadLocationScope(ctx, id, { loadLocation });
   const previewPath = `/api/office/inventory/parts/${partId}/locations/${locationId}/pricing-preview`;
   const preview = await request("POST", previewPath, { priceKind: "selling", quantity: "1" }, {
-    resolveLocationScope,
+    resolveReadLocationScope,
     readPricingSource: async (input) => {
       assert.equal(input.locationId, locationId);
       assert.deepEqual(input.companyIds, [companyId]);

@@ -20,7 +20,7 @@ import { InventoryWorkspace } from "../inventory/InventoryWorkspace.jsx";
 import { UnitsWorkspace } from "../units/UnitsWorkspace.jsx";
 import { CustomersWorkspace } from "../customers/CustomersWorkspace.jsx";
 import { CreateInspectionPage, InspectionExperience } from "../inspections/index.js";
-import { inspectionReturnContext } from "../../app/routes/route-state.js";
+import { inspectionQueueRequested, inspectionReturnContext } from "../../app/routes/route-state.js";
 import {
   OFFICE_PRIMARY_TABS,
   OFFICE_SECONDARY_TAB_KEYS,
@@ -152,7 +152,7 @@ export function OfficeWorkspace({
   const [error, setError] = useState("");
   const inspectionReturn = inspectionReturnContext();
   const initialInspectionId = inspectionAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
-  const [product, setProduct] = useState(() => initialInspectionId || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
+  const [product, setProduct] = useState(() => initialInspectionId || (inspectionAccess.canRead && inspectionQueueRequested()) || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");
   const preferenceHydrated = useRef(false);

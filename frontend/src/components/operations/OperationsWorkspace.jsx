@@ -1,6 +1,7 @@
 import { Dropdown } from "../forms/Dropdown.jsx";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock, Inbox01, SearchMd } from "@untitledui/icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Clock, FilterLines, Inbox01, SearchMd } from "@untitledui/icons";
+import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { api } from "../../lib/api.js";
 import { textEntryProps } from "../forms/text-entry-policy.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
@@ -9,13 +10,15 @@ import { WorkorderDraftQueue } from "../../features/workorder-drafts/index.js";
 import { ProgressiveQueue } from "../responsive/ProgressiveQueue.jsx";
 import { progressiveQueueResetKey } from "../responsive/ProgressiveQueue.js";
 import { WorkorderQueueTabs } from "../workorders/WorkorderQueue.jsx";
-import { Pagination } from "../ui/Pagination.jsx";
+import { CollectionPagination } from "../ui/CollectionPagination.jsx";
+import { CheckpointQueueTable } from "./CheckpointQueueTable.jsx";
+import { useCheckpointPages } from "./useCheckpointPages.js";
+import { readCheckpointFilters, readCheckpointPosition, saveCheckpointFilters, saveCheckpointPosition } from "./checkpoint-position.js";
 import { MobileQueueToolbar } from "./MobileQueueToolbar.jsx";
 import {
   OperationalCollectionCell,
   OperationalCollectionRow,
   OperationalCollectionTable,
-  OperationalCollectionTabs,
   OperationalCollectionToolbar,
 } from "./OperationalCollectionPage.jsx";
 import { PartRequestQueue } from "./PartRequestQueue.jsx";
@@ -72,14 +75,15 @@ function OperationsFilters({
   onSearchChange,
   onUpdate,
   searchInput,
+  fields = ["search", "locationId", "lifecycle", "attentionReason", "sort"],
 }) {
   return (
     <>
-      <label className="operations-search">
+      {fields.includes("search") ? <label className="operations-search">
         <span className="operations-field-label">Search workorders</span>
         <span className="operations-input-with-icon"><SearchMd /><input {...textEntryProps("search")} type="search" value={searchInput} onChange={(event) => onSearchChange(event.target.value)} placeholder="Unit, serial, concern" /></span>
-      </label>
-      {!fixedLocationId ? (
+      </label> : null}
+      {fields.includes("locationId") && !fixedLocationId ? (
         <label>
           <span className="operations-field-label">Location</span>
           <Dropdown value={filters.locationId} onChange={(event) => onUpdate("locationId", event.target.value)}>
@@ -88,26 +92,40 @@ function OperationsFilters({
           </Dropdown>
         </label>
       ) : null}
-      <label>
+      {fields.includes("lifecycle") ? <label>
         <span className="operations-field-label">Lifecycle</span>
         <Dropdown value={filters.lifecycle} onChange={(event) => onUpdate("lifecycle", event.target.value)}>
           {LIFECYCLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </Dropdown>
-      </label>
-      <label>
+      </label> : null}
+      {fields.includes("attentionReason") ? <label>
         <span className="operations-field-label">Attention</span>
         <Dropdown value={filters.attentionReason} onChange={(event) => onUpdate("attentionReason", event.target.value)}>
           {ATTENTION_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </Dropdown>
-      </label>
-      <label>
+      </label> : null}
+      {fields.includes("sort") ? <label>
         <span className="operations-field-label">Sort</span>
         <Dropdown value={filters.sort} onChange={(event) => onUpdate("sort", event.target.value)}>
           {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </Dropdown>
-      </label>
+      </label> : null}
     </>
   );
+}
+
+function OperationsFilterPopover({ label, active, column = false, children }) {
+  return <DialogTrigger>
+    <Button className={`operations-filter-trigger${column ? " is-column" : ""}${active ? " is-active" : ""}`} aria-label={column ? `${label} filters and sort` : label}>
+      {column ? <span>{label}</span> : null}<FilterLines aria-hidden="true" />
+    </Button>
+    <Popover className="operations-filter-popover" placement="bottom end" offset={8}>
+      <Dialog aria-label={label}>{({ close }) => <>
+        <header><h3>{label}</h3><Button onPress={close}>Done</Button></header>
+        <div className="operations-filter-fields">{children}</div>
+      </>}</Dialog>
+    </Popover>
+  </DialogTrigger>;
 }
 
 function OperationRow({ item, onOpenWorkorder }) {
@@ -194,6 +212,7 @@ function LoadingRows() {
 
 export function OperationsWorkspace({
   actor,
+  checkpointScrolling = true,
   locations = [],
   fixedLocationId = "",
   drafts = [],
@@ -222,7 +241,17 @@ export function OperationsWorkspace({
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [summary, setSummary] = useState({ counts: emptyCounts, loading: true, loaded: false, error: "" });
-  const [list, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, loaded: false, error: "" });
+  const [legacyList, setList] = useState({ items: [], total: 0, pageCount: 1, loading: true, loaded: false, error: "" });
+  const checkpointEnabled = checkpointScrolling && !["drafts", "parts"].includes(filters.category);
+  const checkpointKey = JSON.stringify([actor?.id, fixedLocationId, filters]);
+  const initialCheckpointPage = useMemo(() => readCheckpointPosition(checkpointKey)?.page || 1, [checkpointKey]);
+  const fetchCheckpointPage = useCallback((page, { signal }) => api(`/api/admin/operations/workorders?${buildOperationsQuery(filters, page, 20)}`, { signal }), [filters]);
+  const checkpointQueue = useCheckpointPages({
+    queryKey: checkpointKey, fetchPage: fetchCheckpointPage, enabled: checkpointEnabled, refreshKey,
+    initialPage: initialCheckpointPage,
+  });
+  const list = checkpointEnabled ? { ...checkpointQueue, items: checkpointQueue.pages.flatMap((batch) => batch.items) } : legacyList;
+  const QueueTable = checkpointEnabled ? CheckpointQueueTable : OperationalCollectionTable;
   const [partFilters, setPartFilters] = useState({
     locationId: fixedLocationId,
     search: "",
@@ -235,9 +264,14 @@ export function OperationsWorkspace({
   useAutomaticRefresh(() => setRefreshKey((current) => current + 1));
   const partRequestCount = usePartRequestQueueCount({ locationId: fixedLocationId, refreshKey });
 
+  function resetFilterPosition(next) {
+    if (checkpointScrolling) saveCheckpointPosition(JSON.stringify([actor?.id, fixedLocationId, next]), { page: 1 });
+    return next;
+  }
+
   useEffect(() => {
     if (fixedLocationId || !queuePreferences.ready || preferenceHydrated.current) return;
-    const saved = queuePreferences.filters;
+    const saved = (checkpointScrolling && readCheckpointFilters(actor?.id)) || queuePreferences.filters;
     setFilters((current) => {
       const category = !routeCategory && OPERATION_CATEGORIES.some((item) => item.id === saved.category)
         ? saved.category
@@ -247,20 +281,23 @@ export function OperationsWorkspace({
         locationId: saved.locationId || "",
         lifecycle: saved.lifecycle || "",
         attentionReason: saved.attentionReason || "",
+        search: saved.search || "",
         sort: SORT_OPTIONS.some(([value]) => value === saved.sort) ? saved.sort : current.sort,
       });
     });
+    setSearchInput(saved.search || "");
     preferenceHydrated.current = true;
   }, [fixedLocationId, queuePreferences.ready, routeCategory]);
 
   useEffect(() => {
     if (fixedLocationId || !preferenceHydrated.current) return;
+    if (checkpointScrolling) saveCheckpointFilters(actor?.id, filters);
     const { category, locationId, lifecycle, attentionReason, sort } = filters;
     queuePreferences.save(
       { category, locationId, lifecycle, attentionReason, sort },
       { defaultView: category, defaultLocationId: locationId || null },
     );
-  }, [filters.category, filters.locationId, filters.lifecycle, filters.attentionReason, filters.sort, fixedLocationId]);
+  }, [filters.category, filters.locationId, filters.lifecycle, filters.attentionReason, filters.search, filters.sort, fixedLocationId]);
 
   useEffect(() => {
     if (!fixedLocationId) return;
@@ -271,7 +308,7 @@ export function OperationsWorkspace({
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setFilters((current) => ({ ...current, search: searchInput }));
+      setFilters((current) => current.search === searchInput ? current : resetFilterPosition({ ...current, search: searchInput }));
       setPage(1);
     }, 250);
     return () => window.clearTimeout(timeout);
@@ -292,6 +329,7 @@ export function OperationsWorkspace({
 
   useEffect(() => {
     const controller = new AbortController();
+    if (checkpointEnabled) return () => controller.abort();
     if (filters.category === "drafts" || filters.category === "parts") {
       setList({
         items: [],
@@ -318,7 +356,7 @@ export function OperationsWorkspace({
         if (error.name !== "AbortError") setList((current) => ({ ...current, loading: false, loaded: true, error: error.message }));
       });
     return () => controller.abort();
-  }, [drafts, filters, fixedLocationId, page, refreshKey]);
+  }, [drafts, filters, fixedLocationId, page, refreshKey, checkpointEnabled]);
 
   const activeCategory = useMemo(
     () => OPERATION_CATEGORIES.find((category) => category.id === filters.category) || OPERATION_CATEGORIES[0],
@@ -360,7 +398,7 @@ export function OperationsWorkspace({
   );
 
   function updateFilter(key, value) {
-    setFilters((current) => (
+    setFilters((current) => resetFilterPosition(
       key === "category"
         ? normalizeOperationsCategoryFilters(value, current)
         : { ...current, [key]: value }
@@ -370,7 +408,7 @@ export function OperationsWorkspace({
 
   function clearNarrowingFilters() {
     setSearchInput("");
-    setFilters((current) => ({
+    setFilters((current) => resetFilterPosition({
       ...current,
       locationId: fixedLocationId,
       lifecycle: "",
@@ -390,18 +428,6 @@ export function OperationsWorkspace({
 
   return (
     <section className="operations-workspace" aria-label="Workorder operations">
-      <OperationalCollectionTabs
-        className="role-desktop-queues"
-        ariaLabel="Workorder categories"
-        activeId={filters.category}
-        onChange={(category) => updateFilter("category", category)}
-        items={OPERATION_CATEGORIES.map((category) => ({
-          id: category.id,
-          label: category.label,
-          count: category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "-") : category.id !== "drafts" && summary.loading ? "-" : categoryCounts[category.countKey],
-          countLabel: `${categoryCounts[category.countKey] ?? "Unavailable"} ${category.id === "parts" ? "part requests" : category.id === "drafts" ? "drafts" : "workorders"}`,
-        }))}
-      />
       <MobileQueueToolbar
         className="role-mobile-primary-queues"
         tabs={mobilePrimaryCategories}
@@ -412,7 +438,7 @@ export function OperationsWorkspace({
         filtersActive={mobileFiltersActive}
         onClearFilters={() => {
           setSearchInput("");
-          setFilters((current) => ({
+          setFilters((current) => resetFilterPosition({
             ...current,
             category: "needs_attention",
             locationId: fixedLocationId,
@@ -445,16 +471,23 @@ export function OperationsWorkspace({
         ) : null}
       </MobileQueueToolbar>
 
-      {filters.category !== "drafts" && filters.category !== "parts" ? <OperationalCollectionToolbar className="operations-toolbar role-desktop-filters">
-        <OperationsFilters
+      <OperationalCollectionToolbar className="operations-toolbar operations-toolbar-with-queue role-desktop-filters">
+        <label className="operations-queue-field">
+          <span className="operations-field-label">Queue</span>
+          <Dropdown aria-label="Queue" value={filters.category} onChange={(event) => updateFilter("category", event.target.value)}>
+            {OPERATION_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label} ({category.id === "parts" ? (partRequestCount.loaded ? categoryCounts.parts : "—") : category.id !== "drafts" && summary.loading ? "—" : categoryCounts[category.countKey]})</option>)}
+          </Dropdown>
+        </label>
+        {filters.category !== "drafts" && filters.category !== "parts" ? <OperationsFilters
           filters={filters}
           fixedLocationId={fixedLocationId}
           locations={locations}
           onSearchChange={setSearchInput}
           onUpdate={updateFilter}
           searchInput={searchInput}
-        />
-      </OperationalCollectionToolbar> : null}
+          fields={["search"]}
+        /> : null}
+      </OperationalCollectionToolbar>
 
       {filters.category !== "drafts" && filters.category !== "parts" && summary.error ? <p className="operations-inline-error" role="alert">Counts unavailable: {summary.error}</p> : null}
       <div className="operations-results-scroll">
@@ -481,20 +514,24 @@ export function OperationsWorkspace({
           onOpenWorkorder={onOpenWorkorder}
           refreshKey={refreshKey}
         />
-        ) : <OperationalCollectionTable
+        ) : <CollectionPagination enabled={!checkpointEnabled} currentPage={page} pageCount={list.pageCount} setPage={setPage} total={list.total} label="workorders" pageSize={20} loading={list.loading}>
+        <QueueTable
         className="operations-table"
         ariaLabel={`${activeCategory.label} workorders`}
         busy={list.loading}
+        queue={checkpointQueue}
+        storageKey={checkpointKey}
+        renderItem={(item) => <OperationRow item={item} onOpenWorkorder={onOpenWorkorder} />}
         columns={[
-          { id: "location", label: "Location" },
+          { id: "location", label: fixedLocationId ? "Location" : <OperationsFilterPopover column label="Location" active={Boolean(filters.locationId)}><OperationsFilters filters={filters} locations={locations} onUpdate={updateFilter} fields={["locationId"]} /></OperationsFilterPopover> },
           { id: "identity", label: "Unit / workorder" },
           { id: "concern", label: "Concern" },
           { id: "mechanics", label: "Mechanics" },
-          { id: "state", label: "Lifecycle / attention" },
-          { id: "waiting", label: "Time waiting" },
-          { id: "created", label: "Created / age", className: "operations-created" },
+          { id: "state", label: <OperationsFilterPopover column label="Lifecycle / attention" active={Boolean(filters.lifecycle || filters.attentionReason)}><OperationsFilters filters={filters} onUpdate={updateFilter} fields={["lifecycle", "attentionReason"]} /></OperationsFilterPopover> },
+          { id: "waiting", label: <OperationsFilterPopover column label="Time waiting"><OperationsFilters filters={filters} onUpdate={updateFilter} fields={["sort"]} /></OperationsFilterPopover> },
+          { id: "created", label: <OperationsFilterPopover column label="Created / age"><OperationsFilters filters={filters} onUpdate={updateFilter} fields={["sort"]} /></OperationsFilterPopover>, className: "operations-created" },
           { id: "odoo", label: "Odoo", className: "operations-odoo" },
-          { id: "activity", label: "Last activity" },
+          { id: "activity", label: <OperationsFilterPopover column label="Last activity"><OperationsFilters filters={filters} onUpdate={updateFilter} fields={["sort"]} /></OperationsFilterPopover> },
         ]}
       >
         {list.loading ? <LoadingRows /> : null}
@@ -516,7 +553,7 @@ export function OperationsWorkspace({
             ) : null}
           </div>
         ) : null}
-        {!list.loading && !list.error ? (
+        {!checkpointEnabled && !list.loading && !list.error ? (
           <ProgressiveQueue
             items={list.items}
             resetKey={progressiveQueueResetKey([
@@ -531,9 +568,8 @@ export function OperationsWorkspace({
             renderItem={(item) => <OperationRow item={item} onOpenWorkorder={onOpenWorkorder} />}
           />
         ) : null}
-        </OperationalCollectionTable>}
-
-        {filters.category !== "drafts" && filters.category !== "parts" ? <Pagination currentPage={page} pageCount={list.pageCount} setPage={setPage} total={list.total} label="workorders" loading={list.loading} /> : null}
+        </QueueTable>
+        </CollectionPagination>}
       </div>
     </section>
   );

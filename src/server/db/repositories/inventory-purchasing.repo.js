@@ -126,13 +126,25 @@ export async function readPurchasing(input) {
   try {
     const shop = await location(client,input);
     const suppliers = await client.query("select id,name,contact from inventory_suppliers where company_id=$1 and active=true order by lower(name) limit 500", [shop.company_id]);
-    const orders = await client.query(`select id from inventory_purchase_orders where company_id=$1 and location_id=$2 and ($4::boolean=false or status in ('ordered','partially_received')) and ($5='all' or status=$5) and ($6='' or supplier_id=nullif($6,'')::uuid) and ($7='' or number ilike '%'||$7||'%' or supplier_id in (select id from inventory_suppliers where company_id=$1 and name ilike '%'||$7||'%')) order by created_at desc,id desc limit 26 offset $3`,[shop.company_id,shop.id,(input.page-1)*25,input.view==='receiving',input.status||'all',input.supplierId||'',input.query||'']);
+    const orderParams=[shop.company_id,shop.id,(input.page-1)*25,input.view==='receiving',input.status||'all',input.supplierId||'',input.query||''];
+    const orders = await client.query(`with filtered as (
+      select id,created_at from inventory_purchase_orders where company_id=$1 and location_id=$2 and ($4::boolean=false or status in ('ordered','partially_received')) and ($5='all' or status=$5) and ($6='' or supplier_id=nullif($6,'')::uuid) and ($7='' or number ilike '%'||$7||'%' or supplier_id in (select id from inventory_suppliers where company_id=$1 and name ilike '%'||$7||'%'))
+    ), page_rows as (
+      select id,created_at from filtered order by created_at desc,id desc limit 26 offset $3
+    ), totals as (
+      select count(*)::int total_count from filtered
+    )
+    select page_rows.id,totals.total_count,page_rows.created_at
+    from totals left join page_rows on true
+    order by page_rows.created_at desc nulls last,page_rows.id desc`,orderParams);
+    const total=Number(orders.rows[0]?.total_count||0);
+    const orderRows=orders.rows.filter(row=>row.id);
     const items = [];
-    for (const row of orders.rows.slice(0,25)) items.push(await orderDetail(client,shop.company_id,row.id));
+    for (const row of orderRows.slice(0,25)) items.push(await orderDetail(client,shop.company_id,row.id));
     const demand=await purchasingDemand(client,shop.company_id,shop.id);
     const receipts=await client.query(`select r.id,r.posted_at,r.source_type,r.source_reference,l.part_number,l.quantity,l.uom_code from local_inventory_receipts r join local_inventory_receipt_lines l on l.company_id=r.company_id and l.receipt_id=r.id where r.company_id=$1 and r.location_id=$2 order by r.posted_at desc,r.id desc,l.line_index limit 25`,[shop.company_id,shop.id]);
     const approvalPolicy=await readApprovalPolicy(client,shop.company_id);
-    return { suppliers:suppliers.rows,items,demand,receipts:receipts.rows,hasMore:orders.rows.length>25,page:input.page,
+    return { suppliers:suppliers.rows,items,demand,receipts:receipts.rows,total,pageCount:Math.ceil(total/25),hasMore:input.page*25<total,page:input.page,
       purchaseDefaults:{currency:approvalPolicy?.currency||'USD',approvalConfigured:Boolean(approvalPolicy)},
       canApprove:await canApprovePurchase(client,shop.company_id,input.actorId,approvalPolicy) };
   } finally { client.release(); }

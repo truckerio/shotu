@@ -71,7 +71,7 @@ const LEGACY_MIGRATION_CHECKSUMS = new Map([
   ],
 ]);
 
-function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {
+export function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {
   if (appliedChecksum === currentChecksum) return true;
   return LEGACY_MIGRATION_CHECKSUMS.get(name)?.has(appliedChecksum) || false;
 }

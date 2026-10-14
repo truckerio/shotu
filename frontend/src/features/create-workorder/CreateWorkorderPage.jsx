@@ -1,11 +1,7 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DraftLeaveDialog } from "../../components/drafts/index.js";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { PreviewPane } from "../../components/preview/PreviewPane.jsx";
-import { CompactWorkorderPreview } from "../../components/workorders/CompactWorkorderPreview.jsx";
-import { BrowserPrintDocument, PreviewFullscreen, PrintModal, WorkorderPreview } from "../generator/GeneratorUi.jsx";
 import { CreateWorkorderForm } from "../generator/CreateWorkorderForm.jsx";
-import { workorderTemplateStyles } from "../../../../shared/workorder-template.js";
 import { useFocusedFieldVisibility } from "../../hooks/useFocusedFieldVisibility.js";
 import { useVisualViewport } from "../../hooks/useVisualViewport.js";
 import { interfaceText } from "../../i18n/index.js";
@@ -20,12 +16,20 @@ import { customerSelectionPatch, selectedCustomer } from "./customer-contact-mod
 import { CustomerDocumentReview } from "../customer-documents/CustomerDocumentReview.jsx";
 import { CustomerEstimateDelivery } from "../customer-documents/CustomerEstimateDelivery.jsx";
 import { CustomerDocumentDiscountEditor } from "../customer-documents/CustomerDocumentDiscountEditor.jsx";
+import { DocumentsPanel } from "../customer-documents/DocumentsPanel.jsx";
+import {
+  customerDocumentAdjustmentsFromForm,
+  customerEstimateActionPending,
+  customerEstimateErrorMessage,
+  customerEstimateSourceKey,
+  isCurrentCustomerEstimateRequest,
+  recoveredEstimateMatchesSavedDraft,
+} from "./customer-estimate-state.js";
 import {
   activateAcceptedEstimate,
   createEstimateGrant,
   customerDocumentCommandKey,
   customerDocumentGrantLink,
-  emptyCustomerDocumentAdjustments,
   issueDraftEstimate,
   previewDraftEstimate,
   readCustomerDocumentProfile,
@@ -39,7 +43,6 @@ import {
   defaultCreateWorkorderSection,
   isCreateErrorSectionReady,
 } from "./create-workorder-sections.js";
-import { createWorkorderPreviewForm } from "./create-workorder-utils.js";
 import {
   resolveWorkorderModulePolicy,
   WORKORDER_MODULE_IDS,
@@ -50,17 +53,10 @@ import "./create-workorder-page.css";
 export function CreateWorkorderPage({
   actor,
   assignment,
-  browserPrintPayload,
-  effectiveCopies,
-  firstSerial,
   form,
   formRef,
-  fullscreenPageIndex,
-  fullscreenZoom,
   isPhone,
   locale = "en",
-  lastPhysicalPageIndex,
-  lastSerial,
   locationPolicy,
   mapsConfig,
   officeCreateAttempt,
@@ -68,18 +64,8 @@ export function CreateWorkorderPage({
   officeCreateState,
   officeLocations,
   officeLocationsState,
-  previewFullscreen,
-  previewGridRef,
-  previewRef,
-  previewSerials,
-  printMenuOpen,
-  printState,
-  primaryActionLabel,
-  range,
   selectedVehicle,
-  showEmbeddedPreview,
   vehicleLookup,
-  workorderCountLabel,
   workorderDraft,
   createPricing,
   draftLeaveBusy,
@@ -87,21 +73,14 @@ export function CreateWorkorderPage({
   addPartRow,
   createOfficeWorkorder,
   discardDraftAndLeave,
-  jumpToPreview,
   openOfficeWorkspace,
   openActiveUnitWorkorder,
-  openFullscreenPreview,
   reloadOfficeLocations,
   removePartRow,
   replacePartSerializedUnits,
   saveDraftAndLeave,
   setCreateAssignment,
   setDraftLeaveOpen,
-  setFullscreenPageIndex,
-  setFullscreenZoom,
-  setPreviewFullscreen,
-  setPrintMenuOpen,
-  setPrintState,
   selectOfficeLocation,
   updateField,
   updatePart,
@@ -134,7 +113,6 @@ export function CreateWorkorderPage({
   const [customerDocumentBusy, setCustomerDocumentBusy] = useState(false);
   const [customerActivationBusy, setCustomerActivationBusy] = useState(false);
   const [customerDocumentError, setCustomerDocumentError] = useState("");
-  const [customerAdjustments, setCustomerAdjustments] = useState(() => emptyCustomerDocumentAdjustments());
   const [maximumOfficeDiscount, setMaximumOfficeDiscount] = useState(null);
   const [grantRecoveryRequired, setGrantRecoveryRequired] = useState(false);
   const [customerGrant, setCustomerGrant] = useState({ id: "", rawToken: "" });
@@ -146,13 +124,17 @@ export function CreateWorkorderPage({
   const grantExpiresAtRef = useRef("");
   const deliveryKeyRef = useRef("");
   const recoveredDraftRef = useRef("");
+  const customerEstimateRequestRef = useRef(0);
+  const customerEstimateSourceRef = useRef("");
+  const customerEstimateWasPreviewedRef = useRef(false);
+  const refreshCustomerEstimateRef = useRef(false);
+  const lastDraftIdRef = useRef("");
   const mobileScrollRef = useRef(null);
   const viewport = useVisualViewport();
   const keyboardOpen = viewport.keyboardOpen;
   const createSections = useMemo(
     () => buildCreateWorkorderSections({
       canAssign,
-      includePreview: isPhone,
       policyOverrides: locationPolicy,
       role: actor.role,
       userId: actor.id,
@@ -160,16 +142,9 @@ export function CreateWorkorderPage({
       ...section,
       label: interfaceText(locale, `create.section.${section.id}`),
     })),
-    [actor.id, actor.role, canAssign, isPhone, locale, locationPolicy],
+    [actor.id, actor.role, canAssign, locale, locationPolicy],
   );
-  const previewPolicy = useMemo(() => resolveWorkorderModulePolicy({
-    moduleId: WORKORDER_MODULE_IDS.PREVIEW,
-    overrides: locationPolicy,
-    role: actor.role,
-    surface: WORKORDER_SURFACES.CREATE,
-    userId: actor.id,
-  }), [actor.id, actor.role, locationPolicy]);
-  const hasWritableCreateModule = createSections.some((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW && section.modulePolicy?.canWrite);
+  const hasWritableCreateModule = createSections.some((section) => section.modulePolicy?.canWrite);
   const pricingBlocksCreate = createPricing?.hasPriceableRows && !createPricing.complete;
   const authorizationClassification = form.authorizationClassification || "";
   const authorizationResolved = Boolean(authorizationClassification);
@@ -177,11 +152,6 @@ export function CreateWorkorderPage({
   const authorizationExceptionReady = authorizationException && Boolean(form.authorizationExceptionReason?.trim());
   const canDirectCreate = authorizationResolved && authorizationClassification !== "required_external_customer" && (!authorizationException || authorizationExceptionReady);
   const canCreate = hasWritableCreateModule && !pricingBlocksCreate && canDirectCreate;
-  const deferredPreviewSource = useDeferredValue(form);
-  const previewForm = useMemo(
-    () => createWorkorderPreviewForm(deferredPreviewSource, assignment),
-    [assignment, deferredPreviewSource],
-  );
   const selectedDocumentLocation = useMemo(() => officeLocations.find((location) => (location.id || location.location?.id) === form.locationId), [form.locationId, officeLocations]);
   const customerDocumentCompanyId = selectedDocumentLocation?.company_id || selectedDocumentLocation?.companyId || selectedDocumentLocation?.location?.company_id || selectedDocumentLocation?.location?.companyId || "";
   const directoryAvailable = ["office", "admin"].includes(actor.role) && Boolean(customerDocumentCompanyId);
@@ -197,6 +167,41 @@ export function CreateWorkorderPage({
     && Number.isInteger(savedDraft?.version) && savedDraft.version > 0
     && savedDraft.status === "active"
     && workorderDraft.status === "saved" && !workorderDraft.hasUnsyncedChanges;
+  const customerAdjustments = useMemo(
+    () => customerDocumentAdjustmentsFromForm(form.customerDocumentAdjustments),
+    [form.customerDocumentAdjustments],
+  );
+  const customerEstimateKey = useMemo(() => customerEstimateSourceKey({
+    companyId: customerDocumentCompanyId,
+    locationId: form.locationId,
+    draft: savedDraft,
+    adjustments: customerAdjustments,
+    ready: customerSourceReady,
+  }), [customerAdjustments, customerDocumentCompanyId, customerSourceReady, form.locationId, savedDraft?.id, savedDraft?.version]);
+
+  useLayoutEffect(() => {
+    const priorKey = customerEstimateSourceRef.current;
+    const priorDraftId = lastDraftIdRef.current;
+    const nextDraftId = savedDraft?.id || "";
+    customerEstimateSourceRef.current = customerEstimateKey;
+    lastDraftIdRef.current = nextDraftId;
+    if (!priorKey || priorKey === customerEstimateKey) return;
+    customerEstimateRequestRef.current += 1;
+    setCustomerDocumentBusy(false);
+    const switchedDraft = priorDraftId !== nextDraftId;
+    refreshCustomerEstimateRef.current ||= Boolean(customerEstimateWasPreviewedRef.current && !customerRevisionId && !switchedDraft);
+    if (switchedDraft) {
+      recoveredDraftRef.current = "";
+      customerEstimateWasPreviewedRef.current = false;
+      refreshCustomerEstimateRef.current = false;
+      setCustomerRevisionId(""); setCustomerProjection(null); setCustomerPreviewOpen(false); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" }); setGrantRecoveryRequired(false);
+      issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = "";
+    } else if (!customerRevisionId) {
+      customerEstimateWasPreviewedRef.current = false;
+      setCustomerProjection(null); setCustomerPreviewOpen(false); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" });
+      issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = "";
+    }
+  }, [customerEstimateKey, customerRevisionId, customerSourceReady, savedDraft?.id]);
 
   useEffect(() => {
     if (!directoryAvailable) { setCustomerDirectory({ customers: [], loading: false, error: "" }); return undefined; }
@@ -226,12 +231,16 @@ export function CreateWorkorderPage({
     Object.entries(patch).forEach(([field, value]) => updateField(field, value));
   }
 
-  async function recoverCurrentDraftEstimate({ open = false } = {}) {
+  async function recoverCurrentDraftEstimate({ open = false, requestKey = customerEstimateKey } = {}) {
     if (!customerSourceReady) return false;
     try {
       const result = await readCurrentDraftEstimate({ companyId: customerDocumentCompanyId, locationId: form.locationId, draftId: savedDraft.id });
+      if (!isCurrentCustomerEstimateRequest(requestKey, customerEstimateSourceRef.current)) return false;
       const revisionId = result.revision?.id;
       if (!revisionId) throw new Error("The saved Estimate could not be recovered.");
+      if (!recoveredEstimateMatchesSavedDraft({ revision: result.revision, draft: savedDraft, adjustments: customerAdjustments })) {
+        throw new Error("The saved draft changed since issued estimate. The issued Estimate remains unchanged; preview the current draft before issuing a new Estimate.");
+      }
       setCustomerRevisionId(revisionId); setCustomerProjection(result.projection); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" }); setGrantRecoveryRequired(true);
       if (open) setCustomerPreviewOpen(true);
       return true;
@@ -245,11 +254,11 @@ export function CreateWorkorderPage({
     if (!customerSourceReady || recoveredDraftRef.current === savedDraft.id) return;
     let active = true;
     recoveredDraftRef.current = savedDraft.id;
-    recoverCurrentDraftEstimate().catch((error) => {
-      if (active) setCustomerDocumentError(error.message || "The saved Estimate could not be verified. Issuance is unavailable until it can be checked.");
+    recoverCurrentDraftEstimate({ requestKey: customerEstimateKey }).catch((error) => {
+      if (active) setCustomerDocumentError(customerEstimateErrorMessage(error, "The saved Estimate could not be verified. Issuance is unavailable until it can be checked."));
     });
     return () => { active = false; };
-  }, [customerDocumentCompanyId, customerSourceReady, form.locationId, savedDraft?.id]);
+  }, [customerDocumentCompanyId, customerEstimateKey, customerSourceReady, form.locationId, savedDraft?.id]);
 
   useEffect(() => {
     if (!customerSourceReady) { setMaximumOfficeDiscount(null); return; }
@@ -261,7 +270,7 @@ export function CreateWorkorderPage({
   }, [customerDocumentCompanyId, customerSourceReady, form.locationId]);
 
   function updateCustomerAdjustments(next) {
-    setCustomerAdjustments(next);
+    updateField("customerDocumentAdjustments", customerDocumentAdjustmentsFromForm(next));
     setCustomerDocumentError("");
     if (!customerRevisionId) {
       setCustomerProjection(null); setCustomerPreviewOpen(false); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" });
@@ -269,22 +278,37 @@ export function CreateWorkorderPage({
     }
   }
 
-  async function previewCustomerEstimate() {
+  async function previewCustomerEstimate({ open = true } = {}) {
+    if (open) setCustomerPreviewOpen(true);
     if (!customerSourceReady) {
       setCustomerDocumentError("Save a current draft with a configured commercial profile before previewing an Estimate.");
       return;
     }
+    const requestKey = customerEstimateKey;
+    const requestId = ++customerEstimateRequestRef.current;
     setCustomerDocumentBusy(true); setCustomerDocumentError("");
     try {
       if (customerRevisionId) {
-        setCustomerPreviewOpen(true);
+        if (open) setCustomerPreviewOpen(true);
         return;
       }
-      if (await recoverCurrentDraftEstimate({ open: true })) return;
+      if (await recoverCurrentDraftEstimate({ open, requestKey })) return;
       const projection = await previewDraftEstimate({ companyId: customerDocumentCompanyId, locationId: form.locationId, draftId: savedDraft.id, expectedVersion: savedDraft.version, adjustments: customerAdjustments });
-      setCustomerProjection(projection); setCustomerRevisionId(""); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" }); setGrantRecoveryRequired(false); issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = ""; setCustomerPreviewOpen(true);
-    } catch (error) { setCustomerDocumentError(error.message || "The Estimate preview could not be validated."); } finally { setCustomerDocumentBusy(false); }
+      if (requestId !== customerEstimateRequestRef.current || !isCurrentCustomerEstimateRequest(requestKey, customerEstimateSourceRef.current)) return;
+      customerEstimateWasPreviewedRef.current = true;
+      setCustomerProjection(projection); setCustomerRevisionId(""); setCustomerLink(""); setCustomerGrant({ id: "", rawToken: "" }); setDeliveryState({ busy: false, status: "" }); setGrantRecoveryRequired(false); issueKeyRef.current = ""; grantKeyRef.current = ""; grantExpiresAtRef.current = ""; deliveryKeyRef.current = ""; if (open) setCustomerPreviewOpen(true);
+    } catch (error) {
+      if (requestId === customerEstimateRequestRef.current && isCurrentCustomerEstimateRequest(requestKey, customerEstimateSourceRef.current)) setCustomerDocumentError(customerEstimateErrorMessage(error, "The Estimate preview could not be validated."));
+    } finally {
+      if (requestId === customerEstimateRequestRef.current && isCurrentCustomerEstimateRequest(requestKey, customerEstimateSourceRef.current)) setCustomerDocumentBusy(false);
+    }
   }
+
+  useEffect(() => {
+    if (!customerSourceReady || customerRevisionId || !refreshCustomerEstimateRef.current) return;
+    refreshCustomerEstimateRef.current = false;
+    previewCustomerEstimate({ open: false });
+  }, [customerEstimateKey, customerRevisionId, customerSourceReady]);
 
   async function refreshCustomerRevision(revisionId = customerRevisionId) {
     if (!revisionId) return;
@@ -360,11 +384,14 @@ export function CreateWorkorderPage({
     finally { setCustomerActivationBusy(false); }
   }
 
-  const customerDocumentAction = !isMechanicCreate ? <button className="button secondary" type="button" disabled={!customerSourceReady || customerDocumentBusy} onClick={previewCustomerEstimate}>{customerDocumentBusy ? "Loading Estimate…" : customerRevisionId ? "View estimate" : "Preview estimate"}</button> : null;
+  const estimateActionPending = customerEstimateActionPending({ busy: customerDocumentBusy, draft: savedDraft, draftStatus: workorderDraft?.status });
+  const estimateActionLabel = customerRevisionId ? "View estimate" : "Review estimate";
+  const customerDocumentAction = !isMechanicCreate ? <button className={`button secondary customer-estimate-preview-action${estimateActionPending ? " is-loading" : ""}`} type="button" disabled={!customerSourceReady || customerDocumentBusy} aria-busy={estimateActionPending} aria-label={estimateActionPending ? `${estimateActionLabel}, loading` : estimateActionLabel} onClick={() => previewCustomerEstimate()}><span>{estimateActionLabel}</span></button> : null;
   const customerDiscountControl = !isMechanicCreate && !customerRevisionId ? <CustomerDocumentDiscountEditor
     adjustments={customerAdjustments}
+    projection={customerProjection}
     onChange={updateCustomerAdjustments}
-    disabled={!customerSourceReady || customerDocumentBusy}
+    disabled={!["office", "admin"].includes(actor.role) || Boolean(customerRevisionId) || Boolean(savedDraft && savedDraft.status !== "active") || customerDocumentBusy}
     inline
     maximumOfficePercentage={actor.role === "office" ? maximumOfficeDiscount : null}
   /> : null;
@@ -416,7 +443,7 @@ export function CreateWorkorderPage({
     if (!errorSection) return;
     dismissKeyboard();
     setActiveSection(errorSection);
-    resetMobileScroll(errorSection);
+    resetMobileScroll();
   }, [errorSection, isPhone, officeCreateAttempt]);
 
   useEffect(() => {
@@ -429,22 +456,17 @@ export function CreateWorkorderPage({
     if (typeof activeElement?.blur === "function") activeElement.blur();
   }
 
-  function resetMobileScroll(section) {
+  function resetMobileScroll() {
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      if (section === "preview") {
-        previewRef.current?.querySelector?.(".preview-pane-content")?.scrollTo?.({ top: 0, left: 0 });
-        return;
-      }
       mobileScrollRef.current?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
     });
   }
 
   function selectMobileSection(section) {
     dismissKeyboard();
-    if (section === "preview" && !showEmbeddedPreview) jumpToPreview();
     setActiveSection(section);
-    resetMobileScroll(section);
+    resetMobileScroll();
   }
 
   return (
@@ -460,8 +482,6 @@ export function CreateWorkorderPage({
         "--keyboard-inset": `${viewport.keyboardInset}px`,
       }}
     >
-      <style>{workorderTemplateStyles}</style>
-      {previewPolicy.canRead ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
       <CreateWorkorderShell
             activeSection={activeSection}
             assignment={assignment}
@@ -477,34 +497,42 @@ export function CreateWorkorderPage({
             officeCreateState={officeCreateState}
             onBack={openOfficeWorkspace}
             onSelectSection={selectMobileSection}
-            onTogglePreview={jumpToPreview}
-            previewOpen={previewPolicy.canRead && showEmbeddedPreview}
-            previewActive={showEmbeddedPreview || previewFullscreen}
-            previewVisible={previewPolicy.canRead}
+            previewOpen={customerPreviewOpen}
             presentation={createPresentation}
             sectionPreferenceKey={`workorder.sectionOrder.v1:${actor.id}:${actor.role}:create`}
             sections={createSections}
             workorderDraft={workorderDraft}
-            supportingPane={!isPhone && previewPolicy.canRead ? <PreviewPane
-              id="workorder-preview-panel"
-              open={showEmbeddedPreview}
-              variant="full"
-              panelRef={previewRef}
-              countLabel={workorderCountLabel}
-              range={range}
-              printMenuOpen={printMenuOpen}
-              onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-              locale={locale}
-              primaryActionLabel={primaryActionLabel}
-              onFullscreen={openFullscreenPreview}
+            supportingPane={<DocumentsPanel
+              open={customerPreviewOpen}
+              onClose={() => setCustomerPreviewOpen(false)}
             >
-              <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={previewForm} />
-                {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
-                  : null}
-              </div>
-            </PreviewPane> : null}
+              {customerDocumentBusy && !customerProjection ? <p role="status">Preparing document…</p> : null}
+              {customerDocumentError ? <p role="alert">{customerDocumentError}</p> : null}
+              {customerProjection ? <>
+                {authorizationClassification === "approval_not_required" ? <p role="status">This Estimate is created with the Workorder; manual issuance is not required.</p> : null}
+                <CustomerDocumentReview
+                  projection={customerProjection}
+                  issueAvailable={authorizationClassification === "required_external_customer"
+                    && customerSourceReady && !customerRevisionId && Boolean(customerProjection.financialFingerprint)}
+                  onIssue={authorizationClassification === "required_external_customer" ? issueCustomerEstimate : undefined}
+                  issueBusy={customerDocumentBusy}
+                  shareLink={customerLink}
+                  onCopyLink={copyCustomerLink}
+                  onCreateReplacementGrant={grantRecoveryRequired ? createReplacementCustomerGrant : undefined}
+                  onRefreshResponse={() => refreshCustomerRevision()}
+                  onActivate={activateCustomerEstimate}
+                  activateAvailable={customerSourceReady && Boolean(customerRevisionId) && customerProjection.response?.status === "accepted" && customerProjection.eligibility?.canActivate}
+                  activationBusy={customerActivationBusy}
+                  delivery={customerLink && customerGrant.id ? <CustomerEstimateDelivery
+                    email={deliveryEmail}
+                    status={deliveryState.status}
+                    busy={deliveryState.busy}
+                    onEmailChange={setDeliveryEmail}
+                    onSend={sendEstimateEmail}
+                  /> : null}
+                />
+              </> : null}
+            </DocumentsPanel>}
             customerDocumentAction={customerDocumentAction}
           >
             {!createSections.length ? (
@@ -525,6 +553,7 @@ export function CreateWorkorderPage({
               errorFocusReady={errorFocusReady}
               form={form}
               createPricing={createPricing}
+              customerEstimateProjection={customerRevisionId ? null : customerProjection}
               locationLoadState={officeLocationsState}
               locations={officeLocations}
               message={createStatusMessage}
@@ -549,69 +578,11 @@ export function CreateWorkorderPage({
               onErrorFocusTarget={ensureFocusedFieldVisible}
               presentation={createPresentation}
               selectedVehicle={selectedVehicle}
-              sections={createSections.filter((section) => section.id !== WORKORDER_MODULE_IDS.PREVIEW)}
+              sections={createSections}
               vehicleLookup={vehicleLookup}
             />
             {customerDocumentError && !customerPreviewOpen ? <p role="alert">{customerDocumentError}</p> : null}
-            {customerPreviewOpen && customerProjection ? <CustomerDocumentReview
-              projection={customerProjection}
-              onClose={() => setCustomerPreviewOpen(false)}
-              issueAvailable={authorizationClassification === "required_external_customer"
-                && customerSourceReady && !customerRevisionId && Boolean(customerProjection.financialFingerprint)}
-              onIssue={issueCustomerEstimate}
-              issueBusy={customerDocumentBusy}
-              shareLink={customerLink}
-              onCopyLink={copyCustomerLink}
-              onCreateReplacementGrant={grantRecoveryRequired ? createReplacementCustomerGrant : undefined}
-              onRefreshResponse={() => refreshCustomerRevision()}
-              onActivate={activateCustomerEstimate}
-              activateAvailable={customerSourceReady && Boolean(customerRevisionId) && customerProjection.response?.status === "accepted" && customerProjection.eligibility?.canActivate}
-              activationBusy={customerActivationBusy}
-              actionError={customerDocumentError}
-              delivery={customerLink && customerGrant.id ? <CustomerEstimateDelivery
-                email={deliveryEmail}
-                status={deliveryState.status}
-                busy={deliveryState.busy}
-                onEmailChange={setDeliveryEmail}
-                onSend={sendEstimateEmail}
-              /> : null}
-            /> : null}
-          {isPhone && activeSection === "preview" && previewPolicy.canRead ? (
-            <CompactWorkorderPreview
-              panelRef={previewRef}
-              countLabel={workorderCountLabel}
-              range={range}
-              printMenuOpen={printMenuOpen}
-              onTogglePrintMenu={() => setPrintMenuOpen((open) => !open)}
-              locale={locale}
-              primaryActionLabel={primaryActionLabel}
-              onFullscreen={openFullscreenPreview}
-            >
-              <div ref={previewGridRef} className={`preview-grid ${effectiveCopies <= 1 ? "single" : ""}`}>
-                <WorkorderPreview label={t("preview.firstPage")} serial={firstSerial} form={previewForm} />
-                {effectiveCopies > 1 || lastPhysicalPageIndex > 0
-                  ? <WorkorderPreview label={t("preview.lastPage")} serial={lastSerial} form={previewForm} pageIndex={lastPhysicalPageIndex} />
-                  : null}
-              </div>
-            </CompactWorkorderPreview>
-          ) : null}
       </CreateWorkorderShell>
-
-      {previewPolicy.canRead ? <PreviewFullscreen
-        open={previewFullscreen}
-        form={previewForm}
-        serials={previewSerials}
-        pageIndex={fullscreenPageIndex}
-        zoom={fullscreenZoom}
-        range={range}
-        countLabel={workorderCountLabel}
-        actionLabel={primaryActionLabel}
-        onClose={() => setPreviewFullscreen(false)}
-        onPageChange={setFullscreenPageIndex}
-        onZoomChange={setFullscreenZoom}
-        locale={locale}
-      /> : null}
-      {previewPolicy.canRead ? <PrintModal state={printState} range={range} locale={locale} onClose={() => setPrintState({ open: false, stage: "idle", message: "" })} /> : null}
       {!isMechanicCreate ? (
         <DraftLeaveDialog
           open={draftLeaveOpen}

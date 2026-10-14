@@ -45,12 +45,11 @@ test("queue, detail, and Odoo behavior have focused owners", () => {
   assert.doesNotMatch(detailPage, /mark-odoo-entered|mark-missing-info/);
 });
 
-test("surveillance keeps shared preview and timeline implementations", () => {
+test("surveillance retires paper preview and keeps the shared timeline implementation", () => {
   const detailPage = source("./SurveillanceDetailPage.jsx");
   const chatModule = source("../../workorder-modules/chat/WorkorderChatModule.jsx");
-  assert.match(detailPage, /<PreviewPane/);
-  assert.match(detailPage, /<CompactWorkorderPreview/);
-  assert.match(detailPage, /baseDetailSections\.filter\(\(\{ id \}\) => id !== "preview"\)/);
+  assert.doesNotMatch(detailPage, /<PreviewPane|<CompactWorkorderPreview|<PreviewFullscreen|<WorkorderPreview/);
+  assert.match(detailPage, /: baseDetailSections;/);
   assert.match(detailPage, /baseDetailSections\.find\(\(section\) => section\.id === moduleId\)/);
   assert.match(detailPage, /renderInDetail: true/);
   assert.match(chatModule, /renderInDetail = isCompact \|\| isMechanicDetail/);

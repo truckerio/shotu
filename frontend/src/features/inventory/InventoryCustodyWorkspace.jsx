@@ -1,9 +1,11 @@
 import './inventory-tables.css';
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dropdown } from "../../components/forms/Dropdown.jsx";
 import { DatePicker } from "../../components/forms/DatePicker.jsx";
 import { Button } from "../../components/ui/Button.jsx";
-import { Pagination } from "../../components/ui/Pagination.jsx";
+import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
+import { useCheckpointPages } from "../../components/operations/useCheckpointPages.js";
+import { readCheckpointPosition } from "../../components/operations/checkpoint-position.js";
 import {
   SecondaryDetailPanel,
   SecondaryDetailSection,
@@ -78,6 +80,7 @@ const identity = (entry) =>
     .filter(Boolean)
     .join(" · ") || "Tracked part";
 const availableUnit = (unit) => unit?.status === "in_stock" && unit?.custodyHolderType === "inventory_location" && (["new", "serviceable_used", "refurbished"].includes(unit?.conditionCode) || (unit?.conditionCode === "unknown" && unit?.custodyLegacyAvailable === true));
+const PAGE_SIZE = 25;
 const hasStaleLocationDetail = (unit) =>
   Boolean(unit?.custodyBinLocation || unit?.custodyExternalReference);
 const canCorrectLocationDetail = (unit) =>
@@ -181,34 +184,11 @@ export function InventoryCustodyWorkspace({
 }) {
   const [scopeId, setScopeId] = useState(initialLocationId);
   const [tab, setTab] = useState(initialTab);
-  const [stock, setStock] = useState({
-    items: [],
-    counts: {},
-    nextCursor: null,
-    loading: false,
-    error: "",
-  });
-  const [queue, setQueue] = useState({
-    items: [],
-    counts: {},
-    nextCursor: null,
-    loading: false,
-    error: "",
-  });
-  const [stockCursor, setStockCursor] = useState([""]);
-  const [queueCursor, setQueueCursor] = useState([""]);
   const [query, setQuery] = useState("");
   const [condition, setCondition] = useState("");
   const [queueStatus, setQueueStatus] = useState("awaiting_handoff");
   const [route, setRoute] = useState("");
   const [selectedPart, setSelectedPart] = useState(null);
-  const [units, setUnits] = useState({
-    items: [],
-    nextCursor: null,
-    loading: false,
-    error: "",
-  });
-  const [unitCursor, setUnitCursor] = useState([""]);
   const [selectedCase, setSelectedCase] = useState(null);
   const [initialCasePending, setInitialCasePending] = useState(Boolean(initialCaseId));
   const [initialCaseError, setInitialCaseError] = useState("");
@@ -240,7 +220,7 @@ export function InventoryCustodyWorkspace({
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [positionsError, setPositionsError] = useState("");
   const [positionsRefresh, setPositionsRefresh] = useState(0);
-  const refreshRef = useRef(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const scope = useMemo(
     () => locations.find((location) => location.id === scopeId) || null,
     [locations, scopeId],
@@ -248,9 +228,6 @@ export function InventoryCustodyWorkspace({
   const companyId = scope?.companyId || scope?.company_id || "";
   const locationId = scope?.id || "";
   const scopeReady = Boolean(companyId && locationId);
-  const currentStockCursor = stockCursor.at(-1);
-  const currentQueueCursor = queueCursor.at(-1);
-  const currentUnitCursor = unitCursor.at(-1);
 
   useEffect(() => {
     if (!scopeId && locations.length === 1) setScopeId(locations[0].id);
@@ -258,66 +235,18 @@ export function InventoryCustodyWorkspace({
   useEffect(() => { if (initialLocationId) setScopeId(initialLocationId); }, [initialLocationId]);
   useEffect(() => { setInitialCasePending(Boolean(initialCaseId)); setInitialCaseError(""); }, [initialCaseId]);
   useEffect(() => {
-    setStockCursor([""]);
-    setQueueCursor([""]);
     setSelectedPart(null);
     setSelectedCase(null);
     setExactIdentityId("");
   }, [scopeId, query, condition, queueStatus, route]);
 
-  useEffect(() => {
-    if (!scopeReady || tab !== "stock") return undefined;
-    let active = true;
-    setStock((current) => ({ ...current, loading: true, error: "" }));
-    const timer = window.setTimeout(
-      () =>
-        api(
-          apiPath("/api/inventory-reuse/stock", {
-            companyId,
-            locationId,
-            q: query.trim(),
-            condition,
-            limit: 25,
-            cursor: currentStockCursor,
-          }),
-        )
-          .then(
-            (result) =>
-              active &&
-              setStock({
-                items: result.items || [],
-                counts: result.counts || {},
-                nextCursor: result.nextCursor || null,
-                capabilities: result.capabilities || {},
-                loading: false,
-                error: "",
-              }),
-          )
-          .catch(
-            (error) =>
-              active &&
-              setStock((current) => ({
-                ...current,
-                loading: false,
-                error: error.message || "Stock could not be loaded.",
-              })),
-          ),
-      160,
-    );
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [
-    scopeReady,
-    tab,
-    companyId,
-    locationId,
-    query,
-    condition,
-    currentStockCursor,
-    refreshRef.current,
-  ]);
+  const stockKey = `inventory-custody-stock:${JSON.stringify([companyId, locationId, query.trim(), condition])}`;
+  const stockFetch = useCallback(async (page, { signal }) => {
+    const result = await api(apiPath("/api/inventory-reuse/stock", { companyId, locationId, q: query.trim(), condition, limit: PAGE_SIZE, page }), { signal });
+    return { ...result, meta: { capabilities: result.capabilities || {} } };
+  }, [companyId, condition, locationId, query]);
+  const stockInitialPage = useMemo(() => readCheckpointPosition(stockKey)?.page || 1, [stockKey]);
+  const stock = useCheckpointPages({ queryKey: stockKey, fetchPage: stockFetch, enabled: scopeReady && tab === "stock", refreshKey: refreshVersion, initialPage: stockInitialPage, getItemKey: (item) => item.catalogPartId });
 
   useEffect(() => {
     setPositions([]);
@@ -341,113 +270,20 @@ export function InventoryCustodyWorkspace({
     };
   }, [action, locationId, positionsRefresh, scopeReady]);
 
-  useEffect(() => {
-    if (!scopeReady || tab !== "returns") return undefined;
-    let active = true;
-    setQueue((current) => ({ ...current, loading: true, error: "" }));
-    const timer = window.setTimeout(
-      () =>
-        api(
-          apiPath("/api/inventory-reuse/queue", {
-            companyId,
-            locationId,
-            q: query.trim(),
-            status: queueStatus,
-            route,
-            limit: 25,
-            cursor: currentQueueCursor,
-          }),
-        )
-          .then(
-            (result) =>
-              active &&
-              setQueue({
-                items: result.items || [],
-                counts: result.counts || {},
-                nextCursor: result.nextCursor || null,
-                capabilities: result.capabilities || {},
-                loading: false,
-                error: "",
-              }),
-          )
-          .catch(
-            (error) =>
-              active &&
-              setQueue((current) => ({
-                ...current,
-                loading: false,
-                error:
-                  error.message || "Returns and repairs could not be loaded.",
-              })),
-          ),
-      160,
-    );
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [
-    scopeReady,
-    tab,
-    companyId,
-    locationId,
-    query,
-    queueStatus,
-    route,
-    currentQueueCursor,
-    refreshRef.current,
-  ]);
+  const queueKey = `inventory-custody-queue:${JSON.stringify([companyId, locationId, query.trim(), queueStatus, route])}`;
+  const queueFetch = useCallback(async (page, { signal }) => {
+    const result = await api(apiPath("/api/inventory-reuse/queue", { companyId, locationId, q: query.trim(), status: queueStatus, route, limit: PAGE_SIZE, page }), { signal });
+    return { ...result, meta: { counts: result.counts || {}, capabilities: result.capabilities || {} } };
+  }, [companyId, locationId, query, queueStatus, route]);
+  const queueInitialPage = useMemo(() => readCheckpointPosition(queueKey)?.page || 1, [queueKey]);
+  const queue = useCheckpointPages({ queryKey: queueKey, fetchPage: queueFetch, enabled: scopeReady && tab === "returns", refreshKey: refreshVersion, initialPage: queueInitialPage, getItemKey: (item) => item.id });
 
-  useEffect(() => {
-    if (!scopeReady || !selectedPart?.catalogPartId) return undefined;
-    let active = true;
-    setUnits((current) => ({ ...current, loading: true, error: "" }));
-    api(
-      apiPath(
-        `/api/inventory-reuse/stock/${encodeURIComponent(selectedPart.catalogPartId)}/units`,
-        {
-          companyId,
-          locationId,
-          q: query.trim(),
-          condition,
-          limit: 25,
-          cursor: currentUnitCursor,
-        },
-      ),
-    )
-      .then(
-        (result) =>
-          active &&
-          setUnits({
-            items: result.items || [],
-            nextCursor: result.nextCursor || null,
-            capabilities: result.capabilities || {},
-            loading: false,
-            error: "",
-          }),
-      )
-      .catch(
-        (error) =>
-          active &&
-          setUnits((current) => ({
-            ...current,
-            loading: false,
-            error: error.message || "Exact units could not be loaded.",
-          })),
-      );
-    return () => {
-      active = false;
-    };
-  }, [
-    scopeReady,
-    selectedPart?.catalogPartId,
-    companyId,
-    locationId,
-    query,
-    condition,
-    currentUnitCursor,
-    refreshRef.current,
-  ]);
+  const unitKey = `inventory-custody-units:${JSON.stringify([companyId, locationId, selectedPart?.catalogPartId || "", query.trim(), condition])}`;
+  const unitFetch = useCallback(async (page, { signal }) => api(apiPath(`/api/inventory-reuse/stock/${encodeURIComponent(selectedPart.catalogPartId)}/units`, { companyId, locationId, q: query.trim(), condition, limit: PAGE_SIZE, page }), { signal }), [companyId, condition, locationId, query, selectedPart?.catalogPartId]);
+  const unitInitialPage = useMemo(() => readCheckpointPosition(unitKey)?.page || 1, [unitKey]);
+  const units = useCheckpointPages({ queryKey: unitKey, fetchPage: unitFetch, enabled: scopeReady && Boolean(selectedPart?.catalogPartId), refreshKey: refreshVersion, initialPage: unitInitialPage, getItemKey: (item) => item.id });
+  const stockMeta = stock.pages[0]?.meta || {};
+  const queueMeta = queue.pages[0]?.meta || {};
 
   async function openCase(caseItem) {
     setSelectedCase(caseItem);
@@ -586,9 +422,7 @@ export function InventoryCustodyWorkspace({
       setAction("");
       setSelectedCase(null);
       setDetail(null);
-      refreshRef.current += 1;
-      setStockCursor([""]);
-      setQueueCursor([""]);
+      setRefreshVersion((value) => value + 1);
     } catch (error) {
       if (!error.status || error.status >= 500)
         setActionError(
@@ -633,7 +467,7 @@ export function InventoryCustodyWorkspace({
       setRetryAllowed(false);
       setAction("");
       setSelectedCase(null);
-      refreshRef.current += 1;
+      setRefreshVersion((value) => value + 1);
     } catch (error) {
       if (error.code === "INVENTORY_REUSE_OPERATION_NOT_FOUND")
         setRetryAllowed(true);
@@ -667,9 +501,7 @@ export function InventoryCustodyWorkspace({
       setPendingRequest(null);
       setAction("");
       await openCase(caseItem);
-      refreshRef.current += 1;
-      setStockCursor([""]);
-      setQueueCursor([""]);
+      setRefreshVersion((value) => value + 1);
     } catch (error) {
       if (error.status === 409) {
         clearCustodyRecovery(window.sessionStorage, recoveryScope);
@@ -710,7 +542,7 @@ export function InventoryCustodyWorkspace({
   }
   const caps =
     detail?.capabilities ||
-    (tab === "stock" ? stock.capabilities : queue.capabilities) ||
+    (tab === "stock" ? stockMeta.capabilities : queueMeta.capabilities) ||
     {};
   const activeCase = detail?.case || selectedCase;
   const nextAction = statusForAction(activeCase, caps);
@@ -742,7 +574,6 @@ export function InventoryCustodyWorkspace({
   ) : null;
   const isAwaitingReturn =
     (activeCase?.workflowStatus || activeCase?.status) === "awaiting_handoff";
-  const page = tab === "stock" ? stockCursor.length : queueCursor.length;
   const state = tab === "stock" ? stock : queue;
   return (
     <section
@@ -838,14 +669,9 @@ export function InventoryCustodyWorkspace({
               items={QUEUES.map(([id, label]) => ({
                 id,
                 label,
-                count: queue.counts?.[id] ?? "-",
+                count: queueMeta.counts?.[id] ?? "-",
               }))}
             />
-          ) : null}
-          {state.error ? (
-            <p className="ops-error" role="alert">
-              {state.error}
-            </p>
           ) : null}
           {initialCaseError ? (
             <p className="ops-error" role="alert">
@@ -857,28 +683,25 @@ export function InventoryCustodyWorkspace({
               {state.loading
                 ? "Updating results…"
                 : tab === "stock"
-                  ? `${stock.items.length} catalog parts`
-                  : `${queue.items.length} returned parts`}
+                  ? `${stock.total} catalog parts`
+                  : `${queue.total} returned parts`}
             </span>
           </OperationalCollectionResultHeader>
           {tab === "stock" ? (
-            <OperationalCollectionTable className="inventory-data-table inventory-data-table-five"
-              ariaLabel="Stock by catalog part"
-              busy={stock.loading}
-              columns={[
+            <CheckpointCollection queue={stock} label="catalog parts" pageSize={PAGE_SIZE} storageKey={stockKey} ariaLabel="Stock by catalog part" getItemKey={(item) => item.catalogPartId}
+              renderItems={(entries) => <OperationalCollectionTable className="inventory-data-table inventory-data-table-five" ariaLabel="Stock by catalog part" busy={stock.loading || stock.loadingMore} columns={[
                 { id: "part", label: "Part" },
                 { id: "available", label: "Available" },
                 { id: "reserved", label: "Reserved" },
                 { id: "installed", label: "Installed" },
                 { id: "attention", label: "Needs attention" },
-              ]}
-            >
-              {stock.items.map((item) => (
+              ]}>
+              {entries.map(({ item, key, rowProps }) => (
                 <OperationalCollectionRow
-                  key={item.catalogPartId}
+                  {...rowProps}
+                  key={key}
                   onAction={() => {
                     setSelectedPart(item);
-                    setUnitCursor([""]);
                   }}
                   ariaLabel={`Open ${identity(item)}`}
                 >
@@ -900,22 +723,21 @@ export function InventoryCustodyWorkspace({
                   </OperationalCollectionCell>
                 </OperationalCollectionRow>
               ))}
-            </OperationalCollectionTable>
+            </OperationalCollectionTable>}
+            ><p className="inventory-empty">No matching records at this location.</p></CheckpointCollection>
           ) : (
-            <OperationalCollectionTable className="inventory-data-table inventory-data-table-five"
-              ariaLabel="Returns and repairs"
-              busy={queue.loading}
-              columns={[
+            <CheckpointCollection queue={queue} label="returned parts" pageSize={PAGE_SIZE} storageKey={queueKey} ariaLabel="Returns and repairs" getItemKey={(item) => item.id}
+              renderItems={(entries) => <OperationalCollectionTable className="inventory-data-table inventory-data-table-five" ariaLabel="Returns and repairs" busy={queue.loading || queue.loadingMore} columns={[
                 { id: "part", label: "Part / serial" },
                 { id: "holder", label: "Where it is" },
                 { id: "route", label: "Queue" },
                 { id: "age", label: "Age" },
                 { id: "next", label: "Next action" },
-              ]}
-            >
-              {queue.items.map((item) => (
+              ]}>
+              {entries.map(({ item, key, rowProps }) => (
                 <OperationalCollectionRow
-                  key={item.id}
+                  {...rowProps}
+                  key={key}
                   onAction={() => openCase(item)}
                   ariaLabel={`Open ${identity(item)}`}
                 >
@@ -932,38 +754,20 @@ export function InventoryCustodyWorkspace({
                     {item.ageLabel || item.age || "—"}
                   </OperationalCollectionCell>
                   <OperationalCollectionCell label="Next action">
-                    {commandLabel(item, queue.capabilities || {})}
+                    {commandLabel(item, queueMeta.capabilities || {})}
                   </OperationalCollectionCell>
                 </OperationalCollectionRow>
               ))}
-            </OperationalCollectionTable>
+            </OperationalCollectionTable>}
+            ><p className="inventory-empty">No matching records at this location.</p></CheckpointCollection>
           )}
-          {!state.loading && !state.items.length ? (
-            <p className="inventory-empty">
-              No matching records at this location.
-            </p>
-          ) : null}
-          <Pagination
-            currentPage={page}
-            pageCount={state.nextCursor ? page + 1 : page}
-            setPage={(next) => {
-              const stack = tab === "stock" ? stockCursor : queueCursor;
-              const setter = tab === "stock" ? setStockCursor : setQueueCursor;
-              if (next < stack.length) setter(stack.slice(0, next));
-              else if (state.nextCursor) setter([...stack, state.nextCursor]);
-            }}
-            total={0}
-            label="records"
-            loading={state.loading}
-          />
           {caps.configure ? (
             <ReuseSetup
               companyId={companyId}
               locationId={locationId}
               requestedPolicyPart={requestedPolicyPart}
               onSaved={() => {
-                refreshRef.current += 1;
-                setQueueCursor([""]);
+                setRefreshVersion((value) => value + 1);
               }}
             />
           ) : null}
@@ -1007,13 +811,10 @@ export function InventoryCustodyWorkspace({
               </p>
             </SecondaryDetailSection>
             <SecondaryDetailSection title="Exact units">
-              {units.error ? <p role="alert">{units.error}</p> : null}
-              {units.loading ? (
-                <p role="status">Loading exact units…</p>
-              ) : (
-                <ul className="inventory-custody-units">
-                  {units.items.map((unit) => (
-                    <li key={unit.id}>
+              <CheckpointCollection queue={units} label="exact units" pageSize={PAGE_SIZE} storageKey={unitKey} ariaLabel="Exact units" getItemKey={(unit) => unit.id}
+                renderItems={(entries) => <ul className="inventory-custody-units">
+                  {entries.map(({ item: unit, key, rowProps }) => (
+                    <li {...rowProps} key={key}>
                       <strong>{unit.serialNumber || unit.id}</strong>
                       <span>
                         {CONDITIONS[unit.conditionCode] || "Not classified"} ·{" "}
@@ -1022,11 +823,8 @@ export function InventoryCustodyWorkspace({
                       </span>
                     </li>
                   ))}
-                </ul>
-              )}
-              {!units.loading && !units.items.length ? (
-                <p>No exact units match this filter.</p>
-              ) : null}
+                </ul>}
+              ><p>No exact units match this filter.</p></CheckpointCollection>
             </SecondaryDetailSection>
           </>
         ) : null}

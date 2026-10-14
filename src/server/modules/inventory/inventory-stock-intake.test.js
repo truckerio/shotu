@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createAggregateStockIntake } from "./inventory-stock-intake.service.js";
+import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 
 const COMPANY_ID = "00000000-0000-4000-8000-000000000101";
 const LOCATION_ID = "00000000-0000-4000-8000-000000000102";
@@ -9,10 +10,12 @@ const PART_ID = "00000000-0000-4000-8000-000000000103";
 const ACTOR_ID = "00000000-0000-4000-8000-000000000104";
 const context = (role = "office") => ({ actor: { id: ACTOR_ID, role }, companyIds: new Set([COMPANY_ID]), locationIds: new Set([LOCATION_ID]) });
 const input = { quantity: 3, uomCode: "ea", trackingMode: "quantity", confirmation: "physically_present_at_location", idempotencyKey: "manual-intake-101" };
+const resolveLocationScope = (requestContext, locationId, options) => effectiveInventoryScope(requestContext, { companyId: COMPANY_ID, locationId, ...options });
 
 test("aggregate intake forwards scoped physical evidence and returns replay state", async () => {
   let command;
   const result = await createAggregateStockIntake(PART_ID, LOCATION_ID, input, context(), {
+    resolveLocationScope,
     postIntake: async (value) => { command = value; return { kind: "posted", receiptId: "receipt-1", quantity: 3 }; },
   });
   assert.deepEqual(command.companyIds, [COMPANY_ID]);
@@ -23,9 +26,11 @@ test("aggregate intake forwards scoped physical evidence and returns replay stat
 
 test("aggregate intake blocks mechanics and stale tracking policy", async () => {
   await assert.rejects(createAggregateStockIntake(PART_ID, LOCATION_ID, input, context("mechanic"), {
+    resolveLocationScope,
     postIntake: async () => assert.fail("mechanic reached repository"),
   }), (error) => error.code === "INVENTORY_CREATE_FORBIDDEN" && error.statusCode === 403);
   await assert.rejects(createAggregateStockIntake(PART_ID, LOCATION_ID, input, context(), {
+    resolveLocationScope,
     postIntake: async () => ({ kind: "tracking_policy" }),
   }), (error) => error.code === "INVENTORY_INTAKE_TRACKING_POLICY" && error.statusCode === 409);
 });
@@ -33,6 +38,7 @@ test("aggregate intake blocks mechanics and stale tracking policy", async () => 
 test("aggregate intake schema limits precision and canonical policy values", async () => {
   let accepted;
   await createAggregateStockIntake(PART_ID, LOCATION_ID, { ...input, quantity: 1.005, uomCode: "gal", trackingMode: "measured_bulk" }, context(), {
+    resolveLocationScope,
     postIntake: async (value) => { accepted = value; return { kind: "posted", receiptId: "receipt-1005", quantity: value.quantity }; },
   });
   assert.equal(accepted.quantity, 1.005);
@@ -48,6 +54,7 @@ test("revoked location cannot replay a prior intake", async () => {
   let called = false;
   const revoked = { ...context(), locationIds: new Set() };
   await assert.rejects(createAggregateStockIntake(PART_ID, LOCATION_ID, input, revoked, {
+    resolveLocationScope,
     postIntake: async () => { called = true; return { kind: "replay", receiptId: "hidden-receipt", quantity: 3 }; },
   }), (error) => error.code === "inventory_not_found" && error.statusCode === 404);
   assert.equal(called, false);

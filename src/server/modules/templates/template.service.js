@@ -5,7 +5,7 @@ import { validateTemplateDefinition } from "./template-family.registry.js";
 
 function adminScope(context, companyId, locationId = null) {
   const actor = requireActor(context); if (context.companyRoles?.get(companyId) !== "admin") throw permissionDenied();
-  requireCompanyAccess(context, companyId); if (locationId) requireLocationAccess(context, locationId); return actor;
+  requireCompanyAccess(context, companyId); if (locationId) requireLocationAccess(context, locationId, companyId); return actor;
 }
 export async function createInspectionTemplate(context, input, dependencies = {}) {
   const actor = adminScope(context, input.companyId); const definition = validateTemplateDefinition("inspection", input.definition);

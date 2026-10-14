@@ -7,7 +7,7 @@ test("inventory workspace is the single stock owner and delegates history to inv
   const office = await readFile(new URL("../office/OfficeWorkspace.jsx", import.meta.url), "utf8");
   const admin = await readFile(new URL("../admin/workspace/AdminWorkspaceShell.jsx", import.meta.url), "utf8");
   assert.match(workspace, /\/api\/office\/inventory\/stock/);
-  assert.match(workspace, /params\.set\("sort", stockSort\)/);
+  assert.match(workspace, /sort: stockSort/);
   assert.doesNotMatch(workspace, /filterAndSortStock\(items/);
   assert.match(workspace, /All locations/);
   assert.match(workspace, /<IconButton className="inventory-refresh-button" icon=\{RefreshCw01\} label="Refresh inventory"/);
@@ -22,10 +22,10 @@ test("inventory workspace is the single stock owner and delegates history to inv
   assert.match(workspace, /<OperationalCollectionTabs/);
   assert.match(workspace, /<OperationalCollectionToolbar className="inventory-toolbar inventory-stock-toolbar">/);
   assert.match(workspace, /<OperationalCollectionResultHeader className="inventory-results-line" aria-live="polite">/);
-  assert.match(workspace, /<OperationalCollectionTable/);
+  assert.match(workspace, /<CheckpointCollection queue=\{stockQueue\}/);
   assert.match(workspace, /<OperationalCollectionRow/);
   assert.match(workspace, /<OperationalCollectionCell/);
-  assert.match(workspace, /busy=\{refreshing\}/);
+  assert.match(workspace, /queryKey: stockQueryKey, refreshKey, getItemKey: stockItemKey/);
   assert.match(workspace, /Updating results/);
   assert.match(workspace, /stockLoaded/);
   assert.doesNotMatch(workspace, /\/api\/office\/inventory\/invoices/);
@@ -91,13 +91,13 @@ test("stock filters preserve search priority and compact the secondary controls 
     readFile(new URL("./InventoryWorkspace.jsx", import.meta.url), "utf8"),
     readFile(new URL("./inventory-workspace.css", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /<section className="operational-collection-surface inventory-section-surface"[\s\S]*?<OperationalCollectionTabs[\s\S]*?<OperationalCollectionTable/);
+  assert.match(workspace, /<section className="operational-collection-surface inventory-section-surface"[\s\S]*?<OperationalCollectionTabs[\s\S]*?<CheckpointCollection/);
   assert.match(workspace, /aria-label=\{`\$\{INVENTORY_SECTIONS\.find/);
   assert.match(styles, /\.inventory-stock-table \.operational-collection-table-head > span:not\(:first-child\)\s*\{\s*justify-content:\s*flex-end;\s*text-align:\s*right;/);
   assert.match(styles, /\.inventory-stock-row > \.operational-collection-cell:not\(:first-child\)\s*\{\s*justify-items:\s*end;\s*text-align:\s*right;/);
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
   assert.match(styles, /\.inventory-stock-toolbar \.inventory-search-field\s*\{\s*grid-column:\s*1 \/ -1;/);
-  assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/);
+  assert.match(styles, /@media \(max-width: 360px\)[\s\S]*?\.inventory-stock-toolbar\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
 });
 
 test("Inbound owns the global arrival and invoice entry points while Purchasing keeps contextual supplier intake", async () => {
@@ -131,12 +131,13 @@ test("Inbound owns the global arrival and invoice entry points while Purchasing 
 
 test("Inbound is a server-backed list and detail handoff workspace", async () => {
   const inbound = await readFile(new URL("./InventoryInboundWorkspace.jsx", import.meta.url), "utf8");
-  assert.match(inbound, /api\(inboundRequestUrl\(\{ view, locationId, query, page \}\)\)/);
+  assert.match(inbound, /useCheckpointPages\(\{ queryKey: inboundQueryKey/);
+  assert.match(inbound, /<CheckpointCollection queue=\{inboundQueue\} label="inbound items" pageSize=\{100\}/);
+  assert.match(inbound, /<OperationalDataRow \{\.\.\.rowProps\} id=\{item\.id\} key=\{key\}>/);
+  assert.doesNotMatch(inbound, />Previous<|>Next</);
   assert.match(inbound, /ariaLabel="Inbound views"/);
   assert.match(inbound, /aria-label="Inbound shop"/);
   assert.match(inbound, /aria-label="Search inbound work"/);
-  assert.match(inbound, /role="alert"/);
-  assert.match(inbound, />Retry<\/Button>/);
   assert.match(inbound, /<SecondaryDetailPanel/);
   assert.match(inbound, /onReceivePurchaseOrder\?\.\(item\.poId, item\.locationId\)/);
   assert.match(inbound, /onAddInventory\?\.\(item\.locationId\)/);
@@ -413,6 +414,10 @@ test("stock starts unified add stock and keeps location count handoffs", async (
 
 test("Purchases posts one tracking-aware partial receipt instead of marking a whole PO received first", async () => {
   const purchases = await readFile(new URL("./InventoryPurchases.jsx", import.meta.url), "utf8");
+  assert.match(purchases, /useCheckpointPages\(\{queryKey:purchasingQueryKey/);
+  assert.match(purchases, /<CheckpointCollection queue=\{purchaseQueue\}/);
+  assert.match(purchases, /<OperationalDataRow \{\.\.\.rowProps\} id=\{order\.id\} key=\{key\}>/);
+  assert.doesNotMatch(purchases, />Previous<|>Next</);
   assert.match(purchases, /ReceiptLinesEditor/);
   assert.match(purchases, /\/api\/office\/inventory\/purchasing\/\$\{encodeURIComponent\(receiptOrder\.id\)\}\/receipts/);
   assert.match(purchases, /receiptLinePayload\(receiptLines\)/);
@@ -566,7 +571,8 @@ test("part detail pages keep the daily stock facts visible and secondary records
   assert.match(activity, /href=\{receiptHref\(item\.receiptId\)\}>Open receipt<\/a>/);
   assert.match(activity, /inventorySection: "inbound", receiptId/);
   assert.doesNotMatch(activity, /<code>\{item\.receiptId\}<\/code>/);
-  assert.match(activity, />Refresh<\/Button>/);
+  assert.match(activity, /<CheckpointCollection queue=\{queue\} label="movements"/);
+  assert.match(activity, /queryKey: scope, refreshKey/);
   assert.match(styles, /\.inventory-stock-activity-list/);
   assert.match(styles, /\.inventory-detail-other-locations/);
 });
@@ -736,8 +742,10 @@ test("inventory availability filters use the shared collection template without 
   assert.match(workspace, /Filter stock by availability/);
   assert.match(workspace, /No matching stock/);
   assert.match(workspace, /use Reset view above/);
-  assert.match(workspace, /className=\{`inventory-stock-table inventory-data-table\$\{refreshing \? " is-refreshing" : ""\}`\}/);
-  assert.match(workspace, /<Pagination currentPage=\{stockPage\} pageCount=\{stockMeta\.pageCount\} setPage=\{setStockPage\} total=\{stockMeta\.total\} label="parts" loading=\{refreshing\} \/>/);
+  assert.match(workspace, /className="inventory-stock-table inventory-data-table"/);
+  assert.match(workspace, /<CheckpointCollection queue=\{stockQueue\} label="parts" pageSize=\{20\} getItemKey=\{stockItemKey\}/);
+  assert.doesNotMatch(workspace, /<CollectionPagination|setStockPage/);
+  assert.match(workspace, /setSelectedLocationPart\(item\)/);
   assert.match(styles, /\.inventory-stock-table\.is-refreshing/);
   assert.doesNotMatch(styles, /\.inventory-workspace \{|\.inventory-workspace-header|\.inventory-workspace-heading|\.inventory-workspace-actions|\.inventory-stock-controls|\.inventory-stock-filters|\.inventory-stock-list|\.inventory-stock-head|\.inventory-stock-results|\.inventory-stock-row:hover|\.inventory-stock-row:focus-visible/);
   assert.match(styles, /\.inventory-results-progress/);
@@ -769,8 +777,11 @@ test("part location drilldown creates and prints serialized child QR labels", as
   assert.match(panel, /physically_present_at_location/);
   assert.match(panel, /Condition evidence \(required\)/);
   assert.match(panel, /setCustodyRefreshVersion\(\(version\) => version \+ 1\)/);
-  assert.equal((panel.match(/className="inventory-serial-list"/g) || []).length, 1);
-  assert.match(panel, /const visibleUnits = companyId && !custodyUnits\.error/);
+  assert.equal((panel.match(/className="inventory-serial-list"/g) || []).length, 2);
+  assert.match(panel, /useCheckpointPages/);
+  assert.match(panel, /CheckpointCollection/);
+  assert.match(panel, /pageSize=\{25\}/);
+  assert.match(panel, /<article \{\.\.\.rowProps\}/);
   assert.match(panel, /Filter exact units by state/);
   assert.match(panel, /unitState: custodyUnitState/);
   assert.match(panel, /\["available", "Available"\]/);
@@ -809,7 +820,7 @@ test("count sheets use server pagination and accessible upload dialog", async ()
     readFile(new URL("../../components/ui/UploadDialog.jsx", import.meta.url), "utf8"),
     readFile(new URL("../../components/ui/upload-dialog.css", import.meta.url), "utf8"),
   ]);
-  assert.match(panel, /count-imports\?page=\$\{importPage\}&pageSize=10/);
+  assert.match(panel, /count-imports\?page=\$\{page\}&pageSize=10/);
   assert.match(panel, /pageCount: Number\(result\.pageCount\) \|\| 1/);
   assert.match(panel, /<UploadDialog title="Import count sheet"/);
   assert.match(panel, /isDismissable=\{!uploading\}/);
@@ -821,7 +832,12 @@ test("count sheets use server pagination and accessible upload dialog", async ()
   assert.match(sharedDialog, /aria-live="assertive"/);
   assert.match(sharedStyles, /\.shared-upload-dropzone/);
   assert.match(sharedStyles, /@media \(max-width:700px\)/);
-  assert.match(panel, /<Pagination currentPage=\{importPage\}/);
+  assert.match(panel, /useCheckpointPages\(\{ queryKey: "inventory-count-imports"/);
+  assert.match(panel, /<CheckpointCollection queue=\{importQueue\} label="count sheets" pageSize=\{10\}/);
+  assert.match(panel, /useClientCheckpointPages\(filteredExceptions, \{ pageSize: 12/);
+  assert.match(panel, /<CheckpointCollection queue=\{exceptionQueue\} label="rows" pageSize=\{12\}/);
+  assert.match(panel, /<OperationalDataRow \{\.\.\.rowProps\} id=\{entry\.id\} key=\{key\}>/);
+  assert.match(panel, /<InventoryCountExceptionRow key=\{key\} rowProps=\{rowProps\}/);
   assert.match(panel, /label: stocktake\.sourceFileName \|\| "Count sheet"/);
   assert.match(panel, /ariaLabel="Uploaded count sheets"/);
   assert.match(panel, /No count sheets uploaded/);
@@ -830,6 +846,14 @@ test("count sheets use server pagination and accessible upload dialog", async ()
   assert.doesNotMatch(panel, /Back to uploaded files/);
   assert.match(panel, /data-inventory-import=\{entry\.id\}/);
   assert.match(panel, /returnFocusImportIdRef/);
+});
+
+test("inventory exact-page collections use the shared checkpoint wrapper", async () => {
+  const authority = await readFile(new URL("./InventoryAuthorityExceptionsPanel.jsx", import.meta.url), "utf8");
+  assert.match(authority, /useCheckpointPages\(\{ queryKey: "inventory-authority-exceptions"/);
+  assert.match(authority, /<CheckpointCollection queue=\{queue\} label="exceptions" pageSize=\{25\}/);
+  assert.match(authority, /<article \{\.\.\.rowProps\} key=\{key\}>/);
+  assert.doesNotMatch(authority, /<CollectionPagination\b|<Pagination\b/);
 });
 
 test("only the admin workspace enables applying physically counted inventory", async () => {

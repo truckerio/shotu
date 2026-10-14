@@ -17,6 +17,7 @@ import { getLocationTemplates } from "../db/repositories/templates.repo.js";
 import { readStoredChatImage } from "../modules/chat/chat-media.service.js";
 import { requireCompanyAccess, requireLocationAccess } from "../auth/authorize.js";
 import { requireWorkorderAccess } from "../auth/resource-access.js";
+import { effectiveCompanyContext, effectiveCompanyRole, requireCompanyRole } from "../auth/company-role.js";
 import { recordWorkorderOpen } from "../modules/workorders/workorder-detail.service.js";
 import { acknowledgeChatReceiptsSchema } from "../modules/chat/chat-receipts.schemas.js";
 import { normalizeModuleAccessMap, normalizeUserModuleAccessMap } from "../../../shared/workorder-modules.js";
@@ -100,7 +101,8 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
   }
 
   if (req.method === "GET" && url.pathname === "/api/mechanic/template") {
-    const rows = await getLocationTemplates(requestContext.actor.locationIds || []);
+    const rows = (await getLocationTemplates(requestContext.actor.locationIds || []))
+      .filter((row) => effectiveCompanyRole(requestContext, row.company_id) === "mechanic");
     const locations = rows.map((row) => ({
       location: {
         id: row.location_id,
@@ -142,10 +144,13 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
     const { decisions } = await resolveModules(requestContext, detailId, {
       resourceAccess: { allowAvailable: true, allowActiveAtLocation: true },
     });
+    const detail = await loadDetail(detailId, mechanicUserId, requestContext);
+    requireCompanyRole(requestContext, detail.workorder.companyId, ["mechanic"]);
+    const targetContext = effectiveCompanyContext(requestContext, detail.workorder.companyId);
     sendJson(res, 200, await projectLoadedProtectedWorkorderDetail(
-      await loadDetail(detailId, mechanicUserId),
+      detail,
       decisions,
-      { viewerRole: requestContext.actor.role },
+      { viewerRole: targetContext.actor.role },
       dependencies,
     ));
     return true;
@@ -153,8 +158,9 @@ export async function handleMechanicApi(req, res, url, helpers, dependencies = {
 
   const openedId = workorderIdFrom(url.pathname, "/opened");
   if (req.method === "POST" && openedId) {
-    await requireWorkorderAccess(requestContext, openedId, { allowAvailable: true, allowActiveAtLocation: true });
-    sendJson(res, 200, await recordWorkorderOpen(openedId, requestContext.actor));
+    const workorder = await requireWorkorderAccess(requestContext, openedId, { allowAvailable: true, allowActiveAtLocation: true });
+    requireCompanyRole(requestContext, workorder.companyId, ["mechanic"]);
+    sendJson(res, 200, await recordWorkorderOpen(openedId, effectiveCompanyContext(requestContext, workorder.companyId).actor));
     return true;
   }
 

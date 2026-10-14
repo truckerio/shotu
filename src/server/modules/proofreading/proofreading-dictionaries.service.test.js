@@ -97,6 +97,19 @@ test("only admins may mutate company vocabulary", async () => {
   assert.equal(added.scope, "company");
 });
 
+test("company vocabulary uses the selected company's effective role", async () => {
+  const mixed = {
+    actor: { id: USER_ID, role: "admin" },
+    companyIds: new Set([COMPANY_ID, OTHER_COMPANY_ID]),
+    companyRoles: new Map([[COMPANY_ID, "admin"], [OTHER_COMPANY_ID, "mechanic"]]),
+  };
+  let saved = false;
+  await assert.rejects(addCompanyProofreadingTerm(mixed, { companyId: OTHER_COMPANY_ID, term: "Bendix" }, {
+    saveTerm: async () => { saved = true; },
+  }), { code: "PERMISSION_DENIED" });
+  assert.equal(saved, false);
+});
+
 test("company selection is tenant checked for reads and writes", async () => {
   await assert.rejects(
     listProofreadingDictionary(context(), { companyId: OTHER_COMPANY_ID }, { listTerms: async () => [] }),
