@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inspectionRefreshMode, loadInspectionRefreshWindow, MAX_LIVE_INSPECTION_ROWS, mergeFastInspectionPage } from "./inspection-api-model.js";
+import { inspectionBatchQuery, inspectionRefreshMode, loadInspectionRefreshWindow, MAX_LIVE_INSPECTION_ROWS, mergeFastInspectionPage } from "./inspection-api-model.js";
+
+test("inspection batches request twenty records and preserve all server refinements", () => {
+  const params = inspectionBatchQuery({ status: "completed", search: " G2021 ", filters: { locationId: "yard", mechanicId: "mechanic", unitType: "Truck", result: "passed", sort: "updated_asc" } }, 3);
+  assert.deepEqual(Object.fromEntries(params), { page: "3", limit: "20", status: "completed", search: "G2021", locationId: "yard", mechanicId: "mechanic", unitType: "Truck", result: "passed", sort: "updated_asc" });
+  assert.equal(params.has("cursor"), false);
+  const all = inspectionBatchQuery({ status: "", search: " ", filters: {} }, 1);
+  assert.deepEqual(Object.fromEntries(all), { page: "1", limit: "20" });
+});
 
 test("fast refresh publishes new rows without dropping cursor-boundary rows", () => {
   assert.deepEqual(

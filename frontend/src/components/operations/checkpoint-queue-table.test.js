@@ -4,6 +4,12 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
+test("Workorder row forwards injected checkpoint identity and batch metadata to the DOM row", () => {
+  const workspace = read("./OperationsWorkspace.jsx");
+  assert.match(workspace, /function OperationRow\(\{ item, onOpenWorkorder, \.\.\.rowProps \}\)/);
+  assert.match(workspace, /<OperationalCollectionRow\s+\{\.\.\.rowProps\}/);
+});
+
 test("checkpoint scrolling is shared by main and embedded Workorders", () => {
   const workspace = read("./OperationsWorkspace.jsx");
   assert.match(workspace, /checkpointScrolling = true/);

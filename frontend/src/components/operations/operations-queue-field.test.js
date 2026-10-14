@@ -4,6 +4,9 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./OperationsWorkspace.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./operations.css", import.meta.url), "utf8");
+test("workorder column filters place icons at the far edge of each header", () => {
+  assert.match(css, /\.operations-table \.operations-filter-trigger\.is-column \{ justify-content: space-between; width: 100%; \}/);
+});
 test("desktop Queue uses the shared field selector and canonical category update", () => {
   assert.match(source, /operations-toolbar-with-queue role-desktop-filters/);
   assert.match(source, /<Dropdown aria-label="Queue" value=\{filters.category\} onChange=\{\(event\) => updateFilter\("category", event.target.value\)\}/);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { inspectionQueueOptions } from "../modules/inspections/inspection.service.js";
 import { assignInspectionSchema, cancelInspectionSchema, claimInspectionSchema, completeInspectionSchema, createInspectionCorrectionSchema, createInspectionFollowUpWorkorderSchema, createInspectionPrintArchiveSchema, createInspectionReinspectionSchema, createInspectionSchema, createInspectionWorkorderSchema, inspectionListSchema, inspectionVersionActionSchema, linkInspectionFollowUpSchema, linkInspectionWorkorderSchema, resolveInspectionFollowUpNoWorkorderSchema, saveInspectionResponsesSchema, workorderInspectionContextParamsSchema } from "../modules/inspections/inspection.schemas.js";
 import { assignInspection, cancelInspection, claimInspection, completeInspection, correctInspection, createInspectionFindingWorkorder, createInspectionFollowUpWorkorder, createInspectionPrintArchiveRecord, eligibleInspectionWorkorders, inspectionCreateContext, linkInspectionFollowUpWorkorder, linkInspectionToWorkorder, patchInspectionResponses, printInspectionSlip, queryInspectionSummaries, readInspection, readInspectionPrintArchivePdf, readInspectionPrintArchiveRecord, reinspectInspection, requestInspection, resolveInspectionFollowUpNoWorkorder, startInspection, workorderInspectionContext } from "../modules/inspections/inspection.service.js";
 
@@ -20,6 +21,7 @@ function followUpRoute(pathname) {
 
 export async function handleInspectionsApi(req,res,url,helpers,dependencies={}){
   if(!url.pathname.startsWith("/api/inspections"))return false; const {sendJson,readBody,requestContext}=helpers;
+  if (req.method === "GET" && url.pathname === "/api/inspections/queue-options") { sendJson(res, 200, await (dependencies.queueOptions || inspectionQueueOptions)(requestContext)); return true; }
   const workorderContext=/^\/api\/inspections\/workorders\/([^/]+)\/context$/.exec(url.pathname);
   if(req.method==="GET"&&workorderContext){const {workorderId}=parse(workorderInspectionContextParamsSchema,{workorderId:decodeURIComponent(workorderContext[1])});sendJson(res,200,await (dependencies.workorderContext||workorderInspectionContext)(requestContext,workorderId));return true;}
   if(req.method==="GET"&&url.pathname==="/api/inspections/create-context"){
@@ -27,7 +29,7 @@ export async function handleInspectionsApi(req,res,url,helpers,dependencies={}){
     sendJson(res,200,await (dependencies.createContext||inspectionCreateContext)(requestContext,{search,locationId}));return true;
   }
   if(req.method==="POST"&&url.pathname==="/api/inspections"){const input=parse(createInspectionSchema,await readBody(req));sendJson(res,201,{inspection:await (dependencies.request||requestInspection)(requestContext,input)});return true;}
-  if(req.method==="GET"&&url.pathname==="/api/inspections"){const raw={};for(const key of ["status","unitType","result","locationId","mechanicId","search","cursor","limit"]){const value=url.searchParams.get(key);if(value!==null)raw[key]=value;}sendJson(res,200,await (dependencies.list||queryInspectionSummaries)(requestContext,parse(inspectionListSchema,raw)));return true;}
+  if(req.method==="GET"&&url.pathname==="/api/inspections"){const raw={};for(const key of ["status","unitType","result","locationId","mechanicId","search","cursor","page","limit","sort"]){const value=url.searchParams.get(key);if(value!==null)raw[key]=value;}sendJson(res,200,await (dependencies.list||queryInspectionSummaries)(requestContext,parse(inspectionListSchema,raw)));return true;}
   const followUp=followUpRoute(url.pathname);
   if (followUp && req.method === "POST") {
     if (followUp.action === "link-workorder") { sendJson(res,200,await (dependencies.linkFollowUp || linkInspectionFollowUpWorkorder)(requestContext,followUp.id,followUp.findingId,parse(linkInspectionFollowUpSchema,await readBody(req)))); return true; }

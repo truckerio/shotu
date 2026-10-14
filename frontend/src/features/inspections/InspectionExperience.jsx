@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api.js";
-import { Dropdown } from "../../components/forms/Dropdown.jsx";
-import { OperationalCollectionTabs } from "../../components/operations/OperationalCollectionPage.jsx";
 import { InspectionDetail } from "./InspectionDetail.jsx";
 import { InspectionQueue } from "./InspectionQueue.jsx";
-import { inspectionFromApi, inspectionRefreshMode, loadInspectionRefreshWindow, MAX_LIVE_INSPECTION_ROWS, mergeFastInspectionPage, responsePayload } from "./inspection-api-model.js";
+import { inspectionFromApi, responsePayload } from "./inspection-api-model.js";
+import { useInspectionQueue } from "./useInspectionQueue.js";
 import { renderAndPrintInspectionSlip } from "./inspection-print.js";
 import { loadInspectionPrintableArchive } from "./inspection-print-loader.js";
 import { readInspectionSession, writeInspectionSession } from "./inspection-session-state.js";
 import { productModuleCapabilities } from "../../app/routes/product-module-access.js";
 import { inspectionQueueSearch, inspectionReturnContext, inspectionWorkspaceSearch, replaceRouteSearch } from "../../app/routes/route-state.js";
-import { createLatestRequestGuard, LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
+import { LIVE_QUEUE_REFRESH_INTERVAL_MS, useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
 import "./inspections.css";
 
 export function InspectionExperience({ actor, projection = "office", initialInspectionId = "", onBack, onCreateWorkorder, onOpenWorkorder, onAssign }) {
@@ -19,14 +18,24 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   const fullProjection = projection === "office" || projection === "admin";
   const readOnly = projection === "read_only";
   const allowedInitialStatuses = fullProjection ? ["not_completed", "needs_action", "in_progress", "completed"] : ["not_completed", "completed"];
-  const [items, setItems] = useState([]);
   const [search, setSearch] = useState(initialSession.search);
+  const [queueFilters, setQueueFilters] = useState(initialSession.filters);
+  const [queueOptions, setQueueOptions] = useState({ locations: [], mechanics: [], loading: true, error: "" });
+  useEffect(() => {
+    const controller = new AbortController();
+    api("/api/inspections/queue-options", { signal: controller.signal }).then(result => {
+      if (!controller.signal.aborted) setQueueOptions({ ...result, loading: false, error: "" });
+    }).catch(error => {
+      if (!controller.signal.aborted) setQueueOptions({ locations: [], mechanics: [], loading: false, error: error.message });
+    });
+    return () => controller.abort();
+  }, [actor.id, actor.productModuleAccess]);
   const [status, setStatus] = useState(allowedInitialStatuses.includes(initialSession.status) ? initialSession.status : (readOnly ? "" : "not_completed"));
   const [active, setActive] = useState(null);
   const [mechanics, setMechanics] = useState([]);
   const [eligibleWorkorders, setEligibleWorkorders] = useState(null);
-  const [nextCursor, setNextCursor] = useState("");
-  const [state, setState] = useState({ loading: true, error: "" });
+  const [state, setState] = useState({ error: "" });
+  const inspectionQueue = useInspectionQueue({ actorId: actor.id, projection, status, search, filters: queueFilters });
   const activeRef = useRef(null);
   const saveQueue = useRef(Promise.resolve());
   const pendingResponseSaves = useRef(0);
@@ -38,77 +47,11 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   const lineageKeys = useRef(new Map());
   const queueScrollY = useRef(initialSession.scrollY);
   const queueFocusRef = useRef(null);
-  const loadGeneration = useRef(createLatestRequestGuard());
-  const loadedItemCount = useRef(0);
-  const foregroundLoads = useRef(0);
-  const abortBackgroundLoad = useRef(null);
-  const refreshCycle = useRef(0);
-
-  const load = useCallback(async ({ cursor = "", append = false, background = "", signal } = {}) => {
-    if (background && foregroundLoads.current > 0) return true;
-    if (!background) {
-      foregroundLoads.current += 1;
-      abortBackgroundLoad.current?.();
-    }
-    const generation = loadGeneration.current.begin();
-    const controller = new AbortController();
-    const abortFromCaller = () => controller.abort();
-    signal?.addEventListener("abort", abortFromCaller, { once: true });
-    if (signal?.aborted) controller.abort();
-    if (background) abortBackgroundLoad.current = () => controller.abort();
-    if (!background) setState((current) => ({ ...current, error: "" }));
-    try {
-      const fetchPage = ({ cursor: pageCursor = "", limit } = {}) => {
-        const params = new URLSearchParams();
-        if (["needs_action", "completed", "in_progress", "not_completed"].includes(status)) params.set("status", status);
-        if (search.trim()) params.set("search", search.trim());
-        if (pageCursor) params.set("cursor", pageCursor);
-        if (limit) params.set("limit", String(limit));
-        return api(`/api/inspections?${params}`, { signal: controller.signal });
-      };
-      const result = background === "reconcile"
-        ? await loadInspectionRefreshWindow(fetchPage, { loadedCount: Math.max(loadedItemCount.current, 25) })
-        : await fetchPage({ cursor });
-      if (controller.signal.aborted || !loadGeneration.current.isCurrent(generation)) return background;
-      const nextItems = (result.items || []).map(inspectionFromApi);
-      if (background === "reconcile") {
-        setItems(nextItems);
-        loadedItemCount.current = nextItems.length;
-        setNextCursor(result.nextCursor || "");
-      } else if (background === "fast") {
-        setItems((current) => {
-          const updated = mergeFastInspectionPage(current, nextItems);
-          loadedItemCount.current = updated.length;
-          return updated;
-        });
-      } else {
-        setItems((current) => {
-          const updated = (append ? [...current, ...nextItems] : nextItems).slice(0, MAX_LIVE_INSPECTION_ROWS);
-          loadedItemCount.current = updated.length;
-          return updated;
-        });
-        setNextCursor(result.nextCursor || "");
-      }
-      setState({ loading: false, error: "" });
-      return true;
-    } catch (error) {
-      if (loadGeneration.current.isCurrent(generation) && !background) setState({ loading: false, error: error.message });
-      return background && controller.signal.aborted;
-    } finally {
-      signal?.removeEventListener("abort", abortFromCaller);
-      if (background && abortBackgroundLoad.current) abortBackgroundLoad.current = null;
-      if (!background) foregroundLoads.current = Math.max(0, foregroundLoads.current - 1);
-    }
-  }, [search, status]);
-
-  useEffect(() => { const timer = window.setTimeout(() => load(), search ? 250 : 0); return () => window.clearTimeout(timer); }, [load, search]);
-  useAutomaticRefresh(({ signal } = {}) => {
-    refreshCycle.current += 1;
-    return load({ background: inspectionRefreshMode(refreshCycle.current), signal });
-  }, { enabled: !active, intervalMs: LIVE_QUEUE_REFRESH_INTERVAL_MS });
+  const load = useCallback(() => inspectionQueue.refresh(), [inspectionQueue.refresh]);
+  useAutomaticRefresh(load, { enabled: !active, intervalMs: LIVE_QUEUE_REFRESH_INTERVAL_MS });
   useEffect(() => { activeRef.current = active; }, [active]);
   useEffect(() => { const id = initialInspectionId || initialSession.activeId; if (id) open({ id }); }, [initialInspectionId]);
-  useEffect(() => { writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current }); }, [projection, search, status]);
+  useEffect(() => { writeInspectionSession(projection, { search, status, filters: queueFilters, activeId: "", scrollY: queueScrollY.current }); }, [projection, search, status, queueFilters]);
   useEffect(() => { if (initialSession.scrollY) window.requestAnimationFrame(() => window.scrollTo({ top: initialSession.scrollY })); }, []);
   useEffect(() => {
     const warnBeforeUnload = (event) => {
@@ -148,7 +91,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     setState((current) => ({ ...current, error: "" }));
     setEligibleWorkorders(null);
     queueScrollY.current = window.scrollY;
-    writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
+    writeInspectionSession(projection, { search, status, filters: queueFilters, activeId: "", scrollY: queueScrollY.current });
     try {
       const result = await api(`/api/inspections/${encodeURIComponent(record.id)}`);
       const next = inspectionFromApi(result.inspection);
@@ -386,7 +329,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
     activeRef.current = null;
     setActive(null);
     replaceRouteSearch(inspectionQueueSearch(actor.role));
-    writeInspectionSession(projection, { search, status, activeId: "", scrollY: queueScrollY.current });
+    writeInspectionSession(projection, { search, status, filters: queueFilters, activeId: "", scrollY: queueScrollY.current });
     load().finally(() => window.requestAnimationFrame(() => {
       window.scrollTo({ top: queueScrollY.current });
       queueFocusRef.current?.querySelector("input")?.focus({ preventScroll: true });
@@ -396,10 +339,7 @@ export function InspectionExperience({ actor, projection = "office", initialInsp
   if (active) return <InspectionDetail inspection={active} projection={activeProjection} mechanics={mechanics} eligibleWorkorders={eligibleWorkorders} actionError={state.error} onCorrect={fullProjection&&active.status==="completed"&&activeInspectionAccess.canWrite?correctCompletedInspection:null} onReinspect={(fullProjection||projection==="mechanic")&&active.status==="completed"&&activeInspectionAccess.canWrite?reinspectCompletedInspection:null} mechanicReinspect={projection==="mechanic"} initialReinspection={initialReinspection} actor={actor} onAssign={fullProjection && activeInspectionAccess.canWrite ? assign : null} onClaim={projection === "mechanic" && active.status === "requested" && activeInspectionAccess.canWrite ? claimInspection : null} onStart={activeInspectionAccess.canWrite && (projection === "admin" || (projection === "mechanic" && active.status !== "requested")) ? startInspection : null} onCancelInspection={fullProjection && activeInspectionAccess.canWrite ? cancelInspection : null} onLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? linkWorkorder : null} onBack={returnToQueue} onResponse={activeInspectionAccess.canWrite ? saveResponse : null} onReload={reloadActive} onComplete={activeInspectionAccess.canWrite ? complete : null} onCreateOrLinkWorkorder={activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite && onCreateWorkorder ? createWorkorder : null} onResolveFollowUp={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite ? resolveFollowUp : null} canResolveFollowUpWorkorders={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite && activeWorkorderAccess.canWrite} canResolveFollowUps={fullProjection && active.status === "completed" && activeInspectionAccess.canWrite} onOpenWorkorder={onOpenWorkorder ? (workorderId) => onOpenWorkorder(workorderId, { from: "inspection", inspectionId: active.id, anchor: "summary" }) : null} onPrint={active.status === "completed" ? print : null} onDownload={active.status === "completed" ? downloadPrintPdf : null} workorderLinksAuthorized={activeWorkorderAccess.canRead} workorderActionsAuthorized={activeWorkorderAccess.canWrite} />;
   return <section className="inspection-experience" aria-label="Inspection workspace" ref={queueFocusRef}>
     {onBack ? <button className="inspection-back" type="button" onClick={onBack}>Back</button> : null}
-    {fullProjection ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "not_completed", label: "Active" }, { id: "needs_action", label: "Needs action" }, { id: "in_progress", label: "In progress" }, { id: "completed", label: "Completed" }]} /> : null}
-    {projection === "mechanic" ? <OperationalCollectionTabs className="inspection-lifecycle-tabs" ariaLabel="Inspection status" activeId={status} onChange={setStatus} items={[{ id: "not_completed", label: "Active" }, { id: "completed", label: "Completed" }]} /> : null}
-    {readOnly ? <label className="inspection-status-filter">Status<Dropdown value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All</option><option value="completed">Completed</option><option value="not_completed">Not completed</option></Dropdown></label> : null}
     {state.error ? <p className="inspection-error" role="alert">{state.error}</p> : null}
-    {state.loading ? <p role="status">Loading inspections…</p> : <><InspectionQueue inspections={items} projection={projection} projectionForInspection={projectionFor} search={search} onSearchChange={setSearch} onOpen={open} />{nextCursor && items.length < MAX_LIVE_INSPECTION_ROWS ? <button className="inspection-load-more" type="button" onClick={() => load({ cursor: nextCursor, append: true })}>Load more inspections</button> : null}</>}
+    <InspectionQueue queue={inspectionQueue} projection={projection} projectionForInspection={projectionFor} search={search} onSearchChange={setSearch} status={status} onStatusChange={setStatus} filters={queueFilters} onFiltersChange={setQueueFilters} filterOptions={queueOptions} onOpen={open} />
   </section>;
 }

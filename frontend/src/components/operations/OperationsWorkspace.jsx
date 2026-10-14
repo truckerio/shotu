@@ -128,7 +128,7 @@ function OperationsFilterPopover({ label, active, column = false, children }) {
   </DialogTrigger>;
 }
 
-function OperationRow({ item, onOpenWorkorder }) {
+function OperationRow({ item, onOpenWorkorder, ...rowProps }) {
   const attentionReasons = Array.isArray(item.attentionReasons) ? item.attentionReasons : [];
   const overdue = attentionReasons.includes("overdue");
   const attentionTone = ["overdue", "revision_requested", "parts", "office_help", "missing_info"]
@@ -150,6 +150,7 @@ function OperationRow({ item, onOpenWorkorder }) {
 
   return (
     <OperationalCollectionRow
+      {...rowProps}
       className={`operations-row lifecycle-tone-${item.lifecycle || "unknown"}${item.unread ? " is-unread" : ""}${overdue ? " is-overdue" : ""}${attentionTone ? ` has-attention attention-tone-${attentionTone}` : ""}`}
       onAction={open}
       ariaLabel={`${item.serial || "Workorder"}, ${unit}, ${location}`}

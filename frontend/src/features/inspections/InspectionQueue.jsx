@@ -1,18 +1,20 @@
-import { ChevronRight, SearchMd } from "@untitledui/icons";
+import { ChevronRight, FilterLines, SearchMd } from "@untitledui/icons";
+import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
+import { Dropdown } from "../../components/forms/Dropdown.jsx";
+import { normalizeInspectionFilters } from "./inspection-session-state.js";
 import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import {
   OperationalCollectionCell,
   OperationalCollectionResultHeader,
   OperationalCollectionRow,
-  OperationalCollectionTable,
 } from "../../components/operations/OperationalCollectionPage.jsx";
-import { ProgressiveQueue } from "../../components/responsive/ProgressiveQueue.jsx";
-import { progressiveQueueResetKey } from "../../components/responsive/ProgressiveQueue.js";
+import { CheckpointCollection } from "../../components/ui/CheckpointCollection.jsx";
 import { formatUiDate } from "../../lib/workorder-presentation.js";
-import { inspectionActionForRole, inspectionMatchesSearch, inspectionResultLabel, inspectionStatusLabel } from "./inspection-model.js";
+import { inspectionActionForRole, inspectionResultLabel, inspectionStatusLabel } from "./inspection-model.js";
 import "./inspections.css";
+import "../../components/operations/operations.css";
 
-export function InspectionRow({ inspection, projection = "office", onOpen }) {
+export function InspectionRow({ inspection, projection = "office", onOpen, ...rowProps }) {
   const action = inspectionActionForRole(inspection, projection);
   const completed = inspection.status === "completed";
   const progress = inspection.progress || {};
@@ -21,6 +23,7 @@ export function InspectionRow({ inspection, projection = "office", onOpen }) {
   const due = formatUiDate(inspection.dueAt);
   return (
     <OperationalCollectionRow
+      {...rowProps}
       className="inspection-row"
       ariaLabel={`${inspection.number || "Inspection"}, ${inspection.unitNo || "Unit not recorded"}, ${status}`}
       onAction={() => onOpen?.(inspection)}
@@ -52,34 +55,62 @@ export function InspectionRow({ inspection, projection = "office", onOpen }) {
   );
 }
 
-export function InspectionQueue({ inspections = [], projection = "office", projectionForInspection, search = "", onSearchChange, onOpen, emptyLabel = "No matching inspections" }) {
-  const rows = inspections.filter((inspection) => inspectionMatchesSearch(inspection, search));
+function InspectionFilterPopover({ label, active, compact = false, children }) {
+  return <DialogTrigger>
+    <Button className={`operations-filter-trigger ${compact ? "inspection-compact-filter" : "is-column"}${active ? " is-active" : ""}`} aria-label={`${label} filters and sort`}><span>{label}</span><FilterLines aria-hidden="true" /></Button>
+    <Popover className="operations-filter-popover inspection-filter-popover" placement="bottom end" offset={8}>
+      <Dialog aria-label={`${label} filters and sort`}>{({ close }) => <>
+        <header><h3>{label}</h3><Button onPress={close}>Done</Button></header>
+        <div className="operations-filter-fields">{children}</div>
+      </>}</Dialog>
+    </Popover>
+  </DialogTrigger>;
+}
+
+export function InspectionQueue({ queue, projection = "office", projectionForInspection, search = "", onSearchChange, status = "not_completed", onStatusChange, filters: filterInput, onFiltersChange, filterOptions = {}, onOpen, emptyLabel = "No matching inspections" }) {
   const readOnly = projection === "read_only";
+  const filters = normalizeInspectionFilters(filterInput);
+  const filtered = Boolean(filters.locationId || filters.mechanicId || filters.unitType || filters.result || filters.sort !== "updated_desc");
+  const update = (key, value) => onFiltersChange?.({ ...filters, [key]: value, ...(key === "locationId" ? { mechanicId: "" } : {}) });
+  const mechanicOptions = (filterOptions.mechanics || []).filter(mechanic => !filters.locationId || mechanic.locationIds.includes(filters.locationId));
+  const fields = {
+    location: <label><span className="inspection-field-label">Location</span><Dropdown aria-label="Location" disabled={filterOptions.loading} value={filters.locationId} onChange={(event) => update("locationId", event.target.value)}><option value="">All locations</option>{filters.locationId && !(filterOptions.locations || []).some(location => location.id === filters.locationId) ? <option value={filters.locationId}>Selected location unavailable</option> : null}{(filterOptions.locations || []).map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</Dropdown></label>,
+    mechanic: <label><span className="inspection-field-label">Mechanic</span><Dropdown aria-label="Mechanic" disabled={filterOptions.loading} value={filters.mechanicId} onChange={(event) => update("mechanicId", event.target.value)}><option value="">All mechanics</option>{filters.mechanicId && !mechanicOptions.some(mechanic => mechanic.id === filters.mechanicId) ? <option value={filters.mechanicId}>Selected mechanic unavailable</option> : null}{mechanicOptions.map(mechanic => <option key={mechanic.id} value={mechanic.id}>{mechanic.name}</option>)}</Dropdown></label>,
+    unit: <label><span className="inspection-field-label">Unit type</span><Dropdown aria-label="Unit type" value={filters.unitType} onChange={(event) => update("unitType", event.target.value)}><option value="">All units</option><option value="Truck">Trucks</option><option value="Trailer">Trailers</option></Dropdown></label>,
+    result: <label><span className="inspection-field-label">Result</span><Dropdown aria-label="Result" value={filters.result} onChange={(event) => update("result", event.target.value)}><option value="">All results</option><option value="passed">Passed</option><option value="issues_found">Issues found</option><option value="out_of_service">Out of service</option></Dropdown></label>,
+    sort: <label><span className="inspection-field-label">Sort</span><Dropdown aria-label="Sort" value={filters.sort} onChange={(event) => update("sort", event.target.value)}><option value="updated_desc">Newest activity</option><option value="updated_asc">Oldest activity</option></Dropdown></label>,
+  };
   return (
     <section className="inspection-queue" aria-label="Inspections">
       <div className="inspection-toolbar">
+        <label className="inspection-queue-field">
+          <span className="inspection-field-label">Queue</span>
+          <Dropdown aria-label="Queue" value={status} onChange={(event) => onStatusChange?.(event.target.value)}>
+            {readOnly ? <option value="">All</option> : null}
+            <option value="not_completed">Active</option>
+            {projection === "office" || projection === "admin" ? <option value="needs_action">Needs action</option> : null}
+            {projection === "office" || projection === "admin" ? <option value="in_progress">In progress</option> : null}
+            <option value="completed">Completed</option>
+          </Dropdown>
+        </label>
         <label className="inspection-search">
           <span className="inspection-field-label">Search inspections</span>
           <span className="inspection-search-control"><SearchMd aria-hidden="true" /><input {...textEntryProps("search")} value={search} onChange={(event) => onSearchChange?.(event.target.value)} placeholder={readOnly ? "Unit, VIN, plate, or inspection" : "Unit or inspection"} aria-label="Search inspections" /></span>
         </label>
+        <InspectionFilterPopover compact label="Filter and sort" active={filtered}>{Object.entries(fields).map(([key, field]) => <div key={key}>{field}</div>)}</InspectionFilterPopover>
       </div>
-      <OperationalCollectionResultHeader><span><strong>{rows.length}</strong> inspection{rows.length === 1 ? "" : "s"}</span></OperationalCollectionResultHeader>
-      {rows.length ? (
-        <OperationalCollectionTable className="inspection-table" ariaLabel="Inspections" columns={[
-          { id: "identity", label: "Unit / inspection" },
-          { id: "location", label: "Location" },
-          { id: "assignee", label: "Assigned to" },
-          { id: "status", label: "Status" },
-          { id: "progress", label: "Due / progress" },
+      {filterOptions.error ? <p role="alert">Filter options unavailable: {filterOptions.error}</p> : null}
+      <OperationalCollectionResultHeader><span><strong>{queue.total}</strong> inspection{queue.total === 1 ? "" : "s"}</span>{filtered ? <Button onPress={() => onFiltersChange?.(normalizeInspectionFilters())}>Clear filters</Button> : null}</OperationalCollectionResultHeader>
+        <CheckpointCollection queue={queue} label="inspections" pageSize={20} storageKey={queue.storageKey} className="inspection-table" ariaLabel="Inspections" columns={[
+          { id: "identity", label: <InspectionFilterPopover label="Unit / inspection" active={Boolean(filters.unitType)}>{fields.unit}</InspectionFilterPopover> },
+          { id: "location", label: <InspectionFilterPopover label="Location" active={Boolean(filters.locationId)}>{fields.location}</InspectionFilterPopover> },
+          { id: "assignee", label: <InspectionFilterPopover label="Mechanic" active={Boolean(filters.mechanicId)}>{fields.mechanic}</InspectionFilterPopover> },
+          { id: "status", label: <InspectionFilterPopover label="Status" active={Boolean(filters.result)}>{fields.result}</InspectionFilterPopover> },
+          { id: "progress", label: <InspectionFilterPopover label="Due / progress" active={filters.sort !== "updated_desc"}>{fields.sort}</InspectionFilterPopover> },
           { id: "action", label: "Action" },
-        ]}>
-          <ProgressiveQueue
-            items={rows}
-            resetKey={progressiveQueueResetKey([projection, search])}
-            renderItem={(inspection) => <InspectionRow inspection={inspection} projection={projectionForInspection?.(inspection) || projection} onOpen={onOpen} />}
-          />
-        </OperationalCollectionTable>
-      ) : <div className="inspection-empty"><strong>{emptyLabel}</strong><span>{search ? "Try a different unit or inspection number." : "Inspections will appear here when they are requested."}</span></div>}
+        ]} renderItem={(inspection) => <InspectionRow inspection={inspection} projection={projectionForInspection?.(inspection) || projection} onOpen={onOpen} />}>
+          <div className="inspection-empty"><strong>{emptyLabel}</strong><span>Change or clear filters to see more inspections.</span></div>
+        </CheckpointCollection>
     </section>
   );
 }

@@ -6,6 +6,10 @@ const detail = readFileSync(new URL("./InspectionDetail.jsx", import.meta.url), 
 const queue = readFileSync(new URL("./InspectionQueue.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./inspections.css", import.meta.url), "utf8");
 
+test("inspection column filter triggers fill the header and separate labels from icons", () => {
+  assert.match(css, /\.inspection-table \.operations-filter-trigger\.is-column \{ justify-content: space-between; width: 100%; \}/);
+});
+
 test("inspection identity sits directly on the page and template label accompanies the back arrow", () => {
   assert.match(detail, /className="inspection-back"[\s\S]*onClick=\{onBack\}>\{template.label\}<\/Button>/);
   assert.doesNotMatch(detail, /onClick=\{onBack\}>Inspections<\/Button>|<span>\{template.label\}<\/span>/);
@@ -23,9 +27,10 @@ test("detail uses one radio group per checklist item and only expands issue deta
   assert.match(detail, /if \(!inspectionResponseShouldSave\(item, value, commit\)\) \{ setSaveState\("Unsaved"\); return; \}/);
 });
 
-test("inspection queue shares progressive queue and does not render a privileged read-only action", () => {
-  assert.match(queue, /<ProgressiveQueue/);
-  assert.match(queue, /<OperationalCollectionTable/);
+test("inspection queue shares continuous checkpoint batches and does not render a privileged read-only action", () => {
+  assert.match(queue, /<CheckpointCollection queue=\{queue\} label="inspections" pageSize=\{20\}/);
+  assert.match(queue, /InspectionRow\(\{ inspection, projection = "office", onOpen, \.\.\.rowProps \}\)/);
+  assert.match(queue, /<OperationalCollectionRow\s+\{\.\.\.rowProps\}/);
   assert.match(queue, /<OperationalCollectionRow/);
   assert.doesNotMatch(queue, /inspection-row-open/);
   assert.doesNotMatch(queue, /<button className="inspection-row-action"/);

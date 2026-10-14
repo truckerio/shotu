@@ -165,15 +165,19 @@ export async function getInspectionById({ inspectionId, companyIds }, dependenci
 }
 
 export async function listInspections(input, dependencies = {}) {
-  const run = dependencies.query || query; const after = decodeInspectionCursor(input.cursor); const values = [input.companyIds,input.locationIds,input.statuses || (input.status ? [input.status] : null),input.unitType || null,input.result || null,input.mechanicId || null,input.search || "",after?.updatedAt || null,after?.id || null,input.limit + 1,input.restrictedMechanicCompanyIds || [],input.actorId || null,input.needsAction === true];
-  const result = await run(`select inspection.*,
+  const ascending = input.sort === "updated_asc";
+  const run = dependencies.query || query;
+  const after = decodeInspectionCursor(input.cursor);
+  const paged = input.page !== undefined;
+  const values = [input.companyIds,input.locationIds,input.statuses || (input.status ? [input.status] : null),input.unitType || null,input.result || null,input.mechanicId || null,input.search || "",after?.updatedAt || null,after?.id || null,paged ? input.limit : input.limit + 1,input.restrictedMechanicCompanyIds || [],input.actorId || null,input.needsAction === true];
+  const projection = `inspection.*,
     (select jsonb_build_object('id',location.id,'name',location.name) from locations location where location.id=inspection.location_id and location.company_id=inspection.company_id) as location,
     (select count(*) from inspection_responses response where response.company_id=inspection.company_id and response.inspection_id=inspection.id)::int as answered_count,
     (select count(*) from inspection_findings finding where finding.company_id=inspection.company_id and finding.inspection_id=inspection.id)::int as defect_count,
   (select count(*) from inspection_finding_follow_ups follow_up where follow_up.company_id=inspection.company_id and follow_up.inspection_id=inspection.id and follow_up.status in ('open','reopened'))::int as follow_up_count,
   ${reinspectionBlockerSql} as reinspection_blocker_code,
-    (select jsonb_build_object('id',profile.id,'name',profile.display_name) from inspection_assignments assignment join user_profiles profile on profile.id=assignment.mechanic_user_id where assignment.inspection_id=inspection.id and assignment.company_id=inspection.company_id and assignment.active and assignment.assignment_role='primary' limit 1) as mechanic
-    from inspections inspection where inspection.company_id=any($1::uuid[]) and ($2::uuid[] is null or inspection.location_id=any($2::uuid[]))
+    (select jsonb_build_object('id',profile.id,'name',profile.display_name) from inspection_assignments assignment join user_profiles profile on profile.id=assignment.mechanic_user_id where assignment.inspection_id=inspection.id and assignment.company_id=inspection.company_id and assignment.active and assignment.assignment_role='primary' limit 1) as mechanic`;
+  const where = `where inspection.company_id=any($1::uuid[]) and ($2::uuid[] is null or inspection.location_id=any($2::uuid[]))
       and ($3::text[] is null or inspection.status=any($3::text[])) and ($4::text is null or inspection.unit_type=$4) and ($5::text is null or inspection.result=$5)
       and ($6::uuid is null or exists(select 1 from inspection_assignments ia where ia.inspection_id=inspection.id and ia.mechanic_user_id=$6 and ia.active))
       and (not $13::boolean or inspection.status in ('requested','assigned') or (inspection.status='completed' and exists(select 1 from inspection_finding_follow_ups action where action.company_id=inspection.company_id and action.inspection_id=inspection.id and action.status in ('open','reopened'))))
@@ -181,8 +185,18 @@ export async function listInspections(input, dependencies = {}) {
         or (inspection.status='requested' and not exists(select 1 from inspection_assignments available_assignment where available_assignment.inspection_id=inspection.id and available_assignment.company_id=inspection.company_id and available_assignment.active))
         or exists(select 1 from inspection_assignments restricted_assignment where restricted_assignment.inspection_id=inspection.id and restricted_assignment.company_id=inspection.company_id and restricted_assignment.mechanic_user_id=$12::uuid and restricted_assignment.active))
       and ($7='' or inspection.inspection_number ilike '%'||$7||'%' or coalesce(inspection.asset_snapshot->>'unitNo','') ilike '%'||$7||'%' or coalesce(inspection.asset_snapshot->>'vin','') ilike '%'||$7||'%' or coalesce(inspection.asset_snapshot->>'licensePlate','') ilike '%'||$7||'%')
-      and ($8::timestamptz is null or (inspection.updated_at,inspection.id)<($8::timestamptz,$9::uuid))
-    order by inspection.updated_at desc,inspection.id desc limit $10`, values);
+      and ($8::timestamptz is null or (inspection.updated_at,inspection.id)${ascending ? ">" : "<"}($8::timestamptz,$9::uuid))`;
+  const order = `inspection.updated_at ${ascending ? "asc" : "desc"},inspection.id ${ascending ? "asc" : "desc"}`;
+  if (paged) {
+    const offset = (input.page - 1) * input.limit;
+    const result = await run(`with filtered as (select inspection.* from inspections inspection ${where}),
+      totals as (select count(*)::bigint as total from filtered),
+      selected as (select * from filtered order by updated_at ${ascending ? "asc" : "desc"},id ${ascending ? "asc" : "desc"} limit $10 offset $14)
+      select ${projection},totals.total from totals left join selected inspection on true order by ${order}`, [...values, offset]);
+    const total = Number(result.rows[0]?.total || 0);
+    return { items: result.rows.filter((row) => row.id).map(publicSummary), page: input.page, total, pageCount: Math.ceil(total / input.limit), nextCursor: null };
+  }
+  const result = await run(`select ${projection} from inspections inspection ${where} order by ${order} limit $10`, values);
   const hasMore = result.rows.length > input.limit; const rows = result.rows.slice(0,input.limit); const last = rows.at(-1);
   return { items: rows.map(publicSummary), nextCursor: hasMore && last ? encodeInspectionCursor(last) : null };
 }

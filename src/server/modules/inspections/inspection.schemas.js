@@ -88,12 +88,18 @@ export const resolveInspectionFollowUpNoWorkorderSchema = z.object({
 }).strict();
 
 export const inspectionListSchema = z.object({
+  sort: z.enum(["updated_desc", "updated_asc"]).default("updated_desc"),
   status: z.enum(["requested", "assigned", "in_progress", "completed", "cancelled", "needs_action", "not_completed"]).optional(),
   unitType: z.enum(["Truck", "Trailer"]).optional(),
   result: z.enum(["passed", "issues_found", "out_of_service"]).optional(),
   locationId: z.string().uuid().optional(), mechanicId: z.string().uuid().optional(),
   search: z.string().trim().max(120).default(""), cursor: z.string().max(1000).nullable().optional(),
+  page: z.coerce.number().int().positive().max(Math.floor(Number.MAX_SAFE_INTEGER / 50)).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(25),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.page !== undefined && value.cursor !== undefined) {
+    context.addIssue({ code: "custom", path: ["cursor"], message: "Use page or cursor, not both." });
+  }
+});
 
 export const workorderInspectionContextParamsSchema=z.object({workorderId:z.string().uuid()}).strict();

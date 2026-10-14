@@ -1,3 +1,11 @@
+export function inspectionBatchQuery({ status, search, filters }, page) {
+  const params = new URLSearchParams({ page: String(page), limit: "20" });
+  if (["needs_action", "completed", "in_progress", "not_completed"].includes(status)) params.set("status", status);
+  if (search.trim()) params.set("search", search.trim());
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+  return params;
+}
+
 export function inspectionFromApi(record = {}) {
   const responseValues = Array.isArray(record.responses) ? record.responses : [];
   const findingsByResponse = new Map((record.findings || []).map((finding) => [finding.responseId, finding]));

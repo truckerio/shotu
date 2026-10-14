@@ -5,6 +5,9 @@ import { readInspectionSession, writeInspectionSession } from "./inspection-sess
 
 const experience = readFileSync(new URL("./InspectionExperience.jsx", import.meta.url), "utf8");
 const detail = readFileSync(new URL("./InspectionDetail.jsx", import.meta.url), "utf8");
+const queue = readFileSync(new URL("./InspectionQueue.jsx", import.meta.url), "utf8");
+const queueHook = readFileSync(new URL("./useInspectionQueue.js", import.meta.url), "utf8");
+const apiModel = readFileSync(new URL("./inspection-api-model.js", import.meta.url), "utf8");
 
 test("autosave conflict reloads the authoritative version and leaves an explicit retry route", () => {
   assert.match(experience, /error\?\.status === 409/);
@@ -29,18 +32,20 @@ test("opening an assigned inspection leaves lifecycle start to the explicit deta
   assert.match(experience, /onStart=\{activeInspectionAccess\.canWrite/);
 });
 
-test("full projections have compact lifecycle filters while read-only exposes the operator status choices", () => {
-  assert.match(experience, /<OperationalCollectionTabs/);
-  assert.match(experience, /id: "not_completed", label: "Active"/);
-  assert.match(experience, /id: "needs_action", label: "Needs action"/);
-  assert.match(experience, /id: "in_progress", label: "In progress"/);
-  assert.match(experience, /id: "completed", label: "Completed"/);
-  assert.match(experience, /<option value="">All<\/option><option value="completed">Completed<\/option><option value="not_completed">Not completed<\/option>/);
-  assert.match(experience, /\["needs_action", "completed", "in_progress", "not_completed"\]\.includes\(status\)/);
-  assert.match(experience, /activeId=\{status\}/);
-  assert.match(experience, /nextCursor/);
-  assert.match(experience, /Load more inspections/);
-  assert.match(experience, /params\.set\("status", status\)/);
+test("queue dropdown preserves role-specific lifecycle choices with server filters and sort", () => {
+  assert.doesNotMatch(experience, /OperationalCollectionTabs/);
+  assert.match(queue, /aria-label="Queue"/);
+  for (const value of ["not_completed", "needs_action", "in_progress", "completed"]) assert.ok(queue.includes(`value="${value}"`));
+  assert.match(queue, /readOnly \? <option value="">All/);
+  assert.match(queue, /projection === "office" \|\| projection === "admin"/);
+  assert.match(queue, /InspectionFilterPopover label="Location"/);
+  assert.match(queue, /InspectionFilterPopover label="Mechanic"/);
+  assert.match(apiModel, /Object\.entries\(filters\)/);
+  assert.match(apiModel, /\["needs_action", "completed", "in_progress", "not_completed"\]\.includes\(status\)/);
+  assert.match(experience, /status=\{status\} onStatusChange=\{setStatus\}/);
+  assert.match(experience, /queue=\{inspectionQueue\}/);
+  assert.doesNotMatch(experience, /Load more inspections/);
+  assert.match(apiModel, /params\.set\("status", status\)/);
 });
 
 test("mechanic available inspections use explicit claim before start", () => {
@@ -122,7 +127,7 @@ test("inspection session state safely preserves queue state across an unmount/re
   globalThis.window = { sessionStorage: { getItem: (key) => entries.get(key) || null, setItem: (key, value) => entries.set(key, value) } };
   try {
     writeInspectionSession("office", { search: "125", status: "needs_action", activeId: "inspection-1", scrollY: 240 });
-    assert.deepEqual(readInspectionSession("office"), { search: "125", status: "needs_action", activeId: "inspection-1", scrollY: 240 });
+    assert.deepEqual(readInspectionSession("office"), { search: "125", status: "needs_action", filters: { locationId: "", mechanicId: "", unitType: "", result: "", sort: "updated_desc" }, activeId: "inspection-1", scrollY: 240 });
   } finally { globalThis.window = previousWindow; }
 });
 
@@ -131,7 +136,7 @@ test("legacy queue sessions reset once so the new Active default is not hidden b
   const entries = new Map([["workorder-generator.inspections.office", JSON.stringify({ search:"1017", status:"needs_action", activeId:"old", scrollY:120 })]]);
   globalThis.window = { sessionStorage: { getItem: (key) => entries.get(key) || null, setItem: (key, value) => entries.set(key, value) } };
   try {
-    assert.deepEqual(readInspectionSession("office"), { search:"", status:"", activeId:"", scrollY:0 });
+    assert.deepEqual(readInspectionSession("office"), { search:"", status:"", filters: { locationId: "", mechanicId: "", unitType: "", result: "", sort: "updated_desc" }, activeId:"", scrollY:0 });
   } finally { globalThis.window = previousWindow; }
 });
 
@@ -156,14 +161,11 @@ test("mixed-location access derives every inspection action from the record loca
 });
 
 test("visible inspection queues refresh automatically without overwriting active detail work", () => {
-  assert.match(experience, /inspectionRefreshMode\(refreshCycle\.current\)/);
   assert.match(experience, /enabled: !active, intervalMs: LIVE_QUEUE_REFRESH_INTERVAL_MS/);
-  assert.match(experience, /createLatestRequestGuard\(\)/);
-  assert.match(experience, /loadGeneration\.current\.begin\(\)/);
-  assert.match(experience, /loadGeneration\.current\.isCurrent\(generation\)/);
-  assert.match(experience, /foregroundLoads\.current > 0/);
-  assert.match(experience, /abortBackgroundLoad\.current\?\.\(\)/);
-  assert.match(experience, /loadInspectionRefreshWindow/);
-  assert.match(experience, /loadedCount: Math\.max\(loadedItemCount\.current, 25\)/);
-  assert.match(experience, /items\.length < MAX_LIVE_INSPECTION_ROWS/);
+  assert.match(experience, /const load = useCallback\(\(\) => inspectionQueue\.refresh\(\)/);
+  assert.match(queueHook, /useCheckpointPages\(\{ queryKey: storageKey, fetchPage, initialPage \}\)/);
+  assert.match(queueHook, /async \(page, \{ signal \}\)/);
+  assert.match(queueHook, /\{ signal \}\)/);
+  assert.match(queueHook, /readCheckpointPosition\(storageKey\)/);
+  assert.match(queueHook, /\["inspection-batches", actorId, projection, status, querySearch, filters\]/);
 });

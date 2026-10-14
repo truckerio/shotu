@@ -2,6 +2,50 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { handleInspectionsApi } from "./inspections.routes.js";
 
+test("list route passes validated global filters and sort and rejects invalid sort", async () => {
+  const h = harness(); let received;
+  await handleInspectionsApi({ method: "GET" }, {}, new URL("http://x/api/inspections?status=completed&unitType=Truck&result=passed&sort=updated_asc"), h.helpers, { list: async (_context, value) => { received = value; return { items: [] }; } });
+  assert.equal(received.sort, "updated_asc"); assert.equal(received.unitType, "Truck"); assert.equal(received.result, "passed"); assert.equal(received.status, "completed");
+  await assert.rejects(handleInspectionsApi({ method: "GET" }, {}, new URL("http://x/api/inspections?sort=invalid"), h.helpers, { list: async () => assert.fail("Invalid query must not reach service") }), error => error.statusCode === 400);
+});
+
+test("queue-options route delegates only its authenticated context without loading detail", async () => {
+  const h = harness(); let received;
+  const options = { locations: [{ id: "yard", name: "Yard" }], mechanics: [] };
+  await handleInspectionsApi({ method: "GET" }, {}, new URL("http://x/api/inspections/queue-options"), h.helpers, { queueOptions: async context => { received = context; return options; } });
+  assert.equal(received, h.helpers.requestContext);
+  assert.deepEqual(h.sent[0], { status: 200, payload: options });
+});
+
+test("list route forwards a bounded page and retains cursor-only response compatibility", async () => {
+  const paged = harness(); let parsed;
+  const response = { items: [], page: 2, total: 31, pageCount: 2, nextCursor: null };
+  await handleInspectionsApi({ method: "GET" }, {}, new URL("http://x/api/inspections?page=2&limit=20&sort=updated_asc"), paged.helpers, {
+    list: async (_context, input) => { parsed = input; return response; },
+  });
+  assert.equal(parsed.page, 2);
+  assert.equal(parsed.limit, 20);
+  assert.equal(parsed.sort, "updated_asc");
+  assert.deepEqual(paged.sent[0], { status: 200, payload: response });
+
+  const cursor = harness(); let cursorInput;
+  await handleInspectionsApi({ method: "GET" }, {}, new URL("http://x/api/inspections?cursor=opaque&limit=20"), cursor.helpers, {
+    list: async (_context, input) => { cursorInput = input; return { items: [], nextCursor: null }; },
+  });
+  assert.equal(cursorInput.page, undefined);
+  assert.equal(cursorInput.cursor, "opaque");
+  assert.deepEqual(cursor.sent[0].payload, { items: [], nextCursor: null });
+});
+
+test("list route rejects invalid page, limit, and page-plus-cursor before service access", async () => {
+  for (const query of ["page=0", "page=-1", "page=1.5", "page=nope", "page=1&cursor=opaque", "limit=0", "limit=51"]) {
+    const h = harness();
+    await assert.rejects(handleInspectionsApi({ method: "GET" }, {}, new URL(`http://x/api/inspections?${query}`), h.helpers, {
+      list: async () => assert.fail("Invalid listing query reached service"),
+    }), (error) => error.statusCode === 400, query);
+  }
+});
+
 function harness(body={}){const sent=[];return{sent,helpers:{requestContext:{actor:{id:"u"}},readBody:async()=>body,sendJson:(_res,status,payload)=>sent.push({status,payload}),sendPdfBytes:(_res,bytes,fileName)=>sent.push({status:200,bytes,fileName})}};}
 test("route validates and delegates idempotent weekly inspection creation",async()=>{const input={companyId:"11111111-1111-4111-8111-111111111111",locationId:"22222222-2222-4222-8222-222222222222",assetId:"33333333-3333-4333-8333-333333333333",mechanicUserIds:[],idempotencyKey:"inspection-create-001"};const h=harness(input);let received;assert.equal(await handleInspectionsApi({method:"POST"},{},new URL("http://x/api/inspections"),h.helpers,{request:async(_context,value)=>(received=value,{id:"i"})}),true);assert.equal(h.sent[0].status,201);assert.equal(received.officeInstructions,"");assert.equal(received.idempotencyKey,"inspection-create-001");});
 test("route rejects inspection creation without an idempotency key",async()=>{const h=harness({companyId:"11111111-1111-4111-8111-111111111111",locationId:"22222222-2222-4222-8222-222222222222",assetId:"33333333-3333-4333-8333-333333333333",mechanicUserIds:[]});await assert.rejects(handleInspectionsApi({method:"POST"},{},new URL("http://x/api/inspections"),h.helpers,{request:async()=>assert.fail()}),/expected string|required/i);});

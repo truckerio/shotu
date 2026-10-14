@@ -49,6 +49,32 @@ export async function queryInspectionSummaries(context,input,dependencies={}){
   const list=dependencies.list||listInspections; const needsAction=input.status==="needs_action"; const statuses=needsAction?null:input.status==="not_completed"?["requested","assigned","in_progress"]:input.status?[input.status]:null; return list({...input,statuses,needsAction,companyIds,locationIds:requestedLocation?[requestedLocation]:locationIds,mechanicId:input.mechanicId,restrictedMechanicCompanyIds,actorId:actor.id});
 }
 
+export async function inspectionQueueOptions(context, dependencies = {}) {
+  const actor = requireActor(context);
+  const access = await (dependencies.bootstrap || productModuleBootstrap)(context);
+  const readable = new Set(access.companies.flatMap(company => company.locations.filter(location => modeAllows(location.modules.inspections, "read")).map(location => `${company.companyId}:${location.locationId}`)));
+  const listLocations = dependencies.listLocations || listProductAccessLocations;
+  const locations = (await Promise.all([...(context.companyIds || [])].map(companyId => listLocations({ companyIds: [companyId], locationIds: context.companyRoles?.get(companyId) === "admin" ? null : [...(context.locationIds || [])] })))).flat().filter(location => readable.has(`${location.companyId}:${location.locationId}`));
+  const mechanics = new Map();
+  const locationRows = await Promise.all(locations.map(async location => {
+    const row = location.name ? location : await (dependencies.readLocation || getLocationById)(location.locationId, [location.companyId]);
+    if (!row) return null;
+    const role = context.companyRoles?.get(location.companyId);
+    if (["office", "admin"].includes(role)) {
+      const users = await (dependencies.listMechanics || listUsersByLocation)(location.locationId);
+      for (const user of users.filter(user => user.role === "mechanic" && user.active && user.membership_active)) {
+        const option = mechanics.get(user.id) || { id: user.id, name: user.name, locationIds: [] };
+        option.locationIds.push(location.locationId); mechanics.set(user.id, option);
+      }
+    } else if (role === "mechanic") {
+      const option = mechanics.get(actor.id) || { id: actor.id, name: actor.name || "Me", locationIds: [] };
+      option.locationIds.push(location.locationId); mechanics.set(actor.id, option);
+    }
+    return { id: location.locationId, name: row.name };
+  }));
+  return { locations: locationRows.filter(Boolean), mechanics: [...mechanics.values()] };
+}
+
 export async function inspectionCreateContext(context, input = {}, dependencies = {}) {
   const actor = requireActor(context);
   const listLocations = dependencies.listLocations || listProductAccessLocations;
