@@ -1,0 +1,15 @@
+.inspection-maintenance { display: grid; gap: var(--space-3, 12px); padding: var(--space-3, 12px); border: 1px solid var(--border-color, #d0d5dd); border-radius: 10px; min-width: 0; overflow-wrap: anywhere; }
+.maintenance-heading, .maintenance-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.maintenance-heading h3 { margin: 0; font-size: 1rem; }
+.maintenance-item, .maintenance-mileage, .maintenance-reading-form, .maintenance-edit, .inspection-deferral-fields { display: grid; gap: 8px; min-width: 0; }
+.maintenance-item { border-top: 1px solid var(--border-color, #d0d5dd); padding-top: 12px; }
+.maintenance-item p { margin: 4px 0; white-space: pre-wrap; }
+.maintenance-item.is-due_soon > div > strong, .maintenance-item.is-needs_reading > div > strong { color: #854b0a; }
+.maintenance-item.is-overdue > div > strong { color: #b42318; }
+.inspection-deferral-fields label, .maintenance-reading-form label, .maintenance-edit > label { display: grid; gap: 4px; min-width: 0; }
+.inspection-deferral-fields input, .inspection-deferral-fields select, .inspection-deferral-fields textarea, .maintenance-reading-form input, .maintenance-reading-form textarea, .maintenance-edit textarea { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--border-color, #d0d5dd); border-radius: 6px; background: var(--surface-color, #fff); color: inherit; font: inherit; }
+.inspection-deferral-fields .maintenance-checkbox { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.inspection-deferral-fields .maintenance-checkbox input { width: 20px; min-height: 20px; flex: 0 0 20px; }
+.maintenance-actions { justify-content: flex-start; }
+.maintenance-actions button { min-height: 44px; }
+.maintenance-mileage > span, .maintenance-mileage > strong { font-size: .875rem; }

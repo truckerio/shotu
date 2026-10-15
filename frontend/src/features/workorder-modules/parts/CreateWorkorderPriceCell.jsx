@@ -71,6 +71,7 @@ export function CreatePartPriceCell({
   customUnitPrice = "",
   eligible = false,
   selection = "",
+  trackingMode,
   preview,
   previewStatus,
   onChange,
@@ -81,16 +82,17 @@ export function CreatePartPriceCell({
   </div>;
   const price = preview?.status === "known" ? { ...preview.price, selection: preview.price?.selection || selection } : null;
   const stale = previewStatus !== "ready";
-  const internalPrice = optionPrice(preview?.options?.batch_cost)
-    || (price?.selection === "batch_cost" ? price : null);
+  const internalValue = trackingMode === "no_stock" ? "internal_cost" : "batch_cost";
+  const internalPrice = optionPrice(preview?.options?.[internalValue])
+    || (price?.selection === internalValue ? price : null);
   const sellingPrice = optionPrice(preview?.options?.selling_price)
     || (price?.selection === "selling_price" ? price : null);
-  const selectedPrice = selection === "batch_cost" ? internalPrice : selection === "selling_price" ? sellingPrice : null;
+  const selectedPrice = selection === internalValue ? internalPrice : selection === "selling_price" ? sellingPrice : null;
   return <div className="create-workorder-price-cell">
     <InlinePriceControl
       customUnitPrice={customUnitPrice}
       internalPrice={internalPrice}
-      internalValue="batch_cost"
+      internalValue={internalValue}
       onCustomUnitPriceChange={onCustomUnitPriceChange}
       onSelectionChange={onChange}
       selectedPrice={selectedPrice}

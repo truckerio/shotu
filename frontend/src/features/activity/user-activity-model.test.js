@@ -36,6 +36,13 @@ test("global Activity names a one-Workorder price override without losing before
   assert.equal(item.description, "FILTER-1 price changed from $18.00 internal price to $24.00 custom price");
 });
 
+test("manual unit mileage activity names the correction and unit", () => {
+  const item = userActivityTimelineItem({ id: "mileage-1", source: "asset_mileage", category: "inspections", action: "mileage_corrected", actorName: "Alex", actorRole: "office", recordLabel: "Truck 12", description: "Mileage changed from 120,000 to 120,100 mi. Dashboard verified" });
+  assert.equal(item.title, "Mileage corrected");
+  assert.equal(item.description, "Mileage changed from 120,000 to 120,100 mi. Dashboard verified");
+  assert.deepEqual(item.details, [{ label: "Unit", value: "Truck 12" }]);
+});
+
 test("changing the activity filter keeps current rows until replacement data arrives", () => {
   const current = { items: [{ id: "event-1" }], page: 4, total: 81, hasMore: true, loading: false, loadingMore: true, error: "Old error" };
   assert.deepEqual(beginUserActivityLoad(current), {
@@ -47,4 +54,10 @@ test("changing the activity filter keeps current rows until replacement data arr
     loadingMore: false,
     error: "",
   });
+});
+
+test("historical mileage evidence is distinguished from a current correction", () => {
+  const item = userActivityTimelineItem({ source: "asset_mileage", action: "mileage_recorded_historical", description: "Historical mileage recorded. Current unit mileage unchanged." });
+  assert.equal(item.title, "Historical mileage recorded");
+  assert.match(item.description, /Current unit mileage unchanged/);
 });

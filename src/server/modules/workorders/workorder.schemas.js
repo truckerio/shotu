@@ -92,7 +92,7 @@ const customUnitPriceSchema = z.string().trim()
 export const createWorkorderPricingSchema = z.object({
   parts: z.array(z.object({
     partIndex: z.number().int().min(0).max(17),
-    selection: z.enum(["batch_cost", "selling_price"]),
+    selection: z.enum(["batch_cost", "internal_cost", "selling_price"]),
     customUnitPrice: customUnitPriceSchema.optional(),
   }).strict()).max(18).default([]),
   labor: z.object({

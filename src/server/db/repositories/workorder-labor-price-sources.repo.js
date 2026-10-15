@@ -14,7 +14,7 @@ export async function readEffectiveLaborPriceSources({ companyId, locationId, pr
         and (rate.location_id is null or rate.location_id=$2)
       order by rate.price_kind,(rate.location_id is not null) desc,rate.version desc
     ), matched_catalog as (
-      select catalog.id, product.id as labor_product_id, product.uom_code
+      select catalog.id, catalog.tracking_mode, product.id as labor_product_id, product.uom_code
       from product join parts_catalog catalog on catalog.company_id=product.company_id
         and lower(btrim(catalog.part_number))=lower(btrim(product.code))
         and catalog.uom_code=product.uom_code
@@ -33,15 +33,28 @@ export async function readEffectiveLaborPriceSources({ companyId, locationId, pr
         on policy.company_id=$1 and policy.catalog_part_id=catalog.id
       where policy.location_id is null or policy.location_id=$2
       order by (policy.location_id is not null) desc,policy.version desc limit 1
+    ), current_internal as (
+      select price.*, catalog.labor_product_id, catalog.uom_code as product_uom_code
+      from matched_catalog catalog join inventory_part_price_versions price
+        on price.company_id=$1 and price.catalog_part_id=catalog.id and price.price_kind='internal'
+      where catalog.tracking_mode='no_stock'
+        and (price.location_id is null or price.location_id=$2)
+      order by (price.location_id is not null) desc,price.version desc limit 1
     )
     select id,labor_product_id,price_kind,version,location_id,amount,currency,created_at,
-      product_uom_code,id as rate_version_id,null::uuid as selling_policy_version_id
+      product_uom_code,id as rate_version_id,null::uuid as selling_policy_version_id,
+      null::uuid as configured_price_version_id
     from local_rates
     union all
     select id,labor_product_id,'selling_price',0,location_id,value,currency,created_at,
-      product_uom_code,null::uuid,id
+      product_uom_code,null::uuid,id,null::uuid
     from current_policy where method='fixed' and currency ~ '^[A-Z]{3}$'
-      and not exists(select 1 from local_rates where price_kind='selling_price')`,
+      and not exists(select 1 from local_rates where price_kind='selling_price')
+    union all
+    select id,labor_product_id,'internal_cost',0,location_id,amount,currency,created_at,
+      product_uom_code,null::uuid,null::uuid,id
+    from current_internal
+    where not exists(select 1 from local_rates where price_kind='internal_cost')`,
   [companyId, locationId, productId]);
   return result.rows;
 }

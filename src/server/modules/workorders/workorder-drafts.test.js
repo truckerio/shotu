@@ -16,6 +16,7 @@ import {
 } from "./workorder-drafts.schemas.js";
 import {
   createUserWorkorderDraft,
+  prepareUserWorkorderDraftSubmission,
   submitUserWorkorderDraft,
   takeoverUserWorkorderDraft,
   updateUserWorkorderDraft,
@@ -52,6 +53,50 @@ function draftRow(overrides = {}) {
     authorization_exception_reason: "Test fleet workorder",
     ...overrides,
   };
+}
+
+test("priced draft submission preserves an explicitly selected legacy product when default differs", async () => {
+  const local = { productId: "77777777-7777-4777-8777-777777777777", externalId: "", code: "PTR001", name: "LABOR HOURS", uomCode: "hr" };
+  const prepared = await prepareUserWorkorderDraftSubmission(context(), {
+    companyId, locationId, createdByUserId: actorId,
+    authorizationClassification: "internal_fleet",
+    payload: {
+      concern: "Inspect leak.", mechanicUserIds: [],
+      formData: { laborProduct: { externalId: "85226", code: "PTR001", name: "LABOR HOURS", uomCode: "hr" }, laborHours: "3" },
+    },
+  }, { parts: [], labor: { selection: "selling_price" }, expectedFingerprint: "a".repeat(64) }, {
+    getLocation: async () => ({ id: locationId, company_id: companyId }),
+    authorizeCreate: async () => {},
+    loadLaborProduct: async () => assert.fail("current default B must not replace selected A"),
+    resolveLegacyLaborProduct: async (scope) => {
+      assert.equal(scope.companyId, companyId);
+      assert.equal(scope.legacyProduct.externalId, "85226");
+      return local;
+    },
+  });
+  assert.deepEqual(prepared.formData.laborProduct, local);
+});
+
+for (const [reason, selection] of [
+  ["unresolved", { externalId: "missing", code: "A", name: "Missing", uomCode: "hr" }],
+  ["inactive", { externalId: "inactive", code: "A", name: "Inactive", uomCode: "hr" }],
+  ["foreign", { externalId: "foreign", code: "A", name: "Foreign", uomCode: "hr" }],
+  ["unit mismatch", { externalId: "labor-A", code: "A", name: "Wrong unit", uomCode: "ea" }],
+]) {
+  test(`priced draft submission rejects ${reason} selected legacy labor without fallback`, async () => {
+    await assert.rejects(prepareUserWorkorderDraftSubmission(context(), {
+      companyId, locationId, createdByUserId: actorId, authorizationClassification: "internal_fleet",
+      payload: { concern: "Inspect leak.", mechanicUserIds: [], formData: { laborProduct: selection, laborHours: "2" } },
+    }, { parts: [], expectedFingerprint: "a".repeat(64) }, {
+      getLocation: async () => ({ id: locationId, company_id: companyId }),
+      authorizeCreate: async () => {},
+      resolveLegacyLaborProduct: async (scope) => {
+        assert.deepEqual(scope, { companyId, legacyProduct: selection });
+        return null;
+      },
+      loadLaborProduct: async () => assert.fail("must not switch to default B"),
+    }), (error) => error.code === "WORKORDER_LABOR_PRODUCT_UNAVAILABLE");
+  });
 }
 
 test("draft schemas allow incomplete autosave snapshots but require optimistic versions", () => {

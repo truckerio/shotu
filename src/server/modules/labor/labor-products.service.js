@@ -3,6 +3,7 @@ import { requireActor, requireLocationAccess } from "../../auth/authorize.js";
 import { companyRoleScope, effectiveCompanyContext, effectiveCompanyRole } from "../../auth/company-role.js";
 import { z } from "zod";
 import { localLaborProductSnapshot } from "../../../../shared/labor-product.js";
+import { getConfiguredLaborProduct, resolveLegacyLocalLaborProduct } from "../../db/repositories/labor-product.repo.js";
 import { findAuthorizedInventoryLocation } from "../../db/repositories/inventory-count-imports.repo.js";
 import {
   createLocalLaborProduct,
@@ -103,4 +104,22 @@ export async function trustedLocalLaborProduct({ productId, companyId, locationI
   const product = await findProduct({ companyId, locationId, productId });
   if (!product) throw resourceNotFound("Labor product");
   return localLaborProductSnapshot(product);
+}
+
+export async function resolveSubmittedLaborProduct({ companyId, locationId, selection }, context, dependencies = {}) {
+  if (selection == null) {
+    return (dependencies.loadDefault || getConfiguredLaborProduct)(companyId);
+  }
+  if (selection.productId) {
+    return (dependencies.resolveLocal || trustedLocalLaborProduct)({
+      companyId, locationId, productId: selection.productId,
+    }, context);
+  }
+  if (selection.externalId) {
+    const product = await (dependencies.resolveLegacy || resolveLegacyLocalLaborProduct)({
+      companyId, legacyProduct: selection,
+    });
+    if (product) return product;
+  }
+  throw new AuthError(422, "WORKORDER_LABOR_PRODUCT_UNAVAILABLE", "Selected labor product is unavailable. Choose an active local labor product.");
 }

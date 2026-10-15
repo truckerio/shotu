@@ -1,3 +1,4 @@
+import { deferralPayload } from "./inspection-maintenance-model.js";
 export function inspectionBatchQuery({ status, search, filters }, page) {
   const params = new URLSearchParams({ page: String(page), limit: "20" });
   if (["needs_action", "completed", "in_progress", "not_completed"].includes(status)) params.set("status", status);
@@ -14,7 +15,7 @@ export function inspectionFromApi(record = {}) {
     return [response.itemKey, {
       response: response.response,
       naReason: response.naReason || "",
-      ...(finding ? { findingId: finding.id, severity: finding.severity, note: finding.note, disposition: finding.disposition, noWorkorderReason: finding.noWorkorderReason || "" } : {}),
+      ...(finding ? { findingId: finding.id, severity: finding.severity, note: finding.note, disposition: finding.disposition, noWorkorderReason: finding.noWorkorderReason || "", ...(finding.deferral ? { deferral: finding.deferral } : {}) } : {}),
     }];
   }));
   const snapshot = record.templateSnapshot;
@@ -52,6 +53,7 @@ export function responsePayload(itemKey, value) {
       note: value.note,
       disposition: value.disposition,
       noWorkorderReason: value.noWorkorderReason || "",
+      ...(value.disposition === "defer" ? { deferral: deferralPayload(value.deferral) } : {}),
     } } : {}),
   };
 }
@@ -86,7 +88,7 @@ export function openInspectionFollowUps({ findings = [], followUps = [] } = {}) 
     return [finding.id, note.length > 240 ? `${note.slice(0, 237)}…` : note];
   }));
   return followUps
-    .filter((followUp) => ["open", "reopened"].includes(followUp.status) && followUp.findingId && Number.isInteger(Number(followUp.version)) && Number(followUp.version) > 0)
+    .filter((followUp) => !followUp.deferral && ["open", "reopened"].includes(followUp.status) && followUp.findingId && Number.isInteger(Number(followUp.version)) && Number(followUp.version) > 0)
     .map((followUp) => ({
       id: followUp.id || followUp.findingId,
       findingId: followUp.findingId,

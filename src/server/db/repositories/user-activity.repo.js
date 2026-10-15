@@ -44,6 +44,8 @@ export async function listUserActivity(requestContext, input = {}, dependencies 
         null::text,
         case when event.field_key like 'pricing.%'
           then concat(event.field_label,' changed from ',event.old_value,' to ',event.new_value)
+          when event.field_key = 'formData.mileage'
+          then concat('Mileage changed from ',coalesce(nullif(event.old_value,''),'unknown'),' to ',coalesce(nullif(event.new_value,''),'unknown'),' mi')
           else event.field_label end,
         null::numeric, null::text, workorder.id, workorder.serial
       from workorder_field_events event join operational_workorders workorder on workorder.id=event.workorder_id
@@ -106,6 +108,19 @@ export async function listUserActivity(requestContext, input = {}, dependencies 
       from inspection_events event
       join inspections inspection on inspection.company_id=event.company_id and inspection.id=event.inspection_id
       where event.actor_id=$1
+      union all
+      select ('asset-mileage:' || observation.id)::text, 'asset_mileage',
+        case when observation.inspection_id is not null then 'inspections' else 'workorders' end,
+        case when observation.provider_payload->>'historical'='true' then 'mileage_recorded_historical' else 'mileage_corrected' end, observation.recorded_at, observation.company_id,
+        coalesce(workorder.location_id,inspection.location_id,asset.location_id), observation.id,
+        coalesce(asset.unit_no,asset.name,asset.vin), null::text,
+        case when observation.provider_payload->>'historical'='true' then concat('Historical mileage recorded: ',observation.miles::text,' mi, observed ',observation.observed_at::text,'. Current unit mileage unchanged. ',observation.reason) else concat('Mileage changed from ',coalesce(observation.prior_miles::text,'unknown'),' to ',observation.miles::text,' mi. ',observation.reason) end,
+        null::numeric, null::text, observation.workorder_id, workorder.serial
+      from asset_mileage_observations observation
+      join assets asset on asset.company_id=observation.company_id and asset.id=observation.asset_id
+      left join operational_workorders workorder on workorder.company_id=observation.company_id and workorder.id=observation.workorder_id
+      left join inspections inspection on inspection.company_id=observation.company_id and inspection.id=observation.inspection_id
+      where observation.actor_id=$1 and observation.source='manual'
     ), scoped as (
       select activity.*, location.name location_name
       from activity

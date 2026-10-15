@@ -72,3 +72,13 @@ test("company selling policy is readable by Office but writable only by Admin", 
   });
   assert.equal(saved.policy.version, 1);
 });
+
+test("no-stock markup rejection is returned as a clear validation error", async () => {
+  await assert.rejects(writeSellingPolicy(partId, assignedLocationId, {
+    expectedVersion: 0, method: "markup_percent", value: "20", currency: null,
+    reason: "Cannot mark up missing batches", idempotencyKey: "no-stock-markup",
+  }, context, {
+    resolveLocationScope: async () => ({ companyIds: [companyId], locationIds: [assignedLocationId], isAdmin: false }),
+    append: async () => ({ kind: "no_stock_fixed_required" }),
+  }), (error) => error.code === "INVENTORY_NO_STOCK_FIXED_PRICE_REQUIRED" && error.statusCode === 422);
+});

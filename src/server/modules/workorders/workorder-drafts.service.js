@@ -18,7 +18,7 @@ import { CustomerDirectoryIdentityError } from "../../db/repositories/customer-d
 import { createWorkorderSchema } from "./workorder.schemas.js";
 import { authorizeWorkorderCreate } from "./workorder-module-access.service.js";
 import { workorderInputModules } from "./workorder-module-projection.js";
-import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
+import { resolveSubmittedLaborProduct } from "../labor/labor-products.service.js";
 import { createHash } from "node:crypto";
 import { issueInformationalDraftEstimate } from "../customer-documents/customer-documents.service.js";
 import { bindInformationalEstimateToWorkorder } from "../../db/repositories/customer-documents.repo.js";
@@ -105,12 +105,17 @@ export async function prepareUserWorkorderDraftSubmission(context, draft, pricin
       companyId: prepared.companyId, locationId: prepared.locationId,
       moduleKeys: workorderInputModules(prepared, { create: true }),
     });
-    if (prepared.formData?.laborProduct?.productId) {
-      prepared.formData.laborProduct = await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
-        companyId: prepared.companyId, locationId: prepared.locationId,
-        productId: prepared.formData.laborProduct.productId,
-      }, context);
-    }
+  }
+  if (prepared.formData?.laborProduct != null || pricing || prepared.formData?.laborHours) {
+    prepared.formData.laborProduct = await resolveSubmittedLaborProduct({
+      companyId: prepared.companyId,
+      locationId: prepared.locationId,
+      selection: prepared.formData?.laborProduct,
+    }, context, {
+      resolveLocal: dependencies.resolveLaborProduct,
+      resolveLegacy: dependencies.resolveLegacyLaborProduct,
+      loadDefault: dependencies.loadLaborProduct,
+    });
   }
   return prepared;
 }

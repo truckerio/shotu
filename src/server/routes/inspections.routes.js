@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { inspectionQueueOptions } from "../modules/inspections/inspection.service.js";
-import { assignInspectionSchema, cancelInspectionSchema, claimInspectionSchema, completeInspectionSchema, createInspectionCorrectionSchema, createInspectionFollowUpWorkorderSchema, createInspectionPrintArchiveSchema, createInspectionReinspectionSchema, createInspectionSchema, createInspectionWorkorderSchema, inspectionListSchema, inspectionVersionActionSchema, linkInspectionFollowUpSchema, linkInspectionWorkorderSchema, resolveInspectionFollowUpNoWorkorderSchema, saveInspectionResponsesSchema, workorderInspectionContextParamsSchema } from "../modules/inspections/inspection.schemas.js";
-import { assignInspection, cancelInspection, claimInspection, completeInspection, correctInspection, createInspectionFindingWorkorder, createInspectionFollowUpWorkorder, createInspectionPrintArchiveRecord, eligibleInspectionWorkorders, inspectionCreateContext, linkInspectionFollowUpWorkorder, linkInspectionToWorkorder, patchInspectionResponses, printInspectionSlip, queryInspectionSummaries, readInspection, readInspectionPrintArchivePdf, readInspectionPrintArchiveRecord, reinspectInspection, requestInspection, resolveInspectionFollowUpNoWorkorder, startInspection, workorderInspectionContext } from "../modules/inspections/inspection.service.js";
+import { acceptInspectionProviderMileageSchema, assignInspectionSchema, cancelInspectionSchema, claimInspectionSchema, completeInspectionSchema, createInspectionCorrectionSchema, createInspectionFollowUpWorkorderSchema, createInspectionPrintArchiveSchema, createInspectionReinspectionSchema, createInspectionSchema, createInspectionWorkorderSchema, deferInspectionFollowUpSchema, inspectionListSchema, inspectionVersionActionSchema, linkInspectionFollowUpSchema, linkInspectionWorkorderSchema, recordInspectionMileageSchema, resolveInspectionFollowUpNoWorkorderSchema, saveInspectionResponsesSchema, verifyInspectionFollowUpSchema, workorderInspectionContextParamsSchema } from "../modules/inspections/inspection.schemas.js";
+import { acceptInspectionProviderMileage, assignInspection, cancelInspection, claimInspection, completeInspection, correctInspection, createInspectionFindingWorkorder, createInspectionFollowUpWorkorder, createInspectionPrintArchiveRecord, deferInspectionFollowUp, eligibleInspectionWorkorders, inspectionCreateContext, inspectionMaintenanceContext, linkInspectionFollowUpWorkorder, linkInspectionToWorkorder, patchInspectionResponses, printInspectionSlip, queryInspectionSummaries, readInspection, readInspectionPrintArchivePdf, readInspectionPrintArchiveRecord, recordInspectionMileage, reinspectInspection, requestInspection, resolveInspectionFollowUpNoWorkorder, startInspection, verifyInspectionFollowUp, workorderInspectionContext, workorderMaintenanceContext } from "../modules/inspections/inspection.service.js";
 
 function parse(schema,value){const result=schema.safeParse(value);if(result.success)return result.data;const error=new Error(result.error.issues[0]?.message||"Invalid inspection request.");error.statusCode=400;throw error;}
 function detailRoute(pathname){const match=/^\/api\/inspections\/([^/]+)(?:\/(responses|print)|\/actions\/(start|complete|cancel|assign|claim))?$/.exec(pathname);return match?{id:decodeURIComponent(match[1]),responses:match[2]==="responses",print:match[2]==="print",action:match[3]||null}:null;}
@@ -15,13 +15,15 @@ function nestedRoute(pathname) {
   return { id:decodeURIComponent(match[1]), archiveId:match[4] ? decodeURIComponent(match[4]) : null, pdf:match[5] === "pdf", kind:"print-archives" };
 }
 function followUpRoute(pathname) {
-  const match = /^\/api\/inspections\/([^/]+)\/follow-ups\/([^/]+)\/actions\/(link-workorder|create-workorder|no-workorder)$/.exec(pathname);
+  const match = /^\/api\/inspections\/([^/]+)\/follow-ups\/([^/]+)\/actions\/(link-workorder|create-workorder|no-workorder|defer|verify)$/.exec(pathname);
   return match ? { id:decodeURIComponent(match[1]), findingId:decodeURIComponent(match[2]), action:match[3] } : null;
 }
 
 export async function handleInspectionsApi(req,res,url,helpers,dependencies={}){
   if(!url.pathname.startsWith("/api/inspections"))return false; const {sendJson,readBody,requestContext}=helpers;
   if (req.method === "GET" && url.pathname === "/api/inspections/queue-options") { sendJson(res, 200, await (dependencies.queueOptions || inspectionQueueOptions)(requestContext)); return true; }
+  const workorderMaintenance=/^\/api\/inspections\/workorders\/([^/]+)\/maintenance$/.exec(url.pathname);
+  if(req.method==="GET"&&workorderMaintenance){const {workorderId}=parse(workorderInspectionContextParamsSchema,{workorderId:decodeURIComponent(workorderMaintenance[1])});sendJson(res,200,await(dependencies.workorderMaintenance||workorderMaintenanceContext)(requestContext,workorderId));return true;}
   const workorderContext=/^\/api\/inspections\/workorders\/([^/]+)\/context$/.exec(url.pathname);
   if(req.method==="GET"&&workorderContext){const {workorderId}=parse(workorderInspectionContextParamsSchema,{workorderId:decodeURIComponent(workorderContext[1])});sendJson(res,200,await (dependencies.workorderContext||workorderInspectionContext)(requestContext,workorderId));return true;}
   if(req.method==="GET"&&url.pathname==="/api/inspections/create-context"){
@@ -34,6 +36,8 @@ export async function handleInspectionsApi(req,res,url,helpers,dependencies={}){
   if (followUp && req.method === "POST") {
     if (followUp.action === "link-workorder") { sendJson(res,200,await (dependencies.linkFollowUp || linkInspectionFollowUpWorkorder)(requestContext,followUp.id,followUp.findingId,parse(linkInspectionFollowUpSchema,await readBody(req)))); return true; }
     if (followUp.action === "create-workorder") { sendJson(res,201,await (dependencies.createFollowUpWorkorder || createInspectionFollowUpWorkorder)(requestContext,followUp.id,followUp.findingId,parse(createInspectionFollowUpWorkorderSchema,await readBody(req)))); return true; }
+    if (followUp.action === "defer") { sendJson(res,200,await (dependencies.deferFollowUp || deferInspectionFollowUp)(requestContext,followUp.id,followUp.findingId,parse(deferInspectionFollowUpSchema,await readBody(req)))); return true; }
+    if (followUp.action === "verify") { sendJson(res,200,await (dependencies.verifyFollowUp || verifyInspectionFollowUp)(requestContext,followUp.id,followUp.findingId,parse(verifyInspectionFollowUpSchema,await readBody(req)))); return true; }
     sendJson(res,200,await (dependencies.noWorkorderFollowUp || resolveInspectionFollowUpNoWorkorder)(requestContext,followUp.id,followUp.findingId,parse(resolveInspectionFollowUpNoWorkorderSchema,await readBody(req)))); return true;
   }
   const nested=nestedRoute(url.pathname);
@@ -48,6 +52,10 @@ export async function handleInspectionsApi(req,res,url,helpers,dependencies={}){
     if (nested.kind === "print-archives" && nested.archiveId && req.method === "GET") { sendJson(res,200,await (dependencies.readArchive || readInspectionPrintArchiveRecord)(requestContext,nested.id,nested.archiveId)); return true; }
     return false;
   }
+  const maintenance=/^\/api\/inspections\/([^/]+)\/maintenance$/.exec(url.pathname);
+  if(req.method==="GET"&&maintenance){sendJson(res,200,await(dependencies.maintenance||inspectionMaintenanceContext)(requestContext,decodeURIComponent(maintenance[1])));return true;}
+  const mileage=/^\/api\/inspections\/([^/]+)\/mileage(?:\/(provider))?$/.exec(url.pathname);
+  if(req.method==="POST"&&mileage){const provider=mileage[2]==="provider";const schema=provider?acceptInspectionProviderMileageSchema:recordInspectionMileageSchema;const service=provider?(dependencies.acceptProviderMileage||acceptInspectionProviderMileage):(dependencies.recordMileage||recordInspectionMileage);sendJson(res,200,{mileage:await service(requestContext,decodeURIComponent(mileage[1]),parse(schema,await readBody(req)))});return true;}
   const route=detailRoute(url.pathname);if(!route)return false;
   if(req.method==="GET"&&route.print){sendJson(res,200,await (dependencies.print||printInspectionSlip)(requestContext,route.id));return true;}
   if(req.method==="GET"&&!route.responses&&!route.action){sendJson(res,200,{inspection:await (dependencies.read||readInspection)(requestContext,route.id)});return true;}

@@ -1,3 +1,4 @@
+import { InspectionMaintenancePanel } from "../inspections/InspectionMaintenancePanel.jsx";
 import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle, Save01, XClose } from "@untitledui/icons";
 import { OperationalCheckboxGroup } from "../../components/forms/OperationalCheckboxGroup.jsx";
@@ -575,6 +576,7 @@ export function WorkorderDetailPage({
             ) : null,
           children: (
             <>
+            {["admin", "office", "mechanic"].includes(actor.role) ? <InspectionMaintenancePanel key={activeWorkorder.id} recordKind="workorder" recordId={activeWorkorder.id} unitType={form.unitType} refreshKey={detailStatus} /> : null}
             <InspectionSourceReferences
               detailStatus={detailStatus}
               inspectionContext={activeWorkorder.inspectionContext}

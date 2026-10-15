@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { assignInspection, claimInspection, completeInspection, correctInspection, createInspectionFindingWorkorder, createInspectionFollowUpWorkorder, createInspectionPrintArchiveRecord, eligibleInspectionWorkorders, linkInspectionFollowUpWorkorder, linkInspectionToWorkorder, patchInspectionResponses, printInspectionSlip, queryInspectionSummaries,readInspection,readInspectionPrintArchiveRecord,reinspectInspection,requestInspection, resolveInspectionFollowUpNoWorkorder,startInspection,workorderInspectionContext } from "./inspection.service.js";
+import { acceptInspectionProviderMileage, assignInspection, claimInspection, completeInspection, correctInspection, createInspectionFindingWorkorder, createInspectionFollowUpWorkorder, createInspectionPrintArchiveRecord, deferInspectionFollowUp, eligibleInspectionWorkorders, inspectionMaintenanceContext, linkInspectionFollowUpWorkorder, linkInspectionToWorkorder, patchInspectionResponses, printInspectionSlip, queryInspectionSummaries,readInspection,readInspectionPrintArchiveRecord,recordInspectionMileage,reinspectInspection,requestInspection, resolveInspectionFollowUpNoWorkorder,startInspection,unitMaintenanceContext,verifyInspectionFollowUp,workorderInspectionContext } from "./inspection.service.js";
 import { inspectionPrintSnapshotDigest } from "./inspection-print-integrity.js";
 import { closePool } from "../../db/pool.js";
 test.after(closePool);
@@ -163,4 +163,50 @@ test("not_completed list status expands only to active lifecycle statuses",async
   let listInput;
   await queryInspectionSummaries(context,{limit:25,search:"",status:"not_completed"},{bootstrap:async()=>({companies:[{companyId,locations:[{locationId,modules:{inspections:"read"}}]}]}),list:async(input)=>(listInput=input,{items:[]})});
   assert.deepEqual(listInput.statuses,["requested","assigned","in_progress"]);
+});
+
+test("inspection maintenance evaluates actual start mileage and strips workorder identity without workorders read",async()=>{
+  const record={id:"visit",companyId,locationId,assetId:"asset",unitType:"Truck",status:"in_progress",startedAt:"2026-10-14T10:00:00.000Z",startEvidence:{odometerMiles:249850},assignments:[]};
+  const denied=Object.assign(new Error("Denied"),{statusCode:403});
+  const value=await inspectionMaintenanceContext(context,"visit",{load:async()=>record,authorizeProduct:async()=>({mode:"full"}),authorizeWorkorders:async()=>{throw denied;},bootstrap:async()=>({companies:[{companyId,locations:[{locationId,modules:{inspections:"read"}}]}]}),readMileage:async()=>({miles:249600,observedAt:"2026-10-14T09:00:00.000Z",source:"samsara_obd",version:1,state:"fresh"}),listMaintenance:async(input)=>{assert.deepEqual(input.locationIds,[locationId]);return[{id:"obligation",findingId:"finding",inspectionId:"source",inspectionNumber:"INS-1",note:"Fluid low",version:1,status:"resolved_workorder",deferral:{reason:"Wait",nextVisit:false,dueDate:null,dueMiles:250000,baselineMiles:null,additionalMiles:null,earlyMiles:200,reviewedAt:"2026-10-10T10:00:00.000Z"},sourceCompletedAt:"2026-10-10T10:00:00.000Z",workorderId:"secret",workorderStatus:"in_progress"}];},now:()=>new Date("2026-10-14T11:00:00.000Z")});
+  assert.equal(value.mileage.source,"inspection_start");assert.equal(value.items[0].dueState,"repair_planned");assert.equal(value.items[0].workorderId,undefined);assert.equal(value.items[0].workorderStatus,undefined);assert.equal(value.canManage,true);assert.equal(value.canManageWorkorders,false);assert.equal(value.canRecordMileage,true);
+});
+
+test("unit maintenance is Office/Admin only and reads all authorized source locations",async()=>{
+  const otherLocation="44444444-4444-4444-8444-444444444444";const adminContext={...context,actor:{id:userId,role:"admin"},locationIds:new Set(),companyRoles:new Map([[companyId,"admin"]])};let listed;
+  const value=await unitMaintenanceContext(adminContext,"asset",{loadAsset:async()=>({id:"asset",companyId,locationId:null,unitType:"Truck"}),bootstrap:async()=>({companies:[{companyId,locations:[{locationId,modules:{inspections:"read"}},{locationId:otherLocation,modules:{inspections:"full"}}]}]}),authorizeProduct:async()=>({mode:"full"}),authorizeWorkorders:async()=>({mode:"read"}),readMileage:async()=>({miles:1,observedAt:"2026-10-14T10:00:00Z",source:"manual",version:1,state:"fresh"}),listMaintenance:async(input)=>(listed=input,[])});
+  assert.deepEqual(listed.locationIds,[locationId,otherLocation]);assert.equal(value.canRecordMileage,false);
+  const mechanic={...context,actor:{id:userId,role:"mechanic"},companyRoles:new Map([[companyId,"mechanic"]])};await assert.rejects(unitMaintenanceContext(mechanic,"asset",{loadAsset:async()=>({id:"asset",companyId,locationId,unitType:"Truck"})}),/not found/i);
+});
+
+test("multi-location maintenance applies workorder and action permissions at each obligation source",async()=>{
+  const sourceB="44444444-4444-4444-8444-444444444444";const denied=()=>Object.assign(new Error("Denied"),{statusCode:403});
+  const value=await unitMaintenanceContext(context,"asset",{loadAsset:async()=>({id:"asset",companyId,locationId,unitType:"Truck"}),bootstrap:async()=>({companies:[{companyId,locations:[{locationId,modules:{inspections:"full",workorders:"full"}},{locationId:sourceB,modules:{inspections:"read",workorders:"off"}}]}]}),authorizeProduct:async(_context,record,capability)=>{if(record.locationId===sourceB&&capability==="write")throw denied();return{mode:"full"};},authorizeWorkorders:async(_context,record)=>{if(record.locationId===sourceB)throw denied();return{mode:"full"};},readMileage:async()=>({miles:100,observedAt:"2026-10-14T10:00:00Z",source:"manual",version:1,state:"fresh"}),listMaintenance:async()=>[{id:"obligation-b",findingId:"finding-b",inspectionId:"inspection-b",inspectionNumber:"INS-B",note:"Source B",version:1,status:"resolved_workorder",deferral:{reason:"Wait",nextVisit:false,dueDate:null,dueMiles:200,baselineMiles:null,additionalMiles:null,earlyMiles:20},sourceCompletedAt:"2026-10-10T10:00:00Z",sourceLocationId:sourceB,workorderId:"private-b",workorderStatus:"in_progress"}]});
+  assert.equal(value.canManage,true);assert.equal(value.canManageWorkorders,true);
+  assert.equal(value.items[0].canManage,false);assert.equal(value.items[0].canManageWorkorders,false);
+  assert.equal(value.items[0].workorderId,undefined);assert.equal(value.items[0].workorderStatus,undefined);assert.equal(value.items[0].sourceLocationId,undefined);
+});
+
+test("a completed subsequent visit keeps next-visit maintenance due in unit context",async()=>{
+  const adminContext={...context,actor:{id:userId,role:"admin"},companyRoles:new Map([[companyId,"admin"]])};
+  const value=await unitMaintenanceContext(adminContext,"asset",{loadAsset:async()=>({id:"asset",companyId,locationId,unitType:"Truck"}),bootstrap:async()=>({companies:[{companyId,locations:[{locationId,modules:{inspections:"read"}}]}]}),authorizeProduct:async()=>({mode:"full"}),authorizeWorkorders:async()=>({mode:"read"}),readMileage:async()=>({miles:null,observedAt:null,source:null,version:0,state:"unknown"}),listMaintenance:async()=>[{id:"obligation",findingId:"finding",inspectionId:"source",inspectionNumber:"INS-1",note:"Fluid low",version:1,status:"open",deferral:{reason:"Next visit",nextVisit:true,dueDate:null,dueMiles:null,baselineMiles:null,additionalMiles:null,earlyMiles:200,reviewedAt:"2026-10-10T10:00:00Z"},sourceCompletedAt:"2026-10-10T10:00:00Z",visitStartedAt:"2026-10-12T10:00:00Z"}]});
+  assert.equal(value.items[0].dueState,"due");assert.equal(value.items[0].visitStartedAt,undefined);
+});
+
+test("defer and verify actions stay Office scoped and additional miles require current verified baseline",async()=>{
+  const record={id:"source",companyId,locationId,assetId:"asset",unitType:"Truck",status:"completed",assignments:[]};const input={expectedVersion:1,idempotencyKey:"defer-again-001",reason:"Still safe",deferral:{reason:"Still safe",nextVisit:false,dueDate:null,dueMiles:null,baselineMiles:249900,additionalMiles:100,earlyMiles:200}};let command;
+  await deferInspectionFollowUp(context,"source","finding",input,{load:async()=>record,authorizeProduct:async()=>{},readMileage:async()=>({miles:249900,state:"fresh"}),resolveFollowUp:async(value)=>(command=value,value)});assert.equal(command.action,"defer");assert.equal(command.deferral.dueMiles,250000);
+  await assert.rejects(deferInspectionFollowUp(context,"source","finding",input,{load:async()=>record,authorizeProduct:async()=>{},readMileage:async()=>({miles:249800,state:"fresh"}),resolveFollowUp:async()=>assert.fail()}),(error)=>error.code==="INSPECTION_DEFERRAL_BASELINE_UNVERIFIED");
+  const verified=await verifyInspectionFollowUp(context,"source","finding",{expectedVersion:2,idempotencyKey:"verify-defer-001",reason:"Dashboard and component verified"},{load:async()=>record,authorizeProduct:async()=>{},resolveFollowUp:async(value)=>value});assert.equal(verified.action,"verify");
+  await assert.rejects(deferInspectionFollowUp(context,"source","finding",{...input,reason:"Audit says something else"},{load:async()=>record,authorizeProduct:async()=>{},resolveFollowUp:async()=>assert.fail()}),(error)=>error.statusCode===400&&error.code==="INSPECTION_DEFERRAL_REASON_MISMATCH");
+  await assert.rejects(deferInspectionFollowUp(context,"source","finding",{...input,reason:"Still safe",deferral:{...input.deferral,dueDate:"2026-02-31"}},{load:async()=>record,authorizeProduct:async()=>{},resolveFollowUp:async()=>assert.fail()}),(error)=>error.statusCode===400);
+});
+
+test("manual and provider mileage commands require an in-progress truck in inspection scope",async()=>{
+  const record={id:"visit",companyId,locationId,assetId:"asset",unitType:"Truck",status:"in_progress",assignments:[]};let manual;const saved=await recordInspectionMileage(context,"visit",{expectedVersion:0,idempotencyKey:"manual-mileage-001",miles:10,observedAt:"2026-10-14T10:00:00Z",reason:"Dashboard verified"},{load:async()=>record,authorizeProduct:async()=>{},recordMileage:async(input)=>(manual=input,{miles:input.miles})});assert.equal(saved.miles,10);assert.equal(manual.inspectionId,"visit");let provider;await acceptInspectionProviderMileage(context,"visit",{expectedVersion:1,idempotencyKey:"provider-mileage-001",reason:"Samsara reading confirmed"},{load:async()=>record,authorizeProduct:async()=>{},acceptProviderMileage:async(input)=>(provider=input,input)});assert.equal(provider.assetId,"asset");await assert.rejects(recordInspectionMileage(context,"visit",{expectedVersion:0,idempotencyKey:"manual-mileage-002",miles:10,observedAt:"2026-10-14T10:00:00Z",reason:"Dashboard verified"},{load:async()=>({...record,status:"completed"}),authorizeProduct:async()=>{},recordMileage:async()=>assert.fail()}),(error)=>error.code==="INSPECTION_MILEAGE_NOT_EDITABLE");
+});
+
+test("inspection mileage commands map repository domain errors to API status codes",async()=>{
+  const record={id:"visit",companyId,locationId,assetId:"asset",unitType:"Truck",status:"in_progress",assignments:[]};const base={load:async()=>record,authorizeProduct:async()=>{}};
+  for(const [code,statusCode] of [["ASSET_MILEAGE_TIME_FUTURE",400],["ASSET_MILEAGE_ASSET_NOT_FOUND",404],["ASSET_MILEAGE_STALE",409]])await assert.rejects(recordInspectionMileage(context,"visit",{expectedVersion:0,idempotencyKey:"manual-mileage-map",miles:10,observedAt:"2026-10-14T10:00:00Z",reason:"Dashboard verified"},{...base,recordMileage:async()=>{throw Object.assign(new Error(code),{code});}}),(error)=>error.code===code&&error.statusCode===statusCode);
 });

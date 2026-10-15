@@ -84,7 +84,7 @@ export function WorkorderPartPriceCell({
             selection,
             reason: selection === "batch_cost"
               ? "Use exact receipt batch cost"
-              : "Use configured selling policy",
+              : selection === "internal_cost" ? "Use configured internal cost" : "Use configured selling policy",
             idempotencyKey: `part-price-${crypto.randomUUID()}`,
           }),
         },
@@ -107,9 +107,11 @@ export function WorkorderPartPriceCell({
     disabled={busy || disabled}
   >
     <option value="">Select price</option>
-    <option value="batch_cost" disabled={!canUseBatchCost}>
-      Batch cost{canUseBatchCost ? "" : " — cost unavailable"}
-    </option>
+    {usageKind === "no_stock"
+      ? <option value="internal_cost">Internal cost</option>
+      : <option value="batch_cost" disabled={!canUseBatchCost}>
+        Batch cost{canUseBatchCost ? "" : " — cost unavailable"}
+      </option>}
     <option value="selling_price">Selling price</option>
   </Dropdown>;
   const allocationHistory = visibleAllocations.length ? <details className="workorder-part-price-layers">

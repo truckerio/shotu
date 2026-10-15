@@ -53,6 +53,7 @@ function priceEvidence(price) {
     baseUnitPrice: price.baseUnitPrice == null ? null : scaled(price.baseUnitPrice, 4).toString(),
     manualOverride: price.manualOverride === true,
     rateVersionId: price.rateVersionId || null, sellingPolicyVersionId: price.sellingPolicyVersionId || null,
+    configuredPriceVersionId: price.configuredPriceVersionId || null,
     receiptLineId: price.receiptLineId || null,
     allocations: (price.allocations || []).map((row) => ({ costLayerId: row.costLayerId,
       receiptLineId: row.receiptLineId || null, quantity: scaled(row.quantity, 3).toString(),
@@ -100,35 +101,43 @@ export async function readCreatePricing(input, transactionClient = null) {
         where company_id=$1 and catalog_part_id=$3 and (location_id is null or location_id=$2)
         order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
       if (catalog?.tracking_mode === "no_stock") {
-        const reason = catalog.uom_code !== (part.uomCode || "ea")
-          ? "No-stock unit changed."
-          : policy?.method !== "fixed" || policy.value === null || !policy.currency
-            ? "Configure a fixed selling price for this no-stock item."
-            : null;
-        let sellingPrice = null;
-        if (!reason) {
+        const configured = (await client.query(`select * from inventory_part_price_versions
+          where company_id=$1 and catalog_part_id=$3 and price_kind='internal'
+            and (location_id is null or location_id=$2)
+          order by (location_id is not null) desc,version desc limit 1`, scope.slice(0, 3))).rows[0];
+        const unitChanged = catalog.uom_code !== (part.uomCode || "ea");
+        const noStockPrice = (selection, source, sourceId) => {
           try {
-            const unitPrice = fixed(scaled(policy.value, 4));
+            if (unitChanged || source?.amount === null || source?.amount === undefined || !source.currency) return null;
+            const unitPrice = fixed(scaled(source.amount, 4));
             const totalPrice = fixed(divide(scaled(unitPrice, 4) * scaled(part.qty, 3), 1000n));
-            sellingPrice = {
-              selection: "selling_price",
+            return {
+              selection,
               quantity: String(part.qty),
               uomCode: catalog.uom_code,
               unitPrice,
               totalPrice,
-              currency: policy.currency,
-              sellingPolicyVersionId: policy.id,
+              currency: source.currency,
+              [sourceId]: source.id,
               allocations: [],
             };
           } catch {
-            sellingPrice = null;
+            return null;
           }
-        }
+        };
+        const internalPrice = noStockPrice("internal_cost", configured, "configuredPriceVersionId");
+        const sellingPrice = policy?.method === "fixed"
+          ? noStockPrice("selling_price", { ...policy, amount: policy.value }, "sellingPolicyVersionId") : null;
         const options = {
-          batch_cost: { status: "incomplete", price: null, reason: "No-stock items have no receipt batch cost." },
+          internal_cost: internalPrice
+            ? { status: "known", price: internalPrice }
+            : { status: "incomplete", price: null,
+              reason: unitChanged ? "No-stock unit changed." : configured?.amount === null
+                ? "Configured internal cost is Unknown." : "Configure an internal cost for this no-stock item." },
           selling_price: sellingPrice
             ? { status: "known", price: sellingPrice }
-            : { status: "incomplete", price: null, reason: reason || "Enter a valid no-stock quantity." },
+            : { status: "incomplete", price: null, reason: unitChanged ? "No-stock unit changed."
+              : "Configure a fixed selling price for this no-stock item." },
         };
         const selectedOption = selected ? options[selection.selection] : null;
         if (!selected) parts.push({ partIndex, status: "unselected", price: null, options });
@@ -232,7 +241,8 @@ export async function readCreatePricing(input, transactionClient = null) {
       productId: input.formData?.laborProduct?.productId }, (sql, params) => client.query(sql, params));
     const currentRates = Object.fromEntries(rates.map((row) => [row.price_kind, { id: row.id, version: row.version,
       locationId: row.location_id, amount: row.amount, currency: row.currency, status: row.amount === null ? "unknown" : "known",
-      sellingPolicyVersionId: row.selling_policy_version_id || null }]));
+      sellingPolicyVersionId: row.selling_policy_version_id || null,
+      configuredPriceVersionId: row.configured_price_version_id || null }]));
     const labor = { status: "incomplete", price: null, currentRates };
     const selectedRate = rates.find((row) => row.price_kind === input.pricing?.labor?.selection);
     if (selectedRate?.amount !== null && selectedRate?.currency && Number(input.formData.laborHours) > 0) {
@@ -242,8 +252,9 @@ export async function readCreatePricing(input, transactionClient = null) {
         if (!validLaborQuantity(input.formData.laborHours, uomCode)) throw new Error("Invalid labor quantity.");
         const hours = scaled(input.formData.laborHours, 2);
         labor.price = applyCreatePriceOverride({ selection: selectedRate.price_kind, productId: selectedRate.labor_product_id,
-          rateVersionId: selectedRate.selling_policy_version_id ? null : selectedRate.id,
+          rateVersionId: selectedRate.rate_version_id || null,
           sellingPolicyVersionId: selectedRate.selling_policy_version_id || null,
+          configuredPriceVersionId: selectedRate.configured_price_version_id || null,
           hours: String(input.formData.laborHours), uomCode, unitPrice: selectedRate.amount,
           totalPrice: fixed(divide(scaled(selectedRate.amount, 4) * hours, 100n)), currency: selectedRate.currency },
         input.pricing?.labor?.customUnitPrice);

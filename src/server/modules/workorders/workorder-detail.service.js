@@ -5,7 +5,7 @@ import {
   recordWorkorderOpened,
 } from "../../db/repositories/operational-workorders.repo.js";
 import { listWorkorderPartRequests } from "../../db/repositories/part-requests.repo.js";
-import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
+import { getConfiguredLaborProduct, resolveLegacyLocalLaborProduct } from "../../db/repositories/labor-product.repo.js";
 
 function mechanicParticipants(workorder, timeline) {
   const participants = new Map();
@@ -75,11 +75,26 @@ export function canViewWorkorderChat(workorder, { viewerUserId = null, participa
 
 export async function loadWorkorderDetail(
   workorderId,
-  { viewerUserId = null, participantChatOnly = false, loadLaborProduct = getConfiguredLaborProduct } = {},
+  {
+    viewerUserId = null,
+    participantChatOnly = false,
+    loadLaborProduct = getConfiguredLaborProduct,
+    resolveLegacyProduct = resolveLegacyLocalLaborProduct,
+    loadWorkorder = getOperationalWorkorderById,
+    loadMessages = listChatMessages,
+    loadTimeline = getWorkorderTimeline,
+    loadPartRequests = listWorkorderPartRequests,
+  } = {},
 ) {
-  const workorder = await getOperationalWorkorderById(workorderId);
+  const workorder = await loadWorkorder(workorderId);
   if (!workorder) throw new Error("Workorder not found.");
-  if (!workorder.formData?.laborProduct) {
+  if (workorder.formData?.laborProduct?.externalId && !workorder.formData.laborProduct.productId) {
+    const resolved = await resolveLegacyProduct({
+      companyId: workorder.companyId,
+      legacyProduct: workorder.formData.laborProduct,
+    });
+    if (resolved) workorder.formData = { ...workorder.formData, laborProduct: resolved };
+  } else if (!workorder.formData?.laborProduct) {
     const laborProduct = await loadLaborProduct(workorder.companyId);
     workorder.formData = {
       ...(workorder.formData || {}),
@@ -88,9 +103,9 @@ export async function loadWorkorderDetail(
   }
   const includeChat = canViewWorkorderChat(workorder, { viewerUserId, participantChatOnly });
   const [messages, timeline, partRequests] = await Promise.all([
-    includeChat ? listChatMessages(workorderId, { viewerUserId }) : [],
-    getWorkorderTimeline(workorderId),
-    listWorkorderPartRequests(workorderId),
+    includeChat ? loadMessages(workorderId, { viewerUserId }) : [],
+    loadTimeline(workorderId),
+    loadPartRequests(workorderId),
   ]);
   return {
     workorder,

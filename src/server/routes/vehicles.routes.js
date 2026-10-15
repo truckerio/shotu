@@ -1,3 +1,4 @@
+import { unitMaintenanceContext } from "../modules/inspections/inspection.service.js";
 import { createManualVehicle, findVehicleById, findVehicles, refreshVehicleLocation } from "../services/vehicles.service.js";
 import { createManualVehicleSchema } from "../modules/vehicles/manual-vehicle.service.js";
 import { readUnitsDirectory, readUnitsDirectoryFacets } from "../modules/vehicles/units-directory.service.js";
@@ -41,6 +42,12 @@ export async function handleVehiclesApi(req, res, url, helpers, dependencies = {
     const type = url.searchParams.get("type");
     if (type !== null) raw.type = type;
     sendJson(res, 200, await (dependencies.directoryFacets || readUnitsDirectoryFacets)(requestContext, raw, dependencies.directoryDependencies));
+    return true;
+  }
+
+  const maintenanceMatch = /^\/api\/vehicles\/([^/]+)\/maintenance$/.exec(url.pathname);
+  if (req.method === "GET" && maintenanceMatch) {
+    sendJson(res, 200, await (dependencies.unitMaintenance || unitMaintenanceContext)(requestContext, decodeURIComponent(maintenanceMatch[1]), dependencies.maintenanceDependencies));
     return true;
   }
 

@@ -954,7 +954,7 @@ export async function createOperationalWorkorderInTransaction(input, client) {
           fieldKey: `pricing.part.${selection.partIndex}`,
           fieldLabel: `${partNumber} price`,
           oldValue: priceAuditValue(saved.snapshot.baseUnitPrice, saved.snapshot.currency,
-            selection.selection === "batch_cost" ? "internal price" : "selling price"),
+            ["batch_cost", "internal_cost"].includes(selection.selection) ? "internal price" : "selling price"),
           newValue: priceAuditValue(saved.snapshot.unitPrice, saved.snapshot.currency, "custom price"),
         });
       }

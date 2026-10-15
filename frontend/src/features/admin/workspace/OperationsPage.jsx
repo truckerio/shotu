@@ -28,7 +28,7 @@ export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, 
 
   return (
     <OperationalCollectionPage
-      className="admin-content admin-operations-content"
+      className={`admin-content admin-operations-content${product === "inspections" ? " is-inspection-workspace" : ""}`}
       title={product === "inspections" ? "Inspections" : "Workorders"}
       actions={createAction}
       surface

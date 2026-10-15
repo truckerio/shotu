@@ -35,7 +35,7 @@ function filledParts(parts) {
         serializedUnitIds: [...new Set(part.serializedUnitIds.filter(Boolean))],
         serializedSerialNumbers: [...new Set((part.serializedSerialNumbers || []).filter(Boolean))],
       } : {}),
-      ...(["batch_cost", "selling_price"].includes(part?.priceSelection) ? {
+      ...((part?.trackingMode === "no_stock" ? ["internal_cost", "selling_price"] : ["batch_cost", "selling_price"]).includes(part?.priceSelection) ? {
         priceSelection: part.priceSelection,
         ...(text(part.customUnitPrice) ? { customUnitPrice: text(part.customUnitPrice) } : {}),
       } : {}),
@@ -62,7 +62,7 @@ export function buildWorkorderDraftPayload({
   const parts = filledParts(form.parts);
   const financialRole = ["admin", "office"].includes(actor.role);
   const pricingParts = financialRole ? parts.flatMap((part, partIndex) => (
-    partHasExactInventorySource(part) && ["batch_cost", "selling_price"].includes(part.priceSelection)
+    partHasExactInventorySource(part) && (part.trackingMode === "no_stock" ? ["internal_cost", "selling_price"] : ["batch_cost", "selling_price"]).includes(part.priceSelection)
       ? [{
         partIndex,
         selection: part.priceSelection,

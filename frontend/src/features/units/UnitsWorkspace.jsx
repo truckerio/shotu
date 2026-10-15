@@ -12,6 +12,7 @@ import {
 } from "../../components/operations/OperationalCollectionPage.jsx";
 import { api } from "../../lib/api.js";
 import { unitsDirectoryFiltersPath, unitsDirectoryPath, unitsDirectorySection, unitsFilters, unitsFilterUrl, unitTitle } from "./units-directory-model.js";
+import { InspectionMaintenancePanel } from "../inspections/InspectionMaintenancePanel.jsx";
 import { UnitPartsLifecycle } from "./UnitPartsLifecycle.jsx";
 import "./units-workspace.css";
 
@@ -160,6 +161,7 @@ export function UnitsWorkspace({ presentation = "page", actorId = "", section = 
         {selected && !detailMode ? <SecondaryDetailSection title="Overview"><dl className="units-overview">
           {[["Unit number", selected.unitNo], ["Type", selected.unitType], ["Name", selected.name], ["VIN", selected.vin], ["License plate", selected.licensePlate], ["Make", selected.make], ["Model", selected.model], ["Year", selected.year], ["Samsara tags", unitTagNames(selected).join(", ")], ["Repair state", selected.activeWorkorder ? `Under repair${selected.activeWorkorder.serial ? ` · ${selected.activeWorkorder.serial}` : ""}` : "No open workorder"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not recorded"}</dd></div>)}
         </dl></SecondaryDetailSection> : null}
+        {selected && !detailMode ? <InspectionMaintenancePanel key={selected.id} recordKind="unit" recordId={selected.id} unitType={selected.unitType} /> : null}
         {selected ? <SecondaryDetailSection className={detailMode ? "unit-parts-focused-section" : ""} title="Installed parts" action={!detailMode ? <SectionHelpDisclosure label="Installed parts help"><p>Remove a tracked part here. Return it through Inventory when it reaches the shop.</p></SectionHelpDisclosure> : null}><UnitPartsLifecycle unit={selected} actorId={actorId} onBusyChange={setDetailBusy} onModeChange={setDetailMode} /></SecondaryDetailSection> : null}
       </SecondaryDetailPanel>
     </OperationalCollectionPage>

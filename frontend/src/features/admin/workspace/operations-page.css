@@ -93,6 +93,19 @@
   z-index: 2;
 }
 
+/* Inspections scroll as one document inside the bounded Operations shell.
+ * Workorder queues keep their existing independent table scroll owners. */
+@media (min-width: 701px) {
+  .admin-operations-content.is-inspection-workspace > .operational-collection-page-body {
+    overflow: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .admin-operations-content.is-inspection-workspace > .operational-collection-page-body > :not([hidden]) {
+    flex-shrink: 0;
+  }
+}
+
 @media (min-width: 701px) {
   .admin-operations-content :is(.operations-table, .part-request-queue-table, .workorder-drafts-results) {
     border-radius: var(--workspace-card-radius);

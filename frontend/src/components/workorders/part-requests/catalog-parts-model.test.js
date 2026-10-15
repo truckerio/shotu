@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { noStockUsedPartDraft } from "../used-parts-model.js";
 import {
   catalogAvailabilityText,
   catalogInventoryContextText,
@@ -17,6 +18,28 @@ test("catalog matches inherit their inventory unit when the catalog row omits it
     partNumber: "OIL-1",
     inventory: { available: 4, uomCode: "qt" },
   }).uomCode, "qt");
+});
+
+test("no-stock catalog results retain their exact unit through the saved Workorder draft", () => {
+  for (const uomCode of ["ea", "hr"]) {
+    const part = normalizeCatalogPart({
+      id: "22222222-2222-4222-8222-222222222222",
+      partNumber: "NOSTOCK001",
+      trackingMode: "no_stock",
+      uomCode,
+      inventory: null,
+    });
+    const draft = noStockUsedPartDraft(part);
+    assert.equal(part.trackingMode, "no_stock");
+    assert.equal(part.uomCode, uomCode);
+    assert.equal(draft.catalogPartId, part.id);
+    assert.equal(draft.trackingMode, "no_stock");
+    assert.equal(draft.uomCode, uomCode);
+    assert.equal(catalogAvailabilityText(part), "No stock tracking");
+    assert.equal(catalogInventoryText(part), "No stock tracking");
+    assert.equal(catalogInventoryIsLow(part), false);
+    assert.equal(catalogInventoryContextText(part), "");
+  }
 });
 
 test("normalizes catalog and location inventory without leaking API shape", () => {

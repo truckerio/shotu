@@ -20,6 +20,14 @@ test("header selling price follows company and effective location pricing", () =
   assert.equal(effectiveSellingPrice(cleared)?.status, "unknown");
 });
 
+test("no-stock header uses fixed policy and never presents legacy or provider price as effective", () => {
+  const commercial = { part: { trackingMode: "no_stock" }, prices: { selling: { current: { status: "known", amount: "88", currency: "USD" } } }, odooPrices: { selling: { status: "known", amount: "77", currency: "USD" } } };
+  assert.equal(effectiveSellingPrice(commercial), null);
+  assert.equal(effectiveSellingPrice(commercial, false, { policy: { method: "fixed", value: "100.0000", currency: "USD" } })?.amount, "100.0000");
+  assert.equal(effectiveSellingPrice(commercial, true, { policy: { method: "markup_percent", value: "20", currency: null } }), null);
+  assert.equal(effectiveSellingPrice(commercial, true, { policy: { method: "fixed", value: "0", currency: "USD" } })?.amount, "0");
+});
+
 test("clearing a price sends paired null values and preserves optimistic version", () => {
   assert.deepEqual(pricePayload({ amount: "", currency: "USD", taxTreatment: "inclusive", taxProfileVersionId: "tax-1", reason: "Clear old price", expectedVersion: 4, idempotencyKey: "request-123" }), {
     expectedVersion: 4, amount: null, currency: null, taxTreatment: "not_configured", taxProfileVersionId: null, reason: "Clear old price", idempotencyKey: "request-123",

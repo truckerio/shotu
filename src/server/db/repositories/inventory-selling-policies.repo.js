@@ -149,7 +149,7 @@ export async function appendInventorySellingPolicy(input) {
   try {
     await client.query("begin");
     const part = await client.query(
-      `select catalog.company_id
+      `select catalog.company_id,catalog.tracking_mode
        from parts_catalog catalog
        left join locations location
          on location.company_id=catalog.company_id and location.id=$3 and location.active=true
@@ -178,6 +178,10 @@ export async function appendInventorySellingPolicy(input) {
       return replay.rows[0].request_hash === input.requestHash
         ? { kind: "saved", policy: publicPolicy(replay.rows[0]), replayed: true }
         : { kind: "idempotency_conflict" };
+    }
+    if (part.rows[0].tracking_mode === "no_stock" && input.method !== "fixed") {
+      await client.query("rollback");
+      return { kind: "no_stock_fixed_required" };
     }
     const current = await client.query(
       `select id,version

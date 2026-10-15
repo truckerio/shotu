@@ -65,6 +65,22 @@ test("selected create prices are complete only with matching known server previe
   assert.equal(createPricingSubmitPayload({ pricing: { parts: [{ partIndex: 2, selection: "selling_price", customUnitPrice: "1." }] } }, "abc"), null);
 });
 
+test("no-stock catalog rows require a known configured source and retain internal cost selection", () => {
+  const payload = {
+    formData: { laborHours: "0", parts: [
+      { catalogPartId: "service-1", trackingMode: "no_stock", qty: "2", purchaseRequested: false },
+      { catalogPartId: "service-2", trackingMode: "no_stock", qty: "1", purchaseRequested: true },
+    ] },
+    pricing: { parts: [{ partIndex: 0, selection: "internal_cost" }, { partIndex: 1, selection: "batch_cost" }] },
+  };
+  assert.deepEqual(createPricingRequirements(payload), { partIndexes: [0], labor: false, hasPriceableRows: true });
+  assert.deepEqual(createPricingPreferences(payload).parts, [{ partIndex: 0, selection: "internal_cost" }]);
+  assert.equal(selectedPricingIsComplete(payload, { fingerprint: "", parts: [] }), false);
+  assert.equal(selectedPricingIsComplete(payload, { fingerprint: "fresh", parts: [{ partIndex: 0, status: "unknown" }] }), false);
+  assert.equal(selectedPricingIsComplete(payload, { fingerprint: "fresh", parts: [{ partIndex: 0, status: "known" }] }), true);
+  assert.notEqual(createPricingRequestKey(payload), createPricingRequestKey({ ...payload, formData: { ...payload.formData, parts: [{ ...payload.formData.parts[0], trackingMode: "quantity" }] } }));
+});
+
 test("create pricing preview is create-only, debounced, cancellable, and latest-response safe", () => {
   const hook = readFileSync(new URL("./useCreateWorkorderPricing.js", import.meta.url), "utf8");
   const commands = readFileSync(new URL("../../app/routes/useRoleRouterCommands.js", import.meta.url), "utf8");

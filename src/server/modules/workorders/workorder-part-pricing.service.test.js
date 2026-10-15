@@ -76,6 +76,12 @@ test("office prices no-stock by server-owned line id and rejects batch cost", as
   assert.equal(Object.hasOwn(received, "usageId"), false);
   assert.equal(result.snapshot.noStockLineId, noStockLineId);
 
+  const configured = await selectWorkorderPartPrice(workorderId, { ...noStockInput, selection: "internal_cost" }, {
+    actor: { id: usageId, role: "office" }, companyIds: new Set([workorderId]),
+    companyRoles: new Map([[workorderId, "office"]]), locationIds: new Set([usageId]),
+  }, { ...workorderAccess, savePartPrice: async (value) => ({ kind: "saved", snapshot: { selection: value.selection } }) });
+  assert.equal(configured.snapshot.selection, "internal_cost");
+
   await assert.rejects(
     () => selectWorkorderPartPrice(workorderId, { ...noStockInput, selection: "batch_cost" }, {
       actor: { id: usageId, role: "office" }, companyIds: new Set([workorderId]), companyRoles: new Map([[workorderId, "office"]]), locationIds: new Set([usageId]),

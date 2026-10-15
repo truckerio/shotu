@@ -137,7 +137,7 @@ const ACTIONS = Object.freeze({
         usageKind: z.enum(["serialized", "aggregate", "no_stock"]),
         usageId: id.optional(),
         noStockLineId: id.optional(),
-        selection: z.enum(["batch_cost", "selling_price"]),
+        selection: z.enum(["batch_cost", "internal_cost", "selling_price"]),
         reason: z.string().trim().min(2).max(500),
         idempotencyKey: z.string().trim().min(8).max(160),
       }),

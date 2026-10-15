@@ -37,7 +37,7 @@ import {
 import { getAuthorizedLocationTemplates } from "../../db/repositories/templates.repo.js";
 import { listUsersByLocation } from "../../db/repositories/users.repo.js";
 import { getConfiguredLaborProduct } from "../../db/repositories/labor-product.repo.js";
-import { trustedLocalLaborProduct } from "../labor/labor-products.service.js";
+import { resolveSubmittedLaborProduct, trustedLocalLaborProduct } from "../labor/labor-products.service.js";
 import { assertWorkorderLaborQuantity } from "../../db/repositories/workorder-labor-quantity.js";
 import { requireCompanyAccess, requireLocationAccess } from "../../auth/authorize.js";
 import { companyRoleScope, effectiveCompanyContext } from "../../auth/company-role.js";
@@ -565,16 +565,15 @@ export async function createWorkorderRuntime(context, input, rawInput = input, d
     moduleKeys: workorderInputModules(rawInput, { create: true }),
   });
   const create = dependencies.create || createOperationalWorkorder;
-  const loadLaborProduct = dependencies.loadLaborProduct || getConfiguredLaborProduct;
-  const resolveLocalLaborProduct = dependencies.resolveLaborProduct || trustedLocalLaborProduct;
-  const selectedLocalProductId = input.formData?.laborProduct?.productId || null;
-  const laborProduct = selectedLocalProductId
-    ? await resolveLocalLaborProduct({
-      productId: selectedLocalProductId,
-      companyId: input.companyId,
-      locationId: input.locationId,
-    }, context)
-    : await loadLaborProduct(input.companyId);
+  const laborProduct = await resolveSubmittedLaborProduct({
+    companyId: input.companyId,
+    locationId: input.locationId,
+    selection: input.formData?.laborProduct,
+  }, context, {
+    resolveLocal: dependencies.resolveLaborProduct,
+    resolveLegacy: dependencies.resolveLegacyLaborProduct,
+    loadDefault: dependencies.loadLaborProduct,
+  });
   assertWorkorderLaborQuantity({ ...input.formData, laborProduct });
   try {
     return await create({
@@ -609,13 +608,16 @@ export async function previewCreateWorkorderPricing(context, input, dependencies
     companyId: input.companyId, locationId: input.locationId,
     moduleKeys: workorderInputModules(input, { create: true }),
   });
-  if (input.formData?.laborProduct?.productId) {
-    const laborProduct = await (dependencies.resolveLaborProduct || trustedLocalLaborProduct)({
-      productId: input.formData.laborProduct.productId, companyId: input.companyId, locationId: input.locationId,
-    }, context);
-    input = { ...input, formData: { ...input.formData, laborProduct } };
-    assertWorkorderLaborQuantity(input.formData);
-  }
+  const laborProduct = await resolveSubmittedLaborProduct({
+    companyId: input.companyId, locationId: input.locationId,
+    selection: input.formData?.laborProduct,
+  }, context, {
+    resolveLocal: dependencies.resolveLaborProduct,
+    resolveLegacy: dependencies.resolveLegacyLaborProduct,
+    loadDefault: dependencies.loadLaborProduct,
+  });
+  input = { ...input, formData: { ...input.formData, laborProduct } };
+  if (input.formData?.laborHours) assertWorkorderLaborQuantity(input.formData);
   return (dependencies.readPricing || readCreatePricing)(input);
 }
 

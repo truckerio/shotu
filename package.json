@@ -48,6 +48,8 @@
     "performance:baseline:mobile": "node --env-file=.env --env-file-if-exists=.env.performance scripts/load/browser-mobile.js",
     "test:role-workflow": "node --env-file-if-exists=.env scripts/qa/e2e/run-role-workflow.js",
     "test:inspection-workflow": "node --env-file-if-exists=.env scripts/qa/e2e/inspection-workflow-runner.js",
+    "test:inspection-maintenance:db": "node --env-file=.env scripts/qa/run-inspection-maintenance-integration.js",
+    "test:inspection-maintenance:browser": "node --env-file=.env scripts/qa/run-inspection-maintenance-integration.js --browser-script scripts/qa/inspection-maintenance.browser.js",
     "test:unit": "node scripts/run-unit-tests.js",
     "check:structure": "node scripts/check-structure.js",
     "check": "node --check server.js && find src/server scripts -name '*.js' -print | xargs -I{} node --check {} && npm run build",

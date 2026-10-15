@@ -50,6 +50,31 @@ test("pricing command rejects client amounts and duplicate rows", () => {
   assert.equal(createWorkorderPricingSchema.parse({ parts: [{ partIndex: 0, selection: "batch_cost", customUnitPrice: "12.3456" }] }).parts[0].customUnitPrice, "12.3456");
   assert.throws(() => createWorkorderPricingSchema.parse({ parts: [{ partIndex: 0, selection: "batch_cost", customUnitPrice: "-1" }] }));
   assert.throws(() => createWorkorderPricingSchema.parse({ parts: [], labor: { selection: "selling_price", customUnitPrice: "1.23456" } }));
+  assert.equal(createWorkorderPricingSchema.parse({ parts: [{ partIndex: 0, selection: "internal_cost" }] }).parts[0].selection, "internal_cost");
+});
+
+test("no-stock preview separates configured internal cost from fixed selling price and fingerprints its version", async () => {
+  let configured = { id: "cost-v1", amount: "40.0000", currency: "USD" };
+  const client = { async query(sql) {
+    if (sql.includes("from parts_catalog")) return { rows: [{ id: "part", tracking_mode: "no_stock", uom_code: "hr" }] };
+    if (sql.includes("from inventory_part_selling_policy_versions")) return { rows: [{ id: "sale-v1", method: "fixed", value: "100.0000", currency: "USD" }] };
+    if (sql.includes("from inventory_part_price_versions")) return { rows: [configured] };
+    return { rows: [] };
+  } };
+  const input = { companyId: "company", locationId: "shop", formData: { parts: [{ catalogPartId: "part", qty: "1.5", uomCode: "hr" }] },
+    inventoryUnitSelections: [], inventoryPositionSelections: [], pricing: { parts: [{ partIndex: 0, selection: "internal_cost" }] } };
+  const first = await readCreatePricing(input, client);
+  assert.equal(first.parts[0].price.totalPrice, "60.0000");
+  assert.equal(first.parts[0].price.configuredPriceVersionId, "cost-v1");
+  assert.equal(first.parts[0].options.selling_price.price.totalPrice, "150.0000");
+  configured = { id: "cost-v2", amount: null, currency: null };
+  const unknown = await readCreatePricing(input, client);
+  assert.equal(unknown.parts[0].status, "incomplete");
+  assert.match(unknown.parts[0].reason, /Unknown/);
+  assert.equal(unknown.parts[0].options.selling_price.status, "known");
+  configured = { id: "cost-v3", amount: "40.0000", currency: "USD" };
+  const changed = await readCreatePricing(input, client);
+  assert.notEqual(first.fingerprint, changed.fingerprint, "a new source version invalidates the reviewed selection");
 });
 
 test("mechanics cannot preview or attach create prices", async () => {
@@ -72,6 +97,66 @@ test("preview rejects foreign company and Office location before reading prices"
   await assert.rejects(previewCreateWorkorderPricing(context, { companyId: "company", locationId: "other" }, dependencies));
   assert.equal(reads, 0);
 });
+
+test("preview preserves an explicitly selected legacy product when the configured default differs", async () => {
+  const context = { actor: { role: "office" }, companyIds: new Set(["company"]), locationIds: new Set(["shop"]) };
+  const local = { productId: "44444444-4444-4444-8444-444444444444", code: "PTR001", name: "LABOR HOURS", uomCode: "hr" };
+  const legacy = { externalId: "85226", code: "PTR001", name: "LABOR HOURS", uomCode: "hr" };
+  const result = await previewCreateWorkorderPricing(context, {
+    companyId: "company", locationId: "shop", formData: { laborProduct: legacy, laborHours: "3" },
+  }, {
+    authorizeCreate: async () => {},
+    loadLaborProduct: async () => assert.fail("current default B must not replace selected A"),
+    resolveLegacyLaborProduct: async (scope) => {
+      assert.deepEqual(scope, { companyId: "company", legacyProduct: legacy });
+      return local;
+    },
+    readPricing: async (input) => input,
+  });
+  assert.deepEqual(result.formData.laborProduct, local);
+});
+
+test("direct create preserves selected legacy A instead of configured default B", async () => {
+  const context = { actor: { id: "actor", role: "admin" }, companyIds: new Set(["company"]), locationIds: new Set(["shop"]) };
+  const legacy = { externalId: "labor-A", code: "A", name: "Selected labor", uomCode: "hr" };
+  const local = { productId: "44444444-4444-4444-8444-444444444444", externalId: "", code: "A", name: "Selected labor", uomCode: "hr" };
+  const input = { companyId: "company", locationId: "shop", concern: "Inspect", mechanicUserIds: [],
+    authorizationClassification: "internal_fleet", formData: { laborProduct: legacy, laborHours: "3" } };
+  const created = await createWorkorderRuntime(context, input, input, {
+    authorizeCreate: async () => {}, create: async (value) => value,
+    loadLaborProduct: async () => assert.fail("current default B must not replace selected A"),
+    resolveLegacyLaborProduct: async (scope) => {
+      assert.deepEqual(scope, { companyId: "company", legacyProduct: legacy });
+      return local;
+    },
+  });
+  assert.deepEqual(created.formData.laborProduct, local);
+});
+
+for (const [reason, selection] of [
+  ["unresolved", { externalId: "missing", code: "A", name: "Missing", uomCode: "hr" }],
+  ["inactive", { externalId: "inactive", code: "A", name: "Inactive", uomCode: "hr" }],
+  ["foreign", { externalId: "foreign", code: "A", name: "Foreign", uomCode: "hr" }],
+  ["unit mismatch", { externalId: "labor-A", code: "A", name: "Wrong unit", uomCode: "ea" }],
+]) {
+  test(`preview and direct create reject ${reason} selected legacy labor without falling back`, async () => {
+    const context = { actor: { id: "actor", role: "admin" }, companyIds: new Set(["company"]), locationIds: new Set(["shop"]) };
+    const input = { companyId: "company", locationId: "shop", concern: "Inspect", mechanicUserIds: [],
+      authorizationClassification: "internal_fleet", formData: { laborProduct: selection, laborHours: "2" } };
+    const dependencies = {
+      authorizeCreate: async () => {},
+      resolveLegacyLaborProduct: async (scope) => {
+        assert.deepEqual(scope, { companyId: "company", legacyProduct: selection });
+        return null;
+      },
+      loadLaborProduct: async () => assert.fail("must not switch to default B"),
+      readPricing: async () => assert.fail("invalid preview must not read prices"),
+      create: async () => assert.fail("invalid labor must not create Workorder"),
+    };
+    await assert.rejects(previewCreateWorkorderPricing(context, input, dependencies), (error) => error.code === "WORKORDER_LABOR_PRODUCT_UNAVAILABLE");
+    await assert.rejects(createWorkorderRuntime(context, input, input, dependencies), (error) => error.code === "WORKORDER_LABOR_PRODUCT_UNAVAILABLE");
+  });
+}
 
 test("preview route parses selections and never needs a saved Workorder", async () => {
   let body = { concern: "", pricing: { parts: [] }, formData: { parts: [] } };

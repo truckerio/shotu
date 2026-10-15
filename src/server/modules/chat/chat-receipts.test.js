@@ -212,7 +212,8 @@ test("detail services pass viewer identity only for authenticated mechanic and o
     readFile(officeServiceUrl, "utf8"),
     readFile(surveillanceServiceUrl, "utf8"),
   ]);
-  assert.match(detail, /includeChat \? listChatMessages\(workorderId, \{ viewerUserId \}\) : \[\]/);
+  assert.match(detail, /loadMessages = listChatMessages/);
+  assert.match(detail, /includeChat \? loadMessages\(workorderId, \{ viewerUserId \}\) : \[\]/);
   assert.match(mechanic, /viewerUserId: mechanic\.id,[\s\S]*participantChatOnly: true/);
   assert.match(office, /loadWorkorderDetail\(workorderId, \{ viewerUserId: user\.id \}\)/);
   assert.match(surveillance, /listChatMessages\(workorderId\)/);

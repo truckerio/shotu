@@ -1,6 +1,7 @@
 import { getPool, query } from "../pool.js";
 import { validLaborQuantity } from "../../../../shared/labor-product.js";
 import { readEffectiveLaborPriceSources } from "./workorder-labor-price-sources.repo.js";
+import { resolveLegacyLocalLaborProduct } from "./labor-product.repo.js";
 
 const terminalStatuses = new Set(["closed", "odoo_entered", "cancelled"]);
 
@@ -16,6 +17,7 @@ function rate(row) {
     currency: row.currency || null,
     createdAt: row.created_at,
     sellingPolicyVersionId: row.selling_policy_version_id || null,
+    configuredPriceVersionId: row.configured_price_version_id || null,
   };
 }
 
@@ -25,6 +27,7 @@ function snapshot(row) {
     productId: row.labor_product_id,
     rateVersionId: row.rate_version_id,
     sellingPolicyVersionId: row.selling_policy_version_id || null,
+    configuredPriceVersionId: row.configured_price_version_id || null,
     selection: row.selection,
     hours: String(row.hours),
     uomCode: row.uom_code || "hr",
@@ -149,7 +152,13 @@ export async function saveWorkorderLaborPriceSnapshot(input, transactionClient =
       if (!transactionClient) await client.query("rollback");
       return { kind: "locked" };
     }
-    const productId = workorder.form_data?.laborProduct?.productId;
+    const formProduct = workorder.form_data?.laborProduct;
+    let productId = formProduct?.productId;
+    if (!productId && formProduct?.externalId) {
+      const resolved = await resolveLegacyLocalLaborProduct({ companyId: workorder.company_id,
+        legacyProduct: formProduct }, (sql, params) => client.query(sql, params));
+      productId = resolved?.productId || null;
+    }
     const product = productId ? (await client.query(
       `select uom_code from local_labor_products where company_id=$1 and id=$2 and active=true`,
       [workorder.company_id, productId],
@@ -181,12 +190,14 @@ export async function saveWorkorderLaborPriceSnapshot(input, transactionClient =
       `insert into workorder_labor_price_snapshots(
          company_id,workorder_id,labor_product_id,rate_version_id,selection,hours,uom_code,
          unit_price,total_price,currency,base_unit_price,manual_override,
-         created_by,reason,idempotency_key,request_hash,selling_policy_version_id
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) returning *`,
-      [workorder.company_id, workorder.id, productId, selectedRate.selling_policy_version_id ? null : selectedRate.id, input.selection,
+         created_by,reason,idempotency_key,request_hash,selling_policy_version_id,
+         configured_price_version_id
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) returning *`,
+      [workorder.company_id, workorder.id, productId, selectedRate.rate_version_id || null, input.selection,
         hours, uomCode, unitPrice, totalPrice, selectedRate.currency,
         manualOverride ? selectedRate.amount : null, manualOverride,
-        input.actorId, input.reason, input.idempotencyKey, input.requestHash, selectedRate.selling_policy_version_id || null],
+        input.actorId, input.reason, input.idempotencyKey, input.requestHash,
+        selectedRate.selling_policy_version_id || null, selectedRate.configured_price_version_id || null],
     );
     if (!transactionClient) await client.query("commit");
     return { kind: "saved", laborPrice: snapshot(result.rows[0]), replayed: false };

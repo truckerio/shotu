@@ -20,8 +20,11 @@ export async function selectWorkorderPartPrice(workorderId, input, context, depe
     || (!noStock && (!input.usageId || input.noStockLineId))) {
     fail("WORKORDER_PART_PRICE_IDENTITY_INVALID", "Choose one canonical Workorder part line to price.", 422);
   }
-  if (noStock && input.selection !== "selling_price") {
-    fail("WORKORDER_BATCH_COST_UNAVAILABLE", "No-stock items have no receipt batch cost. Use the configured selling price.", 422);
+  if (noStock && input.selection === "batch_cost") {
+    fail("WORKORDER_BATCH_COST_UNAVAILABLE", "No-stock items have no receipt batch cost. Select a configured price.", 422);
+  }
+  if (!noStock && input.selection === "internal_cost") {
+    fail("WORKORDER_CONFIGURED_COST_UNAVAILABLE", "Configured internal cost applies only to no-stock items.", 422);
   }
   const command = {
     workorderId,
@@ -52,6 +55,9 @@ export async function selectWorkorderPartPrice(workorderId, input, context, depe
   }
   if (result.kind === "selling_policy_unavailable") {
     fail("WORKORDER_SELLING_POLICY_UNAVAILABLE", "Configure a selling policy for this part first.", 422);
+  }
+  if (result.kind === "configured_price_unavailable") {
+    fail("WORKORDER_CONFIGURED_COST_UNAVAILABLE", "Configure an internal cost for this no-stock item first.", 422);
   }
   if (result.kind === "currency_unavailable") {
     fail("WORKORDER_PART_PRICE_CURRENCY_UNAVAILABLE", "Price currency is unavailable.", 422);

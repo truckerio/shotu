@@ -42,6 +42,7 @@ function activityTitle(event, locale) {
   if (event.source === "part_edited") return "Inventory part updated";
   if (event.source === "workorder_created") return "Workorder created";
   if (event.source === "workorder_status") return humanizeStatus(event.action, locale) || "Workorder updated";
+  if (event.source === "asset_mileage") return event.action === "mileage_recorded_historical" ? "Historical mileage recorded" : "Mileage corrected";
   if (event.source === "workorder_field") {
     if (event.action === "work_details_updated") return "Work details updated";
     if (String(event.action || "").startsWith("pricing.")) return "Workorder price changed";
@@ -71,7 +72,7 @@ export function userActivityTimelineItem(event, locale = "en") {
   if (event.locationName) details.push({ label: "Location", value: event.locationName });
   if (event.workorderSerial) details.push({ label: "Workorder", value: event.workorderSerial });
   if (!event.workorderSerial && event.recordLabel && !event.partNumber) {
-    details.push({ label: event.category === "inspections" ? "Inspection" : "Record", value: event.recordLabel });
+    details.push({ label: event.source === "asset_mileage" ? "Unit" : event.category === "inspections" ? "Inspection" : "Record", value: event.recordLabel });
   }
   return {
     id: event.id,

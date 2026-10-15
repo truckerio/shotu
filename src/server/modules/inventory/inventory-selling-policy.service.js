@@ -94,6 +94,9 @@ export async function writeSellingPolicy(catalogPartId, locationId, raw, context
     requestHash: createHash("sha256").update(JSON.stringify(command)).digest("hex"),
   });
   if (result.kind === "not_found") throw inventoryNotFound();
+  if (result.kind === "no_stock_fixed_required") {
+    fail("INVENTORY_NO_STOCK_FIXED_PRICE_REQUIRED", "No-stock items require a fixed selling price.", 422);
+  }
   if (result.kind === "stale") {
     fail("INVENTORY_SELLING_POLICY_STALE", "Selling policy changed. Refresh before saving.");
   }

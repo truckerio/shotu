@@ -37,6 +37,7 @@ function publicSnapshot(row, allocations = []) {
     manualOverride: row.manual_override === true,
     receiptLineId: row.receipt_line_id || null,
     sellingPolicyVersionId: row.selling_policy_version_id || null,
+    configuredPriceVersionId: row.configured_price_version_id || null,
     noStockLineId: row.no_stock_line_id || null,
     catalogPartId: row.catalog_part_id || null,
     uomCode: row.uom_code || null,
@@ -139,7 +140,9 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
       `select workorder.company_id,workorder.id workorder_id,workorder.location_id,
               workorder.status workorder_status,workorder.form_data,
               catalog.id catalog_part_id,catalog.uom_code,source.part source_part,
-              policy.id policy_id,policy.method,policy.value policy_value,policy.currency policy_currency
+              policy.id policy_id,policy.method,policy.value policy_value,policy.currency policy_currency,
+              configured.id configured_price_id,configured.amount configured_price_amount,
+              configured.currency configured_price_currency
        from operational_workorders workorder
        join lateral (
          select candidate part
@@ -160,6 +163,15 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          order by (candidate.location_id is not null) desc,candidate.version desc
          limit 1
        ) policy on true
+       left join lateral (
+         select candidate.*
+         from inventory_part_price_versions candidate
+         where candidate.company_id=catalog.company_id
+           and candidate.catalog_part_id=catalog.id and candidate.price_kind='internal'
+           and (candidate.location_id is null or candidate.location_id=workorder.location_id)
+         order by (candidate.location_id is not null) desc,candidate.version desc
+         limit 1
+       ) configured on true
        where workorder.id=$1 and workorder.company_id=any($3::uuid[])
          and ($5::boolean or workorder.location_id=any($4::uuid[]))
        limit 1
@@ -224,16 +236,27 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
     let currency;
     let receiptLineId = null;
     let policyId = null;
+    let configuredPriceId = null;
     let pricedAllocations = [];
     if (noStock) {
-      if (input.selection !== "selling_price" || !row.policy_id
-        || row.method !== "fixed" || row.policy_value === null || !row.policy_currency) {
-        if (!transactionClient) await client.query("rollback");
-        return { kind: "selling_policy_unavailable" };
+      if (input.selection === "internal_cost") {
+        if (!row.configured_price_id || row.configured_price_amount === null || !row.configured_price_currency) {
+          if (!transactionClient) await client.query("rollback");
+          return { kind: "configured_price_unavailable" };
+        }
+        unitPrice = String(row.configured_price_amount);
+        currency = row.configured_price_currency;
+        configuredPriceId = row.configured_price_id;
+      } else {
+        if (input.selection !== "selling_price" || !row.policy_id
+          || row.method !== "fixed" || row.policy_value === null || !row.policy_currency) {
+          if (!transactionClient) await client.query("rollback");
+          return { kind: "selling_policy_unavailable" };
+        }
+        unitPrice = String(row.policy_value);
+        currency = row.policy_currency;
+        policyId = row.policy_id;
       }
-      unitPrice = String(row.policy_value);
-      currency = row.policy_currency;
-      policyId = row.policy_id;
     } else if (serialized && input.selection === "batch_cost") {
       if (!row.receipt_line_id || row.unit_cost === null || !row.batch_currency) {
         if (!transactionClient) await client.query("rollback");
@@ -322,9 +345,9 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
          company_id,workorder_id,serialized_usage_id,aggregate_usage_id,
          no_stock_line_id,catalog_part_id,uom_code,selection,
          unit_price,quantity,total_price,currency,receipt_line_id,selling_policy_version_id,
-         base_unit_price,manual_override,
+         configured_price_version_id,base_unit_price,manual_override,
          created_by,reason,idempotency_key,request_hash
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        returning *`,
       [
         row.company_id,
@@ -341,6 +364,7 @@ export async function saveWorkorderPartPriceSnapshot(input, transactionClient = 
         currency,
         receiptLineId,
         policyId,
+        configuredPriceId,
         manualOverride ? selectedUnitPrice : null,
         manualOverride,
         input.actorId,

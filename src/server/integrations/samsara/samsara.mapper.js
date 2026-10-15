@@ -55,13 +55,23 @@ function statValue(statsByVehicleId, vehicleId, type) {
   return value ?? null;
 }
 
+function statReading(statsByVehicleId, vehicleId, type) {
+  const stat = statsByVehicleId.get(String(vehicleId));
+  const raw = stat?.[type];
+  const reading = Array.isArray(raw) ? raw.at(-1) : raw;
+  const value = reading && typeof reading === "object" ? reading.value : reading;
+  const observedAt = reading && typeof reading === "object" ? firstValue(reading.time, reading.observedAt, reading.timestamp) : null;
+  return { value: value ?? null, observedAt };
+}
+
 export function mapSamsaraVehicle(vehicle, statsByVehicleId = new Map()) {
   const providerVehicleId = String(vehicle.id || "");
   const externalIds = vehicle.externalIds || {};
-  const odometerMeters = firstValue(
-    statValue(statsByVehicleId, providerVehicleId, "obdOdometerMeters"),
-    statValue(statsByVehicleId, providerVehicleId, "gpsOdometerMeters")
-  );
+  const obdOdometer = statReading(statsByVehicleId, providerVehicleId, "obdOdometerMeters");
+  const gpsOdometer = statReading(statsByVehicleId, providerVehicleId, "gpsOdometerMeters");
+  const useObdOdometer = obdOdometer.value != null && (obdOdometer.observedAt || gpsOdometer.value == null);
+  const odometer = useObdOdometer ? obdOdometer : gpsOdometer;
+  const odometerMeters = odometer.value;
   const gps = statValue(statsByVehicleId, providerVehicleId, "gps");
   const makeModel = firstValue(vehicle.makeModel, vehicle.model);
 
@@ -83,6 +93,8 @@ export function mapSamsaraVehicle(vehicle, statsByVehicleId = new Map()) {
     raw: vehicle,
     lastOdometerMeters: odometerMeters,
     lastOdometerMiles: metersToMiles(odometerMeters),
+    odometerSource: odometerMeters == null ? null : (useObdOdometer ? "samsara_obd" : "samsara_gps"),
+    odometerObservedAt: odometerMeters == null ? null : odometer.observedAt,
     lastLocation: gps || null,
     lastSeenAt: firstValue(vehicle.updatedAtTime, vehicle.createdAtTime, gps?.time),
   };
@@ -118,6 +130,8 @@ export function mapSamsaraTrailer(trailer, statsByTrailerId = new Map()) {
     raw: trailer,
     lastOdometerMeters: null,
     lastOdometerMiles: null,
+    odometerSource: null,
+    odometerObservedAt: null,
     lastLocation: gps || null,
     lastSeenAt: firstValue(gps?.time, trailer.updatedAtTime, trailer.createdAtTime),
   };

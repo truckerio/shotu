@@ -79,7 +79,10 @@ export function renderInspectionSlip(model) {
         const value = answer?.response || "";
         const finding = findings.get(answer?.id);
         const outcome = { pass: "Pass", issue: "Issue", na: "N/A" }[value] || "Pending";
-        const detail = finding ? [finding.severity, finding.note].filter(Boolean).join(" - ") : (value === "na" ? answer?.naReason : "");
+        const policy = finding?.disposition === "defer" ? finding.deferral : null;
+        const triggers = policy ? [policy.nextVisit ? "Next shop visit" : "", policy.dueDate ? `By ${policy.dueDate}` : "", policy.dueMiles == null ? "" : `At ${policy.dueMiles} mi`].filter(Boolean) : [];
+        const deferredDetail = policy ? `Deferred: ${policy.reason}. Review: ${triggers.join("; ")}${triggers.length > 1 ? "; whichever comes first" : ""}${policy.dueMiles == null ? "" : `. Early notice: ${policy.earlyMiles} mi`}` : "";
+        const detail = finding ? [finding.severity, finding.note, deferredDetail].filter(Boolean).join(" - ") : (value === "na" ? answer?.naReason : "");
         return `<tr class="check"><td>${escapeInspectionHtml(item.label)}</td><td class="outcome">${outcome}</td><td class="detail">${escapeInspectionHtml(detail)}</td></tr>`;
       }).join("")}
     </tbody>`).join("");

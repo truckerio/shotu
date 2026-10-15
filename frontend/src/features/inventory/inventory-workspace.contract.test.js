@@ -517,7 +517,8 @@ test("part header shows the effective selling price without a stock-status badge
   ]);
   assert.match(workspace, /\/commercial\?\$\{params\}/);
   assert.match(workspace, /params\.set\("locationId", selectedLocation\.locationId\)/);
-  assert.match(workspace, /effectiveSellingPrice\(commercial, Boolean\(selectedLocation\?\.locationId\)\)/);
+  assert.match(workspace, /effectiveSellingPrice\(commercial, Boolean\(selectedLocation\?\.locationId\), sellingPolicy\)/);
+  assert.match(workspace, /selectedItem\.trackingMode === "no_stock"[\s\S]*?\/selling-policy/);
   assert.match(workspace, /view\.label === "Unknown" \? "—" : view\.label/);
   assert.match(workspace, /const scopeKey = partHeaderPriceScopeKey/);
   assert.match(workspace, /return \(\) => \{ active = false; \}/);

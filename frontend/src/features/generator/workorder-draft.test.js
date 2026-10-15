@@ -427,3 +427,14 @@ test("no-stock catalog parts carry selling-price selection without an inventory 
   assert.equal(payload.inventoryPositionSelections.length, 0);
   assert.equal(payload.formData.parts[0].trackingMode, "no_stock");
 });
+
+test("no-stock internal cost survives draft serialization without a physical source", () => {
+  const payload = buildWorkorderDraftPayload({
+    actor: { role: "office", companyIds: ["company-1"], locationIds: ["location-1"] },
+    form: { locationId: "location-1", parts: [{ catalogPartId: "service-1", partNo: "SHOP-SERVICE", qty: "2", uomCode: "hr", trackingMode: "no_stock", priceSelection: "internal_cost" }] },
+  });
+  assert.deepEqual(payload.pricing.parts, [{ partIndex: 0, selection: "internal_cost" }]);
+  assert.equal(payload.formData.parts[0].trackingMode, "no_stock");
+  assert.equal(Object.hasOwn(payload.formData.parts[0], "priceSelection"), false);
+  assert.equal(payload.inventoryPositionSelections.length, 0);
+});

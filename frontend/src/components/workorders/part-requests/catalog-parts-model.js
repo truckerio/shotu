@@ -42,7 +42,7 @@ export function normalizeCatalogPart(raw = {}) {
       raw.uomCode || raw.unit || raw.unitCode
       || inventorySource.uomCode || inventorySource.unit || inventorySource.unitCode,
     ),
-    trackingMode: ["quantity", "serialized", "measured_bulk"].includes(raw.trackingMode) ? raw.trackingMode : "",
+    trackingMode: ["quantity", "serialized", "measured_bulk", "no_stock"].includes(raw.trackingMode) ? raw.trackingMode : "",
     decimalScale: Number.isInteger(Number(raw.decimalScale ?? raw.decimal_scale))
       ? Number(raw.decimalScale ?? raw.decimal_scale)
       : 0,
@@ -80,6 +80,7 @@ export function repairOrderAfterCatalogSelection(currentRepairOrder, catalogPart
 }
 
 export function catalogInventoryText(part, localeText = null, formatNumber = String) {
+  if (part.trackingMode === "no_stock") return "No stock tracking";
   const inventory = part.inventory;
   if (!inventory?.available) {
     return localeText
@@ -96,16 +97,19 @@ export function catalogInventoryText(part, localeText = null, formatNumber = Str
 }
 
 export function catalogAvailabilityText(part, formatNumber = String) {
+  if (part.trackingMode === "no_stock") return "No stock tracking";
   const inventory = part.inventory || {};
   return `${formatNumber(numberOrZero(inventory.available))} ${inventory.uomCode || part.uomCode}`;
 }
 
 export function catalogInventoryIsLow(part) {
+  if (part.trackingMode === "no_stock") return false;
   const inventory = part.inventory || {};
   return inventory.lowStock === true || numberOrZero(inventory.available) <= 0;
 }
 
 export function catalogInventoryContextText(part) {
+  if (part.trackingMode === "no_stock") return "";
   const inventory = part.inventory || {};
   return inventory.binLocation || "";
 }

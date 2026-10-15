@@ -16,7 +16,18 @@ export function priceSourceLabel(source) { return source === "location_override"
 export function receiptCostBasisLabel(entry) { if (entry?.basis === "source_invoice_line") return "Invoice line"; if (entry?.basis === "source_invoice_line_missing_cost") return "Invoice line · cost missing"; if (entry?.basis === "unpriced_receipt") return "Receipt · cost missing"; return "Receipt evidence"; }
 export function receiptDateBasisLabel(entry) { return entry?.dateBasis === "invoice_date" ? "Invoice date" : "Received"; }
 export function locationPriceEditState(projection) { const override = projection?.override?.current || null; const effective = projection?.effective || projection?.current || null; return { draft: override || effective, expectedVersion: Number(override?.version || 0), effective, override, companyDefault: projection?.companyDefault?.current || null, source: projection?.source || null }; }
-export function effectiveSellingPrice(commercial, locationScoped = false) { const projection = commercial?.prices?.selling; const configured = locationScoped ? locationPriceEditState(projection).effective : projection?.current || null; if (configured) return configured; const provider = commercial?.odooPrices?.selling; return provider?.status === "known" ? provider : null; }
+export function effectiveSellingPrice(commercial, locationScoped = false, sellingPolicy = null) {
+  if (commercial?.part?.trackingMode === "no_stock") {
+    const policy = sellingPolicy?.policy || commercial?.sellingPolicy?.policy;
+    return policy?.method === "fixed" && policy.value !== null && policy.value !== undefined && policy.currency
+      ? { status: "known", amount: policy.value, currency: policy.currency } : null;
+  }
+  const projection = commercial?.prices?.selling;
+  const configured = locationScoped ? locationPriceEditState(projection).effective : projection?.current || null;
+  if (configured) return configured;
+  const provider = commercial?.odooPrices?.selling;
+  return provider?.status === "known" ? provider : null;
+}
 export function pricePayload({ amount, currency, taxTreatment, taxProfileVersionId, reason, expectedVersion, idempotencyKey }) { const cleared = String(amount).trim() === ""; const treatment = TAX_TREATMENTS.has(taxTreatment) ? taxTreatment : "not_configured"; return { expectedVersion, amount: cleared ? null : String(amount).trim(), currency: cleared ? null : String(currency).trim().toUpperCase(), taxTreatment: cleared ? "not_configured" : treatment, taxProfileVersionId: cleared || (treatment !== "exclusive" && treatment !== "inclusive") ? null : taxProfileVersionId || null, reason: String(reason).trim(), idempotencyKey }; }
 export function eligibleProfiles(profiles, currency) { return (profiles || []).filter((profile) => !profile.archived && profile.current?.currency === String(currency || "").toUpperCase()); }
 export function profilePayload({ companyId, name, currency, jurisdiction, components, reason, expectedVersion, idempotencyKey }) { const payload = { name: String(name).trim(), currency: String(currency).trim().toUpperCase(), jurisdiction: String(jurisdiction).trim(), components: (components || []).map(({ name: componentName, rate, compound }) => ({ name: String(componentName).trim(), rate: String(rate).trim(), compound: Boolean(compound) })), reason: String(reason).trim(), idempotencyKey }; if (expectedVersion === null || expectedVersion === undefined) payload.companyId = companyId; else payload.expectedVersion = expectedVersion; return payload; }

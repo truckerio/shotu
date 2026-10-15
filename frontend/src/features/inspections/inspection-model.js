@@ -1,3 +1,4 @@
+import { deferralIsComplete } from "./inspection-maintenance-model.js";
 export const INSPECTION_RESPONSES = Object.freeze(["pass", "issue", "na"]);
 export const INSPECTION_SEVERITIES = Object.freeze(["attention", "repair_required", "out_of_service"]);
 
@@ -55,6 +56,7 @@ export function responseIsComplete(item, value = {}) {
   if (!INSPECTION_RESPONSES.includes(value.response)) return false;
   if (value.response === "issue") {
     if (!(value.severity && value.note?.trim() && value.disposition)) return false;
+    if (value.disposition === "defer") return value.severity === "attention" && deferralIsComplete(value.deferral);
     if (value.disposition === "no_workorder") return Boolean(value.noWorkorderReason?.trim());
   }
   if (value.response === "na" && item.naReasonRequired) return Boolean(value.naReason?.trim());

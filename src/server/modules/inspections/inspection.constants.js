@@ -3,4 +3,4 @@ export const INSPECTION_STATUS = Object.freeze({
 });
 export const INSPECTION_RESPONSES = Object.freeze(["pass", "issue", "na"]);
 export const INSPECTION_SEVERITIES = Object.freeze(["attention", "repair_required", "out_of_service"]);
-export const INSPECTION_DISPOSITIONS = Object.freeze(["new_workorder", "linked_workorder", "office_follow_up", "no_workorder"]);
+export const INSPECTION_DISPOSITIONS = Object.freeze(["new_workorder", "linked_workorder", "office_follow_up", "no_workorder", "defer"]);

@@ -1,4 +1,4 @@
-const PART_SELECTIONS = new Set(["batch_cost", "selling_price"]);
+const PART_SELECTIONS = new Set(["batch_cost", "internal_cost", "selling_price"]);
 const LABOR_SELECTIONS = new Set(["internal_cost", "selling_price"]);
 
 function customUnitPrice(value) {
@@ -16,7 +16,9 @@ function hasInvalidCustomPrice(payload) {
 
 export function createPricingPreferences(payload) {
   const parts = (Array.isArray(payload?.pricing?.parts) ? payload.pricing.parts : [])
-    .filter((entry) => Number.isInteger(entry?.partIndex) && PART_SELECTIONS.has(entry?.selection))
+    .filter((entry) => Number.isInteger(entry?.partIndex) && PART_SELECTIONS.has(entry?.selection)
+      && (payload?.formData?.parts?.[entry.partIndex]?.trackingMode === "no_stock"
+        ? entry.selection !== "batch_cost" : entry.selection !== "internal_cost"))
     .map(({ partIndex, selection, customUnitPrice: custom }) => ({
       partIndex,
       selection,
@@ -46,6 +48,7 @@ export function createPricingRequirements(payload) {
   const partIndexes = [...new Set([
     ...(payload?.inventoryUnitSelections || []).map((entry) => entry?.partIndex),
     ...(payload?.inventoryPositionSelections || []).map((entry) => entry?.partIndex),
+    ...(payload?.formData?.parts || []).flatMap((part, partIndex) => part?.catalogPartId && part.trackingMode === "no_stock" && part.purchaseRequested !== true ? [partIndex] : []),
   ].filter(Number.isInteger))].sort((left, right) => left - right);
   const labor = Number(payload?.formData?.laborHours) > 0;
   return { partIndexes, labor, hasPriceableRows: labor || partIndexes.length > 0 };
@@ -62,6 +65,8 @@ export function createPricingRequestKey(payload) {
     laborProduct: request.formData?.laborProduct || null,
     parts: (request.formData?.parts || []).map((part) => ({
       catalogPartId: part.catalogPartId || null,
+      trackingMode: part.trackingMode || null,
+      noStockLineId: part.noStockLineId || null,
       partNo: part.partNo || "",
       qty: part.qty || "",
       uomCode: part.uomCode || "",

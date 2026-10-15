@@ -94,3 +94,21 @@ test("directory rejects an invalid cursor before a database query", async () => 
     (error) => error.statusCode === 400 && error.code === "INVALID_UNITS_DIRECTORY_CURSOR",
   );
 });
+
+test("unit maintenance routes through authorized inspection service without generic vehicle lookup", async () => {
+  const h = harness(); let received;
+  assert.equal(await handleVehiclesApi({ method: "GET" }, {}, new URL("http://x/api/vehicles/asset-1/maintenance"), h.helpers, {
+    unitMaintenance: async (context, id) => (received = { context, id }, { items: [], mileage: { state: "unknown" }, canManage: false }),
+  }), true);
+  assert.equal(received.id, "asset-1");
+  assert.equal(received.context, h.helpers.requestContext);
+  assert.equal(h.sent[0].value.mileage.state, "unknown");
+});
+
+test("unit maintenance authorization failures are retained", async () => {
+  const h = harness();
+  await assert.rejects(handleVehiclesApi({ method: "GET" }, {}, new URL("http://x/api/vehicles/hidden/maintenance"), h.helpers, {
+    unitMaintenance: async () => { throw Object.assign(new Error("Not found"), { statusCode: 404 }); },
+  }), error => error.statusCode === 404);
+  assert.equal(h.sent.length, 0);
+});

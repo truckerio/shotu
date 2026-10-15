@@ -1,5 +1,6 @@
 import { query } from "../pool.js";
 import { requireCompanyId } from "../company.js";
+import { recordProviderAssetMileage } from "./asset-mileage.repo.js";
 
 export async function searchVehicles(searchText, limit = 12, companyIds = []) {
   const q = String(searchText || "").trim();
@@ -132,11 +133,13 @@ export async function updateVehicleLocation(id, companyId, location, seenAt) {
   return result.rows[0] || null;
 }
 
-export async function upsertVehicles(vehicles, companyId) {
+export async function upsertVehicles(vehicles, companyId, dependencies = {}) {
+  const runQuery = dependencies.query || query;
+  const recordMileage = dependencies.recordMileage || recordProviderAssetMileage;
   const tenantId = requireCompanyId(companyId);
   let changedCount = 0;
   for (const vehicle of vehicles) {
-    const result = await query(
+    const result = await runQuery(
       `
         insert into assets (
           company_id, provider, provider_vehicle_id, unit_type, owner_name, name, unit_no, vin, license_plate,
@@ -166,8 +169,6 @@ export async function upsertVehicles(vehicles, companyId) {
           tag_names = excluded.tag_names,
           external_ids = excluded.external_ids,
           raw_provider_data = excluded.raw_provider_data,
-          last_odometer_meters = coalesce(excluded.last_odometer_meters, assets.last_odometer_meters),
-          last_odometer_miles = coalesce(excluded.last_odometer_miles, assets.last_odometer_miles),
           last_location = coalesce(excluded.last_location, assets.last_location),
           last_seen_at = coalesce(excluded.last_seen_at, assets.last_seen_at),
           synced_at = now(),
@@ -191,13 +192,24 @@ export async function upsertVehicles(vehicles, companyId) {
         JSON.stringify(vehicle.tagNames || []),
         JSON.stringify(vehicle.externalIds || {}),
         JSON.stringify(vehicle.raw || {}),
-        vehicle.lastOdometerMeters,
-        vehicle.lastOdometerMiles,
+        // Mileage compatibility fields are populated only by accepted evidence.
+        null,
+        null,
         vehicle.lastLocation ? JSON.stringify(vehicle.lastLocation) : null,
         vehicle.lastSeenAt,
       ]
     );
     changedCount += result.rowCount;
+    if (result.rows[0]?.id && vehicle.lastOdometerMiles != null && vehicle.odometerObservedAt && vehicle.odometerSource) {
+      await recordMileage({
+        assetId: result.rows[0].id,
+        companyId: tenantId,
+        miles: vehicle.lastOdometerMiles,
+        observedAt: vehicle.odometerObservedAt,
+        source: vehicle.odometerSource,
+        providerPayload: { provider: vehicle.provider, providerVehicleId: vehicle.providerVehicleId },
+      });
+    }
   }
   return changedCount;
 }

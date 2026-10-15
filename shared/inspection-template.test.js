@@ -74,3 +74,14 @@ test("truck slip includes immutable start evidence", () => {
   assert.match(html,/Engine hours:<\/strong> 8321\.2/);
   assert.match(html,/Previous report:<\/strong> Reviewed/);
 });
+
+
+test("new deferred finding slips retain target and rationale and escape policy text", () => {
+  const html = renderInspectionSlip({ status: "completed", result: "issues_found", templateSnapshot: weeklyInspectionPreset("Truck"),
+    responses: [{ id: "response", itemKey: "outside-1", response: "issue" }],
+    findings: [{ responseId: "response", severity: "attention", note: "Review cover", disposition: "defer", deferral: { reason: "Review <cover> later", nextVisit: true, dueDate: "2026-11-01", dueMiles: 250000, earlyMiles: 200 } }] });
+  assert.match(html, /Deferred: Review &lt;cover&gt; later/);
+  assert.match(html, /Next shop visit; By 2026-11-01; At 250000 mi; whichever comes first/);
+  assert.match(html, /Early notice: 200 mi/);
+  assert.match(html, /Result:<\/strong> Issues found/);
+});

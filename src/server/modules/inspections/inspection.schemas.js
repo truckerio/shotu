@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DATABASE_UUID_PATTERN } from "../../db/company.js";
+import { canonicalizeInspectionDeferral } from "../../../../shared/inspection-maintenance.js";
 
 export const createInspectionSchema = z.object({
   companyId: z.string().regex(DATABASE_UUID_PATTERN), locationId: z.string().uuid(), assetId: z.string().uuid(),
@@ -9,13 +10,32 @@ export const createInspectionSchema = z.object({
   officeInstructions: z.string().trim().max(4000).default(""),
 }).strict();
 
+export const inspectionDeferralSchema = z.object({
+  reason: z.string().trim().min(2).max(2000),
+  nextVisit: z.boolean().default(false),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  dueMiles: z.number().finite().min(0).max(99_999_999.9).nullable().default(null),
+  baselineMiles: z.number().finite().min(0).max(99_999_999.9).nullable().default(null),
+  additionalMiles: z.number().finite().positive().max(99_999_999.9).nullable().default(null),
+  earlyMiles: z.number().finite().min(0).max(10_000).default(200),
+}).strict().superRefine((value, context) => {
+  if (!value.nextVisit && !value.dueDate && value.dueMiles == null && value.additionalMiles == null) context.addIssue({ code:"custom", path:["nextVisit"], message:"Choose next shop visit, a date, or a mileage target." });
+  if (value.additionalMiles != null && value.baselineMiles == null) context.addIssue({ code:"custom", path:["baselineMiles"], message:"Confirm current mileage before using additional miles." });
+  try { canonicalizeInspectionDeferral(value); }
+  catch (error) { context.addIssue({ code:"custom", message:error?.message || "Invalid deferral policy." }); }
+});
+
 const findingSchema = z.object({
   severity: z.enum(["attention", "repair_required", "out_of_service"]),
   note: z.string().trim().min(1).max(4000),
-  disposition: z.enum(["new_workorder", "linked_workorder", "office_follow_up", "no_workorder"]),
+  disposition: z.enum(["new_workorder", "linked_workorder", "office_follow_up", "no_workorder", "defer"]),
   noWorkorderReason: z.string().trim().max(2000).default(""),
+  deferral: inspectionDeferralSchema.nullable().default(null),
 }).strict().superRefine((value, context) => {
   if (value.disposition === "no_workorder" && !value.noWorkorderReason) context.addIssue({ code: "custom", path: ["noWorkorderReason"], message: "Explain why no workorder is needed." });
+  if (value.disposition === "defer" && value.severity !== "attention") context.addIssue({ code:"custom", path:["severity"], message:"Only an Attention issue can be deferred." });
+  if (value.disposition === "defer" && !value.deferral) context.addIssue({ code:"custom", path:["deferral"], message:"Deferral reason and review trigger are required." });
+  if (value.disposition !== "defer" && value.deferral) context.addIssue({ code:"custom", path:["deferral"], message:"Only a deferred issue can have a deferral policy." });
 });
 
 export const saveInspectionResponsesSchema = z.object({
@@ -85,6 +105,30 @@ export const createInspectionFollowUpWorkorderSchema = z.object({
 export const resolveInspectionFollowUpNoWorkorderSchema = z.object({
   ...followUpCommandBase,
   reason: z.string().trim().min(2).max(2000),
+}).strict();
+export const deferInspectionFollowUpSchema = z.object({
+  ...followUpCommandBase,
+  reason: z.string().trim().min(2).max(2000),
+  deferral: inspectionDeferralSchema,
+}).strict().superRefine((value, context) => {
+  if (value.reason !== value.deferral.reason) context.addIssue({ code:"custom", path:["reason"], message:"Follow-up reason must match the deferral reason." });
+});
+export const verifyInspectionFollowUpSchema = z.object({
+  ...followUpCommandBase,
+  reason: z.string().trim().min(2).max(2000),
+}).strict();
+
+export const recordInspectionMileageSchema = z.object({
+  expectedVersion: z.number().int().min(0),
+  idempotencyKey: z.string().trim().min(8).max(120),
+  miles: z.number().finite().min(0).max(10_000_000),
+  observedAt: z.string().datetime(),
+  reason: z.string().trim().min(3).max(1000),
+}).strict();
+export const acceptInspectionProviderMileageSchema = z.object({
+  expectedVersion: z.number().int().min(0),
+  idempotencyKey: z.string().trim().min(8).max(120),
+  reason: z.string().trim().min(3).max(1000),
 }).strict();
 
 export const inspectionListSchema = z.object({

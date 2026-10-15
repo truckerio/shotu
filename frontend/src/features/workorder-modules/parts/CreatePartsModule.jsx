@@ -236,6 +236,7 @@ function LegacyCreatePartsEditor({
             {canViewPrices ? <CreatePartPriceCell
               customUnitPrice={part.customUnitPrice}
               eligible={partHasExactInventorySource(part)}
+              trackingMode={part.trackingMode}
               selection={part.priceSelection}
               preview={previewByPartIndex.get(index)}
               previewStatus={pricing?.status}
@@ -545,6 +546,7 @@ export function CreatePartsModule({
           {canViewPrices ? <CreatePartPriceCell
             customUnitPrice={part.customUnitPrice}
             eligible={partHasExactInventorySource(part)}
+            trackingMode={part.trackingMode}
             selection={part.priceSelection}
             preview={previewByPartIndex.get(index)}
             previewStatus={pricing?.status}

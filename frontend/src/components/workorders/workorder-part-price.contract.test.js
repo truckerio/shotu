@@ -8,6 +8,8 @@ test("workorder price column is limited to office/admin and offers exact batch o
   assert.match(editor, /\["office",\s*"admin"\]\.includes\(role\)/);
   assert.match(cell, /value="batch_cost"/);
   assert.match(cell, /value="selling_price"/);
+  assert.match(cell, /usageKind === "no_stock"[\s\S]*?value="internal_cost"/);
+  assert.match(cell, /selection === "internal_cost" \? "Use configured internal cost"/);
   assert.match(cell, /FCFS/);
   assert.match(cell, /costAllocations/);
   assert.match(cell, /cost unavailable/);

@@ -66,3 +66,32 @@ test("Samsara serialNumber is preserved for trucks and trailers", () => {
   assert.equal(truck.serial, "TRUCK-SERIAL");
   assert.equal(trailer.serial, "TRAILER-SERIAL");
 });
+
+test("Samsara mileage retains the odometer-specific time and OBD provenance", () => {
+  const truck = mapSamsaraVehicle({ id: "truck-5" }, new Map([["truck-5", {
+    obdOdometerMeters: [{ value: 160934.4, time: "2026-10-14T10:00:00.000Z" }],
+    gpsOdometerMeters: [{ value: 162000, time: "2026-10-14T11:00:00.000Z" }],
+  }]]));
+  assert.equal(truck.lastOdometerMiles, 100000 / 1000);
+  assert.equal(truck.odometerSource, "samsara_obd");
+  assert.equal(truck.odometerObservedAt, "2026-10-14T10:00:00.000Z");
+});
+
+test("Samsara mileage falls back to GPS without using vehicle sync time", () => {
+  const truck = mapSamsaraVehicle({ id: "truck-6", updatedAtTime: "2026-10-14T12:00:00.000Z" }, new Map([["truck-6", {
+    gpsOdometerMeters: { value: 1609.344, time: "2026-10-14T09:00:00.000Z" },
+  }]]));
+  assert.equal(truck.lastOdometerMiles, 1);
+  assert.equal(truck.odometerSource, "samsara_gps");
+  assert.equal(truck.odometerObservedAt, "2026-10-14T09:00:00.000Z");
+});
+
+test("Samsara uses timestamped GPS mileage when an OBD value has no observation time", () => {
+  const truck = mapSamsaraVehicle({ id: "truck-7" }, new Map([["truck-7", {
+    obdOdometerMeters: { value: 3218.688 },
+    gpsOdometerMeters: { value: 4828.032, time: "2026-10-14T09:00:00.000Z" },
+  }]]));
+  assert.equal(truck.lastOdometerMiles, 3);
+  assert.equal(truck.odometerSource, "samsara_gps");
+  assert.equal(truck.odometerObservedAt, "2026-10-14T09:00:00.000Z");
+});
