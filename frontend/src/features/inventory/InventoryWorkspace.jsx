@@ -648,7 +648,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
               {!selectedLocationReadOnly && selectedItem.trackingMode !== "no_stock" ? <PartLocationSettings part={selectedItem} location={selectedLocation} onOpenShelves={() => setShelvingOpen(true)} onDamage={(sourceLocationId) => openStockDamage(selectedItem, sourceLocationId)} onTransfer={(sourceLocationId) => openStockTransfer(selectedItem, sourceLocationId)} onSaved={() => setRefreshKey((value) => value + 1)} /> : null}
             </div>
             {selectedItem.trackingMode === "no_stock" ? <div className="inventory-part-location-summary">
-              <section className="inventory-part-location-balance" aria-label="No stock tracking"><p><strong>No stock tracking.</strong> Quantity is recorded on the Workorder without inventory receipts, reservations, or movements.</p></section>
+              <section className="inventory-part-location-balance" aria-label="No stock tracking"><p>No stock tracking</p></section>
               <PartCommercialDetails key={`${selectedItem.catalogPartId}:${selectedLocation.locationId}`} part={selectedItem} location={selectedLocation} readOnly={selectedLocationReadOnly} manageableLocationIds={manageableLocationIds} onChanged={() => setRefreshKey((value) => value + 1)} />
             </div> : selectedItem.trackingMode === "quantity" || selectedItem.trackingMode === "measured_bulk" ? <div className="inventory-part-location-summary">
               <section className="inventory-part-location-balance" aria-label={`${selectedLocation.locationName} stock balance`}>
@@ -674,7 +674,7 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
             </>}
           </> : <>
             {selectedItem.trackingMode === "no_stock" ? <section className="inventory-part-stock-overview" aria-label="No stock tracking">
-              <p><strong>No stock tracking.</strong> Use this item on Workorders without receiving, counting, reserving, or moving stock.</p>
+              <p>No stock tracking</p>
             </section> : <section className="inventory-part-stock-overview" aria-label="Inventory summary">
               {!selectedItem.trackingMode ? <p>Review tracking in Details before adding stock.</p> : null}
               <div className="inventory-detail-metrics">
@@ -684,9 +684,10 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
               </div>
               {Number(selectedItem.odooQuantityOnHand || 0) > 0 ? <p className="inventory-detail-provider-stock">Odoo · read-only · {quantity(selectedItem.odooQuantityOnHand)} {selectedItem.uomCode}</p> : null}
             </section>}
-            {selectedItem.trackingMode === "no_stock" && noStockLocations.length ? <SecondaryDetailSection title="Location prices">
-              <div className="inventory-detail-locations">{noStockLocations.map((location) => <div className="inventory-detail-location-row" key={location.id}><button type="button" onClick={() => setSelectedLocationId(location.id)}><div><span className="inventory-detail-location-name"><strong>{location.name}</strong>{location.canManage === false ? <span className="inventory-view-only-badge">View only</span> : null}</span><small>View or configure location prices</small></div></button></div>)}</div>
-            </SecondaryDetailSection> : null}
+            {selectedItem.trackingMode === "no_stock" && noStockLocations.length ? <details className="inventory-no-stock-locations">
+              <summary>Location prices</summary>
+              <div className="inventory-detail-locations">{noStockLocations.map((location) => <div className="inventory-detail-location-row" key={location.id}><button type="button" onClick={() => setSelectedLocationId(location.id)}><span className="inventory-detail-location-name"><span>{location.name}</span>{location.canManage === false ? <span className="inventory-view-only-badge">View only</span> : null}</span></button></div>)}</div>
+            </details> : null}
             {selectedItem.trackingMode !== "no_stock" ? <SecondaryDetailSection title="Locations">
               {stockedLocations.length ? <div className="inventory-detail-locations">{stockedLocations.map(partLocationRow)}</div> : <p className="inventory-detail-empty">No stock at any location.</p>}
               {otherLocations.length ? <details className="inventory-detail-other-locations"><summary>Other locations <span>{otherLocations.length}</span></summary><div className="inventory-detail-locations">{otherLocations.map(partLocationRow)}</div></details> : null}

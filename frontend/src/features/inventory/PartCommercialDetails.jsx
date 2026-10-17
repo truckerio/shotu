@@ -309,9 +309,12 @@ export function PartCommercialDetails({ part, location = null, secondary = false
     const canEditCost = !readOnly && details.capabilities?.canEditPrices;
     return <section className="inventory-commercial-details inventory-no-stock-pricing" aria-label="No-stock pricing">
       {error ? <p className="inventory-commercial-status" role="alert">{error}</p> : null}
-      <div className="inventory-no-stock-price-summary"><div><span>Internal cost</span><strong>{configuredPriceView(cost).label} / {part.uomCode || "unit"}</strong><small>{cost ? (locationId ? (costState.source === "location_override" ? "Location override" : "Company default") : "Company default") : "Unknown · no configured cost"}</small></div><div><span>Selling price</span><strong>{details.sellingPolicy?.policy?.method === "fixed" ? sellingPolicySummary(details.sellingPolicy.policy) : "Not configured"} / {part.uomCode || "unit"}</strong><small>Fixed selling policy</small></div></div>
-      {canEditCost ? <div className="inventory-commercial-editors"><h4>Configure internal cost</h4><NoStockCostEditor key={`${part.catalogPartId}:${locationId}:${costState.effective?.id || "new"}`} projection={internal} locationId={locationId} onSaved={saveConfiguredCost} /></div> : null}
-      {canEditSellingPolicy ? <div className="inventory-commercial-editors"><h4>Configure selling price</h4><SellingPolicyEditor policy={details.sellingPolicy?.policy} writeVersion={details.sellingPolicy?.writeVersion} observations={[]} defaultCurrency={cost?.currency || "USD"} fixedOnly onSaved={saveSellingPolicy} /></div> : null}
+      {!canEditCost || !canEditSellingPolicy ? <div className="inventory-no-stock-price-summary">
+        {!canEditCost ? <div><span>Internal cost</span><span>{configuredPriceView(cost).label} / {part.uomCode || "unit"}</span></div> : null}
+        {!canEditSellingPolicy ? <div><span>Selling price</span><span>{details.sellingPolicy?.policy?.method === "fixed" ? sellingPolicySummary(details.sellingPolicy.policy) : "Not configured"} / {part.uomCode || "unit"}</span></div> : null}
+      </div> : null}
+      {canEditCost ? <NoStockCostEditor key={`${part.catalogPartId}:${locationId}:${costState.effective?.id || "new"}`} projection={internal} locationId={locationId} onSaved={saveConfiguredCost} /> : null}
+      {canEditSellingPolicy ? <SellingPolicyEditor policy={details.sellingPolicy?.policy} writeVersion={details.sellingPolicy?.writeVersion} observations={[]} defaultCurrency={cost?.currency || "USD"} fixedOnly onSaved={saveSellingPolicy} /> : null}
       <details className="inventory-commercial-configured-history"><summary>Cost history</summary><PriceHistory prices={internal} locationScoped={Boolean(locationId)} /></details>
     </section>;
   }

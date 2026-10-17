@@ -128,3 +128,9 @@ test("location detail uses a contextual Locations breadcrumb without changing lo
   assert.doesNotMatch(locations, /aria-label="Back to locations"/);
   assert.match(locations, /aria-label="Location settings"/);
 });
+
+test("Admin rail follows initial, requested and directly created operation products", () => {
+  assert.match(operationsPage, /useState\(\(\) => requestedProduct \|\| \(initialInspectionId/);
+  assert.match(operationsPage, /useEffect\(\(\) => \{\s*onProductChange\?\.\(product\);\s*\}, \[product, onProductChange\]\)/);
+  assert.doesNotMatch(operationsPage, /onProductChange\?\.\(nextProduct\)/);
+});

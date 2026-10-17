@@ -115,14 +115,14 @@
 .inventory-batch-cost-editor > small { color: #667085; }
 .inventory-batch-cost-editor p { color: #b42318; }
 .inventory-no-stock-pricing { display: grid; gap: 12px; min-width: 0; }
-.inventory-no-stock-price-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.inventory-no-stock-price-summary > div { display: grid; gap: 3px; min-width: 0; padding: 12px; border: 1px solid var(--border-secondary, #d5d9de); border-radius: 8px; }
-.inventory-no-stock-price-summary span, .inventory-no-stock-price-summary small { color: var(--text-secondary, #59636e); font-size: 12px; }
-.inventory-no-stock-price-summary strong { overflow-wrap: anywhere; }
+.inventory-no-stock-price-summary { display: grid; gap: 8px; }
+.inventory-no-stock-price-summary > div { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+.inventory-no-stock-price-summary span { overflow-wrap: anywhere; }
+.inventory-no-stock-pricing label, .inventory-no-stock-pricing strong, .inventory-no-stock-pricing summary, .inventory-no-stock-pricing .button, .inventory-no-stock-pricing .dropdown-select-trigger { font-weight: 400; }
+.inventory-no-stock-locations { padding-block: 10px; }
+.inventory-no-stock-locations > summary { cursor: pointer; color: var(--text-secondary, #59636e); font-size: 13px; font-weight: 400; }
 .inventory-no-stock-cost-editor p { color: #b42318; }
 .inventory-no-stock-cost-editor .inventory-commercial-price-fields { grid-template-columns: minmax(120px, 1fr) minmax(120px, .7fr) minmax(180px, 1.5fr) auto; }
-.inventory-no-stock-pricing > .inventory-commercial-editors { border-top: 1px solid var(--border-secondary, #d5d9de); padding-top: 10px; }
-.inventory-no-stock-pricing > .inventory-commercial-editors h4 { margin: 0; }
 @media (max-width: 640px) {
   .inventory-no-stock-price-summary, .inventory-no-stock-cost-editor .inventory-commercial-price-fields { grid-template-columns: 1fr; }
   .inventory-no-stock-cost-editor .inventory-commercial-price-fields > .button { grid-column: auto; grid-row: auto; width: 100%; }

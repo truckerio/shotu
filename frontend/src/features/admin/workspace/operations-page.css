@@ -6,10 +6,9 @@
   padding: 0 var(--workspace-gutter) var(--workspace-gutter);
 }
 
-.admin-shell.is-operations .role-navigation-rail {
+.admin-shell.is-operations .role-navigation-rail[data-overlay="false"] {
   background: transparent;
   border-right: 0;
-  padding: 10px;
 }
 
 .admin-shell.is-operations .role-navigation-divider {
@@ -21,7 +20,7 @@
 }
 
 .admin-shell.is-operations .role-navigation-list button {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .admin-operations-content > .page-header {

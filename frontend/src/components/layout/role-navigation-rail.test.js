@@ -19,20 +19,21 @@ test("RoleNavigationRail is profile-first, permission-filtered, and accessible",
   assert.match(source, /<ChevronDown aria-hidden="true" \/>/);
   assert.match(source, /import \{ ChevronDown \} from "@untitledui\/icons"/);
   assert.match(source, /<WorkspaceHeader actor=\{actor\} locale=\{locale\} className="role-navigation-account" \/>/);
-  assert.doesNotMatch(source, /LayoutLeft|role-navigation-collapse|Collapse navigation|Expand navigation/);
+  assert.match(source, /aria-label=\{item.label\}/);
 });
 
 test("RoleNavigationRail keeps a flush workspace rail and phone-safe targets", () => {
   assert.match(styles, /border:\s*0/);
-  assert.doesNotMatch(styles, /box-shadow/);
+  assert.match(styles, /height:100dvh/);
+  assert.match(styles, /overflow-y:auto/);
   assert.match(styles, /min-height:\s*44px/);
   assert.match(styles, /@media \(max-width:700px\)/);
   assert.match(styles, /@media \(max-width:700px\) \{ \.role-navigation-rail \{ display:none; \} \}/);
 });
 
 test("Admin profile divider aligns with the page card without dividing the full rail", () => {
-  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail\s*\{[^}]*position:\s*relative;/s);
-  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-right:\s*1px solid #e4e7ec;[^}]*border-top:\s*1px solid #e4e7ec;[^}]*border-top-right-radius:\s*6px;[^}]*height:\s*6px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*68px;/s);
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail\s*\{[^}]*position:\s*sticky;/s);
+  assert.match(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*border-right:\s*1px solid #e4e7ec;[^}]*border-top:\s*1px solid #e4e7ec;[^}]*border-top-right-radius:\s*6px;[^}]*height:\s*6px;[^}]*left:\s*10px;[^}]*right:\s*0;[^}]*top:\s*112px;/s);
   assert.doesNotMatch(adminStyles, /\.admin-shell \.role-navigation-rail::after\s*\{[^}]*inset:/s);
   assert.match(adminStyles, /\.admin-shell \.role-navigation-divider\s*\{[^}]*background:\s*transparent;/s);
 });
@@ -44,16 +45,25 @@ test("RoleNavigationRail supports an icon-free top-level parent destination", ()
   assert.doesNotMatch(source, /data-marker=/);
 });
 
-test("RoleNavigationRail stays expanded without a collapse control", () => {
-  assert.doesNotMatch(source, /collapsed|setCollapsed|navigationId/);
-  assert.doesNotMatch(styles, /role-navigation-collapse|is-collapsed/);
-  assert.match(source, /className="role-navigation-rail"/);
-  assert.match(source, /const open = openGroups\.has\(group\.id\)/);
-  assert.match(source, /onClick=\{\(\) => toggleGroup\(group\.id\)\}/);
-  assert.match(styles, /\.role-navigation-account \.profile-menu\s*\{[^}]*min-width:0;[^}]*width:100%;/s);
-  assert.match(styles, /\.role-navigation-account\s*\{[^}]*height:44px;[^}]*min-height:44px;/s);
-  assert.match(styles, /\.role-navigation-account \.profile-menu-trigger\s*\{[^}]*height:44px;[^}]*min-height:44px;[^}]*padding-right:10px;/s);
-  assert.match(styles, /\.role-navigation-account \.profile-menu-trigger > svg\s*\{[^}]*flex:0 0 auto;[^}]*margin-left:auto;/s);
+test("compact navigation preserves permitted destinations and tablet layout space", () => {
+  assert.match(source, /const open = compact \|\| openGroups.has\(group.id\)/);
+  assert.match(source, /className="role-navigation-fallback" aria-hidden="true"/);
+  assert.match(source, /aria-label=\{compact \? "Expand navigation" : "Collapse navigation"\}/);
+  assert.match(source, /aria-controls=\{navigationId\}/);
+  assert.match(source, /data-compact=\{compact\} data-overlay=\{overlay\} data-tablet=\{tablet\}/);
+  assert.match(styles, /:has\(> \.role-navigation-rail\[data-tablet="true"\]\)/);
+  assert.match(styles, /grid-template-columns:68px minmax\(0, 1fr\)/);
+  assert.match(styles, /\[data-overlay="true"\][^}]*width:var\(--role-navigation-expanded-width/s);
+});
+
+test("tablet expansion dismisses accessibly without remounting content", () => {
+  assert.match(source, /document.addEventListener\("pointerdown", outside\)/);
+  assert.match(source, /document.addEventListener\("focusin", outside\)/);
+  assert.match(source, /event.key === "Escape"/);
+  assert.match(source, /toggleRef.current\?\.focus\(\)/);
+  assert.match(source, /if \(overlay\) dismissOverlay\(true\)/);
+  assert.match(source, /\.profile-menu-popover, \[role='dialog'\]/);
+  assert.match(source, /TooltipTrigger key=\{item.id\} delay=\{250\} isDisabled=\{!compact\}/);
 });
 
 test("desktop role shells use compact role-appropriate rail widths", () => {
@@ -62,4 +72,14 @@ test("desktop role shells use compact role-appropriate rail widths", () => {
     assert.match(shellStyles, /grid-template-columns:\s*220px minmax\(0, 1fr\);/);
     assert.doesNotMatch(shellStyles, /grid-template-columns:\s*244px minmax\(0, 1fr\);/);
   }
+});
+
+test("keyboard labels survive incidental list scrolling but respect dismissal", () => {
+  assert.match(source, /isOpen=\{compact && tooltipOpen\} onOpenChange=\{changeTooltip\}/);
+  assert.match(source, /if \(!nextOpen && keyboardFocus\.current && compact\)/);
+  assert.match(source, /buttonRef\.current === document\.activeElement/);
+  assert.match(source, /onBlur=\{dismissTooltip\}/);
+  assert.match(source, /onPressStart=\{dismissTooltip\}/);
+  assert.match(source, /event\.key === "Escape" && keyboardFocus\.current/);
+  assert.match(source, /cancelAnimationFrame\(reopenFrame\.current\)/);
 });

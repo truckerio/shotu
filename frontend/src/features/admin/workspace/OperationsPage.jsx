@@ -10,7 +10,7 @@ import "./operations-page.css";
 export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, onCreateWorkorder, inspectionAccess = { canRead: false, canWrite: false }, workorderAccess = { canRead: true, canWrite: true }, requestedProduct = "", onProductChange }) {
   const inspectionReturn = inspectionReturnContext();
   const initialInspectionId = inspectionAccess.canRead ? inspectionReturn?.inspectionId || "" : "";
-  const [product, setProduct] = useState(() => initialInspectionId || (inspectionAccess.canRead && inspectionQueueRequested()) || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders");
+  const [product, setProduct] = useState(() => requestedProduct || (initialInspectionId || (inspectionAccess.canRead && inspectionQueueRequested()) || (!workorderAccess.canRead && inspectionAccess.canRead) ? "inspections" : "workorders"));
   const [creatingInspection, setCreatingInspection] = useState(false);
   const [createdInspectionId, setCreatedInspectionId] = useState("");
   const createAction = <WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} />;
@@ -19,9 +19,12 @@ export function OperationsPage({ actor, locations, draftQueue, onOpenWorkorder, 
     if (requestedProduct && requestedProduct !== product) changeProduct(requestedProduct);
   }, [requestedProduct]);
 
+  useEffect(() => {
+    onProductChange?.(product);
+  }, [product, onProductChange]);
+
   function changeProduct(nextProduct) {
     setProduct(nextProduct);
-    onProductChange?.(nextProduct);
     setCreatingInspection(false);
     setCreatedInspectionId("");
   }
