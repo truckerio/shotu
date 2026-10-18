@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "researchedAt": "2026-10-17",
+  "scope": "Initial bounded source inventory, not exhaustive internet collection or training approval",
+  "sources": [
+    {
+      "id": "commons-alternators",
+      "kind": "commons_search",
+      "url": "https://commons.wikimedia.org/wiki/Category:Automobile_alternators",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://commons.wikimedia.org/wiki/Category:Automobile_alternators",
+      "notes": "General component photographs only; individual file license and content must be reviewed; no Freightliner fitment.",
+      "query": "incategory:\"Automobile alternators\"",
+      "limit": 10,
+      "contentHosts": [
+        "upload.wikimedia.org"
+      ]
+    },
+    {
+      "id": "commons-diesel-parts",
+      "kind": "commons_search",
+      "url": "https://commons.wikimedia.org/wiki/Category:Diesel_engine_parts",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://commons.wikimedia.org/wiki/Category:Diesel_engine_parts",
+      "notes": "Mixed marine, stationary and vehicle engine parts; category membership is not an annotation.",
+      "query": "incategory:\"Diesel engine parts\"",
+      "limit": 10,
+      "contentHosts": [
+        "upload.wikimedia.org"
+      ]
+    },
+    {
+      "id": "commons-reuse",
+      "kind": "reference",
+      "url": "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia",
+      "notes": "Policy reference only. Per-file creator/license/source must be retained. Metadata licensing differs from image licensing."
+    },
+    {
+      "id": "dtna-partsprox",
+      "kind": "reference",
+      "url": "https://www.dtnaparts.com/excelerator/",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.dtnaparts.com/excelerator/",
+      "notes": "VIN/serial-specific OEM catalog and purchasing portal. Dealer login does not establish API/export, embedding or AI training rights."
+    },
+    {
+      "id": "dtna-access",
+      "kind": "reference",
+      "url": "https://dtnacontent-dtna.prd.freightliner.com/content/public/DTNAConnect-NewUser.html",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://dtnacontent-dtna.prd.freightliner.com/content/public/DTNAConnect-NewUser.html",
+      "notes": "Customer registration/admin route. Request licensed diagram/image/BOM integration and training terms from DTNA; no accounts created."
+    },
+    {
+      "id": "freightliner-manuals",
+      "kind": "reference",
+      "url": "https://www.freightliner.com/parts/driver-maintenance-manuals/",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.freightliner.com/parts/driver-maintenance-manuals/",
+      "notes": "Public driver/maintenance manuals; not a complete parts BOM and no training permission verified."
+    },
+    {
+      "id": "dtna-techlit",
+      "kind": "reference",
+      "url": "https://www.dtnatechlit.com/portal-public?make=freightliner",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.dtnatechlit.com/portal-public?make=freightliner",
+      "notes": "Public literature viewer; document-specific rights still need checking."
+    },
+    {
+      "id": "dtna-partscap",
+      "kind": "reference",
+      "url": "https://www.dtnaparts.com/parts-cap/",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.dtnaparts.com/parts-cap/",
+      "notes": "Supplier parts information; no bulk data/image reuse permission verified."
+    },
+    {
+      "id": "automann-catalogs",
+      "kind": "reference",
+      "url": "https://www.automann.com/resources/index/index/category/catalogs/",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.automann.com/resources/index/index/category/catalogs/",
+      "notes": "Supplier PDFs and application references, including Detroit engine references; no automatic import."
+    },
+    {
+      "id": "gabriel-2026",
+      "kind": "reference",
+      "url": "https://www.automann.com/media/pdf/files/gabriel-heavy-duty-catalog-2026.pdf",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.automann.com/media/pdf/files/gabriel-heavy-duty-catalog-2026.pdf",
+      "notes": "389-page shocks catalog observed; Freightliner applications/interchanges. Supplier permission needed for image/data training reuse."
+    },
+    {
+      "id": "dorman-m2",
+      "kind": "reference",
+      "url": "https://static.dormanproducts.com/document/web/Freightliner-M2_Make-Sheet_HD.pdf",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://static.dormanproducts.com/document/web/Freightliner-M2_Make-Sheet_HD.pdf",
+      "notes": "Selected M2 106/112 parts, 2019 sheet; explicit no reproduction without prior written approval. Not ingested."
+    },
+    {
+      "id": "dorman-library",
+      "kind": "reference",
+      "url": "https://www.dormanproducts.com/pages/resources/catalogs/dorman.aspx",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.dormanproducts.com/pages/resources/catalogs/dorman.aspx",
+      "notes": "Product catalog library; request commercial data/images permission."
+    },
+    {
+      "id": "united-pacific",
+      "kind": "reference",
+      "url": "https://truck.upauto.com/product-catalogs",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://truck.upauto.com/product-catalogs",
+      "notes": "Freightliner accessories/collision/interior categories; linked Freightliner PDF paths returned404 on research date. No images downloaded."
+    },
+    {
+      "id": "cummins-parts",
+      "kind": "reference",
+      "url": "https://www.cummins.com/en-na/parts/parts-information",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://www.cummins.com/en-na/parts/parts-information",
+      "notes": "ESN-specific engine parts route; no public bulk training grant verified."
+    },
+    {
+      "id": "roboflow-engine-parts",
+      "kind": "reference",
+      "url": "https://universe.roboflow.com/engineparts/engine-parts-c2xfb",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://universe.roboflow.com/engineparts/engine-parts-c2xfb",
+      "notes": "383 images,5 internal engine part classes declared CC BY4.0 by uploader. Source ownership and annotations require review; no archive downloaded or Freightliner fitment claimed."
+    },
+    {
+      "id": "ultralytics-carparts",
+      "kind": "reference",
+      "url": "https://docs.ultralytics.com/datasets/segment/carparts-seg/",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://docs.ultralytics.com/datasets/segment/carparts-seg/",
+      "notes": "Docs report3833 images,23 exterior car classes. Useful segmentation baseline only. Upstream dataset/version/license mapping unresolved; docs and framework license are not dataset rights."
+    },
+    {
+      "id": "roboflow-car-seg-origin",
+      "kind": "reference",
+      "url": "https://universe.roboflow.com/gianmarco-russo-vt9xr/car-seg-un1pm",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://universe.roboflow.com/gianmarco-russo-vt9xr/car-seg-un1pm",
+      "notes": "Uploader declares CC BY4.0; current page2255 images21classes differs from downstream3833/23 package. Resolve versions and original provenance before import."
+    },
+    {
+      "id": "jhu-cgpart",
+      "kind": "reference",
+      "url": "https://archive.data.jhu.edu/dataset.xhtml?persistentId=doi%3A10.7281%2FT1%2FYZKNJ6&version=1.1",
+      "trainingStatus": "excluded",
+      "licenseEvidenceUrl": "https://archive.data.jhu.edu/dataset.xhtml?persistentId=doi%3A10.7281%2FT1%2FYZKNJ6&version=1.1",
+      "notes": "Synthetic vehicle-part data with real test set; CC BY-NC4.0 excludes from this commercial training pipeline unless separately licensed."
+    },
+    {
+      "id": "lscp-paper",
+      "kind": "reference",
+      "url": "https://arxiv.org/abs/2311.11754",
+      "trainingStatus": "permission_required",
+      "licenseEvidenceUrl": "https://arxiv.org/abs/2311.11754",
+      "notes": "Paper describes84162 images12 car-part types; original asset licensing and downloadable archive not verified. Paper license does not grant image rights."
+    },
+    {
+      "id": "commons-cascadia",
+      "kind": "reference",
+      "url": "https://commons.wikimedia.org/wiki/Category:Freightliner_Cascadia",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://commons.wikimedia.org/wiki/Category:Freightliner_Cascadia",
+      "notes": "Model exterior identification candidates only. Not component fitment or exact part labels; per-file rights required."
+    },
+    {
+      "id": "roboflow-engine-bay",
+      "kind": "reference",
+      "url": "https://universe.roboflow.com/stephens-workspace-gjyrj/engine-bay-parts",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://universe.roboflow.com/stephens-workspace-gjyrj/engine-bay-parts",
+      "notes": "Page reports2378images52classes declaredMIT. Includes numbered/unclearclasses and mixedenginebay components; originalassetrights/taxonomy/annotations unverified. Noarchiveimport orFreightlinerfitmentclaim."
+    },
+    {
+      "id": "truck-rim-lines",
+      "kind": "reference",
+      "url": "https://huggingface.co/datasets/frmc/Truck-Wheel-Rim-Line-Dataset",
+      "trainingStatus": "candidate",
+      "licenseEvidenceUrl": "https://huggingface.co/datasets/frmc/Truck-Wheel-Rim-Line-Dataset",
+      "notes": "Uploader declaresCCBY4.0; truckwheel/rim/chassisline annotationtask forweigh-in-motion. Notgeneralengineparts. Datasetimage/annotationpairing/provenance notverified; noarchivedownload."
+    }
+  ]
+}

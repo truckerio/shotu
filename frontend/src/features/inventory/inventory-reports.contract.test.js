@@ -11,13 +11,20 @@ test("inventory reports cover reconciliation, receipt cost evidence, open work, 
   assert.match(source, /section: "reconciliation"/);
   assert.match(source, /<CheckpointCollection queue=\{stockQueue\}/);
   assert.match(source, /<CheckpointCollection queue=\{reconciliationQueue\}/);
-  assert.match(source, /<OperationalDataRow \{\.\.\.rowProps\} id=\{stock\.inventory_item_id\} key=\{key\}>/);
-  assert.match(source, /<OperationalDataRow \{\.\.\.rowProps\} id=\{item\.inventory_item_id\} key=\{key\}>/);
+  assert.match(source, /<OperationalDataRow \{\.\.\.rowProps\} id=\{inventoryReportItemKey\(stock\)\} key=\{key\}>/);
+  assert.match(source, /<OperationalDataRow \{\.\.\.rowProps\} id=\{inventoryReportItemKey\(item\)\} key=\{key\}>/);
   assert.doesNotMatch(source, />Previous<|>Next</);
   assert.match(source, /OperationalDataTable ariaLabel="Reconciliation status"/);
   assert.match(source, /OperationalDataTable ariaLabel="Open inventory tasks and exceptions"/);
   assert.match(source, /OperationalDataTable ariaLabel="No-PO receipt evidence"/);
   assert.match(source, /reconciliationState\(item\)/);
+});
+
+test("report collection checkpoints use the same inventory identity as their React Aria rows", () => {
+  for (const queue of ["stockQueue", "reconciliationQueue"]) {
+    assert.match(source, new RegExp(`<CheckpointCollection queue=\\{${queue}\\}[^>]*getItemKey=\\{inventoryReportItemKey\\}`));
+  }
+  assert.match(source, /purchaseOrders\.map\(\(order\) => <li key=\{order\.order_id\}>/);
 });
 
 test("inventory reports preserve unknown values and emit one formula-safe bounded CSV", () => {

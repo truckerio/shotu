@@ -6,6 +6,7 @@ import { textEntryProps } from "../../components/forms/text-entry-policy.js";
 import { WorkspaceCreateActions } from "../../components/layout/WorkspaceCreateActions.jsx";
 import { RoleNavigationRail } from "../../components/layout/RoleNavigationRail.jsx";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.jsx";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { WorkorderQueueTabs, WorkorderRow, WorkorderTableHeader, workorderMatchesSearch } from "../../components/workorders/WorkorderQueue.jsx";
 import { api } from "../../lib/api.js";
 import { useAutomaticRefresh } from "../../hooks/useAutomaticRefresh.js";
@@ -351,14 +352,22 @@ export function OfficeWorkspace({
     .sort((left, right) => officeUrgency(left) - officeUrgency(right) || new Date(left.updatedAt || left.createdAt) - new Date(right.updatedAt || right.createdAt));
 
   useEffect(() => {
-    if (!["inventory", "units"].includes(activeTab)) lastOperationsTab.current = activeTab;
+    if (!["customers", "inventory", "units"].includes(activeTab)) lastOperationsTab.current = activeTab;
   }, [activeTab]);
 
+  const officePhoneOperationsNavigation = (
+    <nav className="office-phone-operations-nav" aria-label="Office operations sections">
+      {workorderAccess.canRead ? <button className={product === "workorders" && activeTab !== "customers" ? "active" : ""} type="button" aria-current={product === "workorders" && activeTab !== "customers" ? "page" : undefined} onClick={() => selectOperationsProduct("workorders")}>Workorders</button> : null}
+      {workorderAccess.canRead ? <button className={activeTab === "customers" ? "active" : ""} type="button" aria-current={activeTab === "customers" ? "page" : undefined} onClick={() => selectWorkspace("customers")}>Customers</button> : null}
+      {inspectionAccess.canRead ? <button className={product === "inspections" ? "active" : ""} type="button" aria-current={product === "inspections" ? "page" : undefined} onClick={() => selectOperationsProduct("inspections")}>Inspections</button> : null}
+    </nav>
+  );
   const officeMobileNavigation = (
     <nav className="office-mobile-nav" aria-label="Office workspace">
       <button className={!['inventory', 'units'].includes(activeTab) ? "active" : ""} type="button" onClick={() => selectWorkspace("operations")}><Briefcase02 /><span>Operations</span></button>
       <button className={activeTab === "inventory" ? "active" : ""} type="button" onClick={() => selectWorkspace("inventory")}><Package /><span>Inventory</span></button>
       <button className={activeTab === "units" ? "active" : ""} type="button" onClick={() => selectWorkspace("units")}><Tool02 /><span>Units</span></button>
+      <ProfileMenu actor={actor} mobileNav />
     </nav>
   );
   const isOperationsWorkspace = !["inventory", "units"].includes(activeTab);
@@ -382,6 +391,7 @@ export function OfficeWorkspace({
           {officeRail}
           <div className="office-main-content">
             <PageHeader className="office-operations-page-header" title={pageTitle} actions={<WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => setCreatingInspection(true) : null} />} />
+            {officePhoneOperationsNavigation}
             <section className="operational-collection-surface office-inspection-work-surface">
             {creatingInspection
               ? <CreateInspectionPage actor={actor} access={{ canCreate: inspectionAccess.canWrite }} request={api} onCreated={(result) => { setCreatingInspection(false); setCreatedInspectionId(result?.inspection?.id || ""); }} onCancel={() => setCreatingInspection(false)} />
@@ -405,6 +415,7 @@ export function OfficeWorkspace({
         title={pageTitle}
         actions={isOperationsWorkspace ? <WorkspaceCreateActions actor={actor} onCreateWorkorder={workorderAccess.canWrite ? onCreateWorkorder : null} onCreateInspection={inspectionAccess.canWrite ? () => { setProduct("inspections"); setCreatingInspection(true); } : null} /> : activeTab === "inventory" ? inventoryHeaderActions : null}
       />
+      {isOperationsWorkspace ? officePhoneOperationsNavigation : null}
       <section className={`office-layout${["customers", "drafts", "inventory", "units", "parts"].includes(activeTab) ? " is-drafts" : ""}${isOperationsWorkspace ? " operational-collection-surface office-primary-work-surface" : ""}`}>
         {!["customers", "drafts", "inventory", "units", "parts"].includes(activeTab) ? <aside className="office-mechanic-panel" aria-label="Mechanic workload">
           <div className="office-panel-head"><strong>Mechanics</strong><span>{mechanics.length}</span></div>

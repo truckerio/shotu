@@ -42,5 +42,5 @@ test("office and admin preserve authorized operation creation alongside the shar
 test("surveillance desktop filters use standard controls while touch overrides remain 44px", () => {
   assert.match(surveillanceCss, /\.surveillance-filter-row select[^}]*min-height:\s*40px;/s);
   assert.match(surveillanceCss, /\.surveillance-filter-row \.date-picker-control\s*\{\s*min-height:\s*40px;/s);
-  assert.match(surveillanceCss, /@media \(max-width: 640px\)[\s\S]*?\.surveillance-filter-row select,[\s\S]*?min-height:\s*44px;/s);
+  assert.match(surveillanceCss, /@media \(max-width: 700px\)[\s\S]*?\.surveillance-filter-row select,[\s\S]*?min-height:\s*44px;/s);
 });

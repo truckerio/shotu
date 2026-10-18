@@ -42,5 +42,14 @@ test("every lazy route has a loading boundary and retains route precedence", asy
   assert.ok(source.indexOf("if (activeWorkorder)") < source.indexOf("if (!navigation.canOpenCreateWorkspace)"));
   const unavailable = source.slice(source.indexOf("if (!navigation.canOpenCreateWorkspace)"));
   assert.match(unavailable, /create\.unavailable/);
-  assert.match(unavailable, /return <Suspense fallback=\{<AppLoadingFallback \/>\}><CreateWorkorderPage \{\.\.\.createPageProps\} \/><\/Suspense>;/);
+  assert.match(unavailable, /return withPhoneProfile\(<Suspense fallback=\{<AppLoadingFallback \/>\}><CreateWorkorderPage \{\.\.\.createPageProps\} \/><\/Suspense>\);/);
+  assert.match(source, /<nav className="role-phone-profile-dock" aria-label="Profile navigation">\s*<ProfileMenu actor=\{actor\} locale=\{locale\} mobileNav \/>/);
+});
+
+test("phone profile shares the existing Create and detail bottom dock", async () => {
+  const styles = await readFile(new URL("./role-phone-profile-dock.css", import.meta.url), "utf8");
+  assert.match(styles, /:has\(\.workorder-section-nav-mobile, \.create-workorder-mobile-dock\) \.role-phone-profile-dock/);
+  assert.match(styles, /\.role-phone-profile-layout \.create-workorder-mobile-dock \{ padding-right: max\(16\.6667%, 64px\); \}/);
+  assert.match(styles, /:has\(\.create-workorder-mobile-dock\[data-keyboard-open="true"\]\) \.role-phone-profile-dock/);
+  assert.match(styles, /\.role-phone-product-switch \{[\s\S]*?position: fixed;/);
 });

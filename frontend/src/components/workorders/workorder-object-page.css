@@ -489,9 +489,11 @@
 
   .workorder-section-nav-mobile > button span {
     max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    line-height: 1.15;
+    font-size: 12px;
+    text-align: center;
   }
 
   .workorder-section-nav-mobile > button small {

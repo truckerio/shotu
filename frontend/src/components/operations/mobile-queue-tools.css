@@ -90,27 +90,28 @@
     width: 100%;
   }
 
-  .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs {
+  :is(.workspace-operations, .admin-shell) .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs {
     display: flex;
     flex: 1 1 auto;
     gap: 6px;
     grid-template-columns: none;
-    justify-content: space-between;
+    justify-content: flex-start;
     min-width: 0;
-    overflow: visible;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
     width: 100%;
   }
 
-  .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button {
+  :is(.workspace-operations, .admin-shell) .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button {
     flex: 0 0 auto;
     font-size: var(--text-navigation);
-    gap: 2px;
+    gap: 5px;
     min-width: 0;
-    padding-inline: 2px;
+    padding-inline: 5px;
     white-space: nowrap;
   }
 
-  .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button strong {
+  :is(.workspace-operations, .admin-shell) .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button strong {
     font-size: var(--text-navigation);
     height: 20px;
     min-width: 20px;
@@ -133,6 +134,7 @@
     min-height: 0;
   }
 
+  :is(.workspace-operations, .admin-shell) .mobile-queue-toolbar.mobile-queue-toolbar--keyboard-open .mechanic-queue-tabs,
   .mobile-queue-toolbar--keyboard-open .mechanic-queue-tabs,
   .mobile-queue-toolbar--keyboard-open > .mobile-queue-tools {
     display: none;

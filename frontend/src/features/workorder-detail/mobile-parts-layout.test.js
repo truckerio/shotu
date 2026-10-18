@@ -43,7 +43,7 @@ test("shared parts editor keeps legacy manual rows immutable without extra evide
   assert.match(editor, /recordedManualParts\.map\(\(part, index\) => renderRecordedPartRow/);
   assert.doesNotMatch(editor, /parts\.legacyManualEvidence/);
   assert.doesNotMatch(editor, /className="remove-row"/);
-  assert.doesNotMatch(editor, /Trash01/);
+  assert.match(editor, /part\.trackingMode === "no_stock" && part\.noStockLineId[\s\S]*?<IconButton icon=\{Trash01\}/);
   assert.doesNotMatch(globalCss, /\.remove-row::before/);
   assert.doesNotMatch(css, /\.remove-row::before/);
 });
@@ -134,7 +134,7 @@ test("used-parts intake and labor stay compact without hiding accessible names",
   assert.match(editor, /const nextParts = \[\.\.\.recordedManualParts, part\]/);
   assert.match(editor, /onClick=\{addNoStockPart\}/);
   assert.match(editor, /function removeNoStockPart\(part\)[\s\S]*recordedManualParts\.filter\(\(candidate\) => candidate\.noStockLineId !== part\.noStockLineId\)/);
-  assert.match(editor, /part\.trackingMode === "no_stock" && part\.noStockLineId[\s\S]*onClick=\{\(\) => removeNoStockPart\(part\)\}/);
+  assert.match(editor, /part\.trackingMode === "no_stock" && part\.noStockLineId[\s\S]*setRemovalTarget\(\{ part \}\)/);
   assert.match(editor, /aria-expanded=\{intakeOpen\}/);
   assert.match(editor, /aria-controls="workorder-part-intake-row"/);
 });

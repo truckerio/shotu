@@ -172,19 +172,21 @@ export function WorkorderDetailPage({
   vehicleModelText,
 }) {
   const viewport = useVisualViewport();
+  const onePageDetail = isOfficeDetail || isMechanicDetail;
   const [officeToolsOpen, setOfficeToolsOpen] = useState(false);
   const [officeToolView, setOfficeToolView] = useState("chat");
   const openOfficeTool = (view) => { setOfficeToolView(view); setOfficeToolsOpen(true); };
   useEffect(() => {
-    if (!isOfficeDetail) return;
-    const requestedTool = requestedWorkorderTool(detailSection);
+    if (!onePageDetail) return;
+    const requestedTool = isMechanicDetail && detailSection === "photos"
+      ? "photos" : requestedWorkorderTool(detailSection);
     if (requestedTool) {
       setOfficeToolView(requestedTool);
       setOfficeToolsOpen(true);
     } else {
       setOfficeToolsOpen(false);
     }
-  }, [activeWorkorder.workorder.id, detailSection, isOfficeDetail]);
+  }, [activeWorkorder.workorder.id, detailSection, isMechanicDetail, onePageDetail]);
   const serializedRepairFlushRef = useRef(async () => true);
   const registerSerializedRepairFlush = useCallback((flush) => {
     serializedRepairFlushRef.current = typeof flush === "function" ? flush : async () => true;
@@ -278,14 +280,14 @@ export function WorkorderDetailPage({
   });
   const visibleDetailSections = useMemo(
     () => {
-      if (isCompact && !isOfficeDetail) return buildCompactPhoneDetailSections(detailSections, actor.role, {
+      if (isCompact && !onePageDetail) return buildCompactPhoneDetailSections(detailSections, actor.role, {
         locale: isMechanicDetail ? locale : "en",
         policyOverrides,
         userId: actor.id,
       });
       return detailSections;
     },
-    [actor.id, actor.role, detailSections, isCompact, isMechanicDetail, isOfficeDetail, locale, policyOverrides],
+    [actor.id, actor.role, detailSections, isCompact, isMechanicDetail, isOfficeDetail, locale, onePageDetail, policyOverrides],
   );
   const renderedDetailSection = coerceAllowedDetailSection(detailSection, visibleDetailSections);
   const mechanicValidationActive = mechanicAction.validationField === "workPerformed"
@@ -297,7 +299,10 @@ export function WorkorderDetailPage({
   }
   const markWorkDone = () => runAfterSerializedRepairFlush(isOfficeDetail
     ? markOfficeWorkorderDone
-    : () => setMechanicFinish({ open: true, name: "", message: "" }));
+    : () => {
+      setOfficeToolsOpen(false);
+      setMechanicFinish({ open: true, name: "", message: "" });
+    });
   const markWorkDoneBusy = isOfficeDetail ? officeDetailState.busy : mechanicAction.busy === "done";
   const parent = detailParent(actor.role, isOfficeDetail, isMechanicDetail ? locale : "en");
 
@@ -319,7 +324,7 @@ export function WorkorderDetailPage({
     selectDetailSection(renderedDetailSection);
   }, [detailSection, renderedDetailSection, selectDetailSection, visibleDetailSections.length]);
   useChatReceipts({
-    active: chatPolicy.canRead && (isOfficeDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && showEmbeddedPreview)),
+    active: chatPolicy.canRead && (onePageDetail ? officeToolsOpen && officeToolView === "chat" : renderedDetailSection === "chat" || (!isCompact && showEmbeddedPreview)),
     currentUserId: actor.id,
     messages: visibleConversationMessages,
     role: isOfficeDetail ? "office" : "mechanic",
@@ -426,9 +431,7 @@ export function WorkorderDetailPage({
             vehicleMileage={vehicleMileage}
             vehicleModelText={vehicleModelText}
             acceptOpenedMechanicWorkorder={acceptOpenedMechanicWorkorder}
-            openMechanicFinish={() => runAfterSerializedRepairFlush(
-              () => setMechanicFinish({ open: true, name: "", message: "" }),
-            )}
+            openMechanicFinish={markWorkDone}
             markOfficeWorkorderDone={() => runAfterSerializedRepairFlush(markOfficeWorkorderDone)}
             openOfficeClose={() => {
               setOfficeToolsOpen(false);
@@ -437,7 +440,7 @@ export function WorkorderDetailPage({
             }}
           />);
   const officeToolViews = [
-    ...(chatPolicy.canRead || earlierNotes ? [{ id: "chat", label: chatPolicy.canRead ? "Chat" : "Notes", content: <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
+    ...(chatPolicy.canRead || earlierNotes ? [{ id: "chat", label: chatPolicy.canRead ? (isMechanicDetail ? t("detail.helpFromOffice") : "Chat") : "Notes", content: <>{earlierNotes}{chatPolicy.canRead ? workorderChatContent : null}</> }] : []),
     ...(canReadCustomerDocuments ? [{
       id: "customer-documents",
       label: "Documents",
@@ -459,9 +462,9 @@ export function WorkorderDetailPage({
         <Button variant="secondary" type="button" onClick={() => { setOfficeToolsOpen(false); printWorkorders(); }}>{primaryActionLabel}</Button>
       </div>,
     }] : []),
-    ...["activity", "completion", "odoo"].flatMap((id) => {
+    ...[...(isMechanicDetail ? ["photos"] : []), "activity", "completion", "odoo"].flatMap((id) => {
       const section = visibleDetailSections.find((entry) => entry.id === id);
-      return section ? [{ id, label: id === "activity" ? "Activity" : id === "completion" ? "Review" : "Integration", content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
+      return section ? [{ id, label: isMechanicDetail ? section.label : id === "activity" ? "Activity" : id === "completion" ? "Review" : "Integration", content: <>{id === "completion" && officeDetailState.error && officeDetailState.message ? <p role="alert">{officeDetailState.message}</p> : null}{cloneElement(detailModules, { detailSections: [section], detailSection: id, supportingOnly: true })}</> }] : [];
     }),
   ];
   const documentActionLabel = detailStatus === "mechanic_done" ? "Review invoice" : "View estimate";
@@ -479,8 +482,8 @@ export function WorkorderDetailPage({
       {canPrint ? <BrowserPrintDocument payload={browserPrintPayload} /> : null}
       <WorkorderDetailSurface
         locale={isMechanicDetail ? locale : "en"}
-        previewOpen={isOfficeDetail ? officeToolsOpen : !isPhone && supportingPaneVisible && showEmbeddedPreview}
-        presentation={isOfficeDetail ? "one-page" : "panel"}
+        previewOpen={onePageDetail ? officeToolsOpen : !isPhone && supportingPaneVisible && showEmbeddedPreview}
+        presentation={onePageDetail ? "one-page" : "panel"}
         controlRef={formRef}
         context={{
           parent: { ...parent, onClick: followDetailParent },
@@ -535,10 +538,10 @@ export function WorkorderDetailPage({
                   <span>{mechanicAction.busy === "accept" ? t("detail.accepting") : t("detail.acceptWork")}</span>
                 </button>
               ) : null}
-              {isOfficeDetail && canMarkWorkDone ? <WorkDoneButton type="button" onClick={() => openOfficeTool("completion")} busy={markWorkDoneBusy} /> : null}
+              {onePageDetail && canMarkWorkDone ? <WorkDoneButton type="button" onClick={isMechanicDetail ? markWorkDone : () => openOfficeTool("completion")} busy={markWorkDoneBusy} disabled={Boolean(mechanicAction.busy) || officeDetailState.busy} label={t("completion.workDone")} busyLabel={t("completion.submitting")} /> : null}
               {isOfficeDetail && !canMarkWorkDone && !activeWorkorder.allowedActions?.approve && officeToolViews.some((view) => view.id === "completion") ? <Button variant="secondary" type="button" onClick={() => openOfficeTool("completion")}>Review</Button> : null}
-              {isOfficeDetail && officeToolViews.length > 0 ? <PreviewToggle open={officeToolsOpen} onToggle={() => setOfficeToolsOpen((open) => !open)} controls="workorder-preview-panel" openLabel="Open workorder tools" closeLabel="Close workorder tools" /> : null}
-              {!isOfficeDetail && !isPhone && supportingPaneVisible ? (
+              {onePageDetail && officeToolViews.length > 0 ? <PreviewToggle open={officeToolsOpen} onToggle={() => setOfficeToolsOpen((open) => !open)} controls="workorder-preview-panel" openLabel={t("preview.openWorkorderTools")} closeLabel={t("preview.closeWorkorderTools")} /> : null}
+              {!onePageDetail && !isPhone && supportingPaneVisible ? (
                 <PreviewToggle
                   open={showEmbeddedPreview}
                   onToggle={toggleWorkorderTools}
@@ -583,14 +586,6 @@ export function WorkorderDetailPage({
               inspectionContextUnavailable={activeWorkorder.inspectionContextUnavailable}
               actorRole={actor.role}
             />
-            {isMechanicDetail && unitPolicy.canRead ? (
-              <div className="workorder-object-inline-detail">
-                <span>{t("detail.assetDetails")}</span>
-                <strong>{mechanicVehicleLabel}</strong>
-                <span>{t("detail.mileage")}</span>
-                <strong>{form.mileage ? `${form.mileage} ${t("unit.milesShort")}` : t("detail.notListed")}</strong>
-              </div>
-            ) : null}
             <MechanicActionMessage action={mechanicAction} validationActive={mechanicValidationActive} />
             {officeDetailState.error && officeDetailState.message ? (
               <p className="mechanic-action-message is-validation-warning" role="alert">
@@ -607,7 +602,7 @@ export function WorkorderDetailPage({
           onSelect: selectDetailSection,
           preferenceKey: `workorder.sectionOrder.v1:${actor.id}:${actor.role}:detail`,
         }}
-        supportingPane={isOfficeDetail
+        supportingPane={onePageDetail
           ? <WorkorderToolsPanel key={activeWorkorder.workorder.id} open={officeToolsOpen} onClose={() => setOfficeToolsOpen(false)} activeView={officeToolView} onViewChange={setOfficeToolView} views={officeToolViews} />
           : !isCompact && supportingPaneVisible
             ? <WorkorderToolsPanel
@@ -631,20 +626,7 @@ export function WorkorderDetailPage({
             </div>
           ) : null}
 
-          {canMarkWorkDone && isMechanicDetail && isCompact ? (
-            <div className="mechanic-compact-primary-action">
-              <WorkDoneButton
-                type="button"
-                onClick={() => setMechanicFinish({ open: true, name: "", message: "" })}
-                busy={mechanicAction.busy === "done"}
-                disabled={Boolean(mechanicAction.busy) && mechanicAction.busy !== "done"}
-                label={t("completion.workDone")}
-                busyLabel={t("completion.submitting")}
-              />
-            </div>
-          ) : null}
-
-          {isOfficeDetail ? cloneElement(detailModules, {
+          {onePageDetail ? cloneElement(detailModules, {
             detailSections: mainWorkorderSections(visibleDetailSections),
           }) : detailModules}
       </WorkorderDetailSurface>

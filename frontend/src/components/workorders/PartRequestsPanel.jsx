@@ -56,7 +56,7 @@ export function PartRequestsPanel({
   return (
     <div className="part-requests-panel">
       {role === "mechanic" ? (
-        <MechanicPartsSurface {...commonProps} locale={locale} />
+        <MechanicPartsSurface {...commonProps} locale={locale} presentation={presentation} />
       ) : role === "office" ? (
         <OfficePartsSurface {...commonProps} presentation={presentation} />
       ) : (

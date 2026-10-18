@@ -28,6 +28,7 @@ import {
   mechanicJobActionKey,
   mixedMechanicMatchesSearch,
   mixedMechanicQueue,
+  otherMechanicJobs,
 } from "./mechanic-workspace-model.js";
 import { readMechanicQueueSession, writeMechanicQueueSession } from "./mechanic-queue-session.js";
 import { loadMechanicWorkspaceData } from "./mechanic-workspace-api.js";
@@ -173,7 +174,7 @@ export function MechanicWorkspace({
   const phoneSecondaryTabs = queueTabs.filter((tab) => phoneQueueKeys.secondary.some(({ key }) => key === tab.key));
   const nextJob = activeTab === "myWork" ? (combinedQueueEnabled ? mixedQueue.myWork[0] || null : homeView.nextJob) : null;
   const activeRows = combinedQueueEnabled
-    ? mixedQueue[activeTab] || []
+    ? activeTab === "myWork" ? otherMechanicJobs(mixedQueue.myWork, nextJob) : mixedQueue[activeTab] || []
     : activeTab === "myWork"
     ? homeView.assignedJobs
     : activeTab === "openWork"

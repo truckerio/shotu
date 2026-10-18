@@ -316,6 +316,25 @@ test("canonical Parts actions keep domain request identity separate from the HTT
   assert.notEqual(calls[1][4].requestId, "request-one");
 });
 
+test("pickup positions action validates part-only request and wraps a minimal result", async () => {
+  const calls = [];
+  const catalogPartId = "22222222-2222-4222-8222-222222222222";
+  const dependencies = {
+    runAction: async (...args) => { calls.push(args); return { positions: [{ id: "position-1", path: "Shelf", available: 2 }] }; },
+  };
+  const target = await runRoute({ method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body: { operation: "aggregateUsagePositions", catalogPartId }, dependencies });
+  assert.equal(target.responses[0].status, 200);
+  assert.deepEqual(target.responses[0].payload, { result: { positions: [{ id: "position-1", path: "Shelf", available: 2 }] } });
+  assert.deepEqual(calls[0][4], { operation: "aggregateUsagePositions", catalogPartId });
+  await assert.rejects(runRoute({ method: "POST",
+    pathname: `/api/workorders/${WORKORDER_ID}/modules/parts/actions/record`,
+    body: { operation: "aggregateUsagePositions", catalogPartId, locationId: WORKORDER_ID }, dependencies }),
+  (error) => error.statusCode === 400);
+  assert.equal(calls.length, 1);
+});
+
 test("canonical Parts action validates and forwards serialized repair wording", async () => {
   const calls = [];
   const dependencies = {

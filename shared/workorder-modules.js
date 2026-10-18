@@ -76,7 +76,7 @@ export const WORKORDER_MODULES = Object.freeze([
     surfaces: Object.freeze(["create", "detail"]),
     capabilities: Object.freeze(["read", "write"]),
     actions: Object.freeze(["update"]),
-    writeRolesBySurface: Object.freeze({ create: Object.freeze(["mechanic", "office", "admin"]), detail: Object.freeze(["office", "admin"]) }),
+    writeRolesBySurface: Object.freeze({ create: Object.freeze(["mechanic", "office", "admin"]), detail: Object.freeze(["mechanic", "office", "admin"]) }),
   }),
   Object.freeze({
     key: "diagnosisRepair",
@@ -207,7 +207,7 @@ const DEFAULT_ACCESS = Object.freeze({
       location: "read",
       schedule: "read",
       assignment: "write",
-      concern: "read",
+      concern: "write",
       diagnosisRepair: "write",
       photos: "read",
       parts: "write",

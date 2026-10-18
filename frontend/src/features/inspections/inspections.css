@@ -517,3 +517,23 @@
   .inspection-section-trigger { min-height: 48px; }
   .inspection-section-trigger > span:first-child { align-items: start; flex-direction: column; gap: 2px; }
 }
+
+@media (max-width: 430px) {
+  /* Give long unit/location and mechanic names their own flexible columns. */
+  .operational-collection-table.inspection-table .inspection-row {
+    grid-template-areas: "identity action" "state action" "location location" "assignee assignee" "progress progress";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .inspection-row .inspection-state,
+  .inspection-progress-cell {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 700px) {
+  .operational-collection-table .inspection-row :is(.inspection-location, .inspection-assignee, .inspection-state) {
+    align-content: flex-start;
+    justify-content: flex-start;
+  }
+}

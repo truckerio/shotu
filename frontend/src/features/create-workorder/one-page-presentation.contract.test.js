@@ -16,9 +16,9 @@ const createConcern = source("../workorder-modules/work/CreateConcernModule.jsx"
 const css = source("../../components/workorders/workorder-object-page.css");
 const formLayout = source("../../components/workorders/WorkorderFormLayout.jsx");
 
-test("Create opts into an explicit presentation while mechanic Create retains panel navigation", () => {
+test("Create uses one-page presentation including mechanic mobile Create", () => {
   const createPage = source("./CreateWorkorderPage.jsx");
-  assert.match(createPage, /const createPresentation = isMechanicCreate \? "panel" : "one-page"/);
+  assert.match(createPage, /const createPresentation = "one-page"/);
   assert.match(createPage, /presentation=\{createPresentation\}/);
   assert.match(createShell, /presentation = "panel"/);
   assert.match(createShell, /presentation === "panel"[\s\S]*?<WorkorderSectionNav/s);
@@ -63,12 +63,12 @@ test("one-page sections are a flat working surface, not cards", () => {
   assert.match(css, /\.operational-form-section \+ \.operational-form-section\s*\{[^}]*border-top:\s*1px solid #e4e7ec;[^}]*box-shadow:\s*none;/s);
 });
 
-test("one-page Create compacts optional unit details and concern without changing panel behavior", () => {
+test("Create compacts optional unit details on phones and retains desktop panels", () => {
   assert.match(createForm, /unit: \{[\s\S]*?presentation,/);
   assert.match(createForm, /concern: \{[\s\S]*?presentation \}/);
   assert.match(createUnit, /const onePage = presentation === "one-page"/);
-  assert.match(createUnit, /open=\{onePage \? unitDetailsOpen : true\}/);
-  assert.match(createUnit, /onToggle=\{onePage \? setUnitDetailsOpen : undefined\}/);
+  assert.match(createUnit, /open=\{onePage \|\| isPhone \? unitDetailsOpen \|\| Boolean\(errors\?\.unitType[\s\S]*?errors\?\.vinNo\) : true\}/);
+  assert.match(createUnit, /onToggle=\{onePage \|\| isPhone \? setUnitDetailsOpen : undefined\}/);
   assert.match(createConcern, /rows=\{presentation === "one-page" \? 2 : 4\}/);
   assert.match(createUnit, /presentation = "panel"/);
   assert.match(createConcern, /presentation = "panel"/);

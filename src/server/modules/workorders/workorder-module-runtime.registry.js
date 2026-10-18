@@ -116,6 +116,10 @@ const ACTIONS = Object.freeze({
       z.object({ operation: z.literal("officePartPlan"), ...createOfficePartSchema.shape }),
       updateSerializedUsageRepairOrderSchema,
       z.object({
+        operation: z.literal("aggregateUsagePositions"),
+        catalogPartId: id,
+      }).strict(),
+      z.object({
         operation: z.literal("aggregateUsageReserve"),
         catalogPartId: id,
         sourcePositionId: id,

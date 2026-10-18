@@ -199,9 +199,16 @@
 }
 
 @media (max-width: 700px) {
-  .admin-shell .admin-content,
+  .admin-shell .admin-content.admin-content,
   .admin-shell .commercial-profile-settings {
-    padding-inline: var(--workspace-gutter);
+    box-sizing: border-box;
+    min-width: 0;
+    padding-inline: var(--mobile-page-gutter);
+  }
+
+  .customer-portal-page {
+    box-sizing: border-box;
+    padding-inline: var(--mobile-page-gutter);
   }
 
   .admin-shell .admin-location-work {

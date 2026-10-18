@@ -61,7 +61,25 @@ export function AdminSettingsWorkspace({ actor, locations }) {
     );
   }
 
-  if (tab === "commercial") return <CommercialProfileSettings actor={actor} locations={locations} />;
+  if (tab === "commercial") return (
+    <>
+      <div className="admin-content" style={{ paddingBottom: 0 }}>
+        <ContextBreadcrumbs
+          items={[{
+            label: "Settings",
+            href: "/?adminView=settings&settingsTab=integrations",
+            onClick: (event) => {
+              if (!isPlainPrimaryActivation(event)) return;
+              event.preventDefault();
+              changeTab("integrations");
+            },
+          }]}
+          current="Customer commercial profile"
+        />
+      </div>
+      <CommercialProfileSettings actor={actor} locations={locations} />
+    </>
+  );
 
   return tab === "templates" ? (
     <>

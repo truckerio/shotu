@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { interfaceText } from "../../../i18n/index.js";
 import { MechanicPartRequestForm } from "../MechanicPartRequestForm.jsx";
+import { freightlinerAssetContext, freightlinerRequestContextKey } from "./freightliner-catalog-model.js";
 import { mechanicPartsActionState } from "../mechanic-part-request-model.js";
 import { MechanicRequestCard } from "./MechanicRequestCard.jsx";
 import { UsedPartsSection } from "./UsedPartsSection.jsx";
@@ -17,6 +18,8 @@ export function MechanicPartsSurface({
   parts,
   laborHours,
   laborProduct,
+  locationId,
+  presentation = "panel",
   laborRepairOrder,
   laborRepairOrderDisabled,
   installedParts = [],
@@ -48,6 +51,8 @@ export function MechanicPartsSurface({
         parts={parts}
         laborHours={laborHours}
         laborProduct={laborProduct}
+        locationId={locationId}
+        presentation={presentation}
         laborRepairOrder={laborRepairOrder}
         laborRepairOrderDisabled={laborRepairOrderDisabled}
         installedParts={installedParts}
@@ -76,7 +81,7 @@ export function MechanicPartsSurface({
             {t("parts.requestPart")}
           </button>
           <div id={requestPartPanelId} hidden={!requestFormOpen}>
-            <MechanicPartRequestForm workorderId={detail.workorder.id} onChanged={onChanged} locale={locale} />
+            <MechanicPartRequestForm key={freightlinerRequestContextKey(detail.workorder)} workorderId={detail.workorder.id} asset={freightlinerAssetContext(detail.workorder)} onChanged={onChanged} locale={locale} />
           </div>
         </div>
       ) : null}

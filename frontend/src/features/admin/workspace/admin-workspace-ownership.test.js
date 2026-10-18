@@ -57,6 +57,12 @@ test("Settings makes storage layout an Inventory configuration destination", () 
   assert.match(settings, /canApplyInventoryCount=\{actor\?\.role === "admin"\}/);
 });
 
+test("commercial profile has a Settings breadcrumb that returns to integrations", () => {
+  assert.match(settings, /tab === "commercial"[\s\S]*?<ContextBreadcrumbs/);
+  assert.match(settings, /current="Customer commercial profile"/);
+  assert.match(settings, /isPlainPrimaryActivation\(event\)[\s\S]*?changeTab\("integrations"\)/);
+});
+
 test("Operations and Inventory share the operational collection page composition", () => {
   assert.match(operationsPage, /<OperationalCollectionPage/);
   assert.match(operationsPage, /title=\{product === "inspections" \? "Inspections" : "Workorders"\}/);

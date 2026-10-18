@@ -355,3 +355,18 @@
     display: none;
   }
 }
+
+@media (max-width: 700px) {
+  .operational-collection-row,
+  .operational-collection-cell,
+  .operational-collection-cell > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .operational-collection-section-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+}

@@ -114,7 +114,7 @@ export function WorkorderDetailSections({
       activeSection: detailSection,
       activeWorkorder,
       allowedActions: activeWorkorder.allowedActions,
-      concern: form.mechanicConcern,
+      concern: form.mechanicConcern, mechanicProgress: isMechanicDetail ? mechanicProgress : null,
       busy: officeDetailState.busy,
       message: officeDetailState.error || isOfficeDetail ? "" : officeDetailState.message,
       missingInfoAttention: Boolean(missingInfoAttention),

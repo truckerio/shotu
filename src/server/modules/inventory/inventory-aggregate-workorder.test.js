@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { effectiveInventoryScope } from "./inventory-effective-scope.js";
 import {
+  readMeasuredUsagePickupPositionsForWorkorder,
   releaseOrReverseMeasuredUsageForWorkorder,
   reserveMeasuredUsageForWorkorder,
 } from "./inventory-aggregate-workorder.service.js";
@@ -19,6 +20,83 @@ function context(role = "mechanic") {
   return { actor: { id: ACTOR_ID, role }, companyIds: new Set([COMPANY_ID]), locationIds: new Set([LOCATION_ID]) };
 }
 const scopeDeps = { resolveResourceScope: (requestContext, _type, _id, options) => effectiveInventoryScope(requestContext, { companyId: COMPANY_ID, locationId: LOCATION_ID, ...options }) };
+
+test("workorder pickup read returns only usable positions in server-owned company and location", async () => {
+  let scope;
+  const result = await readMeasuredUsagePickupPositionsForWorkorder(WORKORDER_ID, {
+    operation: "aggregateUsagePositions", catalogPartId: PART_ID,
+  }, context(), {
+    authorize: async (_context, _id, request) => {
+      assert.deepEqual(request, { moduleKey: "parts", capability: "write", action: "record" });
+      return { workorder: { id: WORKORDER_ID, companyId: COMPANY_ID, locationId: LOCATION_ID,
+        status: "in_progress", mechanicIds: [ACTOR_ID] } };
+    },
+    getPartPositions: async (input) => {
+      scope = input;
+      return { trackingMode: "quantity", uomCode: "ea", units: [{ serialNumber: "private" }], positions: [
+        { id: POSITION_ID, path: "Bay / Shelf", isActive: true, canStore: true, isPickable: true, available: 3, version: 7, cost: 10 },
+        { id: "empty", path: "Empty", isActive: true, canStore: true, isPickable: true, available: 0 },
+        { id: "blocked", path: "Blocked", isActive: false, canStore: true, isPickable: true, available: 4 },
+      ] };
+    },
+  });
+  assert.deepEqual(scope, { partId: PART_ID, locationId: LOCATION_ID,
+    companyIds: [COMPANY_ID], locationIds: [LOCATION_ID], isAdmin: false });
+  assert.deepEqual(result, { positions: [{ id: POSITION_ID, path: "Bay / Shelf",
+    isActive: true, canStore: true, isPickable: true, available: 3 }] });
+});
+
+test("workorder pickup read rejects policy, assignment, lifecycle, and company failures before inventory lookup", async () => {
+  const baseWorkorder = { id: WORKORDER_ID, companyId: COMPANY_ID, locationId: LOCATION_ID,
+    status: "in_progress", mechanicIds: [ACTOR_ID] };
+  for (const [name, workorder, actorContext] of [
+    ["unassigned", { ...baseWorkorder, mechanicIds: [] }, context()],
+    ["completed", { ...baseWorkorder, status: "mechanic_done" }, context()],
+    ["wrong company", { ...baseWorkorder, companyId: "00000000-0000-4000-8000-000000000009" }, context()],
+    ["missing location", { ...baseWorkorder, locationId: null }, context()],
+    ["stale company role", baseWorkorder, { ...context(), sessionMode: "standard" }],
+  ]) {
+    await assert.rejects(readMeasuredUsagePickupPositionsForWorkorder(WORKORDER_ID, {
+      catalogPartId: PART_ID,
+    }, actorContext, {
+      authorize: async () => ({ workorder }),
+      getPartPositions: async () => assert.fail(`${name} reached inventory lookup`),
+    }));
+  }
+  await assert.rejects(readMeasuredUsagePickupPositionsForWorkorder(WORKORDER_ID, {
+    catalogPartId: PART_ID,
+  }, context(), {
+    authorize: async () => { throw Object.assign(new Error("Parts Edit denied"), { statusCode: 403 }); },
+    getPartPositions: async () => assert.fail("policy denial reached inventory lookup"),
+  }), (error) => error.statusCode === 403);
+});
+
+test("workorder pickup read denies foreign parts and excludes non-quantity tracking", async () => {
+  const dependencies = {
+    authorize: async () => ({ workorder: { id: WORKORDER_ID, companyId: COMPANY_ID,
+      locationId: LOCATION_ID, status: "accepted", mechanicIds: [ACTOR_ID] } }),
+  };
+  for (const state of [null, { trackingMode: "serialized", positions: [] }]) {
+    await assert.rejects(readMeasuredUsagePickupPositionsForWorkorder(WORKORDER_ID, {
+      catalogPartId: PART_ID,
+    }, context(), { ...dependencies, getPartPositions: async () => state }),
+    (error) => error.statusCode === 404);
+  }
+});
+
+test("Office and Admin can read scoped pickup positions without mechanic assignment", async () => {
+  for (const role of ["office", "admin"]) {
+    let scope;
+    await readMeasuredUsagePickupPositionsForWorkorder(WORKORDER_ID, { catalogPartId: PART_ID }, context(role), {
+      authorize: async () => ({ workorder: { id: WORKORDER_ID, companyId: COMPANY_ID,
+        locationId: LOCATION_ID, status: "open", mechanicIds: [] } }),
+      getPartPositions: async (input) => { scope = input; return { trackingMode: "measured_bulk", positions: [] }; },
+    });
+    assert.deepEqual(scope.companyIds, [COMPANY_ID]);
+    assert.deepEqual(scope.locationIds, [LOCATION_ID]);
+    assert.equal(scope.isAdmin, role === "admin");
+  }
+});
 
 test("aggregate migration uses repository auth owners and non-null actor idempotency", async () => {
   const sql = await readFile(new URL("../../db/migrations/093_workorder_aggregate_inventory_usage.sql", import.meta.url), "utf8");

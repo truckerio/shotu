@@ -6,7 +6,7 @@ export function LocaleSelector({ locale, onChange, error = "", compact = false, 
   return (
     <div className={`locale-selector ${compact ? "is-compact" : ""}`.trim()}>
       <label>
-        <span>{interfaceText(value, "language.label")}</span>
+        <span hidden={compact}>{interfaceText(value, "language.label")}</span>
         <Dropdown disabled={disabled} value={value} onChange={(event) => onChange?.(normalizeLocale(event.target.value))} aria-label={interfaceText(value, "language.label")}>
           <option value="en">English</option>
           <option value="pa">ਪੰਜਾਬੀ</option>

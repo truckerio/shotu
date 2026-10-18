@@ -22,6 +22,7 @@ import { UnitOfMeasurePicker } from '../../components/forms/UnitOfMeasurePicker.
 import { SecondaryDetailPanel,SecondaryDetailSection } from '../../components/ui/SecondaryDetailPanel.jsx';
 import { ReceiptLinesEditor } from '../office/ReceiptLinesEditor.jsx';
 import { receiptLinePayload } from '../office/receipt-lines-model.js';
+import { findPurchaseReceiptHandoffOrder } from './purchase-receipt-handoff.js';
 import { OperationalCollectionTabs } from '../../components/operations/OperationalCollectionPage.jsx';
 import './inventory-workflows.css';
 import '../office/physical-receipt-confirmation.css';
@@ -42,7 +43,7 @@ const purchaseOrderColumns=[
 export function InventoryPurchases(props) {
  const demandHandoffKey=`inventory-purchase-demand-handoff:${props.actorId}`;
  const [demandDraft,setDemandDraft]=useState(null);
- const [section,setSection]=useState(props.initialReceiptOrderId || props.initialPurchaseOrderId ? "purchase_orders" : "needs_ordering");
+ const [section,setSection]=useState(props.initialReceiptHandoff?.poId || props.initialPurchaseOrderId ? "purchase_orders" : "needs_ordering");
  useEffect(()=>{if(demandDraft||!props.locations.length)return;try{const saved=JSON.parse(localStorage.getItem(demandHandoffKey));if(saved&&props.locations.some(location=>location.id===saved.locationId)&&Array.isArray(saved.lines)&&saved.lines.length){setDemandDraft(saved);setSection('purchase_orders');}else if(saved)localStorage.removeItem(demandHandoffKey);}catch{localStorage.removeItem(demandHandoffKey);}},[demandDraft,demandHandoffKey,props.locations]);
  function startDemandOrder(lines,locationId){const handoff={lines,locationId,key:crypto.randomUUID()};localStorage.setItem(demandHandoffKey,JSON.stringify(handoff));setDemandDraft(handoff);setSection('purchase_orders');}
  function finishDemandOrder(){localStorage.removeItem(demandHandoffKey);setDemandDraft(null);}
@@ -52,17 +53,18 @@ export function InventoryPurchases(props) {
      {id:'purchase_orders',label:'Purchase orders'},
    ]}/>
    {section==='needs_ordering'?<InventoryNeedsOrdering {...props} onCreateOrder={startDemandOrder}/>:null}
-   {section==='purchase_orders'?<PurchaseOrders {...props} key={demandDraft?.key||'purchase-orders'} initialDraftLines={demandDraft?.lines||[]} initialLocationId={demandDraft?.locationId||''} demandDraftId={demandDraft?.key||''} onDemandOrderFinished={finishDemandOrder}/>:null}
+   {section==='purchase_orders'?<PurchaseOrders {...props} key={demandDraft?.key||'purchase-orders'} initialDraftLines={demandDraft?.lines||[]} initialLocationId={props.initialReceiptHandoff?.locationId||demandDraft?.locationId||(props.initialPurchaseOrderId&&props.initialPurchaseLocationId)||''} demandDraftId={demandDraft?.key||''} onDemandOrderFinished={finishDemandOrder}/>:null}
  </section>;
 }
 
-function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,initialReceiptOrderId='',initialPurchaseOrderId='',initialPurchaseOrderNumber='',initialDraftLines=[],initialLocationId='',demandDraftId='',onDemandOrderFinished}) {
+function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,initialReceiptHandoff=null,onReceiptHandoffConsumed,initialPurchaseOrderId='',initialPurchaseOrderNumber='',initialDraftLines=[],initialLocationId='',demandDraftId='',onDemandOrderFinished}) {
  const [receiptOrder,setReceiptOrder]=useState(null),[receiptLines,setReceiptLines]=useState([]),[receiptReady,setReceiptReady]=useState(false),[receiptReference,setReceiptReference]=useState('');
  const [receiptPositions,setReceiptPositions]=useState([]),[receiptPositionsLoading,setReceiptPositionsLoading]=useState(false),[receiptPositionsError,setReceiptPositionsError]=useState(''),[receiptPositionsReload,setReceiptPositionsReload]=useState(0);
  const receiptKeyRef=useRef('');
+ const consumedReceiptHandoffKeyRef=useRef('');
  const [billUploadRequested,setBillUploadRequested]=useState(false);
  const [filtersOpen,setFiltersOpen]=useState(false);
- const [orderStatus,setOrderStatus]=useState('all'),[supplierFilter,setSupplierFilter]=useState(''),[searchFilter,setSearchFilter]=useState(initialPurchaseOrderNumber);
+ const [orderStatus,setOrderStatus]=useState('all'),[supplierFilter,setSupplierFilter]=useState(''),[searchFilter,setSearchFilter]=useState(initialReceiptHandoff?.poNumber||initialPurchaseOrderNumber);
  const showOrders=true;
  const [locationId,setLocationId]=useState(()=>locations.some(location=>location.id===initialLocationId)?initialLocationId:locations[0]?.id||'');
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[refresh,setRefresh]=useState(0);
@@ -134,10 +136,17 @@ function PurchaseOrders({locations,actorId,view='purchases',onInvoice,onStock,in
  }
  function openReceipt(order){receiptKeyRef.current=crypto.randomUUID();setError('');setReceiptOrder(order);setReceiptLines([]);setReceiptReady(false);setReceiptReference('');}
  useEffect(()=>{
-   if(!initialReceiptOrderId||!data?.items?.length)return;
-   const order=data.items.find((entry)=>entry.id===initialReceiptOrderId);
-   if(order)openReceipt(order);
- },[data,initialReceiptOrderId]);
+   const order=findPurchaseReceiptHandoffOrder(initialReceiptHandoff,locationId,data?.items,consumedReceiptHandoffKeyRef.current);
+   if(order){
+     consumedReceiptHandoffKeyRef.current=initialReceiptHandoff.key;
+     openReceipt(order);
+     onReceiptHandoffConsumed?.(initialReceiptHandoff.key);
+   }else if(initialReceiptHandoff?.key&&initialReceiptHandoff.key!==consumedReceiptHandoffKeyRef.current&&initialReceiptHandoff.locationId===locationId&&data&&!purchaseQueue.loading&&!purchaseQueue.error){
+     consumedReceiptHandoffKeyRef.current=initialReceiptHandoff.key;
+     setError(`Purchase order ${initialReceiptHandoff.poNumber||initialReceiptHandoff.poId} was not found in this shop. Search the purchase orders to open it.`);
+     onReceiptHandoffConsumed?.(initialReceiptHandoff.key);
+   }
+ },[data,initialReceiptHandoff,locationId,onReceiptHandoffConsumed,purchaseQueue.loading,purchaseQueue.error]);
  useEffect(()=>{
    if(!initialPurchaseOrderId||!data?.items?.length)return;
    const order=data.items.find((entry)=>entry.id===initialPurchaseOrderId);

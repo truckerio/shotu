@@ -135,6 +135,7 @@
  .purchase-form-new-supplier { grid-template-columns:1fr; }
  .purchase-more-details > div { grid-template-columns:1fr; }
  .purchase-order-form { padding:12px; }
+ .purchase-order-form input,.purchase-order-form textarea { min-height:44px; }
  .purchase-order-form .purchase-draft-actions { flex-wrap:wrap; }
 }
 
@@ -174,6 +175,7 @@
 .purchase-editor-dialog input,.purchase-editor-dialog textarea { width:100%; box-sizing:border-box; border:1px solid #d0d5dd; border-radius:6px; font:inherit; font-size:13px; }
 @media(max-width:700px) {
  .purchase-filter-bar { grid-template-columns:1fr 1fr; }
+ .purchase-filter-bar input { min-height:44px; }
  .purchase-filter-bar > label:first-child { grid-column:1/-1; }
  .purchase-editor-overlay { padding:12px; }
  .purchase-editor-modal { max-height:calc(100dvh - 24px); }

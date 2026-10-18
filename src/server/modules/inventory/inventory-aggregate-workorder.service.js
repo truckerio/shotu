@@ -7,6 +7,10 @@ import { InventoryError, inventoryNotFound } from "./inventory.errors.js";
 import { z } from "zod";
 import { hasQuantityPrecision, validateQuantityUnit } from "../parts/quantity-uom.js";
 import { resolveInventoryResourceScope } from "./inventory-effective-scope.js";
+import { getPartPositions } from "../../db/repositories/inventory-positions.repo.js";
+import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
+import { effectiveCompanyRole } from "../../auth/company-role.js";
+import { permissionDenied } from "../../auth/errors.js";
 
 const reserveSchema = z.object({
   catalogPartId: z.string().uuid(),
@@ -32,6 +36,44 @@ function hash(value) {
 
 function fail(code, message, statusCode = 409) {
   throw new InventoryError(message, { code, statusCode });
+}
+
+export async function readMeasuredUsagePickupPositionsForWorkorder(workorderId, input, context, dependencies = {}) {
+  const { operation: _operation, ...payload } = input;
+  const { catalogPartId } = z.object({ catalogPartId: z.string().uuid() }).strict().parse(payload);
+  const authorization = await (dependencies.authorize || authorizeWorkorderModule)(context, workorderId, {
+    moduleKey: "parts", capability: "write", action: "record",
+  });
+  const workorder = authorization.workorder;
+  if (workorder.id !== workorderId || !workorder.locationId) throw inventoryNotFound();
+  const role = effectiveCompanyRole(context, workorder.companyId);
+  if (!["mechanic", "office", "admin"].includes(role)) throw permissionDenied();
+  if (role === "mechanic") {
+    if (!workorder.mechanicIds?.includes(context.actor.id)) throw permissionDenied();
+    if (!["accepted", "in_progress"].includes(workorder.status)) {
+      fail("AGGREGATE_USAGE_WORKORDER_INACTIVE", "Measured inventory can be reserved only for active accepted work.");
+    }
+  }
+  const partState = await (dependencies.getPartPositions || getPartPositions)({
+    partId: catalogPartId,
+    locationId: workorder.locationId,
+    companyIds: [workorder.companyId],
+    locationIds: [workorder.locationId],
+    isAdmin: role === "admin",
+  });
+  if (!partState || !["quantity", "measured_bulk"].includes(partState.trackingMode)) throw inventoryNotFound();
+  return {
+    positions: (partState.positions || [])
+      .filter((position) => position.isActive && position.canStore && position.isPickable && Number(position.available) > 0)
+      .map((position) => ({
+        id: position.id,
+        path: position.path,
+        isActive: true,
+        canStore: true,
+        isPickable: true,
+        available: Number(position.available),
+      })),
+  };
 }
 
 export async function reserveMeasuredUsageForWorkorder(workorderId, input, context, dependencies = {}) {

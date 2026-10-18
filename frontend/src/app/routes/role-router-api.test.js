@@ -27,3 +27,14 @@ test("admin diagnosis and repair autosave uses the canonical module endpoint", a
     recordActivity: true,
   });
 });
+
+test("mechanic concern-only autosave uses the protected mechanic progress endpoint", async () => {
+  const calls = [];
+  const result = await updateDetailDiagnosisRepair({ role: "mechanic", workorderId: "wo 1", concern: "Office request; inspected leak", expectedVersion: 7, recordActivity: true }, async (...args) => {
+    calls.push(args);
+    return { concern: "Office request; inspected leak", version: 8 };
+  });
+  assert.equal(result.version, 8);
+  assert.equal(calls[0][0], "/api/mechanic/workorders/wo%201/progress");
+  assert.deepEqual(JSON.parse(calls[0][1].body), { concern: "Office request; inspected leak", expectedVersion: 7, recordActivity: true });
+});

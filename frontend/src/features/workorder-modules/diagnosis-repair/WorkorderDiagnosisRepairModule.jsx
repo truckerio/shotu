@@ -2,6 +2,7 @@ import { FormField, NarrativeField } from "../../../components/forms/index.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
 import { MechanicProgressStatus } from "../../mechanic/progress/MechanicProgressStatus.jsx";
+import { interfaceText } from "../../../i18n/index.js";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
 
 function writable(access) {
@@ -14,7 +15,7 @@ export function WorkorderDiagnosisRepairModule({
   allowedActions = {},
   diagnosis,
   locale = "en",
-  localeText = (value) => value,
+  localeText = (key) => interfaceText(locale, key),
   mechanicProgress,
   onChange,
   onSelect,

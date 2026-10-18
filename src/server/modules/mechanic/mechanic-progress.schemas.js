@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 export const mechanicProgressSchema = z.object({
-  diagnosis: z.string().trim().max(5000).default(""),
-  workPerformed: z.string().trim().max(5000).default(""),
+  concern: z.string().trim().min(1).max(2000).optional(),
+  diagnosis: z.string().trim().max(5000).optional(),
+  workPerformed: z.string().trim().max(5000).optional(),
   laborHours: z.union([
     z.literal(""),
     z.number().positive().max(9999),

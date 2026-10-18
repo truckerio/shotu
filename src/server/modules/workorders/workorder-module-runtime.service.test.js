@@ -211,6 +211,51 @@ test("office and admin diagnosis edits use office persistence instead of mechani
   }
 });
 
+test("mechanic concern-only progress authorizes Concern without requiring Diagnosis access", async () => {
+  const authorizations = [];
+  const input = { concern: "Inspect brakes", expectedVersion: 4 };
+  const result = await patchWorkorderModule(scopedContext("mechanic", "mechanic-1"), "wo-1", "diagnosisRepair", input, {
+    authorize: async (_context, _id, request) => {
+      authorizations.push(request.moduleKey);
+      if (request.moduleKey === "diagnosisRepair") throw new Error("Diagnosis hidden");
+      return { workorder: authorizedWorkorder };
+    },
+    updateMechanic: async (...args) => args,
+  });
+  assert.deepEqual(authorizations, ["concern"]);
+  assert.deepEqual(result[2], input);
+});
+
+test("mechanic mixed progress requires both Concern and Diagnosis write access", async () => {
+  const authorizations = [];
+  await assert.rejects(patchWorkorderModule(scopedContext("mechanic", "mechanic-1"), "wo-1", "diagnosisRepair", {
+    concern: "Inspect brakes", diagnosis: "Worn pad", expectedVersion: 4,
+  }, {
+    authorize: async (_context, _id, request) => {
+      authorizations.push(request.moduleKey);
+      if (request.moduleKey === "concern") throw new Error("Concern read only");
+      return { workorder: authorizedWorkorder };
+    },
+    updateMechanic: async () => assert.fail("denied mutation must not persist"),
+  }), /Concern read only/);
+  assert.deepEqual(authorizations, ["diagnosisRepair", "concern"]);
+});
+
+test("mechanic cannot use administrative Concern patches to change office notes or unit fields", async () => {
+  const mechanic = scopedContext("mechanic", "mechanic-1");
+  const dependencies = {
+    authorize: async () => ({ workorder: authorizedWorkorder }),
+    authorizeMany: async () => ({ workorder: authorizedWorkorder }),
+    updateOffice: async () => assert.fail("mechanic must not reach office persistence"),
+  };
+  await assert.rejects(patchWorkorderModule(mechanic, "wo-1", "concern", {
+    officeNotes: "Forged office note",
+  }, dependencies), (error) => error.statusCode === 403);
+  await assert.rejects(patchWorkorderModules(mechanic, "wo-1", ["concern"], {
+    formData: { unitNo: "Forged unit" },
+  }, dependencies), (error) => error.statusCode === 403);
+});
+
 test("compatibility batch patch authorizes every touched module and persists once", async () => {
   const calls = [];
   const result = await patchWorkorderModules(context, "wo-1", ["unit", "schedule"], { formData: { unitNo: "17" } }, {
@@ -496,6 +541,21 @@ test("mechanic part requests use Parts read access without granting actual-part 
   assert.equal(officeAuthorizations[0].capability,"write");
   assert.equal(officeResult[1].actorRole,"office");
   assert.equal(officeResult[1].mechanicUserId,"actor-1");
+});
+
+test("measured pickup action requires Parts write and forwards only authorized workorder identity", async () => {
+  const requests = [];
+  const input = { operation: "aggregateUsagePositions", catalogPartId: "00000000-0000-4000-8000-000000000006" };
+  const result = await runWorkorderModuleAction(scopedContext("mechanic", "mechanic-1"), "wo-1",
+    "parts", "record", input, {
+      authorize: async (_context, _id, request) => { requests.push(request); return { workorder: authorizedWorkorder }; },
+      readMeasuredUsagePositions: async (...args) => args,
+    });
+  assert.equal(requests[0].moduleKey, "parts");
+  assert.equal(requests[0].capability, "write");
+  assert.equal(requests[0].action, "record");
+  assert.equal(result[0], "wo-1");
+  assert.deepEqual(result[1], input);
 });
 
 test("a primary Admin uses mechanic request authority in its mechanic company", async () => {

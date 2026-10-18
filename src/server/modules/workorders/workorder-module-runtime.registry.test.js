@@ -38,3 +38,12 @@ test("runtime registry owns stable route action allowlists", () => {
     repairOrder: "x".repeat(2001),
   }).success, false);
 });
+
+test("measured pickup action accepts only a catalog part identity", () => {
+  const schema = moduleActionSchema("parts", "record");
+  const valid = { operation: "aggregateUsagePositions", catalogPartId: "00000000-0000-4000-8000-000000000001" };
+  assert.deepEqual(schema.parse(valid), valid);
+  assert.equal(schema.safeParse({ ...valid, locationId: "00000000-0000-4000-8000-000000000002" }).success, false);
+  assert.equal(schema.safeParse({ ...valid, companyId: "00000000-0000-4000-8000-000000000003" }).success, false);
+  assert.equal(schema.safeParse({ operation: "aggregateUsagePositions", catalogPartId: "bad" }).success, false);
+});

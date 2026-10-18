@@ -18,7 +18,7 @@ function textValue(value) {
 }
 
 function changedDetails(before, next) {
-  return ["diagnosis", "workPerformed", "laborHours"]
+  return ["concern", "diagnosis", "workPerformed", "laborHours"]
     .filter((field) => before[field] !== next[field])
     .map((field) => ({
       field,
@@ -29,6 +29,7 @@ function changedDetails(before, next) {
 
 function publicProgress(row) {
   return {
+    concern: row.concern || "",
     diagnosis: row.diagnosis || "",
     workPerformed: row.work_performed || "",
     laborHours: String(row.form_data?.laborHours || ""),
@@ -40,6 +41,7 @@ function publicProgress(row) {
 export async function saveMechanicWorkorderProgress({
   workorderId,
   mechanicUserId,
+  concern,
   diagnosis,
   workPerformed,
   laborHours,
@@ -56,6 +58,7 @@ export async function saveMechanicWorkorderProgress({
           wo.id,
           wo.company_id,
           wo.status,
+          wo.concern,
           wo.diagnosis,
           wo.work_performed,
           wo.form_data,
@@ -92,23 +95,26 @@ export async function saveMechanicWorkorderProgress({
     }
 
     const before = {
+      concern: current.concern || "",
       diagnosis: current.diagnosis || "",
       workPerformed: current.work_performed || "",
       laborHours: String(current.form_data?.laborHours || ""),
     };
     const next = {
-      diagnosis: textValue(diagnosis),
-      workPerformed: textValue(workPerformed),
+      concern: concern === undefined ? before.concern : textValue(concern),
+      diagnosis: diagnosis === undefined ? before.diagnosis : textValue(diagnosis),
+      workPerformed: workPerformed === undefined ? before.workPerformed : textValue(workPerformed),
       laborHours: laborHours === undefined ? before.laborHours : textValue(laborHours),
     };
     const changes = changedDetails(before, next);
+    const concernChanged = changes.some(({ field }) => field === "concern");
     if (laborHours !== undefined) assertWorkorderLaborQuantity({ ...current.form_data, laborHours: next.laborHours });
     const existingPendingFields = Array.isArray(current.progress_pending_fields)
-      ? current.progress_pending_fields.map(String)
+      ? current.progress_pending_fields.map(String).filter((field) => field !== "concern")
       : [];
     const pendingFields = [...new Set([
       ...existingPendingFields,
-      ...changes.map(({ field }) => field),
+      ...changes.map(({ field }) => field).filter((field) => field !== "concern"),
     ])];
     const shouldRecordActivity = recordActivity && pendingFields.length > 0;
     if (!changes.length && !shouldRecordActivity) {
@@ -123,7 +129,8 @@ export async function saveMechanicWorkorderProgress({
     const updatedResult = await client.query(
       `
         update operational_workorders
-        set diagnosis = $3,
+        set concern = $10,
+            diagnosis = $3,
             work_performed = $4,
             form_data = $9::jsonb,
             progress_version = progress_version + $6,
@@ -141,7 +148,7 @@ export async function saveMechanicWorkorderProgress({
               and assignment.mechanic_user_id = $2
               and assignment.active = true
           )
-        returning diagnosis, work_performed, form_data, progress_version, updated_at
+        returning concern, diagnosis, work_performed, form_data, progress_version, updated_at
       `,
       [
         workorderId,
@@ -152,11 +159,25 @@ export async function saveMechanicWorkorderProgress({
         changes.length ? 1 : 0,
         shouldRecordActivity,
         JSON.stringify(pendingFields),
-        JSON.stringify({ ...(current.form_data || {}), laborHours: next.laborHours }),
+        JSON.stringify({
+          ...(current.form_data || {}),
+          laborHours: next.laborHours,
+          ...(concern === undefined ? {} : { mechanicConcern: next.concern }),
+        }),
+        next.concern,
       ],
     );
     const updated = updatedResult.rows[0];
     if (!updated) throw new WorkorderProgressConflictError();
+
+    if (concernChanged) {
+      await client.query(
+        `insert into workorder_field_events (
+           workorder_id, field_key, field_label, old_value, new_value, changed_by_user_id
+         ) values ($1, 'concern', 'Concern', $2, $3, $4)`,
+        [workorderId, before.concern, next.concern, mechanicUserId],
+      );
+    }
 
     if (shouldRecordActivity) {
       await client.query(

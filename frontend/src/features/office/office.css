@@ -49,6 +49,10 @@
   grid-template-columns: 1fr;
 }
 
+.office-phone-operations-nav {
+  display: none;
+}
+
 .office-shell {
   align-items: stretch;
   display: grid;
@@ -426,7 +430,8 @@
 }
 
 @media (max-width: 700px) {
-  .office-phone-account-header { display: flex; }
+  .office-phone-account-header { display: none; }
+  .office-home .profile-menu-mobile-action { display: none; }
   .office-shell {
     display: block;
     min-height: 0;
@@ -451,11 +456,11 @@
   }
 
   .office-main-content {
-    padding: 12px 0 82px;
+    padding: 12px 0 calc(82px + env(safe-area-inset-bottom));
   }
 
   .workspace-operations.office-home {
-    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+    padding-bottom: 0;
   }
 
   .office-operations-page-header {
@@ -474,13 +479,56 @@
     width: auto;
   }
 
+  .office-phone-operations-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 16px 12px;
+  }
+
+  .office-phone-operations-nav button {
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    color: #344054;
+    flex: 1 0 auto;
+    font: inherit;
+    font-weight: var(--weight-semibold);
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+
+  .office-phone-operations-nav button.active {
+    background: #eff8ff;
+    border-color: #84adff;
+    color: #175cd3;
+  }
+
+  .office-phone-operations-nav button:focus-visible {
+    outline: 2px solid #175cd3;
+    outline-offset: 2px;
+  }
+
+  .office-home .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs {
+    gap: 6px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .office-home .mobile-queue-toolbar.mobile-queue-toolbar .mechanic-queue-tabs button {
+    flex: 0 0 auto;
+    gap: 5px;
+    padding-inline: 5px;
+  }
+
   .office-mobile-nav {
     align-items: stretch;
     background: rgb(255 255 255 / 96%);
     border-top: 1px solid #d0d5dd;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     height: calc(58px + env(safe-area-inset-bottom));
     left: 0;
     padding: 4px 8px env(safe-area-inset-bottom);

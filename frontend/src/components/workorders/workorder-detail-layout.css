@@ -54,3 +54,14 @@
     padding-bottom: 8px;
   }
 }
+
+@media (max-width: 700px) {
+  /* A reserved desktop scrollbar made the form appear off-center on phones. */
+  .workorder-detail-layout .control-panel {
+    scrollbar-gutter: auto;
+  }
+
+  .workorder-detail-page .control-panel[data-workorder-presentation="one-page"] :is(.workorder-form-layout, .detail-context-bar) {
+    padding-inline: var(--mobile-page-gutter);
+  }
+}

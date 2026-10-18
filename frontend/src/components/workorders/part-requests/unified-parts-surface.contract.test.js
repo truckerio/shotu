@@ -15,13 +15,16 @@ const panelCss = source("../part-requests-panel.css");
 const legacyCss = source("./legacy-part-requests.css");
 const mechanicLocales = ["en", "es", "pa"].map((locale) => source(`../../../i18n/locales/${locale}.js`));
 
-test("mechanic parts keeps actual use visible and makes requesting a single permission-gated disclosure", () => {
+test("mechanic parts shares the one-page used-parts layout with requests and supply below", () => {
   const usedParts = mechanicSurface.indexOf("<UsedPartsSection");
   const requestAction = mechanicSurface.indexOf("mechanic-part-request-action");
-  assert.ok(usedParts >= 0 && requestAction > usedParts);
+  const openQueue = mechanicSurface.indexOf("openRequests.length");
+  assert.ok(usedParts >= 0 && requestAction > usedParts && openQueue > requestAction);
   assert.match(mechanicSurface, /mechanicActions\.canRequestPart \? \(/);
   assert.match(mechanicSurface, /aria-expanded=\{requestFormOpen\}/);
   assert.match(mechanicSurface, /aria-controls=\{requestPartPanelId\}/);
+  assert.match(mechanicSurface, /presentation=\{presentation\}/);
+  assert.doesNotMatch(mechanicSurface, /mechanic-used-parts-disclosure/);
   assert.match(mechanicSurface, /t\("parts\.requestsSupply"\)/);
   assert.match(mechanicSurface, /t\("parts\.completedRequests"\)/);
   assert.doesNotMatch(mechanicSurface, /usedPartAction|needPartAction|activeAction|aria-pressed/);
@@ -77,6 +80,7 @@ test("office planning follows actual used parts and cannot use the used-part end
 
 test("mechanic request labels remain owned by every supported locale", () => {
   for (const dictionary of mechanicLocales) {
+    assert.match(dictionary, /"parts\.laborAndPartsUsed":\s*"[^"\n]+"/);
     assert.match(dictionary, /"parts\.requestsSupply":\s*"[^"\n]+"/);
     assert.match(dictionary, /"parts\.completedRequests":\s*"[^"\n]+"/);
     assert.match(dictionary, /"parts\.usage\.not_issued":\s*"[^"\n]+"/);

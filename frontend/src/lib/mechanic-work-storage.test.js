@@ -94,11 +94,14 @@ test("progress backups cannot cross mechanic identities", () => {
   globalThis.window = { localStorage: storage };
   try {
     writeProgressBackup("mechanic-a", "workorder-1", {
+      concern: "Office request; mechanic found leak",
       diagnosis: "actor A diagnosis",
       workPerformed: "actor A work",
-    });
+    }, 3);
 
+    assert.equal(readProgressBackup("mechanic-a", "workorder-1").concern, "Office request; mechanic found leak");
     assert.equal(readProgressBackup("mechanic-a", "workorder-1").diagnosis, "actor A diagnosis");
+    assert.equal(readProgressBackup("mechanic-a", "workorder-1").expectedVersion, 3);
     assert.equal(readProgressBackup("mechanic-b", "workorder-1"), null);
     assert.equal(storage.getItem("shotu:mechanic-progress:workorder-1"), null);
 
@@ -122,4 +125,22 @@ test("normal router unmount preserves recovery data while explicit session exits
   assert.match(profile, /authClient\.signOut\(\)[\s\S]*purgeMechanicWorkStorage\(\)/);
   assert.match(authGate, /authClient\.signOut\(\)[\s\S]*purgeMechanicWorkStorage\(\)/);
   assert.match(kiosk, /authClient\.signOut\(\)[\s\S]*purgeMechanicWorkStorage\(\)/);
+});
+
+test("concern backup recovery respects current field permissions and old backups", async () => {
+  const { mechanicProgressRecoveryPatch } = await import("../features/mechanic/progress/progress-storage.js");
+  const backup = { expectedVersion: 3, concern: "Inspected; found leak", diagnosis: "Old diagnosis", workPerformed: "Old repair", laborHours: "2" };
+  assert.deepEqual(mechanicProgressRecoveryPatch(backup, { saveConcern: true }, 3), { mechanicConcern: "Inspected; found leak" });
+  assert.deepEqual(mechanicProgressRecoveryPatch(backup, {}), {});
+  assert.equal(Object.hasOwn(mechanicProgressRecoveryPatch({ ...backup, concern: null }, { saveConcern: true }, 3), "mechanicConcern"), false);
+  assert.deepEqual(mechanicProgressRecoveryPatch({ ...backup, concern: "" }, { saveConcern: true }, 3), { mechanicConcern: "" });
+});
+
+test("older concern backups cannot overwrite a newer office concern after reload", async () => {
+  const { mechanicProgressRecoveryConflict, mechanicProgressRecoveryPatch } = await import("../features/mechanic/progress/progress-storage.js");
+  const backup = { concern: "Old mechanic offline draft", expectedVersion: 3, diagnosis: "Old", workPerformed: "Old", laborHours: "1" };
+  assert.equal(mechanicProgressRecoveryConflict(backup, 4), true);
+  assert.deepEqual(mechanicProgressRecoveryPatch(backup, { saveConcern: true, saveNotes: true }, 4), {});
+  assert.equal(mechanicProgressRecoveryConflict({ ...backup, expectedVersion: null }, 4), true);
+  assert.equal(mechanicProgressRecoveryConflict({ concern: null, expectedVersion: null }, 4), false);
 });

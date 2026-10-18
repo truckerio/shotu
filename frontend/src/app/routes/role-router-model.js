@@ -172,7 +172,7 @@ export function workorderFormValues({ detail, current, officeLocations }) {
     mileage: savedForm.mileage || (asset.lastOdometerMiles ? String(Math.round(Number(asset.lastOdometerMiles))) : ""),
     model: savedForm.model || model,
     vinNo: savedForm.vinNo || asset.vin || "",
-    mechanicConcern: savedForm.mechanicConcern || workorder.concern || "",
+    mechanicConcern: workorder.concern ?? savedForm.mechanicConcern ?? "",
     ...mechanicProgressFields,
     mechanicName: assignedMechanicName || savedForm.mechanicName,
     officeNotes: workorder.officeNotes || savedForm.officeNotes || "",

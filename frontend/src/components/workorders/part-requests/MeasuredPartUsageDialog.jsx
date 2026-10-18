@@ -64,6 +64,7 @@ export function MeasuredPartUsageDialog({
   locationId,
   assetId,
   suggestionsEnabled = true,
+  allowStockIntake = true,
   locale = "en",
   onClose,
   onReserved,
@@ -84,11 +85,16 @@ export function MeasuredPartUsageDialog({
   useEffect(() => {
     if (!open) return;
     setQuantity("1"); setRepairOrder(repairOrderAfterCatalogSelection("", catalogPart)); setMessage(""); setCompleted(false); setPositions([]); setSourcePositionId("");
-    api(`/api/office/inventory/parts/${encodeURIComponent(catalogPart.id)}/locations/${encodeURIComponent(locationId)}/positions`)
-      .then((result) => setPositions((result.positions || []).filter((position) => position.isActive && position.canStore && position.isPickable && Number(position.available) > 0)))
-      .catch((error) => setMessage(error?.message || t("parts.aggregateSaveFailed")));
+    let active = true;
+    api(`/api/workorders/${encodeURIComponent(workorderId)}/modules/parts/actions/record`, {
+      method: "POST",
+      body: JSON.stringify({ operation: "aggregateUsagePositions", catalogPartId: catalogPart.id }),
+    })
+      .then((result) => { if (active) setPositions((result.result?.positions || []).filter((position) => position.isActive && position.canStore && position.isPickable && Number(position.available) > 0)); })
+      .catch((error) => { if (active) setMessage(error?.message || t("parts.aggregateSaveFailed")); });
     window.requestAnimationFrame(() => quantityRef.current?.focus());
-  }, [open, catalogPart?.id, locationId]);
+    return () => { active = false; };
+  }, [open, catalogPart?.id, locationId, workorderId]);
 
   async function reserve(event) {
     event.preventDefault();
@@ -119,7 +125,7 @@ export function MeasuredPartUsageDialog({
     <Modal className="measured-part-dialog-modal">
       <Dialog className="measured-part-dialog" aria-labelledby={titleId} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); onClose?.(); } }}>
         <header><div><p>{catalogPart?.trackingMode === "quantity" ? t("parts.quantity") : t("parts.measuredMaterial")}</p><h2 id={titleId}>{catalogPart?.partNumber}</h2><span>{catalogPart?.description}</span></div><button type="button" onClick={onClose} disabled={busy} aria-label={t("parts.closeMeasuredDialog")}>×</button></header>
-        <StockIntakeControl catalogPartId={catalogPart?.id} locationId={locationId} onReceived={() => setMessage("Stock added. Enter the quantity to reserve for this workorder.")} />
+        {allowStockIntake ? <StockIntakeControl catalogPartId={catalogPart?.id} locationId={locationId} onReceived={() => setMessage("Stock added. Enter the quantity to reserve for this workorder.")} /> : null}
         <form onSubmit={reserve}>
           {message ? <p className="measured-part-message" role="alert">{message}</p> : null}
           <label>{t("parts.quantity")}<input ref={quantityRef} type="number" min={amount.step} step={amount.step} max={amount.max} value={quantity} onChange={(event) => { setQuantity(event.target.value); setSourcePositionId(""); }} disabled={busy} /></label>

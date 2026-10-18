@@ -14,11 +14,31 @@ import {
   noStockUsedPartDraft,
   readonlyUsedParts,
   removeUsedPart,
+  removeUsedPartDraft,
   savableNoStockUsedPart,
   usedPartQuantityAfterPartNumberChange,
   usedPartsAccessState,
   workorderPreviewParts,
 } from "./used-parts-model.js";
+
+test("draft removal preserves neighboring entries and rebases the selected row", () => {
+  const rows = [{ partNo: "first" }, { partNo: "middle", qty: "2", repairOrder: "keep text" }, { partNo: "last" }];
+  assert.deepEqual(removeUsedPartDraft(rows, 0, 2), { rows: rows.slice(1), activeIndex: 1, removedActive: false });
+  assert.deepEqual(removeUsedPartDraft(rows, 1, 1), { rows: [rows[0], rows[2]], activeIndex: -1, removedActive: true });
+  assert.deepEqual(removeUsedPartDraft(rows, 2, 0), { rows: rows.slice(0, 2), activeIndex: 0, removedActive: false });
+  assert.deepEqual(removeUsedPartDraft([rows[0]], 0, 0), { rows: [], activeIndex: -1, removedActive: true });
+  assert.equal(rows.length, 3);
+});
+
+test("draft removal keeps blank neighbors, ignores invalid targets, and frees the row limit", () => {
+  const rows = Array.from({ length: 18 }, () => ({ partNo: "", qty: "", repairOrder: "" }));
+  for (const index of [-1, 18, 0.5, undefined]) assert.equal(removeUsedPartDraft(rows, index), null);
+  const result = removeUsedPartDraft(rows, 0);
+  assert.equal(result.rows.length, 17);
+  assert.equal(result.activeIndex, -1);
+  assert.equal(canAddUsedPartDraft(0, result.rows.length), true);
+  assert.deepEqual(removeUsedPartDraft([], 0), null);
+});
 
 test("zero used parts stay empty until Add part", () => {
   assert.deepEqual(normalizeUsedParts([], 0), []);

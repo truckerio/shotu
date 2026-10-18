@@ -230,6 +230,7 @@
 .admin-invite-result p { color: #475467; line-height: 1.5; margin: 0 0 4px; }
 .admin-invite-result code { overflow-wrap: anywhere; }
 .admin-mobile-nav { display: none; }
+.admin-phone-section-nav { display: none; }
 @media (min-width: 1800px) {
   .admin-template-layout { grid-template-columns: minmax(400px, 480px) minmax(0, 1fr); }
   .admin-template-preview > div { height: calc(8.5in * .82); width: calc(11in * .82); }
@@ -261,6 +262,27 @@
 @media (max-width: 700px) {
   .admin-shell { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
   .admin-content { padding: 20px 14px 32px; }
+  .admin-phone-section-nav {
+    display: grid;
+    gap: 4px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 12px 12px 0;
+  }
+  .admin-phone-section-nav.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-phone-section-nav button {
+    background: #fff;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    color: #344054;
+    font: inherit;
+    font-size: var(--text-body);
+    font-weight: var(--weight-semibold);
+    min-height: 44px;
+    padding: 8px 4px;
+  }
+  .admin-phone-section-nav button.active { background: #eff8ff; border-color: #84adff; color: #175cd3; }
+  .admin-phone-section-nav button:focus-visible { outline: 2px solid #1570ef; outline-offset: 2px; }
+  .admin-phone-section-nav + .admin-content.admin-operations-content { min-height: 0; }
   .admin-workspace-header { display: none; }
   .admin-workspace-header .workspace-header-actions { display: none; }
   .admin-mobile-nav {

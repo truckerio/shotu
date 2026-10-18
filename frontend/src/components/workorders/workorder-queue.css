@@ -592,7 +592,7 @@
     padding: 5px 8px 7px;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
-    touch-action: pan-x;
+    touch-action: auto;
     width: 100%;
   }
 
@@ -634,12 +634,8 @@
 
   .mechanic-work-open .ops-status {
     max-width: min(45vw, 150px);
-  }
-
-  .mechanic-work-open .ops-status span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .work-row-identity,
@@ -709,11 +705,11 @@
   }
 
   .queue-variant-office .work-row-mobile-meta { grid-row: 5; }
-  .queue-variant-surveillance .work-row-mobile-meta { grid-row: 2; }
+  .queue-variant-surveillance .work-row-mobile-meta { grid-row: 3; }
   .queue-variant-surveillance .work-row-created {
     display: block;
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 4;
   }
 
   .work-row-chevron {

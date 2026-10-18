@@ -350,7 +350,7 @@
 @media (max-width: 560px) {
   .kiosk-shell {
     align-items: start;
-    padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+    padding: max(16px, env(safe-area-inset-top)) var(--mobile-page-gutter) max(16px, env(safe-area-inset-bottom));
   }
 
   .kiosk-panel {
@@ -389,8 +389,8 @@
 
   .kiosk-return-button {
     bottom: max(12px, env(safe-area-inset-bottom));
-    left: 14px;
-    right: 14px;
+    left: var(--mobile-page-gutter);
+    right: var(--mobile-page-gutter);
   }
 }
 

@@ -106,7 +106,7 @@
 .inventory-part-detail-pages button[aria-current="page"] { border-bottom-color: #1570ef; color: #175cd3; }
 .inventory-part-detail-pages button:disabled { color: #98a2b3; cursor: not-allowed; }
 .inventory-part-detail-pages button:focus-visible { outline: 3px solid #84caff; outline-offset: -3px; border-radius: 5px 5px 0 0; }
-.inventory-part-detail-primary-action { flex: 0 0 auto; margin-bottom: 6px; }
+.inventory-part-detail-navigation .inventory-part-detail-primary-action { flex: 0 0 auto; margin-bottom: 6px; width: auto; }
 .inventory-part-stock-overview, .inventory-stock-activity-page, .inventory-part-identity { padding-top: 20px; }
 .inventory-part-detail-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 0 0; }
 .inventory-part-detail-toolbar-context { display: flex; align-items: center; min-width: 0; gap: 10px; }
@@ -394,6 +394,11 @@
 @media (max-width: 360px) {
   .inventory-stock-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
   .inventory-stock-toolbar .inventory-search-field { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .inventory-count-review > header { align-items: flex-start; flex-wrap: wrap; }
+  .inventory-count-review > header > div { min-width: 0; }
+  .inventory-count-review > header > div > div { min-width: 0; overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: reduce) {
   .inventory-skeleton-bar { animation: none; }

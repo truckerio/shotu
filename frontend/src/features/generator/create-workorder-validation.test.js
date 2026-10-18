@@ -24,6 +24,21 @@ test("create validation accepts trimmed required values", () => {
   }), {});
 });
 
+test("mechanic create permits blank customer but blocks named customer work", () => {
+  const form = {
+    locationId: "location-1",
+    unitNo: "G2021",
+    mechanicConcern: "Inspect brakes",
+    customerCompanyName: "   ",
+  };
+  assert.deepEqual(validateCreateWorkorder(form, { actorRole: "mechanic" }), {});
+  assert.match(validateCreateWorkorder({ ...form, customerCompanyName: "Fleet customer" }, { actorRole: "mechanic" }).customerCompanyName, /Office.*accepted Estimate/);
+  for (const actorRole of ["office", "admin"]) {
+    assert.match(validateCreateWorkorder(form, { actorRole }).customerCompanyName, /Enter the company/);
+    assert.equal(validateCreateWorkorder({ ...form, customerCompanyName: "Fleet customer" }, { actorRole }).customerCompanyName, undefined);
+  }
+});
+
 test("create validation rejects invalid part quantities and accepts measured units", () => {
   const required = {
     locationId: "location-1",

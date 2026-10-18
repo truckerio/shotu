@@ -128,6 +128,32 @@
 
 .mechanic-part-request-action { display: grid; gap: 10px; max-width: 720px; }
 
+/* Mechanic request action spans the same width as its parts table. */
+.mechanic-detail-page .mechanic-part-request-action {
+  max-width: none;
+}
+
+.mechanic-detail-page .used-parts-editor.is-one-page .used-parts-feedback:empty {
+  display: none;
+}
+
+.mechanic-detail-page .used-parts-editor.is-one-page .used-parts-actions {
+  padding-bottom: 0;
+}
+
+.mechanic-detail-page .mechanic-part-request-action > button {
+  background: #1570ef;
+  border-color: #1570ef;
+  color: #fff;
+  width: 100%;
+}
+
+.mechanic-detail-page .mechanic-part-request-action > button:hover,
+.mechanic-detail-page .mechanic-part-request-action > button:focus-visible {
+  background: #175cd3;
+  border-color: #175cd3;
+}
+
 .mechanic-part-request-form {
   background: #f8f9fb;
   border: 1px solid #e4e7ec;
@@ -138,19 +164,32 @@
   padding: 18px;
 }
 
-.mechanic-part-request-heading {
+.freightliner-manufacturer-number {
   display: grid;
-  gap: 3px;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
-.mechanic-part-request-heading strong {
-  color: #181d27;
-  font-size: var(--text-heading-sm, 18px);
+.freightliner-manufacturer-number input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
 }
 
-.mechanic-part-request-heading span {
-  color: #535862;
-  font-size: var(--text-secondary, 13px);
+.mechanic-used-parts-disclosure {
+  border-top: 1px solid var(--border-subtle, #e4e7ec);
+}
+
+.mechanic-used-parts-disclosure > summary {
+  color: #344054;
+  cursor: pointer;
+  font-weight: var(--weight-semibold, 600);
+  min-height: 44px;
+  padding: 12px 0;
+}
+
+.mechanic-used-parts-disclosure[open] > summary {
+  margin-bottom: 12px;
 }
 
 .mechanic-part-description {

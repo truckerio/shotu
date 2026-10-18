@@ -11,15 +11,17 @@ export function updateMechanicProgress({
   diagnosis,
   workPerformed,
   laborHours,
+  concern,
   expectedVersion,
   recordActivity,
-}) {
-  return api(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}/progress`, {
+}, request = api) {
+  return request(`/api/mechanic/workorders/${encodeURIComponent(workorderId)}/progress`, {
     method: "PATCH",
     body: JSON.stringify({
       diagnosis,
       workPerformed,
       laborHours,
+      concern,
       expectedVersion,
       recordActivity,
     }),
@@ -32,6 +34,7 @@ export async function updateDetailDiagnosisRepair({
   diagnosis,
   workPerformed,
   laborHours,
+  concern,
   expectedVersion,
   recordActivity,
 }, request = api) {
@@ -41,9 +44,10 @@ export async function updateDetailDiagnosisRepair({
       diagnosis,
       workPerformed,
       laborHours,
+      concern,
       expectedVersion,
       recordActivity,
-    });
+    }, request);
   }
 
   const response = await request(

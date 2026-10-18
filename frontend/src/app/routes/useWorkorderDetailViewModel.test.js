@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   assignedMechanicIdsFromDetail,
+  assignedMechanicNamesFromDetail,
   conversationMessagesFromDetail,
   pendingPartRequestCount,
 } from "./workorder-detail-view-model.js";
@@ -10,6 +11,13 @@ import {
 test("detail view model derives assigned mechanics from canonical team", () => {
   const detail = { workorder: { mechanics: [{ id: "m2" }, { id: "m1" }] } };
   assert.deepEqual(assignedMechanicIdsFromDetail(detail), ["m2", "m1"]);
+});
+
+test("assignment label uses the canonical team and leaves empty teams to the translated fallback", () => {
+  assert.equal(assignedMechanicNamesFromDetail({ workorder: { mechanics: [{ name: "Alex" }, { name: "Sam" }] } }), "Alex, Sam");
+  assert.equal(assignedMechanicNamesFromDetail({ workorder: { mechanics: [], mechanic: { name: "Stale mechanic" } } }), "");
+  assert.equal(assignedMechanicNamesFromDetail({ workorder: { mechanic: { name: "Legacy mechanic" } } }), "Legacy mechanic");
+  assert.equal(assignedMechanicNamesFromDetail({ workorder: {} }), "");
 });
 
 test("detail view model includes an office note and hides system chat noise", () => {

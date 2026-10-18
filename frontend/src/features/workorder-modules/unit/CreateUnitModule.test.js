@@ -35,9 +35,9 @@ test("legacy Unit help retains its heading while one-page omits the section wrap
   assert.match(formCss, /\.create-unit-card \.operational-form-section:first-child > \.operational-form-section-legend,[\s\S]*align-items: center;/);
 });
 
-test("one-page Unit details start closed, remain user-controlled, and legacy panels stay open", () => {
-  assert.match(source, /open=\{onePage \? unitDetailsOpen : true\}/);
-  assert.match(source, /onToggle=\{onePage \? setUnitDetailsOpen : undefined\}/);
+test("phone and one-page Unit details start closed and disclose invalid optional fields", () => {
+  assert.match(source, /open=\{onePage \|\| isPhone \? unitDetailsOpen \|\| Boolean\(errors\?\.unitType[\s\S]*?errors\?\.vinNo\) : true\}/);
+  assert.match(source, /onToggle=\{onePage \|\| isPhone \? setUnitDetailsOpen : undefined\}/);
 });
 
 test("unit lookup is a compact keyboard listbox with actionable active workorders", () => {

@@ -2,8 +2,10 @@ import { lazy, Suspense } from "react";
 import { RefreshCw01 } from "@untitledui/icons";
 
 import { AppLoadingFallback } from "../AppErrorBoundary.jsx";
+import { ProfileMenu } from "../../components/account/ProfileMenu.jsx";
 import { interfaceText } from "../../i18n/index.js";
 import { productModuleCapabilities } from "./product-module-access.js";
+import "./role-phone-profile-dock.css";
 
 const CreateWorkorderPage = lazy(() => import("../../features/create-workorder/CreateWorkorderPage.jsx")
   .then((module) => ({ default: module.CreateWorkorderPage })));
@@ -35,6 +37,12 @@ export function RoleWorkspaceOutlet({
   const t = (key) => interfaceText(locale, key);
   const inspectionAccess = productModuleCapabilities(actor, "inspections");
   const workorderAccess = productModuleCapabilities(actor, "workorders");
+  const withPhoneProfile = (content) => <div className="role-phone-profile-layout">
+    {content}
+    <nav className="role-phone-profile-dock" aria-label="Profile navigation">
+      <ProfileMenu actor={actor} locale={locale} mobileNav />
+    </nav>
+  </div>;
   if (new URLSearchParams(window.location.search).has("inventoryScan")) {
     return <Suspense fallback={<AppLoadingFallback />}><InventoryScanWorkspace actor={actor} /></Suspense>;
   }
@@ -50,7 +58,7 @@ export function RoleWorkspaceOutlet({
   }
 
   if (workspace === "mechanic") {
-    return (
+    return withPhoneProfile(
       <Suspense fallback={<AppLoadingFallback />}>
         <MechanicWorkspace
           actor={actor}
@@ -98,11 +106,11 @@ export function RoleWorkspaceOutlet({
   }
 
   if (workspace === "surveillance") {
-    return <Suspense fallback={<AppLoadingFallback />}><SurveillanceWorkspace actor={actor} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} /></Suspense>;
+    return withPhoneProfile(<Suspense fallback={<AppLoadingFallback />}><SurveillanceWorkspace actor={actor} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} /></Suspense>);
   }
 
   if (activeWorkorder) {
-    return <Suspense fallback={<AppLoadingFallback />}><WorkorderDetailPage {...detailPageProps} /></Suspense>;
+    return withPhoneProfile(<Suspense fallback={<AppLoadingFallback />}><WorkorderDetailPage {...detailPageProps} /></Suspense>);
   }
 
   if (!navigation.canOpenCreateWorkspace) {
@@ -116,5 +124,5 @@ export function RoleWorkspaceOutlet({
     );
   }
 
-  return <Suspense fallback={<AppLoadingFallback />}><CreateWorkorderPage {...createPageProps} /></Suspense>;
+  return withPhoneProfile(<Suspense fallback={<AppLoadingFallback />}><CreateWorkorderPage {...createPageProps} /></Suspense>);
 }

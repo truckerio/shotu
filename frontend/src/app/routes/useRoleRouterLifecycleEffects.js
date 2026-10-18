@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { mechanicProgressRecoveryConflict, mechanicProgressRecoveryPatch } from "../../features/mechanic/progress/progress-storage.js";
 
 import { useWorkorderDetailRealtime } from "../../features/workorder-detail/useWorkorderDetailRealtime.js";
 import { canonicalPreviewTimes } from "../../features/workorder-detail/workorder-handoff.js";
@@ -25,28 +26,30 @@ export function useRoleRouterLifecycleEffects({
     const backup = mechanicProgress.backup;
     if (
       !isMechanicDetail
-      || !activeWorkorder?.allowedActions?.saveNotes
+      || !(activeWorkorder?.allowedActions?.saveNotes || activeWorkorder?.allowedActions?.saveConcern)
       || !workorderId
       || !backup
       || mechanicProgressBackupRestoredRef.current === workorderId
     ) return;
     mechanicProgressBackupRestoredRef.current = workorderId;
-    if (backup.diagnosis === form.diagnosis
-      && backup.workPerformed === form.workPerformed
-      && (backup.laborHours === null || backup.laborHours === form.laborHours)) return;
-    setForm((current) => ({
-      ...current,
-      diagnosis: backup.diagnosis,
-      workPerformed: backup.workPerformed,
-      ...(backup.laborHours === null ? {} : { laborHours: backup.laborHours }),
-    }));
+    const currentVersion = activeWorkorder.workorder.progressVersion || 1;
+    if (mechanicProgressRecoveryConflict(backup, currentVersion)) {
+      setMechanicAction({ busy: "", message: `This workorder changed elsewhere. Unsaved work details are kept on this device for review.${backup.concern == null ? "" : ` Unsaved Concern: ${backup.concern}`}` });
+      return;
+    }
+    const patch = mechanicProgressRecoveryPatch(backup, activeWorkorder.allowedActions, currentVersion);
+    if (Object.entries(patch).every(([field, value]) => value === form[field])) return;
+    setForm((current) => ({ ...current, ...patch }));
     setMechanicAction({
       busy: "",
       message: "Recovered unsaved work details from this device. They will sync automatically.",
     });
   }, [
     activeWorkorder?.allowedActions?.saveNotes,
+    activeWorkorder?.allowedActions?.saveConcern,
     activeWorkorder?.workorder?.id,
+    activeWorkorder?.workorder?.progressVersion,
+    form.mechanicConcern,
     form.diagnosis,
     form.workPerformed,
     form.laborHours,

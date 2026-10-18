@@ -50,7 +50,7 @@ export function InventoryInboundWorkspace({ locations, onOpenInvoice, onReceiveP
   function runAction(item) {
     const action = inboundAction(item);
     if (action?.id === "invoice") onOpenInvoice?.(item.invoiceRunId, item.locationId);
-    if (action?.id === "purchase_order") onReceivePurchaseOrder?.(item.poId, item.locationId);
+    if (action?.id === "purchase_order") onReceivePurchaseOrder?.(item.poId, item.locationId, item.poNumber);
     if (action?.id === "inventory") onAddInventory?.(item.locationId);
     if (action?.id === "invoice_upload") onUploadInvoice?.(item.locationId);
   }

@@ -23,7 +23,7 @@ test("inventory finder routes countable catalog selections to one nested seriali
   assert.doesNotMatch(editor, /used-part-quantity-/);
   assert.doesNotMatch(editor, /addUsedPart|usedPartsAutosave|recoveredUnsavedEntries/);
   assert.match(editor, /<WorkorderSerializedPartDialog/);
-  assert.match(editor, /anchorToPartField=\{onePage\}/);
+  assert.match(editor, /anchorToPartField=\{onePage && activeDraftIndex >= 0\}/);
   assert.match(editor, /<PartCatalogCombobox[\s\S]*?onSelect=\{\(catalogPart\) => \{[\s\S]*\["quantity", "measured_bulk"\]\.includes\(partStockTracking\(catalogPart\)\)[\s\S]*setMeasuredDialogPart\(catalogPart\)[\s\S]*partStockTracking\(catalogPart\) === "serialized"[\s\S]*setSerializedDialogPart\(catalogPart\)/);
   assert.doesNotMatch(editor, /CompactWorkorderParts/);
   assert.match(editor, /category === "time"\) setMessage\(t\("parts\.timeInventoryUnsupported"\)\)/);

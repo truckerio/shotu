@@ -6,6 +6,7 @@ import { CreateUnitModule } from "./unit/CreateUnitModule.jsx";
 import { CreateConcernModule } from "./work/CreateConcernModule.jsx";
 import { WorkorderFormLayout } from "../../components/workorders/WorkorderFormLayout.jsx";
 import { moduleRenderer } from "./module-renderer-catalog.js";
+import { interfaceText } from "../../i18n/index.js";
 
 const ONE_PAGE_CORE_IDS = ["unit", "schedule", "concern", "parts", "assignment"];
 
@@ -46,6 +47,7 @@ export function WorkorderCreateModuleHost({ moduleProps = {}, presentation = "pa
     const unitSection = coreSections.find(({ id }) => id === "unit");
     return (
       <WorkorderFormLayout
+        scheduleLabel={interfaceText(moduleProps.schedule?.locale || "en", "create.schedule.workDates")}
         location={locationSection ? renderSection(locationSection, { embedded: true, showMap: !unitSection }) : null}
         unit={unitSection ? renderSection(unitSection, {
           locationContent: locationSection ? renderSection(locationSection, { mapOnly: true }) : null,

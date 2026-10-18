@@ -1,0 +1,236 @@
+/* Phone Create is a quiet work surface: equipment, concern, dates, then parts.
+   Scope to Create so desktop and existing-workorder layouts keep their owners. */
+@media (max-width: 700px) {
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] > .office-create-nav {
+    background: #fff;
+    border-bottom: 1px solid #eef0f3;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding-inline: var(--mobile-page-gutter);
+  }
+
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] > .office-create-nav h1 {
+    font-size: 18px !important;
+    font-weight: 500;
+    line-height: 24px;
+  }
+
+  .create-workorder-page:not(.is-keyboard-open) .control-panel[data-workorder-presentation="one-page"] {
+    padding-bottom: 0;
+  }
+
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout {
+    gap: 24px;
+    padding: 16px var(--mobile-page-gutter) calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .create-workorder-page .workorder-form-layout .workorder-form-layout-header,
+  .create-workorder-page .workorder-form-layout .workorder-form-layout-primary {
+    gap: 20px;
+  }
+
+  .create-workorder-page .workorder-form-layout .operational-form-field-label,
+  .create-workorder-page .workorder-form-layout .create-schedule-one-page-label {
+    color: #667085;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .create-workorder-page .workorder-form-layout-location .operational-form-field {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .create-workorder-page .workorder-form-layout-location .dropdown-select-trigger {
+    min-height: 32px;
+    border: 0;
+    padding: 4px 0;
+    color: #475467;
+    font-size: 13px;
+  }
+
+  .create-workorder-page .workorder-form-layout .workorder-compact-unit-fields {
+    --unit-label-width: 64px;
+    --unit-field-gap: 8px;
+    gap: 8px;
+    max-width: none;
+  }
+
+  .create-workorder-page .workorder-compact-unit-fields > .operational-unit-lookup > .operational-form-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .create-workorder-page .workorder-compact-unit-fields #workorder-unit {
+    border: 0;
+    border-radius: 0;
+    padding: 0 44px 0 0;
+    font-size: 22px !important;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .create-workorder-page .workorder-compact-unit-fields .workorder-unit-popover {
+    top: 20px;
+  }
+
+  .create-workorder-page .workorder-compact-unit-fields .operational-unit-results {
+    left: 0;
+  }
+
+  .create-workorder-page .workorder-form-layout-unit #customer-company-name {
+    padding-inline: 0;
+    font-size: 14px;
+  }
+
+  .create-workorder-page .workorder-form-layout .workorder-form-layout-concern {
+    padding-top: 0;
+  }
+
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] .create-concern-one-page .operational-form-field {
+    gap: 8px;
+  }
+
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] #workorder-concern {
+    min-height: 112px;
+    height: 112px;
+    border: 1px solid #e4e7ec;
+    border-radius: 10px;
+    background: #f9fafb;
+    padding: 12px 14px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] #workorder-concern[aria-invalid="true"] {
+    border-color: #d92d20;
+    background: #fffbfa;
+  }
+
+  .create-workorder-page .workorder-compact-unit-fields #workorder-unit[aria-invalid="true"],
+  .create-workorder-page .workorder-form-layout-location .dropdown-select-trigger[aria-invalid="true"] {
+    border-bottom: 1px solid #d92d20;
+  }
+
+  .create-workorder-page .workorder-form-layout .create-schedule-one-page-range {
+    padding-inline: 0;
+  }
+
+  .create-workorder-page .control-panel[data-workorder-presentation="one-page"] .workorder-form-layout-parts {
+    --workorder-parts-heading-gap: 12px;
+    border-top: 1px solid #eef0f3;
+    margin-top: 0;
+    padding-top: 20px;
+  }
+
+  .create-workorder-page .workorder-form-layout-parts .workorder-section-panel-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 0;
+  }
+
+  .create-workorder-page .workorder-form-layout-parts .workorder-section-panel-heading h2 {
+    font-size: 16px !important;
+    font-weight: 600;
+  }
+
+  .create-workorder-page .workorder-form-layout-parts .workorder-section-panel-action {
+    width: auto;
+    max-width: 100%;
+    margin-left: auto;
+  }
+
+  .create-workorder-page .workorder-form-layout-parts .create-parts-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .create-workorder-page .workorder-form-layout-parts .create-parts-header-actions .button {
+    min-height: 32px;
+    height: auto;
+    width: auto;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: #175cd3;
+    box-shadow: none;
+    font-size: 13px;
+  }
+
+  .create-workorder-page .create-parts-header-actions .section-help-disclosure-trigger {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Group names still label their regions for assistive technology. */
+  .create-workorder-page .create-parts-compact .create-parts-group:first-of-type > .create-parts-group-heading,
+  .create-workorder-page .create-parts-group.is-empty > .create-parts-group-heading {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .create-workorder-page .create-parts-group.is-empty > .create-parts-empty,
+  .create-workorder-page .create-parts-group.is-empty .create-parts-count,
+  .create-workorder-page .create-labor-summary.is-empty small {
+    display: none;
+  }
+
+  .create-workorder-page .create-parts-compact { gap: 8px; }
+
+  .create-workorder-page .create-parts-group + .create-parts-group {
+    padding-top: 8px;
+    border-top: 0;
+  }
+
+  .create-workorder-page .create-labor-summary {
+    min-height: 48px;
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid #eef0f3;
+    border-radius: 0;
+  }
+
+  .create-workorder-page .create-labor-summary strong { font-weight: 500; }
+
+  .create-workorder-page .create-parts-group-heading h3 {
+    color: #667085;
+    font-size: 12px !important;
+    font-weight: 500;
+  }
+
+  .create-workorder-page .create-part-summary {
+    padding: 12px 0;
+    border: 0;
+    border-bottom: 1px solid #eef0f3;
+    border-radius: 0;
+  }
+
+  .create-workorder-page .create-part-summary-main { grid-column: 1; grid-row: 1; }
+  .create-workorder-page .create-part-summary-edit { grid-column: 2; grid-row: 1; }
+  .create-workorder-page .create-part-summary-repair { grid-column: 1 / -1; grid-row: 2; }
+
+  .create-workorder-page .create-parts-actions { padding: 4px 0 0; }
+
+  .create-workorder-page .create-parts-actions .create-parts-add-button {
+    min-height: 40px;
+    background: #f9fafb;
+    border-color: #e4e7ec;
+    color: #344054;
+    box-shadow: none;
+    font-weight: 500;
+  }
+
+  .create-workorder-page .create-workorder-mobile-action {
+    padding: 8px var(--mobile-page-gutter);
+    border-top-color: #eef0f3;
+  }
+}

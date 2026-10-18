@@ -7,7 +7,7 @@ export function CreateConcernModule({ access, activeSection, errors, form, local
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
   const onePage = presentation === "one-page";
-  const concernField = <FormField id="workorder-concern" label={onePage ? "Concern" : t("create.concern.mechanicConcern")} error={errors?.mechanicConcern} required requiredLabel={onePage ? "" : t("create.required")}>
+  const concernField = <FormField id="workorder-concern" label={t(onePage ? "create.concern.title" : "create.concern.mechanicConcern")} error={errors?.mechanicConcern} required requiredLabel={onePage ? "" : t("create.required")}>
     <NarrativeField locale={locale} rows={presentation === "one-page" ? 2 : 4} value={form.mechanicConcern} onChange={(event) => onChange("mechanicConcern", event.target.value)} />
   </FormField>;
   return (

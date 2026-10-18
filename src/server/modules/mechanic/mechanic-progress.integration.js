@@ -3,6 +3,7 @@ import { closePool, query } from "../../db/pool.js";
 import {
   createOperationalWorkorder,
   getOperationalWorkorderById,
+  updateOperationalWorkorder,
 } from "../../db/repositories/operational-workorders.repo.js";
 import {
   WorkorderProgressConflictError,
@@ -74,6 +75,16 @@ try {
     concern: "Progress autosave integration test",
   });
   workorderId = workorder.id;
+  const initialConcern = await query(
+    `select field_label, old_value, new_value, changed_by_user_id
+     from workorder_field_events where workorder_id = $1 and field_key = 'concern.initial'`,
+    [workorderId],
+  );
+  assert.equal(initialConcern.rows.length, 1);
+  assert.equal(initialConcern.rows[0].field_label, "Concern");
+  assert.equal(initialConcern.rows[0].old_value, "");
+  assert.equal(initialConcern.rows[0].new_value, "Progress autosave integration test");
+  assert.equal(initialConcern.rows[0].changed_by_user_id, officeId);
 
   const saved = await saveMechanicWorkorderProgress({
     workorderId,
@@ -124,13 +135,69 @@ try {
     }),
     (error) => error instanceof WorkorderProgressConflictError,
   );
+  const officeConcern = await updateOperationalWorkorder(workorderId, {
+    concern: "Office revised concern", expectedVersion: 2, changedByUserId: officeId,
+  });
+  assert.equal(officeConcern.progressVersion, 3);
+  await assert.rejects(saveMechanicWorkorderProgress({
+    workorderId, mechanicUserId: mechanicId, concern: "Stale mechanic concern", expectedVersion: 2,
+  }), (error) => error instanceof WorkorderProgressConflictError);
+  const concernSaved = await saveMechanicWorkorderProgress({
+    workorderId,
+    mechanicUserId: mechanicId,
+    concern: "Inspect brakes and steering",
+    expectedVersion: 3,
+    recordActivity: true,
+  });
+  assert.equal(concernSaved.version, 4);
+  assert.equal(concernSaved.concern, "Inspect brakes and steering");
+  assert.equal(concernSaved.diagnosis, "Found a leak.");
+  const concernRow = await query(
+    "select concern, diagnosis, work_performed, office_notes, form_data from operational_workorders where id = $1",
+    [workorderId],
+  );
+  assert.equal(concernRow.rows[0].concern, "Inspect brakes and steering");
+  assert.equal(concernRow.rows[0].form_data.mechanicConcern, "Inspect brakes and steering");
+  assert.equal(concernRow.rows[0].diagnosis, "Found a leak.");
+  assert.equal(concernRow.rows[0].work_performed, "Replaced the hose.");
+  assert.equal(concernRow.rows[0].office_notes, "");
+  const concernActivity = await query(
+    `select old_value, new_value, changed_by_user_id from workorder_field_events
+     where workorder_id = $1 and field_key = 'concern' order by created_at desc limit 1`,
+    [workorderId],
+  );
+  assert.equal(concernActivity.rows[0].old_value, "Office revised concern");
+  assert.equal(concernActivity.rows[0].new_value, "Inspect brakes and steering");
+  assert.equal(concernActivity.rows[0].changed_by_user_id, mechanicId);
+  const groupedAfterConcern = await query(
+    `select count(*)::int as count from workorder_field_events
+     where workorder_id = $1 and field_key = 'work_details_updated'`,
+    [workorderId],
+  );
+  assert.equal(groupedAfterConcern.rows[0].count, 1);
+  const concernWithoutActivity = await saveMechanicWorkorderProgress({
+    workorderId, mechanicUserId: mechanicId, concern: "Inspect brakes, steering, and suspension",
+    expectedVersion: 4, recordActivity: false,
+  });
+  assert.equal(concernWithoutActivity.version, 5);
+  const concernEvents = await query(
+    `select old_value, new_value from workorder_field_events
+     where workorder_id = $1 and field_key = 'concern'`,
+    [workorderId],
+  );
+  assert.equal(concernEvents.rows.length, 2);
+  assert.equal(concernEvents.rows.some((row) => row.old_value === "Inspect brakes and steering"
+    && row.new_value === "Inspect brakes, steering, and suspension"), true);
+  await assert.rejects(saveMechanicWorkorderProgress({
+    workorderId, mechanicUserId: mechanicId, concern: "Stale concern", expectedVersion: 3,
+  }), (error) => error instanceof WorkorderProgressConflictError);
   assert.equal(
     await saveMechanicWorkorderProgress({
       workorderId,
       mechanicUserId: otherMechanicId,
       diagnosis: "Not allowed",
       workPerformed: "",
-      expectedVersion: 2,
+      expectedVersion: 5,
     }),
     null,
   );
@@ -142,7 +209,7 @@ try {
       mechanicUserId: mechanicId,
       diagnosis: "Locked",
       workPerformed: "",
-      expectedVersion: 2,
+      expectedVersion: 5,
     }),
     /completed workorder/,
   );

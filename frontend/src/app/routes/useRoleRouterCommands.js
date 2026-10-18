@@ -40,7 +40,7 @@ export function useRoleRouterCommands({
       setCreateState({ busy: false, message: "Enter an audited reason before using an internal fleet or exempt authorization path.", error: true });
       return;
     }
-    const errors = validateCreateWorkorder(form);
+    const errors = validateCreateWorkorder(form, { actorRole: actor.role });
     if (Object.keys(errors).length) {
       setCreateErrors(errors);
       setCreateAttempt((attempt) => attempt + 1);
@@ -99,7 +99,7 @@ export function useRoleRouterCommands({
       if (!opened) finishRoleWorkspace();
     } catch (error) {
       if (error?.code === "WORKORDER_PRICING_CHANGED") createPricing?.refresh?.();
-      setCreateState({ busy: false, message: error.message, error: true });
+      setCreateState({ busy: false, message: error.message, code: error.code, error: true });
     }
   }
 

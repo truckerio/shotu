@@ -302,7 +302,7 @@
   font-weight: var(--weight-semibold);
 }
 
-@media (min-width: 641px) and (max-width: 1007px) {
+@media (min-width: 701px) and (max-width: 1007px) {
   .surveillance-home {
     overflow-x: clip;
   }
@@ -362,7 +362,7 @@
   .surveillance-inline-detail { grid-template-columns: auto minmax(0, 1fr); }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   .surveillance-detail-page .surveillance-batch-nav button {
     height: 44px;
     width: 44px;
@@ -377,7 +377,7 @@
   }
 
   .surveillance-home .page-header {
-    padding-inline: 4px;
+    padding-inline: 0;
   }
 
   .surveillance-queue-shell {
@@ -414,19 +414,7 @@
     display: none;
   }
 
-  .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    min-width: 0;
-    padding: 0 4px;
-  }
 
-  .surveillance-home .surveillance-compact-queues .mechanic-queue-tabs button {
-    justify-content: center;
-    min-height: 48px;
-    min-width: 0;
-    padding-inline: 4px;
-  }
 
   .surveillance-secondary-queue {
     align-items: center;
@@ -601,4 +589,9 @@
     min-height: 44px;
     width: 100%;
   }
+}
+
+@media (max-width: 380px) {
+  .surveillance-detail-page .control-panel > .detail-context-bar { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 112px; }
+  .surveillance-detail-page .detail-context-actions { justify-content: space-between; padding-left: 44px; }
 }

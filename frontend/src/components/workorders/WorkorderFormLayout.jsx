@@ -13,6 +13,7 @@ export function WorkorderFormLayout({
   location = null,
   parts = null,
   schedule = null,
+  scheduleLabel = "Work dates and mechanic",
   unit = null,
 }) {
   return (
@@ -23,7 +24,7 @@ export function WorkorderFormLayout({
           {unit ? <div className="workorder-one-page-unit-context workorder-form-layout-unit">{unit}</div> : null}
           {concern ? <div className="workorder-form-layout-concern">{concern}</div> : null}
         </div>
-        <aside className="workorder-one-page-scheduling workorder-form-layout-schedule" aria-label="Work dates and mechanic">
+        <aside className="workorder-one-page-scheduling workorder-form-layout-schedule" aria-label={scheduleLabel}>
           {schedule}
           {assignment}
           {conversation}

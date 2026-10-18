@@ -53,7 +53,7 @@
 }
 
 @media (max-width: 700px) {
-  html[data-onscreen-keyboard="true"] :is(.admin-mobile-nav, .mobile-jumpbar) {
+  html[data-onscreen-keyboard="true"] :is(.admin-mobile-nav, .office-mobile-nav, .mobile-jumpbar) {
     display: none !important;
   }
 }

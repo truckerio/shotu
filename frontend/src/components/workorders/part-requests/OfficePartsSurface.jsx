@@ -9,6 +9,7 @@ import { UsedPartsSection } from "./UsedPartsSection.jsx";
 import { interfaceText } from "../../../i18n/index.js";
 import { SectionHelpDisclosure } from "../SectionHelpDisclosure.jsx";
 import { MechanicPartRequestForm } from "../MechanicPartRequestForm.jsx";
+import { freightlinerAssetContext, freightlinerRequestContextKey } from "./freightliner-catalog-model.js";
 
 export function OfficePartsSurface({
   actorId,
@@ -58,7 +59,7 @@ export function OfficePartsSurface({
     {detail.allowedActions?.requestParts ? <div className="mechanic-part-request-action">
       <button type="button" aria-expanded={requestFormOpen} aria-controls={`office-request-part-${detail.workorder.id}`} onClick={() => setRequestFormOpen((open) => !open)}>Request part</button>
       <div id={`office-request-part-${detail.workorder.id}`} hidden={!requestFormOpen}>
-        <MechanicPartRequestForm workorderId={detail.workorder.id} onChanged={onChanged} requestUrl={`/api/workorders/${encodeURIComponent(detail.workorder.id)}/modules/parts/actions/request`} />
+        <MechanicPartRequestForm key={freightlinerRequestContextKey(detail.workorder)} workorderId={detail.workorder.id} asset={freightlinerAssetContext(detail.workorder)} onChanged={onChanged} requestUrl={`/api/workorders/${encodeURIComponent(detail.workorder.id)}/modules/parts/actions/request`} />
       </div>
     </div> : null}
     {detail.allowedActions?.planParts ? (

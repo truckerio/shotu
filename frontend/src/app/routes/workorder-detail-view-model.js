@@ -5,6 +5,14 @@ export function assignedMechanicIdsFromDetail(detail) {
     || (detail?.workorder?.mechanic?.id ? [detail.workorder.mechanic.id] : []);
 }
 
+export function assignedMechanicNamesFromDetail(detail) {
+  const mechanics = detail?.workorder?.mechanics;
+  if (Array.isArray(mechanics)) {
+    return mechanics.map((mechanic) => mechanic.name).filter(Boolean).join(", ");
+  }
+  return detail?.workorder?.mechanic?.name || "";
+}
+
 export function conversationMessagesFromDetail(detail) {
   if (!detail) return [];
   const officeNote = detail.workorder.officeNotes

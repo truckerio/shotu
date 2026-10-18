@@ -26,6 +26,7 @@ test("assigned mechanic chat stays available after repair editing locks", () => 
     const actions = mechanicAllowedActions({ status, mechanicIds: [mechanicId] }, mechanicId);
     assert.equal(actions.sendMessage, true, `${status} should keep chat available`);
     assert.equal(actions.saveNotes, false);
+    assert.equal(actions.saveConcern, false);
     assert.equal(actions.requestParts, false);
     assert.equal(actions.markDone, false);
   }
@@ -38,6 +39,7 @@ test("unassigned mechanic cannot chat on another mechanic's workorder", () => {
   );
   assert.equal(actions.sendMessage, false);
   assert.equal(actions.saveNotes, false);
+  assert.equal(actions.saveConcern, false);
 });
 
 test("active assigned work keeps chat and repair actions available", () => {
@@ -47,6 +49,7 @@ test("active assigned work keeps chat and repair actions available", () => {
   );
   assert.equal(actions.sendMessage, true);
   assert.equal(actions.saveNotes, true);
+  assert.equal(actions.saveConcern, true);
   assert.equal(actions.requestParts, true);
   assert.equal(actions.markDone, true);
 });

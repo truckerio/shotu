@@ -108,11 +108,11 @@ test("Create mounts review, loading, and error states inside Documents rather th
   assert.doesNotMatch(createPage, /customerPreviewOpen && customerProjection \? <CustomerDocumentReview/);
 });
 
-test("Create shell uses one-page mode for office while retaining the mechanic panel navigation", () => {
+test("Create uses the shared continuous form for every role", () => {
   assert.match(createShell, /<WorkorderPanelShell/);
   assert.match(workorderPanelShell, /<WorkorderObjectSummary/);
   assert.match(workorderPanelShell, /<WorkorderSectionNav/);
-  assert.match(createPage, /const createPresentation = isMechanicCreate \? "panel" : "one-page"/);
+  assert.match(createPage, /const createPresentation = "one-page"/);
   assert.match(createShell, /presentation=\{presentation\}/);
   assert.match(createShell, /presentation === "panel"[\s\S]*?<WorkorderSectionNav/s);
   assert.match(workorderPanelShell, /\{!onePage \? \([\s\S]*?<WorkorderObjectSummary[\s\S]*?<WorkorderSectionNav/s);

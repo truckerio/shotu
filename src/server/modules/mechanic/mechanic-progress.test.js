@@ -22,6 +22,10 @@ test("mechanic progress requires an optimistic version and normalizes editable f
   assert.throws(() => mechanicProgressSchema.parse({ diagnosis: "x" }));
   assert.throws(() => mechanicProgressSchema.parse({ diagnosis: "x", laborHours: "1.234", expectedVersion: 1 }));
   assert.equal(mechanicProgressSchema.parse({ diagnosis: "x", expectedVersion: 1 }).laborHours, undefined);
+  assert.deepEqual(mechanicProgressSchema.parse({ concern: "  Inspect brakes  ", expectedVersion: 3 }), {
+    concern: "Inspect brakes", expectedVersion: 3, recordActivity: false,
+  });
+  assert.equal(mechanicProgressSchema.safeParse({ concern: "", expectedVersion: 3 }).success, false);
 });
 
 test("progress migration adds a positive per-workorder version token", async () => {
@@ -44,4 +48,12 @@ test("progress repository is assignment-scoped and emits one grouped activity ev
   assert.match(source, /form_data = \$9::jsonb/);
   assert.match(source, /laborHours === undefined \? before\.laborHours/);
   assert.doesNotMatch(source, /current_mechanic_id/);
+});
+
+test("each changed Concern emits a standalone plain-text event without joining pending work details", async () => {
+  const source = await readFile(new URL("../../db/repositories/workorder-progress.repo.js", import.meta.url), "utf8");
+  assert.match(source, /const concernChanged = changes\.some\(\(\{ field \}\) => field === "concern"\)/);
+  assert.match(source, /current\.progress_pending_fields\.map\(String\)\.filter\(\(field\) => field !== "concern"\)/);
+  assert.match(source, /if \(concernChanged\) \{[\s\S]*'concern', 'Concern'[\s\S]*before\.concern, next\.concern, mechanicUserId/);
+  assert.doesNotMatch(source, /fieldsChanged: pendingFields,\s*concern:/);
 });

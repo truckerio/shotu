@@ -60,6 +60,7 @@ import {
 import { readUnitServiceHistory } from "./unit-service-history.service.js";
 import { updateSerializedUsageRepairOrderForWorkorder } from "../inventory/inventory-unit-workorder.service.js";
 import {
+  readMeasuredUsagePickupPositionsForWorkorder,
   releaseOrReverseMeasuredUsageForWorkorder,
   reserveMeasuredUsageForWorkorder,
 } from "../inventory/inventory-aggregate-workorder.service.js";
@@ -291,8 +292,17 @@ async function canonicalizeLaborProductPatch(context, input, workorder, dependen
 
 export async function patchWorkorderModule(context, workorderId, moduleKey, input, dependencies = {}) {
   const authorize = dependencies.authorize || authorizeWorkorderModule;
-  const authorization = await authorize(context, workorderId, { moduleKey, capability: "write", action: "update" });
+  const hasConcern = moduleKey === "diagnosisRepair" && Object.prototype.hasOwnProperty.call(input, "concern");
+  const hasRepair = moduleKey === "diagnosisRepair" && ["diagnosis", "workPerformed", "laborHours", "formData"]
+    .some((field) => Object.prototype.hasOwnProperty.call(input, field));
+  const authorization = hasConcern && !hasRepair
+    ? await authorize(context, workorderId, { moduleKey: "concern", capability: "write", action: "update" })
+    : await authorize(context, workorderId, { moduleKey, capability: "write", action: "update" });
+  if (hasConcern && hasRepair) {
+    await authorize(context, workorderId, { moduleKey: "concern", capability: "write", action: "update" });
+  }
   context = effectiveCompanyContext(context, authorization.workorder.companyId);
+  if (moduleKey === "concern" && context.actor.role === "mechanic") throw permissionDenied();
   if (["unit", "location", "schedule", "assignment", "concern"].includes(moduleKey)) {
     const update = dependencies.updateOffice || updateOfficeWorkorder;
     const preservedInput = preserveUntouchedCustomerDocumentForm(input, authorization?.workorder);
@@ -337,6 +347,7 @@ export async function patchWorkorderModules(context, workorderId, moduleKeys, in
     action: "update",
   })));
   context = effectiveCompanyContext(context, authorization.workorder.companyId);
+  if (context.actor.role === "mechanic" && effectiveModuleKeys.includes("concern")) throw permissionDenied();
   const normalizedInput = laborProductChanged
     ? await canonicalizeLaborProductPatch(
       context, input, authorization?.workorder || loadedWorkorder, dependencies,
@@ -462,6 +473,9 @@ export async function runWorkorderModuleAction(
     }
     if (action === "record" && input.operation === "aggregateUsageReserve") {
       return (dependencies.reserveMeasuredUsage || reserveMeasuredUsageForWorkorder)(workorderId, input, context, dependencies);
+    }
+    if (action === "record" && input.operation === "aggregateUsagePositions") {
+      return (dependencies.readMeasuredUsagePositions || readMeasuredUsagePickupPositionsForWorkorder)(workorderId, input, context, dependencies);
     }
     if (action === "record" && input.operation === "aggregateUsageLifecycle") {
       return (dependencies.releaseMeasuredUsage || releaseOrReverseMeasuredUsageForWorkorder)(workorderId, input, context, dependencies);

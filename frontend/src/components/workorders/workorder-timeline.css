@@ -604,3 +604,33 @@
   padding-right: 0;
   scrollbar-gutter: stable;
 }
+
+.workorder-timeline-details dd {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Activity shares a narrow tools pane even on wide screens. */
+.workorder-tools-panel .workorder-timeline-list > li {
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 6px 10px;
+}
+
+.workorder-tools-panel .workorder-timeline-list > li:not(:last-child)::after {
+  left: 6.5px;
+}
+
+.workorder-tools-panel .workorder-timeline-date {
+  grid-column: 2;
+  justify-self: start;
+  text-align: left;
+}
+
+.workorder-tools-panel .workorder-timeline-marker {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.workorder-tools-panel .workorder-timeline-event {
+  grid-column: 2;
+}

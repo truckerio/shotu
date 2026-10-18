@@ -6,15 +6,18 @@ import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { Button } from "../ui/Button.jsx";
 import { PartCatalogCombobox } from "./part-requests/PartCatalogCombobox.jsx";
 import { catalogInventoryText } from "./part-requests/catalog-parts-model.js";
+import { isFreightlinerAsset } from "./part-requests/freightliner-catalog-model.js";
 import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import {
   createMechanicPartRequestDraft,
+  clearCompanyCatalogSelection,
   mechanicPartRequestErrorFields,
   mechanicPartRequestErrorMessage,
   validateMechanicPartRequest,
+  withManufacturerPartNumber,
 } from "./mechanic-part-request-model.js";
 
-export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en", requestUrl = `/api/mechanic/workorders/${workorderId}/parts` }) {
+export function MechanicPartRequestForm({ workorderId, asset, onChanged, locale = "en", requestUrl = `/api/mechanic/workorders/${workorderId}/parts` }) {
   const t = (key) => interfaceText(locale, key);
   const descriptionRef = useRef(null);
   const [draft, setDraft] = useState(createMechanicPartRequestDraft);
@@ -23,6 +26,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en",
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("error");
   const [catalogQuery, setCatalogQuery] = useState("");
+  const freightliner = isFreightlinerAsset(asset);
 
   function update(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -78,17 +82,13 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en",
 
   return (
     <form className="mechanic-part-request-form" onSubmit={submit} noValidate>
-      <div className="mechanic-part-request-heading">
-        <strong>{t("parts.requestHeading")}</strong>
-        <span>{t("parts.requestHelp")}</span>
-      </div>
       <PartCatalogCombobox
         workorderId={workorderId}
         purpose="request"
         value={catalogQuery}
         onChange={(value) => {
           setCatalogQuery(value);
-          setDraft((current) => ({ ...current, catalogPartId: "", partNumber: "" }));
+          setDraft(clearCompanyCatalogSelection);
         }}
         onSelect={(part) => {
           setCatalogQuery(part.partNumber);
@@ -108,6 +108,31 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en",
         disabled={busy}
         locale={locale}
       />
+      {freightliner ? <label className="freightliner-manufacturer-number">
+        <span>{t("parts.freightliner.partNumber")}</span>
+        <input
+          type="text"
+          autoComplete="off"
+          value={draft.partNumber}
+          onChange={(event) => {
+            const value = event.target.value;
+            setDraft((current) => withManufacturerPartNumber(current, value));
+            setCatalogQuery("");
+            setErrors((current) => {
+              if (!current.partNumber) return current;
+              const next = { ...current };
+              delete next.partNumber;
+              return next;
+            });
+            setMessage("");
+          }}
+          placeholder={t("parts.freightliner.partNumberPlaceholder")}
+          disabled={busy}
+          aria-invalid={Boolean(errors.partNumber)}
+          aria-describedby={errors.partNumber ? "freightliner-part-number-error" : undefined}
+        />
+        {errors.partNumber ? <span className="part-field-error" id="freightliner-part-number-error" role="alert">{errors.partNumber}</span> : null}
+      </label> : null}
       <label className="mechanic-part-description" htmlFor="mechanic-part-query">
         <span>{t("parts.description")}</span>
         <NarrativeField
@@ -136,7 +161,7 @@ export function MechanicPartRequestForm({ workorderId, onChanged, locale = "en",
           onQuantityChange={(value) => update("quantity", value)}
           onUomCodeChange={(value) => {
             update("uomCode", value);
-            setDraft((current) => ({ ...current, catalogPartId: "", partNumber: "" }));
+            setDraft(clearCompanyCatalogSelection);
           }}
           quantityLabel={t("parts.quantity")}
           unitLabel={t("parts.unit")}

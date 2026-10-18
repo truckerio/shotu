@@ -27,6 +27,22 @@ test("only reviewed historical checksums retain migration compatibility", () => 
   assert.equal(compareMigrationLedger([{ name: unknown[0].name, checksum: "different" }], unknown).checksumMismatch.length, 1);
 });
 
+test("verified no-stock revision compatibility is bound to both exact checksums", () => {
+  const name = "196_no_stock_tracking.sql";
+  const historical = "a278d40ef3b375affb04756c68f0b0b31e8f5f830dc896b3e1f645fdea13f377";
+  const current = "2c6bc3588406c5046278c10ec781d1cd99d07e2c763ea0a52d422bb7b1cde69d";
+  const compare = (migrationName, appliedChecksum, repositoryChecksum) => compareMigrationLedger(
+    [{ name: migrationName, checksum: repositoryChecksum }],
+    [{ name: migrationName, checksum: appliedChecksum }],
+  ).checksumMismatch;
+
+  assert.deepEqual(compare(name, historical, current), []);
+  assert.deepEqual(compare(name, current, current), []);
+  assert.equal(compare(name, "unreviewed-checksum", current).length, 1);
+  assert.equal(compare(name, historical, "modified-current-sql").length, 1);
+  assert.equal(compare("197_no_stock_workorder_prices.sql", historical, current).length, 1);
+});
+
 test("profile check separates linked login orphans from historical unlinked profiles", async () => {
   const source = await readFile(new URL("./check-database.js", import.meta.url), "utf8");
   assert.match(source, /profile\.auth_user_id is not null[\s\S]*?as active_profiles_without_company/);

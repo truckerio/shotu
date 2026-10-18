@@ -32,6 +32,12 @@ export function selectNextMechanicJob(jobs = []) {
   return [...jobs].sort(compareMechanicJobs)[0] || null;
 }
 
+export function otherMechanicJobs(jobs = [], nextJob) {
+  if (!nextJob) return jobs;
+  return jobs.filter((job) => job.id !== nextJob.id
+    || (job.queueType || "workorder") !== (nextJob.queueType || "workorder"));
+}
+
 export function mechanicJobActionKey(job) {
   return normalizedLifecycle(job) === "accepted" ? "startJob" : "continueJob";
 }

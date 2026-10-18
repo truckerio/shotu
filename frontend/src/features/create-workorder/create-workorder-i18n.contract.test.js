@@ -22,7 +22,7 @@ test("mechanic locale reaches Create route, page, shell, dates, and preview surf
   assert.ok((shell.match(/locale=\{locale\}/g) || []).length >= 2);
   assert.match(shell, /<WorkorderPanelShell[\s\S]*locale=\{locale\}/);
   assert.match(panelShell, /<WorkorderSectionNav[\s\S]*locale=\{locale\}/);
-  assert.match(page, /const createPresentation = isMechanicCreate \? "panel" : "one-page"/);
+  assert.match(page, /const createPresentation = "one-page"/);
 });
 
 test("Create route and shell static states use the shared interface dictionary", () => {

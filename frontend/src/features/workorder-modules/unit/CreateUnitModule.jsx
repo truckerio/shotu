@@ -2,6 +2,7 @@ import { Dropdown } from "../../../components/forms/Dropdown.jsx";
 import { useEffect, useId, useRef, useState } from "react";
 import { CustomerCompanyField, FormField, FormSection, OptionalSection, UnitSummary } from "../../../components/forms/index.js";
 import { textEntryProps } from "../../../components/forms/text-entry-policy.js";
+import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { SectionHelpDisclosure } from "../../../components/workorders/SectionHelpDisclosure.jsx";
 import { UnitDetailsPopover } from "../../../components/workorders/UnitDetailsPopover.jsx";
@@ -29,7 +30,7 @@ export function normalizedVehicleTagNames(tagNames) {
   }, []);
 }
 
-export function CreateUnitModule({ access, activeSection, customerControl = null, errors, form, locale = "en", locationContent, onChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation = "panel", selectedVehicle, vehicleLookup }) {
+export function CreateUnitModule({ access, activeSection, actorRole = "", customerControl = null, errors, form, locale = "en", locationContent, onChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation = "panel", selectedVehicle, vehicleLookup }) {
   const [unitDetailsOpen, setUnitDetailsOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const [resultsDismissed, setResultsDismissed] = useState(false);
@@ -42,6 +43,7 @@ export function CreateUnitModule({ access, activeSection, customerControl = null
   const resultsOpen = lookupFocused && !resultsDismissed && vehicleResults.length > 0;
   const t = (key) => interfaceText(locale, key);
   const onePage = presentation === "one-page";
+  const isPhone = useMediaQuery("(max-width: 700px)");
   useEffect(() => setUnitDetailsOpen(false), [selectedVehicleId]);
   useEffect(() => {
     setActiveResultIndex(vehicleResults.length ? 0 : -1);
@@ -101,7 +103,7 @@ export function CreateUnitModule({ access, activeSection, customerControl = null
   if (!access) return null;
   const UnitSection = onePage ? "div" : FormSection;
   const UnitDetails = onePage ? UnitDetailsPopover : OptionalSection;
-  const customerField = customerControl || <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required requiredLabel={t("create.required")} />;
+  const customerField = customerControl || <CustomerCompanyField value={form.customerCompanyName} onChange={(value) => onChange("customerCompanyName", value)} error={errors?.customerCompanyName} label={t(onePage ? "create.unit.customer" : "create.unit.customerCompany")} hint={actorRole === "mechanic" ? t("create.mechanicInternalFleetGuidance") : onePage ? "" : undefined} suggestions={vehicleTags} suggestionsLabel={t("create.unit.vehicleTags")} required={actorRole !== "mechanic"} requiredLabel={t("create.required")} />;
   return (
     <ProgressiveWorkorderSection
       id="unit"
@@ -156,8 +158,8 @@ export function CreateUnitModule({ access, activeSection, customerControl = null
         {selectedVehicle && !onePage ? <UnitSummary editing={unitDetailsOpen} unit={{ unitNo: form.unitNo, unitType: form.unitType, vehicle: form.model, vin: form.vinNo, license: form.licenseNo, mileage: form.mileage }} onEdit={() => setUnitDetailsOpen((open) => !open)} onFieldChange={onChange} editLabel={unitDetailsOpen ? t("create.unit.doneEditing") : t("create.unit.editDetails")} locale={locale} /> : null}
         {!selectedVehicle || onePage ? <UnitDetails
           title={t("create.unit.details")}
-          open={onePage ? unitDetailsOpen : true}
-          onToggle={onePage ? setUnitDetailsOpen : undefined}
+          open={onePage || isPhone ? unitDetailsOpen || Boolean(errors?.unitType || errors?.licenseNo || errors?.mileage || errors?.model || errors?.vinNo) : true}
+          onToggle={onePage || isPhone ? setUnitDetailsOpen : undefined}
         >
           <div className="operational-form-grid two">
             <FormField id="workorder-unit-type" label={t("create.unit.type")}><Dropdown value={form.unitType} onChange={(event) => onChange("unitType", event.target.value)}><option value="">{t("create.unit.selectType")}</option><option value="Truck">{t("create.unit.truck")}</option><option value="Trailer">{t("create.unit.trailer")}</option><option value="Other">{t("create.unit.other")}</option></Dropdown></FormField>

@@ -14,8 +14,9 @@ test("shared Work done action owns its icon, label, and busy state", () => {
 });
 
 test("detail and completion surfaces use the shared Work done action", () => {
-  assert.equal((detailPage.match(/<WorkDoneButton/g) || []).length, 3);
-  assert.match(detailPage, /isOfficeDetail && canMarkWorkDone \? <WorkDoneButton[^>]*onClick=\{\(\) => openOfficeTool\("completion"\)\}/);
+  assert.equal((detailPage.match(/<WorkDoneButton/g) || []).length, 2);
+  assert.doesNotMatch(detailPage, /mechanic-compact-primary-action/);
+  assert.match(detailPage, /onePageDetail && canMarkWorkDone \? <WorkDoneButton[^>]*onClick=\{isMechanicDetail \? markWorkDone : \(\) => openOfficeTool\("completion"\)\}/);
   assert.match(completionModule, /canMarkDone \? <WorkDoneButton/);
   assert.match(completionModule, /canMarkDone = allowedActions\.markDone === true/);
   assert.doesNotMatch(detailPage, /className="finish-work-button"/);

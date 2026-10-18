@@ -49,6 +49,7 @@ import {
   WORKORDER_SURFACES,
 } from "../workorder-modules/workorder-module-registry.js";
 import "./create-workorder-page.css";
+import "./mobile-create-design.css";
 
 export function CreateWorkorderPage({
   actor,
@@ -88,7 +89,7 @@ export function CreateWorkorderPage({
   applyVehicle,
 }) {
   const isMechanicCreate = actor.role === "mechanic";
-  const createPresentation = isMechanicCreate ? "panel" : "one-page";
+  const createPresentation = "one-page";
   const t = (key) => interfaceText(locale, key);
   const assignmentPolicy = useMemo(() => resolveWorkorderModulePolicy({
     moduleId: WORKORDER_MODULE_IDS.ASSIGNMENT,
@@ -434,7 +435,9 @@ export function CreateWorkorderPage({
       : officeCreateState.error
         ? Object.keys(officeCreateErrors).some((key) => officeCreateErrors[key])
           ? t("create.fixHighlightedFields")
-          : t("create.failed")
+          : officeCreateState.code === "CUSTOMER_ESTIMATE_ACCEPTANCE_REQUIRED"
+            ? t("create.validation.mechanicCustomerCompanyName")
+            : t("create.failed")
         : t("create.createdAssigned")
     : officeCreateState.message;
 

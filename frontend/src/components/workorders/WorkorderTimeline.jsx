@@ -4,6 +4,7 @@ import { formatLocaleNumber, interfaceText } from "../../i18n/index.js";
 import { formatCreatedAt } from "../../lib/dates.js";
 import {
   groupTimelineEvents,
+  timelineConcernDetails,
   timelineEventDescription,
   timelineEventTitle,
 } from "./workorder-timeline-model.js";
@@ -34,6 +35,11 @@ function TimelineMeta({ actorLabel, actorName, actorRole, createdAt, dateText, e
   );
 }
 
+function TimelineDetails({ details = [] }) {
+  if (!details.length) return null;
+  return <dl className="workorder-timeline-details">{details.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>;
+}
+
 export function WorkorderTimelineList({ className = "", emptyMessage, items, locale = "en" }) {
   if (!items.length) return <p className="chat-empty">{emptyMessage ?? interfaceText(locale, "timeline.noActivity")}</p>;
 
@@ -57,11 +63,7 @@ export function WorkorderTimelineList({ className = "", emptyMessage, items, loc
               {item.action || null}
             </div>
             {item.description ? <span className="workorder-timeline-description">{item.description}</span> : null}
-            {item.details?.length ? (
-              <dl className="workorder-timeline-details">
-                {item.details.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-              </dl>
-            ) : null}
+            <TimelineDetails details={item.details} />
             {item.content || null}
           </div>
         </li>
@@ -98,6 +100,7 @@ export function WorkorderTimeline({ timeline, locale = "en" }) {
           event: group.children[group.children.length - 1],
           title: group.title,
           description: group.description,
+          details: expandable ? [] : timelineConcernDetails(group.children[0], locale),
           action: expandable ? (
                 <button
                   className="workorder-timeline-toggle"
@@ -119,6 +122,7 @@ export function WorkorderTimeline({ timeline, locale = "en" }) {
                       {event.created_at ? <time dateTime={event.created_at}>{formatCreatedAt(event.created_at, locale)}</time> : null}
                     </div>
                     <span>{timelineEventDescription(event, locale)}</span>
+                    <TimelineDetails details={timelineConcernDetails(event, locale)} />
                   </li>
                 ))}
               </ol>

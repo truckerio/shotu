@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { requireWorkorderAccess } from "../../auth/resource-access.js";
 
 import {
   authorizeWorkorderCreate,
@@ -61,6 +62,50 @@ test("module authorization denies write through a read-only grant", async () => 
     }),
     (error) => error.statusCode === 403 && error.code === "PERMISSION_DENIED",
   );
+});
+
+test("mechanic Concern write follows effective policy even when Diagnosis is hidden", async () => {
+  const mechanicContext = { ...context, actor: { id: "mechanic-1", role: "mechanic" }, companyRoles: new Map([["company-1", "mechanic"]]) };
+  const request = { moduleKey: "concern", capability: "write", action: "update" };
+  const dependencies = {
+    authorizeProduct: allowProduct,
+    requireAccess: async () => workorder,
+    getEffectivePolicy: async () => ({
+      companyPolicy: { moduleAccess: { mechanic: { detail: { diagnosisRepair: "hidden" } } } },
+      locationPolicy: null,
+    }),
+  };
+  assert.equal((await authorizeWorkorderModule(mechanicContext, workorder.id, request, dependencies)).access, "write");
+  for (const access of ["read", "hidden"]) {
+    await assert.rejects(authorizeWorkorderModule(mechanicContext, workorder.id, request, {
+      ...dependencies,
+      getEffectivePolicy: async () => ({
+        companyPolicy: { moduleAccess: { mechanic: { detail: { concern: access } } } },
+        locationPolicy: null,
+      }),
+    }), (error) => error.statusCode === 403);
+  }
+});
+
+test("Concern authorization rejects unassigned and other-company mechanics", async () => {
+  const target = { ...workorder, status: "in_progress", mechanicIds: ["assigned-mechanic"] };
+  const dependencies = {
+    authorizeProduct: allowProduct,
+    requireAccess: (ctx, id, options) => requireWorkorderAccess(ctx, id, {
+      ...options, getWorkorder: async () => target,
+    }),
+    getEffectivePolicy: async () => ({ companyPolicy: null, locationPolicy: null }),
+  };
+  const request = { moduleKey: "concern", capability: "write", action: "update" };
+  for (const [actorId, companyId] of [["unassigned-mechanic", "company-1"], ["assigned-mechanic", "company-2"]]) {
+    const ctx = {
+      actor: { id: actorId, role: "mechanic" },
+      companyIds: new Set([companyId]),
+      companyRoles: new Map([[companyId, "mechanic"]]),
+    };
+    await assert.rejects(authorizeWorkorderModule(ctx, workorder.id, request, dependencies),
+      (error) => error.statusCode === 404);
+  }
 });
 
 test("module authorization denies unknown modules by default", async () => {

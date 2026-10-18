@@ -1,10 +1,12 @@
-import { Plus } from "@untitledui/icons";
+import { Plus, Trash01 } from "@untitledui/icons";
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../../lib/api.js";
 import { QuantityUnitInput } from "../forms/QuantityUnitInput.jsx";
 import { NarrativeField } from "../forms/NarrativeField.jsx";
 import { formatQuantityUnit } from "../forms/quantity-unit-model.js";
 import { Button } from "../ui/Button.jsx";
+import { IconButton } from "../ui/IconButton.jsx";
+import { PartRemovalDialog } from "./PartRemovalDialog.jsx";
 import {
   availableUsedPartDraftCount,
   canAddUsedPartDraft,
@@ -12,9 +14,11 @@ import {
   initialUsedPartRows,
   noStockUsedPartDraft,
   readonlyUsedParts,
+  removeUsedPartDraft,
   reusableReturnedUsageIds,
   savableNoStockUsedPart,
   serializedUsageTableState,
+  usedPartHasValue,
 } from "./used-parts-model.js";
 import { createSerializedRepairAutosave } from "./serialized-repair-autosave.js";
 import "./used-parts-editor.css";
@@ -79,7 +83,8 @@ export function UsedPartsEditor({
   const [measuredDialogPart, setMeasuredDialogPart] = useState(null);
   const [noStockDraft, setNoStockDraft] = useState(null);
   const [savingNoStock, setSavingNoStock] = useState(false);
-  const [draftRows, setDraftRows] = useState(() => initialUsedPartRows([]));
+  const [removalTarget, setRemovalTarget] = useState(null);
+  const [draftRows, setDraftRows] = useState(() => role === "mechanic" ? [] : initialUsedPartRows([]));
   const [activeDraftIndex, setActiveDraftIndex] = useState(-1);
   const [serializedHistoryOpen, setSerializedHistoryOpen] = useState(false);
   const [serializedRepairOrders, setSerializedRepairOrders] = useState({});
@@ -270,10 +275,10 @@ export function UsedPartsEditor({
             {actions.install ? <Button type="button" variant="primary" onClick={() => serializedParts.finalize(usage, "installed")} disabled={rowBusy}>
               {t("parts.markInstalled")}
             </Button> : null}
-            {actions.returnUnused ? <Button type="button" onClick={() => serializedParts.finalize(usage, "returned")} disabled={rowBusy}>
+            {actions.returnUnused ? <Button type="button" icon={Trash01} onClick={() => serializedParts.finalize(usage, "returned")} disabled={rowBusy}>
               {t("parts.returnUnused")}
             </Button> : null}
-            {actions.remove ? <Button type="button" onClick={() => serializedParts.requestRemove(usage)} disabled={rowBusy}>
+            {actions.remove ? <Button type="button" icon={Trash01} onClick={() => serializedParts.requestRemove(usage)} disabled={rowBusy}>
               {t("parts.removeFromUnit")}
             </Button> : null}
           </div>
@@ -300,7 +305,7 @@ export function UsedPartsEditor({
           ? <WorkorderPartPriceCell compact={compact} workorderId={detail.workorder.id} usageKind="no_stock" noStockLineId={part.noStockLineId} price={noStockPriceByLineId.get(part.noStockLineId) || null} quantity={part.qty} onChanged={onChanged} disabled={!partsEditable} />
           : <span className="used-part-price-unavailable">Price unavailable · not linked to inventory</span> : null}
         {partsEditable && part.trackingMode === "no_stock" && part.noStockLineId
-          ? <Button type="button" onClick={() => removeNoStockPart(part)} disabled={savingNoStock}>Remove</Button>
+          ? <IconButton icon={Trash01} tone="danger" label={`${t("parts.removePartRow")}: ${partNumber}`} onClick={() => { setMessage(""); setRemovalTarget({ part }); }} disabled={savingNoStock || !onSave} />
           : <span className="used-part-recorded-status" aria-hidden="true"></span>}
       </WorkorderPartsRow>
     );
@@ -398,6 +403,23 @@ export function UsedPartsEditor({
     });
   }
 
+  function deleteDraftRow(index) {
+    const result = removeUsedPartDraft(draftRows, index, activeDraftIndex);
+    if (!result || savingNoStock || !partsEditable) return;
+    setDraftRows(result.rows);
+    setActiveDraftIndex(result.activeIndex);
+    if (result.removedActive) resetIntakeRow();
+    setRemovalTarget(null);
+    window.requestAnimationFrame(() => document.getElementById("workorder-add-approved-part")?.focus());
+  }
+
+  function requestDraftRemoval(index) {
+    if (usedPartHasValue(draftRows[index])) {
+      setMessage("");
+      setRemovalTarget({ index });
+    } else deleteDraftRow(index);
+  }
+
   function focusIntakeRow() {
     if (!intakeOpen) {
       resetIntakeRow();
@@ -407,6 +429,7 @@ export function UsedPartsEditor({
   }
 
   function reuseReturnedUnit(usage) {
+    setActiveDraftIndex(-1);
     serializedReservationCompletedRef.current = false;
     setCatalogQuery(usage.partNumber || "");
     setMessage("");
@@ -462,13 +485,14 @@ export function UsedPartsEditor({
   }
 
   async function removeNoStockPart(part) {
-    if (!onSave || !part?.noStockLineId) return;
+    if (!onSave || !part?.noStockLineId || savingNoStock || !partsEditable) return;
     setMessage("");
     setSavingNoStock(true);
     const nextParts = recordedManualParts.filter((candidate) => candidate.noStockLineId !== part.noStockLineId);
     try {
       const saved = await onSave(nextParts);
       onChange(saved?.parts || nextParts);
+      setRemovalTarget(null);
       await onChanged();
     } catch (error) {
       setMessage(error?.message || "No-stock item could not be removed.");
@@ -582,6 +606,7 @@ export function UsedPartsEditor({
         {rowNoStockDraft ? <Button type="button" variant="primary" onClick={() => addNoStockPart(rowNoStockDraft, index)} disabled={savingNoStock}>
           {savingNoStock ? t("progress.saving") : t("parts.save")}
         </Button> : null}
+        <IconButton icon={Trash01} tone="danger" label={`${t("parts.removePartRow")} ${ordinal}`} onClick={() => requestDraftRemoval(index)} disabled={savingNoStock} />
       </div>
     </WorkorderPartsRow>;
   }
@@ -593,7 +618,7 @@ export function UsedPartsEditor({
     catalogPart={serializedDialogPart}
     initialUnitId={serializedDialogPart.initialUnitId}
     initialSerialNumber={serializedDialogPart.initialSerialNumber}
-    anchorToPartField={onePage}
+    anchorToPartField={onePage && activeDraftIndex >= 0}
     locale={locale}
     onClose={closeSerializedDialog}
     onReserved={async (usage) => {
@@ -607,7 +632,14 @@ export function UsedPartsEditor({
       }
     }}
   /> : null;
+
+  const removalDialog = removalTarget ? <PartRemovalDialog
+    saved={Boolean(removalTarget.part)} busy={savingNoStock} error={message} locale={locale}
+    onCancel={() => setRemovalTarget(null)}
+    onRemove={() => removalTarget.part ? removeNoStockPart(removalTarget.part) : deleteDraftRow(removalTarget.index)}
+  /> : null;
   const measuredDialog = measuredDialogPart ? <MeasuredPartUsageDialog
+    allowStockIntake={canViewPrices}
     open actorId={actorId} workorderId={detail.workorder.id} catalogPart={measuredDialogPart} locationId={locationId || detail.workorder.locationId}
     assetId={detail.workorder.asset?.id || detail.workorder.assetId}
     suggestionsEnabled={suggestionsEnabled}
@@ -653,6 +685,7 @@ export function UsedPartsEditor({
         </section>
         {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
         {measuredDialog}
+        {removalDialog}
       </div>
     );
   }
@@ -660,10 +693,10 @@ export function UsedPartsEditor({
   if (presentation === "one-page") {
     return (
       <div className="used-parts-editor workorder-parts-surface is-one-page" aria-label={t("parts.usedTitle")}>
-        {!partsEditable ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
+        {!partsEditable && role !== "mechanic" ? <p className="used-parts-readonly-state" role="status">{readOnlyText}</p> : null}
         <section className="used-parts-section used-parts-items-section" aria-labelledby={partsSectionTitleId}>
           <div className="used-parts-section-heading">
-            <h3 id={partsSectionTitleId}>Parts</h3>
+            <h3 id={partsSectionTitleId}>{t("detail.parts")}</h3>
             <div className="used-parts-heading-actions">{onePageToolbar}{headerAction}</div>
           </div>
           {serializedFeedback}
@@ -679,7 +712,7 @@ export function UsedPartsEditor({
             laborAriaLabel={laborQuantityLabel}
             laborProduct={<div className="used-part-field operational-part-labor-name">
                 <span className="used-part-label">{t("parts.labor")}</span>
-                <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange || (() => {})} disabled={!laborEditable} locale={locale} />
+                <LaborProductSelector locationId={locationId} value={laborProduct} onChange={onLaborProductChange || (() => {})} disabled={!laborEditable || !onLaborProductChange} locale={locale} />
               </div>}
             laborQuantity={<QuantityUnitInput id="workorder-labor-hours" quantity={laborHours} uomCode={laborUomCode} onValueChange={({ quantity }) => onLaborHoursChange(quantity)} quantityLabel={laborQuantityLabel} unitLabel={t("parts.unit")} disabled={laborControlsDisabled} unitReadOnly compact max={9999} />}
             laborRepair={<div className="used-part-field used-part-repair"><NarrativeField locale={locale} singleLine value={laborRepairOrder} onChange={(event) => onLaborRepairOrderChange(event.target.value)} aria-label={t("parts.repairOrderWorkPerformed")} placeholder={t("parts.repairOrderWorkPerformed")} disabled={laborControlsDisabled} /></div>}
@@ -697,10 +730,12 @@ export function UsedPartsEditor({
             </Button>
           </WorkorderPartsActions> : null}
           {serializedHistory}
-          <div className="used-parts-feedback" aria-live="polite">{message ? <span>{message}</span> : <span></span>}</div>
+          {activeDraftIndex < 0 ? serializedDialog : null}
+          <div className="used-parts-feedback" aria-live="polite">{message ? <span>{message}</span> : null}</div>
         </section>
         {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
         {measuredDialog}
+        {removalDialog}
       </div>
     );
   }
@@ -852,6 +887,7 @@ export function UsedPartsEditor({
       </section>
       {canViewPrices && !financialFooter?.hidden ? <WorkorderPricingSummary pricing={financialFooter ? null : pricingForDisplay} {...financialFooter} /> : null}
       {measuredDialog}
+      {removalDialog}
     </div>
   );
 }

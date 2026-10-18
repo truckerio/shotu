@@ -329,14 +329,29 @@
 
 @media (max-width: 700px) {
   .role-phone-account-header { display: flex; }
+  /* Page actions already contain the account menu on the Workorders home. */
+  .mechanic-home:not(.inspection-workspace) > .role-phone-account-header { display: none; }
+  .mechanic-home-content > .page-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 8px;
+  }
+  .mechanic-home-content > .page-header .page-header-actions {
+    justify-content: flex-end;
+    width: auto;
+  }
   .role-phone-product-switch { display: flex; }
   .mechanic-role-shell { display: block; }
   .mechanic-next-job {
     align-items: stretch;
     grid-template-columns: minmax(0, 1fr);
     margin: 12px 10px;
-    padding: 18px;
+    padding: 12px;
+    gap: 12px;
   }
+
+  .mechanic-next-job-copy { gap: 4px; }
+  .mechanic-next-job-unit { font-size: 22px; }
+  .mechanic-next-job-copy > p { font-size: 14px; }
 
   .mechanic-secondary-actions {
     align-items: stretch;
@@ -450,7 +465,7 @@
     max-width: 100%;
     overflow-x: clip;
     overscroll-behavior-x: none;
-    padding: 16px 12px 28px;
-    touch-action: pan-y;
+    padding: 16px var(--mobile-page-gutter, 16px) 28px;
+    touch-action: pan-y pinch-zoom;
   }
 }

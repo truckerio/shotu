@@ -5,7 +5,7 @@
   inset: 0;
   justify-content: center;
   position: fixed;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   z-index: 90;
 }
 
@@ -185,7 +185,8 @@
   }
 
   .mobile-filter-content {
-    padding-inline: 14px;
+    padding-inline: var(--mobile-page-gutter);
+    scrollbar-gutter: auto;
   }
 }
 

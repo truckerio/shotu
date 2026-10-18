@@ -1,0 +1,22 @@
+.freightliner-catalog-reference {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border, #d5dbe2);
+  border-radius: 0.6rem;
+  background: var(--surface-subtle, #f7f9fb);
+}
+
+.freightliner-catalog-reference-heading { display: grid; gap: 0.15rem; }
+.freightliner-catalog-reference-heading span,
+.freightliner-catalog-reference-note { font-size: 0.85rem; }
+.freightliner-catalog-reference-context { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; margin: 0; }
+.freightliner-catalog-reference-context > div { display: flex; gap: 0.3rem; min-width: 0; }
+.freightliner-catalog-reference-context dt { font-weight: 600; }
+.freightliner-catalog-reference-context dd { margin: 0; overflow-wrap: anywhere; }
+.freightliner-catalog-reference-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.freightliner-catalog-reference-actions .button { min-height: 44px; }
+.freightliner-catalog-reference-note { margin: 0; overflow-wrap: anywhere; }
+.freightliner-manufacturer-number { display: grid; gap: 0.3rem; min-width: 0; }
+.freightliner-manufacturer-number input { box-sizing: border-box; width: 100%; min-width: 0; }

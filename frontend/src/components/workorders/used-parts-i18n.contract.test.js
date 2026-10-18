@@ -48,5 +48,5 @@ test("locale reaches the mechanic editor without changing office defaults", () =
   assert.match(mechanicSurface, /<UsedPartsSection[\s\S]*locale=\{locale\}/);
   assert.match(section, /locale=\{locale\}/);
   assert.match(editor, /locale === "en" \? readonlyMessage : t\("parts\.usedPartsReadOnly"\)/);
-  assert.match(module, /isMechanicDetail \? t\("parts\.usedTitle"\) : "Parts"/);
+  assert.match(module, /isMechanicDetail \? t\("detail\.parts"\) : "Parts"/);
 });

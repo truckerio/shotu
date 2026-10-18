@@ -37,6 +37,23 @@ test("desktop Units is an icon-free group with specific equipment pages", async 
   assert.doesNotMatch(source, /items=\{\[\{ id: "units"/);
 });
 
+test("phone Admin exposes the authorized operation products and each unit category", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./workspace/AdminWorkspaceShell.jsx", import.meta.url),
+    "utf8",
+  ));
+  const styles = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./admin.css", import.meta.url),
+    "utf8",
+  ));
+  assert.match(source, /group\.id === "units"\)\.items/);
+  assert.match(source, /group\.id === "operations"\)\.items\.filter\(\(item\) => item\.visible\)/);
+  assert.match(source, /<nav className=\{`admin-phone-section-nav/);
+  assert.match(source, /aria-pressed=\{activeId === item\.id\}/);
+  assert.match(source, /onClick=\{\(\) => navigate\(item\.id\)\}/);
+  assert.match(styles, /\.admin-phone-section-nav button \{[^}]*min-height: 44px;/s);
+});
+
 test("admin phone navigation keeps Ops visible and only setup destinations in the kebab menu", async () => {
   const styles = await import("node:fs/promises").then(({ readFile }) => readFile(
     new URL("./admin.css", import.meta.url),

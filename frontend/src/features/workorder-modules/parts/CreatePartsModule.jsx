@@ -641,7 +641,7 @@ export function CreatePartsModule({
               </div>
             ) : (
               <button
-                className="create-labor-summary"
+                className={`create-labor-summary${hasLabor ? "" : " is-empty"}`}
                 type="button"
                 aria-expanded={false}
                 onClick={() => {
@@ -660,7 +660,7 @@ export function CreatePartsModule({
             )}
           </section>
 
-          <section className="create-parts-group" aria-labelledby="create-parts-approved-title">
+          <section className={`create-parts-group${renderIndexes.length ? "" : " is-empty"}`} aria-labelledby="create-parts-approved-title">
             <div className="create-parts-group-heading">
               <div>
                 <h3 id="create-parts-approved-title">{t("create.parts.approvedParts")}</h3>
@@ -680,7 +680,7 @@ export function CreatePartsModule({
 
             <WorkorderPartsActions className="create-parts-actions">
               <Button type="button" className="create-parts-compact-action create-parts-add-button" variant="primary" icon={Plus} onClick={startAddingPart} disabled={!canAddPart}>
-                {t("create.parts.add")}
+                {t("parts.addPart")}
               </Button>
             </WorkorderPartsActions>
           </section>

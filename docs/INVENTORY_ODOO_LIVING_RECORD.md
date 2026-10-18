@@ -275,7 +275,7 @@ Server validation checks workorder access, approved request state, company, part
 #### Mechanic
 
 - Works inside shared workorder Parts section.
-- Chooses “I used a part” or “I need a part” when allowed.
+- Uses the shared Parts table with Add line when Parts Edit and the location's used-parts rule allow it; exact serialized stock selection additionally requires Part scanning Edit. Request part stays below the table with Requests & supply on the same page. Mechanic draft rows open on demand to keep those actions near the labor row. Draft rows have a trash control; populated drafts and saved no-stock removals require confirmation. Stock uses existing return/removal/release transitions, and legacy manual evidence remains immutable.
 - Searches catalog optionally, enters request and quantity, reads Office decision/allocation status, and manually chooses final usage status.
 
 #### Office
@@ -1388,3 +1388,19 @@ Each implementation slice records applicable evidence:
 - Authorization/failure behavior: Financial permissions remain Office/Admin-only; legacy matching requires active same-company provider linkage and matching unit. Unknown/missing or stale sources remain unavailable. No receipt, position, reservation, usage, custody, or movement is created for no-stock pricing.
 - Verification: Independent pricing/identity verification passed 155 focused tests, 13 disposable PostgreSQL integrations, and the full repository verify gate (3,378 unit tests passed with 98 skips, 57 Units tests passed, syntax checks and build). The subsequent catalog-picker correction passed 47 focused tests and a fresh build. Authenticated disposable-local browser/API checks proved cost and selling edits, persistence, legacy labor snapshots, tenant/role negatives, Unknown precedence, and zero physical ledger activity; the 390px layout had no horizontal overflow. Final frozen-diff rechecks and exact evidence are retained in the external orchestrator task report.
 - Release evidence: No commit, push, hosted migration, deployment, provider write, or business-price mutation performed.
+
+### INV-20261017-01 — Mechanic part entry and request spacing
+
+- Status: VERIFIED locally.
+- Decision/requirement: Let mechanics add parts and move Request part closer to the labor row using existing controls and permissions.
+- Before: Chino had used-parts recording enabled but mechanic Parts was explicitly View; Part scanning inherited Hidden. The request button followed empty feedback space.
+- After: Existing local Chino role overrides set mechanic Detail Parts and Part scanning to Edit. Other scopes, named-user rules, and defaults remain unchanged. Mechanic draft rows open with Add line; empty feedback adds no space and the actions lose excess bottom padding.
+- Canonical owners: `workorder-policies.repo.js`, `module-access-rules.repo.js`, `UsedPartsEditor.jsx`, `PartRemovalDialog.jsx`, `used-parts-model.js`, shared Parts CSS, `MeasuredPartUsageDialog.jsx`, existing Workorder module action registry/runtime, `inventory-aggregate-workorder.service.js`.
+- Data/API changes: Existing Parts action adds `aggregateUsagePositions` to read usable pickup locations for the authorized workorder and catalog part. The client no longer relies on the Office inventory lookup. No database schema or migration changes. Local versioned policy saves preserve existing role/user overrides; no user impersonation for that configuration operation.
+- Authorization/security changes: Existing active-assignment, company/location, lifecycle, stock identity, and availability checks still apply. Existing serialized units may be selected; creating serialized stock remains Office/Admin.
+- Failure/reconciliation behavior: Existing save errors and canonical inventory transactions retained.
+- Verification: Full `npm run verify` passed after the delete UI change (3411 unit tests passed, 98 skipped; backup, performance, units, syntax, build passed). After the scoped pickup fix, 153 affected tests, structure, full syntax and production build passed. Live assigned-mechanic browser checks passed for blank removal, filled confirmation/cancel/removal, saved no-stock removal with retained history, and quantity-stock reserve, refresh persistence and release. Independent review passed. QA workorder cancelled via the normal lifecycle; no stock was consumed.
+- Release evidence: Local only; no hosted configuration or deployment applied.
+- Remaining gaps: Hosted activation requires the same existing Admin module settings.
+
+- Removal follow-up: Blank drafts remove immediately; filled drafts can cancel confirmation without losing input. Removing a selected draft clears its selection dialogs; removing an earlier row rebases the selected index. Save-in-flight blocks deletion. Saved no-stock removal uses its existing canonical save, retains history and shows failures. Serialized Return/Remove controls retain stock semantics and add the trash icon; aggregate Release/Reverse/Adjust remain explicit lifecycle controls. No hard deletion or request-history cancellation added.

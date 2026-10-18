@@ -99,7 +99,21 @@ test("inspection workspaces retain the profile header on phone", () => {
   assert.match(workspace, /\{officeMobileNavigation\}/);
   assert.match(officeCss, /\.office-mobile-nav \{[\s\S]*?display: grid;/);
   assert.match(workspace, /<WorkspaceHeader actor=\{actor\} className="office-phone-account-header" \/>/);
-  assert.match(officeCss, /@media \(max-width: 700px\)[\s\S]*?\.office-phone-account-header \{ display: flex; \}/);
+  assert.match(workspace, /<ProfileMenu actor=\{actor\} mobileNav \/>/);
+  assert.match(officeCss, /@media \(max-width: 700px\)[\s\S]*?\.office-phone-account-header \{ display: none; \}/);
+  assert.match(officeCss, /\.office-mobile-nav \{[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+});
+
+test("Office phone operations can switch permitted sections and return to the prior workorder queue", () => {
+  assert.match(workspace, /<nav className="office-phone-operations-nav" aria-label="Office operations sections">/);
+  assert.match(workspace, /workorderAccess\.canRead \? <button[^>]*onClick=\{\(\) => selectOperationsProduct\("workorders"\)\}>Workorders<\/button>/);
+  assert.match(workspace, /workorderAccess\.canRead \? <button[^>]*onClick=\{\(\) => selectWorkspace\("customers"\)\}>Customers<\/button>/);
+  assert.match(workspace, /inspectionAccess\.canRead \? <button[^>]*onClick=\{\(\) => selectOperationsProduct\("inspections"\)\}>Inspections<\/button>/);
+  assert.match(workspace, /if \(!\["customers", "inventory", "units"\]\.includes\(activeTab\)\) lastOperationsTab\.current = activeTab;/);
+  assert.match(workspace, /<PageHeader className="office-operations-page-header"[\s\S]*?\/>\s*\{officePhoneOperationsNavigation\}/);
+  assert.match(workspace, /\{isOperationsWorkspace \? officePhoneOperationsNavigation : null\}/);
+  assert.match(officeCss, /\.office-phone-operations-nav \{\s*display: none;/);
+  assert.match(officeCss, /@media \(max-width: 700px\)[\s\S]*?\.office-phone-operations-nav \{\s*display: flex;/);
 });
 
 test("Office opens the newly created inspection instead of returning to the queue", () => {

@@ -28,6 +28,18 @@ export function createMechanicPartRequestDraft() {
   };
 }
 
+export function withManufacturerPartNumber(draft, partNumber) {
+  return { ...draft, catalogPartId: "", partNumber };
+}
+
+export function clearCompanyCatalogSelection(draft) {
+  return {
+    ...draft,
+    catalogPartId: "",
+    partNumber: draft.catalogPartId ? "" : draft.partNumber,
+  };
+}
+
 export function validateMechanicPartRequest(draft, t = (key) => interfaceText("en", key)) {
   const query = String(draft?.query || "").trim();
   const uomCode = String(draft?.uomCode || "").trim().toLowerCase();
@@ -52,7 +64,7 @@ export function validateMechanicPartRequest(draft, t = (key) => interfaceText("e
       ...(draft?.catalogPartId ? { catalogPartId: draft.catalogPartId } : {}),
       query,
       description: query,
-      ...(draft?.partNumber ? { partNumber: String(draft.partNumber).trim() } : {}),
+      ...(String(draft?.partNumber || "").trim() ? { partNumber: String(draft.partNumber).trim() } : {}),
       quantity: Number(normalizedQuantity),
       uomCode,
     },
@@ -77,7 +89,7 @@ function validationIssues(value) {
 }
 
 export function mechanicPartRequestErrorFields(error) {
-  const supportedFields = new Set(["query", "description", "quantity", "uomCode"]);
+  const supportedFields = new Set(["query", "description", "quantity", "uomCode", "partNumber"]);
   const issues = [
     ...validationIssues(error?.details),
     ...validationIssues(error?.message),

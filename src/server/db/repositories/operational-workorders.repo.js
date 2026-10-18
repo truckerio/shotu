@@ -525,6 +525,7 @@ function changedFields(before, input) {
     const newForm = input.formData || {};
     for (const key of Object.keys(FIELD_EVENT_LABELS).filter((entry) => entry.startsWith("formData."))) {
       const formKey = key.slice("formData.".length);
+      if (formKey === "mechanicConcern" && Object.prototype.hasOwnProperty.call(input, "concern")) continue;
       if (
         formKey === "companyName"
         && Object.prototype.hasOwnProperty.call(newForm, "customerCompanyName")
@@ -796,6 +797,16 @@ export async function createOperationalWorkorderInTransaction(input, client) {
       formData.workPerformed || "",
     ]
   );
+  await addFieldEvents(client, {
+    workorderId: result.rows[0].id,
+    changes: [{
+      fieldKey: "concern.initial",
+      fieldLabel: "Concern",
+      oldValue: "",
+      newValue: input.concern,
+    }],
+    changedByUserId: input.createdByUserId,
+  });
   await client.query(
     `insert into workorder_authorization_events(
        company_id,location_id,workorder_id,classification,activation_policy,exception_reason,
@@ -1099,7 +1110,11 @@ export async function updateOperationalWorkorder(workorderId, input) {
             form_data = coalesce($8::jsonb, form_data),
             diagnosis = case when $9::boolean then $10 else diagnosis end,
             work_performed = case when $11::boolean then $12 else work_performed end,
-            progress_version = progress_version + case when $9::boolean or $11::boolean or $13::boolean then 1 else 0 end,
+            progress_version = progress_version + case
+              when ($6::text is not null and concern is distinct from $6::text)
+                or ($8::jsonb ? 'mechanicConcern' and form_data->>'mechanicConcern' is distinct from $8::jsonb->>'mechanicConcern')
+                or $9::boolean or $11::boolean or $13::boolean
+              then 1 else 0 end,
             updated_at = now()
         where id = $1
       `,

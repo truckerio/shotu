@@ -40,7 +40,7 @@
   padding: 10px 18px;
   position: sticky;
   top: 0;
-  z-index: 12;
+  z-index: 20;
 }
 
 .workorder-detail-page .detail-context-actions {

@@ -14,10 +14,10 @@ const laborPrice = source("../LaborPriceCell.jsx");
 const measuredUsage = source("./MeasuredPartUsageDialog.jsx");
 const editorCss = source("../used-parts-editor.css");
 
-test("office one-page Parts reaches the used-parts editor without changing mechanic presentation", () => {
+test("office and mechanic one-page Parts reach the shared used-parts editor", () => {
   assert.match(panel, /presentation = "panel"/);
   assert.match(panel, /<OfficePartsSurface \{\.\.\.commonProps\} presentation=\{presentation\} \/>/);
-  assert.match(panel, /<MechanicPartsSurface \{\.\.\.commonProps\} locale=\{locale\} \/>/);
+  assert.match(panel, /<MechanicPartsSurface \{\.\.\.commonProps\} locale=\{locale\} presentation=\{presentation\} \/>/);
   assert.match(office, /presentation = "panel"/);
   assert.match(office, /<UsedPartsSection[\s\S]*presentation=\{presentation\}/);
   assert.match(section, /presentation = "panel"/);
@@ -55,7 +55,7 @@ test("one-page catalog selection stays in the existing inventory lifecycle", () 
   assert.match(editor, /<PartCatalogCombobox[\s\S]*onSelect=\{\(catalogPart\) => \{[\s\S]*setCatalogQuery\(catalogPart\.partNumber\)[\s\S]*setSerializedDialogPart\(catalogPart\)/);
   assert.match(editor, /\{serializedDialog\}/);
   assert.match(editor, /onReserved=\{async \(usage\) => \{[\s\S]*serializedParts\?\.recordUsage\?\.\(usage\)/);
-  assert.match(editor, /anchorToPartField=\{onePage\}/);
+  assert.match(editor, /anchorToPartField=\{onePage && activeDraftIndex >= 0\}/);
 });
 
 test("office request actions move into a shared modal opened by the Parts More menu", () => {

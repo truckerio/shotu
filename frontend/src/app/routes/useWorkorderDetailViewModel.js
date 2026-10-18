@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import {
   assignedMechanicIdsFromDetail,
+  assignedMechanicNamesFromDetail,
   conversationMessagesFromDetail,
   pendingPartRequestCount,
 } from "./workorder-detail-view-model.js";
@@ -111,12 +112,7 @@ export function useWorkorderDetailViewModel({
     detailLocationName: activeWorkorder?.workorder?.location?.name
       || selectedOfficeLocation?.location?.name
       || "",
-    detailMechanicNames: activeWorkorder?.workorder?.mechanics
-      ?.map((mechanic) => mechanic.name)
-      .filter(Boolean)
-      .join(", ")
-      || activeWorkorder?.workorder?.mechanic?.name
-      || form.mechanicName,
+    detailMechanicNames: assignedMechanicNamesFromDetail(activeWorkorder),
     detailSections,
     filledPartCount,
     mechanicAsset,

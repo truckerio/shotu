@@ -8,6 +8,7 @@ import {
   vehicleMileage,
   vehicleModelText,
   workorderDraftOwnerId,
+  workorderFormValues,
 } from "./role-router-model.js";
 
 test("create state has one shared template baseline and mechanic ownership", () => {
@@ -83,4 +84,10 @@ test("vehicle display values normalize odometer units and duplicate model words"
   assert.equal(vehicleMileage({ last_odometer_miles: 1234.6 }), "1235");
   assert.equal(vehicleMileage({ last_odometer_meters: 16093.44 }), "10");
   assert.equal(vehicleModelText({ year: 2024, make: "Volvo", model: "volvo" }), "2024 Volvo");
+});
+
+test("Concern hydration prefers canonical saved text over an older form snapshot", () => {
+  const values = (concern) => workorderFormValues({ detail: { workorder: { serial: "WO-1", concern, formData: { mechanicConcern: "Older office request" } } }, current: {}, officeLocations: [] });
+  assert.equal(values("Office request; mechanic inspection").mechanicConcern, "Office request; mechanic inspection");
+  assert.equal(values("").mechanicConcern, "");
 });

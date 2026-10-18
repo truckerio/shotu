@@ -48,6 +48,24 @@ test("input ownership decomposes broad updates into touched modules", () => {
   assert.deepEqual(workorderInputModules({ concern: "inspect", formData: {} }, { create: true }), ["concern"]);
 });
 
+test("Concern save action follows Concern policy independently of Diagnosis", () => {
+  const detail = {
+    workorder: { id: "wo-1", companyId: "company-1", concern: "Inspect brakes", formData: { mechanicConcern: "Inspect brakes" } },
+    allowedActions: { saveConcern: true, saveNotes: true },
+  };
+  const writable = projectProtectedWorkorderDetail(detail, {
+    concern: { access: "write" }, diagnosisRepair: { access: "hidden" },
+  });
+  assert.equal(writable.allowedActions.saveConcern, true);
+  assert.equal(writable.allowedActions.saveNotes, false);
+  assert.equal(writable.workorder.concern, "Inspect brakes");
+  const readOnly = projectProtectedWorkorderDetail(detail, {
+    concern: { access: "read" }, diagnosisRepair: { access: "write" },
+  });
+  assert.equal(readOnly.allowedActions.saveConcern, false);
+  assert.equal(readOnly.allowedActions.saveNotes, true);
+});
+
 test("labor belongs to diagnosis and repair while actual rows belong to Parts", () => {
   const projected = projectProtectedWorkorderDetail({
     workorder: {
@@ -287,4 +305,20 @@ test("office and admin parts projections preserve the existing request detail sh
     assert.deepEqual(projected.partRequests, [request]);
     assert.deepEqual(projected.modules.parts.data.partRequests, [request]);
   }
+});
+
+test("hidden Concern does not leak through new or legacy Activity entries", () => {
+  const detail = { workorder: { id: "wo-1" }, timeline: [
+    { id: 1, type: "field", field_key: "concern.initial", old_value: "", new_value: "secret original" },
+    { id: 2, type: "field", field_key: "concern", old_value: "secret old", new_value: "secret new" },
+    { id: 3, type: "field", field_key: "formData.mechanicConcern", old_value: "secret", new_value: "secret" },
+    { id: 4, type: "field", field_key: "work_details_updated", old_value: JSON.stringify({ concern: "secret" }), new_value: JSON.stringify({ fieldsChanged: ["concern", "diagnosis"], concern: "secret", diagnosis: "Visible diagnosis" }) },
+    { id: 5, type: "field", field_key: "work_details_updated", old_value: "{}", new_value: JSON.stringify({ fieldsChanged: ["concern"], concern: "secret" }) },
+  ] };
+  const projected = projectProtectedWorkorderDetail(detail, { activity: { access: "read" }, concern: { access: "hidden" }, diagnosisRepair: { access: "read" } });
+  assert.deepEqual(projected.timeline.map((event) => event.id), [4]);
+  assert.equal(JSON.stringify(projected).includes("secret"), false);
+  assert.equal(JSON.parse(projected.timeline[0].new_value).diagnosis, "Visible diagnosis");
+  const visible = projectProtectedWorkorderDetail(detail, { activity: { access: "read" }, concern: { access: "read" } });
+  assert.deepEqual(visible.timeline, detail.timeline);
 });

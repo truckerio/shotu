@@ -125,7 +125,12 @@ test("Inbound owns the global arrival and invoice entry points while Purchasing 
   assert.match(workspace, /onInvoice=\{\(requestedLocationId\)=>openInvoiceWorkflow\("", requestedLocationId\)\}/);
   assert.match(workspace, /setLocationId\(requestedLocationId\)/);
   assert.match(workspace, /<InventoryInboundWorkspace/);
-  assert.match(workspace, /onReceivePurchaseOrder=\{\(poId\) => \{ setInboundReceiptOrderId\(poId\); selectInventorySection\('purchases'\); \}\}/);
+  assert.match(workspace, /onReceivePurchaseOrder=\{\(poId, requestedLocationId, poNumber\) => \{ setInboundReceiptHandoff\(createPurchaseReceiptHandoff\(poId, requestedLocationId, poNumber, crypto\.randomUUID\(\)\)\); selectInventorySection\('purchases'\); \}\}/);
+  assert.match(workspace, /initialReceiptHandoff=\{inboundReceiptHandoff\} onReceiptHandoffConsumed=\{consumeInboundReceiptHandoff\}/);
+  assert.match(purchases, /initialLocationId=\{props\.initialReceiptHandoff\?\.locationId\|\|demandDraft\?\.locationId\|\|\(props\.initialPurchaseOrderId&&props\.initialPurchaseLocationId\)\|\|''\}/);
+  assert.match(purchases, /searchFilter,setSearchFilter\]=useState\(initialReceiptHandoff\?\.poNumber\|\|initialPurchaseOrderNumber\)/);
+  assert.match(purchases, /Purchase order \$\{initialReceiptHandoff\.poNumber\|\|initialReceiptHandoff\.poId\} was not found in this shop/);
+  assert.match(workspace, /initialPurchaseLocationId=\{reportPurchaseOrderLocationId\}/);
   assert.match(workspace, /onAddInventory=\{\(requestedLocationId\) => setReceivingPart\(\{ receiptLocationId: requestedLocationId \}\)\}/);
 });
 
@@ -139,7 +144,7 @@ test("Inbound is a server-backed list and detail handoff workspace", async () =>
   assert.match(inbound, /aria-label="Inbound shop"/);
   assert.match(inbound, /aria-label="Search inbound work"/);
   assert.match(inbound, /<SecondaryDetailPanel/);
-  assert.match(inbound, /onReceivePurchaseOrder\?\.\(item\.poId, item\.locationId\)/);
+  assert.match(inbound, /onReceivePurchaseOrder\?\.\(item\.poId, item\.locationId, item\.poNumber\)/);
   assert.match(inbound, /onAddInventory\?\.\(item\.locationId\)/);
   assert.match(inbound, /onUploadInvoice\?\.\(item\.locationId\)/);
 });

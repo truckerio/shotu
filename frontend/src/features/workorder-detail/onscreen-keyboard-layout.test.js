@@ -39,7 +39,7 @@ test("fixed dialogs follow the visual viewport and mobile navigation clears the 
   assert.match(keyboardCss, /\.account-modal-overlay/);
   assert.match(keyboardCss, /\.admin-modal-backdrop/);
   assert.match(keyboardCss, /\.modal-backdrop/);
-  assert.match(keyboardCss, /\.admin-mobile-nav, \.mobile-jumpbar/);
+  assert.match(keyboardCss, /\.admin-mobile-nav, \.office-mobile-nav, \.mobile-jumpbar/);
   assert.match(keyboardCss, /scroll-margin-block: 32px/);
   assert.match(keyboardCss, /scroll-padding-block: 32px 48px/);
 });

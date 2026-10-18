@@ -207,6 +207,10 @@
   min-width: 0;
 }
 
+.used-part-intake-actions > .shared-icon-button {
+  justify-self: end;
+}
+
 .used-part-intake-actions .button {
   justify-content: center;
   min-width: 0;

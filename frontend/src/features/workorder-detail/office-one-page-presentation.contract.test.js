@@ -20,8 +20,8 @@ const panelShell = source("../../components/workorders/WorkorderPanelShell.jsx")
 const formLayout = source("../../components/workorders/WorkorderFormLayout.jsx");
 const detailUnit = source("../workorder-modules/unit/WorkorderUnitModule.jsx");
 
-test("only office Detail opts into the one-page presentation", () => {
-  assert.match(detailPage, /presentation=\{isOfficeDetail \? "one-page" : "panel"\}/);
+test("office and mechanic Detail opt into the one-page presentation", () => {
+  assert.match(detailPage, /presentation=\{onePageDetail \? "one-page" : "panel"\}/);
   assert.match(detailSurface, /presentation = "panel"/);
   assert.match(detailSurface, /presentation=\{presentation\}/);
   assert.match(panelShell, /data-workorder-presentation=\{presentation\}/);

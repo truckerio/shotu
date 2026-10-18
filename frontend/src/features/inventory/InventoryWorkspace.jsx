@@ -3,6 +3,7 @@ import { PartPositionsPanel } from "./PartPositionsPanel.jsx";
 import { PartCommercialDetails } from "./PartCommercialDetails.jsx";
 import './inventory-tables.css';
 import { InventoryPurchases } from './InventoryPurchases.jsx';
+import { createPurchaseReceiptHandoff, consumePurchaseReceiptHandoff } from './purchase-receipt-handoff.js';
 import { InventoryInboundWorkspace } from './InventoryInboundWorkspace.jsx';
 import { InventoryStockTasks } from './InventoryStockTasks.jsx';
 import { InventoryReports } from './InventoryReports.jsx';
@@ -124,9 +125,13 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
   const [inventorySection, setInventorySection] = useState(() => INVENTORY_SECTIONS.some((section) => section.id === activeSection)
     ? activeSection
     : ["inbound", "purchases", "tasks", "reports"].includes(initialParams.get("inventorySection")) ? initialParams.get("inventorySection") : "stock");
-  const [inboundReceiptOrderId, setInboundReceiptOrderId] = useState("");
+  const [inboundReceiptHandoff, setInboundReceiptHandoff] = useState(null);
+  const consumeInboundReceiptHandoff = useCallback((key) => {
+    setInboundReceiptHandoff((current) => consumePurchaseReceiptHandoff(current, key));
+  }, []);
   const [reportPurchaseOrderId] = useState(() => initialParams.get("purchaseOrderId") || "");
   const [reportPurchaseOrderNumber] = useState(() => initialParams.get("purchaseOrderNumber") || "");
+  const [reportPurchaseOrderLocationId] = useState(() => initialParams.get("taskLocation") || "");
   const [inboundSource, setInboundSource] = useState(() => ({ receiptId: initialParams.get("receiptId") || "", deliveryId: initialParams.get("deliveryId") || "" }));
   const [stockLocationInitialShop, setStockLocationInitialShop] = useState(() => initialParams.get("taskLocation") || "");
   const [stockLocationInitialPosition, setStockLocationInitialPosition] = useState(() => initialParams.get("positionId") || "");
@@ -533,8 +538,8 @@ export function InventoryWorkspace({ actorId = "", canApplyInventoryCount = fals
         {showSectionNavigationOnPhone ? <div className="inventory-phone-section-navigation"><OperationalCollectionSectionHeader ariaLabel="Inventory sections" activeId={inventorySection} onChange={changeInventorySection} items={INVENTORY_SECTIONS} headingLevel={presentation === "embedded" ? 2 : 1} showHeading={false} /></div> : null}
       </>}
       <section className="operational-collection-surface inventory-section-surface" aria-label={`${INVENTORY_SECTIONS.find((section) => section.id === inventorySection)?.label || "Stock"} workspace`}>
-      {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId) => { setInboundReceiptOrderId(poId); selectInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}
-      {inventorySection==='purchases'?<InventoryPurchases key={inventorySection} locations={locations} actorId={actorId} view={inventorySection} initialReceiptOrderId={inboundReceiptOrderId} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} onInvoice={(requestedLocationId)=>openInvoiceWorkflow("", requestedLocationId)} onStock={()=>selectInventorySection('stock')}/>:null}
+      {inventorySection==='inbound'?<InventoryInboundWorkspace locations={locations} initialReceiptId={inboundSource.receiptId} initialDeliveryId={inboundSource.deliveryId} onOpenInvoice={(invoiceRunId, requestedLocationId) => openInvoiceWorkflow(invoiceRunId, requestedLocationId)} onReceivePurchaseOrder={(poId, requestedLocationId, poNumber) => { setInboundReceiptHandoff(createPurchaseReceiptHandoff(poId, requestedLocationId, poNumber, crypto.randomUUID())); selectInventorySection('purchases'); }} onAddInventory={(requestedLocationId) => setReceivingPart({ receiptLocationId: requestedLocationId })} onUploadInvoice={(requestedLocationId) => openInvoiceWorkflow("", requestedLocationId)}/>:null}
+      {inventorySection==='purchases'?<InventoryPurchases key={inventorySection} locations={locations} actorId={actorId} view={inventorySection} initialReceiptHandoff={inboundReceiptHandoff} onReceiptHandoffConsumed={consumeInboundReceiptHandoff} initialPurchaseOrderId={reportPurchaseOrderId} initialPurchaseOrderNumber={reportPurchaseOrderNumber} initialPurchaseLocationId={reportPurchaseOrderLocationId} onInvoice={(requestedLocationId)=>openInvoiceWorkflow("", requestedLocationId)} onStock={()=>selectInventorySection('stock')}/>:null}
       {inventorySection==='reports'?<InventoryReports locations={locations}/>:null}
       {inventorySection==='tasks'?taskWorkflow?<section className="inventory-task-owner"><IconButton icon={ArrowLeft} label="Back to My work" onClick={closeTaskOwner} />{taskWorkflow.kind==='custody'?<InventoryCustodyWorkspace locations={locations} actorId={actorId} initialTab="returns" initialLocationId={taskLocationId} initialCaseId={taskWorkflow.task.sourceId} hidePrimaryTabs/>:<InventoryStockTasks
           key={taskSection}

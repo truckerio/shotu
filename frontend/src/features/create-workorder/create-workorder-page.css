@@ -277,6 +277,28 @@
 }
 
 @media (max-width: 700px) {
+  /* Let the full form take its natural height below the sticky header. Grid
+     track shrinking otherwise places the first fields underneath that header. */
+  .create-workorder-page:not(.is-keyboard-open) .control-panel[data-workorder-presentation="one-page"] {
+    display: block;
+  }
+
+  /* Preserve the concern heading and its accessible summary name in less space. */
+  .create-workorder-page .workorder-object-summary {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .create-workorder-page .workorder-object-primary > span {
+    display: none;
+  }
+
+  .create-workorder-page .workorder-object-summary .workorder-object-primary h1 {
+    /* The global heading scale is important; this is compact record context. */
+    font-size: 14px !important;
+    line-height: 1.35;
+  }
+
   .create-customer-editor-heading,
   .create-customer-editor-actions {
     align-items: stretch;

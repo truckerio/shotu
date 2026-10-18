@@ -5,6 +5,7 @@ import { OnscreenKeyboardRoot } from "./components/layout/OnscreenKeyboardRoot.j
 import { customerPortalGrantFromLocation } from "./features/customer-portal/customer-portal-grant.js";
 import { AuthGate } from "./features/auth/AuthGate.jsx";
 import "./typography.css";
+import "./styles/mobile-usability.css";
 
 const App = lazy(() => import("./app/App.jsx").then((module) => ({ default: module.App })));
 const InviteAcceptPage = lazy(() => import("./features/admin/InviteAcceptPage.jsx").then((module) => ({ default: module.InviteAcceptPage })));

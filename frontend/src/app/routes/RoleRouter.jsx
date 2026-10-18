@@ -286,10 +286,11 @@ export function RoleRouter({ actor }) {
     (payload) => updateDetailDiagnosisRepair({ ...payload, role: actor.role }), [actor.role]);
   const mechanicProgress = useMechanicProgress({
     actorId: actor.id,
-    workorderId: activeWorkorder?.allowedActions?.saveNotes
+    workorderId: (activeWorkorder?.allowedActions?.saveNotes || (isMechanicDetail && activeWorkorder?.allowedActions?.saveConcern))
       ? activeWorkorder?.workorder?.id : null,
-    value: { diagnosis: form.diagnosis, workPerformed: form.workPerformed, laborHours: form.laborHours },
-    initialVersion: activeWorkorder?.workorder?.progressVersion || 1,
+    value: { diagnosis: form.diagnosis, workPerformed: form.workPerformed, laborHours: form.laborHours, concern: form.mechanicConcern },
+    canSaveNotes: activeWorkorder?.allowedActions?.saveNotes === true, canSaveConcern: isMechanicDetail && activeWorkorder?.allowedActions?.saveConcern === true,
+    initialVersion: activeWorkorder?.workorder?.progressVersion || 1, savedValue: activeWorkorder?.workorder,
     saveProgress: saveDiagnosisRepair,
   });
   const officeActions = useOfficeWorkorderActions({

@@ -1,3 +1,4 @@
+import { MechanicProgressStatus } from "../../mechanic/progress/MechanicProgressStatus.jsx";
 import { FormField, NarrativeField } from "../../../components/forms/index.js";
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
@@ -17,6 +18,7 @@ export function WorkorderConcernModule({
   busy,
   concern,
   message,
+  mechanicProgress,
   missingInfoAttention,
   missingInfoNote,
   locale = "en",
@@ -31,7 +33,7 @@ export function WorkorderConcernModule({
   if (!access) return null;
   const t = (key) => interfaceText(locale, key);
   const text = (key, english) => isMechanicDetail ? t(key) : english;
-  const canWrite = writable(access) && Boolean(allowedActions.update);
+  const canWrite = writable(access) && Boolean(isMechanicDetail ? allowedActions.saveConcern : allowedActions.update);
   const onePage = presentation === "one-page";
 
   return (
@@ -51,11 +53,12 @@ export function WorkorderConcernModule({
             <span>{text("detail.addCorrection", "Add the administrative correction or office addendum below, then save changes.")}</span>
           </div>
         ) : null}
-        {canWrite ? (
+        {canWrite || (onePage && isMechanicDetail) ? (
           onePage ? <div className="workorder-one-page-concern-fields">
-            <FormField id="workorder-concern" label="Concern">
-              <NarrativeField locale={locale} rows={presentation === "one-page" ? 2 : 4} value={concern || ""} onChange={(event) => onChange?.(event.target.value)} />
+            <FormField id="workorder-concern" label={text("detail.concern", "Concern")}>
+              <NarrativeField locale={locale} readOnly={!canWrite} rows={presentation === "one-page" ? 2 : 4} value={concern || ""} onChange={(event) => onChange?.(event.target.value)} />
             </FormField>
+            {isMechanicDetail && canWrite && mechanicProgress ? <MechanicProgressStatus status={mechanicProgress.status} error={mechanicProgress.error} localeText={t} /> : null}
           </div> : <>
             <Field label={text("detail.mechanicConcern", "Mechanic concern")}>
               <NarrativeField locale={locale} rows="4" value={concern || ""} onChange={(event) => onChange?.(event.target.value)} />

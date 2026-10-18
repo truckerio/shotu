@@ -4,8 +4,20 @@ import {
   buildMechanicHomeView,
   mechanicJobActionLabel,
   mixedMechanicQueue,
+  otherMechanicJobs,
   selectNextMechanicJob,
 } from "./mechanic-workspace-model.js";
+
+test("other assigned jobs excludes the featured job without hiding another record type", () => {
+  const featured = { id: "same-id", queueType: "workorder" };
+  const inspection = { id: "same-id", queueType: "inspection" };
+  const other = { id: "other" };
+  const jobs = [featured, inspection, other];
+  assert.deepEqual(otherMechanicJobs(jobs, featured), [inspection, other]);
+  assert.deepEqual(otherMechanicJobs(jobs, inspection), [featured, other]);
+  assert.deepEqual(otherMechanicJobs(jobs, null), jobs);
+  assert.equal(jobs.length, 3);
+});
 
 test("selectNextMechanicJob chooses active work deterministically", () => {
   const jobs = [

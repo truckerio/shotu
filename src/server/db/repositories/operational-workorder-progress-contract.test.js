@@ -8,7 +8,7 @@ test("administrative module updates persist diagnosis and repair with optimistic
   assert.match(source, /before\.progress_version !== input\.expectedVersion/);
   assert.match(source, /diagnosis = case when \$9::boolean then \$10 else diagnosis end/);
   assert.match(source, /work_performed = case when \$11::boolean then \$12 else work_performed end/);
-  assert.match(source, /progress_version = progress_version \+ case when \$9::boolean or \$11::boolean or \$13::boolean then 1 else 0 end/);
+  assert.match(source, /progress_version = progress_version \+ case[\s\S]*concern is distinct from \$6::text[\s\S]*form_data->>'mechanicConcern' is distinct from \$8::jsonb->>'mechanicConcern'[\s\S]*\$9::boolean or \$11::boolean or \$13::boolean[\s\S]*then 1 else 0 end/);
 });
 
 test("administrative full-form saves preserve server-owned labor hours when the payload omits them", () => {
@@ -19,4 +19,13 @@ test("administrative full-form saves preserve server-owned labor hours when the 
 test("creation promotes the labor-row repair order into canonical work performed", () => {
   assert.match(source, /insert into operational_workorders \([\s\S]*work_performed[\s\S]*values \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8::jsonb, \$9\)/);
   assert.match(source, /formData\.workPerformed \|\| ""/);
+});
+
+test("creation audits the full initial Concern with its original actor", () => {
+  assert.match(source, /fieldKey: "concern\.initial",\s*fieldLabel: "Concern",\s*oldValue: "",\s*newValue: input\.concern/);
+  assert.match(source, /changedByUserId: input\.createdByUserId/);
+});
+
+test("Office Concern edits do not duplicate their form snapshot in Activity", () => {
+  assert.match(source, /formKey === "mechanicConcern" && Object\.prototype\.hasOwnProperty\.call\(input, "concern"\)\) continue/);
 });

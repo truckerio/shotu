@@ -82,7 +82,8 @@ test("Work done visibility follows the server-authorized action for mechanic and
     /canMarkWorkDone = \(isMechanicDetail \|\| isOfficeDetail\) && activeWorkorder\.allowedActions\?\.markDone === true/,
   );
   assert.match(detailPage, /actions: canMarkWorkDone && !isCompact/);
-  assert.match(detailPage, /\{canMarkWorkDone && isMechanicDetail && isCompact \? \(/);
+  assert.match(detailPage, /\{onePageDetail && canMarkWorkDone \? <WorkDoneButton/);
+  assert.match(detailPage, /openMechanicFinish=\{markWorkDone\}/);
   assert.doesNotMatch(
     detailPage,
     /renderedDetailSection === "completion" && completionPolicy\.canWrite && activeWorkorder\?\.allowedActions\.markDone/,
@@ -103,7 +104,7 @@ test("shared detail shows canonical read-only timing and separates authorization
 test("closed missing-information correction uses the server-authorized administrative seam", () => {
   assert.match(detailSections, /activeAttention/);
   assert.match(concernModule, /Information requested by Surveillance/);
-  assert.match(concernModule, /canWrite = writable\(access\) && Boolean\(allowedActions\.update\)/);
+  assert.match(concernModule, /canWrite = writable\(access\) && Boolean\(isMechanicDetail \? allowedActions\.saveConcern : allowedActions\.update\)/);
 });
 
 test("Manager detail fields keep a scoped backup and autosave through the shared office endpoint", () => {

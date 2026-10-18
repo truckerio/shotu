@@ -522,7 +522,7 @@
     max-width: 100%;
     padding: 8px 2px 12px;
     scroll-behavior: auto;
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
   }
 
   .workorder-detail-page .chat-content > .chat-thread.is-empty {

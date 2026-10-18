@@ -54,6 +54,11 @@ export function AdminWorkspaceShell({
     { id: "administration", label: "Administration", items: [{ id: "locations", label: "Locations", icon: MarkerPin01 }, { id: "modules", label: "Modules", icon: LayersThree01 }, { id: "settings", label: "Settings", icon: Settings01 }] },
     { id: "units", label: "Units", items: [{ id: "units-trucks", label: "Trucks", icon: Truck01 }, { id: "units-trailers", label: "Trailers", icon: Container }, { id: "units-other", label: "Other equipment", icon: Tool02 }] },
   ];
+  const phoneSections = view === "units"
+    ? groups.find((group) => group.id === "units").items
+    : view === "operations"
+      ? groups.find((group) => group.id === "operations").items.filter((item) => item.visible)
+      : [];
 
   function navigate(id) {
     if (id.startsWith("operations-")) {
@@ -99,6 +104,9 @@ export function AdminWorkspaceShell({
         <div className="admin-shell-content">
           {state.error ? <p className="admin-error" role="alert">{state.error}</p> : null}
           {state.message ? <p className="admin-success" role="status">{state.message}</p> : null}
+          {phoneSections.length > 1 ? <nav className={`admin-phone-section-nav${phoneSections.length === 2 ? " is-two" : ""}`} aria-label={view === "units" ? "Unit pages" : "Operation pages"}>
+            {phoneSections.map((item) => <button key={item.id} type="button" aria-pressed={activeId === item.id} className={activeId === item.id ? "active" : ""} onClick={() => navigate(item.id)}>{item.label}</button>)}
+          </nav> : null}
           {view === "operations" ? <OperationsPage actor={actor} locations={locations} draftQueue={draftQueue} onOpenWorkorder={onOpenWorkorder} onCreateWorkorder={onCreateWorkorder} inspectionAccess={inspectionAccess} workorderAccess={workorderAccess} requestedProduct={operationsProduct} onProductChange={setOperationsProduct} /> : null}
           {view === "inventory" ? <InventoryWorkspace key={inventoryWorkspaceKey} actorId={actor?.id} canApplyInventoryCount={actor?.role === "admin"} canReconcileAuthority={actor?.role === "admin"} presentation="page" activeSection={inventorySection} onSectionChange={onInventorySectionChange} onSectionTitleChange={onInventorySectionTitleChange} showSectionNavigation={false} showSectionNavigationOnPhone /> : null}
           {view === "units" ? <UnitsWorkspace key={unitsSection.key} actorId={actor?.id} section={unitsSection.key} /> : null}

@@ -111,7 +111,7 @@ test("authorized parts surfaces reserve exact units and route removal through cu
 });
 
 test("canonical scan access mounts independently from broad Parts editing", () => {
-  assert.match(partsModule, /activeWorkorder\.moduleAccess\?\.partsScanning\?\.access/);
+  assert.match(partsModule, /canScanWorkorderParts\(activeWorkorder, isMechanicDetail, actorId\)/);
   assert.match(partsModule, /<SerializedPartsScanner/);
   assert.match(partsModule, /function renderPartsPanel\(serializedParts = null\)/);
   assert.match(partsModule, /serializedParts=\{serializedParts\}/);
@@ -271,4 +271,10 @@ test("drawer controls and result state have complete mechanic locale coverage", 
       assert.match(dictionary, new RegExp(`"${key}":\\s*"[^"\\n]+"`));
     }
   }
+});
+
+// Returned units open independently of a catalog draft row in the shared table.
+test("one-page returned-unit reuse mounts a standalone serialized dialog", () => {
+  assert.match(usedPartsEditor, /function reuseReturnedUnit\(usage\) \{\s*setActiveDraftIndex\(-1\)/);
+  assert.match(usedPartsEditor, /activeDraftIndex < 0 \? serializedDialog : null/);
 });

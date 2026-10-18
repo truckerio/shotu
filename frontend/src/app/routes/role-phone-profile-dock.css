@@ -1,0 +1,67 @@
+.role-phone-profile-layout { display: contents; }
+.role-phone-profile-dock { display: none; }
+
+@media (max-width: 700px) {
+  .role-phone-profile-layout .role-phone-account-header,
+  .role-phone-profile-layout .profile-menu-mobile-action { display: none; }
+
+  .role-phone-profile-layout > .workspace-operations,
+  .role-phone-profile-layout > .workorder-detail-page { padding-bottom: calc(71px + env(safe-area-inset-bottom)); }
+
+  .role-phone-profile-dock {
+    align-items: stretch;
+    background: rgb(255 255 255 / 98%);
+    border-top: 1px solid #d5d7da;
+    bottom: 0;
+    box-sizing: border-box;
+    display: flex;
+    height: calc(59px + env(safe-area-inset-bottom));
+    justify-content: flex-end;
+    left: 0;
+    padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
+    position: fixed;
+    right: 0;
+    z-index: 41;
+  }
+
+  .role-phone-profile-dock .profile-menu-mobile-nav-trigger { min-height: 48px; min-width: 0; padding-inline: 0; width: 72px; }
+
+  .role-phone-profile-layout .role-phone-product-switch {
+    align-items: center;
+    bottom: 0;
+    box-sizing: border-box;
+    height: calc(59px + env(safe-area-inset-bottom));
+    left: 0;
+    padding: 5px 0 calc(5px + env(safe-area-inset-bottom)) 6px;
+    position: fixed;
+    right: 84px;
+    z-index: 42;
+  }
+
+  .role-phone-profile-layout:has(.workorder-section-nav-mobile, .create-workorder-mobile-dock) .role-phone-profile-dock {
+    left: auto;
+    width: 16.6667%;
+  }
+  .role-phone-profile-layout:has(.workorder-section-nav-mobile, .create-workorder-mobile-dock) .role-phone-profile-dock .profile-menu-mobile-nav-trigger { width: 100%; }
+
+  .role-phone-profile-layout:has(.workorder-section-nav-mobile) .workorder-section-nav-mobile { right: 16.6667%; }
+  .role-phone-profile-layout:has(.create-workorder-mobile-nav) .create-workorder-mobile-nav { padding-right: 16.6667%; }
+  .role-phone-profile-layout .create-workorder-mobile-dock { padding-right: max(16.6667%, 64px); }
+  .role-phone-profile-layout:has(.create-workorder-mobile-dock) .role-phone-profile-dock { width: max(16.6667%, 64px); }
+  .role-phone-profile-layout:has(.workorder-section-nav-mobile, .create-workorder-mobile-dock) .role-phone-profile-dock { padding-inline: 0; }
+
+  .role-phone-profile-layout:not(:has(.role-phone-product-switch, .workorder-section-nav-mobile, .create-workorder-mobile-dock)) .role-phone-profile-dock {
+    border-left: 1px solid #d5d7da;
+    border-top-left-radius: 10px;
+    box-shadow: 0 -4px 12px rgb(16 24 40 / 8%);
+    left: auto;
+    width: 84px;
+  }
+
+  .role-phone-profile-layout:has(.create-workorder-mobile-dock[data-keyboard-open="true"]) .role-phone-profile-dock,
+  .role-phone-profile-layout:has(.workorder-detail-page.is-keyboard-open) .role-phone-profile-dock { display: none; }
+}
+
+@media (max-width: 380px) {
+  .role-phone-profile-layout .workorder-section-nav-mobile > button span { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

@@ -31,7 +31,7 @@ const MECHANIC_AVAILABILITY_KEYS = Object.freeze([
 
 const ALLOWED_ACTION_MODULES = Object.freeze({
   accept: "assignment", release: "assignment", assignMechanics: "assignment",
-  saveNotes: "diagnosisRepair", sendMessage: "chat",
+  saveNotes: "diagnosisRepair", saveConcern: "concern", sendMessage: "chat",
   recordUsedParts: "parts", requestParts: "parts", addApprovedParts: "parts", planParts: "parts",
   markDone: "completion", approve: "completion", returnToMechanic: "completion", cancel: "completion",
   updateAdministrative: "concern",
@@ -178,6 +178,24 @@ function mergeCompatibility(output, moduleKey, data) {
   if (moduleKey === "photos") output.attachments = data.attachments;
 }
 
+function timelineWithoutConcern(timeline = []) {
+  return timeline.flatMap((event) => {
+    if (["concern", "concern.initial", "formData.mechanicConcern"].includes(event.field_key)) return [];
+    if (event.field_key !== "work_details_updated") return [event];
+    const redact = (value) => {
+      try {
+        const details = JSON.parse(value || "{}");
+        const { concern, ...rest } = details;
+        if (Array.isArray(rest.fieldsChanged)) rest.fieldsChanged = rest.fieldsChanged.filter((field) => field !== "concern");
+        return rest;
+      } catch { return {}; }
+    };
+    const after = redact(event.new_value);
+    if (Array.isArray(after.fieldsChanged) && !after.fieldsChanged.length) return [];
+    return [{ ...event, old_value: JSON.stringify(redact(event.old_value)), new_value: JSON.stringify(after) }];
+  });
+}
+
 export function projectProtectedWorkorderDetail(detail, moduleDecisions, options = {}) {
   const viewerRole = options.viewerRole || detail.user?.role || null;
   const isCustomerDocumentRole = ["office", "admin"].includes(viewerRole);
@@ -199,6 +217,7 @@ export function projectProtectedWorkorderDetail(detail, moduleDecisions, options
     output.moduleAccess[moduleKey] = { access, source: decision?.source || "default" };
     if (access === WORKORDER_ACCESS_MODES.HIDDEN) continue;
     const data = moduleData(detail, moduleKey, { viewerRole, canReadCustomerFinancials });
+    if (moduleKey === "activity" && !canRead(moduleDecisions, "concern")) data.timeline = timelineWithoutConcern(data.timeline);
     output.modules[moduleKey] = { access, data };
     mergeCompatibility(output, moduleKey, data);
   }

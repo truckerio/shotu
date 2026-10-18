@@ -5,7 +5,7 @@
   inset: 0;
   justify-content: flex-end;
   position: fixed;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   z-index: 140;
 }
 
@@ -173,19 +173,23 @@
   }
 
   .secondary-detail-header {
-    padding: 18px 16px 14px;
+    padding: 18px var(--mobile-page-gutter) 14px;
   }
 
   .secondary-detail-content {
-    padding: 0 16px 22px;
+    padding: 0 var(--mobile-page-gutter) 22px;
+    scrollbar-gutter: auto;
   }
 
   .secondary-detail-footer {
-    padding-inline: 16px;
+    padding-inline: var(--mobile-page-gutter);
+    flex-wrap: wrap;
   }
 
   .secondary-detail-footer .button {
-    flex: 1;
+    flex: 1 1 120px;
+    min-width: 0;
+    white-space: normal;
   }
 }
 

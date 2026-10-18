@@ -73,6 +73,13 @@ const LEGACY_MIGRATION_CHECKSUMS = new Map([
 
 export function migrationChecksumMatches(name, appliedChecksum, currentChecksum) {
   if (appliedChecksum === currentChecksum) return true;
+  if (name === "196_no_stock_tracking.sql") {
+    // The historical local revision has been compared with a fresh database:
+    // its three functions, 23 triggers and tracking constraint are equivalent.
+    // Bind compatibility to both revisions so future SQL edits still fail.
+    return appliedChecksum === "a278d40ef3b375affb04756c68f0b0b31e8f5f830dc896b3e1f645fdea13f377"
+      && currentChecksum === "2c6bc3588406c5046278c10ec781d1cd99d07e2c763ea0a52d422bb7b1cde69d";
+  }
   return LEGACY_MIGRATION_CHECKSUMS.get(name)?.has(appliedChecksum) || false;
 }
 

@@ -30,9 +30,9 @@ test("desktop workorder tools tooltip stays beside the header control", () => {
 
 test("operational detail retires paper Preview while Create retains its controller", () => {
   assert.match(previewController, /jumpToPreview/);
-  assert.match(detailPage, /if \(isCompact && !isOfficeDetail\) return buildCompactPhoneDetailSections/);
+  assert.match(detailPage, /if \(isCompact && !onePageDetail\) return buildCompactPhoneDetailSections/);
   assert.doesNotMatch(detailPage, /<WorkorderPreview|<CompactWorkorderPreview|<PreviewFullscreen/);
-  assert.match(detailPage, /supportingPane=\{isOfficeDetail/);
+  assert.match(detailPage, /supportingPane=\{onePageDetail/);
   assert.match(detailPage, /mainWorkorderSections\(visibleDetailSections\)/);
   assert.match(detailPage, /!isCompact && supportingPaneVisible[\s\S]*?<WorkorderToolsPanel/);
 });

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   groupTimelineEvents,
+  timelineConcernDetails,
+  timelineConcernRevision,
   meaningfulTimelineEvents,
   timelineEventCount,
   timelineEventDescription,
@@ -261,4 +263,30 @@ test("group parents preserve every raw child exactly once and summarize final co
   assert.equal(groups[0].description, "Used parts: 2 ea × GRO-54362.");
   assert.equal(groups[1].description, "Work verified.");
   assert.deepEqual(timeline, [access, first, final, status], "grouping must not mutate source audit data");
+});
+
+test("Concern revisions show original and full before/after without changing actor grouping", () => {
+  const initial = { id: "initial", type: "field", field_key: "concern.initial", old_value: "", new_value: "Driver reports air leak.\nAt idle.", actor_user_id: "office", changed_by_name: "Office", actor_role: "office", created_at: "2026-10-17T10:00:00Z" };
+  const edits = [1, 2].map((id) => ({ id, type: "field", field_key: "concern", old_value: id === 1 ? initial.new_value : "Mechanic found hose leak", new_value: id === 1 ? "Mechanic found hose leak" : "Leak confirmed\nHose split", actor_user_id: "mechanic", changed_by_name: "Mechanic", actor_role: "mechanic", created_at: `2026-10-17T10:01:0${id}Z` }));
+  assert.equal(timelineEventTitle(initial), "Concern recorded");
+  assert.deepEqual(timelineConcernDetails(initial), [{ label: "Original concern", value: initial.new_value }]);
+  assert.deepEqual(timelineConcernDetails(edits[0]), [{ label: "Before", value: initial.new_value }, { label: "After", value: "Mechanic found hose leak" }]);
+  assert.equal(timelineEventDescription(edits[0]), "");
+  const groups = groupTimelineEvents([initial, ...edits]);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[1].childCount, 2);
+  assert.deepEqual(groups[1].children.map((event) => timelineConcernDetails(event)[1].value), edits.map((event) => event.new_value));
+  assert.equal(groups[1].actorName, "Mechanic");
+});
+
+test("legacy progress concern uses recorded baseline only and retains other progress descriptions", () => {
+  const legacy = { type: "field", field_key: "work_details_updated", old_value: "{}", new_value: JSON.stringify({ fieldsChanged: ["concern"], concern: "Mechanic findings" }) };
+  assert.equal(timelineConcernDetails(legacy)[0].value, "Not recorded");
+  const known = { ...legacy, old_value: JSON.stringify({ concern: "Driver report" }) };
+  assert.equal(timelineConcernRevision(known).before, "Driver report");
+  const mixed = { ...known, new_value: JSON.stringify({ fieldsChanged: ["concern", "diagnosis"], concern: "Finding", diagnosis: "Leak" }) };
+  assert.equal(timelineEventDescription(mixed), "Diagnosis saved.");
+  assert.equal(timelineConcernDetails(mixed)[1].value, "Finding");
+  assert.deepEqual(timelineConcernDetails({ ...legacy, new_value: "not json" }), []);
+  assert.equal(timelineConcernDetails({ ...known, old_value: JSON.stringify({ concern: "" }) })[0].value, "Empty");
 });

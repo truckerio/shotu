@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createMechanicPartRequestDraft,
+  clearCompanyCatalogSelection,
   mechanicPartsActionState,
   mechanicPartRequestErrorFields,
   mechanicPartRequestErrorMessage,
   workorderPartErrorMessage,
   validateMechanicPartRequest,
+  withManufacturerPartNumber,
 } from "./mechanic-part-request-model.js";
 
 test("mechanic part request starts with one piece", () => {
@@ -47,6 +49,44 @@ test("preserves explicitly selected company catalog identity", () => {
     quantity: 1,
     uomCode: "pc",
   });
+});
+
+test("keeps an exact external number on the existing unlinked request route", () => {
+  assert.deepEqual(validateMechanicPartRequest({
+    query: "Coolant hose",
+    partNumber: "  A06-12345-000  ",
+    catalogPartId: "",
+    quantity: "1",
+    uomCode: "pc",
+  }).payload, {
+    query: "Coolant hose",
+    description: "Coolant hose",
+    partNumber: "A06-12345-000",
+    quantity: 1,
+    uomCode: "pc",
+  });
+});
+
+test("editing a manufacturer number removes a conflicting company selection", () => {
+  const draft = withManufacturerPartNumber({
+    query: "Coolant hose", catalogPartId: "company-part", partNumber: "COMPANY-1", quantity: "2", uomCode: "pc",
+  }, "A06-12345-000");
+  assert.equal(draft.catalogPartId, "");
+  assert.equal(draft.partNumber, "A06-12345-000");
+  assert.equal(draft.query, "Coolant hose");
+  assert.equal(draft.uomCode, "pc");
+  assert.equal(validateMechanicPartRequest(draft).payload.catalogPartId, undefined);
+});
+
+test("company search edits preserve a manual number but invalidate a selected company's number", () => {
+  const manual = clearCompanyCatalogSelection({
+    query: "Coolant hose", catalogPartId: "", partNumber: "A06-12345-000", quantity: "1", uomCode: "pc",
+  });
+  assert.equal(manual.partNumber, "A06-12345-000");
+  assert.equal(validateMechanicPartRequest(manual).payload.partNumber, "A06-12345-000");
+  const selected = clearCompanyCatalogSelection({ ...manual, catalogPartId: "company-part", partNumber: "COMPANY-1" });
+  assert.equal(selected.catalogPartId, "");
+  assert.equal(selected.partNumber, "");
 });
 
 test("offers both mechanic part workflows only when the server permits them", () => {

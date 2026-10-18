@@ -3,6 +3,7 @@ import { SerializedPartsScanner } from "../../../components/workorders/part-requ
 import { ProgressiveWorkorderSection } from "../../../components/workorders/WorkorderObjectPage.jsx";
 import { interfaceText } from "../../../i18n/index.js";
 import { WORKORDER_MODULE_ACCESS } from "../workorder-module-registry.js";
+import { canScanWorkorderParts } from "./workorder-parts-model.js";
 
 export function WorkorderPartsModule({
   access,
@@ -28,9 +29,7 @@ export function WorkorderPartsModule({
   onSaveParts,
   onSelect,
 }) {
-  const scanningAccess = activeWorkorder.moduleAccess?.partsScanning?.access;
-  const canScanSerializedParts = scanningAccess === WORKORDER_MODULE_ACCESS.WRITE
-    || scanningAccess === WORKORDER_MODULE_ACCESS.REQUIRED;
+  const canScanSerializedParts = canScanWorkorderParts(activeWorkorder, isMechanicDetail, actorId);
   const partsVisible = access && access !== WORKORDER_MODULE_ACCESS.HIDDEN;
   if (!partsVisible && !canScanSerializedParts) return null;
   const t = (key) => interfaceText(locale, key);
@@ -66,7 +65,7 @@ export function WorkorderPartsModule({
     <ProgressiveWorkorderSection
       id="parts"
       showTitle={presentation!=="one-page"}
-      title={isMechanicDetail ? t("parts.usedTitle") : "Parts"}
+      title={isMechanicDetail ? t("detail.parts") : "Parts"}
       summary={partsVisible
         ? (pendingPartCount
           ? `${pendingPartCount} ${isMechanicDetail ? t("parts.awaitingAction") : "awaiting action"}`

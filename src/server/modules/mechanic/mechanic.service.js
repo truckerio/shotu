@@ -25,8 +25,9 @@ import {
   WorkorderProgressConflictError,
   saveMechanicWorkorderProgress as persistMechanicWorkorderProgress,
 } from "../../db/repositories/workorder-progress.repo.js";
-import { AuthError, resourceNotFound } from "../../auth/errors.js";
+import { AuthError, permissionDenied, resourceNotFound } from "../../auth/errors.js";
 import { companyRoleScope, requireCompanyRole } from "../../auth/company-role.js";
+import { authorizeWorkorderModule } from "../workorders/workorder-module-access.service.js";
 
 async function requireMechanic(userId, context = null) {
   const user = await getUserById(userId);
@@ -127,6 +128,7 @@ export function mechanicAllowedActions(workorder, mechanicId, policy = {}) {
   return {
     accept: canAccept,
     saveNotes: canEdit,
+    saveConcern: canEdit,
     sendMessage: isMine,
     recordUsedParts: canEdit && policy.mechanicCanRecordParts === true,
     release: canEdit,
@@ -207,6 +209,12 @@ export async function releaseMechanicWorkorder(workorderId, mechanicUserId, reas
 
 export async function saveMechanicWorkorderProgress(workorderId, mechanicUserId, input, context = null) {
   await requireMechanic(mechanicUserId, context);
+  if (Object.prototype.hasOwnProperty.call(input, "concern")) {
+    if (!context) throw permissionDenied();
+    await authorizeWorkorderModule(context, workorderId, {
+      moduleKey: "concern", capability: "write", action: "update",
+    });
+  }
   try {
     const progress = await persistMechanicWorkorderProgress({
       workorderId,

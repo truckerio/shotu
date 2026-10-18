@@ -32,6 +32,15 @@ export function emptyUsedPart() {
   return { partNo: "", qty: "", uomCode: DEFAULT_UOM_CODE, repairOrder: "" };
 }
 
+export function removeUsedPartDraft(rows, index, activeIndex = -1) {
+  if (!Number.isInteger(index) || index < 0 || index >= rows.length) return null;
+  return {
+    rows: rows.filter((_, rowIndex) => rowIndex !== index),
+    activeIndex: activeIndex === index ? -1 : activeIndex > index ? activeIndex - 1 : activeIndex,
+    removedActive: activeIndex === index,
+  };
+}
+
 export function noStockUsedPartDraft(catalogPart) {
   if (catalogPart?.trackingMode !== "no_stock" || !catalogPart?.id || !catalogPart?.partNumber) return null;
   return {

@@ -40,8 +40,35 @@ function humanizeEventValue(value, fallback = "Updated") {
   return text.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+export function timelineConcernRevision(event) {
+  if (event.type !== "field") return null;
+  if (["concern.initial", "concern", "formData.mechanicConcern"].includes(event.field_key)) {
+    return { initial: event.field_key === "concern.initial", before: event.old_value ?? null, after: event.new_value ?? "" };
+  }
+  if (event.field_key !== "work_details_updated") return null;
+  try {
+    const after = JSON.parse(event.new_value || "{}");
+    if (!after?.fieldsChanged?.includes("concern") || typeof after.concern !== "string") return null;
+    let before = null;
+    try { before = JSON.parse(event.old_value || "{}").concern ?? null; } catch { /* Old baseline unavailable. */ }
+    return { initial: false, before, after: after.concern, mixed: after.fieldsChanged.some((field) => field !== "concern") };
+  } catch { return null; }
+}
+
+export function timelineConcernDetails(event, locale = "en") {
+  const revision = timelineConcernRevision(event);
+  if (!revision) return [];
+  const t = (key) => interfaceText(locale, key);
+  const value = (text) => text == null ? t("timeline.concern.unavailable") : text || t("timeline.concern.empty");
+  return revision.initial
+    ? [{ label: t("timeline.concern.original"), value: value(revision.after) }]
+    : [{ label: t("timeline.concern.before"), value: value(revision.before) }, { label: t("timeline.concern.after"), value: value(revision.after) }];
+}
+
 export function timelineEventTitle(event, locale = "en") {
   const t = (key) => interfaceText(locale, key);
+  const concern = timelineConcernRevision(event);
+  if (concern && !concern.mixed) return t(concern.initial ? "timeline.concern.recorded" : "timeline.concern.changed");
   if (event.type === "access") return t("timeline.opened");
   if (event.type === "part") {
     const serializedAction = SERIALIZED_PART_ACTIONS[event.action];
@@ -70,6 +97,8 @@ export function timelineEventTitle(event, locale = "en") {
 }
 
 export function timelineEventDescription(event, locale = "en") {
+  const concern = timelineConcernRevision(event);
+  if (concern && !concern.mixed) return "";
   const t = (key) => interfaceText(locale, key);
   if (event.type === "part" && SERIALIZED_PART_ACTIONS[event.action]) {
     const identity = serializedPartIdentity(event);
@@ -91,7 +120,7 @@ export function timelineEventDescription(event, locale = "en") {
       try {
         const details = JSON.parse(event.new_value || "{}");
         const fields = Array.isArray(details.fieldsChanged) ? details.fieldsChanged : [];
-        if (fields.length === 2) return t("timeline.diagnosisRepairSaved");
+        if (fields.includes("diagnosis") && fields.includes("workPerformed")) return t("timeline.diagnosisRepairSaved");
         if (fields.includes("diagnosis")) return t("timeline.diagnosisSaved");
         if (fields.includes("workPerformed")) return t("timeline.repairSaved");
       } catch {

@@ -56,7 +56,9 @@ export function CreateWorkorderForm({
   const t = (key) => interfaceText(locale, key);
   const localizedErrors = Object.fromEntries(Object.entries(errors || {}).map(([key, value]) => [
     key,
-    key === "parts" && /exact serial/i.test(value)
+    actorRole === "mechanic" && key === "customerCompanyName"
+      ? t("create.validation.mechanicCustomerCompanyName")
+      : key === "parts" && /exact serial/i.test(value)
       ? SERIAL_SELECTION_ERROR[locale] || SERIAL_SELECTION_ERROR.en
       : interfaceText(locale, `create.validation.${key}`) === `create.validation.${key}`
       ? value
@@ -109,7 +111,7 @@ export function CreateWorkorderForm({
       onReplaceSerializedUnits: onReplacePartSerializedUnits,
     },
     schedule: { activeSection: mobileSection, form, locale, onChange: onFieldChange, presentation },
-    unit: { activeSection: mobileSection, customerControl, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation, selectedVehicle, vehicleLookup },
+    unit: { activeSection: mobileSection, actorRole, customerControl, errors: localizedErrors, form, locale, onChange: onFieldChange, onOpenActiveWorkorder, onUnitChange, onVehicleSelect, presentation, selectedVehicle, vehicleLookup },
   };
 
   return (

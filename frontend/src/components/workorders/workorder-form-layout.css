@@ -201,3 +201,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Read-only mechanic facts follow the same inline label/value layout as inputs. */
+.mechanic-detail-page .control-panel[data-workorder-presentation="one-page"] .workorder-review-copy {
+  background: transparent;
+  border: 0;
+  display: block;
+  padding: 0;
+}
+
+.mechanic-detail-page .control-panel[data-workorder-presentation="one-page"] :is(.workorder-assigned-mechanics > div, .workorder-review-copy > div) {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 112px minmax(0, 1fr);
+}
+
+.mechanic-detail-page .control-panel[data-workorder-presentation="one-page"] :is(.workorder-assigned-mechanics dt, .workorder-review-copy span) {
+  color: #344054;
+  font-size: var(--detail-body-size, 12px);
+  font-weight: 400;
+  line-height: 20px;
+  padding-block: 10px;
+  text-transform: none;
+}
+
+.mechanic-detail-page .control-panel[data-workorder-presentation="one-page"] :is(.workorder-assigned-mechanics dd, .workorder-review-copy p) {
+  border-bottom: 1px solid #d0d5dd;
+  box-sizing: border-box;
+  line-height: 20px;
+  margin: 0;
+  min-height: 44px;
+  padding-block: 10px;
+}

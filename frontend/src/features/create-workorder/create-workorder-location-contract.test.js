@@ -37,6 +37,6 @@ test("automatic template hydration resets only a pristine draft baseline", () =>
 });
 
 test("create conflicts are announced as alerts instead of generic status copy", () => {
-  assert.match(commands, /message: error\.message, error: true/);
+  assert.match(commands, /message: error\.message, code: error\.code, error: true/);
   assert.match(createForm, /role=\{error \? "alert" : "status"\}/);
 });
